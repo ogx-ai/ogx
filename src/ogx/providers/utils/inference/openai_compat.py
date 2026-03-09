@@ -18,6 +18,7 @@ def convert_tooldef_to_openai_tool(
     tool_name: str,
     description: str | None = None,
     input_schema: dict[str, Any] | None = None,
+    strict: bool | None = None,
 ) -> dict[str, Any]:
     """
     Convert tool parameters to an OpenAI API-compatible dictionary.
@@ -26,6 +27,7 @@ def convert_tooldef_to_openai_tool(
         tool_name: Tool name as string
         description: Optional tool description
         input_schema: Optional JSON Schema for tool parameters
+        strict: Optional flag for strict parameter validation
 
     Returns:
         OpenAI-compatible tool dictionary:
@@ -35,6 +37,7 @@ def convert_tooldef_to_openai_tool(
                 "name": tool_name,
                 "description": description,
                 "parameters": {<JSON Schema>},
+                "strict": strict,
             },
         }
 
@@ -53,6 +56,9 @@ def convert_tooldef_to_openai_tool(
 
     if input_schema:
         function["parameters"] = input_schema
+
+    if strict is not None:
+        function["strict"] = strict
 
     return out
 

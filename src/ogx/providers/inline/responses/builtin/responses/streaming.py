@@ -1580,9 +1580,13 @@ class StreamingResponseOrchestrator:
 
         for input_tool in tools:
             if input_tool.type == "function":
-                self.ctx.chat_tools.append(
-                    ChatCompletionToolParam(type="function", function=input_tool.model_dump(exclude_none=True))  # type: ignore[typeddict-item,arg-type]  # Dict compatible with FunctionDefinition
+                tool_param: ChatCompletionToolParam = convert_tooldef_to_openai_tool(  # type: ignore[assignment]
+                    tool_name=input_tool.name,
+                    description=input_tool.description,
+                    input_schema=input_tool.parameters,
+                    strict=input_tool.strict,
                 )
+                self.ctx.chat_tools.append(tool_param)
             elif input_tool.type in WebSearchToolTypes:
                 tool_name = "web_search"
                 # Need to access tool_groups_api from tool_executor

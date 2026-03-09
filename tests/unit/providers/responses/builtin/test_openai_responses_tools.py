@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 from unittest.mock import patch
 
 from openai.types.chat.chat_completion_chunk import (
@@ -678,9 +679,6 @@ async def test_tool_call_arguments_arrive_in_subsequent_delta(openai_responses_i
     assert len(completed_chunk.response.output) == 1
     assert completed_chunk.response.output[0].type == "function_call"
     assert completed_chunk.response.output[0].name == "get_weather"
-    # Arguments must be valid JSON — not '{}{"location": "..."}' which was the bug
-    import json
-
     parsed = json.loads(completed_chunk.response.output[0].arguments)
     assert parsed == {"location": "San Francisco"}
 
@@ -781,8 +779,6 @@ async def test_tool_call_arguments_split_across_multiple_deltas(openai_responses
     assert completed_chunk.response.output[0].type == "function_call"
     assert completed_chunk.response.output[0].name == "get_weather"
 
-    import json
-
     parsed = json.loads(completed_chunk.response.output[0].arguments)
     assert parsed == {"location": "Boston"}
 
@@ -837,9 +833,6 @@ async def test_tool_call_no_parameters_still_returns_empty_json(openai_responses
     assert completed_chunk.type == "response.completed"
     assert completed_chunk.response.output[0].type == "function_call"
     assert completed_chunk.response.output[0].name == "get_current_time"
-    # No-parameter functions should produce valid empty JSON
-    import json
-
     parsed = json.loads(completed_chunk.response.output[0].arguments)
     assert parsed == {}
 
@@ -963,3 +956,42 @@ async def test_function_tool_strict_false_included(openai_responses_impl, mock_i
     tool_function = params.tools[0]["function"]
     assert "strict" in tool_function, "strict field should be included when explicitly set to False"
     assert tool_function["strict"] is False, "strict field should be False"
+
+
+async def test_function_tool_type_field_excluded_from_function_dict(openai_responses_impl, mock_inference_api):
+    """Test that the 'type' field from the input tool is excluded from the function dict.
+
+    The function dict inside ChatCompletionToolParam should only contain function-specific
+    fields (name, description, parameters, strict) and not the top-level 'type' field,
+    which belongs on the outer tool param.
+    """
+    input_text = "What is the weather?"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    await openai_responses_impl.create_openai_response(
+        input=input_text,
+        model=model,
+        stream=False,
+        tools=[
+            OpenAIResponseInputToolFunction(
+                type="function",
+                name="get_weather",
+                description="Get weather information",
+                parameters={"type": "object", "properties": {"location": {"type": "string"}}, "required": ["location"]},
+            )
+        ],
+    )
+
+    assert mock_inference_api.openai_chat_completion.call_count == 1
+    params = mock_inference_api.openai_chat_completion.call_args[0][0]
+
+    assert len(params.tools) == 1
+    # The outer tool param should have type="function"
+    assert params.tools[0]["type"] == "function"
+    # The inner function dict should NOT contain 'type'
+    tool_function = params.tools[0]["function"]
+    assert "type" not in tool_function, "The input tool 'type' field should be excluded from the function dict"
+    assert tool_function["name"] == "get_weather"
+    assert tool_function["description"] == "Get weather information"
