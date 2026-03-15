@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import uuid
 from collections.abc import Sequence
 from enum import Enum
 from typing import Annotated, Any, Literal
@@ -219,9 +220,8 @@ class OpenAIResponseMessage(BaseModel):
     role: Literal["system"] | Literal["developer"] | Literal["user"] | Literal["assistant"]
     type: Literal["message"] = "message"
 
-    # The fields below are not used in all scenarios, but are required in others.
-    id: str | None = None
-    status: str | None = None
+    id: str = Field(default_factory=lambda: f"msg_{uuid.uuid4()}")
+    status: str = Field(default="completed")
 
 
 @json_schema_type
@@ -281,16 +281,16 @@ class OpenAIResponseOutputMessageFunctionToolCall(BaseModel):
     :param name: Name of the function being called
     :param arguments: JSON string containing the function arguments
     :param type: Tool call type identifier, always "function_call"
-    :param id: (Optional) Additional identifier for the tool call
-    :param status: (Optional) Current status of the function call execution
+    :param id: Unique identifier for the tool call
+    :param status: Current status of the function call execution
     """
 
     call_id: str
     name: str
     arguments: str
     type: Literal["function_call"] = "function_call"
-    id: str | None = None
-    status: str | None = None
+    id: str = Field(default_factory=lambda: f"fc_{uuid.uuid4()}")
+    status: str = Field(default="in_progress")
 
 
 @json_schema_type
@@ -1548,8 +1548,8 @@ class OpenAIResponseInputFunctionToolCallOutput(BaseModel):
     call_id: str
     output: str | list[OpenAIResponseInputMessageContent]
     type: Literal["function_call_output"] = "function_call_output"
-    id: str | None = None
-    status: str | None = None
+    id: str = Field(default_factory=lambda: f"fco_{uuid.uuid4()}")
+    status: str = Field(default="completed")
 
 
 @json_schema_type
