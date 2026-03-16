@@ -32,7 +32,7 @@ def skip_if_provider_isnt_vllm(client_with_models, text_model_id):
 
 def skip_if_chat_completions_logprobs_not_supported(client_with_models, text_model_id):
     provider_type = provider_from_model(client_with_models, text_model_id).provider_type
-    if provider_type in ("remote::ollama",):
+    if provider_type in ("remote::ollama", "remote::watsonx"):
         pytest.skip(f"Model {text_model_id} hosted by {provider_type} doesn't support /v1/chat/completions logprobs.")
 
 
@@ -209,6 +209,8 @@ def test_response_non_streaming_multi_turn(responses_client, text_model_id, case
 
 @pytest.mark.parametrize("case", image_test_cases)
 def test_response_non_streaming_image(responses_client, text_model_id, case):
+    if text_model_id.startswith("watsonx/"):
+        pytest.skip("WatsonX text model does not support vision/image inputs")
     response = responses_client.responses.create(
         model=text_model_id,
         input=case.input,
@@ -220,6 +222,8 @@ def test_response_non_streaming_image(responses_client, text_model_id, case):
 
 @pytest.mark.parametrize("case", multi_turn_image_test_cases)
 def test_response_non_streaming_multi_turn_image(responses_client, text_model_id, case):
+    if text_model_id.startswith("watsonx/"):
+        pytest.skip("WatsonX text model does not support vision/image inputs")
     previous_response_id = None
     for turn_input, turn_expected in case.turns:
         response = responses_client.responses.create(

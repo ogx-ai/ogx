@@ -94,6 +94,14 @@ providers:
       api_type: ${env.AZURE_API_TYPE:=}
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
+  - provider_id: transformers
+    provider_type: inline::transformers
+  - provider_id: ${env.WATSONX_API_KEY:+watsonx}
+    provider_type: remote::watsonx
+    config:
+      base_url: ${env.WATSONX_BASE_URL:=https://us-south.ml.cloud.ibm.com}
+      api_key: ${env.WATSONX_API_KEY:=}
+      project_id: ${env.WATSONX_PROJECT_ID:=}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -276,7 +284,17 @@ storage:
       namespace: connectors
       backend: kv_default
 registered_resources:
-  models: []
+  models:
+  - metadata: {}
+    model_id: azure/gpt-4o
+    provider_id: ${env.AZURE_API_KEY:+azure}
+    provider_model_id: gpt-4o
+    model_type: llm
+  - metadata: {}
+    model_id: watsonx/meta-llama/llama-3-3-70b-instruct
+    provider_id: ${env.WATSONX_API_KEY:+watsonx}
+    provider_model_id: meta-llama/llama-3-3-70b-instruct
+    model_type: llm
   shields:
   - shield_id: llama-guard
     provider_id: ${env.SAFETY_MODEL:+llama-guard}

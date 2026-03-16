@@ -271,7 +271,7 @@ Available Models:
             api=Api.inference,
             adapter_type="watsonx",
             provider_type="remote::watsonx",
-            pip_packages=["litellm"],
+            pip_packages=[],
             module="llama_stack.providers.remote.inference.watsonx",
             config_class="llama_stack.providers.remote.inference.watsonx.WatsonXConfig",
             provider_data_validator="llama_stack.providers.remote.inference.watsonx.config.WatsonXProviderDataValidator",

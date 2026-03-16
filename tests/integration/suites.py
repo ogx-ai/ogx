@@ -130,6 +130,23 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "embedding_dimension": 1536,
         },
     ),
+    "azure": Setup(
+        name="azure",
+        description="Azure-hosted GPT models via the Azure OpenAI-compatible endpoint",
+        defaults={
+            "text_model": "azure/gpt-4o",
+            "vision_model": "azure/gpt-4o",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
+        },
+    ),
+    "watsonx": Setup(
+        name="watsonx",
+        description="IBM WatsonX AI models",
+        defaults={
+            "text_model": "watsonx/meta-llama/llama-3-3-70b-instruct",
+        },
+    ),
     "tgi": Setup(
         name="tgi",
         description="Text Generation Inference (TGI) provider with a text model",
