@@ -59,7 +59,7 @@ def create_router(impl: Models) -> APIRouter:
             200: {"description": "A list of model objects."},
         },
     )
-    async def list_models(request: Request) -> Response:
+    async def list_models(request: Request) -> OpenAIListModelsResponse | Response:
         sdk = detect_sdk(request)
         if sdk == SdkType.ANTHROPIC:
             anthropic_result = await impl.anthropic_list_models()
@@ -71,8 +71,7 @@ def create_router(impl: Models) -> APIRouter:
             google_result = await impl.google_list_models()
             return JSONResponse(content=google_result.model_dump(exclude_none=True))
 
-        openai_result = await impl.openai_list_models()
-        return JSONResponse(content=openai_result.model_dump(exclude_none=True))
+        return await impl.openai_list_models()
 
     @router.get(
         "/models/{model_id:path}",
@@ -86,7 +85,7 @@ def create_router(impl: Models) -> APIRouter:
     async def get_model(
         request: Request,
         model_request: Annotated[GetModelRequest, Depends(get_model_request)],
-    ) -> Response:
+    ) -> Model | Response:
         model = await impl.get_model(model_request)
         sdk = detect_sdk(request)
 
@@ -107,6 +106,6 @@ def create_router(impl: Models) -> APIRouter:
             )
             return JSONResponse(content=google_model.model_dump(exclude_none=True))
 
-        return JSONResponse(content=model.model_dump(exclude_none=True))
+        return model
 
     return router
