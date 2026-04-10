@@ -59,8 +59,8 @@ def create_router(impl: Models) -> APIRouter:
             200: {"description": "A list of model objects."},
         },
     )
-    async def list_models(raw_request: Request) -> Response:
-        sdk = detect_sdk(raw_request)
+    async def list_models(request: Request) -> Response:
+        sdk = detect_sdk(request)
         if sdk == SdkType.ANTHROPIC:
             anthropic_result = await impl.anthropic_list_models()
             return JSONResponse(
@@ -84,11 +84,11 @@ def create_router(impl: Models) -> APIRouter:
         },
     )
     async def get_model(
-        raw_request: Request,
-        request: Annotated[GetModelRequest, Depends(get_model_request)],
+        request: Request,
+        model_request: Annotated[GetModelRequest, Depends(get_model_request)],
     ) -> Response:
-        model = await impl.get_model(request)
-        sdk = detect_sdk(raw_request)
+        model = await impl.get_model(model_request)
+        sdk = detect_sdk(request)
 
         if sdk == SdkType.ANTHROPIC:
             anthropic_model = AnthropicModelInfo(

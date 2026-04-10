@@ -24,14 +24,18 @@ class SdkType(StrEnum):
     GOOGLE = "google"
 
 
-def detect_sdk(request: Request) -> SdkType:
+def detect_sdk(request: Request | None) -> SdkType:
     """Detect which SDK is making the request based on headers.
 
     Detection priority:
     1. anthropic-version header → Anthropic SDK
     2. x-goog-api-key header → Google AI SDK
     3. Default → OpenAI SDK
+
+    Returns OPENAI when request is None (e.g. library client mode).
     """
+    if request is None:
+        return SdkType.OPENAI
     headers = request.headers
     if headers.get("anthropic-version"):
         return SdkType.ANTHROPIC
