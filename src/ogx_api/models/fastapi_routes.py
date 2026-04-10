@@ -19,7 +19,6 @@ from fastapi.responses import JSONResponse
 
 from ogx_api.messages.models import ANTHROPIC_VERSION
 from ogx_api.router_utils import create_path_dependency, standard_responses
-from ogx_api.sdk_detection import SdkType
 from ogx_api.version import OGX_API_V1
 
 from .api import Models
@@ -33,18 +32,6 @@ from .models import (
 
 # Path parameter dependencies for single-field models
 get_model_request = create_path_dependency(GetModelRequest)
-
-
-def _detect_sdk_from_headers(
-    anthropic_version: Annotated[str | None, Header(alias="anthropic-version")] = None,
-    x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
-) -> SdkType:
-    """Detect SDK type from request headers via FastAPI dependency injection."""
-    if anthropic_version:
-        return SdkType.ANTHROPIC
-    if x_goog_api_key:
-        return SdkType.GOOGLE
-    return SdkType.OPENAI
 
 
 def create_router(impl: Models) -> APIRouter:
@@ -72,15 +59,16 @@ def create_router(impl: Models) -> APIRouter:
         },
     )
     async def list_models(
-        sdk: Annotated[SdkType, Depends(_detect_sdk_from_headers)] = SdkType.OPENAI,
+        anthropic_version: Annotated[str | None, Header(alias="anthropic-version")] = None,
+        x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
     ) -> OpenAIListModelsResponse | Response:
-        if sdk == SdkType.ANTHROPIC:
+        if anthropic_version:
             anthropic_result = await impl.anthropic_list_models()
             return JSONResponse(
                 content=anthropic_result.model_dump(exclude_none=True),
                 headers={"anthropic-version": ANTHROPIC_VERSION},
             )
-        elif sdk == SdkType.GOOGLE:
+        elif x_goog_api_key:
             google_result = await impl.google_list_models()
             return JSONResponse(content=google_result.model_dump(exclude_none=True))
 
@@ -97,11 +85,12 @@ def create_router(impl: Models) -> APIRouter:
     )
     async def get_model(
         model_request: Annotated[GetModelRequest, Depends(get_model_request)],
-        sdk: Annotated[SdkType, Depends(_detect_sdk_from_headers)] = SdkType.OPENAI,
+        anthropic_version: Annotated[str | None, Header(alias="anthropic-version")] = None,
+        x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
     ) -> Model | Response:
         model = await impl.get_model(model_request)
 
-        if sdk == SdkType.ANTHROPIC:
+        if anthropic_version:
             anthropic_model = AnthropicModelInfo(
                 id=model.identifier,
                 display_name=model.identifier,
@@ -111,7 +100,7 @@ def create_router(impl: Models) -> APIRouter:
                 content=anthropic_model.model_dump(exclude_none=True),
                 headers={"anthropic-version": ANTHROPIC_VERSION},
             )
-        elif sdk == SdkType.GOOGLE:
+        elif x_goog_api_key:
             google_model = GoogleModelInfo(
                 name=f"models/{model.identifier}",
                 display_name=model.identifier,
