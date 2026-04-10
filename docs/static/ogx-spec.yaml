@@ -1177,11 +1177,17 @@ paths:
     get:
       responses:
         '200':
-          description: A list of OpenAI model objects.
+          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or `x-goog-api-key` header for Google format.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OpenAIListModelsResponse'
+                oneOf:
+                - $ref: '#/components/schemas/OpenAIListModelsResponse'
+                  title: OpenAIListModelsResponse
+                - $ref: '#/components/schemas/AnthropicListModelsResponse'
+                  title: AnthropicListModelsResponse
+                - $ref: '#/components/schemas/GoogleListModelsResponse'
+                  title: GoogleListModelsResponse
         '400':
           description: Bad Request
           $ref: '#/components/responses/BadRequest400'
@@ -1196,9 +1202,22 @@ paths:
           $ref: '#/components/responses/DefaultError'
       tags:
       - Models
-      summary: List models using the OpenAI API.
-      description: List models using the OpenAI API.
-      operationId: openai_list_models_v1_models_get
+      summary: List models.
+      description: List models. Returns OpenAI, Anthropic, or Google response format based on SDK headers.
+      operationId: list_models_v1_models_get
+      parameters:
+      - name: anthropic-version
+        in: header
+        required: false
+        schema:
+          type: string
+        description: When present, the response uses the Anthropic Models API format. The Anthropic SDK sends this header automatically.
+      - name: x-goog-api-key
+        in: header
+        required: false
+        schema:
+          type: string
+        description: When present, the response uses the Google Models API format. The Google AI SDK sends this header automatically.
       x-codeSamples:
       - lang: Python
         label: OpenAI
@@ -1214,11 +1233,17 @@ paths:
     get:
       responses:
         '200':
-          description: The model object.
+          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or `x-goog-api-key` header for Google format.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Model'
+                oneOf:
+                - $ref: '#/components/schemas/Model'
+                  title: Model
+                - $ref: '#/components/schemas/AnthropicModelInfo'
+                  title: AnthropicModelInfo
+                - $ref: '#/components/schemas/GoogleModelInfo'
+                  title: GoogleModelInfo
         '400':
           $ref: '#/components/responses/BadRequest400'
           description: Bad Request
@@ -1234,7 +1259,7 @@ paths:
       tags:
       - Models
       summary: Get a model by its identifier.
-      description: Get a model by its identifier.
+      description: Get a model by its identifier. Returns OpenAI, Anthropic, or Google response format based on SDK headers.
       operationId: get_model_v1_models__model_id__get
       parameters:
       - name: model_id
@@ -1245,6 +1270,18 @@ paths:
           description: The ID of the model to get.
           title: Model Id
         description: The ID of the model to get.
+      - name: anthropic-version
+        in: header
+        required: false
+        schema:
+          type: string
+        description: When present, the response uses the Anthropic Models API format. The Anthropic SDK sends this header automatically.
+      - name: x-goog-api-key
+        in: header
+        required: false
+        schema:
+          type: string
+        description: When present, the response uses the Google Models API format. The Google AI SDK sends this header automatically.
       x-codeSamples:
       - lang: Python
         label: OpenAI
@@ -1926,7 +1963,7 @@ paths:
           input_items = client.responses.input_items.list("resp_abc123")
           for item in input_items:
               print(item)
-  /v1/admin/tools:
+  /v1/tools:
     get:
       responses:
         '200':
@@ -1951,7 +1988,7 @@ paths:
       - Tools
       summary: List tools with optional tool group filter.
       description: List tools with optional tool group filter.
-      operationId: list_tools_v1_admin_tools_get
+      operationId: list_tools_v1_tools_get
       parameters:
       - name: toolgroup_id
         in: query
@@ -12880,6 +12917,162 @@ components:
       - sequence_number
       title: OpenAIResponseObjectStreamError
       type: object
+    ListModelsResponse:
+      description: Response containing a list of model objects.
+      properties:
+        data:
+          description: List of model objects.
+          items:
+            $ref: '#/components/schemas/Model'
+          title: Data
+          type: array
+      required:
+      - data
+      title: ListModelsResponse
+      type: object
+    AnthropicModelInfo:
+      description: |-
+        Anthropic model info response object.
+
+        :id: Unique model identifier
+      properties:
+        id:
+          title: Id
+          type: string
+        type:
+          title: Type
+          type: string
+          enum:
+          - model
+        display_name:
+          title: Display Name
+          type: string
+        created_at:
+          title: Created At
+          type: string
+        max_input_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          nullable: true
+        max_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          nullable: true
+      required:
+      - id
+      - display_name
+      - created_at
+      title: AnthropicModelInfo
+      type: object
+    AnthropicListModelsResponse:
+      description: Response containing a list of Anthropic model objects.
+      properties:
+        data:
+          description: List of Anthropic model objects.
+          items:
+            $ref: '#/components/schemas/AnthropicModelInfo'
+          title: Data
+          type: array
+        has_more:
+          default: false
+          title: Has More
+          type: boolean
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          nullable: true
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          nullable: true
+      required:
+      - data
+      title: AnthropicListModelsResponse
+      type: object
+    GoogleModelInfo:
+      description: |-
+        Google model info response object.
+
+        :name: Model resource name, e.g. 'models/gemini-pro'
+        :display_name: A human-readable name for the model
+        :description: A description of the model
+      properties:
+        name:
+          title: Name
+          type: string
+        display_name:
+          title: Display Name
+          type: string
+        description:
+          default: ''
+          title: Description
+          type: string
+      required:
+      - name
+      - display_name
+      title: GoogleModelInfo
+      type: object
+    GoogleListModelsResponse:
+      description: Response containing a list of Google model objects.
+      properties:
+        models:
+          description: List of Google model objects.
+          items:
+            $ref: '#/components/schemas/GoogleModelInfo'
+          title: Models
+          type: array
+      required:
+      - models
+      title: GoogleListModelsResponse
+      type: object
+    GetModelRequest:
+      description: Request model for getting a model by ID.
+      properties:
+        model_id:
+          description: The ID of the model to get.
+          title: Model Id
+          type: string
+      required:
+      - model_id
+      title: GetModelRequest
+      type: object
+    UnregisterModelRequest:
+      description: Request model for unregistering a model.
+      properties:
+        model_id:
+          description: The ID of the model to unregister.
+          title: Model Id
+          type: string
+      required:
+      - model_id
+      title: UnregisterModelRequest
+      type: object
+    GetShieldRequest:
+      description: Request model for getting a shield by identifier.
+      properties:
+        identifier:
+          description: The identifier of the shield to get.
+          title: Identifier
+          type: string
+      required:
+      - identifier
+      title: GetShieldRequest
+      type: object
+    UnregisterShieldRequest:
+      description: Request model for unregistering a shield.
+      properties:
+        identifier:
+          description: The identifier of the shield to unregister.
+          title: Identifier
+          type: string
+      required:
+      - identifier
+      title: UnregisterShieldRequest
+      type: object
     TextDelta:
       description: A text content delta for streaming responses.
       properties:
@@ -12952,126 +13145,6 @@ components:
           description: The ID of the tool group to filter tools by.
           nullable: true
       title: ListToolsRequest
-      type: object
-    ConnectorInput:
-      description: Input for creating a connector
-      properties:
-        connector_type:
-          $ref: '#/components/schemas/ConnectorType'
-          default: mcp
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-        url:
-          description: URL of the connector
-          title: Url
-          type: string
-        server_label:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Label of the server
-          nullable: true
-      required:
-      - connector_id
-      - url
-      title: ConnectorInput
-      type: object
-    GetConnectorRequest:
-      description: Request model for getting a connector by ID.
-      properties:
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-      required:
-      - connector_id
-      title: GetConnectorRequest
-      type: object
-    ListConnectorToolsRequest:
-      description: Request model for listing tools from a connector.
-      properties:
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-      required:
-      - connector_id
-      title: ListConnectorToolsRequest
-      type: object
-    GetConnectorToolRequest:
-      description: Request model for getting a tool from a connector.
-      properties:
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-        tool_name:
-          description: Name of the tool
-          title: Tool Name
-          type: string
-      required:
-      - connector_id
-      - tool_name
-      title: GetConnectorToolRequest
-      type: object
-    ListModelsResponse:
-      description: Response containing a list of model objects.
-      properties:
-        data:
-          description: List of model objects.
-          items:
-            $ref: '#/components/schemas/Model'
-          title: Data
-          type: array
-      required:
-      - data
-      title: ListModelsResponse
-      type: object
-    GetModelRequest:
-      description: Request model for getting a model by ID.
-      properties:
-        model_id:
-          description: The ID of the model to get.
-          title: Model Id
-          type: string
-      required:
-      - model_id
-      title: GetModelRequest
-      type: object
-    UnregisterModelRequest:
-      description: Request model for unregistering a model.
-      properties:
-        model_id:
-          description: The ID of the model to unregister.
-          title: Model Id
-          type: string
-      required:
-      - model_id
-      title: UnregisterModelRequest
-      type: object
-    GetShieldRequest:
-      description: Request model for getting a shield by identifier.
-      properties:
-        identifier:
-          description: The identifier of the shield to get.
-          title: Identifier
-          type: string
-      required:
-      - identifier
-      title: GetShieldRequest
-      type: object
-    UnregisterShieldRequest:
-      description: Request model for unregistering a shield.
-      properties:
-        identifier:
-          description: The identifier of the shield to unregister.
-          title: Identifier
-          type: string
-      required:
-      - identifier
-      title: UnregisterShieldRequest
       type: object
     Api:
       description: Enumeration of all available APIs in the OGX system.
@@ -14097,6 +14170,69 @@ components:
           enum:
           - dialog
       title: DialogType
+      type: object
+    ConnectorInput:
+      description: Input for creating a connector
+      properties:
+        connector_type:
+          $ref: '#/components/schemas/ConnectorType'
+          default: mcp
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+        url:
+          description: URL of the connector
+          title: Url
+          type: string
+        server_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Label of the server
+          nullable: true
+      required:
+      - connector_id
+      - url
+      title: ConnectorInput
+      type: object
+    GetConnectorRequest:
+      description: Request model for getting a connector by ID.
+      properties:
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+      required:
+      - connector_id
+      title: GetConnectorRequest
+      type: object
+    ListConnectorToolsRequest:
+      description: Request model for listing tools from a connector.
+      properties:
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+      required:
+      - connector_id
+      title: ListConnectorToolsRequest
+      type: object
+    GetConnectorToolRequest:
+      description: Request model for getting a tool from a connector.
+      properties:
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+        tool_name:
+          description: Name of the tool
+          title: Tool Name
+          type: string
+      required:
+      - connector_id
+      - tool_name
+      title: GetConnectorToolRequest
       type: object
     ConversationMessage:
       description: OpenAI-compatible message item for conversations.

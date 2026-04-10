@@ -118,6 +118,57 @@ class ListModelsResponse(BaseModel):
 
 
 @json_schema_type
+class AnthropicModelInfo(BaseModel):
+    """Anthropic model info response object.
+
+    :id: Unique model identifier
+    :type: Object type, always 'model'
+    :display_name: A human-readable name for the model
+    :created_at: RFC 3339 datetime string for when the model was released
+    :max_input_tokens: Maximum input context window size in tokens
+    :max_tokens: Maximum value for the max_tokens parameter
+    """
+
+    id: str
+    type: Literal["model"] = "model"
+    display_name: str
+    created_at: str
+    max_input_tokens: int | None = None
+    max_tokens: int | None = None
+
+
+@json_schema_type
+class AnthropicListModelsResponse(BaseModel):
+    """Response containing a list of Anthropic model objects."""
+
+    data: list[AnthropicModelInfo] = Field(..., description="List of Anthropic model objects.")
+    has_more: bool = False
+    first_id: str | None = None
+    last_id: str | None = None
+
+
+@json_schema_type
+class GoogleModelInfo(BaseModel):
+    """Google model info response object.
+
+    :name: Model resource name, e.g. 'models/gemini-pro'
+    :display_name: A human-readable name for the model
+    :description: A description of the model
+    """
+
+    name: str
+    display_name: str
+    description: str = ""
+
+
+@json_schema_type
+class GoogleListModelsResponse(BaseModel):
+    """Response containing a list of Google model objects."""
+
+    models: list[GoogleModelInfo] = Field(..., description="List of Google model objects.")
+
+
+@json_schema_type
 class OpenAIModel(BaseModel):
     """A model from OpenAI.
 
@@ -176,8 +227,12 @@ class UnregisterModelRequest(BaseModel):
 
 
 __all__ = [
+    "AnthropicListModelsResponse",
+    "AnthropicModelInfo",
     "CommonModelFields",
     "GetModelRequest",
+    "GoogleListModelsResponse",
+    "GoogleModelInfo",
     "ListModelsResponse",
     "Model",
     "ModelInput",
