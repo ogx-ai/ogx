@@ -14,12 +14,12 @@ response formats via header-based SDK detection.
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import JSONResponse
 
 from ogx_api.messages.models import ANTHROPIC_VERSION
 from ogx_api.router_utils import create_path_dependency, standard_responses
-from ogx_api.sdk_detection import SdkType, detect_sdk
+from ogx_api.sdk_detection import SdkType
 from ogx_api.version import OGX_API_V1
 
 from .api import Models
@@ -33,6 +33,18 @@ from .models import (
 
 # Path parameter dependencies for single-field models
 get_model_request = create_path_dependency(GetModelRequest)
+
+
+def _detect_sdk_from_headers(
+    anthropic_version: Annotated[str | None, Header(alias="anthropic-version")] = None,
+    x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
+) -> SdkType:
+    """Detect SDK type from request headers via FastAPI dependency injection."""
+    if anthropic_version:
+        return SdkType.ANTHROPIC
+    if x_goog_api_key:
+        return SdkType.GOOGLE
+    return SdkType.OPENAI
 
 
 def create_router(impl: Models) -> APIRouter:
@@ -59,8 +71,9 @@ def create_router(impl: Models) -> APIRouter:
             200: {"description": "A list of model objects."},
         },
     )
-    async def list_models(request: Request) -> OpenAIListModelsResponse | Response:
-        sdk = detect_sdk(request)
+    async def list_models(
+        sdk: Annotated[SdkType, Depends(_detect_sdk_from_headers)] = SdkType.OPENAI,
+    ) -> OpenAIListModelsResponse | Response:
         if sdk == SdkType.ANTHROPIC:
             anthropic_result = await impl.anthropic_list_models()
             return JSONResponse(
@@ -83,11 +96,10 @@ def create_router(impl: Models) -> APIRouter:
         },
     )
     async def get_model(
-        request: Request,
         model_request: Annotated[GetModelRequest, Depends(get_model_request)],
+        sdk: Annotated[SdkType, Depends(_detect_sdk_from_headers)] = SdkType.OPENAI,
     ) -> Model | Response:
         model = await impl.get_model(model_request)
-        sdk = detect_sdk(request)
 
         if sdk == SdkType.ANTHROPIC:
             anthropic_model = AnthropicModelInfo(
