@@ -240,6 +240,8 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
         )
 
     async def google_list_models(self) -> GoogleListModelsResponse:
+        # Uses the Gemini API "models/{id}" format. Vertex AI uses a different
+        # resource path and would need provider-aware translation if added.
         all_models = await self._get_all_models()
         google_models = [
             GoogleModelInfo(
