@@ -129,12 +129,14 @@ class AnthropicModelInfo(BaseModel):
     :max_tokens: Maximum value for the max_tokens parameter
     """
 
-    id: str
-    type: Literal["model"] = "model"
-    display_name: str
-    created_at: str
-    max_input_tokens: int | None = None
-    max_tokens: int | None = None
+    id: str = Field(..., description="Unique model identifier.")
+    type: Literal["model"] = Field(default="model", description="Object type, always 'model'.")
+    display_name: str = Field(..., description="A human-readable name for the model.")
+    created_at: str = Field(..., description="RFC 3339 datetime string representing when the model was released.")
+    max_input_tokens: int | None = Field(default=None, description="Maximum input context window size in tokens.")
+    max_tokens: int | None = Field(
+        default=None, description="Maximum value for the max_tokens parameter when using this model."
+    )
 
 
 @json_schema_type
@@ -142,9 +144,13 @@ class AnthropicListModelsResponse(BaseModel):
     """Response containing a list of Anthropic model objects."""
 
     data: list[AnthropicModelInfo] = Field(..., description="List of Anthropic model objects.")
-    has_more: bool = False
-    first_id: str | None = None
-    last_id: str | None = None
+    has_more: bool = Field(default=False, description="Whether there are more results in the requested page direction.")
+    first_id: str | None = Field(
+        default=None, description="First ID in the data list, usable as before_id for the previous page."
+    )
+    last_id: str | None = Field(
+        default=None, description="Last ID in the data list, usable as after_id for the next page."
+    )
 
 
 @json_schema_type
@@ -156,9 +162,9 @@ class GoogleModelInfo(BaseModel):
     :description: A description of the model
     """
 
-    name: str
-    display_name: str
-    description: str = ""
+    name: str = Field(..., description="Model resource name, e.g. 'models/gemini-pro'.")
+    display_name: str = Field(..., description="A human-readable name for the model.")
+    description: str = Field(default="", description="A description of the model.")
 
 
 @json_schema_type
