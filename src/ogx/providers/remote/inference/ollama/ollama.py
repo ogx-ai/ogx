@@ -20,9 +20,11 @@ from ogx_api import (
     HealthResponse,
     HealthStatus,
     Model,
+    OpenAIAssistantMessageParam,
     OpenAIChatCompletionChunkWithReasoning,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionWithReasoning,
+    OpenAIMessageParam,
     UnsupportedModelError,
 )
 
@@ -107,15 +109,14 @@ class OllamaInferenceAdapter(OpenAIMixin):
         params = params.model_copy()
         self._prepare_reasoning_params(params)
 
-        # Ollama's CC endpoint expects 'reasoning' on assistant messages, but
-        # that field isn't part of the official CC spec. Convert to dicts so we
-        # can rename reasoning_content → reasoning.
-        mapped_messages: list = []
+        # Ollama expects `reasoning` on assistant messages. Keep the message list typed
+        # by rehydrating the remapped assistant message back into the OpenAI assistant model.
+        mapped_messages: list[OpenAIMessageParam] = []
         for msg in params.messages:
             if isinstance(msg, AssistantMessageWithReasoning) and msg.reasoning_content:
                 msg_dict = msg.model_dump(exclude_none=True)
                 msg_dict["reasoning"] = msg_dict.pop("reasoning_content")
-                mapped_messages.append(msg_dict)
+                mapped_messages.append(OpenAIAssistantMessageParam.model_validate(msg_dict))
             else:
                 mapped_messages.append(msg)
         params.messages = mapped_messages
