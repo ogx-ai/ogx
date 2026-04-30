@@ -21,6 +21,7 @@ from ogx_api import (
     AllowedToolsFilter,
     ApprovalFilter,
     Connectors,
+    CreateResponseRequest,
     GetConnectorRequest,
     Inference,
     MCPListToolsTool,
@@ -33,6 +34,7 @@ from ogx_api import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
+    OpenAIChatCompletionToolCallFunction,
     OpenAIChatCompletionToolChoice,
     OpenAIChatCompletionToolChoiceAllowedTools,
     OpenAIChatCompletionToolChoiceCustomTool,
@@ -250,8 +252,10 @@ class StreamingResponseOrchestrator:
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         stream_options: ResponseStreamOptions | None = None,
+        use_native_responses: bool = False,
     ):
         self.inference_api = inference_api
+        self.use_native_responses = use_native_responses
         self.ctx = ctx
         self.response_id = response_id
         self.created_at = created_at
@@ -524,63 +528,73 @@ class StreamingResponseOrchestrator:
                 if self.stream_options:
                     effective_stream_options.update(self.stream_options)
 
-                params = OpenAIChatCompletionRequestWithExtraBody(
-                    model=self.ctx.model,
-                    messages=messages,
-                    # Pydantic models are dict-compatible but mypy treats them as distinct types
-                    tools=effective_tools,  # type: ignore[arg-type]
-                    tool_choice=chat_tool_choice,
-                    stream=True,
-                    temperature=self.ctx.temperature,
-                    top_p=self.ctx.top_p,
-                    frequency_penalty=self.ctx.frequency_penalty,
-                    response_format=response_format,
-                    stream_options=effective_stream_options,
-                    logprobs=logprobs,
-                    parallel_tool_calls=effective_parallel_tool_calls,
-                    reasoning_effort=self.reasoning.effort if self.reasoning else None,
-                    safety_identifier=self.safety_identifier,
-                    service_tier=ServiceTier(self.service_tier) if self.service_tier else None,
-                    max_completion_tokens=remaining_output_tokens,
-                    prompt_cache_key=self.prompt_cache_key,
-                    top_logprobs=self.top_logprobs,
-                    presence_penalty=self.presence_penalty,
-                    **(self.extra_body or {}),
-                )
-                # Use reasoning-aware method when reasoning is explicitly requested
-                completion_result: (
-                    OpenAIChatCompletion
-                    | AsyncIterator[OpenAIChatCompletionChunk]
-                    | OpenAIChatCompletionWithReasoning
-                    | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]
-                )
-                if self.reasoning and self.reasoning.effort and self.reasoning.effort != "none":
-                    try:
-                        # Pass a copy — the router mutates params.model (strips provider prefix).
-                        # Keep original params intact in-case of fallback to regular CC.
-                        # NOTE : Is a deep-copy necessary ?
-                        completion_result = await self.inference_api.openai_chat_completions_with_reasoning(
-                            params.model_copy()
-                        )
-                    except (NotImplementedError, AttributeError, ValueError):
-                        logger.critical(
-                            "Provider does not support reasoning in chat completions. "
-                            "Falling back to regular chat completion."
-                        )
-                        completion_result = await self.inference_api.openai_chat_completion(params)
+                # --- Inference call: native responses or chat completions ---
+                completion_result_data: ChatCompletionResult | None = None
+                if self.use_native_responses:
+                    async for stream_event_or_result in self._native_response_inference(
+                        messages=messages,
+                        remaining_output_tokens=remaining_output_tokens,
+                        output_messages=output_messages,
+                    ):
+                        if isinstance(stream_event_or_result, ChatCompletionResult):
+                            completion_result_data = stream_event_or_result
+                        else:
+                            yield stream_event_or_result
+                    if self.violation_detected:
+                        return
                 else:
-                    completion_result = await self.inference_api.openai_chat_completion(params)
-
-                # Process streaming chunks and build complete response
-                completion_result_data = None
-                async for stream_event_or_result in self._process_streaming_chunks(completion_result, output_messages):
-                    if isinstance(stream_event_or_result, ChatCompletionResult):
-                        completion_result_data = stream_event_or_result
+                    # Fall back to chat completions path
+                    params = OpenAIChatCompletionRequestWithExtraBody(
+                        model=self.ctx.model,
+                        messages=messages,
+                        tools=effective_tools,  # type: ignore[arg-type]
+                        tool_choice=chat_tool_choice,
+                        stream=True,
+                        temperature=self.ctx.temperature,
+                        top_p=self.ctx.top_p,
+                        frequency_penalty=self.ctx.frequency_penalty,
+                        response_format=response_format,
+                        stream_options=effective_stream_options,
+                        logprobs=logprobs,
+                        parallel_tool_calls=effective_parallel_tool_calls,
+                        reasoning_effort=self.reasoning.effort if self.reasoning else None,
+                        safety_identifier=self.safety_identifier,
+                        service_tier=ServiceTier(self.service_tier) if self.service_tier else None,
+                        max_completion_tokens=remaining_output_tokens,
+                        prompt_cache_key=self.prompt_cache_key,
+                        top_logprobs=self.top_logprobs,
+                        presence_penalty=self.presence_penalty,
+                        **(self.extra_body or {}),
+                    )
+                    completion_result: (
+                        OpenAIChatCompletion
+                        | AsyncIterator[OpenAIChatCompletionChunk]
+                        | OpenAIChatCompletionWithReasoning
+                        | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]
+                    )
+                    if self.reasoning and self.reasoning.effort and self.reasoning.effort != "none":
+                        try:
+                            completion_result = await self.inference_api.openai_chat_completions_with_reasoning(
+                                params.model_copy()
+                            )
+                        except (NotImplementedError, AttributeError, ValueError):
+                            logger.critical(
+                                "Provider does not support reasoning in chat completions. "
+                                "Falling back to regular chat completion."
+                            )
+                            completion_result = await self.inference_api.openai_chat_completion(params)
                     else:
-                        yield stream_event_or_result
-                # If violation detected, skip the rest of processing since we already sent refusal
-                if self.violation_detected:
-                    return
+                        completion_result = await self.inference_api.openai_chat_completion(params)
+
+                    async for stream_event_or_result in self._process_streaming_chunks(
+                        completion_result, output_messages
+                    ):
+                        if isinstance(stream_event_or_result, ChatCompletionResult):
+                            completion_result_data = stream_event_or_result
+                        else:
+                            yield stream_event_or_result
+                    if self.violation_detected:
+                        return
 
                 if not completion_result_data:
                     raise ValueError("Streaming chunk processor failed to return completion data")
@@ -887,6 +901,29 @@ class StreamingResponseOrchestrator:
                 ),
             )
 
+    def _accumulate_native_usage(self, usage: OpenAIResponseUsage) -> None:
+        """Accumulate usage from a native response into the response usage tracking."""
+        self.accumulated_builtin_output_tokens += usage.output_tokens
+
+        if self.accumulated_usage is None:
+            self.accumulated_usage = usage
+        else:
+            self.accumulated_usage = OpenAIResponseUsage(
+                input_tokens=self.accumulated_usage.input_tokens + usage.input_tokens,
+                output_tokens=self.accumulated_usage.output_tokens + usage.output_tokens,
+                total_tokens=self.accumulated_usage.total_tokens + usage.total_tokens,
+                input_tokens_details=OpenAIResponseUsageInputTokensDetails(
+                    cached_tokens=usage.input_tokens_details.cached_tokens
+                    if usage.input_tokens_details
+                    else self.accumulated_usage.input_tokens_details.cached_tokens
+                ),
+                output_tokens_details=OpenAIResponseUsageOutputTokensDetails(
+                    reasoning_tokens=usage.output_tokens_details.reasoning_tokens
+                    if usage.output_tokens_details
+                    else self.accumulated_usage.output_tokens_details.reasoning_tokens
+                ),
+            )
+
     async def _handle_reasoning_content_chunk(
         self,
         reasoning_content: str,
@@ -1007,6 +1044,208 @@ class StreamingResponseOrchestrator:
                 refusal=final_refusal_text,
             ),
             sequence_number=self.sequence_number,
+        )
+
+    @staticmethod
+    def _convert_cc_messages_to_responses_input(messages: list[OpenAIMessageParam]) -> list[dict[str, Any]]:
+        """Convert Chat Completions message history to Responses API input format.
+
+        The tool-calling loop builds next_turn_messages in CC format
+        (role=assistant with tool_calls, role=tool with tool_call_id).
+        The Responses API expects type=function_call and
+        type=function_call_output items instead.
+        """
+        converted: list[dict[str, Any]] = []
+        for msg in messages:
+            dumped = msg.model_dump(exclude_none=True)
+            role = dumped.get("role")
+            if role == "assistant" and dumped.get("tool_calls"):
+                if dumped.get("content"):
+                    converted.append({"role": "assistant", "content": dumped["content"]})
+                for tc in dumped["tool_calls"]:
+                    fn = tc.get("function", {})
+                    converted.append(
+                        {
+                            "type": "function_call",
+                            "call_id": tc.get("id", ""),
+                            "name": fn.get("name", ""),
+                            "arguments": fn.get("arguments", "{}"),
+                        }
+                    )
+            elif role == "tool":
+                content = dumped.get("content", "")
+                if isinstance(content, list):
+                    content = " ".join(p.get("text", "") for p in content if isinstance(p, dict))
+                converted.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": dumped.get("tool_call_id", ""),
+                        "output": content,
+                    }
+                )
+            else:
+                converted.append(dumped)
+        return converted
+
+    async def _native_response_inference(
+        self,
+        messages: list[OpenAIMessageParam],
+        remaining_output_tokens: int | None,
+        output_messages: list[OpenAIResponseOutput],
+    ) -> AsyncIterator[OpenAIResponseObjectStream | ChatCompletionResult]:
+        """Use the provider's native /v1/responses endpoint for inference.
+
+        Yields streaming events incrementally and a final ChatCompletionResult sentinel,
+        matching the same pattern as _process_streaming_chunks for the CC path.
+
+        Only called when self.use_native_responses is True.
+        """
+        converted_input = self._convert_cc_messages_to_responses_input(messages)
+
+        native_request = CreateResponseRequest(
+            model=self.ctx.model,
+            input=converted_input,  # type: ignore[arg-type]
+            instructions=self.instructions,
+            tools=self.ctx.response_tools,
+            tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
+            stream=True,
+            store=False,
+            temperature=self.ctx.temperature,
+            top_p=self.ctx.top_p,
+            reasoning=self.reasoning,
+            max_output_tokens=remaining_output_tokens,
+            include=self.include,
+            truncation=self.truncation,
+            presence_penalty=self.presence_penalty,
+            frequency_penalty=self.ctx.frequency_penalty,
+        )
+
+        result = await self.inference_api.openai_response(native_request)
+
+        if not isinstance(result, AsyncIterator):
+            raise ValueError("Expected streaming response from native responses endpoint")
+
+        async for event_or_result in self._process_native_response_events(result):
+            yield event_or_result
+
+    async def _process_native_response_events(
+        self,
+        event_stream: AsyncIterator[OpenAIResponseObjectStream],
+    ) -> AsyncIterator[OpenAIResponseObjectStream | ChatCompletionResult]:
+        """Process native response streaming events incrementally.
+
+        Yields content events (text deltas, function call events) to the client as
+        they arrive. Filters out provider lifecycle events (created, in_progress,
+        completed) and reasoning events (handled by shared code in create_response).
+
+        When output guardrails are configured, buffers events and validates
+        accumulated text before emitting, matching the CC path behavior.
+
+        Yields a final ChatCompletionResult sentinel for the tool-calling loop.
+        """
+        content_parts: list[str] = []
+        tool_calls: dict[int, OpenAIChatCompletionToolCall] = {}
+        reasoning_parts: list[str] = []
+        finish_reason: OpenAIFinishReason = "stop"
+        model = self.ctx.model
+        created = self.created_at
+        message_item_id = f"msg_{uuid.uuid4().hex[:24]}"
+        tool_call_item_ids: dict[int, str] = {}
+        service_tier: str | None = None
+        tool_call_idx = 0
+        pending_arguments: dict[str, str] = {}
+        chunk_events: list[OpenAIResponseObjectStream] = []
+
+        _lifecycle_types = (
+            OpenAIResponseObjectStreamResponseCreated,
+            OpenAIResponseObjectStreamResponseInProgress,
+        )
+        _terminal_types = (
+            OpenAIResponseObjectStreamResponseCompleted,
+            OpenAIResponseObjectStreamResponseIncomplete,
+        )
+        _reasoning_types = (
+            OpenAIResponseObjectStreamResponseReasoningTextDelta,
+            OpenAIResponseObjectStreamResponseReasoningTextDone,
+        )
+
+        async for event in event_stream:
+            if isinstance(event, OpenAIResponseObjectStreamResponseOutputTextDelta):
+                content_parts.append(event.delta)
+                chunk_events.append(event)
+            elif isinstance(event, OpenAIResponseObjectStreamResponseReasoningTextDelta):
+                reasoning_parts.append(event.delta)
+            elif isinstance(event, OpenAIResponseObjectStreamResponseFunctionCallArgumentsDone):
+                pending_arguments[event.item_id] = event.arguments
+                chunk_events.append(event)
+            elif isinstance(event, OpenAIResponseObjectStreamResponseOutputItemDone):
+                item = event.item
+                if hasattr(item, "type") and item.type == "function_call":
+                    item_id = getattr(item, "id", "")
+                    call_id = getattr(item, "call_id", f"call_{uuid.uuid4().hex[:24]}")
+                    name = getattr(item, "name", "")
+                    arguments = getattr(item, "arguments", pending_arguments.pop(item_id, "{}"))
+                    tool_calls[tool_call_idx] = OpenAIChatCompletionToolCall(
+                        id=call_id,
+                        type="function",
+                        function=OpenAIChatCompletionToolCallFunction(
+                            name=name,
+                            arguments=arguments,
+                        ),
+                    )
+                    tool_call_item_ids[tool_call_idx] = item_id or f"fc_{uuid.uuid4().hex[:24]}"
+                    tool_call_idx += 1
+                else:
+                    chunk_events.append(event)
+            elif isinstance(event, _terminal_types):
+                if hasattr(event, "response") and event.response:
+                    resp = event.response
+                    if hasattr(resp, "model"):
+                        model = resp.model
+                    if hasattr(resp, "service_tier"):
+                        service_tier = resp.service_tier
+                    if hasattr(resp, "usage") and resp.usage is not None:
+                        self._accumulate_native_usage(resp.usage)
+                if isinstance(event, OpenAIResponseObjectStreamResponseIncomplete) or (
+                    hasattr(resp, "status") and resp.status == "incomplete"
+                ):
+                    finish_reason = "length"
+            elif isinstance(event, _lifecycle_types + _reasoning_types):
+                pass
+            else:
+                chunk_events.append(event)
+
+            if self.guardrail_ids and chunk_events:
+                accumulated_text = "".join(content_parts)
+                violation_message = await run_guardrails(self.safety_api, accumulated_text, self.guardrail_ids)
+                if violation_message:
+                    logger.info("Output guardrail violation", violation_message=violation_message)
+                    chunk_events.clear()
+                    yield await self._create_refusal_response(violation_message)
+                    self.violation_detected = True
+                    return
+                for evt in chunk_events:
+                    yield evt
+                chunk_events.clear()
+            elif not self.guardrail_ids and chunk_events:
+                for evt in chunk_events:
+                    yield evt
+                chunk_events.clear()
+
+        reasoning_content = "".join(reasoning_parts) if reasoning_parts else None
+
+        yield ChatCompletionResult(
+            response_id=self.response_id,
+            content=content_parts,
+            tool_calls=tool_calls,
+            created=created,
+            model=model,
+            finish_reason=finish_reason,
+            message_item_id=message_item_id,
+            tool_call_item_ids=tool_call_item_ids,
+            content_part_emitted=bool(content_parts),
+            service_tier=service_tier,
+            reasoning_content=reasoning_content,
         )
 
     async def _process_streaming_chunks(

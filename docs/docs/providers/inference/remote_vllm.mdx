@@ -36,6 +36,7 @@ Remote vLLM inference provider for connecting to vLLM servers.
 | `network.headers` | `dict[str, str] \| None` | No |  | Additional HTTP headers to include in all requests. |
 | `base_url` | `HttpUrl \| None` | No |  | The URL for the vLLM model serving endpoint |
 | `max_tokens` | `int` | No | 4096 | Maximum number of tokens to generate. |
+| `native_responses` | `bool` | No | False | Use vLLM's native /v1/responses endpoint for inference instead of /v1/chat/completions. Provides proper reasoning token retention and structured token accounting. Requires vLLM with Responses API support. |
 | `tls_verify` | `bool \| str \| None` | No |  | DEPRECATED: Use 'network.tls.verify' instead. Whether to verify TLS certificates. Can be a boolean or a path to a CA certificate file. |
 
 ## Sample Configuration
@@ -44,6 +45,7 @@ Remote vLLM inference provider for connecting to vLLM servers.
 base_url: ${env.VLLM_URL:=}
 max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
 api_token: ${env.VLLM_API_TOKEN:=fake}
+native_responses: ${env.VLLM_NATIVE_RESPONSES:=false}
 network:
   tls:
     verify: ${env.VLLM_TLS_VERIFY:=true}

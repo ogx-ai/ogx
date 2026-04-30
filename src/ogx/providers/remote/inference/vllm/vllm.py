@@ -3,11 +3,13 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
+import json
 from collections.abc import AsyncIterator
+from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-from pydantic import ConfigDict
+from pydantic import ConfigDict, TypeAdapter, ValidationError
 
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
@@ -18,6 +20,7 @@ from ogx.providers.utils.inference.http_client import (
 )
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
+    CreateResponseRequest,
     HealthResponse,
     HealthStatus,
     Model,
@@ -29,6 +32,8 @@ from ogx_api import (
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionWithReasoning,
+    OpenAIResponseObject,
+    OpenAIResponseObjectStream,
     RerankData,
     RerankResponse,
 )
@@ -47,6 +52,10 @@ class VLLMInferenceAdapter(OpenAIMixin):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     provider_data_api_key_field: str = "vllm_api_token"
+
+    @property
+    def supports_native_responses(self) -> bool:
+        return self.config.native_responses
 
     def get_api_key(self) -> str | None:
         if self.config.auth_credential:
@@ -171,6 +180,139 @@ class VLLMInferenceAdapter(OpenAIMixin):
                 )
 
         return _wrap_chunks()
+
+    async def openai_response(
+        self,
+        request: CreateResponseRequest,
+    ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
+        if not self.config.native_responses:
+            raise NotImplementedError("Native responses disabled. Set native_responses: true in vLLM config.")
+
+        payload = self._build_response_payload(request)
+        endpoint = f"{self.get_base_url()}/responses"
+        headers = self._build_auth_headers()
+
+        if request.stream:
+            return await self._stream_response(endpoint, headers, payload)
+        else:
+            return await self._fetch_response(endpoint, headers, payload)
+
+    def _build_response_payload(self, request: CreateResponseRequest) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": request.model,
+            "input": request.input
+            if isinstance(request.input, str)
+            else [
+                item.model_dump(exclude_none=True) if hasattr(item, "model_dump") else item for item in request.input
+            ],
+            "stream": bool(request.stream),
+            "store": False,
+        }
+
+        if request.instructions is not None:
+            payload["instructions"] = request.instructions
+        if request.temperature is not None:
+            payload["temperature"] = request.temperature
+        if request.top_p is not None:
+            payload["top_p"] = request.top_p
+        if request.max_output_tokens is not None:
+            payload["max_output_tokens"] = request.max_output_tokens
+        if request.tools:
+            payload["tools"] = [
+                tool.model_dump(exclude_none=True) if hasattr(tool, "model_dump") else tool for tool in request.tools
+            ]
+        if request.tool_choice is not None:
+            payload["tool_choice"] = (
+                request.tool_choice.model_dump(exclude_none=True)
+                if hasattr(request.tool_choice, "model_dump")
+                else request.tool_choice
+            )
+        if request.text is not None:
+            payload["text"] = (
+                request.text.model_dump(exclude_none=True) if hasattr(request.text, "model_dump") else request.text
+            )
+        if request.reasoning is not None:
+            payload["reasoning"] = (
+                request.reasoning.model_dump(exclude_none=True)
+                if hasattr(request.reasoning, "model_dump")
+                else request.reasoning
+            )
+        if request.include is not None:
+            payload["include"] = request.include
+        if request.metadata is not None:
+            payload["metadata"] = request.metadata
+        if request.frequency_penalty is not None:
+            payload["frequency_penalty"] = request.frequency_penalty
+        if request.presence_penalty is not None:
+            payload["presence_penalty"] = request.presence_penalty
+        if request.truncation is not None:
+            payload["truncation"] = (
+                request.truncation.model_dump(exclude_none=True)
+                if hasattr(request.truncation, "model_dump")
+                else request.truncation
+            )
+
+        return payload
+
+    def _build_auth_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        api_key = self._get_api_key_from_config_or_provider_data()
+        if api_key and api_key != "NO KEY REQUIRED":
+            headers["Authorization"] = f"Bearer {api_key}"
+        return headers
+
+    async def _fetch_response(
+        self, endpoint: str, headers: dict[str, str], payload: dict[str, Any]
+    ) -> OpenAIResponseObject:
+        try:
+            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+                response = await client.post(endpoint, headers=headers, json=payload, timeout=None)
+                if response.status_code == 404:
+                    raise NotImplementedError(
+                        "vLLM server does not support /v1/responses endpoint. "
+                        "Upgrade vLLM or set native_responses: false."
+                    )
+                if response.status_code != 200:
+                    raise RuntimeError(f"Failed to get response from vLLM: {response.status_code}: {response.text}")
+                return OpenAIResponseObject(**response.json())
+        except httpx.HTTPError as e:
+            raise ConnectionError(f"Failed to connect to vLLM responses API at {endpoint}: {e}") from e
+
+    _response_stream_adapter: TypeAdapter[OpenAIResponseObjectStream] = TypeAdapter(OpenAIResponseObjectStream)
+
+    async def _stream_response(
+        self, endpoint: str, headers: dict[str, str], payload: dict[str, Any]
+    ) -> AsyncIterator[OpenAIResponseObjectStream]:
+        async def _event_iterator() -> AsyncIterator[OpenAIResponseObjectStream]:
+            try:
+                async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+                    async with client.stream("POST", endpoint, headers=headers, json=payload, timeout=None) as response:
+                        if response.status_code == 404:
+                            raise NotImplementedError(
+                                "vLLM server does not support /v1/responses endpoint. "
+                                "Upgrade vLLM or set native_responses: false."
+                            )
+                        if response.status_code != 200:
+                            body = await response.aread()
+                            raise RuntimeError(
+                                f"Failed to get response from vLLM: {response.status_code}: {body.decode()}"
+                            )
+                        async for line in response.aiter_lines():
+                            if not line.startswith("data: "):
+                                continue
+                            data = line[len("data: ") :]
+                            if data.strip() == "[DONE]":
+                                break
+                            try:
+                                event_data = json.loads(data)
+                                yield self._response_stream_adapter.validate_python(event_data)
+                            except (json.JSONDecodeError, ValidationError) as e:
+                                log.warning("Failed to parse SSE event from vLLM", error=str(e), data=data[:200])
+                                continue
+            except httpx.HTTPError as e:
+                raise ConnectionError(f"Failed to connect to vLLM responses API at {endpoint}: {e}") from e
+
+        return _event_iterator()
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # vLLM's /v1/models response does not expose a model task/type field, so classify by name.

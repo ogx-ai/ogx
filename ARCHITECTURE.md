@@ -116,6 +116,14 @@ The full list of auto-routed pairs is defined in `builtin_automatically_routed_a
 | `Api.tool_groups`     | `Api.tool_runtime` |
 | `Api.vector_stores`   | `Api.vector_io`  |
 
+### Optional Provider Capabilities
+
+Some providers support capabilities beyond the base protocol. These are exposed as opt-in properties on the `InferenceProvider` protocol:
+
+- **`supports_native_responses`** -- When `True`, the provider implements `openai_response()` to call a native `/v1/responses` endpoint (e.g., vLLM) instead of decomposing through `/v1/chat/completions`. The `InferenceRouter.check_native_responses_support()` method queries this flag, and the `StreamingResponseOrchestrator` uses it to choose the inference path. Controlled by the `native_responses` config flag on the vLLM provider.
+
+This pattern uses explicit capability checks (`getattr(provider, "supports_native_responses", False)`) rather than try/except, since Pydantic `BaseModel` subclasses raise `KeyError` (not `AttributeError`) for undefined attributes.
+
 ## The API Layer (`ogx_api`)
 
 The `ogx_api` package defines all public-facing types and protocols:

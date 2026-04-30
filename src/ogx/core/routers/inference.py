@@ -26,6 +26,7 @@ from ogx.telemetry.inference_metrics import (
     inference_tokens_per_second,
 )
 from ogx_api import (
+    CreateResponseRequest,
     GetChatCompletionRequest,
     HealthResponse,
     HealthStatus,
@@ -51,6 +52,8 @@ from ogx_api import (
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
     OpenAIMessageParam,
+    OpenAIResponseObject,
+    OpenAIResponseObjectStream,
     OpenAITokenLogProb,
     OpenAITopLogProb,
     RegisterModelRequest,
@@ -285,6 +288,21 @@ class InferenceRouter(Inference):
         # the Responses layer catches them and falls back to regular CC
         # with a warning.
         return await provider.openai_chat_completions_with_reasoning(params)
+
+    async def check_native_responses_support(self, model: str) -> bool:
+        """Check if the provider for a given model supports native responses."""
+        provider, _ = await self._get_model_provider(model, ModelType.llm)
+        return getattr(provider, "supports_native_responses", False)
+
+    async def openai_response(
+        self,
+        request: CreateResponseRequest,
+    ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
+        """Route a native Responses API inference call to the provider for the given model."""
+        provider, provider_resource_id = await self._get_model_provider(request.model, ModelType.llm)
+        request = request.model_copy()
+        request.model = provider_resource_id
+        return await provider.openai_response(request)
 
     async def openai_embeddings(
         self,

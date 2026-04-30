@@ -4,10 +4,19 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from ogx_api.models import Model
+
+if TYPE_CHECKING:
+    from ogx_api.openai_responses import (
+        OpenAIResponseObject,
+        OpenAIResponseObjectStream,
+    )
+    from ogx_api.responses.models import CreateResponseRequest
 
 from .models import (
     GetChatCompletionRequest,
@@ -83,6 +92,32 @@ class InferenceProvider(Protocol):
         loudly instead of silently returning no reasoning.
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support reasoning in chat completions")
+
+    @property
+    def supports_native_responses(self) -> bool:
+        """Whether this provider supports native /v1/responses inference.
+
+        Providers that return True must implement openai_response().
+        The orchestrator checks this flag to decide the inference path
+        rather than relying on try/except NotImplementedError.
+        """
+        return False
+
+    async def openai_response(
+        self,
+        request: CreateResponseRequest,
+    ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
+        """Native Responses API inference for providers that support it.
+
+        Used by the Responses orchestrator as a higher-fidelity inference
+        primitive than chat completions. Providers that expose a /v1/responses
+        endpoint (e.g., vLLM) implement this to preserve reasoning tokens,
+        structured token accounting, and native streaming events.
+
+        Only called when supports_native_responses is True.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support native responses API")
+        return  # mypy safe-super rule
 
     async def openai_embeddings(
         self,

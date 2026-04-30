@@ -311,6 +311,7 @@ const sidebars: SidebarsConfig = {
         'building_applications/evals',
         'building_applications/telemetry',
         'building_applications/safety',
+        'building_applications/native_responses',
         'building_applications/playground',
         'building_applications/claude_code_integration',
         'building_applications/codex_cli_integration',

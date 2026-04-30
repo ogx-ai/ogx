@@ -21,6 +21,7 @@ from ogx_api.tools import ToolGroups, ToolRuntime
 @pytest.fixture
 def mock_inference_api():
     inference_api = AsyncMock()
+    inference_api.check_native_responses_support = AsyncMock(return_value=False)
     return inference_api
 
 

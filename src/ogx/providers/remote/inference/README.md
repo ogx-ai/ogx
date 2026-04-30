@@ -45,6 +45,10 @@ Most remote inference providers follow the same pattern:
 
 Some providers support per-request credentials via `provider_data_validator`. This allows API keys to be passed in request headers rather than server config, useful for multi-tenant deployments.
 
+## Native Responses Support
+
+Providers can optionally support native `/v1/responses` inference by implementing the `openai_response()` method and setting the `supports_native_responses` property to `True`. When enabled, the Responses API orchestrator calls the provider's responses endpoint directly instead of decomposing through chat completions, preserving reasoning tokens and structured token accounting. Currently only `vllm/` implements this, gated by a `native_responses` config flag.
+
 ## Adding a New Inference Provider
 
 1. Create a directory under `inference/` with `__init__.py`, `config.py`, and the implementation.

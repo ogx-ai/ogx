@@ -1,0 +1,130 @@
+---
+title: Native Responses (vLLM)
+description: Use vLLM's native /v1/responses endpoint for higher-fidelity inference with reasoning tokens and structured token accounting
+sidebar_label: Native Responses (vLLM)
+sidebar_position: 7
+---
+
+# Native Responses
+
+When Llama Stack receives a Responses API request, it normally decomposes it into one or more Chat Completions calls to the inference provider. This works across all providers but loses information in the translation — reasoning tokens, structured token accounting, and native streaming events are either approximated or unavailable.
+
+**Native responses** is an opt-in mode that tells Llama Stack to call vLLM's `/v1/responses` endpoint directly for inference, skipping the Chat Completions translation layer. Everything else — tool calling, state management, persistence, guardrails, RAG, MCP — stays in Llama Stack.
+
+:::info Provider support
+Native responses is currently supported only for the `remote::vllm` inference provider. All other providers use the standard Chat Completions path. Requires vLLM with Responses API support (v0.8+).
+:::
+
+## Why use native responses
+
+The Chat Completions path translates between two API formats on every inference call:
+
+```
+Responses input → CC messages → CC chunks → Responses events
+```
+
+This translation is lossy in three specific ways:
+
+| Capability | Chat Completions path | Native responses path |
+|------------|----------------------|----------------------|
+| **Reasoning tokens** | Extracted via non-standard `delta.reasoning` field; non-streaming not supported | Native `ReasoningItem` objects in both streaming and non-streaming |
+| **Token accounting** | Aggregate `prompt_tokens` / `completion_tokens` only | Structured `reasoning_tokens`, `cached_tokens` breakdowns |
+| **Streaming events** | Synthesized from flat delta chunks | Parsed directly from vLLM's structured events |
+
+If you don't need reasoning tokens or detailed token accounting, the default Chat Completions path works fine.
+
+## Configuration
+
+Set `native_responses: true` in your vLLM provider config:
+
+```yaml title="run.yaml"
+providers:
+  inference:
+    - provider_id: vllm
+      provider_type: remote::vllm
+      config:
+        base_url: ${env.VLLM_URL:=}
+        max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
+        api_token: ${env.VLLM_API_TOKEN:=fake}
+        # highlight-next-line
+        native_responses: true
+```
+
+Or via environment variable:
+
+```bash
+export VLLM_NATIVE_RESPONSES=true
+```
+
+## What stays the same
+
+Native responses changes only the wire format between Llama Stack and vLLM for each inference call. Everything else is identical:
+
+- **Tool calling** — Llama Stack orchestrates the tool loop, executes tools, appends results, and calls inference again
+- **MCP tools** — Llama Stack's MCP client handles discovery, approval, and execution
+- **RAG / file_search** — Llama Stack queries vector stores and injects context before calling inference
+- **Guardrails** — Input and output safety checks run on every turn
+- **Persistence** — `previous_response_id`, response storage, and conversations are managed by Llama Stack
+- **State** — vLLM is treated as a stateless inference endpoint; `store` is always set to `false` in requests to vLLM
+
+## How it works
+
+Without native responses (default):
+
+```
+Client → POST /v1/responses → Llama Stack orchestrator
+  → Convert to CC messages
+  → POST /v1/chat/completions → vLLM
+  ← CC chunks
+  → Convert to Responses events
+  ← Stream to client
+```
+
+With native responses enabled:
+
+```
+Client → POST /v1/responses → Llama Stack orchestrator
+  → POST /v1/responses → vLLM
+  ← Responses events (native format)
+  → Parse tool calls, reasoning, content
+  ← Stream to client
+```
+
+The orchestrator's tool-calling loop is identical in both modes — only the inference call format changes.
+
+## Verifying it works
+
+Start your Llama Stack server with the vLLM config, then make a request with reasoning enabled:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="unused")
+
+response = client.responses.create(
+    model="your-vllm-model",
+    input="What is the capital of France?",
+    reasoning={"effort": "high"},
+    stream=True,
+)
+
+for event in response:
+    if event.type == "response.reasoning_text.delta":
+        print(f"[reasoning] {event.delta}", end="")
+    elif event.type == "response.output_text.delta":
+        print(event.delta, end="")
+    elif event.type == "response.completed":
+        print(f"\n\nStatus: {event.response.status}")
+```
+
+If native responses is working, you'll see `response.reasoning_text.delta` events with the model's chain-of-thought reasoning. Without native responses, reasoning output depends on the provider's Chat Completions support for non-standard reasoning fields.
+
+## Troubleshooting
+
+**vLLM returns 404 on `/v1/responses`**
+
+Your vLLM version doesn't support the Responses API. Upgrade vLLM or set `native_responses: false` to use the Chat Completions path.
+
+**Reasoning tokens show as 0**
+
+Verify that vLLM is running a model that supports reasoning (e.g., a model with chain-of-thought capabilities) and that you're passing `reasoning={"effort": "high"}` in the request.
