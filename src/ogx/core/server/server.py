@@ -342,7 +342,6 @@ def create_app() -> StackApp:
     apis_to_serve.add("providers")
     apis_to_serve.add("prompts")
     apis_to_serve.add("conversations")
-    apis_to_serve.add("connectors")
 
     # Build route-to-API mapping and add request metrics middleware.
     # Added last so it runs first (outermost), wrapping auth/quota/cors.

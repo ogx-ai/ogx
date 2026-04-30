@@ -12730,63 +12730,6 @@ components:
       - sequence_number
       title: OpenAIResponseObjectStreamError
       type: object
-    ListModelsResponse:
-      description: Response containing a list of model objects.
-      properties:
-        data:
-          description: List of model objects.
-          items:
-            $ref: '#/components/schemas/Model'
-          title: Data
-          type: array
-      required:
-      - data
-      title: ListModelsResponse
-      type: object
-    GetModelRequest:
-      description: Request model for getting a model by ID.
-      properties:
-        model_id:
-          description: The ID of the model to get.
-          title: Model Id
-          type: string
-      required:
-      - model_id
-      title: GetModelRequest
-      type: object
-    UnregisterModelRequest:
-      description: Request model for unregistering a model.
-      properties:
-        model_id:
-          description: The ID of the model to unregister.
-          title: Model Id
-          type: string
-      required:
-      - model_id
-      title: UnregisterModelRequest
-      type: object
-    GetShieldRequest:
-      description: Request model for getting a shield by identifier.
-      properties:
-        identifier:
-          description: The identifier of the shield to get.
-          title: Identifier
-          type: string
-      required:
-      - identifier
-      title: GetShieldRequest
-      type: object
-    UnregisterShieldRequest:
-      description: Request model for unregistering a shield.
-      properties:
-        identifier:
-          description: The identifier of the shield to unregister.
-          title: Identifier
-          type: string
-      required:
-      - identifier
-      title: UnregisterShieldRequest
-      type: object
     TextDelta:
       description: A text content delta for streaming responses.
       properties:
@@ -12859,6 +12802,126 @@ components:
           description: The ID of the tool group to filter tools by.
           nullable: true
       title: ListToolsRequest
+      type: object
+    ConnectorInput:
+      description: Input for creating a connector
+      properties:
+        connector_type:
+          $ref: '#/components/schemas/ConnectorType'
+          default: mcp
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+        url:
+          description: URL of the connector
+          title: Url
+          type: string
+        server_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Label of the server
+          nullable: true
+      required:
+      - connector_id
+      - url
+      title: ConnectorInput
+      type: object
+    GetConnectorRequest:
+      description: Request model for getting a connector by ID.
+      properties:
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+      required:
+      - connector_id
+      title: GetConnectorRequest
+      type: object
+    ListConnectorToolsRequest:
+      description: Request model for listing tools from a connector.
+      properties:
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+      required:
+      - connector_id
+      title: ListConnectorToolsRequest
+      type: object
+    GetConnectorToolRequest:
+      description: Request model for getting a tool from a connector.
+      properties:
+        connector_id:
+          description: Identifier for the connector
+          title: Connector Id
+          type: string
+        tool_name:
+          description: Name of the tool
+          title: Tool Name
+          type: string
+      required:
+      - connector_id
+      - tool_name
+      title: GetConnectorToolRequest
+      type: object
+    ListModelsResponse:
+      description: Response containing a list of model objects.
+      properties:
+        data:
+          description: List of model objects.
+          items:
+            $ref: '#/components/schemas/Model'
+          title: Data
+          type: array
+      required:
+      - data
+      title: ListModelsResponse
+      type: object
+    GetModelRequest:
+      description: Request model for getting a model by ID.
+      properties:
+        model_id:
+          description: The ID of the model to get.
+          title: Model Id
+          type: string
+      required:
+      - model_id
+      title: GetModelRequest
+      type: object
+    UnregisterModelRequest:
+      description: Request model for unregistering a model.
+      properties:
+        model_id:
+          description: The ID of the model to unregister.
+          title: Model Id
+          type: string
+      required:
+      - model_id
+      title: UnregisterModelRequest
+      type: object
+    GetShieldRequest:
+      description: Request model for getting a shield by identifier.
+      properties:
+        identifier:
+          description: The identifier of the shield to get.
+          title: Identifier
+          type: string
+      required:
+      - identifier
+      title: GetShieldRequest
+      type: object
+    UnregisterShieldRequest:
+      description: Request model for unregistering a shield.
+      properties:
+        identifier:
+          description: The identifier of the shield to unregister.
+          title: Identifier
+          type: string
+      required:
+      - identifier
+      title: UnregisterShieldRequest
       type: object
     Api:
       description: Enumeration of all available APIs in the OGX system.
@@ -13852,69 +13915,6 @@ components:
           enum:
           - dialog
       title: DialogType
-      type: object
-    ConnectorInput:
-      description: Input for creating a connector
-      properties:
-        connector_type:
-          $ref: '#/components/schemas/ConnectorType'
-          default: mcp
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-        url:
-          description: URL of the connector
-          title: Url
-          type: string
-        server_label:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Label of the server
-          nullable: true
-      required:
-      - connector_id
-      - url
-      title: ConnectorInput
-      type: object
-    GetConnectorRequest:
-      description: Request model for getting a connector by ID.
-      properties:
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-      required:
-      - connector_id
-      title: GetConnectorRequest
-      type: object
-    ListConnectorToolsRequest:
-      description: Request model for listing tools from a connector.
-      properties:
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-      required:
-      - connector_id
-      title: ListConnectorToolsRequest
-      type: object
-    GetConnectorToolRequest:
-      description: Request model for getting a tool from a connector.
-      properties:
-        connector_id:
-          description: Identifier for the connector
-          title: Connector Id
-          type: string
-        tool_name:
-          description: Name of the tool
-          title: Tool Name
-          type: string
-      required:
-      - connector_id
-      - tool_name
-      title: GetConnectorToolRequest
       type: object
     ConversationMessage:
       description: OpenAI-compatible message item for conversations.
