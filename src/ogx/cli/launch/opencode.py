@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 
-import httpx
+from openai import APIConnectionError, APIStatusError, OpenAI
 from termcolor import cprint
 
 from ogx.cli.subcommand import Subcommand
@@ -82,30 +82,29 @@ class LaunchOpenCode(Subcommand):
         sys.exit(result.returncode)
 
     def _fetch_models(self, base_url: str) -> list[str]:
+        client = OpenAI(base_url=base_url, api_key="unused")
         try:
-            resp = httpx.get(f"{base_url}/models", timeout=5.0)
-        except (httpx.ConnectError, httpx.TimeoutException, OSError):
+            response = client.models.list()
+        except APIConnectionError:
             cprint(
                 f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx stack run <config>",
                 color="red",
                 file=sys.stderr,
             )
             sys.exit(1)
-
-        if resp.status_code >= 400:
+        except APIStatusError as e:
             cprint(
-                f"Failed to query models from OGX server at {base_url} (HTTP {resp.status_code})",
+                f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})",
                 color="red",
                 file=sys.stderr,
             )
             sys.exit(1)
 
-        data = resp.json()
         models: list[str] = []
-        for model in data.get("data", []):
-            metadata = model.get("custom_metadata", {}) or {}
+        for model in response.data:
+            metadata = (model.model_extra or {}).get("custom_metadata") or {}
             if metadata.get("model_type") != "embedding":
-                models.append(model["id"])
+                models.append(model.id)
         return models
 
     def _select_default_model(self, requested_model: str | None, available_models: list[str]) -> str:
