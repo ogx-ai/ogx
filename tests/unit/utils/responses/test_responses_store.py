@@ -12,15 +12,25 @@ import pytest
 
 from ogx.core.storage.datatypes import ResponsesStoreReference, SqliteSqlStoreConfig
 from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from ogx.providers.utils.responses.responses_store import ResponsesStore
+from ogx.providers.utils.responses.responses_store import ResponsesStore, _apply_include_filter
 from ogx_api import (
     InvalidParameterError,
     OpenAIMessageParam,
     OpenAIResponseInput,
+    OpenAIResponseInputMessageContentImage,
+    OpenAIResponseMessage,
     OpenAIResponseObject,
+    OpenAIResponseOutputMessageContentOutputText,
+    OpenAIResponseOutputMessageFileSearchToolCall,
+    OpenAIResponseOutputMessageFileSearchToolCallResults,
+    OpenAIResponseOutputMessageFunctionToolCall,
+    OpenAIResponseOutputMessageReasoningItem,
+    OpenAIResponseOutputMessageReasoningSummary,
+    OpenAITokenLogProb,
     OpenAIUserMessageParam,
     Order,
     ResponseInputItemNotFoundError,
+    ResponseItemInclude,
     ResponseNotFoundError,
 )
 
@@ -51,8 +61,6 @@ def create_test_response_object(
 
 def create_test_response_input(content: str, input_id: str) -> OpenAIResponseInput:
     """Helper to create a test response input."""
-    from ogx_api import OpenAIResponseMessage
-
     return OpenAIResponseMessage(
         id=input_id,
         content=content,
@@ -64,6 +72,92 @@ def create_test_response_input(content: str, input_id: str) -> OpenAIResponseInp
 def create_test_messages(content: str) -> list[OpenAIMessageParam]:
     """Helper to create test messages for chat completion."""
     return [OpenAIUserMessageParam(content=content)]
+
+
+def create_test_input_image_message(
+    input_id: str = "image-input",
+    image_url: str = "https://example.com/image.jpg",
+) -> OpenAIResponseInput:
+    return OpenAIResponseMessage(
+        id=input_id,
+        role="user",
+        content=[OpenAIResponseInputMessageContentImage(image_url=image_url, detail="high")],
+        type="message",
+    )
+
+
+def create_test_output_text_message(
+    input_id: str = "output-message",
+    text: str = "Paris",
+) -> OpenAIResponseInput:
+    return OpenAIResponseMessage(
+        id=input_id,
+        role="assistant",
+        content=[
+            OpenAIResponseOutputMessageContentOutputText(
+                text=text,
+                logprobs=[OpenAITokenLogProb(token=text, logprob=-0.1)],
+            )
+        ],
+        type="message",
+        status="completed",
+    )
+
+
+def create_test_file_search_call(input_id: str = "file-search-call") -> OpenAIResponseInput:
+    return OpenAIResponseOutputMessageFileSearchToolCall(
+        id=input_id,
+        queries=["capital of France"],
+        status="completed",
+        results=[
+            OpenAIResponseOutputMessageFileSearchToolCallResults(
+                attributes={},
+                file_id="file-123",
+                filename="facts.txt",
+                score=0.98,
+                text="Paris is the capital of France.",
+            )
+        ],
+    )
+
+
+def create_test_include_filter_items() -> list[OpenAIResponseInput]:
+    return [
+        create_test_input_image_message(),
+        create_test_output_text_message(),
+        create_test_file_search_call(),
+        OpenAIResponseOutputMessageFunctionToolCall(
+            call_id="call-123",
+            name="lookup_weather",
+            arguments='{"city":"Paris"}',
+            id="function-call-1",
+            status="completed",
+        ),
+        OpenAIResponseOutputMessageReasoningItem(
+            id="reasoning-1",
+            summary=[OpenAIResponseOutputMessageReasoningSummary(text="Reasoning summary")],
+            status="completed",
+        ),
+    ]
+
+
+def get_image_content(item: OpenAIResponseInput) -> OpenAIResponseInputMessageContentImage:
+    assert isinstance(item, OpenAIResponseMessage)
+    assert not isinstance(item.content, str)
+    assert isinstance(item.content[0], OpenAIResponseInputMessageContentImage)
+    return item.content[0]
+
+
+def get_output_text_content(item: OpenAIResponseInput) -> OpenAIResponseOutputMessageContentOutputText:
+    assert isinstance(item, OpenAIResponseMessage)
+    assert not isinstance(item.content, str)
+    assert isinstance(item.content[0], OpenAIResponseOutputMessageContentOutputText)
+    return item.content[0]
+
+
+def get_file_search_call(item: OpenAIResponseInput) -> OpenAIResponseOutputMessageFileSearchToolCall:
+    assert isinstance(item, OpenAIResponseOutputMessageFileSearchToolCall)
+    return item
 
 
 async def test_responses_store_pagination_basic():
@@ -338,13 +432,84 @@ async def test_responses_store_input_items_pagination():
         with pytest.raises(ResponseInputItemNotFoundError, match="Input item 'non-existent' not found"):
             await store.list_response_input_items("test-resp", after="non-existent")
 
-        # Test error for unsupported features
-        with pytest.raises(NotImplementedError, match="Include is not supported yet"):
-            await store.list_response_input_items("test-resp", include=["some-field"])
+        # Include should not change the returned items when no gated fields are present
+        include_result = await store.list_response_input_items(
+            "test-resp",
+            include=[ResponseItemInclude.file_search_call_results],
+        )
+        assert len(include_result.data) == 5
+        assert [item.id for item in include_result.data] == [item.id for item in all_items.data]
 
         # Test error for mutually exclusive parameters
         with pytest.raises(InvalidParameterError, match="Cannot specify both 'before' and 'after' parameters"):
             await store.list_response_input_items("test-resp", before="some-id", after="other-id")
+
+
+def test_apply_include_filter_no_include_hides_gated_fields_without_mutating_source():
+    items = create_test_include_filter_items()
+
+    filtered_items = _apply_include_filter(items, None)
+
+    assert get_image_content(filtered_items[0]).image_url is None
+    assert get_output_text_content(filtered_items[1]).logprobs is None
+    assert get_file_search_call(filtered_items[2]).results is None
+    assert filtered_items[3] == items[3]
+    assert filtered_items[4] == items[4]
+
+    # Ensure the source items still retain the stored data.
+    assert get_image_content(items[0]).image_url == "https://example.com/image.jpg"
+    assert get_output_text_content(items[1]).logprobs is not None
+    assert get_file_search_call(items[2]).results is not None
+
+
+def test_apply_include_filter_preserves_requested_fields():
+    items = create_test_include_filter_items()
+
+    filtered_items = _apply_include_filter(
+        items,
+        [
+            ResponseItemInclude.message_input_image_image_url,
+            ResponseItemInclude.message_output_text_logprobs,
+            ResponseItemInclude.file_search_call_results,
+        ],
+    )
+
+    assert get_image_content(filtered_items[0]).image_url == "https://example.com/image.jpg"
+    assert get_output_text_content(filtered_items[1]).logprobs is not None
+    assert get_file_search_call(filtered_items[2]).results is not None
+
+
+def test_apply_include_filter_noop_values_leave_gated_fields_hidden():
+    items = create_test_include_filter_items()
+
+    filtered_items = _apply_include_filter(
+        items,
+        [
+            ResponseItemInclude.web_search_call_action_sources,
+            ResponseItemInclude.reasoning_encrypted_content,
+            ResponseItemInclude.code_interpreter_call_outputs,
+            ResponseItemInclude.computer_call_output_output_image_url,
+        ],
+    )
+
+    assert get_image_content(filtered_items[0]).image_url is None
+    assert get_output_text_content(filtered_items[1]).logprobs is None
+    assert get_file_search_call(filtered_items[2]).results is None
+
+
+def test_apply_include_filter_string_message_content_is_unchanged():
+    message = OpenAIResponseMessage(
+        id="plain-message",
+        role="user",
+        content="plain text content",
+        type="message",
+    )
+
+    filtered_items = _apply_include_filter([message], None)
+
+    assert len(filtered_items) == 1
+    assert filtered_items[0] is message
+    assert filtered_items[0].content == "plain text content"
 
 
 async def test_responses_store_input_items_before_pagination():
@@ -404,6 +569,39 @@ async def test_responses_store_input_items_before_pagination():
         # Test error for non-existent before ID
         with pytest.raises(ResponseInputItemNotFoundError, match="Input item 'non-existent' not found"):
             await store.list_response_input_items("test-resp-before", before="non-existent")
+
+
+async def test_responses_store_input_items_include_filtering():
+    with TemporaryDirectory() as tmp_dir:
+        db_path = tmp_dir + "/test.db"
+        store = build_store(db_path)
+        await store.initialize()
+
+        response = create_test_response_object("test-resp-include", int(time.time()))
+        input_list = [
+            create_test_input_image_message("image-1"),
+            create_test_output_text_message("output-1"),
+            create_test_file_search_call("file-search-1"),
+        ]
+        messages = create_test_messages("Image input")
+        await store.store_response_object(response, input_list, messages)
+        await store.flush()
+
+        result = await store.list_response_input_items(
+            "test-resp-include",
+            order=Order.asc,
+            include=[ResponseItemInclude.message_input_image_image_url],
+        )
+
+        assert len(result.data) == 3
+        assert get_image_content(result.data[0]).image_url == "https://example.com/image.jpg"
+        assert get_output_text_content(result.data[1]).logprobs is None
+        assert get_file_search_call(result.data[2]).results is None
+
+        stored_response = await store.get_response_object("test-resp-include")
+        assert get_image_content(stored_response.input[0]).image_url == "https://example.com/image.jpg"
+        assert get_output_text_content(stored_response.input[1]).logprobs is not None
+        assert get_file_search_call(stored_response.input[2]).results is not None
 
 
 async def test_responses_store_safety_identifier():

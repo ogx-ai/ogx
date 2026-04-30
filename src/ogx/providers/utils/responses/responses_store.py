@@ -16,8 +16,14 @@ from ogx_api import (
     OpenAIDeleteResponseObject,
     OpenAIMessageParam,
     OpenAIResponseInput,
+    OpenAIResponseInputMessageContent,
+    OpenAIResponseInputMessageContentImage,
+    OpenAIResponseMessage,
     OpenAIResponseObject,
     OpenAIResponseObjectWithInput,
+    OpenAIResponseOutputMessageContent,
+    OpenAIResponseOutputMessageContentOutputText,
+    OpenAIResponseOutputMessageFileSearchToolCall,
     Order,
     ResponseInputItemNotFoundError,
     ResponseItemInclude,
@@ -26,6 +32,62 @@ from ogx_api import (
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 logger = get_logger(name=__name__, category="openai_responses")
+
+
+def _filter_message_include_fields(
+    item: OpenAIResponseMessage,
+    include_values: set[str],
+) -> OpenAIResponseMessage:
+    if isinstance(item.content, str):
+        return item
+
+    filtered_content: list[OpenAIResponseInputMessageContent | OpenAIResponseOutputMessageContent] = []
+    include_input_image_url = ResponseItemInclude.message_input_image_image_url.value in include_values
+    include_output_text_logprobs = ResponseItemInclude.message_output_text_logprobs.value in include_values
+    item_changed = False
+
+    for content_item in item.content:
+        filtered_content_item = content_item
+
+        if isinstance(content_item, OpenAIResponseInputMessageContentImage) and not include_input_image_url:
+            if content_item.image_url is not None:
+                filtered_content_item = content_item.model_copy(update={"image_url": None})
+                item_changed = True
+        elif (
+            isinstance(content_item, OpenAIResponseOutputMessageContentOutputText) and not include_output_text_logprobs
+        ):
+            if content_item.logprobs is not None:
+                filtered_content_item = content_item.model_copy(update={"logprobs": None})
+                item_changed = True
+
+        filtered_content.append(filtered_content_item)
+
+    if not item_changed:
+        return item
+
+    return item.model_copy(update={"content": filtered_content})
+
+
+def _apply_include_filter(
+    items: list[OpenAIResponseInput],
+    include: list[ResponseItemInclude] | None,
+) -> list[OpenAIResponseInput]:
+    include_values = {str(value) for value in include or []}
+    include_file_search_results = ResponseItemInclude.file_search_call_results.value in include_values
+    filtered_items: list[OpenAIResponseInput] = []
+
+    for item in items:
+        if isinstance(item, OpenAIResponseOutputMessageFileSearchToolCall):
+            if item.results is not None and not include_file_search_results:
+                filtered_items.append(item.model_copy(update={"results": None}))
+            else:
+                filtered_items.append(item)
+        elif isinstance(item, OpenAIResponseMessage):
+            filtered_items.append(_filter_message_include_fields(item, include_values))
+        else:
+            filtered_items.append(item)
+
+    return filtered_items
 
 
 class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObjectWithInput):
@@ -272,8 +334,6 @@ class ResponsesStore:
         :param limit: A limit on the number of objects to be returned.
         :param order: The order to return the input items in.
         """
-        if include:
-            raise NotImplementedError("Include is not supported yet")
         if before and after:
             raise InvalidParameterError(
                 "before/after",
@@ -314,6 +374,8 @@ class ResponsesStore:
         # Apply limit
         if limit is not None:
             items = items[:limit]
+
+        items = _apply_include_filter(items, include)
 
         return ListOpenAIResponseInputItem(data=items)
 
