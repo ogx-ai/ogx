@@ -35,7 +35,17 @@ def _msg_to_dict(msg):
 @pytest.fixture
 def impl():
     mock_inference = AsyncMock()
-    return BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference)
+    instance = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference, policy=[])
+    instance.store = AsyncMock()
+    instance.store.get_interaction = AsyncMock(return_value=None)
+    instance.store.store_interaction = AsyncMock()
+    return instance
+
+
+def _build_and_translate(impl, request):
+    """Helper: build messages from request and translate to OpenAI params."""
+    messages = impl._convert_input_to_openai(request.system_instruction, request.input)
+    return impl._google_to_openai(request, messages)
 
 
 class TestRequestTranslation:
@@ -44,7 +54,7 @@ class TestRequestTranslation:
             model="gemini-2.5-flash",
             input="Hello",
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         assert result.model == "gemini-2.5-flash"
         assert len(result.messages) == 1
@@ -61,7 +71,7 @@ class TestRequestTranslation:
                 GoogleInputTurn(role="user", content=[GoogleTextContent(text="Question 2")]),
             ],
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         assert len(result.messages) == 3
         m0 = _msg_to_dict(result.messages[0])
@@ -81,7 +91,7 @@ class TestRequestTranslation:
                 GoogleInputTurn(role="model", content=[GoogleTextContent(text="I am the model")]),
             ],
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         m = _msg_to_dict(result.messages[0])
         assert m["role"] == "assistant"
@@ -92,7 +102,7 @@ class TestRequestTranslation:
             input="Hi",
             system_instruction="You are helpful.",
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         assert len(result.messages) == 2
         m0 = _msg_to_dict(result.messages[0])
@@ -107,7 +117,7 @@ class TestRequestTranslation:
             input="Hi",
             generation_config=GoogleGenerationConfig(temperature=0.7),
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
         assert result.temperature == 0.7
 
     def test_generation_config_top_p(self, impl):
@@ -116,7 +126,7 @@ class TestRequestTranslation:
             input="Hi",
             generation_config=GoogleGenerationConfig(top_p=0.9),
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
         assert result.top_p == 0.9
 
     def test_generation_config_max_output_tokens(self, impl):
@@ -125,7 +135,7 @@ class TestRequestTranslation:
             input="Hi",
             generation_config=GoogleGenerationConfig(max_output_tokens=500),
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
         assert result.max_tokens == 500
 
     def test_generation_config_top_k_extra_body(self, impl):
@@ -134,7 +144,7 @@ class TestRequestTranslation:
             input="Hi",
             generation_config=GoogleGenerationConfig(top_k=40),
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
         assert result.model_extra.get("top_k") == 40
 
     def test_stream_flag(self, impl):
@@ -143,7 +153,7 @@ class TestRequestTranslation:
             input="Hi",
             stream=True,
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
         assert result.stream is True
 
     def test_multi_content_turn(self, impl):
@@ -159,14 +169,14 @@ class TestRequestTranslation:
                 ),
             ],
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         m = _msg_to_dict(result.messages[0])
         assert m["content"] == "Line 1\nLine 2"
 
 
 class TestResponseTranslation:
-    def test_simple_text_response(self, impl):
+    async def test_simple_text_response(self, impl):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
         openai_resp.choices[0].message = MagicMock()
@@ -176,7 +186,7 @@ class TestResponseTranslation:
         openai_resp.usage.prompt_tokens = 10
         openai_resp.usage.completion_tokens = 5
 
-        result = impl._openai_to_google(openai_resp, "gemini-2.5-flash")
+        result = await impl._openai_to_google(openai_resp, "gemini-2.5-flash", [{"role": "user", "content": "Hi"}])
 
         assert result.id.startswith("interaction-")
         assert result.status == "completed"
@@ -192,7 +202,7 @@ class TestResponseTranslation:
         assert result.usage.total_output_tokens == 5
         assert result.usage.total_tokens == 15
 
-    def test_empty_response(self, impl):
+    async def test_empty_response(self, impl):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
         openai_resp.choices[0].message = MagicMock()
@@ -202,12 +212,12 @@ class TestResponseTranslation:
         openai_resp.usage.prompt_tokens = 5
         openai_resp.usage.completion_tokens = 0
 
-        result = impl._openai_to_google(openai_resp, "m")
+        result = await impl._openai_to_google(openai_resp, "m", [])
 
         assert result.status == "completed"
         assert len(result.outputs) == 0
 
-    def test_missing_usage(self, impl):
+    async def test_missing_usage(self, impl):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
         openai_resp.choices[0].message = MagicMock()
@@ -215,7 +225,7 @@ class TestResponseTranslation:
         openai_resp.choices[0].finish_reason = "stop"
         openai_resp.usage = None
 
-        result = impl._openai_to_google(openai_resp, "m")
+        result = await impl._openai_to_google(openai_resp, "m", [])
 
         assert result.usage.total_input_tokens == 0
         assert result.usage.total_output_tokens == 0
@@ -241,7 +251,7 @@ class TestStreamingTranslation:
                 yield c
 
         events = []
-        async for event in impl._stream_openai_to_google(mock_stream(), "m"):
+        async for event in impl._stream_openai_to_google(mock_stream(), "m", []):
             events.append(event)
 
         # interaction.start wraps in interaction object
@@ -289,7 +299,7 @@ class TestStreamingTranslation:
             yield chunk2
 
         events = []
-        async for event in impl._stream_openai_to_google(mock_stream(), "m"):
+        async for event in impl._stream_openai_to_google(mock_stream(), "m", []):
             events.append(event)
 
         complete_event = [e for e in events if e.event_type == "interaction.complete"][0]
@@ -309,7 +319,7 @@ class TestStreamingTranslation:
             yield chunk
 
         events = []
-        async for event in impl._stream_openai_to_google(mock_stream(), "m"):
+        async for event in impl._stream_openai_to_google(mock_stream(), "m", []):
             events.append(event)
 
         assert events[0].event_type == "interaction.start"
@@ -347,7 +357,7 @@ class TestPassthroughDetection:
         mock_provider.config.network = network_config
         mock_inference.routing_table.get_provider_impl = AsyncMock(return_value=mock_provider)
 
-        return BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference)
+        return BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference, policy=[])
 
     async def test_gemini_provider_detected(self):
         impl = self._make_impl_with_router(
@@ -382,7 +392,7 @@ class TestPassthroughDetection:
 
     async def test_no_routing_table_returns_none(self):
         mock_inference = AsyncMock(spec=[])
-        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference)
+        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference, policy=[])
         result = await impl._get_passthrough_info("gemini/gemini-2.5-flash")
 
         assert result is None
@@ -437,7 +447,7 @@ class TestCreateInteractionPassthrough:
         mock_provider.config.network = network_config
         mock_inference.routing_table.get_provider_impl = AsyncMock(return_value=mock_provider)
 
-        return BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference)
+        return BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference, policy=[])
 
     async def test_non_streaming_uses_native_passthrough(self):
         impl = self._make_impl_with_router(
@@ -472,7 +482,7 @@ class TestCreateInteractionPassthrough:
 
 class TestPassthroughRequest:
     async def test_non_streaming_uses_header_auth_and_no_query_params(self, monkeypatch):
-        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=AsyncMock())
+        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=AsyncMock(), policy=[])
         passthrough = {
             "base_url": "https://generativelanguage.googleapis.com/v1beta",
             "auth_headers": {"x-goog-api-key": "test-key"},
@@ -509,7 +519,7 @@ class TestPassthroughRequest:
         assert post_kwargs["json"]["model"] == "gemini-2.5-flash"
 
     async def test_non_streaming_applies_network_config_client_kwargs(self, monkeypatch):
-        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=AsyncMock())
+        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=AsyncMock(), policy=[])
         network_config = MagicMock()
         passthrough = {
             "base_url": "https://generativelanguage.googleapis.com/v1beta",
@@ -551,7 +561,7 @@ class TestPassthroughRequest:
         assert ctor_kwargs["timeout"] == built_kwargs["timeout"]
 
     async def test_non_streaming_accepts_thought_outputs(self, monkeypatch):
-        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=AsyncMock())
+        impl = BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=AsyncMock(), policy=[])
         passthrough = {
             "base_url": "https://generativelanguage.googleapis.com/v1beta",
             "auth_headers": {"x-goog-api-key": "test-key"},
@@ -622,7 +632,7 @@ class TestToolCallingRequestTranslation:
                 )
             ],
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         assert result.tools is not None
         assert len(result.tools) == 1
@@ -645,7 +655,7 @@ class TestToolCallingRequestTranslation:
                 )
             ],
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         assert result.tools is not None
         assert len(result.tools) == 2
@@ -680,7 +690,7 @@ class TestToolCallingRequestTranslation:
                 ),
             ],
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         # user message, assistant with tool_calls, tool message
         assert len(result.messages) == 3
@@ -717,7 +727,7 @@ class TestToolCallingRequestTranslation:
                 ),
             ],
         )
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
 
         assert len(result.messages) == 1
         m = _msg_to_dict(result.messages[0])
@@ -728,12 +738,12 @@ class TestToolCallingRequestTranslation:
 
     def test_no_tools_when_none(self, impl):
         request = GoogleCreateInteractionRequest(model="m", input="Hello")
-        result = impl._google_to_openai(request)
+        result = _build_and_translate(impl, request)
         assert result.tools is None
 
 
 class TestToolCallingResponseTranslation:
-    def test_function_call_output(self, impl):
+    async def test_function_call_output(self, impl):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
         openai_resp.choices[0].message = MagicMock()
@@ -750,7 +760,7 @@ class TestToolCallingResponseTranslation:
         openai_resp.usage.prompt_tokens = 20
         openai_resp.usage.completion_tokens = 10
 
-        result = impl._openai_to_google(openai_resp, "m")
+        result = await impl._openai_to_google(openai_resp, "m", [])
 
         assert len(result.outputs) == 1
         fc = result.outputs[0]
@@ -759,7 +769,7 @@ class TestToolCallingResponseTranslation:
         assert fc.name == "get_weather"
         assert fc.args == {"location": "NYC"}
 
-    def test_text_and_function_call_output(self, impl):
+    async def test_text_and_function_call_output(self, impl):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
         openai_resp.choices[0].message = MagicMock()
@@ -776,7 +786,7 @@ class TestToolCallingResponseTranslation:
         openai_resp.usage.prompt_tokens = 10
         openai_resp.usage.completion_tokens = 15
 
-        result = impl._openai_to_google(openai_resp, "m")
+        result = await impl._openai_to_google(openai_resp, "m", [])
 
         assert len(result.outputs) == 2
         assert result.outputs[0].type == "text"
@@ -784,7 +794,7 @@ class TestToolCallingResponseTranslation:
         assert result.outputs[1].type == "function_call"
         assert result.outputs[1].name == "get_weather"
 
-    def test_invalid_function_arguments_json(self, impl):
+    async def test_invalid_function_arguments_json(self, impl):
         openai_resp = MagicMock()
         openai_resp.choices = [MagicMock()]
         openai_resp.choices[0].message = MagicMock()
@@ -799,7 +809,7 @@ class TestToolCallingResponseTranslation:
         openai_resp.choices[0].finish_reason = "tool_calls"
         openai_resp.usage = None
 
-        result = impl._openai_to_google(openai_resp, "m")
+        result = await impl._openai_to_google(openai_resp, "m", [])
 
         assert result.outputs[0].args == {}
 
@@ -861,7 +871,7 @@ class TestToolCallingStreamingTranslation:
                 yield c
 
         events = []
-        async for event in impl._stream_openai_to_google(mock_stream(), "m"):
+        async for event in impl._stream_openai_to_google(mock_stream(), "m", []):
             events.append(event)
 
         assert events[0].event_type == "interaction.start"
@@ -915,7 +925,7 @@ class TestToolCallingStreamingTranslation:
                 yield c
 
         events = []
-        async for event in impl._stream_openai_to_google(mock_stream(), "m"):
+        async for event in impl._stream_openai_to_google(mock_stream(), "m", []):
             events.append(event)
 
         event_types = [e.event_type for e in events]

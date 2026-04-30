@@ -5,6 +5,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
 # /// script
 # dependencies = [
 #   "google-genai",
@@ -14,8 +20,8 @@
 """Test plan script for the Google Interactions API front-end.
 
 This script validates the Interactions API endpoint against a running
-OGX server using the official Google GenAI SDK, proving that
-ADK/Gemini ecosystem clients can call OGX natively.
+Llama Stack server using the official Google GenAI SDK, proving that
+ADK/Gemini ecosystem clients can call Llama Stack natively.
 
 Usage:
     # Start a OGX server first:
@@ -36,7 +42,7 @@ from google.genai import types
 
 
 def _create_client(base_url: str) -> genai.Client:
-    """Create a Google GenAI client pointed at the OGX server."""
+    """Create a Google GenAI client pointed at the Llama Stack server."""
     return genai.Client(
         api_key="no-key-required",
         http_options=types.HttpOptions(
@@ -55,7 +61,7 @@ def run_non_streaming_basic(client: genai.Client, model: str) -> None:
         input="What is 2+2? Reply with just the number.",
     )
 
-    assert len(interaction.id) > 0, f"ID should not be empty, got: {interaction.id}"
+    assert interaction.id.startswith("interaction-"), f"ID should start with 'interaction-', got: {interaction.id}"
     assert interaction.status == "completed", f"Status should be 'completed', got: {interaction.status}"
     assert len(interaction.outputs) > 0, "Expected at least one output"
     assert interaction.outputs[0].type == "text", f"Output type should be 'text', got: {interaction.outputs[0].type}"
@@ -134,103 +140,30 @@ def run_non_streaming_generation_config(client: genai.Client, model: str) -> Non
     print("  PASSED")
 
 
-def run_tool_calling(client: genai.Client, model: str) -> None:
-    """Test 5: Tool calling - function declaration, function_call output, function_response input."""
-    print("Test 5: Tool calling round-trip...")
+def run_previous_interaction_id(client: genai.Client, model: str) -> None:
+    """Test 5: Conversation chaining via previous_interaction_id."""
+    print("Test 5: Conversation chaining (previous_interaction_id)...")
 
-    # Step 1: Send request with tools, expect a function_call output
-    interaction = client.interactions.create(
+    # First interaction: establish context
+    first = client.interactions.create(
         model=model,
-        input="What is the weather in New York City? Use the get_weather tool.",
-        tools=[
-            {
-                "function_declarations": [
-                    {
-                        "name": "get_weather",
-                        "description": "Get the current weather for a location.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "location": {"type": "string", "description": "The city name."},
-                            },
-                            "required": ["location"],
-                        },
-                    }
-                ]
-            }
-        ],
+        input="My name is Alice. Remember it.",
     )
+    assert first.status == "completed"
+    assert first.id.startswith("interaction-")
+    print(f"  First response: {first.outputs[0].text[:80]}")
 
-    assert interaction.status == "completed"
-    assert len(interaction.outputs) > 0
-
-    # The model should have produced a function_call output
-    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
-    print(f"  Outputs: {[o.type for o in interaction.outputs]}")
-
-    if not function_calls:
-        # Some models may just answer directly without calling the tool
-        print("  Note: Model did not call the tool (answered directly). Skipping round-trip.")
-        print("  PASSED (partial - no function_call)")
-        return
-
-    fc = function_calls[0]
-    print(f"  Function call: {fc.name}({fc.args})")
-    assert fc.name == "get_weather", f"Expected function name 'get_weather', got: {fc.name}"
-
-    # Step 2: Send the function result back and get a final text response
-    interaction2 = client.interactions.create(
+    # Second interaction: chain from first, ask about the context
+    second = client.interactions.create(
         model=model,
-        input=[
-            {"role": "user", "content": [{"type": "text", "text": "What is the weather in New York City?"}]},
-            {
-                "role": "model",
-                "content": [
-                    {
-                        "type": "function_call",
-                        "id": fc.id,
-                        "name": fc.name,
-                        "args": fc.args,
-                    }
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "function_result",
-                        "id": fc.id,
-                        "name": fc.name,
-                        "result": {"temperature": 72, "condition": "Sunny"},
-                    }
-                ],
-            },
-        ],
-        tools=[
-            {
-                "function_declarations": [
-                    {
-                        "name": "get_weather",
-                        "description": "Get the current weather for a location.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "location": {"type": "string", "description": "The city name."},
-                            },
-                            "required": ["location"],
-                        },
-                    }
-                ]
-            }
-        ],
+        input="What is my name?",
+        previous_interaction_id=first.id,
     )
+    assert second.status == "completed"
+    text = second.outputs[0].text.lower()
+    assert "alice" in text, f"Expected 'alice' in chained response, got: {second.outputs[0].text}"
 
-    assert interaction2.status == "completed"
-    assert len(interaction2.outputs) > 0
-
-    text_outputs = [o for o in interaction2.outputs if o.type == "text"]
-    assert len(text_outputs) > 0, "Expected a text response after providing function result"
-    print(f"  Final response: {text_outputs[0].text[:100]}")
+    print(f"  Chained response: {second.outputs[0].text[:80]}")
     print("  PASSED")
 
 
@@ -269,7 +202,7 @@ def run_streaming_basic(client: genai.Client, model: str) -> None:
     full_text = "".join(text_parts)
     assert len(full_text) > 0, "Streaming should produce text"
     assert interaction_id is not None, "Should have received an interaction ID"
-    assert len(interaction_id) > 0, f"ID should not be empty, got: {interaction_id}"
+    assert interaction_id.startswith("interaction-"), f"ID should start with 'interaction-', got: {interaction_id}"
 
     print(f"  Events: {event_types}")
     print(f"  Full text: {full_text[:80]}")
@@ -294,7 +227,7 @@ def main():
     parser.add_argument(
         "--base-url",
         default="http://localhost:8321",
-        help="Base URL of the OGX server (default: http://localhost:8321)",
+        help="Base URL of the Llama Stack server (default: http://localhost:8321)",
     )
     parser.add_argument(
         "--model",
@@ -315,7 +248,7 @@ def main():
         run_non_streaming_system_instruction,
         run_non_streaming_multi_turn,
         run_non_streaming_generation_config,
-        run_tool_calling,
+        run_previous_interaction_id,
         run_streaming_basic,
     ]
 

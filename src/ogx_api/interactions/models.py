@@ -163,6 +163,10 @@ class GoogleCreateInteractionRequest(BaseModel):
         default=None,
         description="Tools (function declarations) available to the model.",
     )
+    previous_interaction_id: str | None = Field(
+        default=None,
+        description="ID of a previous interaction to continue the conversation from.",
+    )
     stream: bool | None = Field(default=False, description="Whether to stream the response via SSE.")
     response_modalities: list[str] | None = Field(
         default=None,
