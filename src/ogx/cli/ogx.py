@@ -14,6 +14,7 @@ setup_logging()
 
 from .letsgo import LetsGo
 from .run import Run
+from .launch import LaunchParser  # type: ignore[attr-defined]
 from .stack import StackParser  # type: ignore[attr-defined]
 from .stack.utils import print_subcommand_description
 
@@ -38,6 +39,7 @@ class OGXCLIParser:
         LetsGo.create(subparsers)
         Run.create(subparsers)
         StackParser.create(subparsers)
+        LaunchParser.create(subparsers)
 
         print_subcommand_description(self.parser, subparsers)
 
