@@ -1,0 +1,74 @@
+name: 'Launch GPU EC2 Runner'
+description: 'Launch GPU-enabled EC2 instance as GitHub Actions self-hosted runner (wrapper for machulav/ec2-github-runner)'
+
+inputs:
+  mode:
+    description: 'Mode: start or stop'
+    required: true
+  github-token:
+    description: 'GitHub Personal Access Token with repo scope for runner registration'
+    required: true
+  instance-type:
+    description: 'EC2 instance type (e.g., g6.2xlarge, g5.2xlarge, g6.8xlarge)'
+    required: false
+    default: 'g6.2xlarge'
+  aws-region:
+    description: 'AWS region'
+    required: true
+  availability-zones-config:
+    description: 'JSON array of AZ configs with imageId, subnetId, securityGroupId for fallback'
+    required: false
+    default: ''
+  # For stop mode
+  label:
+    description: 'Runner label (for stop mode)'
+    required: false
+  ec2-instance-id:
+    description: 'EC2 instance ID (for stop mode)'
+    required: false
+  # Optional
+  ec2-instance-tags:
+    description: 'JSON array of tags to apply to EC2 instance'
+    required: false
+    default: '[]'
+  runner-home-dir:
+    description: 'Home directory for the runner'
+    required: false
+    default: '/home/ec2-user/actions-runner'
+  iam-role-name:
+    description: 'IAM role name to attach to the instance (optional, for enhanced security)'
+    required: false
+    default: ''
+
+outputs:
+  label:
+    description: 'Unique label for the launched runner'
+    value: ${{ steps.ec2-runner.outputs.label }}
+  ec2-instance-id:
+    description: 'EC2 instance ID'
+    value: ${{ steps.ec2-runner.outputs.ec2-instance-id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Start EC2 runner
+      if: inputs.mode == 'start'
+      id: ec2-runner
+      uses: machulav/ec2-github-runner@fcfb31a5760dad1314a64a0e172b78ec6fc8a17e # v2.3.6
+      with:
+        mode: start
+        github-token: ${{ inputs.github-token }}
+        ec2-instance-type: ${{ inputs.instance-type }}
+        aws-resource-tags: ${{ inputs.ec2-instance-tags }}
+        runner-home-dir: ${{ inputs.runner-home-dir }}
+        iam-role-name: ${{ inputs.iam-role-name }}
+        availability-zones-config: ${{ inputs.availability-zones-config }}
+
+    - name: Stop EC2 runner
+      if: inputs.mode == 'stop'
+      uses: machulav/ec2-github-runner@fcfb31a5760dad1314a64a0e172b78ec6fc8a17e # v2.3.6
+      with:
+        mode: stop
+        github-token: ${{ inputs.github-token }}
+        label: ${{ inputs.label }}
+        ec2-instance-id: ${{ inputs.ec2-instance-id }}

@@ -1,0 +1,217 @@
+name: 'Setup vLLM GPU'
+description: 'Install vLLM with GPU support and start vLLM server with gpt-oss:20b'
+
+inputs:
+  model:
+    description: 'Model to serve (e.g., gpt-oss:20b, Qwen/Qwen3-0.6B)'
+    required: false
+    default: 'gpt-oss:20b'
+  port:
+    description: 'Port for vLLM server'
+    required: false
+    default: '8000'
+  gpu-memory-utilization:
+    description: 'GPU memory utilization (0.0-1.0)'
+    required: false
+    default: '0.85'
+  max-model-len:
+    description: 'Maximum model context length'
+    required: false
+    default: '8192'
+  quantization:
+    description: 'Quantization method (awq, gptq, or none)'
+    required: false
+    default: 'awq'
+
+outputs:
+  vllm-url:
+    description: 'URL of the vLLM server'
+    value: 'http://0.0.0.0:${{ inputs.port }}/v1'
+  model-name:
+    description: 'Name of the model being served'
+    value: ${{ inputs.model }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Verify GPU availability
+      shell: bash
+      run: |
+        echo "=== GPU Information ==="
+        nvidia-smi
+        echo ""
+        echo "=== CUDA Version ==="
+        nvcc --version || echo "nvcc not found in PATH"
+        echo ""
+        echo "=== Environment ==="
+        echo "CUDA_HOME: ${CUDA_HOME:-not set}"
+        echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH:-not set}"
+
+    - name: Configure CUDA environment
+      shell: bash
+      run: |
+        # Set CUDA environment variables if not already set
+        if [ -z "$CUDA_HOME" ]; then
+          export CUDA_HOME=/usr/local/cuda-12.4
+          echo "CUDA_HOME=/usr/local/cuda-12.4" >> $GITHUB_ENV
+        fi
+
+        # Configure LD_LIBRARY_PATH with "sandwich" pattern
+        # (system libs first, then NVIDIA libs, then CUDA)
+        export LD_LIBRARY_PATH="/usr/lib64:${LD_LIBRARY_PATH:-}:/usr/local/cuda-12.4/lib64"
+        echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+
+        export PATH="${CUDA_HOME}/bin:${PATH}"
+        echo "PATH=${PATH}" >> $GITHUB_ENV
+
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        # Install uv if not present
+        if ! command -v uv &> /dev/null; then
+          echo "Installing uv..."
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          source $HOME/.cargo/env
+        fi
+
+        # Create virtual environment
+        python3.12 -m venv /tmp/vllm-env
+        source /tmp/vllm-env/bin/activate
+
+        echo "VIRTUAL_ENV=/tmp/vllm-env" >> $GITHUB_ENV
+        echo "/tmp/vllm-env/bin" >> $GITHUB_PATH
+
+    - name: Install vLLM with GPU support
+      shell: bash
+      run: |
+        source /tmp/vllm-env/bin/activate
+
+        echo "=== Installing PyTorch with CUDA support ==="
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+
+        echo "=== Installing vLLM ==="
+        # Install vLLM with CUDA support
+        pip install vllm
+
+        echo "=== Verifying installation ==="
+        python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+        python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+        python -c "import torch; print(f'CUDA device count: {torch.cuda.device_count()}')"
+        vllm --version
+
+    - name: Pull model (if Ollama-style)
+      shell: bash
+      env:
+        MODEL: ${{ inputs.model }}
+      run: |
+        source /tmp/vllm-env/bin/activate
+
+        # Check if model is in Ollama format (contains ":")
+        if [[ "$MODEL" == *":"* ]]; then
+          echo "Detected Ollama-style model: $MODEL"
+          echo "Note: vLLM will attempt to load from Ollama cache"
+          echo "Ensure Ollama has pulled this model or it exists in ~/.ollama/models"
+
+          # Optionally install ollama-python for model management
+          pip install ollama-python || true
+        else
+          echo "Detected HuggingFace-style model: $MODEL"
+          echo "vLLM will download from HuggingFace Hub if not cached"
+        fi
+
+    - name: Start vLLM server
+      shell: bash
+      env:
+        MODEL: ${{ inputs.model }}
+        PORT: ${{ inputs.port }}
+        GPU_MEM: ${{ inputs.gpu-memory-utilization }}
+        MAX_LEN: ${{ inputs.max-model-len }}
+        QUANT: ${{ inputs.quantization }}
+      run: |
+        source /tmp/vllm-env/bin/activate
+
+        echo "=== Starting vLLM server ==="
+        echo "Model: $MODEL"
+        echo "Port: $PORT"
+        echo "GPU Memory Utilization: $GPU_MEM"
+        echo "Max Model Length: $MAX_LEN"
+        echo "Quantization: $QUANT"
+        echo ""
+
+        # Build vLLM command
+        VLLM_CMD="vllm serve $MODEL \
+          --host 0.0.0.0 \
+          --port $PORT \
+          --tensor-parallel-size 1 \
+          --gpu-memory-utilization $GPU_MEM \
+          --max-model-len $MAX_LEN \
+          --enable-auto-tool-choice \
+          --tool-call-parser hermes \
+          --dtype auto"
+
+        # Add quantization if specified
+        if [ "$QUANT" != "none" ]; then
+          VLLM_CMD="$VLLM_CMD --quantization $QUANT"
+        fi
+
+        echo "Command: $VLLM_CMD"
+        echo ""
+
+        # Start vLLM in background
+        $VLLM_CMD > /tmp/vllm-server.log 2>&1 &
+        VLLM_PID=$!
+        echo "vLLM server started with PID: $VLLM_PID"
+        echo "VLLM_PID=$VLLM_PID" >> $GITHUB_ENV
+
+        # Save PID for cleanup
+        echo $VLLM_PID > /tmp/vllm.pid
+
+    - name: Wait for vLLM server to be ready
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+      run: |
+        echo "=== Waiting for vLLM server to be ready ==="
+        echo "Health check URL: http://localhost:$PORT/health"
+        echo ""
+
+        # Wait up to 10 minutes for server to be ready
+        timeout 600 bash -c "
+          until curl -f http://localhost:$PORT/health > /dev/null 2>&1; do
+            echo \"Waiting for vLLM server... (checking http://localhost:$PORT/health)\"
+
+            # Check if process is still running
+            if ! kill -0 \$VLLM_PID 2>/dev/null; then
+              echo \"ERROR: vLLM process died!\"
+              echo \"Last 50 lines of vLLM log:\"
+              tail -n 50 /tmp/vllm-server.log
+              exit 1
+            fi
+
+            sleep 5
+          done
+        " || {
+          echo "ERROR: vLLM server failed to start within 10 minutes"
+          echo "=== vLLM Server Log ==="
+          cat /tmp/vllm-server.log
+          exit 1
+        }
+
+        echo "✓ vLLM server is ready!"
+        echo ""
+        echo "=== Testing API endpoint ==="
+        curl -s http://localhost:$PORT/v1/models | python3 -m json.tool || echo "Warning: Could not query models endpoint"
+
+    - name: Display server information
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+        MODEL: ${{ inputs.model }}
+      run: |
+        echo "=== vLLM Server Information ==="
+        echo "URL: http://0.0.0.0:$PORT/v1"
+        echo "Model: $MODEL"
+        echo "Health: http://0.0.0.0:$PORT/health"
+        echo "Models: http://0.0.0.0:$PORT/v1/models"
+        echo ""
+        echo "Server is ready for testing!"

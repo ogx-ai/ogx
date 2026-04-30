@@ -26,6 +26,7 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | Test ogx stack list-deps | [providers-list-deps.yml](providers-list-deps.yml) | Test ogx stack list-deps |
 | Build, test, and publish packages | [pypi.yml](pypi.yml) | Build, test, and publish packages |
 | Integration Tests (Record) | [record-integration-tests.yml](record-integration-tests.yml) | Auto-record missing test recordings for PR |
+| vLLM GPU Recording | [record-vllm-gpu-tests.yml](record-vllm-gpu-tests.yml) | GPU recording for gpt-oss:20b (${{ inputs.suite }} suite) |
 | Release Branch Scheduled CI | [release-branch-scheduled-ci.yml](release-branch-scheduled-ci.yml) | Scheduled CI checks for active release branches |
 | Check semantic PR titles | [semantic-pr.yml](semantic-pr.yml) | Ensure that PR titles follow the conventional commit spec |
 | Stainless SDK Builds | [stainless-builds.yml](stainless-builds.yml) | Build Stainless SDK from OpenAPI spec changes |
