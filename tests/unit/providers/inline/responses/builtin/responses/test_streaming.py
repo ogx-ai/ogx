@@ -19,7 +19,7 @@ from ogx.providers.inline.responses.builtin.responses.utils import (
     should_summarize_reasoning,
     summarize_reasoning,
 )
-from ogx_api import ToolDef
+from ogx_api import OpenAIResponseFormatText, OpenAIUserMessageParam, ToolDef
 from ogx_api.inference.models import (
     OpenAIAssistantMessageParam,
     OpenAIChatCompletion,
@@ -32,6 +32,7 @@ from ogx_api.inference.models import (
 from ogx_api.openai_responses import (
     OpenAIResponseInputToolMCP,
     OpenAIResponseReasoning,
+    OpenAIResponseText,
 )
 
 
@@ -577,3 +578,72 @@ class TestSummarizeReasoning:
         call_args = mock_inference.openai_chat_completion.call_args[0][0]
         user_msg = call_args.messages[1].content
         assert "Preserve the key logical steps" in user_msg
+
+
+def _build_reasoning_orchestrator(
+    inference_api: AsyncMock,
+    reasoning_effort: str = "low",
+) -> StreamingResponseOrchestrator:
+    """Build a minimal StreamingResponseOrchestrator configured for reasoning tests."""
+    ctx = ChatCompletionContext(
+        model="test-model",
+        messages=[OpenAIUserMessageParam(role="user", content="Hello")],
+        response_tools=None,
+        temperature=None,
+        top_p=None,
+        response_format=OpenAIResponseFormatText(type="text"),
+        tool_context=ToolContext(current_tools=None),
+        inputs="Hello",
+    )
+    return StreamingResponseOrchestrator(
+        inference_api=inference_api,
+        ctx=ctx,
+        response_id="resp_test",
+        created_at=0,
+        text=OpenAIResponseText(format={"type": "text"}),
+        max_infer_iters=1,
+        tool_executor=MagicMock(),
+        instructions=None,
+        safety_api=None,
+        reasoning=OpenAIResponseReasoning(effort=reasoning_effort),
+    )
+
+
+class TestReasoningNotSupported:
+    """When the provider doesn't support reasoning, a ValueError should be raised."""
+
+    async def test_raises_value_error_when_not_implemented(self):
+        """NotImplementedError from the provider is converted to ValueError (400)."""
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completions_with_reasoning.side_effect = NotImplementedError(
+            "Provider does not support reasoning"
+        )
+
+        orchestrator = _build_reasoning_orchestrator(mock_inference)
+        with pytest.raises(ValueError, match="does not support reasoning"):
+            async for _ in orchestrator.create_response():
+                pass
+
+    async def test_raises_value_error_when_attribute_error(self):
+        """AttributeError from the provider is converted to ValueError (400)."""
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completions_with_reasoning.side_effect = AttributeError("No such attribute")
+
+        orchestrator = _build_reasoning_orchestrator(mock_inference)
+        with pytest.raises(ValueError, match="does not support reasoning"):
+            async for _ in orchestrator.create_response():
+                pass
+
+    async def test_does_not_fall_back_to_regular_chat_completion(self):
+        """When reasoning is unsupported, the fallback to regular chat completion must not occur."""
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completions_with_reasoning.side_effect = NotImplementedError(
+            "Provider does not support reasoning"
+        )
+
+        orchestrator = _build_reasoning_orchestrator(mock_inference)
+        with pytest.raises(ValueError):
+            async for _ in orchestrator.create_response():
+                pass
+
+        mock_inference.openai_chat_completion.assert_not_called()

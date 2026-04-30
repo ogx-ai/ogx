@@ -557,17 +557,14 @@ class StreamingResponseOrchestrator:
                 if self.reasoning and self.reasoning.effort and self.reasoning.effort != "none":
                     try:
                         # Pass a copy — the router mutates params.model (strips provider prefix).
-                        # Keep original params intact in-case of fallback to regular CC.
-                        # NOTE : Is a deep-copy necessary ?
                         completion_result = await self.inference_api.openai_chat_completions_with_reasoning(
                             params.model_copy()
                         )
-                    except (NotImplementedError, AttributeError, ValueError):
-                        logger.critical(
-                            "Provider does not support reasoning in chat completions. "
-                            "Falling back to regular chat completion."
-                        )
-                        completion_result = await self.inference_api.openai_chat_completion(params)
+                    except (NotImplementedError, AttributeError) as exc:
+                        raise ValueError(
+                            "Failed to process request: the selected model does not support reasoning. "
+                            "Remove the 'reasoning' parameter from your request or choose a model that supports it."
+                        ) from exc
                 else:
                     completion_result = await self.inference_api.openai_chat_completion(params)
 
@@ -713,6 +710,8 @@ class StreamingResponseOrchestrator:
                 incomplete_reason = "length"
 
         except ModelNotFoundError:
+            raise
+        except ValueError:
             raise
         except Exception as exc:  # noqa: BLE001
             self.final_messages = messages.copy()
