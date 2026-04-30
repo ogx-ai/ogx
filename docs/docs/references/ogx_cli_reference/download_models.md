@@ -45,16 +45,16 @@ You can download models using the `huggingface-cli download` command. Here are s
 
 ```bash
 # Download Llama 3.2 3B Instruct model
-huggingface-cli download meta-llama/Llama-3.2-3B-Instruct --local-dir ~/.llama/Llama-3.2-3B-Instruct
+huggingface-cli download meta-llama/Llama-3.2-3B-Instruct --local-dir ~/.ogx/Llama-3.2-3B-Instruct
 
 # Download Llama 3.2 1B Instruct model
-huggingface-cli download meta-llama/Llama-3.2-1B-Instruct --local-dir ~/.llama/Llama-3.2-1B-Instruct
+huggingface-cli download meta-llama/Llama-3.2-1B-Instruct --local-dir ~/.ogx/Llama-3.2-1B-Instruct
 
 # Download Llama Guard 3 1B model
-huggingface-cli download meta-llama/Llama-Guard-3-1B --local-dir ~/.llama/Llama-Guard-3-1B
+huggingface-cli download meta-llama/Llama-Guard-3-1B --local-dir ~/.ogx/Llama-Guard-3-1B
 
 # Download Prompt Guard model
-huggingface-cli download meta-llama/Prompt-Guard-86M --local-dir ~/.llama/Prompt-Guard-86M
+huggingface-cli download meta-llama/Prompt-Guard-86M --local-dir ~/.ogx/Prompt-Guard-86M
 ```
 
 **Important:** You need to authenticate with Hugging Face to download models. You can do this by:

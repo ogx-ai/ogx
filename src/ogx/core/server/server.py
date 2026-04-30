@@ -50,6 +50,7 @@ from ogx.core.stack import (
     replace_env_vars,
 )
 from ogx.core.utils.config import redact_sensitive_fields
+from ogx.core.utils.config_dirs import migrate_legacy_config_dir
 from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
 from ogx_api import Api, ConflictError, ResourceNotFoundError
@@ -228,6 +229,8 @@ def create_app() -> StackApp:
     Returns:
         Configured StackApp instance.
     """
+    migrate_legacy_config_dir()
+
     config_file_str = os.getenv("OGX_CONFIG")
     if config_file_str is None:
         raise ValueError("OGX_CONFIG environment variable is required")

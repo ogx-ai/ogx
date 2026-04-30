@@ -230,7 +230,7 @@ class RunConfigSettings(BaseModel):
 
                 config_class = instantiate_class_type(config_class)
                 if hasattr(config_class, "sample_run_config"):
-                    config = config_class.sample_run_config(__distro_dir__=f"~/.llama/distributions/{name}")
+                    config = config_class.sample_run_config(__distro_dir__=f"~/.ogx/distributions/{name}")
                 else:
                     config = {}
                 # BuildProvider does not have a config attribute; skip assignment
@@ -246,11 +246,11 @@ class RunConfigSettings(BaseModel):
 
         storage_backends = self.storage_backends or {
             "kv_default": SqliteKVStoreConfig.sample_run_config(
-                __distro_dir__=f"~/.llama/distributions/{name}",
+                __distro_dir__=f"~/.ogx/distributions/{name}",
                 db_name="kvstore.db",
             ),
             "sql_default": SqliteSqlStoreConfig.sample_run_config(
-                __distro_dir__=f"~/.llama/distributions/{name}",
+                __distro_dir__=f"~/.ogx/distributions/{name}",
                 db_name="sql_store.db",
             ),
         }

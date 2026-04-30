@@ -13,6 +13,7 @@ from termcolor import cprint
 
 from ogx.cli.subcommand import Subcommand
 from ogx.cli.table import print_table
+from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
 
 class StackRemove(Subcommand):
@@ -46,7 +47,7 @@ class StackRemove(Subcommand):
     def _get_distribution_dirs(self) -> dict[str, Path]:
         """Return a dictionary of distribution names and their paths"""
         distributions = {}
-        dist_dir = Path.home() / ".llama" / "distributions"
+        dist_dir = DISTRIBS_BASE_DIR
 
         if dist_dir.exists():
             for stack_dir in dist_dir.iterdir():
@@ -58,7 +59,7 @@ class StackRemove(Subcommand):
         """Display available stacks in a table"""
         distributions = self._get_distribution_dirs()
         if not distributions:
-            cprint("No stacks found in ~/.llama/distributions", color="red", file=sys.stderr)
+            cprint("No stacks found in ~/.ogx/distributions", color="red", file=sys.stderr)
             sys.exit(1)
 
         headers = ["Stack Name", "Path"]

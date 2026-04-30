@@ -103,7 +103,7 @@ The following environment variables can be configured:
 
 ### Vector Database Configuration
 
-- `SQLITE_STORE_DIR`: SQLite store directory (default: `~/.llama/distributions/starter`)
+- `SQLITE_STORE_DIR`: SQLite store directory (default: `~/.ogx/distributions/starter`)
 - `ENABLE_SQLITE_VEC`: Enable SQLite vector provider
 - `ENABLE_CHROMADB`: Enable ChromaDB provider
 - `ENABLE_PGVECTOR`: Enable PGVector provider
@@ -165,7 +165,7 @@ Or run the pre-built container image from [Docker Hub](https://hub.docker.com/r/
 ```bash
 docker run -it \
   -p 8321:8321 \
-  -v ~/.llama:/root/.llama \
+  -v ~/.ogx:/root/.ogx \
   -e OLLAMA_URL=http://host.docker.internal:11434 \
   ogx/distribution-starter
 ```

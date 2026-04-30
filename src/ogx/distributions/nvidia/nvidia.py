@@ -44,7 +44,7 @@ def get_distribution_template(name: str = "nvidia") -> DistributionTemplate:
     files_provider = Provider(
         provider_id="builtin-files",
         provider_type="inline::localfs",
-        config=LocalfsFilesImplConfig.sample_run_config(f"~/.llama/distributions/{name}"),
+        config=LocalfsFilesImplConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
     )
     inference_model = ModelInput(
         model_id="${env.INFERENCE_MODEL}",

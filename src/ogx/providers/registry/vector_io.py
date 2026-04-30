@@ -665,7 +665,7 @@ vector_io:
   - provider_id: milvus
     provider_type: inline::milvus
     config:
-      db_path: ~/.llama/distributions/together/milvus_store.db
+      db_path: ~/.ogx/distributions/together/milvus_store.db
 ```
 
 ### Remote Configuration

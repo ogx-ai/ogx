@@ -16,7 +16,7 @@ OGX supports external APIs that live outside of the main codebase. This allows y
 To enable external APIs, you need to configure the `external_apis_dir` in your OGX configuration. This directory should contain your external API specifications:
 
 ```yaml
-external_apis_dir: ~/.llama/apis.d/
+external_apis_dir: ~/.ogx/apis.d/
 ```
 
 ## Directory Structure
@@ -147,7 +147,7 @@ include = ["ogx_api_weather", "ogx_api_weather.*"]
 4. Create the API specification:
 
 ```yaml
-# ~/.llama/apis.d/weather.yaml
+# ~/.ogx/apis.d/weather.yaml
 module: ogx_api_weather
 name: weather
 pip_packages: ["ogx-api-weather"]
@@ -167,7 +167,7 @@ distro_name: "weather-demo"
 apis:
   - weather
 providers: {}
-external_apis_dir: ~/.llama/apis.d
+external_apis_dir: ~/.ogx/apis.d
 ```
 
 The API is now available at `/v1/weather/locations`.
@@ -277,7 +277,7 @@ class WeatherKazeAdapter(WeatherProvider):
 5. Create the provider specification:
 
 ```yaml
-# ~/.llama/providers.d/remote/weather/kaze.yaml
+# ~/.ogx/providers.d/remote/weather/kaze.yaml
 adapter_type: kaze
 pip_packages: ["ogx_provider_kaze"]
 config_class: ogx_provider_kaze.config.KazeProviderConfig
@@ -294,7 +294,7 @@ uv pip install -e .
 7. Configure OGX to use the provider:
 
 ```yaml
-# ~/.llama/config.yaml
+# ~/.ogx/config.yaml
 version: "2"
 distro_name: "ogx-api-weather"
 apis:
@@ -304,8 +304,8 @@ providers:
   - provider_id: kaze
     provider_type: remote::kaze
     config: {}
-external_apis_dir: ~/.llama/apis.d
-external_providers_dir: ~/.llama/providers.d
+external_apis_dir: ~/.ogx/apis.d
+external_providers_dir: ~/.ogx/providers.d
 server:
   port: 8321
 ```
@@ -313,7 +313,7 @@ server:
 8. Run the server:
 
 ```bash
-ogx run ~/.llama/config.yaml
+ogx run ~/.ogx/config.yaml
 ```
 
 9. Test the API:

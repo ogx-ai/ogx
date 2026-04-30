@@ -112,14 +112,14 @@ providers:
   - provider_id: sqlite-vec
     provider_type: inline::sqlite-vec
     config:
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/ci-tests}/sqlite_vec.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ci-tests}/sqlite_vec.db
       persistence:
         namespace: vector_io::sqlite_vec
         backend: kv_default
   - provider_id: ${env.MILVUS_URL:+milvus}
     provider_type: inline::milvus
     config:
-      db_path: ${env.MILVUS_DB_PATH:=~/.llama/distributions/ci-tests}/milvus.db
+      db_path: ${env.MILVUS_DB_PATH:=~/.ogx/distributions/ci-tests}/milvus.db
       persistence:
         namespace: vector_io::milvus
         backend: kv_default
@@ -186,7 +186,7 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/ci-tests/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/ci-tests/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default
@@ -245,10 +245,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/ci-tests}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ci-tests}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/ci-tests}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ci-tests}/sql_store.db
   stores:
     metadata:
       namespace: registry

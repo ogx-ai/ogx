@@ -106,14 +106,14 @@ providers:
   - provider_id: sqlite-vec
     provider_type: inline::sqlite-vec
     config:
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/sqlite_vec.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/sqlite_vec.db
       persistence:
         namespace: vector_io::sqlite_vec
         backend: kv_default
   - provider_id: ${env.MILVUS_URL:+milvus}
     provider_type: inline::milvus
     config:
-      db_path: ${env.MILVUS_DB_PATH:=~/.llama/distributions/starter}/milvus.db
+      db_path: ${env.MILVUS_DB_PATH:=~/.ogx/distributions/starter}/milvus.db
       persistence:
         namespace: vector_io::milvus
         backend: kv_default
@@ -180,7 +180,7 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/starter/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/starter/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default

@@ -39,7 +39,7 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/rag-benchmarks/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/rag-benchmarks/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default
@@ -66,10 +66,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/rag-benchmarks}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/rag-benchmarks}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/rag-benchmarks}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/rag-benchmarks}/sql_store.db
   stores:
     metadata:
       namespace: registry

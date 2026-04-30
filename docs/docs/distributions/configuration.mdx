@@ -36,7 +36,7 @@ providers:
       kvstore:
         type: sqlite
         namespace: null
-        db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/ollama}/faiss_store.db
+        db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ollama}/faiss_store.db
   safety:
   - provider_id: llama-guard
     provider_type: inline::llama-guard
@@ -56,10 +56,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/ollama}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ollama}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/ollama}/sqlstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ollama}/sqlstore.db
   stores:
     metadata:
       backend: kv_default

@@ -46,7 +46,7 @@ def get_distribution_template(name: str = "watsonx") -> DistributionTemplate:
     files_provider = Provider(
         provider_id="builtin-files",
         provider_type="inline::localfs",
-        config=LocalfsFilesImplConfig.sample_run_config(f"~/.llama/distributions/{name}"),
+        config=LocalfsFilesImplConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
     )
     return DistributionTemplate(
         name=name,

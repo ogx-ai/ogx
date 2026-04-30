@@ -133,7 +133,7 @@ vector_io:
     config:
       kvstore:
         type: sqlite
-        db_path: ~/.llama/faiss_store.db
+        db_path: ~/.ogx/faiss_store.db
 ```
 
 ### With FileResponse Support
@@ -145,16 +145,16 @@ vector_io:
     config:
       kvstore:
         type: sqlite
-        db_path: ~/.llama/faiss_store.db
+        db_path: ~/.ogx/faiss_store.db
 
 files:
   - provider_id: local-files
     provider_type: inline::localfs
     config:
-      storage_dir: ~/.llama/files
+      storage_dir: ~/.ogx/files
       metadata_store:
         type: sqlite
-        db_path: ~/.llama/files_metadata.db
+        db_path: ~/.ogx/files_metadata.db
 ```
 
 ## Usage Examples

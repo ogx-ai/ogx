@@ -37,7 +37,7 @@ providers:
   - provider_id: sqlite-vec
     provider_type: inline::sqlite-vec
     config:
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/open-benchmark}/sqlite_vec.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/open-benchmark}/sqlite_vec.db
       persistence:
         namespace: vector_io::sqlite_vec
         backend: kv_default
@@ -102,10 +102,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/open-benchmark}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/open-benchmark}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/open-benchmark}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/open-benchmark}/sql_store.db
   stores:
     metadata:
       namespace: registry

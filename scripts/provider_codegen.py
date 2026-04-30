@@ -242,11 +242,11 @@ def get_config_class_info(config_class_path: str) -> dict[str, Any]:
                         default_value = field.default_factory()
                         # HACK ALERT:
                         # If the default value contains a path that looks like it came from RUNTIME_BASE_DIR,
-                        # replace it with a generic ~/.llama/ path for documentation
-                        if isinstance(default_value, str) and "/.llama/" in default_value:
-                            if ".llama/" in default_value:
-                                path_part = default_value.split(".llama/")[-1]
-                                default_value = f"~/.llama/{path_part}"
+                        # replace it with a generic ~/.ogx/ path for documentation
+                        if isinstance(default_value, str) and "/.ogx/" in default_value:
+                            if ".ogx/" in default_value:
+                                path_part = default_value.split(".ogx/")[-1]
+                                default_value = f"~/.ogx/{path_part}"
                     except Exception:
                         default_value = ""
                 elif field.default is None or field.default is PydanticUndefined:
@@ -557,7 +557,7 @@ def generate_provider_docs(progress, provider_spec: Any, api_name: str) -> str:
             if sample_config_func is not None:
                 sig = inspect.signature(sample_config_func)
                 if "__distro_dir__" in sig.parameters:
-                    sample_config = sample_config_func(__distro_dir__="~/.llama/dummy")
+                    sample_config = sample_config_func(__distro_dir__="~/.ogx/dummy")
                 else:
                     sample_config = sample_config_func()
 

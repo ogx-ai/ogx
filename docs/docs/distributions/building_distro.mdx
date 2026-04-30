@@ -103,7 +103,7 @@ External providers live outside the main repository but can be bundled by pointi
 
 1. Copy providers into the build context, for example `cp -R path/to/providers providers.d`.
 2. Update `build.yaml` with the directory and provider entries.
-3. Adjust run configs to use the in-container path (usually `/.llama/providers.d`). Pass `--build-arg RUN_CONFIG_PATH=/workspace/config.yaml` if you want to bake the config.
+3. Adjust run configs to use the in-container path (usually `/.ogx/providers.d`). Pass `--build-arg RUN_CONFIG_PATH=/workspace/config.yaml` if you want to bake the config.
 
 Example `build.yaml` excerpt for a custom Ollama provider:
 
@@ -200,7 +200,7 @@ After building the image, launch it directly with Docker or Podman—the entrypo
 ```bash
 docker run -d \
   -p $OGX_PORT:$OGX_PORT \
-  -v ~/.llama:/root/.llama \
+  -v ~/.ogx:/root/.ogx \
   -e INFERENCE_MODEL=$INFERENCE_MODEL \
   -e OLLAMA_URL=http://host.docker.internal:11434 \
   ogx:starter \
@@ -213,7 +213,7 @@ Here are the docker flags and their uses:
 
 * `-p $OGX_PORT:$OGX_PORT`: Maps the container port to the host port for accessing the server
 
-* `-v ~/.llama:/root/.llama`: Mounts the local .llama directory to persist configurations and data
+* `-v ~/.ogx:/root/.ogx`: Mounts the local .ogx directory to persist configurations and data
 
 * `localhost/distribution-ollama:dev`: The name and tag of the container image to run
 

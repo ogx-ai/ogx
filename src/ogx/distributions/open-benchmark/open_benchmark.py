@@ -124,20 +124,18 @@ def get_distribution_template() -> DistributionTemplate:
         Provider(
             provider_id="sqlite-vec",
             provider_type="inline::sqlite-vec",
-            config=SQLiteVectorIOConfig.sample_run_config(f"~/.llama/distributions/{name}"),
+            config=SQLiteVectorIOConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
         ),
         Provider(
             provider_id="${env.ENABLE_CHROMADB:+chromadb}",
             provider_type="remote::chromadb",
-            config=ChromaVectorIOConfig.sample_run_config(
-                f"~/.llama/distributions/{name}", url="${env.CHROMADB_URL:=}"
-            ),
+            config=ChromaVectorIOConfig.sample_run_config(f"~/.ogx/distributions/{name}", url="${env.CHROMADB_URL:=}"),
         ),
         Provider(
             provider_id="${env.ENABLE_PGVECTOR:+pgvector}",
             provider_type="remote::pgvector",
             config=PGVectorVectorIOConfig.sample_run_config(
-                f"~/.llama/distributions/{name}",
+                f"~/.ogx/distributions/{name}",
                 db="${env.PGVECTOR_DB:=}",
                 user="${env.PGVECTOR_USER:=}",
                 password="${env.PGVECTOR_PASSWORD:=}",

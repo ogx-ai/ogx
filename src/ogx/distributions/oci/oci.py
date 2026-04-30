@@ -49,13 +49,13 @@ def get_distribution_template(name: str = "oci") -> DistributionTemplate:
     vector_io_provider = Provider(
         provider_id="faiss",
         provider_type="inline::faiss",
-        config=FaissVectorIOConfig.sample_run_config(f"~/.llama/distributions/{name}"),
+        config=FaissVectorIOConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
     )
 
     files_provider = Provider(
         provider_id="builtin-files",
         provider_type="inline::localfs",
-        config=LocalfsFilesImplConfig.sample_run_config(f"~/.llama/distributions/{name}"),
+        config=LocalfsFilesImplConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
     )
     return DistributionTemplate(
         name=name,

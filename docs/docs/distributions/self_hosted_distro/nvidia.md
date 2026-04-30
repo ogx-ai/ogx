@@ -127,7 +127,7 @@ docker run \
   -it \
   --pull always \
   -p $OGX_PORT:$OGX_PORT \
-  -v ~/.llama:/root/.llama \
+  -v ~/.ogx:/root/.ogx \
   -e NVIDIA_API_KEY=$NVIDIA_API_KEY \
   ogx/distribution-nvidia \
   --port $OGX_PORT
@@ -146,7 +146,7 @@ docker run \
   -it \
   --pull always \
   -p $OGX_PORT:$OGX_PORT \
-  -v ~/.llama:/root/.llama \
+  -v ~/.ogx:/root/.ogx \
   -v $CUSTOM_RUN_CONFIG:/app/custom-config.yaml \
   -e RUN_CONFIG_PATH=/app/custom-config.yaml \
   -e NVIDIA_API_KEY=$NVIDIA_API_KEY \
