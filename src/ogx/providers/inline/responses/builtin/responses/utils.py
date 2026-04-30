@@ -548,27 +548,38 @@ def is_function_tool_call(
     return False
 
 
-async def run_guardrails(safety_api: Safety | None, messages: str, guardrail_ids: list[str]) -> str | None:
+async def resolve_guardrail_model_ids(safety_api: Safety, guardrail_ids: list[str]) -> list[str]:
+    """Resolve guardrail identifiers to concrete shield model IDs.
+
+    Call once and pass the result to run_guardrails() to avoid repeated lookups.
+    """
+    # TODO: list_shields not in Safety interface but available at runtime via API routing
+    shields_list = await safety_api.routing_table.list_shields()  # type: ignore[attr-defined]
+    model_ids = []
+    for guardrail_id in guardrail_ids:
+        matching_shields = [shield for shield in shields_list.data if shield.identifier == guardrail_id]
+        if matching_shields:
+            model_ids.append(matching_shields[0].provider_resource_id)
+        else:
+            raise ValueError(f"No shield found with identifier '{guardrail_id}'")
+    return model_ids
+
+
+async def run_guardrails(
+    safety_api: Safety | None,
+    messages: str,
+    guardrail_ids: list[str],
+    model_ids: list[str] | None = None,
+) -> str | None:
     """Run guardrails against messages and return violation message if blocked."""
     if not messages:
         return None
 
-    # If safety API is not available, skip guardrails
     if safety_api is None:
         return None
 
-    # Look up shields to get their provider_resource_id (actual model ID)
-    model_ids = []
-    # TODO: list_shields not in Safety interface but available at runtime via API routing
-    shields_list = await safety_api.routing_table.list_shields()  # type: ignore[attr-defined]
-
-    for guardrail_id in guardrail_ids:
-        matching_shields = [shield for shield in shields_list.data if shield.identifier == guardrail_id]
-        if matching_shields:
-            model_id = matching_shields[0].provider_resource_id
-            model_ids.append(model_id)
-        else:
-            raise ValueError(f"No shield found with identifier '{guardrail_id}'")
+    if model_ids is None:
+        model_ids = await resolve_guardrail_model_ids(safety_api, guardrail_ids)
 
     guardrail_tasks = [
         safety_api.run_moderation(RunModerationRequest(input=messages, model=model_id)) for model_id in model_ids

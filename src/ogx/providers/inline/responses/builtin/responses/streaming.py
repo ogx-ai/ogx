@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import os
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -117,6 +118,7 @@ from .utils import (
     convert_chat_choice_to_response_message,
     convert_mcp_tool_choice,
     is_function_tool_call,
+    resolve_guardrail_model_ids,
     run_guardrails,
     should_summarize_reasoning,
     summarize_reasoning,
@@ -128,6 +130,8 @@ tracer = trace.get_tracer(__name__)
 # Built-in tool names that the server knows how to execute itself.
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
 _SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+
+_GUARDRAIL_BATCH_CHARS = int(os.environ.get("GUARDRAIL_BATCH_CHARS", "200"))
 
 # Maps OpenAI Chat Completions error codes to Responses API error codes
 _RESPONSES_API_ERROR_CODES = {
@@ -304,6 +308,7 @@ class StreamingResponseOrchestrator:
         self.accumulated_usage: OpenAIResponseUsage | None = None
         # Track if we've sent a refusal response
         self.violation_detected = False
+        self._guardrail_model_ids: list[str] = []
         # Track total calls made to built-in tools
         self.accumulated_builtin_tool_calls = 0
         # Track total output tokens generated across inference calls
@@ -411,8 +416,15 @@ class StreamingResponseOrchestrator:
 
         # Input safety validation - check messages before processing
         if self.guardrail_ids:
+            if self.safety_api is not None:
+                self._guardrail_model_ids = await resolve_guardrail_model_ids(self.safety_api, self.guardrail_ids)
             combined_text = interleaved_content_as_str([msg.content for msg in self.ctx.messages])
-            input_violation_message = await run_guardrails(self.safety_api, combined_text, self.guardrail_ids)
+            input_violation_message = await run_guardrails(
+                self.safety_api,
+                combined_text,
+                self.guardrail_ids,
+                model_ids=self._guardrail_model_ids,
+            )
             if input_violation_message:
                 logger.info("Input guardrail violation", input_violation_message=input_violation_message)
                 yield await self._create_refusal_response(input_violation_message)
@@ -1038,6 +1050,8 @@ class StreamingResponseOrchestrator:
         message_output_index = len(output_messages)
         reasoning_text_accumulated = []
         refusal_text_accumulated = []
+        pending_guardrail_events: list[OpenAIResponseObjectStream] = []
+        chars_since_last_check = 0
 
         async for raw_chunk in completion_result:
             # Providers returning OpenAIChatCompletionChunkWithReasoning wrap
@@ -1058,9 +1072,6 @@ class StreamingResponseOrchestrator:
 
             # Accumulate usage from chunks (typically in final chunk with stream_options)
             self._accumulate_chunk_usage(chunk)
-
-            # Track deltas for this specific chunk for guardrail validation
-            chunk_events: list[OpenAIResponseObjectStream] = []
 
             for chunk_choice in chunk.choices:
                 # Collect logprobs if present
@@ -1115,12 +1126,14 @@ class StreamingResponseOrchestrator:
                     )
                     # Buffer text delta events for guardrail check
                     if self.guardrail_ids:
-                        chunk_events.append(text_delta_event)
+                        pending_guardrail_events.append(text_delta_event)
                     else:
                         yield text_delta_event
 
                 # Collect content for final response
-                chat_response_content.append(chunk_choice.delta.content or "")
+                content_delta = chunk_choice.delta.content or ""
+                chat_response_content.append(content_delta)
+                chars_since_last_check += len(content_delta)
                 if chunk_choice.finish_reason:
                     chunk_finish_reason = chunk_choice.finish_reason
 
@@ -1137,7 +1150,7 @@ class StreamingResponseOrchestrator:
                     ):
                         # Buffer reasoning events for guardrail check
                         if self.guardrail_ids:
-                            chunk_events.append(event)
+                            pending_guardrail_events.append(event)
                         else:
                             yield event
                     reasoning_part_emitted = True
@@ -1232,21 +1245,49 @@ class StreamingResponseOrchestrator:
                                     response_tool_call.function.arguments or ""
                                 ) + tool_call.function.arguments
 
-            # Output Safety Validation for this chunk
-            if self.guardrail_ids:
-                # Check guardrails on accumulated text so far
+            # Batched output safety validation. If we have only buffered reasoning events and
+            # no assistant text yet, flush per chunk so reasoning can stream in real time.
+            guardrail_check_due = chars_since_last_check >= _GUARDRAIL_BATCH_CHARS
+            if pending_guardrail_events and not any(chat_response_content):
+                guardrail_check_due = True
+
+            if self.guardrail_ids and guardrail_check_due:
                 accumulated_text = "".join(chat_response_content)
-                violation_message = await run_guardrails(self.safety_api, accumulated_text, self.guardrail_ids)
+                violation_message = await run_guardrails(
+                    self.safety_api,
+                    accumulated_text,
+                    self.guardrail_ids,
+                    model_ids=self._guardrail_model_ids,
+                )
                 if violation_message:
                     logger.info("Output guardrail violation", violation_message=violation_message)
-                    chunk_events.clear()
+                    pending_guardrail_events.clear()
                     yield await self._create_refusal_response(violation_message)
                     self.violation_detected = True
                     return
-                else:
-                    # No violation detected, emit all content events for this chunk
-                    for event in chunk_events:
-                        yield event
+                for event in pending_guardrail_events:
+                    yield event
+                pending_guardrail_events.clear()
+                chars_since_last_check = 0
+
+        # Final guardrail check on remaining buffered content
+        if self.guardrail_ids and pending_guardrail_events:
+            accumulated_text = "".join(chat_response_content)
+            violation_message = await run_guardrails(
+                self.safety_api,
+                accumulated_text,
+                self.guardrail_ids,
+                model_ids=self._guardrail_model_ids,
+            )
+            if violation_message:
+                logger.info("Output guardrail violation", violation_message=violation_message)
+                pending_guardrail_events.clear()
+                yield await self._create_refusal_response(violation_message)
+                self.violation_detected = True
+                return
+            for event in pending_guardrail_events:
+                yield event
+            pending_guardrail_events.clear()
 
         # Emit arguments.done events for completed tool calls (differentiate between MCP and function calls)
         for tool_call_index in sorted(chat_response_tool_calls.keys()):
