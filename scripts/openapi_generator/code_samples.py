@@ -47,6 +47,14 @@ client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 completion = client.chat.completions.retrieve("completion_id")
 print(completion)
 """,
+    ("/v1/chat/completions/{completion_id}/messages", "get"): """\
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
+
+messages = client.chat.completions.messages.list(completion_id="completion_id")
+print(messages.data)
+""",
     # --- Completions ---
     ("/v1/completions", "post"): """\
 from openai import OpenAI

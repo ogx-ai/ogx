@@ -10,7 +10,9 @@ from typing import Protocol, runtime_checkable
 from ogx_api.models import Model
 
 from .models import (
+    ChatCompletionMessageList,
     GetChatCompletionRequest,
+    ListChatCompletionMessagesRequest,
     ListChatCompletionsRequest,
     ListOpenAIChatCompletionResponse,
     OpenAIChatCompletion,
@@ -113,3 +115,10 @@ class Inference(InferenceProvider):
     async def get_chat_completion(self, request: GetChatCompletionRequest) -> OpenAICompletionWithInputMessages:
         """Retrieve a stored chat completion by its ID."""
         raise NotImplementedError("Get chat completion is not implemented")
+
+    async def list_chat_completion_messages(
+        self,
+        request: ListChatCompletionMessagesRequest,
+    ) -> ChatCompletionMessageList:
+        """List messages from a stored chat completion."""
+        raise NotImplementedError("List chat completion messages is not implemented")

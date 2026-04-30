@@ -20,8 +20,12 @@ from ogx.core.task import (
 )
 from ogx.log import get_logger
 from ogx_api import (
+    ChatCompletionMessage,
+    ChatCompletionMessageList,
     ListOpenAIChatCompletionResponse,
     OpenAIChatCompletion,
+    OpenAIChatCompletionContentPartParam,
+    OpenAIChatCompletionResponseMessage,
     OpenAICompletionWithInputMessages,
     OpenAIMessageParam,
     Order,
@@ -35,6 +39,58 @@ class _WriteItem(NamedTuple):
     completion: OpenAIChatCompletion
     messages: list[OpenAIMessageParam]
     request_context: RequestContext
+
+
+def _supported_content_parts(content: Any) -> list[OpenAIChatCompletionContentPartParam] | None:
+    """Return only multipart content parts supported by the listing response schema."""
+    if not isinstance(content, list):
+        return None
+
+    supported_parts = []
+    for part in content:
+        if not isinstance(part, dict):
+            continue
+        if part.get("type") not in {"text", "image_url"}:
+            continue
+        supported_parts.append(part)
+
+    return supported_parts or None
+
+
+def _message_from_input(message_id: str, input_message: OpenAIMessageParam) -> ChatCompletionMessage:
+    """Convert a stored input message into the list response format."""
+    data = input_message.model_dump()
+    content = data.get("content")
+    # OpenAI spec: content is string|null, multipart goes in content_parts
+    if isinstance(content, list):
+        text_content = None
+        content_parts = _supported_content_parts(content)
+    else:
+        text_content = content
+        content_parts = None
+    return ChatCompletionMessage(
+        id=message_id,
+        role=data["role"],
+        content=text_content,
+        content_parts=content_parts,
+        name=data.get("name"),
+        tool_calls=data.get("tool_calls"),
+        tool_call_id=data.get("tool_call_id"),
+    )
+
+
+def _message_from_choice(message_id: str, message: OpenAIChatCompletionResponseMessage) -> ChatCompletionMessage:
+    """Convert a stored output message into the list response format."""
+    return ChatCompletionMessage(
+        id=message_id,
+        role=message.role,
+        content=message.content,
+        tool_calls=message.tool_calls,
+        refusal=message.refusal,
+        function_call=message.function_call,
+        annotations=message.annotations,
+        audio=message.audio,
+    )
 
 
 class InferenceStore:
@@ -268,4 +324,44 @@ class InferenceStore:
             model=row["model"],
             choices=row["choices"],
             input_messages=row["input_messages"],
+        )
+
+    async def list_chat_completion_messages(
+        self,
+        completion_id: str,
+        after: str | None = None,
+        limit: int | None = 20,
+        order: str = "asc",
+    ) -> ChatCompletionMessageList:
+        """List flattened input and output messages from a stored chat completion."""
+        completion = await self.get_chat_completion(completion_id)
+        messages: list[ChatCompletionMessage] = []
+
+        for index, input_message in enumerate(completion.input_messages):
+            messages.append(_message_from_input(f"{completion_id}-{index}", input_message))
+
+        base_index = len(messages)
+        for index, choice in enumerate(completion.choices):
+            messages.append(_message_from_choice(f"{completion_id}-{base_index + index}", choice.message))
+
+        if order == Order.desc.value:
+            messages = list(reversed(messages))
+
+        if after:
+            cursor_index = next((i for i, message in enumerate(messages) if message.id == after), None)
+            if cursor_index is None:
+                raise ValueError(
+                    f"Failed to list chat completion messages: cursor '{after}' not found in completion '{completion_id}'."
+                )
+            messages = messages[cursor_index + 1 :]
+
+        page_size = limit or 20
+        has_more = len(messages) > page_size
+        page = messages[:page_size]
+
+        return ChatCompletionMessageList(
+            data=page,
+            has_more=has_more,
+            first_id=page[0].id if page else "",
+            last_id=page[-1].id if page else "",
         )

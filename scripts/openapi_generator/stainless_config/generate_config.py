@@ -286,7 +286,17 @@ ALL_RESOURCES = {
                         "type": "http",
                         "endpoint": "get /v1/chat/completions/{completion_id}",
                     },
-                }
+                },
+                "subresources": {
+                    "messages": {
+                        "methods": {
+                            "list": {
+                                "type": "http",
+                                "endpoint": "get /v1/chat/completions/{completion_id}/messages",
+                            }
+                        }
+                    }
+                },
             }
         },
     },

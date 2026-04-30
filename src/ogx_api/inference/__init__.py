@@ -25,6 +25,8 @@ from .api import Inference, InferenceProvider, ModelStore
 from .models import (
     AllowedToolsConfig,
     Bf16QuantizationConfig,
+    ChatCompletionMessage,
+    ChatCompletionMessageList,
     ChatCompletionResponseEventType,
     CompletionRequest,
     CustomToolConfig,
@@ -37,6 +39,7 @@ from .models import (
     GreedySamplingStrategy,
     Int4QuantizationConfig,
     JsonSchemaResponseFormat,
+    ListChatCompletionMessagesRequest,
     ListChatCompletionsRequest,
     ListOpenAIChatCompletionResponse,
     LogProbConfig,
@@ -139,6 +142,8 @@ __all__ = [
     "ToolResponseMessage",
     "ToolChoice",
     "TokenLogProbs",
+    "ChatCompletionMessage",
+    "ChatCompletionMessageList",
     # Response
     "ChatCompletionResponseEventType",
     "ResponseFormatType",
@@ -213,6 +218,7 @@ __all__ = [
     # Request Models
     "ListChatCompletionsRequest",
     "GetChatCompletionRequest",
+    "ListChatCompletionMessagesRequest",
     "RerankRequest",
     # Router factory module
     "fastapi_routes",

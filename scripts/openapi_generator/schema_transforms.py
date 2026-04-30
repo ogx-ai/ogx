@@ -374,6 +374,7 @@ def _restore_const_enum_defaults(openapi_schema: dict[str, Any]) -> None:
     # These correspond to OpenAI schemas that have explicit defaults on
     # single-value enum fields (verified against openai-spec-2.3.0.yml).
     _defaults_to_restore: dict[str, dict[str, str]] = {
+        "ChatCompletionMessageList": {"object": "list"},
         "Conversation": {"object": "conversation"},
         "ListOpenAIChatCompletionResponse": {"object": "list"},
         "OpenAICompactedResponse": {"object": "response.compaction"},

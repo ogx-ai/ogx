@@ -372,6 +372,48 @@ def test_inference_store(compat_client, client_with_models, text_model_id, strea
         or retrieved_response.input_messages[0]["content"]
     )
     assert input_content == message, retrieved_response
+    if not hasattr(client.chat.completions, "messages"):
+        return
+
+    first_page = client.chat.completions.messages.list(completion_id=response_id, limit=1)
+    assert first_page.object == "list"
+    assert len(first_page.data) == 1
+    assert first_page.data[0].id == f"{response_id}-0"
+    assert first_page.data[0].role == "user"
+    assert first_page.data[0].content == message
+    assert first_page.first_id == f"{response_id}-0"
+    assert first_page.last_id == f"{response_id}-0"
+    assert first_page.has_more is True
+
+    second_page = client.chat.completions.messages.list(
+        completion_id=response_id,
+        after=first_page.last_id,
+        limit=10,
+    )
+    assert len(second_page.data) == 1
+    assert second_page.data[0].id == f"{response_id}-1"
+    assert second_page.data[0].role == "assistant"
+    assert second_page.has_more is False
+
+    first_page = client.chat.completions.messages.list(completion_id=response_id, limit=1)
+    assert first_page.object == "list"
+    assert len(first_page.data) == 1
+    assert first_page.data[0].id == f"{response_id}-0"
+    assert first_page.data[0].role == "user"
+    assert first_page.data[0].content == message
+    assert first_page.first_id == f"{response_id}-0"
+    assert first_page.last_id == f"{response_id}-0"
+    assert first_page.has_more is True
+
+    second_page = client.chat.completions.messages.list(
+        completion_id=response_id,
+        after=first_page.last_id,
+        limit=10,
+    )
+    assert len(second_page.data) == 1
+    assert second_page.data[0].id == f"{response_id}-1"
+    assert second_page.data[0].role == "assistant"
+    assert second_page.has_more is False
 
 
 @pytest.mark.parametrize(

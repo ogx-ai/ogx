@@ -22,6 +22,7 @@ def sample_route_to_api():
     return {
         "POST:/v1/chat/completions": RouteInfo("inference", "openai_chat_completion"),
         "GET:/v1/chat/completions": RouteInfo("inference", "list_chat_completions"),
+        "GET:/v1/chat/completions/{completion_id}/messages": RouteInfo("inference", "list_chat_completion_messages"),
         "POST:/v1/completions": RouteInfo("inference", "openai_completion"),
         "POST:/v1/embeddings": RouteInfo("inference", "openai_embeddings"),
         "GET:/v1/models": RouteInfo("models", "openai_list_models"),
@@ -104,6 +105,15 @@ class TestResolveRoute:
         route = middleware._resolve_route("POST", "/v1/agents/agent-123/sessions/sess-456/turns")
         assert route.api == "agents"
         assert route.method == "create_agent_turn"
+
+    def test_nested_parameterized_path_messages(self, sample_route_to_api):
+        patterns = _compile_route_patterns(sample_route_to_api)
+        middleware = RequestMetricsMiddleware.__new__(RequestMetricsMiddleware)
+        middleware._patterns = patterns
+
+        route = middleware._resolve_route("GET", "/v1/chat/completions/chatcmpl-123/messages")
+        assert route.api == "inference"
+        assert route.method == "list_chat_completion_messages"
 
     def test_unknown_path(self, sample_route_to_api):
         patterns = _compile_route_patterns(sample_route_to_api)

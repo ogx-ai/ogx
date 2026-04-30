@@ -21,10 +21,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -38,6 +40,39 @@ def _load_spec(spec_path: Path) -> dict[str, Any]:
     if spec_path.suffix in (".yml", ".yaml"):
         return yaml.safe_load(content)
     return json.loads(content)
+
+
+def _prepare_llama_spec_for_conformance(llama_spec: Path) -> Path:
+    """Normalize semantically equivalent schema shapes before comparison."""
+
+    spec = _load_spec(llama_spec)
+    schemas = spec.get("components", {}).get("schemas", {})
+    list_schema = schemas.get("ChatCompletionMessageList")
+    if not isinstance(list_schema, dict):
+        return llama_spec
+
+    properties = list_schema.get("properties", {})
+    if not isinstance(properties, dict):
+        return llama_spec
+
+    data_prop = properties.get("data")
+    if not isinstance(data_prop, dict):
+        return llama_spec
+
+    items = data_prop.get("items")
+    if not (isinstance(items, dict) and items.get("$ref") == "#/components/schemas/ChatCompletionMessage"):
+        return llama_spec
+
+    data_prop["items"] = {"allOf": [copy.deepcopy(items)]}
+
+    suffix = llama_spec.suffix if llama_spec.suffix in (".yml", ".yaml", ".json") else ".yaml"
+    with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False) as temp_file:
+        if suffix in (".yml", ".yaml"):
+            yaml.safe_dump(spec, temp_file, sort_keys=False)
+        else:
+            json.dump(spec, temp_file, indent=2)
+            temp_file.write("\n")
+        return Path(temp_file.name)
 
 
 def _count_schema_properties(schema: dict[str, Any], spec: dict[str, Any], visited: set[str] | None = None) -> int:
@@ -348,168 +383,174 @@ def calculate_coverage(
     openresponses_spec: Path | None = None,
 ) -> dict[str, Any]:
     """Calculate coverage metrics."""
-    # Load categories from OpenAI spec
-    endpoint_categories = _load_endpoint_categories(openai_spec)
+    normalized_llama_spec = _prepare_llama_spec_for_conformance(llama_spec)
 
-    # Run main diff
-    diff = _run_oasdiff(openai_spec, llama_spec)
+    try:
+        # Load categories from OpenAI spec
+        endpoint_categories = _load_endpoint_categories(openai_spec)
 
-    # If openresponses spec is provided, use it for Responses category
-    if openresponses_spec and openresponses_spec.exists():
-        responses_diff = _run_oasdiff(openresponses_spec, llama_spec)
-        # Get all paths that start with /responses
-        responses_paths = set(endpoint_categories.get("Responses", []))
-        # Also include any /responses paths from the openresponses spec
-        responses_spec_data = json.loads(openresponses_spec.read_text())
-        for path in responses_spec_data.get("paths", {}).keys():
-            responses_paths.add(path)
-        diff = _merge_diffs(diff, responses_diff, responses_paths)
+        # Run main diff
+        diff = _run_oasdiff(openai_spec, normalized_llama_spec)
 
-    paths_diff = diff.get("paths", {})
-    deleted_paths = paths_diff.get("deleted", [])
-    modified_paths = paths_diff.get("modified", {})
+        # If openresponses spec is provided, use it for Responses category
+        if openresponses_spec and openresponses_spec.exists():
+            responses_diff = _run_oasdiff(openresponses_spec, normalized_llama_spec)
+            # Get all paths that start with /responses
+            responses_paths = set(endpoint_categories.get("Responses", []))
+            # Also include any /responses paths from the openresponses spec
+            responses_spec_data = json.loads(openresponses_spec.read_text())
+            for path in responses_spec_data.get("paths", {}).keys():
+                responses_paths.add(path)
+            diff = _merge_diffs(diff, responses_diff, responses_paths)
 
-    # Filter to relevant categories (endpoints that exist in OpenAI spec)
-    missing_endpoints = sorted([p for p in deleted_paths if _categorize_path(p, endpoint_categories) != "Other"])
-    implemented_endpoints = sorted(
-        [p for p in modified_paths.keys() if _categorize_path(p, endpoint_categories) != "Other"]
-    )
+        paths_diff = diff.get("paths", {})
+        deleted_paths = paths_diff.get("deleted", [])
+        modified_paths = paths_diff.get("modified", {})
 
-    # Analyze each endpoint
-    categories: dict[str, dict[str, Any]] = {}
+        # Filter to relevant categories (endpoints that exist in OpenAI spec)
+        missing_endpoints = sorted([p for p in deleted_paths if _categorize_path(p, endpoint_categories) != "Other"])
+        implemented_endpoints = sorted(
+            [p for p in modified_paths.keys() if _categorize_path(p, endpoint_categories) != "Other"]
+        )
 
-    for path in implemented_endpoints:
-        category = _categorize_path(path, endpoint_categories)
-        if category not in categories:
-            categories[category] = {
-                "endpoints": [],
-                "total_issues": 0,
-                "total_missing": 0,
+        # Analyze each endpoint
+        categories: dict[str, dict[str, Any]] = {}
+
+        for path in implemented_endpoints:
+            category = _categorize_path(path, endpoint_categories)
+            if category not in categories:
+                categories[category] = {
+                    "endpoints": [],
+                    "total_issues": 0,
+                    "total_missing": 0,
+                }
+
+            endpoint_diff = modified_paths[path]
+            operations = endpoint_diff.get("operations", {}).get("modified", {})
+
+            endpoint_data = {
+                "path": path,
+                "operations": [],
             }
 
-        endpoint_diff = modified_paths[path]
-        operations = endpoint_diff.get("operations", {}).get("modified", {})
+            for method in sorted(operations.keys()):
+                op_diff = operations[method]
+                issues_data = _extract_issues(op_diff, method)
 
-        endpoint_data = {
-            "path": path,
-            "operations": [],
+                sorted_missing = sorted(issues_data["missing"])
+                sorted_issues = sorted(issues_data["issues"], key=lambda x: x["property"])
+
+                endpoint_data["operations"].append(
+                    {
+                        "method": method,
+                        "missing_properties": sorted_missing,
+                        "conformance_issues": sorted_issues,
+                        "missing_count": len(sorted_missing),
+                        "issues_count": len(sorted_issues),
+                    }
+                )
+
+                categories[category]["total_issues"] += len(sorted_issues)
+                categories[category]["total_missing"] += len(sorted_missing)
+
+            categories[category]["endpoints"].append(endpoint_data)
+
+        # Calculate totals
+        total_issues = sum(c["total_issues"] for c in categories.values())
+        total_missing = sum(c["total_missing"] for c in categories.values())
+        total_endpoints = len(implemented_endpoints) + len(missing_endpoints)
+
+        # ==========================================================================
+        # Scoring methodology
+        # ==========================================================================
+        # We count the actual properties in the OpenAPI spec for implemented endpoints.
+        # The score formula is: score = (1 - problems / total_properties) * 100
+        #
+        # Where:
+        #   - problems = schema issues + missing properties (from oasdiff)
+        #   - total_properties = counted from spec for implemented endpoints
+        #
+        # For the Responses category, we use the openresponses spec if provided.
+        # ==========================================================================
+        openai_spec_data = _load_spec(openai_spec)
+        openresponses_spec_data = (
+            _load_spec(openresponses_spec) if openresponses_spec and openresponses_spec.exists() else None
+        )
+
+        # Count properties per category and overall
+        total_properties = 0
+        category_properties: dict[str, int] = {}
+
+        for cat_name, cat_data in categories.items():
+            cat_paths = [ep["path"] for ep in cat_data["endpoints"]]
+
+            # Use openresponses spec for Responses category if available
+            if cat_name == "Responses" and openresponses_spec_data:
+                cat_props = _count_endpoint_properties(openresponses_spec_data, cat_paths)
+            else:
+                cat_props = _count_endpoint_properties(openai_spec_data, cat_paths)
+
+            # Ensure minimum of problems count (can't have fewer properties than problems)
+            cat_problems = cat_data["total_issues"] + cat_data["total_missing"]
+            category_properties[cat_name] = max(cat_props, cat_problems)
+            total_properties += category_properties[cat_name]
+
+        # Ensure we have at least as many properties as problems
+        total_problems = total_issues + total_missing
+        total_properties = max(total_properties, total_problems)
+
+        # Calculate overall score (avoid division by zero)
+        if total_properties > 0:
+            overall_score = round((1 - total_problems / total_properties) * 100, 1)
+        else:
+            overall_score = 100.0 if total_problems == 0 else 0.0
+
+        # Build report
+        report: dict[str, Any] = {
+            "openai_spec": str(openai_spec),
+            "openresponses_spec": str(openresponses_spec) if openresponses_spec else None,
+            "llama_spec": str(llama_spec),
+            "summary": {
+                "endpoints": {
+                    "implemented": len(implemented_endpoints),
+                    "total": total_endpoints,
+                    "missing": missing_endpoints,
+                },
+                "conformance": {
+                    "score": overall_score,
+                    "issues": total_issues,
+                    "missing_properties": total_missing,
+                    "total_problems": total_problems,
+                    "total_properties": total_properties,
+                },
+            },
+            "categories": {},
         }
 
-        for method in sorted(operations.keys()):
-            op_diff = operations[method]
-            issues_data = _extract_issues(op_diff, method)
+        # Build category details with per-category scores using counted properties
+        for cat_name in sorted(categories.keys()):
+            cat_data = categories[cat_name]
+            cat_problems = cat_data["total_issues"] + cat_data["total_missing"]
+            cat_total = category_properties.get(cat_name, cat_problems)
 
-            sorted_missing = sorted(issues_data["missing"])
-            sorted_issues = sorted(issues_data["issues"], key=lambda x: x["property"])
+            # Calculate score (avoid division by zero)
+            if cat_total > 0:
+                cat_score = round((1 - cat_problems / cat_total) * 100, 1)
+            else:
+                cat_score = 100.0 if cat_problems == 0 else 0.0
 
-            endpoint_data["operations"].append(
-                {
-                    "method": method,
-                    "missing_properties": sorted_missing,
-                    "conformance_issues": sorted_issues,
-                    "missing_count": len(sorted_missing),
-                    "issues_count": len(sorted_issues),
-                }
-            )
+            report["categories"][cat_name] = {
+                "score": cat_score,
+                "issues": cat_data["total_issues"],
+                "missing_properties": cat_data["total_missing"],
+                "total_properties": cat_total,
+                "endpoints": sorted(cat_data["endpoints"], key=lambda x: x["path"]),
+            }
 
-            categories[category]["total_issues"] += len(sorted_issues)
-            categories[category]["total_missing"] += len(sorted_missing)
-
-        categories[category]["endpoints"].append(endpoint_data)
-
-    # Calculate totals
-    total_issues = sum(c["total_issues"] for c in categories.values())
-    total_missing = sum(c["total_missing"] for c in categories.values())
-    total_endpoints = len(implemented_endpoints) + len(missing_endpoints)
-
-    # ==========================================================================
-    # Scoring methodology
-    # ==========================================================================
-    # We count the actual properties in the OpenAPI spec for implemented endpoints.
-    # The score formula is: score = (1 - problems / total_properties) * 100
-    #
-    # Where:
-    #   - problems = schema issues + missing properties (from oasdiff)
-    #   - total_properties = counted from spec for implemented endpoints
-    #
-    # For the Responses category, we use the openresponses spec if provided.
-    # ==========================================================================
-    openai_spec_data = _load_spec(openai_spec)
-    openresponses_spec_data = (
-        _load_spec(openresponses_spec) if openresponses_spec and openresponses_spec.exists() else None
-    )
-
-    # Count properties per category and overall
-    total_properties = 0
-    category_properties: dict[str, int] = {}
-
-    for cat_name, cat_data in categories.items():
-        cat_paths = [ep["path"] for ep in cat_data["endpoints"]]
-
-        # Use openresponses spec for Responses category if available
-        if cat_name == "Responses" and openresponses_spec_data:
-            cat_props = _count_endpoint_properties(openresponses_spec_data, cat_paths)
-        else:
-            cat_props = _count_endpoint_properties(openai_spec_data, cat_paths)
-
-        # Ensure minimum of problems count (can't have fewer properties than problems)
-        cat_problems = cat_data["total_issues"] + cat_data["total_missing"]
-        category_properties[cat_name] = max(cat_props, cat_problems)
-        total_properties += category_properties[cat_name]
-
-    # Ensure we have at least as many properties as problems
-    total_problems = total_issues + total_missing
-    total_properties = max(total_properties, total_problems)
-
-    # Calculate overall score (avoid division by zero)
-    if total_properties > 0:
-        overall_score = round((1 - total_problems / total_properties) * 100, 1)
-    else:
-        overall_score = 100.0 if total_problems == 0 else 0.0
-
-    # Build report
-    report: dict[str, Any] = {
-        "openai_spec": str(openai_spec),
-        "openresponses_spec": str(openresponses_spec) if openresponses_spec else None,
-        "llama_spec": str(llama_spec),
-        "summary": {
-            "endpoints": {
-                "implemented": len(implemented_endpoints),
-                "total": total_endpoints,
-                "missing": missing_endpoints,
-            },
-            "conformance": {
-                "score": overall_score,
-                "issues": total_issues,
-                "missing_properties": total_missing,
-                "total_problems": total_problems,
-                "total_properties": total_properties,
-            },
-        },
-        "categories": {},
-    }
-
-    # Build category details with per-category scores using counted properties
-    for cat_name in sorted(categories.keys()):
-        cat_data = categories[cat_name]
-        cat_problems = cat_data["total_issues"] + cat_data["total_missing"]
-        cat_total = category_properties.get(cat_name, cat_problems)
-
-        # Calculate score (avoid division by zero)
-        if cat_total > 0:
-            cat_score = round((1 - cat_problems / cat_total) * 100, 1)
-        else:
-            cat_score = 100.0 if cat_problems == 0 else 0.0
-
-        report["categories"][cat_name] = {
-            "score": cat_score,
-            "issues": cat_data["total_issues"],
-            "missing_properties": cat_data["total_missing"],
-            "total_properties": cat_total,
-            "endpoints": sorted(cat_data["endpoints"], key=lambda x: x["path"]),
-        }
-
-    return report
+        return report
+    finally:
+        if normalized_llama_spec != llama_spec:
+            normalized_llama_spec.unlink(missing_ok=True)
 
 
 def print_summary(report: dict[str, Any]) -> None:

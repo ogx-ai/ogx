@@ -4,7 +4,7 @@
   "llama_spec": "docs/static/ogx-spec.yaml",
   "summary": {
     "endpoints": {
-      "implemented": 29,
+      "implemented": 30,
       "total": 146,
       "missing": [
         "/assistants",
@@ -15,7 +15,6 @@
         "/audio/voice_consents",
         "/audio/voice_consents/{consent_id}",
         "/audio/voices",
-        "/chat/completions/{completion_id}/messages",
         "/evals",
         "/evals/{eval_id}",
         "/evals/{eval_id}/runs",
@@ -127,11 +126,11 @@
       ]
     },
     "conformance": {
-      "score": 91.7,
+      "score": 91.8,
       "issues": 184,
       "missing_properties": 101,
       "total_problems": 285,
-      "total_properties": 3441
+      "total_properties": 3487
     }
   },
   "categories": {
@@ -700,10 +699,10 @@
       ]
     },
     "Chat": {
-      "score": 98.5,
+      "score": 98.7,
       "issues": 5,
       "missing_properties": 1,
-      "total_properties": 403,
+      "total_properties": 449,
       "endpoints": [
         {
           "path": "/chat/completions",
@@ -772,6 +771,18 @@
               ],
               "missing_count": 0,
               "issues_count": 1
+            }
+          ]
+        },
+        {
+          "path": "/chat/completions/{completion_id}/messages",
+          "operations": [
+            {
+              "method": "GET",
+              "missing_properties": [],
+              "conformance_issues": [],
+              "missing_count": 0,
+              "issues_count": 0
             }
           ]
         }
