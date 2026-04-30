@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import argparse
+import atexit
 import os
 import ssl
 import subprocess
@@ -66,6 +67,12 @@ class StackRun(Subcommand):
             default=None,
             help="Run a stack with only a list of providers. This list is formatted like: api1=provider1,api1=provider2,api2=provider3. Where there can be multiple providers per API.",
         )
+        self.parser.add_argument(
+            "--insecure",
+            action="store_true",
+            default=False,
+            help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
+        )
 
     def _run_stack_run_cmd(self, args: argparse.Namespace) -> None:
         import yaml
@@ -126,10 +133,28 @@ class StackRun(Subcommand):
         if not config_file:
             self.parser.error("Config file is required")
 
+        import tempfile
+
         config_file = resolve_config_or_distro(str(config_file))
         with open(config_file) as fp:
             config_contents = yaml.safe_load(fp)
-            config = StackConfig(**cast_distro_name_to_string(replace_env_vars(config_contents)))
+            config_contents = cast_distro_name_to_string(replace_env_vars(config_contents))
+
+            if args.insecure:
+                if "server" not in config_contents:
+                    config_contents["server"] = {}
+                config_contents["server"]["insecure"] = True
+
+            config = StackConfig(**config_contents)
+
+        # Write resolved config (with CLI overrides) to a temp file so
+        # create_app() workers read the final config directly from disk.
+        resolved_config = config.model_dump(mode="json")
+        fd, resolved_path = tempfile.mkstemp(suffix=".yaml", prefix="ogx-run-")
+        resolved_file = Path(resolved_path)
+        atexit.register(lambda p=resolved_file: p.unlink(missing_ok=True))
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(resolved_config, f, default_flow_style=False, sort_keys=False)
 
         port = args.port or config.server.port
         workers = config.server.workers
@@ -143,8 +168,7 @@ class StackRun(Subcommand):
         elif workers and workers > 1:
             host = "::"
 
-        # Set the config file in environment so create_app can find it
-        os.environ["OGX_CONFIG"] = str(config_file)
+        os.environ["OGX_CONFIG"] = str(resolved_file)
 
         # Let create_app() handle logging setup instead of passing config to uvicorn
         uvicorn_config = {
@@ -165,11 +189,21 @@ class StackRun(Subcommand):
                 uvicorn_config["ssl_ca_certs"] = config.server.tls_cafile
                 uvicorn_config["ssl_cert_reqs"] = ssl.CERT_REQUIRED
 
+            if config.server.tls_config and config.server.tls_config.ciphers:
+                uvicorn_config["ssl_ciphers"] = ":".join(config.server.tls_config.ciphers)
+
             logger.info(
                 "HTTPS enabled with certificates", keyfile=keyfile, certfile=certfile, cafile=config.server.tls_cafile
             )
+        elif not config.server.insecure:
+            raise SystemExit(
+                "TLS required: set tls_certfile/tls_keyfile in server config or pass '--insecure' to disable."
+            )
         else:
-            logger.info("HTTPS enabled with certificates", keyfile=keyfile, certfile=certfile)
+            logger.warning(
+                "TLS is not enabled — server will transmit data in cleartext. "
+                "Set tls_certfile and tls_keyfile in server config to enable HTTPS."
+            )
 
         logger.info("Listening on", host=host, port=port)
 

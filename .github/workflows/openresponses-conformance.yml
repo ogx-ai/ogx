@@ -87,7 +87,7 @@ jobs:
         run: |
           mkdir -p /tmp/ogx-conformance
           export OGX_LOG_WIDTH=200
-          nohup uv run ogx stack run ci-tests --port "$OGX_PORT" \
+          nohup uv run ogx stack run ci-tests --port "$OGX_PORT" --insecure \
             > /tmp/ogx-conformance/server.log 2>&1 &
           echo "Server PID: $!"
 

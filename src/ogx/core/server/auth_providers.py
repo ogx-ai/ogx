@@ -28,6 +28,20 @@ from ogx_api import TokenValidationError
 
 logger = get_logger(name=__name__, category="core::auth")
 
+# FIPS-approved JWT signing algorithms (asymmetric only).
+# Symmetric algorithms (HS256, etc.) are excluded to prevent algorithm confusion attacks.
+FIPS_APPROVED_JWT_ALGORITHMS = [
+    "RS256",
+    "RS384",
+    "RS512",
+    "PS256",
+    "PS384",
+    "PS512",
+    "ES256",
+    "ES384",
+    "ES512",
+]
+
 
 class AuthResponse(BaseModel):
     """The format of the authentication response from the auth endpoint."""
@@ -190,13 +204,13 @@ class OAuth2TokenAuthProvider(AuthProvider):
         try:
             jwks_client: jwt.PyJWKClient = self._get_jwks_client()
             signing_key = jwks_client.get_signing_key_from_jwt(token)
-            algorithm = jwt.get_unverified_header(token)["alg"]
 
-            # Decode and verify the JWT
+            # Decode and verify the JWT using a static allowlist of FIPS-approved algorithms.
+            # Never trust the algorithm from the unverified token header (algorithm confusion attack).
             claims = jwt.decode(
                 token,
                 signing_key.key,
-                algorithms=[algorithm],
+                algorithms=FIPS_APPROVED_JWT_ALGORITHMS,
                 audience=self.config.audience,
                 issuer=self.config.issuer,
                 options={"verify_exp": True, "verify_aud": True, "verify_iss": True},
@@ -221,9 +235,11 @@ class OAuth2TokenAuthProvider(AuthProvider):
         if self.config.introspection is None:
             raise ValueError("Introspection is not configured")
 
-        # ssl_ctxt can be None, bool, str, or SSLContext - httpx accepts all
-        ssl_ctxt: ssl.SSLContext | bool = False  # Default to no verification if no cafile
-        if self.config.tls_cafile:
+        # Default to True (system CA verification); only disable when verify_tls=False
+        ssl_ctxt: ssl.SSLContext | bool = True
+        if not self.config.verify_tls:
+            ssl_ctxt = False
+        elif self.config.tls_cafile:
             ssl_ctxt = ssl.create_default_context(cafile=self.config.tls_cafile.as_posix())
 
         # Build post kwargs conditionally based on auth method

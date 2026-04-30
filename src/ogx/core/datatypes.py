@@ -755,6 +755,9 @@ class RegisteredResources(BaseModel):
         return self
 
 
+from ogx.core.server_tls import FIPS_APPROVED_CIPHERS, ServerTLSConfig  # noqa: E402
+
+
 class ServerConfig(BaseModel):
     """Configuration for the HTTP(S) server including TLS, authentication, and quotas."""
 
@@ -803,6 +806,34 @@ class ServerConfig(BaseModel):
         description="Interval in seconds between registry refreshes for syncing model information from providers",
         gt=0,
     )
+    insecure: bool = Field(
+        default=False,
+        description="Disable TLS enforcement. Only for local development — do not use in production.",
+    )
+    tls_config: ServerTLSConfig | None = Field(
+        default=None,
+        description="TLS configuration (cipher suites). Auto-populated with FIPS-approved defaults.",
+    )
+    hsts_max_age: int = Field(
+        default=31536000,
+        description="HSTS Strict-Transport-Security max-age in seconds. Only applied when TLS is enabled. Set to 0 to disable HSTS.",
+        ge=0,
+    )
+
+    @model_validator(mode="after")
+    def validate_tls(self) -> "ServerConfig":
+        if self.insecure:
+            return self
+        if self.tls_certfile and self.tls_keyfile:
+            if self.tls_config is None:
+                self.tls_config = ServerTLSConfig(ciphers=FIPS_APPROVED_CIPHERS)
+            elif self.tls_config.ciphers is None:
+                self.tls_config.ciphers = FIPS_APPROVED_CIPHERS
+            elif not self.tls_config.ciphers:
+                raise ValueError("At least one cipher suite must be specified.")
+            elif invalid := set(self.tls_config.ciphers) - set(FIPS_APPROVED_CIPHERS):
+                raise ValueError(f"FIPS-approved ciphers required. Invalid: {sorted(invalid)}")
+        return self
 
 
 class StackConfig(BaseModel):

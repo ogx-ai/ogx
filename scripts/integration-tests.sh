@@ -373,7 +373,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup ogx stack run $stack_config >server.log 2>&1 &
+    nohup ogx stack run $stack_config --insecure >server.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
     for i in {1..30}; do
