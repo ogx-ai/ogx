@@ -14,6 +14,9 @@
 
 [**Quick Start**](https://ogx-ai.github.io/docs/getting_started/quickstart) | [**Documentation**](https://ogx-ai.github.io/docs) | [**OpenAI API Compatibility**](https://ogx-ai.github.io/docs/api-openai) | [**Discord**](https://discord.gg/ZAFjsrcw)
 
+> [!IMPORTANT]
+> **Llama Stack is now OGX.** The name changed, and so did the mission — model-agnostic, multi-SDK, production-grade. [Read the full announcement →](https://ogx-ai.github.io/blog/from-llama-stack-to-ogx)
+
 **Open-source agentic API server for building AI applications. OpenAI-compatible. Any model, any infrastructure.**
 
 <p align="center">

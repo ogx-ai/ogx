@@ -434,6 +434,49 @@ function useConstellation(canvasId) {
   }, [canvasId]);
 }
 
+function AnnouncementBanner() {
+  const [visible, setVisible] = useState(true);
+  const [dismissing, setDismissing] = useState(false);
+
+  if (!visible) return null;
+
+  const handleDismiss = () => {
+    setDismissing(true);
+    setTimeout(() => setVisible(false), 350);
+  };
+
+  return (
+    <div className={clsx(styles.announcementBar, dismissing && styles.announcementDismissing)}>
+      <div className="container">
+        <div className={styles.announcementInner}>
+          <span className={styles.announcementPulse} aria-hidden="true" />
+          <span className={styles.announcementLabel}>New</span>
+          <span className={styles.announcementSep} aria-hidden="true" />
+          <span className={styles.announcementText}>
+            Llama Stack is now <span className={styles.announcementHighlight}>OGX</span>
+          </span>
+          <a
+            className={styles.announcementLink}
+            href="https://ogx-ai.github.io/blog/from-llama-stack-to-ogx"
+          >
+            Read the story <span className={styles.announcementArrow}>&rarr;</span>
+          </a>
+          <button
+            type="button"
+            className={styles.announcementDismiss}
+            onClick={handleDismiss}
+            aria-label="Dismiss announcement"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
   useConstellation('hero-constellation');
 
@@ -625,6 +668,7 @@ export default function Home() {
   return (
     <Layout title="The Open-Source AI Application Server" description="Inference, vector stores, safety, tools, and agentic orchestration. One server, OpenAI + Anthropic + Google compatible, pluggable providers.">
       <main>
+        <AnnouncementBanner />
         <Hero />
         <ApiSurface />
         <ServerNotLibrary />
