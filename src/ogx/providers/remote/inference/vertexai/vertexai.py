@@ -33,8 +33,6 @@ from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingData,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
@@ -95,44 +93,6 @@ class GeminiSamplingParams(BaseModel):
             stop_sequences=stop_sequences,
             response_logprobs=params.logprobs,
             logprobs=params.top_logprobs,
-        )
-
-
-class GeminiCompletionSamplingParams(BaseModel):
-    """Gemini sampling parameters mapped from OpenAI text completion request fields.
-
-    Mirrors ``GeminiSamplingParams`` for the ``/v1/completions`` endpoint.
-    ``model_dump(exclude_none=True)`` produces kwargs ready for
-    ``GenerateContentConfig``.
-    """
-
-    temperature: float | None = None
-    top_p: float | None = None
-    frequency_penalty: float | None = None
-    presence_penalty: float | None = None
-    seed: int | None = None
-    candidate_count: int | None = None
-    max_output_tokens: int | None = None
-    stop_sequences: list[str] | None = None
-    response_logprobs: bool | None = None
-
-    @classmethod
-    def from_openai_params(cls, params: OpenAICompletionRequestWithExtraBody) -> GeminiCompletionSamplingParams:
-        """Create from OpenAI text completion request parameters."""
-        stop_sequences: list[str] | None = None
-        if params.stop is not None:
-            stop_sequences = [params.stop] if isinstance(params.stop, str) else list(params.stop)
-
-        return cls(
-            temperature=params.temperature,
-            top_p=params.top_p,
-            frequency_penalty=params.frequency_penalty,
-            presence_penalty=params.presence_penalty,
-            seed=params.seed,
-            candidate_count=params.n,
-            max_output_tokens=params.max_tokens,
-            stop_sequences=stop_sequences,
-            response_logprobs=params.logprobs or None,
         )
 
 
@@ -634,42 +594,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
 
         return _iter()
 
-    async def _stream_completion(
-        self,
-        client: Client,
-        provider_model_id: str,
-        contents: Any,
-        config: genai_types.GenerateContentConfig,
-        model: str,
-        stream_options: dict[str, Any] | None = None,
-        *,
-        completion_id: str | None = None,
-        choice_index_offset: int = 0,
-    ) -> AsyncIterator[OpenAICompletion]:
-        """Stream text completions via Gemini's generate_content_stream."""
-        # NOTE: Unlike _stream_chat_completion, we cannot emit a usage-only final
-        # chunk because OpenAICompletion requires min_length=1 choices and has no
-        # usage field. The stream_options parameter is still accepted and wired
-        # through get_stream_options_for_telemetry() for OpenTelemetry span
-        # consistency. See OpenAICompletion in ogx_api/inference/models.py.
-        stream = await client.aio.models.generate_content_stream(
-            model=provider_model_id,
-            contents=contents,
-            config=config,
-        )
-        resolved_completion_id = completion_id if completion_id is not None else converters.generate_completion_id()
-
-        async def _iter() -> AsyncIterator[OpenAICompletion]:
-            async for chunk in stream:
-                yield converters.convert_gemini_stream_chunk_to_openai_completion(
-                    chunk=chunk,
-                    model=model,
-                    completion_id=resolved_completion_id,
-                    index_offset=choice_index_offset,
-                )
-
-        return _iter()
-
     def _is_model_allowed(self, provider_model_id: str) -> bool:
         if self.config.allowed_models is None:
             return True
@@ -774,128 +698,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             config=config,
         )
         return converters.convert_gemini_response_to_openai(response=response, model=params.model)
-
-    @staticmethod
-    def _validate_completion_prompt(prompt: Any) -> list[str]:
-        """Validate and normalize a completion prompt to a list of strings."""
-        if isinstance(prompt, str):
-            return [prompt]
-        if isinstance(prompt, list) and all(isinstance(p, str) for p in prompt):
-            return [str(p) for p in prompt]
-        raise ValueError(
-            "VertexAI text completions only support string or list-of-string prompts. "
-            "Token array prompts (list[int] or list[list[int]]) are not supported."
-        )
-
-    @staticmethod
-    def _warn_unsupported_completion_params(params: OpenAICompletionRequestWithExtraBody) -> None:
-        """Log warnings/debug messages for unsupported text completion parameters."""
-        if params.best_of is not None:
-            logger.warning("VertexAI does not support best_of; this parameter will be ignored.")
-        if params.suffix is not None:
-            logger.warning("VertexAI does not support suffix; this parameter will be ignored.")
-        if params.logit_bias is not None:
-            logger.warning("VertexAI does not support logit_bias; this parameter will be ignored.")
-        if params.user is not None:
-            logger.debug("VertexAI text completion ignores the 'user' parameter (it is used in embeddings requests).")
-
-    def _build_completion_config(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> genai_types.GenerateContentConfig:
-        """Build a ``GenerateContentConfig`` for text completions.
-
-        Uses ``GeminiCompletionSamplingParams`` to map OpenAI field names to
-        their Gemini equivalents, mirroring ``_collect_sampling_params`` for
-        the chat completion path.
-        """
-        kwargs = GeminiCompletionSamplingParams.from_openai_params(params).model_dump(exclude_none=True)
-        if params.model_extra:
-            kwargs.update(params.model_extra)
-        return genai_types.GenerateContentConfig(**kwargs)
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        prompts = self._validate_completion_prompt(params.prompt)
-        self._warn_unsupported_completion_params(params)
-
-        provider_model_id = await self._get_provider_model_id(params.model)
-        self._validate_model_allowed(provider_model_id)
-        client = self._get_client()
-        config = self._build_completion_config(params)
-
-        if params.stream:
-            stream_options = get_stream_options_for_telemetry(params.stream_options, params.stream or False)
-            shared_completion_id = converters.generate_completion_id()
-
-            async def _multi_prompt_stream() -> AsyncIterator[OpenAICompletion]:
-                for i, prompt in enumerate(prompts):
-                    if params.echo:
-                        yield OpenAICompletion(
-                            id=shared_completion_id,
-                            choices=[
-                                converters.OpenAICompletionChoice(
-                                    text=prompt,
-                                    finish_reason="stop",
-                                    index=i,
-                                )
-                            ],
-                            model=params.model,
-                            created=int(time.time()),
-                        )
-                    contents = converters.convert_completion_prompt_to_contents(prompt)
-                    per_prompt_stream = await self._stream_completion(
-                        client,
-                        provider_model_id,
-                        contents,
-                        config,
-                        params.model,
-                        stream_options=stream_options,
-                    )
-                    async for chunk in per_prompt_stream:
-                        n = params.n or 1
-                        yield chunk.model_copy(
-                            update={
-                                "id": shared_completion_id,
-                                "choices": [
-                                    choice.model_copy(update={"index": i * n + j})
-                                    for j, choice in enumerate(chunk.choices)
-                                ],
-                            }
-                        )
-
-            return _multi_prompt_stream()
-
-        all_choices: list[Any] = []
-        for prompt in prompts:
-            contents = converters.convert_completion_prompt_to_contents(prompt)
-            request_contents = cast(Any, contents)
-            response = await client.aio.models.generate_content(
-                model=provider_model_id,
-                contents=request_contents,
-                config=config,
-            )
-            result = converters.convert_gemini_response_to_openai_completion(
-                response, model=params.model, prompt=prompt
-            )
-            for choice in result.choices:
-                text = (prompt + choice.text) if params.echo else choice.text
-                all_choices.append(
-                    converters.OpenAICompletionChoice(
-                        text=text,
-                        finish_reason=choice.finish_reason,
-                        index=len(all_choices),
-                    )
-                )
-
-        return OpenAICompletion(
-            id=converters.generate_completion_id(),
-            choices=all_choices,
-            created=int(time.time()),
-            model=params.model,
-        )
 
     async def openai_embeddings(
         self,

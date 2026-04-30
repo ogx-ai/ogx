@@ -290,15 +290,6 @@ ALL_RESOURCES = {
             }
         },
     },
-    "completions": {
-        "methods": {
-            "create": {
-                "type": "http",
-                "streaming": {"param_discriminator": "stream"},
-                "endpoint": "post /v1/completions",
-            }
-        }
-    },
     "vector_io": {
         "models": {"queryChunksResponse": "QueryChunksResponse"},
         "methods": {

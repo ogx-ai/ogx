@@ -24,9 +24,6 @@ from ogx_api import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionResponseMessage,
     OpenAIChoice,
-    OpenAICompletion,
-    OpenAICompletionChoice,
-    OpenAICompletionRequestWithExtraBody,
 )
 
 # These are unit test for the remote vllm provider
@@ -169,79 +166,6 @@ async def test_openai_chat_completion_is_async(vllm_inference_adapter):
 
         assert mock_create_client.call_count == 4  # no cheating
         assert total_time < (sleep_time * 3), f"Total time taken: {total_time}s exceeded expected max"
-
-
-async def test_vllm_completion_extra_body():
-    """
-    Test that vLLM-specific guided_choice and prompt_logprobs parameters are correctly forwarded
-    via extra_body to the underlying OpenAI client through the InferenceRouter.
-    """
-    # Set up the vLLM adapter
-    config = VLLMInferenceAdapterConfig(base_url="http://mocked.localhost:12345")
-    vllm_adapter = VLLMInferenceAdapter(config=config)
-    vllm_adapter.__provider_id__ = "vllm"
-    await vllm_adapter.initialize()
-
-    # Create a mock model store
-    mock_model_store = AsyncMock()
-    mock_model = Model(identifier="mock-model", provider_resource_id="mock-model", provider_id="vllm")
-    mock_model_store.get_model.return_value = mock_model
-    mock_model_store.has_model.return_value = True
-
-    # Create a mock dist_registry
-    mock_dist_registry = MagicMock()
-    mock_dist_registry.get = AsyncMock(return_value=mock_model)
-    mock_dist_registry.set = AsyncMock()
-
-    # Set up the routing table
-    routing_table = ModelsRoutingTable(
-        impls_by_provider_id={"vllm": vllm_adapter},
-        dist_registry=mock_dist_registry,
-        policy=[],
-    )
-    # Inject the model store into the adapter
-    vllm_adapter.model_store = routing_table
-
-    # Create the InferenceRouter
-    router = InferenceRouter(routing_table=routing_table)
-
-    # Patch the OpenAI client
-    with patch.object(VLLMInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_property:
-        mock_client = MagicMock()
-        mock_client.completions.create = AsyncMock(
-            return_value=OpenAICompletion(
-                id="cmpl-abc123",
-                created=1,
-                model="mock-model",
-                choices=[
-                    OpenAICompletionChoice(
-                        text="joy",
-                        finish_reason="stop",
-                        index=0,
-                    )
-                ],
-            )
-        )
-        mock_client_property.return_value = mock_client
-
-        # Test with guided_choice and prompt_logprobs as extra fields
-        params = OpenAICompletionRequestWithExtraBody(
-            model="mock-model",
-            prompt="I am feeling happy",
-            stream=False,
-            guided_choice=["joy", "sadness"],
-            prompt_logprobs=5,
-        )
-        await router.openai_completion(params)
-
-        # Verify that the client was called with extra_body containing both parameters
-        mock_client.completions.create.assert_called_once()
-        call_kwargs = mock_client.completions.create.call_args.kwargs
-        assert "extra_body" in call_kwargs
-        assert "guided_choice" in call_kwargs["extra_body"]
-        assert call_kwargs["extra_body"]["guided_choice"] == ["joy", "sadness"]
-        assert "prompt_logprobs" in call_kwargs["extra_body"]
-        assert call_kwargs["extra_body"]["prompt_logprobs"] == 5
 
 
 async def test_vllm_chat_completion_extra_body():

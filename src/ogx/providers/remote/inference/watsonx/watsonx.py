@@ -20,8 +20,6 @@ from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
     validate_embeddings_input_is_text,
@@ -189,14 +187,6 @@ class WatsonXInferenceAdapter(OpenAIMixin):
         await self._refresh_iam_token(self._get_api_key_or_raise())
         params = self._inject_project_id(params)
         return await super().openai_chat_completion(params)
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        raise NotImplementedError(
-            "WatsonX does not support the /v1/completions endpoint. Use /v1/chat/completions instead."
-        )
 
     async def openai_embeddings(
         self,

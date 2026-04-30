@@ -11,7 +11,6 @@ import pathlib
 class TestCase:
     _apis = [
         "inference/chat_completion",
-        "inference/completion",
     ]
     _jsonblob = {}
 

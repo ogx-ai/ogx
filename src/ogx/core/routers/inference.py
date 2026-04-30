@@ -45,8 +45,6 @@ from ogx_api import (
     OpenAIChatCompletionWithReasoning,
     OpenAIChoice,
     OpenAIChoiceLogprobs,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAICompletionWithInputMessages,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
@@ -165,27 +163,6 @@ class InferenceRouter(Inference):
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.rerank)
         params.model = provider_resource_id
         return await provider.rerank(params)
-
-    async def openai_completion(
-        self,
-        params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
-    ) -> OpenAICompletion:
-        logger.debug(
-            "InferenceRouter.openai_completion: model=, stream=, prompt",
-            model=params.model,
-            stream=params.stream,
-            prompt=params.prompt,
-        )
-        request_model_id = params.model
-        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
-        params.model = provider_resource_id
-
-        if params.stream:
-            return await provider.openai_completion(params)
-
-        response = await provider.openai_completion(params)
-        response.model = request_model_id
-        return response
 
     async def openai_chat_completion(
         self,

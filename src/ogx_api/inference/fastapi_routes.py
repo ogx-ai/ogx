@@ -33,8 +33,6 @@ from .models import (
     ListOpenAIChatCompletionResponse,
     OpenAIChatCompletion,
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAICompletionWithInputMessages,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
@@ -186,32 +184,6 @@ def create_router(impl: Inference) -> APIRouter:
         request: Annotated[GetChatCompletionRequest, Depends(get_chat_completion_request)],
     ) -> OpenAICompletionWithInputMessages:
         return await impl.get_chat_completion(request)
-
-    @router.post(
-        f"/{OGX_API_V1}/completions",
-        response_model=None,  # Dynamic response: non-streaming (JSON) or streaming (SSE)
-        summary="Create completion.",
-        description="Generate an OpenAI-compatible completion for the given prompt using the specified model.",
-        responses={
-            200: {
-                "description": "An OpenAICompletion. When streaming, returns Server-Sent Events (SSE) with OpenAICompletion chunks.",
-                "content": {
-                    "application/json": {"schema": {"$ref": "#/components/schemas/OpenAICompletion"}},
-                    "text/event-stream": {"schema": {"$ref": "#/components/schemas/OpenAICompletion"}},
-                },
-            },
-        },
-    )
-    async def openai_completion(
-        params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
-    ) -> OpenAICompletion | StreamingResponse:
-        result = await impl.openai_completion(params)
-        if isinstance(result, AsyncIterator):
-            return StreamingResponse(
-                _preserve_context_for_sse(_sse_generator(result, context="completion")),
-                media_type="text/event-stream",
-            )
-        return result
 
     @router.post(
         f"/{OGX_API_V1}/embeddings",

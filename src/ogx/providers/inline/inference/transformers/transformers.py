@@ -24,8 +24,6 @@ from ogx_api import (
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
     RerankData,
@@ -83,12 +81,6 @@ class TransformersInferenceImpl(
 
     async def unregister_model(self, model_id: str) -> None:
         pass
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion:
-        raise NotImplementedError("OpenAI completion not supported by transformers provider")
 
     async def openai_chat_completion(
         self,

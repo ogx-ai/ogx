@@ -34,8 +34,6 @@ from ogx_api import (
     OpenAIChoiceDelta,
     OpenAIChoiceLogprobs,
     OpenAIChunkChoice,
-    OpenAICompletion,
-    OpenAICompletionChoice,
     OpenAIFinishReason,
     OpenAITokenLogProb,
     OpenAITopLogProb,
@@ -696,83 +694,4 @@ def convert_gemini_stream_chunk_to_openai(
         created=created,
         model=model,
         usage=extract_usage(chunk),
-    )
-
-
-def convert_gemini_stream_chunk_to_openai_completion(
-    chunk: genai_types.GenerateContentResponse,
-    model: str,
-    completion_id: str,
-    index_offset: int = 0,
-) -> OpenAICompletion:
-    """Map a Gemini streaming chunk to ``OpenAICompletion`` (text completions)."""
-    candidates = getattr(chunk, "candidates", None) or []
-
-    choices: list[OpenAICompletionChoice] = []
-    for i, candidate in enumerate(candidates):
-        text = ""
-        if candidate.content and candidate.content.parts:
-            text = getattr(candidate.content.parts[0], "text", "") or ""
-        finish_reason_val = getattr(candidate, "finish_reason", None)
-        finish_reason = _resolve_stream_finish_reason(finish_reason_val, has_tool_calls=False)
-        # finish_reason can be None mid-stream; OpenAICompletionChoice requires a value.
-        # Use "stop" as default for mid-stream chunks since the field is required.
-        if finish_reason is None:
-            finish_reason = "stop"
-        choices.append(
-            OpenAICompletionChoice(
-                text=text,
-                finish_reason=finish_reason,
-                index=i + index_offset,
-                logprobs=_extract_logprobs(candidate),
-            )
-        )
-
-    if not choices:
-        choices.append(OpenAICompletionChoice(text="", finish_reason="stop", index=index_offset))
-
-    return OpenAICompletion(
-        id=completion_id,
-        choices=choices,
-        created=int(time.time()),
-        model=model,
-    )
-
-
-def convert_completion_prompt_to_contents(prompt: str) -> list[dict[str, Any]]:
-    """Wrap a plain-text prompt as a Gemini ``contents`` list for ``generate_content``."""
-    return [{"role": "user", "parts": [{"text": prompt}]}]
-
-
-def convert_gemini_response_to_openai_completion(
-    response: genai_types.GenerateContentResponse,
-    model: str,
-    prompt: str,
-) -> OpenAICompletion:
-    """Map a google-genai ``GenerateContentResponse`` to ``OpenAICompletion`` (text completions)."""
-    candidates = getattr(response, "candidates", None) or []
-
-    choices: list[OpenAICompletionChoice] = []
-    if candidates:
-        for i, candidate in enumerate(candidates):
-            text = (
-                getattr(candidate.content.parts[0], "text", "") if candidate.content and candidate.content.parts else ""
-            )
-            finish_reason = _resolve_finish_reason(candidate.finish_reason, has_tool_calls=False)
-            choices.append(
-                OpenAICompletionChoice(
-                    text=text,
-                    finish_reason=finish_reason,
-                    index=i,
-                    logprobs=_extract_logprobs(candidate),
-                )
-            )
-    else:
-        choices.append(OpenAICompletionChoice(text="", finish_reason="content_filter", index=0))
-
-    return OpenAICompletion(
-        id=generate_completion_id(),
-        choices=choices,
-        created=int(time.time()),
-        model=model,
     )

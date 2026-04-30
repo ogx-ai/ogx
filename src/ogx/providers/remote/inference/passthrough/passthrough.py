@@ -18,8 +18,6 @@ from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
 )
@@ -143,20 +141,6 @@ class PassthroughInferenceAdapter(NeedsRequestProviderData, Inference):
                 'Pass url of the passthrough endpoint in the header X-OGX-Provider-Data as { "passthrough_url": <your passthrough url>}'
             )
         return str(provider_data.passthrough_url)
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        """Forward completion request to downstream using OpenAI client."""
-        client = self._get_openai_client()
-        request_params = params.model_dump(exclude_none=True)
-        response = await client.completions.create(**request_params)
-
-        if params.stream:
-            return wrap_async_stream(response)
-
-        return response  # type: ignore[return-value]
 
     async def openai_chat_completion(
         self,

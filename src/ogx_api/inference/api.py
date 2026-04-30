@@ -18,8 +18,6 @@ from .models import (
     OpenAIChatCompletionChunkWithReasoning,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionWithReasoning,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAICompletionWithInputMessages,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
@@ -51,13 +49,6 @@ class InferenceProvider(Protocol):
         """Rerank a list of documents based on their relevance to a query."""
         raise NotImplementedError("Reranking is not implemented")
         return  # this is so mypy's safe-super rule will consider the method concrete
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        """Generate an OpenAI-compatible completion for the given prompt using the specified model."""
-        ...
 
     async def openai_chat_completion(
         self,
@@ -95,10 +86,10 @@ class InferenceProvider(Protocol):
 class Inference(InferenceProvider):
     """Inference
 
-    OGX Inference API for generating completions, chat completions, and embeddings.
+    OGX Inference API for generating chat completions and embeddings.
 
     This API provides the raw interface to the underlying models. Three kinds of models are supported:
-    - LLM models: these models generate "raw" and "chat" (conversational) completions.
+    - LLM models: these models generate chat (conversational) completions.
     - Embedding models: these models generate embeddings to be used for semantic search.
     - Rerank models: these models reorder the documents based on their relevance to a query.
     """

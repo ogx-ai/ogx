@@ -4,13 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import Iterable
 
 from databricks.sdk import WorkspaceClient
 
 from ogx.log import get_logger
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
-from ogx_api import OpenAICompletion, OpenAICompletionRequestWithExtraBody
 
 from .config import DatabricksImplConfig
 
@@ -48,9 +47,3 @@ class DatabricksInferenceAdapter(OpenAIMixin):
                 host=host, token=api_token
             ).serving_endpoints.list()  # TODO: this is not async
         ]
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        raise NotImplementedError()

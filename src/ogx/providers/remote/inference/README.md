@@ -39,7 +39,7 @@ Most remote inference providers follow the same pattern:
 3. **Model registry** -- Declares supported models as `ProviderModelEntry` objects.
 4. **Factory function** -- `get_adapter_impl()` instantiates the provider with config and dependencies.
 
-`OpenAIMixin` provides standard implementations of `openai_chat_completion()`, `openai_completion()`, and `openai_embeddings()` using the `AsyncOpenAI` client. The provider typically just needs to implement `get_base_url()`.
+`OpenAIMixin` provides standard implementations of `openai_chat_completion()` and `openai_embeddings()` using the `AsyncOpenAI` client. The provider typically just needs to implement `get_base_url()`.
 
 ## Provider Data
 

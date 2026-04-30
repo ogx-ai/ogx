@@ -269,61 +269,6 @@ class TestBatchesIntegration:
         deleted_error_file = openai_client.files.delete(final_batch.error_file_id)
         assert deleted_error_file.deleted, f"Error file {final_batch.error_file_id} was not deleted successfully"
 
-    def test_batch_e2e_completions(self, openai_client, batch_helper, text_model_id):
-        """Run an end-to-end batch with a single successful text completion request."""
-        request_body = {"model": text_model_id, "prompt": "Say completions", "max_tokens": 20}
-
-        batch_requests = [
-            {
-                "custom_id": "success-1",
-                "method": "POST",
-                "url": "/v1/completions",
-                "body": request_body,
-            }
-        ]
-
-        with batch_helper.create_file(batch_requests) as uploaded_file:
-            batch = openai_client.batches.create(
-                input_file_id=uploaded_file.id,
-                endpoint="/v1/completions",
-                completion_window="24h",
-                metadata={"test": "e2e_completions_success"},
-            )
-
-            final_batch = batch_helper.wait_for(
-                batch.id,
-                max_wait_time=3 * 60,
-                expected_statuses={"completed"},
-                timeout_action="skip",
-            )
-
-        assert final_batch.status == "completed"
-        assert final_batch.request_counts is not None
-        assert final_batch.request_counts.total == 1
-        assert final_batch.request_counts.completed == 1
-        assert final_batch.output_file_id is not None
-
-        output_content = openai_client.files.content(final_batch.output_file_id)
-        if isinstance(output_content, str):
-            output_text = output_content
-        else:
-            output_text = output_content.content.decode("utf-8")
-
-        output_lines = output_text.strip().split("\n")
-        assert len(output_lines) == 1
-
-        result = json.loads(output_lines[0])
-        assert result["custom_id"] == "success-1"
-        assert "response" in result
-        assert result["response"]["status_code"] == 200
-
-        deleted_output_file = openai_client.files.delete(final_batch.output_file_id)
-        assert deleted_output_file.deleted
-
-        if final_batch.error_file_id is not None:
-            deleted_error_file = openai_client.files.delete(final_batch.error_file_id)
-            assert deleted_error_file.deleted
-
     def test_batch_e2e_embeddings(self, openai_client, batch_helper, embedding_model_id):
         """Run an end-to-end batch with embeddings requests including both string and list inputs."""
         batch_requests = [

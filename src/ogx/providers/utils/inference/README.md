@@ -22,7 +22,6 @@ inference/
 The central utility class. Provides implementations of:
 
 - `openai_chat_completion()` -- Chat completions via `AsyncOpenAI`
-- `openai_completion()` -- Text completions via `AsyncOpenAI`
 - `openai_embeddings()` -- Embedding generation via `AsyncOpenAI`
 
 Customizable via class attributes:

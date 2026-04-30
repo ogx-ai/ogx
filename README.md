@@ -34,7 +34,7 @@ response = client.chat.completions.create(
 
 ## What you get
 
-- **Chat Completions & Embeddings** — standard `/v1/chat/completions`, `/v1/completions`, and `/v1/embeddings` endpoints, compatible with any OpenAI client
+- **Chat Completions & Embeddings** — standard `/v1/chat/completions` and `/v1/embeddings` endpoints, compatible with any OpenAI client
 - **Responses API** — server-side agentic orchestration with tool calling, MCP server integration, and built-in file search (RAG) in a single API call ([learn more](https://ogx-ai.github.io/docs/api-openai))
 - **Vector Stores & Files** — `/v1/vector_stores` and `/v1/files` for managed document storage and search
 - **Batches** — `/v1/batches` for offline batch processing

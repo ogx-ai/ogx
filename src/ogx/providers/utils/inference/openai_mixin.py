@@ -33,8 +33,6 @@ from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingData,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
@@ -315,47 +313,6 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             if self.overwrite_completion_id:
                 resp.id = f"cltsd-{uuid.uuid4()}"
             return resp
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        """
-        Direct OpenAI completion API call.
-        """
-        # Inject stream_options when streaming and telemetry is active
-        stream_options = get_stream_options_for_telemetry(
-            params.stream_options, params.stream or False, self.supports_stream_options
-        )
-
-        provider_model_id = await self._get_provider_model_id(params.model)
-        self._validate_model_allowed(provider_model_id)
-
-        completion_kwargs = await prepare_openai_completion_params(
-            model=provider_model_id,
-            prompt=params.prompt,
-            best_of=params.best_of,
-            echo=params.echo,
-            frequency_penalty=params.frequency_penalty,
-            logit_bias=params.logit_bias,
-            logprobs=params.logprobs,
-            max_tokens=params.max_tokens,
-            n=params.n,
-            presence_penalty=params.presence_penalty,
-            seed=params.seed,
-            stop=params.stop,
-            stream=params.stream,
-            stream_options=stream_options,
-            temperature=params.temperature,
-            top_p=params.top_p,
-            user=params.user,
-            suffix=params.suffix,
-        )
-        if extra_body := params.model_extra:
-            completion_kwargs["extra_body"] = extra_body
-        resp = await self.client.completions.create(**completion_kwargs)
-
-        return await self._maybe_overwrite_id(resp, params.stream)  # type: ignore[no-any-return]
 
     async def openai_chat_completion(
         self,

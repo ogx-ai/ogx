@@ -47,7 +47,7 @@ The tests are categorized and outlined below, keep this updated:
   * test_validate_input_multiple_errors_per_request (negative)
   * test_validate_input_invalid_request_format (negative)
   * test_validate_input_missing_parameters_chat_completions (parametrized negative - custom_id, method, url, body, model, messages missing validation for chat/completions)
-  * test_validate_input_missing_parameters_completions (parametrized negative - custom_id, method, url, body, model, prompt missing validation for completions)
+  * test_validate_input_missing_parameters_embeddings (parametrized negative - custom_id, method, url, body, model, input missing validation for embeddings)
   * test_validate_input_invalid_parameter_types (parametrized negative - custom_id, url, method, body, model, messages type validation)
 
 The tests use temporary SQLite databases for isolation and mock external
@@ -536,61 +536,6 @@ class TestReferenceBatchesImpl:
             id="batch_test",
             object="batch",
             endpoint="/v1/chat/completions",
-            input_file_id=f"missing_{param_name}_file",
-            completion_window="24h",
-            status="validating",
-            created_at=1234567890,
-        )
-
-        errors, requests = await provider._validate_input(batch)
-
-        assert len(errors) == 1
-        assert len(requests) == 0
-
-        assert errors[0].code == error_code
-        assert errors[0].line == 1
-        assert errors[0].message == error_message
-        assert errors[0].param == param_path
-
-    @pytest.mark.parametrize(
-        "param_name,param_path,error_code,error_message",
-        [
-            ("custom_id", "custom_id", "missing_required_parameter", "Missing required parameter: custom_id"),
-            ("method", "method", "missing_required_parameter", "Missing required parameter: method"),
-            ("url", "url", "missing_required_parameter", "Missing required parameter: url"),
-            ("body", "body", "missing_required_parameter", "Missing required parameter: body"),
-            ("model", "body.model", "invalid_request", "Model parameter is required"),
-            ("prompt", "body.prompt", "invalid_request", "Prompt parameter is required"),
-        ],
-    )
-    async def test_validate_input_missing_parameters_completions(
-        self, provider, param_name, param_path, error_code, error_message
-    ):
-        """Test _validate_input when file contains request with missing required parameters for text completions."""
-        provider.files_api.openai_retrieve_file = AsyncMock()
-        mock_response = MagicMock()
-
-        base_request = {
-            "custom_id": "req-1",
-            "method": "POST",
-            "url": "/v1/completions",
-            "body": {"model": "test-model", "prompt": "Hello"},
-        }
-
-        # Remove the specific parameter being tested
-        if "." in param_path:
-            top_level, nested_param = param_path.split(".", 1)
-            del base_request[top_level][nested_param]
-        else:
-            del base_request[param_name]
-
-        mock_response.body = json.dumps(base_request).encode()
-        provider.files_api.openai_retrieve_file_content = AsyncMock(return_value=mock_response)
-
-        batch = BatchObject(
-            id="batch_test",
-            object="batch",
-            endpoint="/v1/completions",
             input_file_id=f"missing_{param_name}_file",
             completion_window="24h",
             status="validating",

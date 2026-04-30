@@ -765,41 +765,6 @@ class OpenAIChatCompletionChunk(BaseModel):
 
 
 @json_schema_type
-class OpenAICompletionLogprobs(BaseModel):
-    """The log probabilities for the tokens from an OpenAI-compatible completion response."""
-
-    text_offset: list[int] | None = Field(default=None, description="The offset of the token in the text.")
-    token_logprobs: list[float] | None = Field(default=None, description="The log probabilities for the tokens.")
-    tokens: list[str] | None = Field(default=None, description="The tokens.")
-    top_logprobs: list[dict[str, float]] | None = Field(
-        default=None, description="The top log probabilities for the tokens."
-    )
-
-
-@json_schema_type
-class OpenAICompletionChoice(BaseModel):
-    """A choice from an OpenAI-compatible completion response."""
-
-    finish_reason: OpenAIFinishReason = Field(..., description="The reason the model stopped generating.")
-    text: str = Field(..., description="The text of the choice.")
-    index: int = Field(..., ge=0, description="The index of the choice.")
-    logprobs: OpenAIChoiceLogprobs | None = Field(
-        default=None, description="The log probabilities for the tokens in the choice."
-    )
-
-
-@json_schema_type
-class OpenAICompletion(BaseModel):
-    """Response from an OpenAI-compatible completion request."""
-
-    id: str = Field(..., description="The ID of the completion.")
-    choices: list[OpenAICompletionChoice] = Field(..., min_length=1, description="List of choices.")
-    created: int = Field(..., ge=0, description="The Unix timestamp in seconds when the completion was created.")
-    model: str = Field(..., description="The model that was used to generate the completion.")
-    object: Literal["text_completion"] = Field(default="text_completion", description="The object type.")
-
-
-@json_schema_type
 class OpenAIEmbeddingData(BaseModel):
     """A single embedding data object from an OpenAI-compatible embeddings response."""
 
@@ -873,38 +838,6 @@ class ListOpenAIChatCompletionResponse(BaseModel):
     first_id: str = Field(..., description="ID of the first completion in this list.")
     last_id: str = Field(..., description="ID of the last completion in this list.")
     object: Literal["list"] = Field(default="list", description="Must be 'list' to identify this as a list response.")
-
-
-# extra_body can be accessed via .model_extra
-@json_schema_type
-class OpenAICompletionRequestWithExtraBody(BaseModel, extra="allow"):
-    """Request parameters for OpenAI-compatible completion endpoint."""
-
-    # Standard OpenAI completion parameters
-    model: str = Field(..., description="The identifier of the model to use.")
-    prompt: str | list[str] | list[int] | list[list[int]] = Field(
-        ..., description="The prompt to generate a completion for."
-    )
-    best_of: int | None = Field(default=None, ge=1, description="The number of completions to generate.")
-    echo: bool | None = Field(default=None, description="Whether to echo the prompt.")
-    frequency_penalty: float | None = Field(
-        default=None, ge=-2.0, le=2.0, description="The penalty for repeated tokens."
-    )
-    logit_bias: dict[str, float] | None = Field(default=None, description="The logit bias to use.")
-    logprobs: bool | None = Field(default=None, description="The log probabilities to use.")
-    max_tokens: int | None = Field(default=None, ge=1, description="The maximum number of tokens to generate.")
-    n: int | None = Field(default=None, ge=1, description="The number of completions to generate.")
-    presence_penalty: float | None = Field(
-        default=None, ge=-2.0, le=2.0, description="The penalty for repeated tokens."
-    )
-    seed: int | None = Field(default=None, description="The seed to use.")
-    stop: str | list[str] | None = Field(default=None, description="The stop tokens to use.")
-    stream: bool | None = Field(default=None, description="Whether to stream the response.")
-    stream_options: dict[str, Any] | None = Field(default=None, description="The stream options to use.")
-    temperature: float | None = Field(default=None, ge=0.0, le=2.0, description="The temperature to use.")
-    top_p: float | None = Field(default=None, ge=0.0, le=1.0, description="The top p to use.")
-    user: str | None = Field(default=None, description="The user to use.")
-    suffix: str | None = Field(default=None, description="The suffix that should be appended to the completion.")
 
 
 # extra_body can be accessed via .model_extra
@@ -1140,9 +1073,6 @@ __all__ = [
     "OpenAIChatCompletionUsage",
     "OpenAIChatCompletion",
     "OpenAIChatCompletionChunk",
-    "OpenAICompletionLogprobs",
-    "OpenAICompletionChoice",
-    "OpenAICompletion",
     "OpenAIFinishReason",
     "OpenAIEmbeddingData",
     "OpenAIEmbeddingUsage",
@@ -1152,7 +1082,6 @@ __all__ = [
     "ServiceTier",
     "OpenAICompletionWithInputMessages",
     "ListOpenAIChatCompletionResponse",
-    "OpenAICompletionRequestWithExtraBody",
     "OpenAIChatCompletionRequestWithExtraBody",
     "OpenAIEmbeddingsRequestWithExtraBody",
     # Request Models

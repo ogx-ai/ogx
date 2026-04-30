@@ -18,8 +18,6 @@ from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletion,
-    OpenAICompletionRequestWithExtraBody,
 )
 
 from .config import SentenceTransformersInferenceConfig
@@ -69,12 +67,6 @@ class SentenceTransformersInferenceImpl(
 
     async def unregister_model(self, model_id: str) -> None:
         pass
-
-    async def openai_completion(
-        self,
-        params: OpenAICompletionRequestWithExtraBody,
-    ) -> OpenAICompletion:
-        raise NotImplementedError("OpenAI completion not supported by sentence transformers provider")
 
     async def openai_chat_completion(
         self,

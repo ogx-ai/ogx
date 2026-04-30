@@ -10,7 +10,6 @@ import pytest
 
 from ogx_api import (
     OpenAIChatCompletionRequestWithExtraBody,
-    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIUserMessageParam,
 )
@@ -21,11 +20,10 @@ class TestOpenAIMixinAllowedModelsInference:
 
     async def test_inference_with_allowed_models(self, mixin, mock_client_context):
         """Test that all inference methods succeed with allowed models"""
-        mixin.config.allowed_models = ["gpt-4", "text-davinci-003", "text-embedding-ada-002"]
+        mixin.config.allowed_models = ["gpt-4", "text-embedding-ada-002"]
 
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=MagicMock())
-        mock_client.completions.create = AsyncMock(return_value=MagicMock())
         mock_embedding_response = MagicMock()
         mock_embedding_response.data = [MagicMock(embedding=[0.1, 0.2, 0.3])]
         mock_embedding_response.usage = MagicMock(prompt_tokens=5, total_tokens=5)
@@ -39,12 +37,6 @@ class TestOpenAIMixinAllowedModelsInference:
                 )
             )
             mock_client.chat.completions.create.assert_called_once()
-
-            # Test completion
-            await mixin.openai_completion(
-                OpenAICompletionRequestWithExtraBody(model="text-davinci-003", prompt="Hello")
-            )
-            mock_client.completions.create.assert_called_once()
 
             # Test embeddings
             await mixin.openai_embeddings(
@@ -67,12 +59,6 @@ class TestOpenAIMixinAllowedModelsInference:
                     )
                 )
 
-            # Test completion with disallowed model
-            with pytest.raises(ValueError, match="Model 'text-davinci-002' is not in the allowed models list"):
-                await mixin.openai_completion(
-                    OpenAICompletionRequestWithExtraBody(model="text-davinci-002", prompt="Hello")
-                )
-
             # Test embeddings with disallowed model
             with pytest.raises(ValueError, match="Model 'text-embedding-3-large' is not in the allowed models list"):
                 await mixin.openai_embeddings(
@@ -80,7 +66,6 @@ class TestOpenAIMixinAllowedModelsInference:
                 )
 
             mock_client.chat.completions.create.assert_not_called()
-            mock_client.completions.create.assert_not_called()
             mock_client.embeddings.create.assert_not_called()
 
     async def test_inference_with_no_restrictions(self, mixin, mock_client_context):
@@ -194,41 +179,6 @@ class TestOpenAIMixinStreamOptionsInjection:
                 call_kwargs = mock_client.chat.completions.create.call_args[1]
                 assert "stream_options" not in call_kwargs or call_kwargs["stream_options"] is None
 
-    async def test_completion_injects_stream_options_when_telemetry_active(self, mixin, mock_client_context):
-        """Test that stream_options is injected for streaming completion when telemetry is active"""
-        mock_client = MagicMock()
-        mock_client.completions.create = AsyncMock(return_value=MagicMock())
-
-        mock_span = MagicMock()
-        mock_span.is_recording.return_value = True
-
-        with mock_client_context(mixin, mock_client):
-            with patch("opentelemetry.trace.get_current_span", return_value=mock_span):
-                await mixin.openai_completion(
-                    OpenAICompletionRequestWithExtraBody(model="text-davinci-003", prompt="Hello", stream=True)
-                )
-
-                mock_client.completions.create.assert_called_once()
-                call_kwargs = mock_client.completions.create.call_args[1]
-                assert call_kwargs["stream_options"] == {"include_usage": True}
-
-    async def test_completion_no_injection_when_telemetry_inactive(self, mixin, mock_client_context):
-        """Test that stream_options is NOT injected for completion when telemetry is inactive"""
-        mock_client = MagicMock()
-        mock_client.completions.create = AsyncMock(return_value=MagicMock())
-
-        mock_span = MagicMock()
-        mock_span.is_recording.return_value = False
-
-        with mock_client_context(mixin, mock_client):
-            with patch("opentelemetry.trace.get_current_span", return_value=mock_span):
-                await mixin.openai_completion(
-                    OpenAICompletionRequestWithExtraBody(model="text-davinci-003", prompt="Hello", stream=True)
-                )
-
-                call_kwargs = mock_client.completions.create.call_args[1]
-                assert "stream_options" not in call_kwargs or call_kwargs["stream_options"] is None
-
     async def test_params_not_mutated(self, mixin, mock_client_context):
         """Test that original params object is not mutated when stream_options is injected"""
         mock_client = MagicMock()
@@ -292,30 +242,6 @@ class TestOpenAIMixinStreamOptionsInjection:
                 )
 
                 call_kwargs = mock_client.chat.completions.create.call_args[1]
-                # Should NOT inject stream_options even though telemetry is active
-                assert "stream_options" not in call_kwargs or call_kwargs["stream_options"] is None
-
-    async def test_completion_no_injection_when_provider_doesnt_support_stream_options(
-        self, mixin, mock_client_context
-    ):
-        """Test that stream_options is NOT injected for completion when provider doesn't support it"""
-        # Set supports_stream_options to False (like Ollama/vLLM)
-        mixin.supports_stream_options = False
-
-        mock_client = MagicMock()
-        mock_client.completions.create = AsyncMock(return_value=MagicMock())
-
-        # Mock OpenTelemetry span as recording (telemetry is active)
-        mock_span = MagicMock()
-        mock_span.is_recording.return_value = True
-
-        with mock_client_context(mixin, mock_client):
-            with patch("opentelemetry.trace.get_current_span", return_value=mock_span):
-                await mixin.openai_completion(
-                    OpenAICompletionRequestWithExtraBody(model="text-davinci-003", prompt="Hello", stream=True)
-                )
-
-                call_kwargs = mock_client.completions.create.call_args[1]
                 # Should NOT inject stream_options even though telemetry is active
                 assert "stream_options" not in call_kwargs or call_kwargs["stream_options"] is None
 
