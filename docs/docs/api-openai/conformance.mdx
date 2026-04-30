@@ -18,12 +18,12 @@ This documentation is auto-generated from the OpenAI API specification compariso
 
 | Metric | Value |
 |--------|-------|
-| **Overall Conformance Score** | 91.7% |
+| **Overall Conformance Score** | 91.6% |
 | **Endpoints Implemented** | 29/146 |
 | **Total Properties Checked** | 3441 |
-| **Schema/Type Issues** | 184 |
-| **Missing Properties** | 101 |
-| **Total Issues to Fix** | 285 |
+| **Schema/Type Issues** | 183 |
+| **Missing Properties** | 107 |
+| **Total Issues to Fix** | 290 |
 
 ## Integration Test Coverage
 
@@ -47,11 +47,11 @@ Categories are sorted by conformance score (lowest first, needing most attention
 | Moderations | 17.0% | 53 | 5 | 39 |
 | Batch | 39.9% | 168 | 60 | 41 |
 | Completions | 58.7% | 46 | 17 | 2 |
+| Models | 60.0% | 15 | 0 | 6 |
 | Files | 76.2% | 42 | 8 | 2 |
 | Embeddings | 78.6% | 14 | 3 | 0 |
 | Vector stores | 82.9% | 310 | 41 | 12 |
 | Responses | 88.9% | 225 | 25 | 0 |
-| Models | 93.3% | 15 | 1 | 0 |
 | Chat | 98.5% | 403 | 5 | 1 |
 | Conversations | 98.9% | 2165 | 19 | 4 |
 
@@ -504,6 +504,36 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 
 </details>
 
+### Models
+
+**Score:** 60.0% · **Issues:** 0 · **Missing:** 6
+
+#### `/models`
+
+**GET**
+
+<details>
+<summary>Missing Properties (2)</summary>
+
+- `responses.200.content.application/json.properties.data`
+- `responses.200.content.application/json.properties.object`
+
+</details>
+
+#### `/models/{model}`
+
+**GET**
+
+<details>
+<summary>Missing Properties (4)</summary>
+
+- `responses.200.content.application/json.properties.created`
+- `responses.200.content.application/json.properties.id`
+- `responses.200.content.application/json.properties.object`
+- `responses.200.content.application/json.properties.owned_by`
+
+</details>
+
 ### Files
 
 **Score:** 76.2% · **Issues:** 8 · **Missing:** 2
@@ -838,23 +868,6 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 | `requestBody.content.application/json.properties.input` | Union variants added: 2; Union variants removed: 1 | Yes |
 | `requestBody.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 3 | Yes |
 | `responses.200.content.application/json.properties.output.items` | Union variants added: 4 | Yes |
-
-</details>
-
-### Models
-
-**Score:** 93.3% · **Issues:** 1 · **Missing:** 0
-
-#### `/models/{model}`
-
-**GET**
-
-<details>
-<summary>Schema Issues (1)</summary>
-
-| Property | Issues |
-|----------|--------|
-| `responses.200.content.application/json.properties.owned_by` | Default changed: None -&gt; ogx |
 
 </details>
 

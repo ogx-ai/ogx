@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from ogx.core.access_control.access_control import is_action_allowed
@@ -16,7 +17,11 @@ from ogx.core.request_headers import PROVIDER_DATA_VAR, NeedsRequestProviderData
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
 from ogx_api import (
+    AnthropicListModelsResponse,
+    AnthropicModelInfo,
     GetModelRequest,
+    GoogleListModelsResponse,
+    GoogleModelInfo,
     ListModelsResponse,
     Model,
     ModelNotFoundError,
@@ -187,32 +192,19 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
 
         return dynamic_models
 
-    async def list_models(self) -> ListModelsResponse:
-        # Get models from registry
+    async def _get_all_models(self) -> list[Model]:
+        """Fetch all models from registry and provider_data, deduplicating by identifier."""
         registry_models = await self.get_all_with_type("model")
-
-        # Get additional models available via provider_data (user-specific, not cached)
         dynamic_models = await self._get_dynamic_models_from_provider_data()
-
-        # Combine, avoiding duplicates (registry takes precedence)
         registry_identifiers = {m.identifier for m in registry_models}
         unique_dynamic_models = [m for m in dynamic_models if m.identifier not in registry_identifiers]
+        return registry_models + unique_dynamic_models
 
-        return ListModelsResponse(data=registry_models + unique_dynamic_models)
+    async def list_models(self) -> ListModelsResponse:
+        return ListModelsResponse(data=await self._get_all_models())
 
     async def openai_list_models(self) -> OpenAIListModelsResponse:
-        # Get models from registry
-        registry_models = await self.get_all_with_type("model")
-
-        # Get additional models available via provider_data (user-specific, not cached)
-        dynamic_models = await self._get_dynamic_models_from_provider_data()
-
-        # Combine, avoiding duplicates (registry takes precedence)
-        registry_identifiers = {m.identifier for m in registry_models}
-        unique_dynamic_models = [m for m in dynamic_models if m.identifier not in registry_identifiers]
-
-        all_models = registry_models + unique_dynamic_models
-
+        all_models = await self._get_all_models()
         openai_models = [
             OpenAIModel(
                 id=model.identifier,
@@ -229,6 +221,36 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
             for model in all_models
         ]
         return OpenAIListModelsResponse(data=openai_models)
+
+    async def anthropic_list_models(self) -> AnthropicListModelsResponse:
+        all_models = await self._get_all_models()
+        anthropic_models = [
+            AnthropicModelInfo(
+                id=model.identifier,
+                display_name=model.identifier,
+                created_at=datetime.fromtimestamp(model.created, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            for model in all_models
+        ]
+        return AnthropicListModelsResponse(
+            data=anthropic_models,
+            has_more=False,
+            first_id=anthropic_models[0].id if anthropic_models else None,
+            last_id=anthropic_models[-1].id if anthropic_models else None,
+        )
+
+    async def google_list_models(self) -> GoogleListModelsResponse:
+        # Uses the Gemini API "models/{id}" format. Vertex AI uses a different
+        # resource path and would need provider-aware translation if added.
+        all_models = await self._get_all_models()
+        google_models = [
+            GoogleModelInfo(
+                name=f"models/{model.identifier}",
+                display_name=model.identifier,
+            )
+            for model in all_models
+        ]
+        return GoogleListModelsResponse(models=google_models)
 
     async def get_model(self, request_or_model_id: GetModelRequest | str) -> Model:
         # Support both the public Models API (GetModelRequest) and internal ModelStore interface (string)

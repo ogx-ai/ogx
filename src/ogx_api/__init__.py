@@ -298,8 +298,12 @@ from .messages import (
     AnthropicUsage,
 )
 from .models import (
+    AnthropicListModelsResponse,
+    AnthropicModelInfo,
     CommonModelFields,
     GetModelRequest,
+    GoogleListModelsResponse,
+    GoogleModelInfo,
     ListModelsResponse,
     Model,
     ModelInput,
@@ -695,6 +699,10 @@ __all__ = [
     "ModelType",
     "ModelTypeError",
     "Models",
+    "AnthropicListModelsResponse",
+    "AnthropicModelInfo",
+    "GoogleListModelsResponse",
+    "GoogleModelInfo",
     "GetModelRequest",
     "RegisterModelRequest",
     "UnregisterModelRequest",

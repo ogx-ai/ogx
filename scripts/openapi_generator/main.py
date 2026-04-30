@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 from fastapi.openapi.utils import get_openapi
 
-from . import app, code_samples, schema_collection, schema_filtering, schema_transforms, state
+from . import app, code_samples, multi_sdk, schema_collection, schema_filtering, schema_transforms, state
 
 
 def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
@@ -89,6 +89,9 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
 
     # Add Google GenAI SDK code samples to Interactions API endpoints
     openapi_schema = code_samples._add_google_code_samples(openapi_schema)
+
+    # Add oneOf response schemas and SDK detection headers to multi-SDK endpoints
+    openapi_schema = multi_sdk._add_multi_sdk_response_schemas(openapi_schema)
 
     # Split into stable (v1 only), experimental (v1alpha + v1beta), deprecated, and combined (stainless) specs
     # Each spec needs its own deep copy of the full schema to avoid cross-contamination

@@ -19,8 +19,12 @@ from .api import Models
 
 # Import models for re-export
 from .models import (
+    AnthropicListModelsResponse,
+    AnthropicModelInfo,
     CommonModelFields,
     GetModelRequest,
+    GoogleListModelsResponse,
+    GoogleModelInfo,
     ListModelsResponse,
     Model,
     ModelInput,
@@ -32,9 +36,13 @@ from .models import (
 )
 
 __all__ = [
+    "AnthropicListModelsResponse",
+    "AnthropicModelInfo",
     "CommonModelFields",
     "fastapi_routes",
     "GetModelRequest",
+    "GoogleListModelsResponse",
+    "GoogleModelInfo",
     "ListModelsResponse",
     "Model",
     "ModelInput",

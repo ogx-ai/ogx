@@ -1165,28 +1165,51 @@ paths:
     get:
       responses:
         '200':
-          description: A list of OpenAI model objects.
+          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or `x-goog-api-key` header for Google format.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OpenAIListModelsResponse'
+                oneOf:
+                - $ref: '#/components/schemas/OpenAIListModelsResponse'
+                  title: OpenAIListModelsResponse
+                - $ref: '#/components/schemas/AnthropicListModelsResponse'
+                  title: AnthropicListModelsResponse
+                - $ref: '#/components/schemas/GoogleListModelsResponse'
+                  title: GoogleListModelsResponse
         '400':
-          description: Bad Request
           $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
         '429':
-          description: Too Many Requests
           $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
         '500':
-          description: Internal Server Error
           $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
         default:
-          description: Default Response
           $ref: '#/components/responses/DefaultError'
+          description: Default Response
       tags:
       - Models
-      summary: List models using the OpenAI API.
-      description: List models using the OpenAI API.
-      operationId: openai_list_models_v1_models_get
+      summary: List models.
+      description: List models. Returns OpenAI, Anthropic, or Google response format based on SDK headers.
+      operationId: list_models_v1_models_get
+      parameters:
+      - name: anthropic-version
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Anthropic-Version
+      - name: x-goog-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Goog-Api-Key
       x-codeSamples:
       - lang: Python
         label: OpenAI
@@ -1202,11 +1225,17 @@ paths:
     get:
       responses:
         '200':
-          description: The model object.
+          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or `x-goog-api-key` header for Google format.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Model'
+                oneOf:
+                - $ref: '#/components/schemas/Model'
+                  title: Model
+                - $ref: '#/components/schemas/AnthropicModelInfo'
+                  title: AnthropicModelInfo
+                - $ref: '#/components/schemas/GoogleModelInfo'
+                  title: GoogleModelInfo
         '400':
           $ref: '#/components/responses/BadRequest400'
           description: Bad Request
@@ -1222,7 +1251,7 @@ paths:
       tags:
       - Models
       summary: Get a model by its identifier.
-      description: Get a model by its identifier.
+      description: Get a model by its identifier. Returns OpenAI, Anthropic, or Google response format based on SDK headers.
       operationId: get_model_v1_models__model_id__get
       parameters:
       - name: model_id
@@ -1233,6 +1262,22 @@ paths:
           description: The ID of the model to get.
           title: Model Id
         description: The ID of the model to get.
+      - name: anthropic-version
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Anthropic-Version
+      - name: x-goog-api-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Goog-Api-Key
       x-codeSamples:
       - lang: Python
         label: OpenAI
@@ -12742,6 +12787,117 @@ components:
       required:
       - data
       title: ListModelsResponse
+      type: object
+    AnthropicModelInfo:
+      description: |-
+        Anthropic model info response object.
+
+        :id: Unique model identifier
+      properties:
+        id:
+          description: Unique model identifier.
+          title: Id
+          type: string
+        type:
+          description: Object type, always 'model'.
+          title: Type
+          type: string
+          enum:
+          - model
+        display_name:
+          description: A human-readable name for the model.
+          title: Display Name
+          type: string
+        created_at:
+          description: RFC 3339 datetime string representing when the model was released.
+          title: Created At
+          type: string
+        max_input_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Maximum input context window size in tokens.
+          nullable: true
+        max_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Maximum value for the max_tokens parameter when using this model.
+          nullable: true
+      required:
+      - id
+      - display_name
+      - created_at
+      title: AnthropicModelInfo
+      type: object
+    AnthropicListModelsResponse:
+      description: Response containing a list of Anthropic model objects.
+      properties:
+        data:
+          description: List of Anthropic model objects.
+          items:
+            $ref: '#/components/schemas/AnthropicModelInfo'
+          title: Data
+          type: array
+        has_more:
+          default: false
+          description: Whether there are more results in the requested page direction.
+          title: Has More
+          type: boolean
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: First ID in the data list, usable as before_id for the previous page.
+          nullable: true
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Last ID in the data list, usable as after_id for the next page.
+          nullable: true
+      required:
+      - data
+      title: AnthropicListModelsResponse
+      type: object
+    GoogleModelInfo:
+      description: |-
+        Google model info response object.
+
+        :name: Model resource name, e.g. 'models/gemini-pro'
+        :display_name: A human-readable name for the model
+        :description: A description of the model
+      properties:
+        name:
+          description: Model resource name, e.g. 'models/gemini-pro'.
+          title: Name
+          type: string
+        display_name:
+          description: A human-readable name for the model.
+          title: Display Name
+          type: string
+        description:
+          default: ''
+          description: A description of the model.
+          title: Description
+          type: string
+      required:
+      - name
+      - display_name
+      title: GoogleModelInfo
+      type: object
+    GoogleListModelsResponse:
+      description: Response containing a list of Google model objects.
+      properties:
+        models:
+          description: List of Google model objects.
+          items:
+            $ref: '#/components/schemas/GoogleModelInfo'
+          title: Models
+          type: array
+      required:
+      - models
+      title: GoogleListModelsResponse
       type: object
     GetModelRequest:
       description: Request model for getting a model by ID.
