@@ -562,12 +562,21 @@ class StreamingResponseOrchestrator:
                         completion_result = await self.inference_api.openai_chat_completions_with_reasoning(
                             params.model_copy()
                         )
-                    except (NotImplementedError, AttributeError, ValueError):
-                        logger.critical(
+                    except (NotImplementedError, ValueError):
+                        logger.warning(
                             "Provider does not support reasoning in chat completions. "
                             "Falling back to regular chat completion."
                         )
                         completion_result = await self.inference_api.openai_chat_completion(params)
+                    except AttributeError:
+                        logger.warning("Model does not support reasoning_effort parameter")
+                        # Temporary workaround: https://github.com/ogx-ai/ogx/issues/5636
+                        if params.model.startswith("ollama/"):
+                            completion_result = await self.inference_api.openai_chat_completion(params)
+                        else:
+                            completion_result = await self.inference_api.openai_chat_completion(
+                                params.model_copy(update={"reasoning_effort": None})
+                            )
                 else:
                     completion_result = await self.inference_api.openai_chat_completion(params)
 
