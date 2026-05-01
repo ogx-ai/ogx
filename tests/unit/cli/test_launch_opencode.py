@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from openai import APIConnectionError, APIStatusError
 
 from ogx.cli.launch.opencode import LaunchOpenCode
 
@@ -22,53 +23,19 @@ def launch_opencode() -> LaunchOpenCode:
     return LaunchOpenCode(subparsers)
 
 
-MODELS_RESPONSE = {
-    "object": "list",
-    "data": [
-        {"id": "gpt-4o", "object": "model", "created": 0, "owned_by": "ogx", "custom_metadata": {"model_type": "llm"}},
-        {
-            "id": "llama-3.1-8b",
-            "object": "model",
-            "created": 0,
-            "owned_by": "ogx",
-            "custom_metadata": {"model_type": "llm"},
-        },
-    ],
-}
+def _make_model(model_id: str, model_type: str = "llm") -> MagicMock:
+    model = MagicMock()
+    model.id = model_id
+    model.model_extra = {"custom_metadata": {"model_type": model_type}}
+    return model
 
-MODELS_RESPONSE_WITH_EMBEDDING = {
-    "object": "list",
-    "data": [
-        {"id": "gpt-4o", "object": "model", "created": 0, "owned_by": "ogx", "custom_metadata": {"model_type": "llm"}},
-        {
-            "id": "text-embedding-3-small",
-            "object": "model",
-            "created": 0,
-            "owned_by": "ogx",
-            "custom_metadata": {"model_type": "embedding"},
-        },
-    ],
-}
 
-MODELS_RESPONSE_ONLY_EMBEDDING = {
-    "object": "list",
-    "data": [
-        {
-            "id": "text-embedding-3-small",
-            "object": "model",
-            "created": 0,
-            "owned_by": "ogx",
-            "custom_metadata": {"model_type": "embedding"},
-        },
-    ],
-}
-
-SINGLE_MODEL_RESPONSE = {
-    "object": "list",
-    "data": [
-        {"id": "gpt-4o", "object": "model", "created": 0, "owned_by": "ogx", "custom_metadata": {"model_type": "llm"}},
-    ],
-}
+def _make_mock_client(models: list[MagicMock]) -> MagicMock:
+    client = MagicMock()
+    response = MagicMock()
+    response.data = models
+    client.models.list.return_value = response
+    return client
 
 
 class TestArguments:
@@ -107,13 +74,11 @@ class TestOpenCodeDetection:
 
     def test_continues_when_opencode_found(self, launch_opencode: LaunchOpenCode) -> None:
         args = launch_opencode.parser.parse_args(["--model", "gpt-4o"])
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = SINGLE_MODEL_RESPONSE
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
             patch("ogx.cli.launch.opencode.shutil.which", return_value="/usr/bin/opencode"),
-            patch("ogx.cli.launch.opencode.httpx.get", return_value=mock_resp),
+            patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client),
             patch("ogx.cli.launch.opencode.subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0)
@@ -124,33 +89,34 @@ class TestOpenCodeDetection:
 
 class TestServerProbe:
     def test_exits_when_server_unreachable(self, launch_opencode: LaunchOpenCode) -> None:
-        with (
-            patch("ogx.cli.launch.opencode.shutil.which", return_value="/usr/bin/opencode"),
-            patch("ogx.cli.launch.opencode.httpx.get", side_effect=httpx.ConnectError("connection refused")),
-        ):
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = APIConnectionError(request=httpx.Request("GET", "http://localhost"))
+
+        with patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
                 launch_opencode._fetch_models("http://localhost:8321/v1")
 
     def test_exits_on_timeout(self, launch_opencode: LaunchOpenCode) -> None:
-        with (
-            patch("ogx.cli.launch.opencode.shutil.which", return_value="/usr/bin/opencode"),
-            patch("ogx.cli.launch.opencode.httpx.get", side_effect=httpx.TimeoutException("timeout")),
-        ):
+        mock_client = MagicMock()
+        mock_client.models.list.side_effect = APIConnectionError(request=httpx.Request("GET", "http://localhost"))
+
+        with patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
                 launch_opencode._fetch_models("http://localhost:8321/v1")
 
     def test_exits_on_server_error(self, launch_opencode: LaunchOpenCode) -> None:
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 500
-        with patch("ogx.cli.launch.opencode.httpx.get", return_value=mock_resp):
+        mock_client = MagicMock()
+        mock_response = httpx.Response(500, request=httpx.Request("GET", "http://localhost"))
+        mock_client.models.list.side_effect = APIStatusError("server error", response=mock_response, body=None)
+
+        with patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
                 launch_opencode._fetch_models("http://localhost:8321/v1")
 
     def test_returns_models_on_success(self, launch_opencode: LaunchOpenCode) -> None:
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = MODELS_RESPONSE
-        with patch("ogx.cli.launch.opencode.httpx.get", return_value=mock_resp):
+        mock_client = _make_mock_client([_make_model("gpt-4o"), _make_model("llama-3.1-8b")])
+
+        with patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client):
             models = launch_opencode._fetch_models("http://localhost:8321/v1")
         assert models == ["gpt-4o", "llama-3.1-8b"]
 
@@ -169,19 +135,26 @@ class TestModelSelection:
         assert result == "gpt-4o"
 
     def test_filters_out_embedding_models(self, launch_opencode: LaunchOpenCode) -> None:
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = MODELS_RESPONSE_WITH_EMBEDDING
-        with patch("ogx.cli.launch.opencode.httpx.get", return_value=mock_resp):
+        mock_client = _make_mock_client(
+            [
+                _make_model("gpt-4o"),
+                _make_model("text-embedding-3-small", model_type="embedding"),
+            ]
+        )
+
+        with patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client):
             models = launch_opencode._fetch_models("http://localhost:8321/v1")
         assert "text-embedding-3-small" not in models
         assert "gpt-4o" in models
 
     def test_exits_when_no_llm_models(self, launch_opencode: LaunchOpenCode) -> None:
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = MODELS_RESPONSE_ONLY_EMBEDDING
-        with patch("ogx.cli.launch.opencode.httpx.get", return_value=mock_resp):
+        mock_client = _make_mock_client(
+            [
+                _make_model("text-embedding-3-small", model_type="embedding"),
+            ]
+        )
+
+        with patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client):
             models = launch_opencode._fetch_models("http://localhost:8321/v1")
         assert models == []
 
@@ -226,13 +199,11 @@ class TestConfigGeneration:
 class TestLaunch:
     def test_launches_opencode_with_config_env(self, launch_opencode: LaunchOpenCode) -> None:
         args = launch_opencode.parser.parse_args(["--model", "gpt-4o"])
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = SINGLE_MODEL_RESPONSE
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
             patch("ogx.cli.launch.opencode.shutil.which", return_value="/usr/bin/opencode"),
-            patch("ogx.cli.launch.opencode.httpx.get", return_value=mock_resp),
+            patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client),
             patch("ogx.cli.launch.opencode.subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=0)
@@ -247,13 +218,11 @@ class TestLaunch:
 
     def test_propagates_exit_code(self, launch_opencode: LaunchOpenCode) -> None:
         args = launch_opencode.parser.parse_args(["--model", "gpt-4o"])
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = SINGLE_MODEL_RESPONSE
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
 
         with (
             patch("ogx.cli.launch.opencode.shutil.which", return_value="/usr/bin/opencode"),
-            patch("ogx.cli.launch.opencode.httpx.get", return_value=mock_resp),
+            patch("ogx.cli.launch.opencode.OpenAI", return_value=mock_client),
             patch("ogx.cli.launch.opencode.subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(returncode=42)
