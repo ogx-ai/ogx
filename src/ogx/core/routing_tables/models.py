@@ -222,26 +222,59 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
         ]
         return OpenAIListModelsResponse(data=openai_models)
 
-    async def anthropic_list_models(self) -> AnthropicListModelsResponse:
-        all_models = await self._get_all_models()
+    async def anthropic_list_models(
+        self,
+        *,
+        before_id: str | None = None,
+        after_id: str | None = None,
+        limit: int | None = None,
+    ) -> AnthropicListModelsResponse:
+        if before_id and after_id:
+            raise ValueError("Failed to list models: before_id and after_id are mutually exclusive.")
+
+        all_models = sorted(await self._get_all_models(), key=lambda model: model.identifier)
+        all_ids = [model.identifier for model in all_models]
+
+        page_limit = limit if limit is not None else 20
+        if page_limit < 1:
+            raise ValueError("Failed to list models: limit must be at least 1.")
+
+        if after_id is not None:
+            if after_id not in all_ids:
+                raise ValueError("Failed to list models: after_id was not found.")
+            start_index = all_ids.index(after_id) + 1
+            end_index = start_index + page_limit
+            page_models = all_models[start_index:end_index]
+            has_more = end_index < len(all_models)
+        elif before_id is not None:
+            if before_id not in all_ids:
+                raise ValueError("Failed to list models: before_id was not found.")
+            end_index = all_ids.index(before_id)
+            start_index = max(0, end_index - page_limit)
+            page_models = all_models[start_index:end_index]
+            has_more = start_index > 0
+        else:
+            page_models = all_models[:page_limit]
+            has_more = len(all_models) > page_limit
+
         anthropic_models = [
             AnthropicModelInfo(
                 id=model.identifier,
                 display_name=model.identifier,
                 created_at=datetime.fromtimestamp(model.created, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             )
-            for model in all_models
+            for model in page_models
         ]
         return AnthropicListModelsResponse(
             data=anthropic_models,
-            has_more=False,
+            has_more=has_more,
             first_id=anthropic_models[0].id if anthropic_models else None,
             last_id=anthropic_models[-1].id if anthropic_models else None,
         )
 
     async def google_list_models(self) -> GoogleListModelsResponse:
-        # Uses the Gemini API "models/{id}" format. Vertex AI uses a different
-        # resource path and would need provider-aware translation if added.
+        # Always return OGX identifiers under the Gemini-style "models/{id}" prefix
+        # so list -> retrieve round-trips for all providers (Gemini, Vertex, etc.).
         all_models = await self._get_all_models()
         google_models = [
             GoogleModelInfo(

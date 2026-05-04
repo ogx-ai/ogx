@@ -14,7 +14,7 @@ response formats via header-based SDK detection.
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import JSONResponse
 
 from ogx_api.messages.models import ANTHROPIC_VERSION
@@ -32,6 +32,43 @@ from .models import (
 
 # Path parameter dependencies for single-field models
 get_model_request = create_path_dependency(GetModelRequest)
+
+
+def _is_google_sdk_request(
+    x_goog_api_key: str | None,
+    x_goog_user_project: str | None,
+    x_goog_api_client: str | None,
+) -> bool:
+    return any((x_goog_api_key, x_goog_user_project, x_goog_api_client))
+
+
+def _normalize_google_model_id(model_id: str) -> str:
+    if model_id.startswith("/models/"):
+        return model_id.removeprefix("/")
+    if model_id.startswith("models/"):
+        return model_id.removeprefix("models/")
+    return model_id
+
+
+async def _resolve_google_model_request(impl: Models, model_request: GetModelRequest) -> GetModelRequest:
+    normalized_model_id = _normalize_google_model_id(model_request.model_id)
+
+    all_models = await impl.list_models()
+    matching_identifiers = sorted(
+        {
+            model.identifier
+            for model in all_models.data
+            if model.identifier == normalized_model_id or model.provider_resource_id == normalized_model_id
+        }
+    )
+    if len(matching_identifiers) > 1:
+        raise ValueError(
+            "Failed to get model: Google model ID is ambiguous across providers. Use 'models/{provider_id}/{model_id}'."
+        )
+    if len(matching_identifiers) == 1:
+        normalized_model_id = matching_identifiers[0]
+
+    return GetModelRequest(model_id=normalized_model_id)
 
 
 def create_router(impl: Models) -> APIRouter:
@@ -53,22 +90,34 @@ def create_router(impl: Models) -> APIRouter:
         "/models",
         response_model=OpenAIListModelsResponse,
         summary="List models.",
-        description="List models. Returns OpenAI, Anthropic, or Google response format based on SDK headers.",
+        description="List models. Returns OpenAI, Anthropic, or Google response format based on SDK detection headers.",
         responses={
             200: {"description": "A list of model objects."},
         },
     )
     async def list_models(
+        before_id: Annotated[
+            str | None, Query(description="Return models before this model ID (Anthropic SDK format only).")
+        ] = None,
+        after_id: Annotated[
+            str | None, Query(description="Return models after this model ID (Anthropic SDK format only).")
+        ] = None,
+        limit: Annotated[
+            int | None,
+            Query(ge=1, le=1000, description="Maximum number of models to return (Anthropic SDK format only)."),
+        ] = None,
         anthropic_version: Annotated[str | None, Header(alias="anthropic-version")] = None,
         x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
+        x_goog_user_project: Annotated[str | None, Header(alias="x-goog-user-project")] = None,
+        x_goog_api_client: Annotated[str | None, Header(alias="x-goog-api-client")] = None,
     ) -> OpenAIListModelsResponse | Response:
         if anthropic_version:
-            anthropic_result = await impl.anthropic_list_models()
+            anthropic_result = await impl.anthropic_list_models(before_id=before_id, after_id=after_id, limit=limit)
             return JSONResponse(
                 content=anthropic_result.model_dump(exclude_none=True),
                 headers={"anthropic-version": ANTHROPIC_VERSION},
             )
-        elif x_goog_api_key:
+        elif _is_google_sdk_request(x_goog_api_key, x_goog_user_project, x_goog_api_client):
             google_result = await impl.google_list_models()
             return JSONResponse(content=google_result.model_dump(exclude_none=True))
 
@@ -78,7 +127,7 @@ def create_router(impl: Models) -> APIRouter:
         "/models/{model_id:path}",
         response_model=Model,
         summary="Get a model by its identifier.",
-        description="Get a model by its identifier. Returns OpenAI, Anthropic, or Google response format based on SDK headers.",
+        description="Get a model by its identifier. Returns OpenAI, Anthropic, or Google response format based on SDK detection headers.",
         responses={
             200: {"description": "The model object."},
         },
@@ -87,10 +136,12 @@ def create_router(impl: Models) -> APIRouter:
         model_request: Annotated[GetModelRequest, Depends(get_model_request)],
         anthropic_version: Annotated[str | None, Header(alias="anthropic-version")] = None,
         x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
+        x_goog_user_project: Annotated[str | None, Header(alias="x-goog-user-project")] = None,
+        x_goog_api_client: Annotated[str | None, Header(alias="x-goog-api-client")] = None,
     ) -> Model | Response:
         normalized_model_request = model_request
-        if x_goog_api_key and model_request.model_id.startswith("models/"):
-            normalized_model_request = GetModelRequest(model_id=model_request.model_id.removeprefix("models/"))
+        if _is_google_sdk_request(x_goog_api_key, x_goog_user_project, x_goog_api_client):
+            normalized_model_request = await _resolve_google_model_request(impl, model_request)
 
         model = await impl.get_model(normalized_model_request)
 
@@ -104,7 +155,7 @@ def create_router(impl: Models) -> APIRouter:
                 content=anthropic_model.model_dump(exclude_none=True),
                 headers={"anthropic-version": ANTHROPIC_VERSION},
             )
-        elif x_goog_api_key:
+        elif _is_google_sdk_request(x_goog_api_key, x_goog_user_project, x_goog_api_client):
             google_model = GoogleModelInfo(
                 name=f"models/{model.identifier}",
                 display_name=model.identifier,

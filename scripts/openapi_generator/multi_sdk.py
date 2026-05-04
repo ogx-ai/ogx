@@ -31,7 +31,8 @@ _MULTI_SDK_ENDPOINTS: dict[str, dict[str, Any]] = {
         "description": (
             "Returns OpenAI format by default. "
             "Send `anthropic-version` header for Anthropic format, "
-            "or `x-goog-api-key` header for Google format."
+            "or any Google SDK header (`x-goog-api-key`, `x-goog-user-project`, `x-goog-api-client`) "
+            "for Google format."
         ),
     },
     "/v1/models/{model_id}": {
@@ -43,7 +44,8 @@ _MULTI_SDK_ENDPOINTS: dict[str, dict[str, Any]] = {
         "description": (
             "Returns OpenAI format by default. "
             "Send `anthropic-version` header for Anthropic format, "
-            "or `x-goog-api-key` header for Google format."
+            "or any Google SDK header (`x-goog-api-key`, `x-goog-user-project`, `x-goog-api-client`) "
+            "for Google format."
         ),
     },
 }
@@ -67,6 +69,26 @@ _SDK_DETECTION_HEADERS = [
         "description": (
             "When present, the response uses the Google Models API format. "
             "The Google AI SDK sends this header automatically."
+        ),
+    },
+    {
+        "name": "x-goog-user-project",
+        "in": "header",
+        "required": False,
+        "schema": {"type": "string"},
+        "description": (
+            "When present, the response uses the Google Models API format. "
+            "Google OAuth/ADC clients may send this header automatically."
+        ),
+    },
+    {
+        "name": "x-goog-api-client",
+        "in": "header",
+        "required": False,
+        "schema": {"type": "string"},
+        "description": (
+            "When present, the response uses the Google Models API format. "
+            "Google SDKs may send this header automatically."
         ),
     },
 ]

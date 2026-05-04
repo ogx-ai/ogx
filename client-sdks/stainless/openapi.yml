@@ -1179,7 +1179,7 @@ paths:
     get:
       responses:
         '200':
-          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or `x-goog-api-key` header for Google format.
+          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or any Google SDK header (`x-goog-api-key`, `x-goog-user-project`, `x-goog-api-client`) for Google format.
           content:
             application/json:
               schema:
@@ -1205,9 +1205,41 @@ paths:
       tags:
       - Models
       summary: List models.
-      description: List models. Returns OpenAI, Anthropic, or Google response format based on SDK headers.
+      description: List models. Returns OpenAI, Anthropic, or Google response format based on SDK detection headers.
       operationId: list_models_v1_models_get
       parameters:
+      - name: before_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Return models before this model ID (Anthropic SDK format only).
+          title: Before Id
+        description: Return models before this model ID (Anthropic SDK format only).
+      - name: after_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Return models after this model ID (Anthropic SDK format only).
+          title: After Id
+        description: Return models after this model ID (Anthropic SDK format only).
+      - name: limit
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 1000
+            minimum: 1
+          - type: 'null'
+          description: Maximum number of models to return (Anthropic SDK format only).
+          title: Limit
+        description: Maximum number of models to return (Anthropic SDK format only).
       - name: anthropic-version
         in: header
         required: false
@@ -1224,6 +1256,22 @@ paths:
           - type: string
           - type: 'null'
           title: X-Goog-Api-Key
+      - name: x-goog-user-project
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Goog-User-Project
+      - name: x-goog-api-client
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Goog-Api-Client
       x-codeSamples:
       - lang: Python
         label: OpenAI
@@ -1239,7 +1287,7 @@ paths:
     get:
       responses:
         '200':
-          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or `x-goog-api-key` header for Google format.
+          description: Returns OpenAI format by default. Send `anthropic-version` header for Anthropic format, or any Google SDK header (`x-goog-api-key`, `x-goog-user-project`, `x-goog-api-client`) for Google format.
           content:
             application/json:
               schema:
@@ -1265,7 +1313,7 @@ paths:
       tags:
       - Models
       summary: Get a model by its identifier.
-      description: Get a model by its identifier. Returns OpenAI, Anthropic, or Google response format based on SDK headers.
+      description: Get a model by its identifier. Returns OpenAI, Anthropic, or Google response format based on SDK detection headers.
       operationId: get_model_v1_models__model_id__get
       parameters:
       - name: model_id
@@ -1292,6 +1340,22 @@ paths:
           - type: string
           - type: 'null'
           title: X-Goog-Api-Key
+      - name: x-goog-user-project
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Goog-User-Project
+      - name: x-goog-api-client
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Goog-Api-Client
       x-codeSamples:
       - lang: Python
         label: OpenAI
