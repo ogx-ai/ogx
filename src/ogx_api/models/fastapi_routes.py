@@ -88,7 +88,11 @@ def create_router(impl: Models) -> APIRouter:
         anthropic_version: Annotated[str | None, Header(alias="anthropic-version")] = None,
         x_goog_api_key: Annotated[str | None, Header(alias="x-goog-api-key")] = None,
     ) -> Model | Response:
-        model = await impl.get_model(model_request)
+        normalized_model_request = model_request
+        if x_goog_api_key and model_request.model_id.startswith("models/"):
+            normalized_model_request = GetModelRequest(model_id=model_request.model_id.removeprefix("models/"))
+
+        model = await impl.get_model(normalized_model_request)
 
         if anthropic_version:
             anthropic_model = AnthropicModelInfo(
