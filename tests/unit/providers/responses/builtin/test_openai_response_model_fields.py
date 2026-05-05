@@ -15,7 +15,7 @@
 import pytest
 from pydantic import ValidationError
 
-from llama_stack_api import (
+from ogx_api import (
     OpenAIResponseInputFunctionToolCallOutput,
     OpenAIResponseMessage,
     OpenAIResponseOutputMessageFunctionToolCall,
