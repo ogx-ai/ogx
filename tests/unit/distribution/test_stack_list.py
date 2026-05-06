@@ -1,17 +1,17 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Tests for the llama stack list command."""
+"""Tests for the ogx list command."""
 
 import argparse
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llama_stack.cli.stack.list_stacks import StackListBuilds
+from ogx.cli.stack.list_stacks import StackListBuilds
 
 
 @pytest.fixture
@@ -39,11 +39,11 @@ def mock_distribs_base_dir(tmp_path):
 @pytest.fixture
 def mock_distro_dir(tmp_path):
     """Create a mock distributions directory with built-in distributions."""
-    distro_dir = tmp_path / "src" / "llama_stack" / "distributions"
+    distro_dir = tmp_path / "src" / "ogx" / "distributions"
     distro_dir.mkdir(parents=True, exist_ok=True)
 
     # Create some built-in distributions
-    for distro_name in ["starter", "nvidia", "dell"]:
+    for distro_name in ["starter", "nvidia"]:
         distro_path = distro_dir / distro_name
         distro_path.mkdir()
         (distro_path / "config.yaml").write_text("# config")
@@ -65,15 +65,15 @@ def create_path_mock(builtin_dist_dir):
 
 
 class TestStackList:
-    """Test suite for llama stack list command."""
+    """Test suite for ogx list command."""
 
     def test_builtin_distros_shown_without_running(self, list_stacks_command, mock_distro_dir, tmp_path):
         """Test that built-in distributions are shown even before running them."""
         mock_path = create_path_mock(mock_distro_dir)
 
         # Mock DISTRIBS_BASE_DIR to be a non-existent directory (no custom distributions)
-        with patch("llama_stack.cli.stack.list_stacks.DISTRIBS_BASE_DIR", tmp_path / "nonexistent"):
-            with patch("llama_stack.cli.stack.list_stacks.Path") as mock_path_class:
+        with patch("ogx.cli.stack.list_stacks.DISTRIBS_BASE_DIR", tmp_path / "nonexistent"):
+            with patch("ogx.cli.stack.list_stacks.Path") as mock_path_class:
                 mock_path_class.return_value = mock_path
 
                 distributions = list_stacks_command._get_distribution_dirs()
@@ -87,14 +87,13 @@ class TestStackList:
                 # Check specific distributions we created
                 assert "starter" in distributions
                 assert "nvidia" in distributions
-                assert "dell" in distributions
 
     def test_custom_distribution_overrides_builtin(self, list_stacks_command, mock_distro_dir, mock_distribs_base_dir):
         """Test that custom distributions override built-in ones with the same name."""
         mock_path = create_path_mock(mock_distro_dir)
 
-        with patch("llama_stack.cli.stack.list_stacks.DISTRIBS_BASE_DIR", mock_distribs_base_dir):
-            with patch("llama_stack.cli.stack.list_stacks.Path") as mock_path_class:
+        with patch("ogx.cli.stack.list_stacks.DISTRIBS_BASE_DIR", mock_distribs_base_dir):
+            with patch("ogx.cli.stack.list_stacks.Path") as mock_path_class:
                 mock_path_class.return_value = mock_path
 
                 distributions = list_stacks_command._get_distribution_dirs()
@@ -118,8 +117,8 @@ class TestStackList:
 
         mock_path = create_path_mock(mock_distro_dir)
 
-        with patch("llama_stack.cli.stack.list_stacks.DISTRIBS_BASE_DIR", tmp_path / "nonexistent"):
-            with patch("llama_stack.cli.stack.list_stacks.Path") as mock_path_class:
+        with patch("ogx.cli.stack.list_stacks.DISTRIBS_BASE_DIR", tmp_path / "nonexistent"):
+            with patch("ogx.cli.stack.list_stacks.Path") as mock_path_class:
                 mock_path_class.return_value = mock_path
 
                 distributions = list_stacks_command._get_distribution_dirs()

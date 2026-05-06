@@ -1,0 +1,167 @@
+{
+  "test_id": "tests/integration/responses/test_tool_responses.py::test_function_call_output_list_text[openai_client-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content_stream",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What is the weather in Paris?"
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "function_call": {
+                "name": "get_weather",
+                "args": {
+                  "location": "Paris, France"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "function_response": {
+                "name": "get_weather",
+                "response": {
+                  "result": "It is sunny and 22 degrees Celsius in Paris."
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "config": {
+        "tools": [
+          {
+            "function_declarations": [
+              {
+                "description": "Get current temperature for a given location.",
+                "name": "get_weather",
+                "parameters_json_schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "location": {
+                      "description": "City and country e.g. Bogot\u00e1, Colombia",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "location"
+                  ],
+                  "type": "object"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "endpoint": "/generate_content_stream",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:29:41 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "It is sunny and"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-01T10:29:41.472888Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "lfPMabjuHOnEmPUPsY_byQc",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:29:41 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " 22 degrees Celsius in Paris.\n"
+                }
+              ],
+              "role": "model"
+            },
+            "finish_reason": "STOP"
+          }
+        ],
+        "create_time": "2026-04-01T10:29:41.472888Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "lfPMabjuHOnEmPUPsY_byQc",
+        "usage_metadata": {
+          "candidates_token_count": 13,
+          "candidates_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 13
+            }
+          ],
+          "prompt_token_count": 41,
+          "prompt_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 41
+            }
+          ],
+          "total_token_count": 54,
+          "traffic_type": "ON_DEMAND"
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

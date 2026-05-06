@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -28,7 +28,7 @@ async def test_openai_chat_completion_image_url(openai_client, vision_model_id):
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": "https://raw.githubusercontent.com/meta-llama/llama-stack/main/tests/integration/inference/dog.png"
+                    "url": "https://raw.githubusercontent.com/meta-llama/ogx/main/tests/integration/inference/dog.png"
                 },
             },
             {

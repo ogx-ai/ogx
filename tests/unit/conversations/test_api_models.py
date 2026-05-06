@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 
-from llama_stack_api import Conversation, ConversationItem, ConversationItemList
+from ogx_api import Conversation, ConversationItem, ConversationItemList
 
 
 def test_conversation_model_defaults():

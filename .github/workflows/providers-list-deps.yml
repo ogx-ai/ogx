@@ -1,28 +1,28 @@
-name: Test llama stack list-deps
+name: Test ogx stack list-deps
 
-run-name: Test llama stack list-deps
+run-name: Test ogx stack list-deps
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'src/llama_stack/cli/stack/list_deps.py'
-      - 'src/llama_stack/cli/stack/_list_deps.py'
-      - 'src/llama_stack/core/build.*'
-      - 'src/llama_stack/core/*.sh'
+      - 'src/ogx/cli/stack/list_deps.py'
+      - 'src/ogx/cli/stack/_list_deps.py'
+      - 'src/ogx/core/build.*'
+      - 'src/ogx/core/*.sh'
       - '.github/workflows/providers-list-deps.yml'
-      - 'src/llama_stack/templates/**'
+      - 'src/ogx/templates/**'
       - 'pyproject.toml'
 
   pull_request:
     paths:
-      - 'src/llama_stack/cli/stack/list_deps.py'
-      - 'src/llama_stack/cli/stack/_list_deps.py'
-      - 'src/llama_stack/core/build.*'
-      - 'src/llama_stack/core/*.sh'
+      - 'src/ogx/cli/stack/list_deps.py'
+      - 'src/ogx/cli/stack/_list_deps.py'
+      - 'src/ogx/core/build.*'
+      - 'src/ogx/core/*.sh'
       - '.github/workflows/providers-list-deps.yml'
-      - 'src/llama_stack/templates/**'
+      - 'src/ogx/templates/**'
       - 'pyproject.toml'
   merge_group:
     branches:
@@ -45,7 +45,7 @@ jobs:
       - name: Generate Distribution List
         id: set-matrix
         run: |
-          distros=$(find src/llama_stack/distributions -mindepth 1 -maxdepth 1 -type d 2>/dev/null | \
+          distros=$(find src/ogx/distributions -mindepth 1 -maxdepth 1 -type d 2>/dev/null | \
             awk -F'/' '{print $NF}' | \
             grep -v '^__pycache__$' | \
             grep -v '^ci-tests$' | \
@@ -70,13 +70,13 @@ jobs:
 
       - name: Print dependencies
         run: |
-          uv run llama stack list-deps ${{ matrix.distro }}
+          uv run ogx stack list-deps ${{ matrix.distro }}
 
-      - name: Install Distro using llama stack list-deps
+      - name: Install Distro using ogx stack list-deps
         run: |
           # USE_COPY_NOT_MOUNT is set to true since mounting is not supported by docker buildx, we use COPY instead
-          # LLAMA_STACK_DIR is set to the current directory so we are building from the source
-          USE_COPY_NOT_MOUNT=true LLAMA_STACK_DIR=. uv run llama stack list-deps ${{ matrix.distro }} | xargs -L1 uv pip install
+          # OGX_DIR is set to the current directory so we are building from the source
+          USE_COPY_NOT_MOUNT=true OGX_DIR=. uv run ogx stack list-deps ${{ matrix.distro }} | xargs -L1 uv pip install
 
       - name: Print dependencies in the image
         if: matrix.image-type == 'venv'
@@ -94,7 +94,7 @@ jobs:
 
       - name: Show a single provider
         run: |
-          USE_COPY_NOT_MOUNT=true LLAMA_STACK_DIR=. uv run llama stack list-deps --providers inference=remote::ollama
+          USE_COPY_NOT_MOUNT=true OGX_DIR=. uv run ogx stack list-deps --providers inference=remote::ollama
 
   list-deps-from-config:
     runs-on: ubuntu-latest
@@ -108,6 +108,6 @@ jobs:
       - name: list-des from Config
         env:
           USE_COPY_NOT_MOUNT: "true"
-          LLAMA_STACK_DIR: "."
+          OGX_DIR: "."
         run: |
-          uv run llama stack list-deps src/llama_stack/distributions/ci-tests/config.yaml
+          uv run ogx stack list-deps src/ogx/distributions/ci-tests/config.yaml

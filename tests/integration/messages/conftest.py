@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,8 +11,8 @@ from typing import Any
 import httpx
 import pytest
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
-from llama_stack.core.testing_context import get_test_context
+from ogx.core.library_client import OGXAsLibraryClient
+from ogx.core.testing_context import get_test_context
 
 # Import fixtures from common module to make them available in this test directory
 from tests.integration.fixtures.common import (  # noqa: F401
@@ -23,15 +23,15 @@ from tests.integration.fixtures.common import (  # noqa: F401
 
 def pytest_configure(config):
     """Disable stderr pipe to prevent Rich logging from blocking on buffer saturation."""
-    os.environ["LLAMA_STACK_TEST_LOG_STDERR"] = "0"
+    os.environ["OGX_TEST_LOG_STDERR"] = "0"
 
 
 @pytest.fixture(scope="session")
-def messages_base_url(llama_stack_client):
+def messages_base_url(ogx_client):
     """Provide the base URL for the Messages API, skipping library client mode."""
-    if isinstance(llama_stack_client, LlamaStackAsLibraryClient):
+    if isinstance(ogx_client, OGXAsLibraryClient):
         pytest.skip("Messages API tests are not supported in library client mode")
-    return llama_stack_client.base_url
+    return ogx_client.base_url
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def _build_headers() -> dict[str, str]:
     test_id = get_test_context()
     if test_id:
         provider_data = {"__test_id": test_id}
-        headers["X-LlamaStack-Provider-Data"] = json.dumps(provider_data)
+        headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
     return headers
 
 

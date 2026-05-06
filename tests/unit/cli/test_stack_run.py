@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 """
-Unit tests for `llama stack run` CLI command.
+Unit tests for `ogx run` CLI command.
 
 Categories:
   - Arguments: --providers flag is registered and parsed correctly
@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llama_stack.cli.stack.run import StackRun
+from ogx.cli.stack.run import StackRun
 
 
 @pytest.fixture
@@ -48,10 +48,10 @@ class TestDelegation:
         mock_config.model_dump.return_value = {}
 
         with (
-            patch("llama_stack.cli.stack.run.run_config_from_dynamic_config_spec", return_value=mock_config) as mock_fn,
-            patch("llama_stack.cli.stack.run.DISTRIBS_BASE_DIR", tmp_path),
+            patch("ogx.cli.stack.run.run_config_from_dynamic_config_spec", return_value=mock_config) as mock_fn,
+            patch("ogx.cli.stack.run.DISTRIBS_BASE_DIR", tmp_path),
             patch(
-                "llama_stack.core.configure.parse_and_maybe_upgrade_config",
+                "ogx.core.configure.parse_and_maybe_upgrade_config",
                 return_value=MagicMock(external_providers_dir=None),
             ),
             patch.object(stack_run, "_uvicorn_run"),
@@ -70,10 +70,10 @@ class TestDelegation:
         mock_config.model_dump.return_value = {"distro_name": "providers-run"}
 
         with (
-            patch("llama_stack.cli.stack.run.run_config_from_dynamic_config_spec", return_value=mock_config),
-            patch("llama_stack.cli.stack.run.DISTRIBS_BASE_DIR", tmp_path),
+            patch("ogx.cli.stack.run.run_config_from_dynamic_config_spec", return_value=mock_config),
+            patch("ogx.cli.stack.run.DISTRIBS_BASE_DIR", tmp_path),
             patch(
-                "llama_stack.core.configure.parse_and_maybe_upgrade_config",
+                "ogx.core.configure.parse_and_maybe_upgrade_config",
                 return_value=MagicMock(external_providers_dir=None),
             ),
             patch.object(stack_run, "_uvicorn_run"),
@@ -89,10 +89,10 @@ class TestErrorPropagation:
     def test_value_error_causes_exit(self, stack_run: StackRun, tmp_path: Path):
         with (
             patch(
-                "llama_stack.cli.stack.run.run_config_from_dynamic_config_spec",
+                "ogx.cli.stack.run.run_config_from_dynamic_config_spec",
                 side_effect=ValueError("Failed to parse provider spec 'bad'. Expected format: api=provider"),
             ),
-            patch("llama_stack.cli.stack.run.DISTRIBS_BASE_DIR", tmp_path),
+            patch("ogx.cli.stack.run.DISTRIBS_BASE_DIR", tmp_path),
             pytest.raises(SystemExit) as exc_info,
         ):
             args = stack_run.parser.parse_args(["--providers", "bad"])

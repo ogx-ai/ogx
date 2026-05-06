@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,29 +12,29 @@ from pathlib import Path
 
 import pytest
 
-from llama_stack.core.access_control.access_control import default_policy
-from llama_stack.core.conversations.conversations import (
+from ogx.core.access_control.access_control import default_policy
+from ogx.core.conversations.conversations import (
     ConversationServiceConfig,
     ConversationServiceImpl,
 )
-from llama_stack.core.datatypes import StackConfig
-from llama_stack.core.storage.datatypes import (
+from ogx.core.datatypes import StackConfig
+from ogx.core.storage.datatypes import (
     ServerStoresConfig,
     SqliteSqlStoreConfig,
     SqlStoreReference,
     StorageConfig,
 )
-from llama_stack.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from llama_stack.providers.inline.files.localfs import (
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx.providers.inline.files.localfs import (
     LocalfsFilesImpl,
     LocalfsFilesImplConfig,
 )
-from llama_stack.providers.utils.files.sanitize import (
+from ogx.providers.utils.files.sanitize import (
     sanitize_content_disposition_filename,
 )
-from llama_stack_api import InvalidParameterError, OpenAIFilePurpose
-from llama_stack_api.conversations import AddItemsRequest
-from llama_stack_api.files.models import (
+from ogx_api import InvalidParameterError, OpenAIFilePurpose
+from ogx_api.conversations import AddItemsRequest
+from ogx_api.files.models import (
     RetrieveFileContentRequest,
     UploadFileRequest,
 )

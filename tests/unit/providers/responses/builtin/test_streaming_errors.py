@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@
 
 from unittest.mock import MagicMock
 
-from llama_stack.providers.inline.responses.builtin.responses.streaming import (
+from ogx.providers.inline.responses.builtin.responses.streaming import (
     extract_openai_error,
 )
 

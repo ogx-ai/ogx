@@ -1,0 +1,131 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+required-version = ">=0.7.0"
+
+[project]
+name = "ogx-api"
+dynamic = ["version"]
+authors = [{ name = "The OGX Contributors", email = "contributors@ogx.dev" }]
+description = "API and Provider specifications for OGX - lightweight package with protocol definitions and provider specs"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { "text" = "MIT" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "openai>=2.30.0",
+    "fastapi>=0.115.0,<1.0",
+    "pydantic>=2.11.9",
+    "jsonschema",
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.30.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ogx-ai/ogx"
+
+[tool.setuptools]
+# 1. Map the 'ogx_api' namespace to the current directory (.)
+# This anchors the package and ensures it's not empty.
+package-dir = {"ogx_api" = "."}
+
+# 2. List ONLY the directories as sub-packages.
+# WARNING: Update this list when adding/removing API directories (e.g., new FastAPI routers)
+packages = [
+    "ogx_api.admin",
+    "ogx_api.responses",
+    "ogx_api.batches",
+    "ogx_api.common",
+    "ogx_api.conversations",
+    "ogx_api.file_processors",
+    "ogx_api.files",
+    "ogx_api.inspect_api",
+    "ogx_api.inference",
+    "ogx_api.interactions",
+    "ogx_api.internal",
+    "ogx_api.messages",
+    "ogx_api.models",
+
+    "ogx_api.providers",
+    "ogx_api.shields",
+    "ogx_api.prompts",
+    "ogx_api.safety",
+    "ogx_api.tools",
+    "ogx_api.vector_io",
+    "ogx_api.connectors",
+]
+
+# 3. List every root-level .py file as a module.
+# Because of package-dir above, these will be placed INSIDE the ogx_api folder.
+# WARNING: Update this list when adding/removing root-level .py files
+py-modules = [
+    "ogx_api.datatypes",
+    "ogx_api.filters",
+    "ogx_api.openai_responses",
+    "ogx_api.rag_tool",
+    "ogx_api.resource",
+    "ogx_api.router_utils",
+    "ogx_api.schema_utils",
+    "ogx_api.vector_stores",
+    "ogx_api.version",
+    "ogx_api.validators",
+]
+
+[tool.setuptools.package-data]
+ogx_api = ["py.typed", "**/*.json", "**/*.yaml"]
+
+[tool.setuptools_scm]
+root = "../.."
+fallback_version = "0.7.2.dev0"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "UP",      # pyupgrade
+    "B",       # flake8-bugbear
+    "B9",      # flake8-bugbear subset
+    "C",       # comprehensions
+    "E",       # pycodestyle
+    "F",       # Pyflakes
+    "N",       # Naming
+    "W",       # Warnings
+    "DTZ",     # datetime rules
+    "I",       # isort (imports order)
+    "RUF001",  # Checks for ambiguous Unicode characters in strings
+    "RUF002",  # Checks for ambiguous Unicode characters in docstrings
+    "RUF003",  # Checks for ambiguous Unicode characters in comments
+    "PLC2401", # Checks for the use of non-ASCII characters in variable names
+]
+ignore = [
+    # The following ignores are desired by the project maintainers.
+    "E402",   # Module level import not at top of file
+    "E501",   # Line too long
+    "F405",   # Maybe undefined or defined from star import
+    "C408",   # Ignored because we like the dict keyword argument syntax
+    "N812",   # Ignored because import torch.nn.functional as F is PyTorch convention
+
+    # These are the additional ones we started ignoring after moving to ruff. We should look into each one of them later.
+    "C901",   # Complexity of the function is too high
+]
+unfixable = [
+    "PLE2515",
+] # Do not fix this automatically since ruff will replace the zero-width space with \u200b - let's do it manually
+
+[tool.ruff.lint.per-file-ignores]
+"ogx_api/apis/**/__init__.py" = ["F403"]
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = ["classmethod", "pydantic.field_validator"]

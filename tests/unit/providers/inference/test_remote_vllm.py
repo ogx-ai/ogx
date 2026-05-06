@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import pytest
 from pydantic import SecretStr
 
-from llama_stack.core.routers.inference import InferenceRouter
-from llama_stack.core.routing_tables.models import ModelsRoutingTable
-from llama_stack.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
-from llama_stack.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
-from llama_stack_api import (
+from ogx.core.routers.inference import InferenceRouter
+from ogx.core.routing_tables.models import ModelsRoutingTable
+from ogx.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
+from ogx.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
+from ogx_api import (
     HealthStatus,
     Model,
     OpenAIChatCompletion,
@@ -399,7 +399,7 @@ class TestRerankTLSAndAuth:
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__.return_value = mock_client_instance
 
-            from llama_stack_api.inference import RerankRequest
+            from ogx_api.inference import RerankRequest
 
             request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
             await adapter.rerank(request)
@@ -428,7 +428,7 @@ class TestRerankTLSAndAuth:
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__.return_value = mock_client_instance
 
-            from llama_stack_api.inference import RerankRequest
+            from ogx_api.inference import RerankRequest
 
             request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
             await adapter.rerank(request)
@@ -454,7 +454,7 @@ class TestRerankTLSAndAuth:
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__.return_value = mock_client_instance
 
-            from llama_stack_api.inference import RerankRequest
+            from ogx_api.inference import RerankRequest
 
             request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
             await adapter.rerank(request)
@@ -464,7 +464,7 @@ class TestRerankTLSAndAuth:
             assert "Authorization" not in headers
 
     async def test_rerank_uses_provider_data_api_key(self):
-        """rerank() should use API key from x-llamastack-provider-data header over config."""
+        """rerank() should use API key from x-ogx-provider-data header over config."""
         config = VLLMInferenceAdapterConfig(
             base_url="https://vllm.example.com/v1",
             api_token="config-token",
@@ -486,7 +486,7 @@ class TestRerankTLSAndAuth:
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__.return_value = mock_client_instance
 
-            from llama_stack_api.inference import RerankRequest
+            from ogx_api.inference import RerankRequest
 
             request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
             await adapter.rerank(request)

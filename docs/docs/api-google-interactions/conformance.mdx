@@ -1,0 +1,282 @@
+---
+title: Google Interactions API Conformance
+description: Coverage status of OGX against the Google Interactions API specification
+sidebar_label: Interactions Conformance
+sidebar_position: 5
+---
+
+# Google Interactions API Coverage Report
+
+Spec version: `v1beta`
+
+This page provides a detailed breakdown of OGX's coverage of the
+[Google Interactions API](https://ai.google.dev/gemini-api/docs/interactions) specification.
+The coverage score increases as missing features are implemented.
+
+:::info Auto-generated
+This documentation is auto-generated from the Google Interactions API specification comparison.
+:::
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| **Overall Coverage Score** | 32.9% |
+| **Total Items Implemented** | 27/82 |
+| **Total Missing** | 55 |
+
+## Section Scores
+
+Sections are sorted by coverage score (lowest first, needing most attention).
+
+| Section | Score | Implemented | Total | Missing |
+|---------|-------|-------------|-------|---------|
+| Tool Types | 0.0% | 0 | 9 | 9 |
+| Content Types | 5.0% | 1 | 20 | 19 |
+| Endpoints | 25.0% | 1 | 4 | 3 |
+| GenerationConfig | 30.0% | 3 | 10 | 7 |
+| Usage | 30.0% | 3 | 10 | 7 |
+| Request Properties | 46.2% | 6 | 13 | 7 |
+| Streaming Events | 71.4% | 5 | 7 | 2 |
+| Response Properties | 88.9% | 8 | 9 | 1 |
+
+## Detailed Breakdown
+
+Below is a detailed breakdown of what is implemented and what is missing for each section.
+
+### Tool Types
+
+**Score:** 0.0% · **Implemented:** 0/9
+
+<details>
+<summary>Missing (9)</summary>
+
+- `CodeExecution`
+- `ComputerUse`
+- `FileSearch`
+- `Function`
+- `GoogleMaps`
+- `GoogleSearch`
+- `McpServer`
+- `Retrieval`
+- `UrlContext`
+
+</details>
+
+### Content Types
+
+**Score:** 5.0% · **Implemented:** 1/20
+
+<details>
+<summary>Implemented (1)</summary>
+
+- `TextContent`
+
+</details>
+
+<details>
+<summary>Missing (19)</summary>
+
+- `AudioContent`
+- `CodeExecutionCallContent`
+- `CodeExecutionResultContent`
+- `DocumentContent`
+- `FileSearchCallContent`
+- `FileSearchResultContent`
+- `FunctionCallContent`
+- `FunctionResultContent`
+- `GoogleMapsCallContent`
+- `GoogleMapsResultContent`
+- `GoogleSearchCallContent`
+- `GoogleSearchResultContent`
+- `ImageContent`
+- `McpServerToolCallContent`
+- `McpServerToolResultContent`
+- `ThoughtContent`
+- `UrlContextCallContent`
+- `UrlContextResultContent`
+- `VideoContent`
+
+</details>
+
+### Endpoints
+
+**Score:** 25.0% · **Implemented:** 1/4
+
+<details>
+<summary>Implemented (1)</summary>
+
+- `POST /{api_version}/interactions`
+
+</details>
+
+<details>
+<summary>Missing (3)</summary>
+
+- `DELETE /{api_version}/interactions/{id}`
+- `GET /{api_version}/interactions/{id}`
+- `POST /{api_version}/interactions/{id}/cancel`
+
+</details>
+
+### GenerationConfig
+
+**Score:** 30.0% · **Implemented:** 3/10
+
+<details>
+<summary>Implemented (3)</summary>
+
+- `max_output_tokens`
+- `temperature`
+- `top_p`
+
+</details>
+
+<details>
+<summary>Missing (7)</summary>
+
+- `image_config`
+- `seed`
+- `speech_config`
+- `stop_sequences`
+- `thinking_level`
+- `thinking_summaries`
+- `tool_choice`
+
+</details>
+
+<details>
+<summary>Extra in OGX (1)</summary>
+
+These properties are in the OGX implementation but not in the Google spec:
+
+- `top_k`
+
+</details>
+
+### Usage
+
+**Score:** 30.0% · **Implemented:** 3/10
+
+<details>
+<summary>Implemented (3)</summary>
+
+- `total_input_tokens`
+- `total_output_tokens`
+- `total_tokens`
+
+</details>
+
+<details>
+<summary>Missing (7)</summary>
+
+- `cached_tokens_by_modality`
+- `input_tokens_by_modality`
+- `output_tokens_by_modality`
+- `tool_use_tokens_by_modality`
+- `total_cached_tokens`
+- `total_thought_tokens`
+- `total_tool_use_tokens`
+
+</details>
+
+### Request Properties
+
+**Score:** 46.2% · **Implemented:** 6/13
+
+<details>
+<summary>Implemented (6)</summary>
+
+- `generation_config`
+- `input`
+- `model`
+- `response_modalities`
+- `stream`
+- `system_instruction`
+
+</details>
+
+<details>
+<summary>Missing (7)</summary>
+
+- `background`
+- `previous_interaction_id`
+- `response_format`
+- `response_mime_type`
+- `service_tier`
+- `store`
+- `tools`
+
+</details>
+
+### Streaming Events
+
+**Score:** 71.4% · **Implemented:** 5/7
+
+<details>
+<summary>Implemented (5)</summary>
+
+- `ContentDelta`
+- `ContentStart`
+- `ContentStop`
+- `InteractionCompleteEvent`
+- `InteractionStartEvent`
+
+</details>
+
+<details>
+<summary>Missing (2)</summary>
+
+- `ErrorEvent`
+- `InteractionStatusUpdate`
+
+</details>
+
+### Response Properties
+
+**Score:** 88.9% · **Implemented:** 8/9
+
+<details>
+<summary>Implemented (8)</summary>
+
+- `created`
+- `id`
+- `model`
+- `outputs`
+- `role`
+- `status`
+- `updated`
+- `usage`
+
+</details>
+
+<details>
+<summary>Missing (1)</summary>
+
+- `agent`
+
+</details>
+
+<details>
+<summary>Extra in OGX (1)</summary>
+
+These properties are in the OGX implementation but not in the Google spec:
+
+- `object`
+
+</details>
+
+## How to Improve Coverage
+
+To improve coverage scores:
+
+1. **Add Missing Properties**: Implement missing fields in request/response models in `src/ogx_api/interactions/models.py`
+2. **Add Content Types**: Support additional content types beyond text (images, audio, function calls, etc.)
+3. **Add Tool Support**: Implement tool declarations (Function, GoogleSearch, CodeExecution, etc.)
+4. **Add Missing Endpoints**: Implement GET, DELETE, and Cancel endpoints
+
+Run the coverage analyzer to check your progress:
+
+```bash
+python scripts/google_interactions_coverage.py --update --generate-docs
+```

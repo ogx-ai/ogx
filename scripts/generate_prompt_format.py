@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 # Run this script:
-# torchrun --nproc_per_node=8 scripts/generate_prompt_format.py meta-llama/Llama-4-17B-Omni-Instruct-BF16-16E ~/.llama/checkpoints/Llama-4-17B-Omni-Instruct-BF16-16E/ llama_stack.models.llama.llama4.prompts llama_stack/models/llama/llama4/prompt_format.md
+# torchrun --nproc_per_node=8 scripts/generate_prompt_format.py meta-llama/Llama-4-17B-Omni-Instruct-BF16-16E ~/.llama/checkpoints/Llama-4-17B-Omni-Instruct-BF16-16E/ ogx.models.llama.llama4.prompts ogx/models/llama/llama4/prompt_format.md
 
 
 import importlib
@@ -15,10 +15,10 @@ from pathlib import Path
 
 import fire
 
-from llama_stack.models.llama.llama3.generation import Llama3
-from llama_stack.models.llama.llama4.generation import Llama4
-from llama_stack.models.llama.sku_list import resolve_model
-from llama_stack_api import ModelNotFoundError
+from ogx.models.llama.llama3.generation import Llama3
+from ogx.models.llama.llama4.generation import Llama4
+from ogx.models.llama.sku_list import resolve_model
+from ogx_api import ModelNotFoundError
 
 THIS_DIR = Path(__file__).parent.resolve()
 

@@ -1,12 +1,12 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from llama_stack.cli.stack.utils import add_dependent_providers
-from llama_stack.core.datatypes import Provider
-from llama_stack.core.distribution import get_provider_registry
+from ogx.cli.stack.utils import add_dependent_providers
+from ogx.core.datatypes import Provider
+from ogx.core.distribution import get_provider_registry
 
 
 def test_add_dependent_providers_expands_required_apis():

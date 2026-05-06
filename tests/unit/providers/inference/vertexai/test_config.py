@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from llama_stack.providers.remote.inference.vertexai.config import (
+from ogx.providers.remote.inference.vertexai.config import (
     VertexAIConfig,
     VertexAIProviderDataValidator,
 )

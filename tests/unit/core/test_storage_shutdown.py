@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,21 +8,21 @@
 
 import tempfile
 
-from llama_stack.core.storage.datatypes import (
+from ogx.core.storage.datatypes import (
     KVStoreReference,
     SqliteKVStoreConfig,
     SqliteSqlStoreConfig,
     SqlStoreReference,
 )
-from llama_stack.core.storage.kvstore.kvstore import (
+from ogx.core.storage.kvstore.kvstore import (
     InmemoryKVStoreImpl,
     kvstore_impl,
     register_kvstore_backends,
     shutdown_kvstore_backends,
 )
-from llama_stack.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
-from llama_stack.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
-from llama_stack.core.storage.sqlstore.sqlstore import (
+from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
+from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
+from ogx.core.storage.sqlstore.sqlstore import (
     register_sqlstore_backends,
     shutdown_sqlstore_backends,
     sqlstore_impl,
@@ -121,7 +121,7 @@ class TestSqlStoreShutdown:
             store = SqlAlchemySqlStoreImpl(config)
 
             # Create a table and insert data (this triggers lazy engine initialization)
-            from llama_stack_api.internal.sqlstore import ColumnType
+            from ogx_api.internal.sqlstore import ColumnType
 
             await store.create_table("test", {"id": ColumnType.INTEGER, "name": ColumnType.STRING})
             await store.insert("test", {"id": 1, "name": "test"})
@@ -152,7 +152,7 @@ class TestSqlStoreShutdown:
             store = sqlstore_impl(SqlStoreReference(backend="sql_test", table_name="test"))
 
             # Verify store is working
-            from llama_stack_api.internal.sqlstore import ColumnType
+            from ogx_api.internal.sqlstore import ColumnType
 
             await store.create_table("test", {"id": ColumnType.INTEGER})
             await store.insert("test", {"id": 1})

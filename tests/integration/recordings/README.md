@@ -3,7 +3,7 @@
 This directory contains recorded inference API responses used for deterministic testing without requiring live API access.
 
 For more information, see the
-[docs](https://llamastack.github.io/docs/contributing/testing/record-replay).
+[docs](https://ogx-ai.github.io/docs/contributing/testing/record-replay).
 This README provides more technical information.
 
 ## Structure
@@ -43,7 +43,7 @@ These normalizations ensure that re-recording tests produces minimal git diffs, 
 Responses are replayed from recordings:
 
 ```bash
-LLAMA_STACK_TEST_INFERENCE_MODE=replay pytest tests/integration/
+OGX_TEST_INFERENCE_MODE=replay pytest tests/integration/
 ```
 
 ### Record-if-missing mode (recommended for adding new tests)
@@ -51,7 +51,7 @@ LLAMA_STACK_TEST_INFERENCE_MODE=replay pytest tests/integration/
 Records only when no recording exists, otherwise replays. Use this for iterative development:
 
 ```bash
-LLAMA_STACK_TEST_INFERENCE_MODE=record-if-missing pytest tests/integration/
+OGX_TEST_INFERENCE_MODE=record-if-missing pytest tests/integration/
 ```
 
 ### Recording mode
@@ -59,7 +59,7 @@ LLAMA_STACK_TEST_INFERENCE_MODE=record-if-missing pytest tests/integration/
 **Force-records all API interactions**, overwriting existing recordings. Use with caution:
 
 ```bash
-LLAMA_STACK_TEST_INFERENCE_MODE=record pytest tests/integration/
+OGX_TEST_INFERENCE_MODE=record pytest tests/integration/
 ```
 
 ### Live mode
@@ -67,7 +67,7 @@ LLAMA_STACK_TEST_INFERENCE_MODE=record pytest tests/integration/
 Skip recordings entirely and use live APIs:
 
 ```bash
-LLAMA_STACK_TEST_INFERENCE_MODE=live pytest tests/integration/
+OGX_TEST_INFERENCE_MODE=live pytest tests/integration/
 ```
 
 ## Re-normalizing Existing Recordings

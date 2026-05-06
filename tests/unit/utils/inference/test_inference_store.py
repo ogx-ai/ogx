@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,10 +12,10 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
-from llama_stack.core.storage.datatypes import InferenceStoreReference, SqliteSqlStoreConfig
-from llama_stack.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from llama_stack.providers.utils.inference.inference_store import InferenceStore
-from llama_stack_api import (
+from ogx.core.storage.datatypes import InferenceStoreReference, SqliteSqlStoreConfig
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx.providers.utils.inference.inference_store import InferenceStore
+from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionResponseMessage,
     OpenAIChoice,

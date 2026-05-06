@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from llama_stack.core.distribution import get_provider_registry
+from ogx.core.distribution import get_provider_registry
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -25,7 +25,7 @@ def get_api_docstring(api_name: str) -> str | None:
     """Extract docstring from the API protocol class."""
     try:
         # Import the API module dynamically
-        api_module = __import__(f"llama_stack_api.{api_name}", fromlist=[api_name.title()])
+        api_module = __import__(f"ogx_api.{api_name}", fromlist=[api_name.title()])
 
         # Get the main protocol class (usually capitalized API name)
         protocol_class_name = api_name.title()

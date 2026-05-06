@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,7 +6,7 @@
 
 """
 Regression tests: ensure logging behaves consistently whether the server
-is started via `llama stack run` or directly via `uvicorn create_app`.
+is started via `ogx run` or directly via `uvicorn create_app`.
 
 These tests verify that:
 1. setup_logging() is called when creating the app
@@ -22,7 +22,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from llama_stack.log import LoggingConfig, _reset_logging_state, parse_yaml_config, setup_logging
+from ogx.log import LoggingConfig, _reset_logging_state, parse_yaml_config, setup_logging
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +97,7 @@ class TestLoggingConfiguration:
         # Assert - loggers should still be created
         assert len(logging.root.handlers) > 0
 
-    @patch("llama_stack.core.server.server.setup_logging")
+    @patch("ogx.core.server.server.setup_logging")
     def test_create_app_calls_setup_logging_with_config(self, mock_setup_logging):
         """
         Verify that create_app() calls setup_logging() when
@@ -123,10 +123,10 @@ class TestLoggingConfiguration:
 
         try:
             # Set environment variable
-            os.environ["LLAMA_STACK_CONFIG"] = config_file
+            os.environ["OGX_CONFIG"] = config_file
 
             # Act - import here to avoid early initialization
-            from llama_stack.core.server.server import create_app
+            from ogx.core.server.server import create_app
 
             # This will fail due to missing Stack implementation, but we can verify
             # that setup_logging was called
@@ -146,10 +146,10 @@ class TestLoggingConfiguration:
         finally:
             # Cleanup
             os.unlink(config_file)
-            if "LLAMA_STACK_CONFIG" in os.environ:
-                del os.environ["LLAMA_STACK_CONFIG"]
+            if "OGX_CONFIG" in os.environ:
+                del os.environ["OGX_CONFIG"]
 
-    @patch("llama_stack.core.server.server.setup_logging")
+    @patch("ogx.core.server.server.setup_logging")
     def test_create_app_calls_setup_logging_without_config(self, mock_setup_logging):
         """
         Verify that create_app() calls setup_logging() even when
@@ -169,10 +169,10 @@ class TestLoggingConfiguration:
 
         try:
             # Set environment variable
-            os.environ["LLAMA_STACK_CONFIG"] = config_file
+            os.environ["OGX_CONFIG"] = config_file
 
             # Act
-            from llama_stack.core.server.server import create_app
+            from ogx.core.server.server import create_app
 
             try:
                 create_app()
@@ -185,24 +185,24 @@ class TestLoggingConfiguration:
         finally:
             # Cleanup
             os.unlink(config_file)
-            if "LLAMA_STACK_CONFIG" in os.environ:
-                del os.environ["LLAMA_STACK_CONFIG"]
+            if "OGX_CONFIG" in os.environ:
+                del os.environ["OGX_CONFIG"]
 
 
 class TestLoggingConfigIntegration:
     """Integration tests for logging configuration with actual logging output"""
 
-    def test_llama_stack_loggers_are_configured(self):
-        """Test that llama_stack.* loggers are properly configured after setup_logging()"""
+    def test_ogx_loggers_are_configured(self):
+        """Test that ogx.* loggers are properly configured after setup_logging()"""
         # Arrange
         category_levels = {"core": logging.DEBUG}
         setup_logging(category_levels)
 
-        # Act - create various llama_stack loggers
+        # Act - create various ogx loggers
         loggers = [
-            logging.getLogger("llama_stack.core.server"),
-            logging.getLogger("llama_stack.core.stack"),
-            logging.getLogger("llama_stack.cli.stack.run"),
+            logging.getLogger("ogx.core.server"),
+            logging.getLogger("ogx.core.stack"),
+            logging.getLogger("ogx.cli.stack.run"),
         ]
 
         # Assert - all loggers should have handlers (configured)
@@ -223,7 +223,7 @@ class TestLoggingConfigIntegration:
     def test_custom_log_levels_are_applied(self):
         """Test that custom log levels from config are actually applied to loggers"""
         # Arrange
-        from llama_stack.log import get_logger
+        from ogx.log import get_logger
 
         category_levels = {
             "core": logging.DEBUG,
@@ -249,7 +249,7 @@ class TestLoggingConfigIntegration:
         import time) must have their levels updated when setup_logging() is
         called later with custom category levels.
         """
-        from llama_stack.log import get_logger
+        from ogx.log import get_logger
 
         # Arrange - reset to defaults, then create loggers BEFORE calling
         # setup_logging with custom levels (simulates module-level imports)

@@ -4,12 +4,12 @@ import styles from './styles.module.css';
 const EXAMPLES = [
   {
     label: 'Local (Ollama)',
-    command: "uvx --from 'llama-stack[starter]' llama stack run starter",
+    command: "uvx --from 'ogx[starter]' ogx stack run starter",
     tokens: [
       { text: 'uvx', style: 'tokenBinary' },
       { text: '--from', style: 'tokenFlag' },
-      { text: "'llama-stack[starter]'", style: 'tokenPackage' },
-      { text: 'llama', style: 'tokenCommand' },
+      { text: "'ogx[starter]'", style: 'tokenPackage' },
+      { text: 'ogx', style: 'tokenCommand' },
       { text: 'stack', style: 'tokenSub' },
       { text: 'run', style: 'tokenSub' },
       { text: 'starter', style: 'tokenAccent' },
@@ -17,7 +17,7 @@ const EXAMPLES = [
   },
   {
     label: 'OpenAI',
-    command: "export OPENAI_API_KEY=sk-xxx\nuvx --from 'llama-stack[starter]' llama stack run starter",
+    command: "export OPENAI_API_KEY=sk-xxx\nuvx --from 'ogx[starter]' ogx stack run starter",
     lines: [
       [
         { text: 'export', style: 'tokenBinary' },
@@ -26,8 +26,8 @@ const EXAMPLES = [
       [
         { text: 'uvx', style: 'tokenBinary' },
         { text: '--from', style: 'tokenFlag' },
-        { text: "'llama-stack[starter]'", style: 'tokenPackage' },
-        { text: 'llama', style: 'tokenCommand' },
+        { text: "'ogx[starter]'", style: 'tokenPackage' },
+        { text: 'ogx', style: 'tokenCommand' },
         { text: 'stack', style: 'tokenSub' },
         { text: 'run', style: 'tokenSub' },
         { text: 'starter', style: 'tokenAccent' },

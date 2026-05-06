@@ -14,20 +14,22 @@ A distribution is a pre-configured run config that bundles specific providers fo
 Most users should start with `starter`. It includes all providers and auto-enables them based on available environment variables:
 
 ```bash
-# Local with Ollama (auto-detected)
-uv run llama stack run starter
+# With Ollama (local inference)
+OLLAMA_URL=http://localhost:11434 uv run ogx run starter
 
-# With OpenAI
-OPENAI_API_KEY=sk-xxx uv run llama stack run starter
+# With OpenAI (remote inference)
+OPENAI_API_KEY=sk-xxx uv run ogx run starter
 ```
 
 The starter distribution uses FAISS for vector storage, sentence-transformers for embeddings, and pypdf for file processing - all running locally with no external dependencies.
 
 ## Types of Distributions
 
-**Self-hosted**: Run Llama Stack on your own infrastructure with your choice of inference backend (Ollama, vLLM, or cloud providers like OpenAI, Bedrock, etc.). The `starter` distribution covers this use case.
+**Self-hosted**: Run OGX on your own infrastructure with your choice of inference backend (Ollama, vLLM, or cloud providers like OpenAI, Bedrock, etc.). The `starter` distribution covers this use case.
 
-**Hardware-specific**: Optimized for specific hardware. Examples include `nvidia` and `dell` distributions with vendor-specific provider configurations.
+**Hardware-specific**: Optimized for specific hardware. The `nvidia` distribution includes vendor-specific provider configurations.
+
+**Starter variants**: The `postgres-demo` distribution is the starter pre-configured with PostgreSQL storage ([`ogx/distribution-postgres-demo`](https://hub.docker.com/r/ogx/distribution-postgres-demo)).
 
 ## Custom Distributions
 

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.core.server.metrics import (
+from ogx.core.server.metrics import (
     RequestMetricsMiddleware,
     RouteInfo,
     _compile_route_patterns,

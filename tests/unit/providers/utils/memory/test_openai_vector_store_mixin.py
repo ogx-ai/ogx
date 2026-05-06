@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
-from llama_stack_api import (
+from ogx.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
+from ogx_api import (
     VectorStoreChunkingStrategyAuto,
 )
-from llama_stack_api.vector_io.models import OpenAIAttachFileRequest
+from ogx_api.vector_io.models import OpenAIAttachFileRequest
 
 
 def _make_store_info():

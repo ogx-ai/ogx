@@ -1,30 +1,30 @@
-name: Test Llama Stack Build
+name: Test OGX Build
 
-run-name: Test llama stack build
+run-name: Test ogx build
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'src/llama_stack/cli/stack/build.py'
-      - 'src/llama_stack/cli/stack/_build.py'
-      - 'src/llama_stack/core/build.*'
-      - 'src/llama_stack/core/*.sh'
+      - 'src/ogx/cli/stack/build.py'
+      - 'src/ogx/cli/stack/_build.py'
+      - 'src/ogx/core/build.*'
+      - 'src/ogx/core/*.sh'
       - '.github/workflows/providers-build.yml'
-      - 'src/llama_stack/distributions/**'
+      - 'src/ogx/distributions/**'
       - 'pyproject.toml'
       - 'containers/Containerfile'
       - '.dockerignore'
 
   pull_request:
     paths:
-      - 'src/llama_stack/cli/stack/build.py'
-      - 'src/llama_stack/cli/stack/_build.py'
-      - 'src/llama_stack/core/build.*'
-      - 'src/llama_stack/core/*.sh'
+      - 'src/ogx/cli/stack/build.py'
+      - 'src/ogx/cli/stack/_build.py'
+      - 'src/ogx/core/build.*'
+      - 'src/ogx/core/*.sh'
       - '.github/workflows/providers-build.yml'
-      - 'src/llama_stack/distributions/**'
+      - 'src/ogx/distributions/**'
       - 'pyproject.toml'
       - 'containers/Containerfile'
       - '.dockerignore'
@@ -52,7 +52,7 @@ jobs:
       - name: Generate Distribution List
         id: set-matrix
         run: |
-          distros=$(find src/llama_stack/distributions -mindepth 1 -maxdepth 1 -type d 2>/dev/null | \
+          distros=$(find src/ogx/distributions -mindepth 1 -maxdepth 1 -type d 2>/dev/null | \
             awk -F'/' '{print $NF}' | \
             grep -v '^__pycache__$' | \
             grep -v '^ci-tests$' | \
@@ -78,7 +78,7 @@ jobs:
       - name: Install distribution into venv
         if: matrix.image-type == 'venv'
         run: |
-          uv run llama stack list-deps ${{ matrix.distro }} | xargs -L1 uv pip install
+          uv run ogx stack list-deps ${{ matrix.distro }} | xargs -L1 uv pip install
 
       - name: Build container image
         if: matrix.image-type == 'container'
@@ -93,7 +93,7 @@ jobs:
           docker build . \
             -f containers/Containerfile \
             "${BUILD_ARGS[@]}" \
-            --tag llama-stack:${{ matrix.distro }}-ci
+            --tag ogx:${{ matrix.distro }}-ci
 
   build-arm64:
     if: github.event_name == 'schedule'
@@ -126,7 +126,7 @@ jobs:
           docker buildx build --platform linux/arm64 --load . \
             -f containers/Containerfile \
             "${BUILD_ARGS[@]}" \
-            --tag llama-stack:${{ matrix.distro }}-arm64-ci
+            --tag ogx:${{ matrix.distro }}-arm64-ci
 
   build-single-provider:
     runs-on: ubuntu-latest
@@ -140,7 +140,7 @@ jobs:
       - name: Build a single provider
         run: |
           uv pip install -e .
-          uv run --no-sync llama stack list-deps --providers inference=remote::ollama | xargs -L1 uv pip install
+          uv run --no-sync ogx stack list-deps --providers inference=remote::ollama | xargs -L1 uv pip install
   build-custom-container-distribution:
     runs-on: ubuntu-latest
     steps:
@@ -152,10 +152,10 @@ jobs:
 
       - name: Build container image
         run: |
-          BASE_IMAGE=$(yq -r '.distribution_spec.container_image // "python:3.12-slim"' src/llama_stack/distributions/ci-tests/config.yaml)
+          BASE_IMAGE=$(yq -r '.distribution_spec.container_image // "python:3.12-slim"' src/ogx/distributions/ci-tests/config.yaml)
           BUILD_ARGS=(--build-arg "INSTALL_MODE=editable" --build-arg "DISTRO_NAME=ci-tests")
           BUILD_ARGS+=(--build-arg "BASE_IMAGE=$BASE_IMAGE")
-          BUILD_ARGS+=(--build-arg "RUN_CONFIG_PATH=/workspace/src/llama_stack/distributions/ci-tests/config.yaml")
+          BUILD_ARGS+=(--build-arg "RUN_CONFIG_PATH=/workspace/src/ogx/distributions/ci-tests/config.yaml")
           if [ -n "${UV_EXTRA_INDEX_URL:-}" ]; then
             BUILD_ARGS+=(--build-arg "UV_EXTRA_INDEX_URL=$UV_EXTRA_INDEX_URL")
           fi
@@ -165,7 +165,7 @@ jobs:
           docker build . \
             -f containers/Containerfile \
             "${BUILD_ARGS[@]}" \
-            -t llama-stack:ci-tests
+            -t ogx:ci-tests
 
       - name: Inspect the container image entrypoint
         run: |
@@ -176,7 +176,7 @@ jobs:
           fi
           entrypoint=$(docker inspect --format '{{ .Config.Entrypoint }}' "$IMAGE_ID")
           echo "Entrypoint: $entrypoint"
-          if [ "$entrypoint" != "[/usr/local/bin/llama-stack-entrypoint.sh]" ]; then
+          if [ "$entrypoint" != "[/usr/local/bin/ogx-entrypoint.sh]" ]; then
             echo "Entrypoint is not correct"
             exit 1
           fi
@@ -194,14 +194,20 @@ jobs:
         run: |
           yq -i '
             .distribution_spec.container_image = "registry.access.redhat.com/ubi9:latest"
-          ' src/llama_stack/distributions/ci-tests/config.yaml
+          ' src/ogx/distributions/ci-tests/config.yaml
+
+      - name: Create UBI9 pip constraints
+        run: |
+          # UBI9 ships glibc 2.34; semgrep >= 1.158 requires manylinux_2_35
+          echo "semgrep<1.158" > ubi9-constraints.txt
 
       - name: Build UBI9 container image
         run: |
-          BASE_IMAGE=$(yq -r '.distribution_spec.container_image // "registry.access.redhat.com/ubi9:latest"' src/llama_stack/distributions/ci-tests/config.yaml)
+          BASE_IMAGE=$(yq -r '.distribution_spec.container_image // "registry.access.redhat.com/ubi9:latest"' src/ogx/distributions/ci-tests/config.yaml)
           BUILD_ARGS=(--build-arg "INSTALL_MODE=editable" --build-arg "DISTRO_NAME=ci-tests")
           BUILD_ARGS+=(--build-arg "BASE_IMAGE=$BASE_IMAGE")
-          BUILD_ARGS+=(--build-arg "RUN_CONFIG_PATH=/workspace/src/llama_stack/distributions/ci-tests/config.yaml")
+          BUILD_ARGS+=(--build-arg "RUN_CONFIG_PATH=/workspace/src/ogx/distributions/ci-tests/config.yaml")
+          BUILD_ARGS+=(--build-arg "PIP_CONSTRAINT_FILE=/workspace/ubi9-constraints.txt")
           if [ -n "${UV_EXTRA_INDEX_URL:-}" ]; then
             BUILD_ARGS+=(--build-arg "UV_EXTRA_INDEX_URL=$UV_EXTRA_INDEX_URL")
           fi
@@ -211,7 +217,7 @@ jobs:
           docker build . \
             -f containers/Containerfile \
             "${BUILD_ARGS[@]}" \
-            -t llama-stack:ci-tests-ubi9
+            -t ogx:ci-tests-ubi9
 
       - name: Inspect UBI9 image
         run: |
@@ -222,7 +228,7 @@ jobs:
           fi
           entrypoint=$(docker inspect --format '{{ .Config.Entrypoint }}' "$IMAGE_ID")
           echo "Entrypoint: $entrypoint"
-          if [ "$entrypoint" != "[/usr/local/bin/llama-stack-entrypoint.sh]" ]; then
+          if [ "$entrypoint" != "[/usr/local/bin/ogx-entrypoint.sh]" ]; then
             echo "Entrypoint is not correct"
             exit 1
           fi
@@ -263,7 +269,7 @@ jobs:
           docker buildx build --platform linux/arm64 --load . \
             -f containers/Containerfile \
             "${BUILD_ARGS[@]}" \
-            --tag llama-stack:starter-ubi9-arm64
+            --tag ogx:starter-ubi9-arm64
 
       - name: Inspect starter UBI9 ARM64 image
         run: |
@@ -274,7 +280,7 @@ jobs:
           fi
           entrypoint=$(docker inspect --format '{{ .Config.Entrypoint }}' "$IMAGE_ID")
           echo "Entrypoint: $entrypoint"
-          if [ "$entrypoint" != "[/usr/local/bin/llama-stack-entrypoint.sh]" ]; then
+          if [ "$entrypoint" != "[/usr/local/bin/ogx-entrypoint.sh]" ]; then
             echo "Entrypoint is not correct"
             exit 1
           fi

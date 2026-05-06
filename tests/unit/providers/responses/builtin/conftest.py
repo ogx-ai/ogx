@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     OpenAIResponsesImpl,
 )
-from llama_stack.providers.utils.responses.responses_store import (
+from ogx.providers.utils.responses.responses_store import (
     ResponsesStore,
 )
-from llama_stack_api import Connectors
-from llama_stack_api.tools import ToolGroups, ToolRuntime
+from ogx_api import Connectors
+from ogx_api.tools import ToolGroups, ToolRuntime
 
 
 @pytest.fixture

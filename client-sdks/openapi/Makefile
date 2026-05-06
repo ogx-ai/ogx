@@ -4,14 +4,14 @@ PYTHON := uv run python
 # Auto-detect openapi-generator command (npm installs as openapi-generator-cli, brew as openapi-generator)
 OPENAPI_GENERATOR := $(shell command -v openapi-generator-cli 2>/dev/null || command -v openapi-generator 2>/dev/null || echo openapi-generator-cli)
 
-# Package naming: set OPEN=0 to generate as "llama_stack_client" (without "open")
+# Package naming: set OPEN=0 to generate as "ogx_client" (without "open")
 OPEN ?= 1
 ifeq ($(OPEN),0)
-  PACKAGE_NAME := llama_stack_client
-  PROJECT_NAME := llama-stack-client
+  PACKAGE_NAME := ogx_client
+  PROJECT_NAME := ogx-client
 else
-  PACKAGE_NAME := llama_stack_open_client
-  PROJECT_NAME := llama-stack-open-client
+  PACKAGE_NAME := ogx_open_client
+  PROJECT_NAME := ogx-open-client
 endif
 
 # Scripts
@@ -53,8 +53,8 @@ help:
 	@echo "Pipeline: openapi -> hierarchy -> sdk (each target triggers its dependencies)"
 	@echo ""
 	@echo "Options:"
-	@echo "  OPEN=1     - (default) Generate as llama_stack_open_client"
-	@echo "  OPEN=0     - Generate as llama_stack_client (without 'open')"
+	@echo "  OPEN=1     - (default) Generate as ogx_open_client"
+	@echo "  OPEN=0     - Generate as ogx_client (without 'open')"
 
 version:
 	@echo "SDK version: $(VERSION)"

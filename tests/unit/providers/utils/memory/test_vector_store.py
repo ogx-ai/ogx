@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llama_stack.providers.utils.memory.vector_store import (
+from ogx.providers.utils.memory.vector_store import (
     content_from_data_and_mime_type,
     validate_tiktoken_encoding,
 )
-from llama_stack_api import URL, RAGDocument
+from ogx_api import URL, RAGDocument
 
 
 def test_validate_tiktoken_encoding_succeeds():
@@ -22,7 +22,7 @@ def test_validate_tiktoken_encoding_succeeds():
 
 def test_validate_tiktoken_encoding_raises_on_failure():
     """validate_tiktoken_encoding raises RuntimeError with operator context on failure."""
-    import llama_stack.providers.utils.memory.vector_store as vs_module
+    import ogx.providers.utils.memory.vector_store as vs_module
 
     with patch.object(vs_module, "_get_encoding", side_effect=RuntimeError("encoding unavailable")):
         with pytest.raises(RuntimeError, match="encoding unavailable"):
@@ -73,8 +73,8 @@ def test_content_from_data_and_mime_type_both_encodings_fail():
 
 async def test_memory_tool_error_handling():
     """Test that memory tool handles various failures gracefully without crashing."""
-    from llama_stack.providers.inline.tool_runtime.file_search.config import FileSearchToolRuntimeConfig
-    from llama_stack.providers.inline.tool_runtime.file_search.file_search import FileSearchToolRuntimeImpl
+    from ogx.providers.inline.tool_runtime.file_search.config import FileSearchToolRuntimeConfig
+    from ogx.providers.inline.tool_runtime.file_search.file_search import FileSearchToolRuntimeImpl
 
     config = FileSearchToolRuntimeConfig()
     memory_tool = FileSearchToolRuntimeImpl(

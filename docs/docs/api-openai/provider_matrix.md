@@ -19,10 +19,11 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 113 | 113 | 0 | 86% |
+| azure | 114 | 114 | 0 | 86% |
 | bedrock | 27 | 27 | 0 | 20% |
 | ollama | 2 | 2 | 0 | 2% |
-| openai | 132 | 132 | 0 | 100% |
+| openai | 133 | 133 | 0 | 100% |
+| vertexai | 73 | 73 | 0 | 55% |
 | vllm | 3 | 3 | 0 | 2% |
 | watsonx | 56 | 56 | 0 | 42% |
 
@@ -32,204 +33,206 @@ Models, endpoints, and versions used during test recordings.
 
 | Provider | Model(s) | Endpoint | Version Info |
 |----------|----------|----------|--------------|
-| azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com | openai sdk: 2.30.0 |
-| bedrock | openai.gpt-oss-20b | bedrock-mantle.us-east-2.api.aws, bedrock-mantle.us-west-2.api.aws | openai sdk: 2.5.0 |
+| azure | gpt-4o | lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.30.0 |
+| bedrock | openai.gpt-oss-20b-1:0 | bedrock-runtime.us-west-2.amazonaws.com | openai sdk: 2.30.0 |
 | ollama | gpt-oss:20b | — | openai sdk: 2.5.0, vllm server: 0.9.2rc2.dev136+g0b382b53a.d20250924 |
 | openai | gpt-4o, o4-mini, text-embedding-3-small | api.openai.com | openai sdk: 2.5.0 |
+| vertexai | publishers/google/models/gemini-2.0-flash | — | openai sdk: 2.5.0, provider: vertexai |
 | vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.18.1rc1.dev197+g0e9358c11 |
 | watsonx | meta-llama/llama-3-3-70b-instruct | us-south.ml.cloud.ibm.com | openai sdk: 2.5.0 |
 
 ## Basic Responses
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| extra body guided choice | ✅ | ✅ | — | ✅ | — | ✅ |
-| include logprobs non streaming | ✅ | ✅ | — | ✅ | — | ✅ |
-| include logprobs streaming | ✅ | ✅ | — | ✅ | — | ✅ |
-| include logprobs with function tools | ✅ | ✅ | — | ✅ | — | ✅ |
-| include logprobs with web search | ✅ | ✅ | — | ✅ | — | ✅ |
-| non streaming basic | ✅ | ✅ | — | ✅ | — | ✅ |
-| non streaming image | ✅ | ⏭️ | — | ✅ | — | ⏭️ |
-| non streaming multi turn | ✅ | ✅ | — | ✅ | — | ✅ |
-| non streaming multi turn image | ✅ | ⏭️ | — | ✅ | — | ⏭️ |
-| streaming basic | ✅ | ✅ | — | ✅ | — | ✅ |
-| streaming incremental content | ✅ | ✅ | — | ✅ | — | ✅ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| extra body guided choice | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| include logprobs non streaming | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| include logprobs streaming | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| include logprobs with function tools | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| include logprobs with web search | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| non streaming basic | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| non streaming image | ✅ | ⏭️ | — | ✅ | ⏭️ | — | ⏭️ |
+| non streaming multi turn | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| non streaming multi turn image | ✅ | ⏭️ | — | ✅ | ⏭️ | — | ⏭️ |
+| streaming basic | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| streaming incremental content | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
 
 ## Compact Responses
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| compact basic conversation | ✅ | — | — | ✅ | — | — |
-| compact chain through compaction | ✅ | — | — | ✅ | — | — |
-| compact double compaction | ✅ | — | — | ✅ | — | — |
-| compact input items hides compaction | ✅ | — | — | ✅ | — | — |
-| compact roundtrip | ✅ | — | — | ✅ | — | — |
-| compact single message | ✅ | — | — | ✅ | — | — |
-| compact with previous response id | ✅ | — | — | ✅ | — | — |
-| compact with tool calls dropped | ✅ | — | — | ✅ | — | — |
-| context management auto compacts large input | ✅ | — | — | ✅ | — | — |
-| context management no compact below threshold | ✅ | — | — | ✅ | — | — |
-| context management none does not compact | ✅ | — | — | ✅ | — | — |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| compact basic conversation | ✅ | — | — | ✅ | ✅ | — | — |
+| compact chain through compaction | ✅ | — | — | ✅ | ✅ | — | — |
+| compact double compaction | ✅ | — | — | ✅ | ✅ | — | — |
+| compact input items hides compaction | ✅ | — | — | ✅ | ✅ | — | — |
+| compact response is retrievable | ✅ | — | — | ✅ | ✅ | — | — |
+| compact roundtrip | ✅ | — | — | ✅ | ✅ | — | — |
+| compact single message | ✅ | — | — | ✅ | ✅ | — | — |
+| compact with previous response id | ✅ | — | — | ✅ | ✅ | — | — |
+| compact with tool calls dropped | ✅ | — | — | ✅ | ✅ | — | — |
+| context management auto compacts large input | ✅ | — | — | ✅ | ✅ | — | — |
+| context management no compact below threshold | ✅ | — | — | ✅ | ✅ | — | — |
+| context management none does not compact | ✅ | — | — | ✅ | ✅ | — | — |
 
 ## Conversation Responses
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| conversation backward compatibility | ✅ | ✅ | — | ✅ | — | ✅ |
-| conversation basic workflow | ✅ | ✅ | — | ✅ | — | ✅ |
-| conversation context loading | ✅ | ✅ | — | ✅ | — | ✅ |
-| conversation error handling | ⏭️ | ⏭️ | — | ✅ | — | ⏭️ |
-| conversation multi turn and streaming | ✅ | ✅ | — | ✅ | — | ✅ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| conversation backward compatibility | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| conversation basic workflow | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| conversation context loading | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| conversation error handling | ⏭️ | ⏭️ | — | ✅ | ⏭️ | — | ⏭️ |
+| conversation multi turn and streaming | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
 
 ## File Search
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| file search filter by category | ✅ | — | — | ✅ | — | ⏭️ |
-| file search filter by date range | ✅ | — | — | ✅ | — | ⏭️ |
-| file search filter by region | ✅ | — | — | ✅ | — | ⏭️ |
-| file search filter compound and | ✅ | — | — | ✅ | — | ⏭️ |
-| file search filter compound or | ✅ | — | — | ✅ | — | ⏭️ |
-| file search streaming events | ✅ | — | — | ✅ | — | ⏭️ |
-| text format | ✅ | — | — | ✅ | — | ✅ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| file search filter by category | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| file search filter by date range | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| file search filter by region | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| file search filter compound and | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| file search filter compound or | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| file search streaming events | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| text format | ✅ | — | — | ✅ | ✅ | — | ✅ |
 
 ## Mcp Authentication
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| mcp authorization backward compatibility | ✅ | ✅ | — | ✅ | — | — |
-| mcp authorization bearer | ✅ | ✅ | — | ✅ | — | — |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| mcp authorization backward compatibility | ✅ | ✅ | — | ✅ | — | — | — |
+| mcp authorization bearer | ✅ | ✅ | — | ✅ | — | — | — |
 
 ## Openai Responses
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| background false is synchronous | ✅ | — | — | ✅ | — | ✅ |
-| background returns queued | ✅ | — | — | ✅ | — | ✅ |
-| cancel completed response fails | ✅ | — | — | ✅ | — | ⏭️ |
-| incomplete details length | ✅ | — | — | ✅ | — | ✅ |
-| incomplete details length streaming | ✅ | — | — | ✅ | — | ✅ |
-| incomplete details max iterations exceeded | ✅ | — | — | ✅ | — | ✅ |
-| incomplete details max iterations exceeded streaming | ✅ | — | — | ✅ | — | ✅ |
-| incomplete details null when completed | ✅ | — | — | ✅ | — | ✅ |
-| reasoning effort | ⏭️ | — | — | ✅ | — | ⏭️ |
-| reasoning effort streaming | ⏭️ | — | — | ✅ | — | ⏭️ |
-| streaming includes usage | ✅ | — | — | ✅ | — | ✅ |
-| streaming invalid base64 image failure code is spec compliant | ✅ | — | — | ✅ | — | ⏭️ |
-| with max output tokens | ✅ | — | — | ✅ | — | ⏭️ |
-| with parallel tool calls and previous response | ✅ | — | — | ✅ | — | ✅ |
-| with parallel tool calls disabled | ✅ | — | — | ✅ | — | ⏭️ |
-| with parallel tool calls disabled streaming | ✅ | — | — | ✅ | — | ⏭️ |
-| with parallel tool calls enabled | ✅ | — | — | ✅ | — | ⏭️ |
-| with prompt cache key | ✅ | — | — | ✅ | — | ✅ |
-| with prompt cache key and previous response | ✅ | — | — | ✅ | — | ✅ |
-| with prompt cache key streaming | ✅ | — | — | ✅ | — | ✅ |
-| with safety identifier | ✅ | — | — | ✅ | — | ✅ |
-| with safety identifier and previous response | ✅ | — | — | ✅ | — | ✅ |
-| with safety identifier streaming | ✅ | — | — | ✅ | — | ✅ |
-| with service tier | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with service tier and previous response | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with service tier auto | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with service tier auto and previous response | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with service tier auto streaming | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with service tier flex | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with service tier flex streaming | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with service tier streaming | ⏭️ | — | — | ✅ | — | ⏭️ |
-| with small max output tokens | ✅ | — | — | ✅ | — | ⏭️ |
-| with stream options and previous response | ✅ | — | — | ✅ | — | ✅ |
-| with stream options includes usage | ✅ | — | — | ✅ | — | ✅ |
-| with stream options non streaming | ✅ | — | — | ✅ | — | ✅ |
-| with top logprobs | ✅ | — | — | ✅ | — | ✅ |
-| with top logprobs and previous response | ✅ | — | — | ✅ | — | ✅ |
-| with top logprobs streaming | ✅ | — | — | ✅ | — | ✅ |
-| with top p | ✅ | — | — | ✅ | — | ✅ |
-| with top p and previous response | ✅ | — | — | ✅ | — | ✅ |
-| with top p streaming | ✅ | — | — | ✅ | — | ✅ |
-| with truncation and previous response | ✅ | — | — | ✅ | — | ✅ |
-| with truncation disabled | ✅ | — | — | ✅ | — | ✅ |
-| with truncation disabled streaming | ✅ | — | — | ✅ | — | ✅ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| background false is synchronous | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| background returns queued | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| cancel completed response fails | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| incomplete details length | ✅ | — | — | ✅ | ⏭️ | — | ✅ |
+| incomplete details length streaming | ✅ | — | — | ✅ | ⏭️ | — | ✅ |
+| incomplete details max iterations exceeded | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| incomplete details max iterations exceeded streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| incomplete details null when completed | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| reasoning effort | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| reasoning effort streaming | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| streaming includes usage | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| streaming invalid base64 image failure code is spec compliant | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with max output tokens | ✅ | — | — | ✅ | ✅ | — | ⏭️ |
+| with parallel tool calls and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with parallel tool calls disabled | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with parallel tool calls disabled streaming | ✅ | — | — | ✅ | ✅ | — | ⏭️ |
+| with parallel tool calls enabled | ✅ | — | — | ✅ | ✅ | — | ⏭️ |
+| with prompt cache key | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with prompt cache key and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with prompt cache key streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with safety identifier | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with safety identifier and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with safety identifier streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with service tier | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with service tier and previous response | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with service tier auto | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with service tier auto and previous response | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with service tier auto streaming | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with service tier flex | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with service tier flex streaming | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with service tier streaming | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with small max output tokens | ✅ | — | — | ✅ | ⏭️ | — | ⏭️ |
+| with stream options and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with stream options includes usage | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with stream options non streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with top logprobs | ✅ | — | — | ✅ | ⏭️ | — | ✅ |
+| with top logprobs and previous response | ✅ | — | — | ✅ | ⏭️ | — | ✅ |
+| with top logprobs streaming | ✅ | — | — | ✅ | ⏭️ | — | ✅ |
+| with top p | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with top p and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with top p streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with truncation and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with truncation disabled | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with truncation disabled streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
 
 ## Prompt Templates
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| basic prompt template | ✅ | ✅ | — | ✅ | — | ✅ |
-| multi variable prompt template | ✅ | ✅ | — | ✅ | — | ✅ |
-| multi version prompt template | ✅ | ✅ | — | ✅ | — | ✅ |
-| prompt template no variables | ✅ | ✅ | — | ✅ | — | ✅ |
-| prompt template with multi turn | ✅ | ✅ | — | ✅ | — | ✅ |
-| prompt template with streaming | ✅ | ✅ | — | ✅ | — | ✅ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| basic prompt template | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| multi variable prompt template | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| multi version prompt template | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| prompt template no variables | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| prompt template with multi turn | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| prompt template with streaming | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
 
 ## Reasoning
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| reasoning basic streaming | ✅ | ✅ | ⏭️ | ✅ | ✅ | ✅ |
-| reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ✅ | ⏭️ |
-| reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ✅ | ⏭️ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| reasoning basic streaming | ✅ | ✅ | ⏭️ | ✅ | ✅ | ✅ | ✅ |
+| reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
+| reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
 
 ## Responses Access Control
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| previous response id access control | — | — | — | ✅ | — | — |
-| user can access own resources after denial | — | — | — | ✅ | — | — |
-| user cannot access other users response input items | — | — | — | ✅ | — | — |
-| user cannot delete other users response | — | — | — | ✅ | — | — |
-| user cannot retrieve other users response | — | — | — | ✅ | — | — |
-| users have isolated responses | — | — | — | ✅ | — | — |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| previous response id access control | — | — | — | ✅ | — | — | — |
+| user can access own resources after denial | — | — | — | ✅ | — | — | — |
+| user cannot access other users response input items | — | — | — | ✅ | — | — | — |
+| user cannot delete other users response | — | — | — | ✅ | — | — | — |
+| user cannot retrieve other users response | — | — | — | ✅ | — | — | — |
+| users have isolated responses | — | — | — | ✅ | — | — | — |
 
 ## Responses Errors
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| completed response has no error | ✅ | ✅ | — | ✅ | — | ✅ |
-| invalid base64 image returns image error | ✅ | ⏭️ | — | ✅ | — | ⏭️ |
-| invalid image url returns image error | ✅ | ⏭️ | — | ✅ | — | ⏭️ |
-| non vision model returns error for image input | ✅ | ✅ | — | ✅ | — | ✅ |
-| non vision model with base64 image returns server error | ✅ | ✅ | — | ✅ | — | ✅ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| completed response has no error | ✅ | ✅ | — | ✅ | ✅ | — | ✅ |
+| invalid base64 image returns image error | ✅ | ⏭️ | — | ✅ | ⏭️ | — | ⏭️ |
+| invalid image url returns image error | ✅ | ⏭️ | — | ✅ | ⏭️ | — | ⏭️ |
+| non vision model returns error for image input | ✅ | ✅ | — | ✅ | ⏭️ | — | ✅ |
+| non vision model with base64 image returns server error | ✅ | ✅ | — | ✅ | ⏭️ | — | ✅ |
 
 ## Structured Output
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| json schema array of integers | ✅ | — | — | ✅ | — | ✅ |
-| json schema array of objects | ✅ | — | — | ✅ | — | ✅ |
-| json schema array of strings | ✅ | — | — | ✅ | — | ⏭️ |
-| json schema boolean types | ✅ | — | — | ✅ | — | ⏭️ |
-| json schema float types | ✅ | — | — | ✅ | — | ⏭️ |
-| json schema integer types | ✅ | — | — | ✅ | — | ⏭️ |
-| json schema mixed types structures | ✅ | — | — | ✅ | — | ✅ |
-| json schema nested objects | ✅ | — | — | ✅ | — | ✅ |
-| json schema string types | ✅ | — | — | ✅ | — | ✅ |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| json schema array of integers | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| json schema array of objects | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| json schema array of strings | ✅ | — | — | ✅ | ✅ | — | ⏭️ |
+| json schema boolean types | ✅ | — | — | ✅ | ✅ | — | ⏭️ |
+| json schema float types | ✅ | — | — | ✅ | ✅ | — | ⏭️ |
+| json schema integer types | ✅ | — | — | ✅ | ✅ | — | ⏭️ |
+| json schema mixed types structures | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| json schema nested objects | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| json schema string types | ✅ | — | — | ✅ | ✅ | — | ✅ |
 
 ## Tool Responses
 
-| Feature | azure | bedrock | ollama | openai | vllm | watsonx |
-| --- | --- | --- | --- | --- | --- | --- |
-| connector resolution mcp tool | ✅ | — | — | ✅ | — | — |
-| function call ordering 1 | ✅ | — | — | ✅ | — | — |
-| function call ordering 2 | ✅ | — | — | ✅ | — | — |
-| function call output list file | ✅ | — | — | ✅ | — | — |
-| function call output list image | ✅ | — | — | ✅ | — | — |
-| function call output list text | ✅ | — | — | ✅ | — | — |
-| function call output list text multi block | ✅ | — | — | ✅ | — | — |
-| max tool calls with function tools | ✅ | — | — | ✅ | — | — |
-| max tool calls with mcp tools | ✅ | — | — | ✅ | — | — |
-| mcp tool approval | ✅ | — | — | ✅ | — | — |
-| multi turn streaming web search | ✅ | — | — | ✅ | — | — |
-| non streaming custom tool | ✅ | — | — | ✅ | — | — |
-| non streaming file search | ✅ | — | — | ✅ | — | — |
-| non streaming file search empty vector store | ✅ | — | — | ✅ | — | — |
-| non streaming mcp tool | ✅ | — | — | ✅ | — | — |
-| non streaming multi turn tool execution | ✅ | — | — | ✅ | — | — |
-| non streaming web search | ✅ | — | — | ✅ | — | — |
-| parallel tool calls with function tools | ✅ | — | — | ✅ | — | — |
-| parallel tool calls with mcp tools | ✅ | — | — | ✅ | — | — |
-| sequential file search | ✅ | — | — | ✅ | — | — |
-| sequential mcp tool | ✅ | — | — | ✅ | — | — |
-| streaming multi turn tool execution | ✅ | — | — | ✅ | — | — |
-| streaming web search | ✅ | — | — | ✅ | — | — |
+| Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| connector resolution mcp tool | ✅ | — | — | ✅ | ⏭️ | — | — |
+| function call ordering 1 | ✅ | — | — | ✅ | ✅ | — | — |
+| function call ordering 2 | ✅ | — | — | ✅ | ⏭️ | — | — |
+| function call output list file | ✅ | — | — | ✅ | ✅ | — | — |
+| function call output list image | ✅ | — | — | ✅ | ⏭️ | — | — |
+| function call output list text | ✅ | — | — | ✅ | ✅ | — | — |
+| function call output list text multi block | ✅ | — | — | ✅ | ⏭️ | — | — |
+| max tool calls with function tools | ✅ | — | — | ✅ | ✅ | — | — |
+| max tool calls with mcp tools | ✅ | — | — | ✅ | ⏭️ | — | — |
+| mcp tool approval | ✅ | — | — | ✅ | ⏭️ | — | — |
+| multi turn streaming web search | ✅ | — | — | ✅ | ⏭️ | — | — |
+| non streaming custom tool | ✅ | — | — | ✅ | ✅ | — | — |
+| non streaming file search | ✅ | — | — | ✅ | ⏭️ | — | — |
+| non streaming file search empty vector store | ✅ | — | — | ✅ | ⏭️ | — | — |
+| non streaming mcp tool | ✅ | — | — | ✅ | ⏭️ | — | — |
+| non streaming multi turn tool execution | ✅ | — | — | ✅ | ⏭️ | — | — |
+| non streaming web search | ✅ | — | — | ✅ | ⏭️ | — | — |
+| parallel tool calls with function tools | ✅ | — | — | ✅ | ⏭️ | — | — |
+| parallel tool calls with mcp tools | ✅ | — | — | ✅ | ⏭️ | — | — |
+| sequential file search | ✅ | — | — | ✅ | ⏭️ | — | — |
+| sequential mcp tool | ✅ | — | — | ✅ | ⏭️ | — | — |
+| streaming multi turn tool execution | ✅ | — | — | ✅ | ⏭️ | — | — |
+| streaming web search | ✅ | — | — | ✅ | ⏭️ | — | — |
 
 ---
 

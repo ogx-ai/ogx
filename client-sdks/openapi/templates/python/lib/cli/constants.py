@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,8 +7,8 @@
 import os
 from pathlib import Path
 
-LLAMA_STACK_CLIENT_CONFIG_DIR = Path(os.path.expanduser("~/.llama/client"))
+OGX_CLIENT_CONFIG_DIR = Path(os.path.expanduser("~/.llama/client"))
 
 
 def get_config_file_path():
-    return LLAMA_STACK_CLIENT_CONFIG_DIR / "config.yaml"
+    return OGX_CLIENT_CONFIG_DIR / "config.yaml"

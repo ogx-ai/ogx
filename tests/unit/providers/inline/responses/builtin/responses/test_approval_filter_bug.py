@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,14 +9,14 @@
 Verifies that the ApprovalFilter.always and ApprovalFilter.never lists
 are correctly evaluated when require_approval is an ApprovalFilter object.
 
-See: https://github.com/meta-llama/llama-stack/issues/5287
+See: https://github.com/ogx-ai/ogx/issues/5287
 """
 
 from unittest.mock import AsyncMock, MagicMock
 
-from llama_stack.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
-from llama_stack.providers.inline.responses.builtin.responses.types import ChatCompletionContext, ToolContext
-from llama_stack_api.openai_responses import (
+from ogx.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
+from ogx.providers.inline.responses.builtin.responses.types import ChatCompletionContext, ToolContext
+from ogx_api.openai_responses import (
     ApprovalFilter,
     OpenAIResponseInputToolMCP,
 )

@@ -1,0 +1,159 @@
+version: 2
+distro_name: rag-benchmarks
+apis:
+- files
+- file_processors
+- inference
+- responses
+- tool_runtime
+- vector_io
+providers:
+  inference:
+  - provider_id: openai
+    provider_type: remote::openai
+    config:
+      api_key: ${env.OPENAI_API_KEY:=}
+      base_url: ${env.OPENAI_BASE_URL:=https://api.openai.com/v1}
+  - provider_id: vllm
+    provider_type: remote::openai
+    config:
+      api_key: ${env.VLLM_API_KEY:=EMPTY}
+      base_url: ${env.VLLM_BASE_URL:=http://10.0.0.99:8000/v1}
+  - provider_id: sentence-transformers
+    provider_type: inline::sentence-transformers
+    config:
+      trust_remote_code: true
+  - provider_id: transformers
+    provider_type: inline::transformers
+  vector_io:
+  - provider_id: milvus
+    provider_type: remote::milvus
+    config:
+      uri: ${env.MILVUS_URI:=http://localhost:19530}
+      token: ${env.MILVUS_TOKEN:=}
+      consistency_level: Strong
+      persistence:
+        namespace: vector_io::milvus_remote
+        backend: kv_default
+  files:
+  - provider_id: builtin-files
+    provider_type: inline::localfs
+    config:
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/rag-benchmarks/files}
+      metadata_store:
+        table_name: files_metadata
+        backend: sql_default
+  file_processors:
+  - provider_id: pypdf
+    provider_type: inline::pypdf
+  responses:
+  - provider_id: builtin
+    provider_type: inline::builtin
+    config:
+      persistence:
+        agent_state:
+          namespace: agents
+          backend: kv_default
+        responses:
+          table_name: responses
+          backend: sql_default
+          max_write_queue_size: 10000
+          num_writers: 4
+  tool_runtime:
+  - provider_id: file-search
+    provider_type: inline::file-search
+storage:
+  backends:
+    kv_default:
+      type: kv_sqlite
+      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/rag-benchmarks}/kvstore.db
+    sql_default:
+      type: sql_sqlite
+      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/rag-benchmarks}/sql_store.db
+  stores:
+    metadata:
+      namespace: registry
+      backend: kv_default
+    inference:
+      table_name: inference_store
+      backend: sql_default
+      max_write_queue_size: 10000
+      num_writers: 4
+    conversations:
+      table_name: openai_conversations
+      backend: sql_default
+    prompts:
+      namespace: prompts
+      backend: kv_default
+    connectors:
+      namespace: connectors
+      backend: kv_default
+registered_resources:
+  models: []
+  shields: []
+  vector_dbs: []
+server:
+  port: 8321
+vector_stores:
+  default_provider_id: milvus
+  default_embedding_model:
+    provider_id: sentence-transformers
+    model_id: nomic-ai/nomic-embed-text-v1.5
+  default_reranker_model:
+    provider_id: transformers
+    model_id: Qwen/Qwen3-Reranker-0.6B
+  default_search_mode: hybrid
+  file_search_params:
+    header_template: 'file_search tool found {num_chunks} chunks:
+
+      BEGIN of file_search tool results.
+
+      '
+    footer_template: 'END of file_search tool results.
+
+      '
+  context_prompt_params:
+    chunk_annotation_template: 'Result {index}
+
+      Content: {chunk.content}
+
+      Metadata: {metadata}
+
+      '
+    context_template: 'The above results were retrieved to help answer the user''s
+      query: "{query}". Use them as supporting information only in answering this
+      query. {annotation_instruction}
+
+      '
+  annotation_prompt_params:
+    enable_annotations: true
+    annotation_instruction_template: Cite sources immediately at the end of sentences
+      before punctuation, using `<|file-id|>` format like 'This is a fact <|file-Cn3MSNn72ENTiiq11Qda4A|>.'.
+      Do not add extra punctuation. Use only the file IDs provided, do not invent
+      new ones.
+    chunk_annotation_template: '[{index}] {metadata_text} cite as <|{file_id}|>
+
+      {chunk_text}
+
+      '
+  file_ingestion_params:
+    default_chunk_size_tokens: 512
+    default_chunk_overlap_tokens: 128
+  chunk_retrieval_params:
+    chunk_multiplier: 5
+    max_tokens_in_context: 4000
+    default_reranker_strategy: rrf
+    rrf_impact_factor: 60.0
+    weighted_search_alpha: 0.5
+    default_search_mode: hybrid
+  file_batch_params:
+    max_concurrent_files_per_batch: 3
+    file_batch_chunk_size: 10
+    cleanup_interval_seconds: 86400
+  contextual_retrieval_params:
+    default_timeout_seconds: 120
+    default_max_concurrency: 3
+    max_document_tokens: 100000
+safety:
+  default_shield_id: null
+connectors: []

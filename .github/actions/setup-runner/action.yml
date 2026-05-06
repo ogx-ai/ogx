@@ -6,7 +6,7 @@ inputs:
     required: false
     default: "3.12"
   client-version:
-    description: The llama-stack-client-python version to test against (latest or published)
+    description: The ogx-client-python version to test against (latest or published)
     required: false
     default: "latest"
   sdk_install_url:
@@ -28,7 +28,7 @@ runs:
 
     - name: Configure client installation
       id: client-config
-      uses: ./.github/actions/install-llama-stack-client
+      uses: ./.github/actions/install-ogx-client
       with:
         client-version: ${{ inputs.client-version }}
         sdk_install_url: ${{ inputs.sdk_install_url }}
@@ -45,9 +45,9 @@ runs:
 
         # Install specific client version after sync if needed
         if [ "${{ steps.client-config.outputs.install-after-sync }}" = "true" ]; then
-          echo "Installing llama-stack-client from: ${{ steps.client-config.outputs.install-source }}"
+          echo "Installing ogx-client from: ${{ steps.client-config.outputs.install-source }}"
           uv pip install ${{ steps.client-config.outputs.install-source }}
         fi
 
-        echo "Installed llama packages"
-        uv pip list | grep llama
+        echo "Installed ogx packages"
+        uv pip list | grep ogx

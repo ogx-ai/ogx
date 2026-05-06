@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import UploadFile
 
-from llama_stack.providers.inline.file_processor.pypdf import PyPDFFileProcessorConfig
-from llama_stack.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
-from llama_stack_api.common.errors import OpenAIFileObjectNotFoundError
-from llama_stack_api.vector_io import (
+from ogx.providers.inline.file_processor.pypdf import PyPDFFileProcessorConfig
+from ogx.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
+from ogx_api.common.errors import OpenAIFileObjectNotFoundError
+from ogx_api.vector_io import (
     VectorStoreChunkingStrategyAuto,
     VectorStoreChunkingStrategyStatic,
     VectorStoreChunkingStrategyStaticConfig,
@@ -133,7 +133,7 @@ class TestPyPDFFileProcessor:
             / "responses"
             / "fixtures"
             / "pdfs"
-            / "llama_stack_and_models.pdf"
+            / "ogx_and_models.pdf"
         )
 
     @pytest.fixture
@@ -146,7 +146,7 @@ class TestPyPDFFileProcessor:
     def upload_file(self, test_pdf_content: bytes) -> UploadFile:
         """Mock UploadFile for testing."""
         pdf_buffer = io.BytesIO(test_pdf_content)
-        return UploadFile(file=pdf_buffer, filename="llama_stack_and_models.pdf")
+        return UploadFile(file=pdf_buffer, filename="ogx_and_models.pdf")
 
     async def test_process_file_basic(self, processor: PyPDFFileProcessor, upload_file: UploadFile):
         """Test basic file processing without chunking."""
@@ -208,7 +208,7 @@ class TestPyPDFFileProcessor:
             # Verify chunk metadata dict
             assert "document_id" in chunk.metadata
             uuid.UUID(chunk.metadata["document_id"])  # Should be a valid UUID
-            assert chunk.metadata["filename"] == "llama_stack_and_models.pdf"
+            assert chunk.metadata["filename"] == "ogx_and_models.pdf"
 
     async def test_process_file_with_static_chunking(self, processor: PyPDFFileProcessor, upload_file: UploadFile):
         """Test file processing with static chunking strategy."""
@@ -252,7 +252,7 @@ class TestPyPDFFileProcessor:
         # Check document-level metadata in chunks
         chunk = response.chunks[0]
         assert "filename" in chunk.metadata
-        assert chunk.metadata["filename"] == "llama_stack_and_models.pdf"
+        assert chunk.metadata["filename"] == "ogx_and_models.pdf"
         uuid.UUID(chunk.metadata["document_id"])  # Should be a valid UUID
 
     async def test_text_cleaning(self):
@@ -373,7 +373,7 @@ class TestPyPDFFileProcessor:
         # Document ID should be a generated UUID
         uuid.UUID(chunk.chunk_metadata.document_id)  # Should be a valid UUID
         uuid.UUID(chunk.metadata["document_id"])  # Should be a valid UUID
-        assert chunk.metadata["filename"] == "llama_stack_and_models.pdf"
+        assert chunk.metadata["filename"] == "ogx_and_models.pdf"
 
     async def test_chunk_id_uniqueness(self, processor: PyPDFFileProcessor, upload_file: UploadFile):
         """Test chunk ID uniqueness across chunks."""

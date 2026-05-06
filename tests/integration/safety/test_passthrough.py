@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -23,9 +23,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.providers.remote.safety.passthrough.config import PassthroughSafetyConfig
-from llama_stack.providers.remote.safety.passthrough.passthrough import PassthroughSafetyAdapter
-from llama_stack_api import (
+from ogx.providers.remote.safety.passthrough.config import PassthroughSafetyConfig
+from ogx.providers.remote.safety.passthrough.passthrough import PassthroughSafetyAdapter
+from ogx_api import (
     OpenAIUserMessageParam,
     ResourceType,
     RunModerationRequest,
@@ -92,7 +92,7 @@ async def _make_adapter(base_url: str, **kwargs) -> PassthroughSafetyAdapter:
     await adapter.initialize()
     adapter.__provider_spec__ = MagicMock()
     adapter.__provider_spec__.provider_data_validator = (
-        "llama_stack.providers.remote.safety.passthrough.config.PassthroughProviderDataValidator"
+        "ogx.providers.remote.safety.passthrough.config.PassthroughProviderDataValidator"
     )
 
     shield_store = AsyncMock()
@@ -160,7 +160,7 @@ async def test_api_key_sent_as_bearer(mock_server):
 
 async def test_forward_headers_sent_downstream(mock_server):
     """forward_headers mapping sends provider data as HTTP headers."""
-    from llama_stack.core.request_headers import request_provider_data_context
+    from ogx.core.request_headers import request_provider_data_context
 
     adapter = await _make_adapter(
         mock_server,
@@ -168,7 +168,7 @@ async def test_forward_headers_sent_downstream(mock_server):
     )
 
     provider_data = json.dumps({"tenant_id": "t-integration-test"})
-    with request_provider_data_context({"x-llamastack-provider-data": provider_data}):
+    with request_provider_data_context({"x-ogx-provider-data": provider_data}):
         request = RunModerationRequest(input="test", model="text-moderation-latest")
         await adapter.run_moderation(request)
 

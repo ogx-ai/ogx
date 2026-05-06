@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,9 +7,9 @@
 import os
 from unittest.mock import ANY, MagicMock, patch
 
-from llama_stack.core.stack import replace_env_vars
-from llama_stack.providers.remote.inference.openai.config import OpenAIConfig
-from llama_stack.providers.remote.inference.openai.openai import OpenAIInferenceAdapter
+from ogx.core.stack import replace_env_vars
+from ogx.providers.remote.inference.openai.config import OpenAIConfig
+from ogx.providers.remote.inference.openai.openai import OpenAIInferenceAdapter
 
 
 class TestOpenAIBaseURLConfig:
@@ -55,7 +55,7 @@ class TestOpenAIBaseURLConfig:
         # Config should take precedence over environment variable
         assert adapter.get_base_url() == custom_url
 
-    @patch("llama_stack.providers.utils.inference.openai_mixin.AsyncOpenAI")
+    @patch("ogx.providers.utils.inference.openai_mixin.AsyncOpenAI")
     def test_client_uses_configured_base_url(self, mock_openai_class):
         """Test that the OpenAI client is initialized with the configured base URL."""
         custom_url = "https://test.openai.com/v1"
@@ -76,7 +76,7 @@ class TestOpenAIBaseURLConfig:
             http_client=ANY,
         )
 
-    @patch("llama_stack.providers.utils.inference.openai_mixin.AsyncOpenAI")
+    @patch("ogx.providers.utils.inference.openai_mixin.AsyncOpenAI")
     async def test_check_model_availability_uses_configured_url(self, mock_openai_class):
         """Test that check_model_availability uses the configured base URL."""
         custom_url = "https://test.openai.com/v1"
@@ -117,7 +117,7 @@ class TestOpenAIBaseURLConfig:
         mock_client.models.list.assert_called_once()
 
     @patch.dict(os.environ, {"OPENAI_BASE_URL": "https://proxy.openai.com/v1"})
-    @patch("llama_stack.providers.utils.inference.openai_mixin.AsyncOpenAI")
+    @patch("ogx.providers.utils.inference.openai_mixin.AsyncOpenAI")
     async def test_environment_variable_affects_model_availability_check(self, mock_openai_class):
         """Test that setting OPENAI_BASE_URL environment variable affects where model availability is checked."""
         # Use sample_run_config which has proper environment variable syntax

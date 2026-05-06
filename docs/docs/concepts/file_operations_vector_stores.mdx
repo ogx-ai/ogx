@@ -2,14 +2,14 @@
 
 ## Overview
 
-Llama Stack provides seamless integration between the Files API and Vector Store APIs, enabling you to upload documents and automatically process them into searchable vector embeddings. This integration implements file operations following the [OpenAI Vector Store Files API specification](https://platform.openai.com/docs/api-reference/vector-stores-files).
+OGX provides seamless integration between the Files API and Vector Store APIs, enabling you to upload documents and automatically process them into searchable vector embeddings. This integration implements file operations following the [OpenAI Vector Store Files API specification](https://platform.openai.com/docs/api-reference/vector-stores-files).
 
 ## Enhanced Capabilities Beyond OpenAI
 
-While Llama Stack maintains full compatibility with OpenAI's Vector Store API, it provides several additional capabilities that enhance functionality and flexibility:
+While OGX maintains full compatibility with OpenAI's Vector Store API, it provides several additional capabilities that enhance functionality and flexibility:
 
 ### **Embedding Model Specification**
-Unlike OpenAI's vector stores which use a fixed embedding model, Llama Stack allows you to specify which embedding model to use when creating a vector store:
+Unlike OpenAI's vector stores which use a fixed embedding model, OGX allows you to specify which embedding model to use when creating a vector store:
 
 ```python
 # Create vector store with specific embedding model
@@ -23,7 +23,7 @@ vector_store = client.vector_stores.create(
 ```
 
 ### **Advanced Search Modes**
-Llama Stack supports multiple search modes beyond basic vector similarity:
+OGX supports multiple search modes beyond basic vector similarity:
 
 - **Vector Search**: Pure semantic similarity search using embeddings
 - **Keyword Search**: Traditional keyword-based search for exact matches
@@ -40,7 +40,7 @@ results = await client.vector_stores.search(
 ```
 
 ### **Flexible Ranking Options**
-For hybrid search, Llama Stack offers configurable ranking strategies:
+For hybrid search, OGX offers configurable ranking strategies:
 
 - **RRF (Reciprocal Rank Fusion)**: Combines rankings with configurable impact factor
 - **Weighted Ranker**: Linear combination of vector and keyword scores with adjustable weights
@@ -54,7 +54,7 @@ to Elasticsearch equivalents when possible.
 
 **Weighted Ranker:**
 ```python
-from llama_stack_api import SearchRankingOptions
+from ogx_api import SearchRankingOptions
 
 # Weighted ranker with custom alpha (0 = keyword only, 1 = vector only)
 results = await client.vector_stores.search(
@@ -140,7 +140,7 @@ vector_store = client.vector_stores.create(
 )
 ```
 
-**Note**: All Llama Stack-specific parameters (`provider_id`, `embedding_model`, and `embedding_dimension`) must be specified in the `extra_body` parameter when creating vector stores.
+**Note**: All OGX-specific parameters (`provider_id`, `embedding_model`, and `embedding_dimension`) must be specified in the `extra_body` parameter when creating vector stores.
 
 ## How It Works
 
@@ -175,7 +175,7 @@ The following vector store providers support file operations:
 ### 1. File Upload
 
 ```python
-from llama_stack import LlamaStackClient
+from ogx import LlamaStackClient
 
 client = LlamaStackClient("http://localhost:8000")
 
@@ -247,7 +247,7 @@ The default chunking strategy uses:
 You can customize chunking when attaching files:
 
 ```python
-from llama_stack.apis.vector_io import VectorStoreChunkingStrategy
+from ogx.apis.vector_io import VectorStoreChunkingStrategy
 
 # Attach file with custom chunking
 file_attach_response = await client.vector_stores.files.create(
@@ -257,7 +257,7 @@ file_attach_response = await client.vector_stores.files.create(
 )
 ```
 
-**Note**: While Llama Stack is OpenAI-compatible, it also supports additional options beyond the standard OpenAI API. When creating vector stores, you can specify custom embedding models and embedding dimensions that will be used when processing chunks from attached files.
+**Note**: While OGX is OpenAI-compatible, it also supports additional options beyond the standard OpenAI API. When creating vector stores, you can specify custom embedding models and embedding dimensions that will be used when processing chunks from attached files.
 
 
 ## File Management

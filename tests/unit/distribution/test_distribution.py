@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,9 +11,9 @@ import pytest
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-from llama_stack.core.datatypes import Api, Provider, StackConfig
-from llama_stack.core.distribution import INTERNAL_APIS, get_provider_registry, providable_apis
-from llama_stack.core.storage.datatypes import (
+from ogx.core.datatypes import Api, Provider, StackConfig
+from ogx.core.distribution import INTERNAL_APIS, get_provider_registry, providable_apis
+from ogx.core.storage.datatypes import (
     InferenceStoreReference,
     KVStoreReference,
     ServerStoresConfig,
@@ -22,7 +22,7 @@ from llama_stack.core.storage.datatypes import (
     SqlStoreReference,
     StorageConfig,
 )
-from llama_stack_api import ProviderSpec
+from ogx_api import ProviderSpec
 
 
 class SampleConfig(BaseModel):
@@ -68,7 +68,7 @@ def make_stack_config(**overrides) -> StackConfig:
 @pytest.fixture
 def mock_providers():
     """Mock the available_providers function to return test providers."""
-    with patch("llama_stack.providers.registry.inference.available_providers") as mock:
+    with patch("ogx.providers.registry.inference.available_providers") as mock:
         mock.return_value = [
             ProviderSpec(
                 provider_type="test_provider",
@@ -150,7 +150,7 @@ def make_import_module_side_effect(
     from types import SimpleNamespace
 
     def import_module_side_effect(name):
-        if name == "llama_stack.providers.registry.inference":
+        if name == "ogx.providers.registry.inference":
             mock_builtin = SimpleNamespace(
                 available_providers=lambda: [
                     builtin_provider_spec
@@ -197,7 +197,7 @@ class TestProviderRegistry:
             assert internal_api not in apis, f"Internal API {internal_api} should not be in providable_apis"
 
         for api in apis:
-            module_name = f"llama_stack.providers.registry.{api.name.lower()}"
+            module_name = f"ogx.providers.registry.{api.name.lower()}"
             try:
                 importlib.import_module(module_name)
             except ImportError as err:
@@ -312,7 +312,7 @@ pip_packages:
         """Test loading an external provider from a module (success path)."""
         from types import SimpleNamespace
 
-        from llama_stack_api import Api, ProviderSpec
+        from ogx_api import Api, ProviderSpec
 
         # Simulate a provider module with get_provider_spec
         fake_spec = ProviderSpec(
@@ -345,7 +345,7 @@ pip_packages:
             provider = registry[Api.inference]["external_test"]
             assert provider.module == "external_test"
             assert provider.config_class == "external_test.config.ExternalTestConfig"
-            mock_import.assert_any_call("llama_stack.providers.registry.inference")
+            mock_import.assert_any_call("ogx.providers.registry.inference")
             mock_import.assert_any_call("external_test.provider")
 
     def test_external_provider_from_module_not_found(self, mock_providers):
@@ -395,8 +395,8 @@ pip_packages:
 
     def test_external_provider_from_module_listing(self, mock_providers):
         """Test loading an external provider from a module during list-deps (listing=True, partial spec)."""
-        from llama_stack.core.datatypes import StackConfig
-        from llama_stack_api import Api
+        from ogx.core.datatypes import StackConfig
+        from ogx_api import Api
 
         # No importlib patch needed, should not import module when listing
         config = StackConfig(
@@ -428,7 +428,7 @@ class TestGetExternalProvidersFromModule:
 
     def test_stackrunconfig_provider_without_module(self, mock_providers):
         """Test that providers without module attribute are skipped."""
-        from llama_stack.core.distribution import get_external_providers_from_module
+        from ogx.core.distribution import get_external_providers_from_module
 
         import_module_side_effect = make_import_module_side_effect()
 
@@ -454,8 +454,8 @@ class TestGetExternalProvidersFromModule:
         """Test provider with module containing version spec (e.g., package==1.0.0)."""
         from types import SimpleNamespace
 
-        from llama_stack.core.distribution import get_external_providers_from_module
-        from llama_stack_api import ProviderSpec
+        from ogx.core.distribution import get_external_providers_from_module
+        from ogx_api import ProviderSpec
 
         fake_spec = ProviderSpec(
             api=Api.inference,
@@ -491,8 +491,8 @@ class TestGetExternalProvidersFromModule:
 
     def test_buildconfig_does_not_import_module(self, mock_providers):
         """Test that StackConfig does not import the module when listing (listing=True)."""
-        from llama_stack.core.datatypes import StackConfig
-        from llama_stack.core.distribution import get_external_providers_from_module
+        from ogx.core.datatypes import StackConfig
+        from ogx.core.distribution import get_external_providers_from_module
 
         config = StackConfig(
             distro_name="test_image",
@@ -527,8 +527,8 @@ class TestGetExternalProvidersFromModule:
 
     def test_buildconfig_multiple_providers(self, mock_providers):
         """Test StackConfig with multiple providers for the same API."""
-        from llama_stack.core.datatypes import StackConfig
-        from llama_stack.core.distribution import get_external_providers_from_module
+        from ogx.core.datatypes import StackConfig
+        from ogx.core.distribution import get_external_providers_from_module
 
         config = StackConfig(
             distro_name="test_image",
@@ -551,8 +551,8 @@ class TestGetExternalProvidersFromModule:
 
     def test_distributionspec_does_not_import_module(self, mock_providers):
         """Test that DistributionSpec does not import the module (listing=True)."""
-        from llama_stack.core.datatypes import BuildProvider, DistributionSpec
-        from llama_stack.core.distribution import get_external_providers_from_module
+        from ogx.core.datatypes import BuildProvider, DistributionSpec
+        from ogx.core.distribution import get_external_providers_from_module
 
         dist_spec = DistributionSpec(
             description="test distribution",
@@ -585,8 +585,8 @@ class TestGetExternalProvidersFromModule:
         """Test when get_provider_spec returns a list of specs."""
         from types import SimpleNamespace
 
-        from llama_stack.core.distribution import get_external_providers_from_module
-        from llama_stack_api import ProviderSpec
+        from ogx.core.distribution import get_external_providers_from_module
+        from ogx_api import ProviderSpec
 
         spec1 = ProviderSpec(
             api=Api.inference,
@@ -633,8 +633,8 @@ class TestGetExternalProvidersFromModule:
         """Test that list return filters specs by provider_type."""
         from types import SimpleNamespace
 
-        from llama_stack.core.distribution import get_external_providers_from_module
-        from llama_stack_api import ProviderSpec
+        from ogx.core.distribution import get_external_providers_from_module
+        from ogx_api import ProviderSpec
 
         spec1 = ProviderSpec(
             api=Api.inference,
@@ -681,8 +681,8 @@ class TestGetExternalProvidersFromModule:
         """Test that list return adds multiple different provider_types when config requests them."""
         from types import SimpleNamespace
 
-        from llama_stack.core.distribution import get_external_providers_from_module
-        from llama_stack_api import ProviderSpec
+        from ogx.core.distribution import get_external_providers_from_module
+        from ogx_api import ProviderSpec
 
         # Module returns both inline and remote variants
         spec1 = ProviderSpec(
@@ -736,7 +736,7 @@ class TestGetExternalProvidersFromModule:
 
     def test_module_not_found_raises_value_error(self, mock_providers):
         """Test that ModuleNotFoundError raises ValueError with helpful message."""
-        from llama_stack.core.distribution import get_external_providers_from_module
+        from ogx.core.distribution import get_external_providers_from_module
 
         def import_side_effect(name):
             if name == "missing_module.provider":
@@ -768,7 +768,7 @@ class TestGetExternalProvidersFromModule:
         """Test that generic exceptions are properly raised."""
         from types import SimpleNamespace
 
-        from llama_stack.core.distribution import get_external_providers_from_module
+        from ogx.core.distribution import get_external_providers_from_module
 
         def bad_spec():
             raise RuntimeError("Something went wrong")
@@ -803,7 +803,7 @@ class TestGetExternalProvidersFromModule:
 
     def test_empty_provider_list(self, mock_providers):
         """Test with empty provider list."""
-        from llama_stack.core.distribution import get_external_providers_from_module
+        from ogx.core.distribution import get_external_providers_from_module
 
         config = make_stack_config(
             distro_name="test_image",
@@ -820,8 +820,8 @@ class TestGetExternalProvidersFromModule:
         """Test multiple APIs with providers."""
         from types import SimpleNamespace
 
-        from llama_stack.core.distribution import get_external_providers_from_module
-        from llama_stack_api import ProviderSpec
+        from ogx.core.distribution import get_external_providers_from_module
+        from ogx_api import ProviderSpec
 
         inference_spec = ProviderSpec(
             api=Api.inference,

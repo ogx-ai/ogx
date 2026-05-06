@@ -1,13 +1,13 @@
 # Evaluations
 
-The Llama Stack Evaluation flow allows you to run evaluations on your GenAI application datasets or pre-registered benchmarks.
+The OGX Evaluation flow allows you to run evaluations on your GenAI application datasets or pre-registered benchmarks.
 
-We introduce a set of APIs in Llama Stack for supporting running evaluations of LLM applications.
+We introduce a set of APIs in OGX for supporting running evaluations of LLM applications.
 - `/datasetio` + `/datasets` API
 - `/scoring` + `/scoring_functions` API
 - `/eval` + `/benchmarks` API
 
-This guide goes over the sets of APIs and developer experience flow of using Llama Stack to run evaluations for different use cases. Checkout our Colab notebook on working examples with evaluations [here](https://colab.research.google.com/drive/10CHyykee9j2OigaIcRv47BKG9mrNm0tJ?usp=sharing).
+This guide goes over the sets of APIs and developer experience flow of using OGX to run evaluations for different use cases. Checkout our Colab notebook on working examples with evaluations [here](https://colab.research.google.com/drive/10CHyykee9j2OigaIcRv47BKG9mrNm0tJ?usp=sharing).
 
 ## Evaluation Concepts
 
@@ -24,23 +24,23 @@ The Evaluation APIs are associated with a set of Resources as shown in the follo
 
 ## Evaluation Examples Walkthrough
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/meta-llama/llama-stack/blob/main/docs/notebooks/Llama_Stack_Benchmark_Evals.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/meta-llama/ogx/blob/main/docs/notebooks/Llama_Stack_Benchmark_Evals.ipynb)
 
 It is best to open this notebook in Colab to follow along with the examples.
 
 ### 1. Open Benchmark Model Evaluation
 
-This first example walks you through how to evaluate a model candidate served by Llama Stack on open benchmarks. We will use the following benchmark:
+This first example walks you through how to evaluate a model candidate served by OGX on open benchmarks. We will use the following benchmark:
 - [MMMU](https://arxiv.org/abs/2311.16502) (A Massive Multi-discipline Multimodal Understanding and Reasoning Benchmark for Expert AGI)]: Benchmark designed to evaluate multimodal models.
 - [SimpleQA](https://openai.com/index/introducing-simpleqa/): Benchmark designed to access models to answer short, fact-seeking questions.
 
 #### 1.1 Running MMMU
-- We will use a pre-processed MMMU dataset from [llamastack/mmmu](https://huggingface.co/datasets/llamastack/mmmu). The preprocessing code is shown in this [GitHub Gist](https://gist.github.com/yanxi0830/118e9c560227d27132a7fd10e2c92840). The dataset is obtained by transforming the original [MMMU/MMMU](https://huggingface.co/datasets/MMMU/MMMU) dataset into correct format by `inference/chat-completion` API.
+- We will use a pre-processed MMMU dataset from [ogx/mmmu](https://huggingface.co/datasets/ogx/mmmu). The preprocessing code is shown in this [GitHub Gist](https://gist.github.com/yanxi0830/118e9c560227d27132a7fd10e2c92840). The dataset is obtained by transforming the original [MMMU/MMMU](https://huggingface.co/datasets/MMMU/MMMU) dataset into correct format by `inference/chat-completion` API.
 
 ```python
 import datasets
 
-ds = datasets.load_dataset(path="llamastack/mmmu", name="Agriculture", split="dev")
+ds = datasets.load_dataset(path="ogx/mmmu", name="Agriculture", split="dev")
 ds = ds.select_columns(["chat_completion_input", "input_query", "expected_answer"])
 eval_rows = ds.to_pandas().to_dict(orient="records")
 ```
@@ -105,7 +105,7 @@ pprint(response)
 ```
 
 #### 1.2. Running SimpleQA
-- We will use a pre-processed SimpleQA dataset from [llamastack/evals](https://huggingface.co/datasets/llamastack/evals/viewer/evals__simpleqa) which is obtained by transforming the input query into correct format accepted by `inference/chat-completion` API.
+- We will use a pre-processed SimpleQA dataset from [ogx/evals](https://huggingface.co/datasets/ogx/evals/viewer/evals__simpleqa) which is obtained by transforming the input query into correct format accepted by `inference/chat-completion` API.
 - Since we will be using this same dataset in our next example for Agentic evaluation, we will register it using the `/datasets` API, and interact with it through `/datasetio` API.
 
 ```python
@@ -115,7 +115,7 @@ _ = client.datasets.register(
     purpose="eval/messages-answer",
     source={
         "type": "uri",
-        "uri": "huggingface://datasets/llamastack/simpleqa?split=train",
+        "uri": "huggingface://datasets/ogx/simpleqa?split=train",
     },
     dataset_id=simpleqa_dataset_id,
 )
@@ -155,7 +155,7 @@ pprint(response)
 ```
 
 ### 2. Agentic Evaluation
-- In this example, we will demonstrate how to evaluate a agent candidate served by Llama Stack via `/agent` API.
+- In this example, we will demonstrate how to evaluate a agent candidate served by OGX via `/agent` API.
 - We will continue to use the SimpleQA dataset we used in previous example.
 - Instead of running evaluation on model, we will run the evaluation on a Search Agent with access to search tool. We will define our agent evaluation candidate through `AgentConfig`.
 
@@ -195,11 +195,11 @@ pprint(response)
 ```
 
 ### 3. Agentic Application Dataset Scoring
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/meta-llama/llama-stack/blob/main/docs/getting_started.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/meta-llama/ogx/blob/main/docs/getting_started.ipynb)
 
-Llama Stack offers a library of scoring functions and the `/scoring` API, allowing you to run evaluations on your pre-annotated AI application datasets.
+OGX offers a library of scoring functions and the `/scoring` API, allowing you to run evaluations on your pre-annotated AI application datasets.
 
-In this example, we will work with an example RAG dataset you have built previously, label with an annotation, and use LLM-As-Judge with custom judge prompt for scoring. Please checkout our [Llama Stack Playground](../building_applications/playground) for an interactive interface to upload datasets and run scorings.
+In this example, we will work with an example RAG dataset you have built previously, label with an annotation, and use LLM-As-Judge with custom judge prompt for scoring. Please checkout our [OGX Playground](../building_applications/playground) for an interactive interface to upload datasets and run scorings.
 
 ```python
 judge_model_id = "meta-llama/Llama-3.1-405B-Instruct-FP8"
@@ -263,7 +263,7 @@ response = client.scoring.score(
 ```
 
 ## Running Evaluations via CLI
-The following examples give the quick steps to start running evaluations using the llama-stack-client CLI.
+The following examples give the quick steps to start running evaluations using the ogx-client CLI.
 
 ### Benchmark Evaluation CLI
 There are 3 necessary input for running a benchmark eval
@@ -272,14 +272,14 @@ There are 3 necessary input for running a benchmark eval
 - `output_dir`: Path to store the evaluate results
 
 ```bash
-llama-stack-client eval run-benchmark <benchmark_id_1> <benchmark_id_2> ... \
+ogx-client eval run-benchmark <benchmark_id_1> <benchmark_id_2> ... \
 --model_id <model id to evaluate on> \
 --output_dir <directory to store the evaluate results> \
 ```
 
 You can run
 ```bash
-llama-stack-client eval run-benchmark help
+ogx-client eval run-benchmark help
 ```
 to see the description of all the flags to run benchmark eval
 
@@ -290,11 +290,11 @@ Usage: For running application evals, you will already have available datasets i
 - `scoring-fn-id`: List of ScoringFunction identifiers you wish to use to run on your application.
 - `Dataset` used for evaluation:
   - (1) `--dataset-path`: path to local file system containing datasets to run evaluation on
-  - (2) `--dataset-id`: pre-registered dataset in Llama Stack
+  - (2) `--dataset-id`: pre-registered dataset in OGX
 - (Optional) `--scoring-params-config`: optionally parameterize scoring functions with custom params (e.g. `judge_prompt`, `judge_model`, `parsing_regexes`).
 
 ```bash
-llama-stack-client eval run_scoring <scoring_fn_id_1> <scoring_fn_id_2> ... <scoring_fn_id_n>
+ogx-client eval run_scoring <scoring_fn_id_1> <scoring_fn_id_2> ... <scoring_fn_id_n>
 --dataset-path <path-to-local-dataset> \
 --output-dir ./
 ```
@@ -302,8 +302,8 @@ llama-stack-client eval run_scoring <scoring_fn_id_1> <scoring_fn_id_2> ... <sco
 ### Defining BenchmarkConfig
 The `BenchmarkConfig` are user specified config to define:
 1. `EvalCandidate` to run generation on:
-   - `ModelCandidate`: The model will be used for generation through LlamaStack /inference API.
-   - `AgentCandidate`: The agentic system specified by AgentConfig will be used for generation through LlamaStack  /agents API.
+   - `ModelCandidate`: The model will be used for generation through OGX /inference API.
+   - `AgentCandidate`: The agentic system specified by AgentConfig will be used for generation through OGX  /agents API.
 2. Optionally scoring function params to allow customization of scoring function behaviour. This is useful to parameterize generic scoring functions such as LLMAsJudge with custom `judge_model` / `judge_prompt`.
 
 **Example BenchmarkConfig**
@@ -340,22 +340,22 @@ An eval open-benchmark essentially contains 2 parts:
 - `raw data`: The raw dataset associated with the benchmark. You typically need to search the original paper that introduces the benchmark and find the canonical dataset (usually hosted on huggingface)
 - `prompt template`: How to ask the candidate model to generate the answer (prompt template plays a critical role to the evaluation results). Typically, you can find the reference prompt template associated with the benchmark in benchmarks author's repo ([example](https://github.com/idavidrein/gpqa/blob/main/prompts/chain_of_thought.txt)) or some other popular open source repos ([example](https://github.com/openai/simple-evals/blob/0a6e8f62e52bc5ae915f752466be3af596caf392/common.py#L14))
 
-To create new open-benchmark in llama stack, you need to combine the prompt template and the raw data into the `chat_completion_input` column in the evaluation dataset.
+To create new open-benchmark in ogx, you need to combine the prompt template and the raw data into the `chat_completion_input` column in the evaluation dataset.
 
 Llama stack enforces the evaluate dataset schema to contain at least 3 columns:
 - `chat_completion_input`: The actual input to the model to run the generation for eval
 - `input_query`: The raw input from the raw dataset without the prompt template
 - `expected_answer`: The ground truth for scoring functions to calculate the score from.
 
-You need to write a script [example convert script](https://gist.github.com/yanxi0830/118e9c560227d27132a7fd10e2c92840) to convert the benchmark raw dataset to llama stack format eval dataset and update the dataset to huggingface [example benchmark dataset](https://huggingface.co/datasets/llamastack/mmmu)
+You need to write a script [example convert script](https://gist.github.com/yanxi0830/118e9c560227d27132a7fd10e2c92840) to convert the benchmark raw dataset to ogx format eval dataset and update the dataset to huggingface [example benchmark dataset](https://huggingface.co/datasets/ogx/mmmu)
 
 ### Find scoring function for your new benchmark
 The purpose of scoring function is to calculate the score for each example based on candidate model generation result and expected_answer. It also aggregates the scores from all the examples and generate the final evaluate results.
 
-Firstly, you can see if the existing [llama stack scoring functions](https://github.com/meta-llama/llama-stack/tree/main/llama_stack/providers/inline/scoring) can fulfill your need. If not, you need to write a new scoring function based on what benchmark author / other open source repo describe.
+Firstly, you can see if the existing [ogx scoring functions](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/inline/scoring) can fulfill your need. If not, you need to write a new scoring function based on what benchmark author / other open source repo describe.
 
 ### Add new benchmark into template
-Firstly, you need to add the evaluation dataset associated with your benchmark under `datasets` resource in the [open-benchmark](https://github.com/meta-llama/llama-stack/blob/main/llama_stack/distributions/open-benchmark/config.yaml)
+Firstly, you need to add the evaluation dataset associated with your benchmark under `datasets` resource in the [open-benchmark](https://github.com/ogx-ai/ogx/blob/main/ogx/distributions/open-benchmark/config.yaml)
 
 Secondly, you need to add the new benchmark you just created under the `benchmarks` resource in the same template. To add the new benchmark, you need to have
 - `benchmark_id`: identifier of the benchmark
@@ -364,14 +364,14 @@ Secondly, you need to add the new benchmark you just created under the `benchmar
 
 ### Test the new benchmark
 
-Spin up llama stack server with 'open-benchmark' templates
+Spin up ogx server with 'open-benchmark' templates
 ```bash
-llama stack run llama_stack/distributions/open-benchmark/config.yaml
+ogx run ogx/distributions/open-benchmark/config.yaml
 ```
 
 Run eval benchmark CLI with your new benchmark id
 ```bash
-llama-stack-client eval run-benchmark <new_benchmark_id> \
+ogx-client eval run-benchmark <new_benchmark_id> \
 --model_id <model id to evaluate on> \
 --output_dir <directory to store the evaluate results> \
 ```

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,14 +14,14 @@ import numpy as np
 import pytest
 from tiktoken import get_encoding
 
-from llama_stack.core.datatypes import RerankerModel, VectorStoresConfig
-from llama_stack.providers.utils.memory.vector_store import (
+from ogx.core.datatypes import RerankerModel, VectorStoresConfig
+from ogx.providers.utils.memory.vector_store import (
     VectorStoreWithIndex,
     _validate_embedding,
     make_overlapped_chunks,
 )
-from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
-from llama_stack_api import (
+from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
+from ogx_api import (
     Chunk,
     ChunkMetadata,
     EmbeddedChunk,

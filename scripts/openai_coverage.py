@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@
 """
 OpenAI API Coverage Analyzer
 
-Uses oasdiff to compare Llama Stack's OpenAPI spec against OpenAI's spec
+Uses oasdiff to compare OGX's OpenAPI spec against OpenAI's spec
 and generates a coverage report showing:
 - Which endpoints are implemented
 - Which properties are conformant vs have issues
@@ -206,14 +206,14 @@ def _run_oasdiff(openai_spec: Path, llama_spec: Path) -> dict[str, Any]:
 def _extract_issues(obj: Any, path: str = "") -> dict[str, Any]:
     """Recursively extract issues from oasdiff output."""
     result: dict[str, Any] = {
-        "missing": [],  # Properties in OpenAI but not in Llama Stack
+        "missing": [],  # Properties in OpenAI but not in OGX
         "issues": [],  # Properties that exist but have conformance issues
     }
 
     if not isinstance(obj, dict):
         return result
 
-    # Track deleted properties (missing from Llama Stack)
+    # Track deleted properties (missing from OGX)
     if "deleted" in obj:
         deleted = obj["deleted"]
         if isinstance(deleted, list):
@@ -576,8 +576,8 @@ def main():
     parser.add_argument(
         "--llama-spec",
         type=Path,
-        default=Path("docs/static/llama-stack-spec.yaml"),
-        help="Path to Llama Stack spec",
+        default=Path("docs/static/ogx-spec.yaml"),
+        help="Path to OGX spec",
     )
     parser.add_argument(
         "--output",

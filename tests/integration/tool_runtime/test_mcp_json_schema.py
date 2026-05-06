@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -93,7 +93,7 @@ def mcp_server_with_output_schemas():
 class TestMCPToolInvocationViaAgent:
     """Test invoking MCP tools with complex schemas through the Agent API."""
 
-    def test_invoke_mcp_tool_with_nested_data(self, llama_stack_client, text_model_id, mcp_server_with_complex_schemas):
+    def test_invoke_mcp_tool_with_nested_data(self, ogx_client, text_model_id, mcp_server_with_complex_schemas):
         """Test that an MCP tool accepting nested object structures can be invoked via the Agent."""
         uri = mcp_server_with_complex_schemas["server_url"]
 
@@ -109,7 +109,7 @@ class TestMCPToolInvocationViaAgent:
         ]
 
         agent = Agent(
-            client=llama_stack_client,
+            client=ogx_client,
             model=text_model_id,
             instructions="You are a helpful assistant. When asked to process an order, use the process_order tool.",
             tools=tool_defs,
@@ -153,7 +153,7 @@ class TestMCPToolInvocationViaAgent:
         assert tool_events, "Expected tool execution to complete"
         assert tool_events[-1].result.tool_calls[0].tool_name == "process_order"
 
-    def test_invoke_with_flexible_schema(self, llama_stack_client, text_model_id, mcp_server_with_complex_schemas):
+    def test_invoke_with_flexible_schema(self, ogx_client, text_model_id, mcp_server_with_complex_schemas):
         """Test invoking a tool that accepts flexible input (email or phone)."""
         uri = mcp_server_with_complex_schemas["server_url"]
 
@@ -169,7 +169,7 @@ class TestMCPToolInvocationViaAgent:
         ]
 
         agent = Agent(
-            client=llama_stack_client,
+            client=ogx_client,
             model=text_model_id,
             instructions="You are a helpful assistant. Use the flexible_contact tool when given contact info.",
             tools=tool_defs,
@@ -208,9 +208,7 @@ class TestMCPSchemaRoundTrip:
     MCP server -> tool discovery -> LLM tool call -> MCP invocation -> result.
     """
 
-    def test_complex_tool_produces_valid_result(
-        self, llama_stack_client, text_model_id, mcp_server_with_output_schemas
-    ):
+    def test_complex_tool_produces_valid_result(self, ogx_client, text_model_id, mcp_server_with_output_schemas):
         """Test that a tool with structured output returns valid data through the Agent."""
         uri = mcp_server_with_output_schemas["server_url"]
 
@@ -226,7 +224,7 @@ class TestMCPSchemaRoundTrip:
         ]
 
         agent = Agent(
-            client=llama_stack_client,
+            client=ogx_client,
             model=text_model_id,
             instructions="You are a helpful calculator. Use the calculate tool to answer math questions.",
             tools=tool_defs,
@@ -265,7 +263,7 @@ class TestMCPSchemaRoundTrip:
         assert final_response is not None
         assert "10" in final_response.output_text
 
-    def test_multi_tool_mcp_server(self, llama_stack_client, text_model_id, mcp_server_with_complex_schemas):
+    def test_multi_tool_mcp_server(self, ogx_client, text_model_id, mcp_server_with_complex_schemas):
         """Test that multiple tools from the same MCP server are all discoverable and callable."""
         uri = mcp_server_with_complex_schemas["server_url"]
 
@@ -281,7 +279,7 @@ class TestMCPSchemaRoundTrip:
         ]
 
         agent = Agent(
-            client=llama_stack_client,
+            client=ogx_client,
             model=text_model_id,
             instructions=("You are a helpful assistant. Use the flexible_contact tool to save contact information."),
             tools=tool_defs,

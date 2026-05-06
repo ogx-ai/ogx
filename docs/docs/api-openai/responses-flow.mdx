@@ -1,0 +1,27 @@
+---
+title: Responses API Internal Flow
+description: Interactive sequence diagram showing how the Responses API processes requests internally
+sidebar_label: Responses Flow
+sidebar_position: 2
+---
+
+import ResponsesFlowSimulator from '@site/src/components/ResponsesFlowSimulator';
+
+# Responses API Internal Flow
+
+The Responses API orchestrates inference, tool execution, safety checks, and state persistence in a single request. The flow changes depending on which parameters you pass.
+
+Use the toggles below to select parameters and see how the request flows through internal subsystems. Pick a preset to see common patterns, or build your own combination.
+
+<ResponsesFlowSimulator />
+
+## Legend
+
+| Arrow style | Meaning |
+|-------------|---------|
+| **Solid teal** | Request (outgoing call to a subsystem) |
+| **Solid gray** | Response (return value from a subsystem) |
+| **Dashed amber** | SSE event (streaming to client) |
+| **Dashed purple** | Async operation (background queue, polling) |
+
+The dashed box marks the **inference loop** — the model calls tools, receives results, and calls inference again until no more server-side tool calls are needed, a client-side `function_call` is returned, or `max_infer_iters` is reached.

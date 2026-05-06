@@ -1,0 +1,167 @@
+{
+  "test_id": "tests/integration/responses/test_basic_responses.py::test_response_non_streaming_basic[client_with_models-txt=bedrock/openai.gpt-oss-20b-1:0-saturn]",
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b-1:0",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        },
+        {
+          "role": "assistant",
+          "content": "<reasoning>The question: \"Which planet has rings around it with a name starting with letter S?\" They are asking which planet has rings with a name starting with S. The answer: Saturn. Because Saturn has rings and its name starts with S. But maybe asking \"Which planet has (rings) around it with a name starting with S?\" The answer: Saturn has rings. The rings are called \"Saturn's</reasoning><reasoning> Rings\" but the planet is Saturn. It's likely a riddle. Or maybe they mean: Which planet has rings around it, with a name starting with letter \"S\"? The planet is Saturn. So answer: Saturn.\n\nBut need to output a short answer: Saturn.</reasoning>Saturn."
+        },
+        {
+          "role": "user",
+          "content": "Repeat your previous response in all caps."
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b-1:0",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-90f144dbd9d4",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "SH9BiwHKxZktu8wGbJAoxzENt21sLxTPRTGbqbsR8YA7xPivM6v9"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-90f144dbd9d4",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "NL3zWSMNLwoq28xArXYjFFwyqHKzUHs6E7ZrJpLIDtmcGlXxZIVBqtPaQvo"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-90f144dbd9d4",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning>We must repeat previous response in all caps. The previous response: \"Saturn.\" So output: \"SATURN.\"</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "MKornSyfXsNmY5FUF2nMTsSPpQ41Z3av0lZHjPyhwtHAxOBHWL42W9EBZ2CAx90nntT66h0kyjz"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-90f144dbd9d4",
+          "choices": [
+            {
+              "delta": {
+                "content": "SATURN.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "8LDWtyI1X9kgsHjFBdOs6OhziLoSrsPMsIQcSZ1MtDeiP30m9x8NwHbvvi2VZ"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-90f144dbd9d4",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 37,
+            "prompt_tokens": 252,
+            "total_tokens": 289,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

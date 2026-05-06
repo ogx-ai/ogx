@@ -1,6 +1,6 @@
 # Integration Testing Guide
 
-Integration tests verify complete workflows across different providers using Llama Stack's record-replay system.
+Integration tests verify complete workflows across different providers using OGX's record-replay system.
 
 ## Quick Start
 
@@ -26,7 +26,7 @@ Here are the most important options:
 - `--stack-config`: specify the stack config to use. You have four ways to point to a stack:
   - **`server:<config>`** - automatically start a server with the given config (e.g., `server:starter`). This provides one-step testing by auto-starting the server if the port is available, or reusing an existing server if already running.
   - **`server:<config>:<port>`** - same as above but with a custom port (e.g., `server:starter:8322`)
-  - a URL which points to a Llama Stack distribution server
+  - a URL which points to a OGX distribution server
   - a distribution name (e.g., `starter`) or a path to a `config.yaml` file
   - a comma-separated list of api=provider pairs, e.g. `inference=ollama,safety=llama-guard,agents=builtin`. This is most useful for testing a single API surface.
 - `--env`: set environment variables, e.g. --env KEY=value. this is a utility option to set environment variables required by various providers.
@@ -163,7 +163,7 @@ Tests make real API calls (not recorded):
 pytest tests/integration/ --inference-mode=live
 ```
 
-By default, the recording directory is `tests/integration/recordings`. You can override this by setting the `LLAMA_STACK_TEST_RECORDING_DIR` environment variable.
+By default, the recording directory is `tests/integration/recordings`. You can override this by setting the `OGX_TEST_RECORDING_DIR` environment variable.
 
 ## Managing Recordings
 
@@ -270,8 +270,8 @@ Note that when re-recording tests, you must use a Stack pointing to a server (i.
 ### Basic Test Pattern
 
 ```python
-def test_basic_chat_completion(llama_stack_client, text_model_id):
-    response = llama_stack_client.chat.completions.create(
+def test_basic_chat_completion(ogx_client, text_model_id):
+    response = ogx_client.chat.completions.create(
         model=text_model_id,
         messages=[{"role": "user", "content": "Hello"}],
     )
@@ -285,11 +285,11 @@ def test_basic_chat_completion(llama_stack_client, text_model_id):
 ### Provider-Specific Tests
 
 ```python
-def test_asymmetric_embeddings(llama_stack_client, embedding_model_id):
+def test_asymmetric_embeddings(ogx_client, embedding_model_id):
     if embedding_model_id not in MODELS_SUPPORTING_TASK_TYPE:
         pytest.skip(f"Model {embedding_model_id} doesn't support task types")
 
-    query_response = llama_stack_client.inference.embeddings(
+    query_response = ogx_client.inference.embeddings(
         model_id=embedding_model_id,
         contents=["What is machine learning?"],
         task_type="query",
@@ -300,18 +300,18 @@ def test_asymmetric_embeddings(llama_stack_client, embedding_model_id):
 
 ## TypeScript Client Replays
 
-TypeScript SDK tests can run alongside Python tests when testing against `server:<config>` stacks. Set `TS_CLIENT_PATH` to the path or version of `llama-stack-client-typescript` to enable:
+TypeScript SDK tests can run alongside Python tests when testing against `server:<config>` stacks. Set `TS_CLIENT_PATH` to the path or version of `ogx-client-typescript` to enable:
 
 ```bash
 # Use published npm package (responses suite)
 TS_CLIENT_PATH=^0.3.2 scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
 
 # Use local checkout from ~/.cache (recommended for development)
-git clone https://github.com/llamastack/llama-stack-client-typescript.git ~/.cache/llama-stack-client-typescript
-TS_CLIENT_PATH=~/.cache/llama-stack-client-typescript scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
+git clone https://github.com/ogx-ai/ogx-client-typescript.git ~/.cache/ogx-client-typescript
+TS_CLIENT_PATH=~/.cache/ogx-client-typescript scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
 
 # Run base suite with TypeScript tests
-TS_CLIENT_PATH=~/.cache/llama-stack-client-typescript scripts/integration-tests.sh --stack-config server:ci-tests --suite base --setup ollama
+TS_CLIENT_PATH=~/.cache/ogx-client-typescript scripts/integration-tests.sh --stack-config server:ci-tests --suite base --setup ollama
 ```
 
 TypeScript tests run immediately after Python tests pass, using the same replay fixtures. The mapping between Python suites/setups and TypeScript test files is defined in `tests/integration/client-typescript/suites.json`.
@@ -352,7 +352,7 @@ integration/
 
 ## Recording System Internals
 
-The record/replay system is implemented in `src/llama_stack/testing/api_recorder.py`. Key implementation details:
+The record/replay system is implemented in `src/ogx/testing/api_recorder.py`. Key implementation details:
 
 - **Request hashing**: Each API call is matched to a recording by hashing its parameters (method name, model, messages, etc.). This allows replay even when test execution order changes.
 - **Deterministic IDs**: During replay, resource IDs (files, vector stores, etc.) are generated deterministically using counters, so tests produce the same IDs across runs.

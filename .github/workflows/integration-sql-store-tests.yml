@@ -12,7 +12,7 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/llama_stack/providers/utils/sqlstore/**'
+      - 'src/ogx/providers/utils/sqlstore/**'
       - 'tests/integration/sqlstore/**'
       - 'uv.lock'
       - 'pyproject.toml'
@@ -39,9 +39,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: llamastack
-          POSTGRES_PASSWORD: llamastack
-          POSTGRES_DB: llamastack
+          POSTGRES_USER: ogx
+          POSTGRES_PASSWORD: ogx
+          POSTGRES_DB: ogx
         ports:
           - 5432:5432
         options: >-
@@ -64,15 +64,15 @@ jobs:
           ENABLE_POSTGRES_TESTS: "true"
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
-          POSTGRES_DB: llamastack
-          POSTGRES_USER: llamastack
-          POSTGRES_PASSWORD: llamastack
+          POSTGRES_DB: ogx
+          POSTGRES_USER: ogx
+          POSTGRES_PASSWORD: ogx
         run: |
           uv run pytest -sv tests/integration/providers/utils/sqlstore/
 
       - name: Upload test logs
         if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: postgres-test-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.python-version }}
           path: |

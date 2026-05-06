@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -21,9 +21,9 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from llama_stack.core.datatypes import Api
-from llama_stack.core.stack import run_config_from_dynamic_config_spec
-from llama_stack_api import ProviderSpec
+from ogx.core.datatypes import Api
+from ogx.core.stack import run_config_from_dynamic_config_spec
+from ogx_api import ProviderSpec
 
 
 @pytest.fixture(autouse=True)
@@ -188,7 +188,7 @@ class TestEnvVarSubstitution:
 
     def test_missing_required_env_var_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("MY_PROVIDER_API_KEY", raising=False)
-        from llama_stack.core.stack import EnvVarError
+        from ogx.core.stack import EnvVarError
 
         with pytest.raises(EnvVarError, match="MY_PROVIDER_API_KEY"):
             run_config_from_dynamic_config_spec(
@@ -233,7 +233,7 @@ class TestConfigShape:
         # The template is unresolved at this point — resolution happens when the config
         # is loaded at server-start time.  Verify the template is formed correctly and
         # that replace_env_vars resolves it to SQLITE_STORE_DIR.
-        from llama_stack.core.stack import replace_env_vars
+        from ogx.core.stack import replace_env_vars
 
         resolved_kv = replace_env_vars(backends["kv_default"].db_path)
         resolved_sql = replace_env_vars(backends["sql_default"].db_path)

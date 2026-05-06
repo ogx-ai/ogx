@@ -10,9 +10,9 @@ on:
       - 'release-[0-9]+.[0-9]+.[0-9]+'
       - 'release-[0-9]+.[0-9]+'
     paths:
-      - 'src/llama_stack/core/datatypes.py'
-      - 'src/llama_stack/providers/datatypes.py'
-      - 'src/llama_stack/distributions/**/config.yaml'
+      - 'src/ogx/core/datatypes.py'
+      - 'src/ogx/providers/datatypes.py'
+      - 'src/ogx/distributions/**/config.yaml'
       - 'tests/backward_compat/**'
       - '.github/workflows/backward-compat.yml'
   merge_group:
@@ -41,7 +41,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
 
@@ -54,7 +54,7 @@ jobs:
         run: |
           # Get list of config.yaml paths from main
           git fetch origin main
-          CONFIG_PATHS=$(git ls-tree -r --name-only origin/main | grep "src/llama_stack/distributions/.*/config.yaml$" || true)
+          CONFIG_PATHS=$(git ls-tree -r --name-only origin/main | grep "src/ogx/distributions/.*/config.yaml$" || true)
 
           if [ -z "$CONFIG_PATHS" ]; then
             echo "No config.yaml files found in main branch"
@@ -177,7 +177,7 @@ jobs:
       - name: Extract ci-tests config.yaml from main
         run: |
           git fetch origin main
-          git show origin/main:src/llama_stack/distributions/ci-tests/config.yaml > /tmp/main-ci-tests-config.yaml
+          git show origin/main:src/ogx/distributions/ci-tests/config.yaml > /tmp/main-ci-tests-config.yaml
           echo "Extracted ci-tests config.yaml from main branch"
 
       - name: Setup test environment
@@ -300,10 +300,10 @@ jobs:
           RELEASE_TAG="${{ steps.get_release.outputs.tag }}"
 
           # Try with src/ prefix first (newer releases), then without (older releases)
-          if git show "$RELEASE_TAG:src/llama_stack/distributions/ci-tests/config.yaml" > /tmp/release-ci-tests-config.yaml 2>/dev/null; then
+          if git show "$RELEASE_TAG:src/ogx/distributions/ci-tests/config.yaml" > /tmp/release-ci-tests-config.yaml 2>/dev/null; then
             echo "Extracted ci-tests config.yaml from release $RELEASE_TAG (src/ path)"
             echo "has_config=true" >> "$GITHUB_OUTPUT"
-          elif git show "$RELEASE_TAG:llama_stack/distributions/ci-tests/config.yaml" > /tmp/release-ci-tests-config.yaml 2>/dev/null; then
+          elif git show "$RELEASE_TAG:ogx/distributions/ci-tests/config.yaml" > /tmp/release-ci-tests-config.yaml 2>/dev/null; then
             echo "Extracted ci-tests config.yaml from release $RELEASE_TAG (old path)"
             echo "has_config=true" >> "$GITHUB_OUTPUT"
           else
@@ -451,7 +451,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
 
@@ -484,7 +484,7 @@ jobs:
           RELEASE_TAG="${{ steps.get_release.outputs.tag }}"
 
           # Get config.yaml files from the release (try both src/ and old path)
-          CONFIG_PATHS=$(git ls-tree -r --name-only "$RELEASE_TAG" | grep "llama_stack/distributions/.*/config.yaml$" || true)
+          CONFIG_PATHS=$(git ls-tree -r --name-only "$RELEASE_TAG" | grep "ogx/distributions/.*/config.yaml$" || true)
 
           if [ -z "$CONFIG_PATHS" ]; then
             echo "::warning::No config.yaml files found in release $RELEASE_TAG"

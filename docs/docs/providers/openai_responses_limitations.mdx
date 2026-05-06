@@ -1,5 +1,5 @@
 ---
-title: Known Limitations of the OpenAI-compatible Responses API in Llama Stack
+title: Known Limitations of the OpenAI-compatible Responses API in OGX
 description: Limitations of Responses API
 sidebar_label: Limitations of Responses API
 sidebar_position: 1
@@ -7,17 +7,17 @@ sidebar_position: 1
 
 ## Issues
 
-This document outlines known limitations and inconsistencies between Llama Stack's Responses API and OpenAI's Responses API. This comparison is based on OpenAI's API and reflects a comparison with the OpenAI APIs as of October 6, 2025 (OpenAI's client version `openai==1.107`).
+This document outlines known limitations and inconsistencies between OGX's Responses API and OpenAI's Responses API. This comparison is based on OpenAI's API and reflects a comparison with the OpenAI APIs as of October 6, 2025 (OpenAI's client version `openai==1.107`).
 See the OpenAI [changelog](https://platform.openai.com/docs/changelog) for details of any new functionality that has been added since that date. Links to issues are included so readers can read about status, post comments, and/or subscribe for updates relating to any limitations that are of specific interest to them. We would also love any other feedback on any use-cases you try that do not work to help prioritize the pieces left to implement.
-Please open new issues in the [meta-llama/llama-stack](https://github.com/meta-llama/llama-stack) GitHub repository with details of anything that does not work that does not already have an open issue.
+Please open new issues in the [meta-llama/ogx](https://github.com/ogx-ai/ogx) GitHub repository with details of anything that does not work that does not already have an open issue.
 
 ### Web-search tool compatibility
 
 **Status:** Partial Implementation
 
-**Issue:** https://github.com/llamastack/llama-stack/issues/4442
+**Issue:** https://github.com/ogx-ai/ogx/issues/4442
 
-Llama Stack offers an OpenAI compatible Web Search tool. To have a feature complete implementation of Web Search that is compatible with what OpenAI's tool offers, the following features need to be implemented:
+OGX offers an OpenAI compatible Web Search tool. To have a feature complete implementation of Web Search that is compatible with what OpenAI's tool offers, the following features need to be implemented:
 
 - [ ] Domain filtering: Restrict searching to a whitelisted subset of domains
 - [ ] User location: Refine search results based on geography by specifying an approximate user location using country, city, region, and/or timezone
@@ -29,11 +29,11 @@ Llama Stack offers an OpenAI compatible Web Search tool. To have a feature compl
 
 **Status:** Partially Implemented
 
-**Issue:** https://github.com/llamastack/llama-stack/issues/4440
+**Issue:** https://github.com/ogx-ai/ogx/issues/4440
 
 OpenAI allows you to return an optional subset of additional/power user data in their API response.
-Llama Stack's API now supports these fields, but most of them are not implemented. Not all of them will
-make sense to implement in llama stack, but this meta issue tracks which of them are implemented and which are not.
+OGX's API now supports these fields, but most of them are not implemented. Not all of them will
+make sense to implement in ogx, but this meta issue tracks which of them are implemented and which are not.
 
 - [ ] `web_search_call.action.sources`
 - [ ] `code_interpreter_call.outputs`
@@ -50,7 +50,7 @@ make sense to implement in llama stack, but this meta issue tracks which of them
 
 **Status:** Not Implemented
 
-**Issue:** [#4404](https://github.com/llamastack/llama-stack/issues/4404)
+**Issue:** [#4404](https://github.com/ogx-ai/ogx/issues/4404)
 
 Responses API allows you to preserve reasoning context between turns with the reasoning.encrypted_content include value.
 The field exists as a no-op right now, and needs to be wired up to providers.
@@ -63,12 +63,12 @@ The field exists as a no-op right now, and needs to be wired up to providers.
 
 OpenAI's Responses API includes an ecosystem of built-in tools (e.g., code interpreter) that lower the barrier to entry for agentic workflows. These tools are typically aligned with specific model training.
 
-**Current Status in Llama Stack:**
+**Current Status in OGX:**
 - Some built-in tools exist (file search, web search)
 - Missing tools include code interpreter, computer use, and image generation
 - Some built-in tools may require additional APIs (e.g., [containers API](https://platform.openai.com/docs/api-reference/containers) for code interpreter)
 
-It's unclear whether there is demand for additional built-in tools in Llama Stack. No upstream issues have been filed for adding more built-in tools.
+It's unclear whether there is demand for additional built-in tools in OGX. No upstream issues have been filed for adding more built-in tools.
 
 ---
 
@@ -76,7 +76,7 @@ It's unclear whether there is demand for additional built-in tools in Llama Stac
 
 **Status:** Not Working
 
-Response branching, as discussed in the [Agents vs OpenAI Responses API documentation](https://llamastack.github.io/docs/building_applications/responses_vs_agents), is not currently functional.
+Response branching, as discussed in the [Agents vs OpenAI Responses API documentation](https://ogx-ai.github.io/docs/building_applications/responses_vs_agents), is not currently functional.
 
 ---
 
@@ -84,9 +84,9 @@ Response branching, as discussed in the [Agents vs OpenAI Responses API document
 
 **Status:** Not Implemented
 
-**Issue:** [#4381](https://github.com/llamastack/llama-stack/issues/4381)
+**Issue:** [#4381](https://github.com/ogx-ai/ogx/issues/4381)
 
-OpenAI's platform allows users to track agentic users using a safety identifier passed with each response. When requests violate moderation or safety rules, account holders are alerted and automated actions can be taken. This capability is not currently available in Llama Stack.
+OpenAI's platform allows users to track agentic users using a safety identifier passed with each response. When requests violate moderation or safety rules, account holders are alerted and automated actions can be taken. This capability is not currently available in OGX.
 
 ---
 
@@ -94,7 +94,7 @@ OpenAI's platform allows users to track agentic users using a safety identifier 
 
 **Status:** Partially Implemented
 
-The `reasoning` object in the output of Responses works for inference providers such as vLLM that output reasoning traces in chat completions requests.  It does not work for other providers such as OpenAI's hosted service.  See [#3551](https://github.com/llamastack/llama-stack/issues/3551) for more details.
+The `reasoning` object in the output of Responses works for inference providers such as vLLM that output reasoning traces in chat completions requests.  It does not work for other providers such as OpenAI's hosted service.  See [#3551](https://github.com/ogx-ai/ogx/issues/3551) for more details.
 
 ---
 
@@ -102,9 +102,9 @@ The `reasoning` object in the output of Responses works for inference providers 
 
 **Status:** Not Implemented
 
-**Issue:** [#3550](https://github.com/llamastack/llama-stack/issues/3550)
+**Issue:** [#3550](https://github.com/ogx-ai/ogx/issues/3550)
 
-Responses has a field `service_tier` that can be used to prioritize access to inference resources.  Not all inference providers have such a concept, but Llama Stack pass through this value for those providers that do.  Currently it does not.
+Responses has a field `service_tier` that can be used to prioritize access to inference resources.  Not all inference providers have such a concept, but OGX pass through this value for those providers that do.  Currently it does not.
 
 ---
 
@@ -112,9 +112,9 @@ Responses has a field `service_tier` that can be used to prioritize access to in
 
 **Status:** Not Implemented
 
-**Issue:** [#3567](https://github.com/llamastack/llama-stack/issues/3567)
+**Issue:** [#3567](https://github.com/ogx-ai/ogx/issues/3567)
 
-The return object from a call to Responses includes a field for indicating why a response is incomplete if it is.  For example, if the model stops generating because it has reached the specified max output tokens (see above), this field should be set to "IncompleteDetails(reason='max_output_tokens')".  This is not implemented in Llama Stack.
+The return object from a call to Responses includes a field for indicating why a response is incomplete if it is.  For example, if the model stops generating because it has reached the specified max output tokens (see above), this field should be set to "IncompleteDetails(reason='max_output_tokens')".  This is not implemented in OGX.
 
 
 ---
@@ -123,7 +123,7 @@ The return object from a call to Responses includes a field for indicating why a
 
 **Status:** Feature Request
 
-When calling the OpenAI Responses API, model outputs go through safety models configured by OpenAI administrators. Perhaps Llama Stack should provide a mechanism to configure safety models (or non-model logic) for all Responses requests, either through `config.yaml` or an administrative API.
+When calling the OpenAI Responses API, model outputs go through safety models configured by OpenAI administrators. Perhaps OGX should provide a mechanism to configure safety models (or non-model logic) for all Responses requests, either through `config.yaml` or an administrative API.
 
 ---
 
@@ -131,9 +131,9 @@ When calling the OpenAI Responses API, model outputs go through safety models co
 
 **Status:** Feature Request
 
-**Issue:** [#3325](https://github.com/llamastack/llama-stack/issues/3325)
+**Issue:** [#3325](https://github.com/ogx-ai/ogx/issues/3325)
 
-OpenAI has not released a way for users to configure their own guardrails. However, Llama Stack users may want this capability to complement or replace global guardrails. This could be implemented as a non-breaking, additive difference from the OpenAI API.
+OpenAI has not released a way for users to configure their own guardrails. However, OGX users may want this capability to complement or replace global guardrails. This could be implemented as a non-breaking, additive difference from the OpenAI API.
 
 ---
 
@@ -147,7 +147,7 @@ See the [MCP specification](https://modelcontextprotocol.io/specification/draft/
 **Open Questions:**
 - Does this work in OpenAI's Responses API reference implementation?
 - If not, is there a reasonable way to make that work within the API as is? Or would the API need to change?
-- Does this work in Llama Stack?
+- Does this work in OGX?
 
 ---
 
@@ -160,7 +160,7 @@ Sampling allows MCP tools to query the generative AI model. See the [MCP specifi
 **Open Questions:**
 - Does this work in OpenAI's Responses API reference implementation?
 - If not, is there a reasonable way to make that work within the API as is? Or would the API need to change?
-- Does this work in Llama Stack?
+- Does this work in OGX?
 
 ---
 
@@ -171,9 +171,9 @@ Sampling allows MCP tools to query the generative AI model. See the [MCP specifi
 OpenAI provides a [prompt caching](https://platform.openai.com/docs/guides/prompt-caching) mechanism in Responses that is enabled for its most recent models.
 
 **Open Questions:**
-- Does this work in Llama Stack?
+- Does this work in OGX?
 - If not, is there a reasonable way to make that work for those inference providers that have this capability by passing through the provided `prompt_cache_key` to the inference provider?
-- Is there a reasonable way to make that work for inference providers that don't build in this capability by doing some sort of caching at the Llama Stack layer?
+- Is there a reasonable way to make that work for inference providers that don't build in this capability by doing some sort of caching at the OGX layer?
 
 ---
 
@@ -183,7 +183,7 @@ OpenAI provides a [prompt caching](https://platform.openai.com/docs/guides/promp
 
 **Status:** In Progress
 
-Align Llama Stack Responses Paralell tool calls behavior with OpenAI and harden the implementation with tests.
+Align OGX Responses Parallel tool calls behavior with OpenAI and harden the implementation with tests.
 
 ---
 
@@ -191,7 +191,7 @@ Align Llama Stack Responses Paralell tool calls behavior with OpenAI and harden 
 
 **Status:** In Progress
 
-**Issue:** [#3552](https://github.com/llamastack/llama-stack/issues/3552)
+**Issue:** [#3552](https://github.com/ogx-ai/ogx/issues/3552)
 
 The `top_logprobs` parameter from OpenAI's Responses API extends the functionality obtained by including `message.output_text.logprobs` in the `include` parameter list (as discussed in the Include section above).
 It enables users to also get logprobs for alternative tokens.
@@ -202,9 +202,9 @@ It enables users to also get logprobs for alternative tokens.
 
 **Status:** Merged [Planned 0.4.z]
 
-**Issue:** [#3806](https://github.com/llamastack/llama-stack/issues/3806)
+**Issue:** [#3806](https://github.com/ogx-ai/ogx/issues/3806)
 
-Support OpenTelemetry as the preferred way to instrument Llama Stack.
+Support OpenTelemetry as the preferred way to instrument OGX.
 
 **Remaining Issues:**
 - Some data needs to be converted to follow semantic conventions for OTEL genai data

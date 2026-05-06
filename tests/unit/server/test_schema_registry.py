@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,8 +6,8 @@
 
 from pydantic import BaseModel
 
-from llama_stack_api import Conversation, SamplingStrategy
-from llama_stack_api.schema_utils import (
+from ogx_api import Conversation, SamplingStrategy
+from ogx_api.schema_utils import (
     clear_dynamic_schema_types,
     get_registered_schema_info,
     iter_dynamic_schema_types,

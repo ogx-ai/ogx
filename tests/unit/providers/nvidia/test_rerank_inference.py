@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from llama_stack.providers.remote.inference.nvidia.config import NVIDIAConfig
-from llama_stack.providers.remote.inference.nvidia.nvidia import NVIDIAInferenceAdapter
-from llama_stack.providers.utils.inference.openai_mixin import OpenAIMixin
-from llama_stack_api import ModelType
-from llama_stack_api.inference import RerankRequest
+from ogx.providers.remote.inference.nvidia.config import NVIDIAConfig
+from ogx.providers.remote.inference.nvidia.nvidia import NVIDIAInferenceAdapter
+from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx_api import ModelType
+from ogx_api.inference import RerankRequest
 
 
 class MockResponse:

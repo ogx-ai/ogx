@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,8 +15,8 @@ PROMPT_TOKENS=512
 OUTPUT_TOKENS=256
 RATE_TYPE="concurrent"
 RATE="1,2,4,8,16,32,64,128"
-STACK_DEPLOYMENT="llama-stack-benchmark-server"
-STACK_URL="http://llama-stack-benchmark-service:8323/v1/openai"
+STACK_DEPLOYMENT="ogx-benchmark-server"
+STACK_URL="http://ogx-benchmark-service:8323/v1/openai"
 VLLM_DEPLOYMENT="vllm-server"
 OUTPUT_FILE=""
 
@@ -31,14 +31,14 @@ usage() {
     echo "  -r, --rate-type <type>        Rate type (default: concurrent)"
     echo "  -c, --rate                    Rate (default: 1,2,4,8,16,32,64,128)"
     echo "  --output-file <path>          Output file path (default: auto-generated)"
-    echo "  --stack-deployment <name>     Name of the stack deployment (default: llama-stack-benchmark-server)"
+    echo "  --stack-deployment <name>     Name of the stack deployment (default: ogx-benchmark-server)"
     echo "  --vllm-deployment <name>      Name of the vllm deployment (default: vllm-server)"
-    echo "  --stack-url <url>             URL of the stack service (default: http://llama-stack-benchmark-service:8323/v1/openai)"
+    echo "  --stack-url <url>             URL of the stack service (default: http://ogx-benchmark-service:8323/v1/openai)"
     echo "  -h, --help                    Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 --target vllm                              # Benchmark vLLM direct"
-    echo "  $0 --target stack                             # Benchmark Llama Stack (default)"
+    echo "  $0 --target stack                             # Benchmark OGX (default)"
     echo "  $0 -t vllm -s 60 -p 512 -o 256               # vLLM with custom parameters"
     echo "  $0 --output-file results/my-benchmark.txt     # Specify custom output file"
     echo "  $0 --stack-deployment my-stack-server         # Use custom stack deployment name"
@@ -113,7 +113,7 @@ if [[ "$TARGET" == "vllm" ]]; then
 else
     BASE_URL="$STACK_URL"
     JOB_NAME="guidellm-stack-benchmark-job"
-    echo "Benchmarking Llama Stack with GuideLLM..."
+    echo "Benchmarking OGX with GuideLLM..."
 fi
 
 

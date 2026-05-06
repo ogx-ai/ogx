@@ -1,6 +1,6 @@
-# Llama Stack CI
+# OGX CI
 
-Llama Stack uses GitHub Actions for Continuous Integration (CI). Below is a table detailing what CI the project includes and the purpose.
+OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detailing what CI the project includes and the purpose.
 
 | Name | File | Purpose |
 | ---- | ---- | ------- |
@@ -18,12 +18,12 @@ Llama Stack uses GitHub Actions for Continuous Integration (CI). Below is a tabl
 | Integration Tests (Replay) | [integration-tests.yml](integration-tests.yml) | Run the integration test suites from tests/integration in replay mode |
 | Vector IO Integration Tests | [integration-vector-io-tests.yml](integration-vector-io-tests.yml) | Run the integration test suite with various VectorIO providers |
 | OpenAPI Generator SDK Validation | [openapi-generator-validation.yml](openapi-generator-validation.yml) | Validate OpenAPI Generator SDK generation |
-| OpenResponses Conformance Tests | [openresponses-conformance.yml](openresponses-conformance.yml) | Run OpenResponses conformance tests against llama-stack Responses API |
+| OpenResponses Conformance Tests | [openresponses-conformance.yml](openresponses-conformance.yml) | Run OpenResponses conformance tests against ogx Responses API |
 | Post-release automation | [post-release.yml](post-release.yml) | Post-release automation |
 | Pre-commit | [pre-commit.yml](pre-commit.yml) | Run pre-commit checks |
 | Prepare release | [prepare-release.yml](prepare-release.yml) | Prepare release |
-| Test Llama Stack Build | [providers-build.yml](providers-build.yml) | Test llama stack build |
-| Test llama stack list-deps | [providers-list-deps.yml](providers-list-deps.yml) | Test llama stack list-deps |
+| Test OGX Build | [providers-build.yml](providers-build.yml) | Test ogx build |
+| Test ogx stack list-deps | [providers-list-deps.yml](providers-list-deps.yml) | Test ogx stack list-deps |
 | Build, test, and publish packages | [pypi.yml](pypi.yml) | Build, test, and publish packages |
 | Integration Tests (Record) | [record-integration-tests.yml](record-integration-tests.yml) | Auto-record missing test recordings for PR |
 | Release Branch Scheduled CI | [release-branch-scheduled-ci.yml](release-branch-scheduled-ci.yml) | Scheduled CI checks for active release branches |
@@ -32,5 +32,6 @@ Llama Stack uses GitHub Actions for Continuous Integration (CI). Below is a tabl
 | Close stale issues and PRs | [stale_bot.yml](stale_bot.yml) | Run the Stale Bot action |
 | Test External Providers Installed via Module | [test-external-provider-module.yml](test-external-provider-module.yml) | Test External Provider installation via Python module |
 | Test External API and Providers | [test-external.yml](test-external.yml) | Test the External API and Provider mechanisms |
+| Trigger Docs Deploy | [trigger-docs-deploy.yml](trigger-docs-deploy.yml) | Trigger docs site rebuild after docs change |
 | UI Tests | [ui-unit-tests.yml](ui-unit-tests.yml) | Run the UI test suite |
 | Unit Tests | [unit-tests.yml](unit-tests.yml) | Run the unit test suite |

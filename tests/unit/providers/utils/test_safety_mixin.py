@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,16 +8,16 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.providers.inline.safety.prompt_guard.prompt_guard import (
+from ogx.providers.inline.safety.prompt_guard.prompt_guard import (
     PromptGuardSafetyImpl,
 )
-from llama_stack.providers.remote.safety.bedrock.bedrock import BedrockSafetyAdapter
-from llama_stack.providers.remote.safety.nvidia.nvidia import NVIDIASafetyAdapter
-from llama_stack.providers.remote.safety.sambanova.sambanova import (
+from ogx.providers.remote.safety.bedrock.bedrock import BedrockSafetyAdapter
+from ogx.providers.remote.safety.nvidia.nvidia import NVIDIASafetyAdapter
+from ogx.providers.remote.safety.sambanova.sambanova import (
     SambaNovaSafetyAdapter,
 )
-from llama_stack.providers.utils.safety import ShieldToModerationMixin
-from llama_stack_api import (
+from ogx.providers.utils.safety import ShieldToModerationMixin
+from ogx_api import (
     OpenAIUserMessageParam,
     RunModerationRequest,
     RunShieldRequest,

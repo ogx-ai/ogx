@@ -1,0 +1,72 @@
+---
+title: Anthropic Messages API
+description: Anthropic Messages API compatibility in OGX
+sidebar_label: Anthropic Messages
+sidebar_position: 1
+---
+
+# Anthropic Messages API
+
+OGX provides native support for the Anthropic Messages API at `/v1/messages`. Point the official Anthropic SDK at your OGX server and use any model.
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(base_url="http://localhost:8321/v1", api_key="fake")
+message = client.messages.create(
+    model="llama-3.3-70b",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)
+```
+
+## How it works
+
+The Messages adapter checks whether the configured inference provider natively supports the `/v1/messages` endpoint. If it does, the request is forwarded directly. Otherwise, the adapter translates between Anthropic and OpenAI formats.
+
+```mermaid
+flowchart TD
+    A["Anthropic SDK\nPOST /v1/messages"] --> B["Messages Adapter"]
+    B --> C{"Provider supports\n/v1/messages natively?"}
+    C -- Yes --> D["Forward request directly\n(no translation)"]
+    C -- No --> E["Translate Anthropic → OpenAI"]
+    E --> F["inference_api.openai_chat_completion()"]
+    F --> G["Translate OpenAI → Anthropic"]
+    D --> H["Inference Provider\n(Ollama, vLLM)"]
+    G --> I["Inference Provider\n(OpenAI, Bedrock, etc.)"]
+    H --> J["Anthropic-format response"]
+    I --> K["Translate response\nOpenAI → Anthropic"]
+    K --> J
+```
+
+**Translation path** (most providers): the adapter converts the full request and response between formats:
+
+- **Request**: Anthropic `system`, `messages`, `tools`, `tool_choice`, `stop_sequences`, and `thinking` are mapped to their OpenAI equivalents
+- **Response**: OpenAI completions are converted back to Anthropic format, including `content` blocks, `stop_reason`, and `usage`
+- **Streaming**: OpenAI streaming chunks are transformed into Anthropic SSE events (`message_start`, `content_block_delta`, `message_delta`, etc.)
+- **Tool use**: Anthropic `tool_use` / `tool_result` blocks are translated to and from OpenAI `tool_calls` / `tool` messages
+
+**Passthrough path** (Ollama, vLLM): the request is forwarded directly to the provider's `/v1/messages` endpoint without any translation, since these providers natively speak the Anthropic format.
+
+## Implemented endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/messages` | POST | Create a message (streaming and non-streaming) |
+| `/v1/messages/count_tokens` | POST | Count tokens for a message |
+
+## Supported features
+
+- System messages (string or content blocks)
+- Multi-turn conversations
+- Streaming via Server-Sent Events
+- Tool definitions and tool use
+- Extended thinking (thinking blocks)
+- Temperature, top_p, top_k, stop sequences
+- Token counting
+
+## Not yet implemented
+
+- Message Batches (`/v1/messages/batches`)
+
+For property-level conformance details and missing properties, see the [conformance report](/docs/api-anthropic-messages/conformance).

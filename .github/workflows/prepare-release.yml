@@ -7,7 +7,7 @@
 #
 # Automates:
 #   - Updating fallback_version to the release version in both pyproject.toml files
-#   - Updating llama-stack-client pins to the release version
+#   - Updating ogx-client pins to the release version
 #   - Committing all changes directly to the release branch
 #
 # =============================================================================
@@ -66,12 +66,12 @@ jobs:
 
           # --- Update fallback_version in both pyproject.toml files ---
           sed -i "s/^fallback_version = .*/fallback_version = \"${VERSION}\"/" pyproject.toml
-          sed -i "s/^fallback_version = .*/fallback_version = \"${VERSION}\"/" src/llama_stack_api/pyproject.toml
+          sed -i "s/^fallback_version = .*/fallback_version = \"${VERSION}\"/" src/ogx_api/pyproject.toml
 
-          # --- Update llama-stack-client pins in pyproject.toml ---
+          # --- Update ogx-client pins in pyproject.toml ---
           # Update the pin in [project.optional-dependencies] and [dependency-groups]
-          # Match patterns like: "llama-stack-client>=X.Y.Z" or "llama-stack-client==X.Y.Z"
-          sed -i -E "s/\"llama-stack-client[><=!]+[0-9]+\.[0-9]+\.[0-9]+[^\"]*\"/\"llama-stack-client==${VERSION}\"/" pyproject.toml
+          # Match patterns like: "ogx-client>=X.Y.Z" or "ogx-client==X.Y.Z"
+          sed -i -E "s/\"ogx-client[><=!]+[0-9]+\.[0-9]+\.[0-9]+[^\"]*\"/\"ogx-client==${VERSION}\"/" pyproject.toml
 
           # Show what changed
           echo "=== Changes ==="
@@ -85,7 +85,7 @@ jobs:
 
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml src/llama_stack_api/pyproject.toml
+          git add pyproject.toml src/ogx_api/pyproject.toml
           git commit -s -m "chore: prepare release v${VERSION}"
           git push origin "HEAD:${RELEASE_BRANCH}"
           echo "Committed version updates directly to ${RELEASE_BRANCH}"

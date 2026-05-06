@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -19,7 +19,7 @@ def mcp_server():
         yield mcp_server_info
 
 
-def test_mcp_invocation(llama_stack_client, text_model_id, mcp_server):
+def test_mcp_invocation(ogx_client, text_model_id, mcp_server):
     """Test MCP tool invocation through the Responses/Agent API.
 
     MCP tools are passed directly as tool definitions to the Agent;
@@ -40,7 +40,7 @@ def test_mcp_invocation(llama_stack_client, text_model_id, mcp_server):
         }
     ]
     agent = Agent(
-        client=llama_stack_client,
+        client=ogx_client,
         model=text_model_id,
         instructions="You are a helpful assistant.",
         tools=tool_defs,

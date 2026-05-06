@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 import pytest
-from llama_stack_client import BadRequestError as LlamaStackBadRequestError
+from llama_stack_client import BadRequestError as OGXBadRequestError
 from llama_stack_client.types.alpha import InferenceRerankResponse
 from llama_stack_client.types.shared.interleaved_content import (
     ImageContentItem,
@@ -14,7 +14,7 @@ from llama_stack_client.types.shared.interleaved_content import (
     TextContentItem,
 )
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
 # Test data
 DUMMY_STRING = "string_1"
@@ -99,7 +99,7 @@ def test_rerank_text(client_with_models, rerank_model_id, query, items, inferenc
 
     response = client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
     assert isinstance(response, list)
-    # TODO: Add type validation for response items once InferenceRerankResponseItem is exported from llama stack client.
+    # TODO: Add type validation for response items once InferenceRerankResponseItem is exported from ogx client.
     assert len(response) <= len(items)
     _validate_rerank_response(response, items)
 
@@ -125,9 +125,7 @@ def test_rerank_image(client_with_models, rerank_model_id, query, items, inferen
     skip_if_provider_doesnt_support_rerank(inference_provider_type)
 
     if rerank_model_id not in PROVIDERS_SUPPORTING_MEDIA:
-        error_type = (
-            ValueError if isinstance(client_with_models, LlamaStackAsLibraryClient) else LlamaStackBadRequestError
-        )
+        error_type = ValueError if isinstance(client_with_models, OGXAsLibraryClient) else OGXBadRequestError
         with pytest.raises(error_type):
             client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
     else:

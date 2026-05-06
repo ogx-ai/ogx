@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,8 +8,8 @@ import random
 
 import pytest
 
-from llama_stack.core.prompts.prompts import PromptServiceConfig, PromptServiceImpl
-from llama_stack.core.storage.datatypes import (
+from ogx.core.prompts.prompts import PromptServiceConfig, PromptServiceImpl
+from ogx.core.storage.datatypes import (
     InferenceStoreReference,
     KVStoreReference,
     ServerStoresConfig,
@@ -18,7 +18,7 @@ from llama_stack.core.storage.datatypes import (
     SqlStoreReference,
     StorageConfig,
 )
-from llama_stack.core.storage.kvstore import register_kvstore_backends
+from ogx.core.storage.kvstore import register_kvstore_backends
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ async def temp_prompt_store(tmp_path_factory):
     temp_dir = tmp_path_factory.getbasetemp()
     db_path = str(temp_dir / f"{unique_id}.db")
 
-    from llama_stack.core.datatypes import StackConfig
+    from ogx.core.datatypes import StackConfig
 
     storage = StorageConfig(
         backends={

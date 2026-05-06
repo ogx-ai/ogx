@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -79,10 +79,10 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "SAFETY_MODEL": "ollama/llama-guard3:1b",
             "POSTGRES_HOST": "127.0.0.1",
             "POSTGRES_PORT": "5432",
-            "POSTGRES_DB": "llamastack",
-            "POSTGRES_USER": "llamastack",
-            "POSTGRES_PASSWORD": "llamastack",
-            "LLAMA_STACK_LOGGING": "openai_responses=info",
+            "POSTGRES_DB": "ogx",
+            "POSTGRES_USER": "ogx",
+            "POSTGRES_PASSWORD": "ogx",
+            "OGX_LOGGING": "openai_responses=info",
         },
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
@@ -116,12 +116,12 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     "bedrock": Setup(
         name="bedrock",
         description=(
-            "AWS Bedrock via OpenAI-compatible Mantle API (OpenAI GPT-OSS; "
+            "AWS Bedrock via OpenAI-compatible API (OpenAI GPT-OSS; "
             "see AWS Chat Completions docs). No default vision model — GPT-OSS is text-only; "
             "tests that require vision_model_id skip unless you pass --vision-model."
         ),
         defaults={
-            "text_model": "bedrock/openai.gpt-oss-20b",
+            "text_model": "bedrock/openai.gpt-oss-20b-1:0",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
         },
@@ -158,6 +158,26 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="IBM WatsonX AI models",
         defaults={
             "text_model": "watsonx/meta-llama/llama-3-3-70b-instruct",
+        },
+    ),
+    "vertexai": Setup(
+        name="vertexai",
+        description="Google Vertex AI with Gemini models",
+        defaults={
+            "text_model": "vertexai/publishers/google/models/gemini-2.0-flash",
+            "vision_model": "vertexai/publishers/google/models/gemini-2.0-flash",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
+        },
+    ),
+    "tgi": Setup(
+        name="tgi",
+        description="Text Generation Inference (TGI) provider with a text model",
+        env={
+            "TGI_URL": "http://localhost:8080",
+        },
+        defaults={
+            "text_model": "tgi/Qwen/Qwen3-0.6B",
         },
     ),
     "together": Setup(
@@ -205,6 +225,15 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "text_model": "llama_openai_compat/Llama-3.3-8B-Instruct",
         },
     ),
+    "gemini": Setup(
+        name="gemini",
+        description="Google Gemini models via GenAI API",
+        defaults={
+            "text_model": "gemini/gemini-2.5-flash-lite",
+            "embedding_model": "gemini/text-embedding-004",
+            "embedding_dimension": 768,
+        },
+    ),
     "groq": Setup(
         name="groq",
         description="Groq models",
@@ -237,7 +266,8 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
 base_roots = [
     str(p)
     for p in this_dir.glob("*")
-    if p.is_dir() and p.name not in ("__pycache__", "fixtures", "test_cases", "recordings", "responses", "messages")
+    if p.is_dir()
+    and p.name not in ("__pycache__", "fixtures", "test_cases", "recordings", "responses", "messages", "interactions")
 ]
 
 SUITE_DEFINITIONS: dict[str, Suite] = {
@@ -287,6 +317,21 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="messages",
         roots=["tests/integration/messages"],
         default_setup="ollama-reasoning",
+    ),
+    # Exercises the /v1/messages translation path: Anthropic request format is
+    # translated to OpenAI Chat Completions, dispatched to OpenAI, and the response
+    # is translated back to Anthropic format. OpenAI is not in _NATIVE_MESSAGES_MODULES,
+    # so this setup guarantees the translation codepath in providers/inline/messages/impl.py
+    # is covered end-to-end (rather than the native passthrough used by the ollama suite).
+    "messages-openai": Suite(
+        name="messages-openai",
+        roots=["tests/integration/messages"],
+        default_setup="gpt",
+    ),
+    "interactions": Suite(
+        name="interactions",
+        roots=["tests/integration/interactions"],
+        default_setup="gemini",
     ),
     # Bedrock-specific tests with pre-recorded responses (no live API calls in CI)
     "bedrock": Suite(

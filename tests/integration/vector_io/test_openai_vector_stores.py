@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,9 +12,9 @@ from llama_stack_client import BadRequestError
 from openai import BadRequestError as OpenAIBadRequestError
 from openai import OpenAI
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
-from llama_stack.log import get_logger
-from llama_stack_api import ChunkMetadata, EmbeddedChunk, ExpiresAfter
+from ogx.core.library_client import OGXAsLibraryClient
+from ogx.log import get_logger
+from ogx_api import ChunkMetadata, EmbeddedChunk, ExpiresAfter
 
 from ..conftest import vector_provider_wrapper
 
@@ -106,7 +106,7 @@ def skip_if_provider_doesnt_support_openai_vector_stores_search(
     }
 
     # ChromaDB's default embedding function produces 384-dimensional embeddings whereas other providers produce 768-dimensional embeddings.
-    # More details: https://github.com/llamastack/llama-stack/issues/4588
+    # More details: https://github.com/ogx-ai/ogx/issues/4588
     # When using query_texts for keyword/hybrid search, the embedding dimension must match
     chromadb_default_embedding_dim = 384
 
@@ -149,7 +149,7 @@ def skip_if_provider_doesnt_support_openai_vector_stores_search(
 def sample_chunks():
     import time
 
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     chunks_data = [
         (
@@ -3563,7 +3563,7 @@ def test_openai_vector_store_with_chunks(
         },
     )
 
-    # Insert chunks using the native LlamaStack API (since OpenAI API doesn't have direct chunk insertion)
+    # Insert chunks using the native OGX API (since OpenAI API doesn't have direct chunk insertion)
     llama_client.vector_io.insert(
         vector_store_id=vector_store.id,
         chunks=sample_chunks,
@@ -3786,7 +3786,7 @@ def test_openai_vector_store_search_with_high_score_filter(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_weighted_ranker(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -3798,7 +3798,7 @@ def test_openai_vector_store_search_with_weighted_ranker(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -3884,7 +3884,7 @@ def test_openai_vector_store_search_with_weighted_ranker(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_rrf_ranker(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -3896,7 +3896,7 @@ def test_openai_vector_store_search_with_rrf_ranker(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -3937,7 +3937,7 @@ def test_openai_vector_store_search_with_rrf_ranker(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_ranker_defaults(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -3949,7 +3949,7 @@ def test_openai_vector_store_search_with_ranker_defaults(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -4014,7 +4014,7 @@ def test_openai_vector_store_search_neural_ranker_validation(
 
     compat_client = compat_client_with_empty_stores
 
-    # OpenAI client doesn't support search_mode parameter (it's a Llama Stack extension)
+    # OpenAI client doesn't support search_mode parameter (it's a OGX extension)
     if isinstance(compat_client, OpenAI):
         pytest.skip("OpenAI client doesn't support search_mode parameter")
     llama_client = client_with_models
@@ -4064,7 +4064,7 @@ def test_openai_vector_store_search_neural_ranker_validation(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_ranking_options_combined(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -4076,7 +4076,7 @@ def test_openai_vector_store_search_with_ranking_options_combined(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -4177,7 +4177,7 @@ def test_openai_vector_store_attach_file(
 ):
     """Test OpenAI vector store attach file."""
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     compat_client = compat_client_with_empty_stores
 
@@ -4361,7 +4361,7 @@ def test_openai_vector_store_attach_files_on_creation(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create some files and attach them to the vector store
     valid_file_ids = []
@@ -4426,7 +4426,7 @@ def test_openai_vector_store_list_files(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4501,7 +4501,7 @@ def test_openai_vector_store_list_files_invalid_vector_store(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    if isinstance(compat_client, LlamaStackAsLibraryClient):
+    if isinstance(compat_client, OGXAsLibraryClient):
         errors = ValueError
     else:
         errors = (BadRequestError, OpenAIBadRequestError)
@@ -4518,7 +4518,7 @@ def test_openai_vector_store_retrieve_file_contents(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4563,7 +4563,7 @@ def test_openai_vector_store_retrieve_file_contents(
     assert len(file_contents.data) == 1
     content = file_contents.data[0]
 
-    # llama-stack-client returns a model, openai-python is a badboy and returns a dict
+    # ogx-client returns a model, openai-python is a badboy and returns a dict
     if not isinstance(content, dict):
         content = content.model_dump()
     assert content["type"] == "text"
@@ -4579,7 +4579,7 @@ def test_openai_vector_store_delete_file(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4645,7 +4645,7 @@ def test_openai_vector_store_delete_file_removes_from_vector_store(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4697,7 +4697,7 @@ def test_openai_vector_store_update_file(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4754,7 +4754,7 @@ def test_create_vector_store_files_duplicate_vector_store_name(
     This test confirms that client.vector_stores.create() creates a unique ID
     """
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     compat_client = compat_client_with_empty_stores
 
@@ -4820,7 +4820,7 @@ def test_create_vector_store_files_duplicate_vector_store_name(
 @pytest.mark.parametrize("search_mode", ["vector", "keyword", "hybrid"])
 @vector_provider_wrapper
 def test_openai_vector_store_search_modes(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     search_mode,
@@ -4833,7 +4833,7 @@ def test_openai_vector_store_search_modes(
         client_with_models, search_mode, vector_io_provider_id, embedding_dimension
     )
 
-    vector_store = llama_stack_client.vector_stores.create(
+    vector_store = ogx_client.vector_stores.create(
         name=f"search_mode_test_{search_mode}",
         metadata={"purpose": "search_mode_testing"},
         extra_body={
@@ -4848,7 +4848,7 @@ def test_openai_vector_store_search_modes(
     )
     query = "Python programming language"
 
-    search_response = llama_stack_client.vector_stores.search(
+    search_response = ogx_client.vector_stores.search(
         vector_store_id=vector_store.id,
         query=query,
         max_num_results=4,
@@ -5182,7 +5182,7 @@ def test_openai_vector_store_file_batch_error_handling(
     assert batch.file_counts.failed >= 0  # Implementation may vary
 
     # Test retrieving non-existent batch (returns BadRequestError)
-    if isinstance(compat_client, LlamaStackAsLibraryClient):
+    if isinstance(compat_client, OGXAsLibraryClient):
         batch_errors = ValueError
     else:
         batch_errors = (BadRequestError, OpenAIBadRequestError)
@@ -5194,7 +5194,7 @@ def test_openai_vector_store_file_batch_error_handling(
         )
 
     # Test operations on non-existent vector store (returns BadRequestError)
-    if isinstance(compat_client, LlamaStackAsLibraryClient):
+    if isinstance(compat_client, OGXAsLibraryClient):
         vector_store_errors = ValueError
     else:
         vector_store_errors = (BadRequestError, OpenAIBadRequestError)

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llama_stack.core.connectors.connectors import (
+from ogx.core.connectors.connectors import (
     KEY_PREFIX,
     ConnectorServiceImpl,
 )
-from llama_stack_api import (
+from ogx_api import (
     Connector,
     ConnectorNotFoundError,
     ConnectorType,
@@ -64,7 +64,7 @@ async def connector_service(mock_kvstore):
     mock_config = MagicMock(spec=Connector)
 
     with patch(
-        "llama_stack.core.connectors.connectors.kvstore_impl",
+        "ogx.core.connectors.connectors.kvstore_impl",
         return_value=mock_kvstore,
     ):
         service = ConnectorServiceImpl(mock_config)
@@ -178,7 +178,7 @@ class TestGetConnector:
         mock_server_info.description = "A test server"
         mock_server_info.version = "1.0.0"
 
-        with patch("llama_stack.core.connectors.connectors.get_mcp_server_info") as mock_get_info:
+        with patch("ogx.core.connectors.connectors.get_mcp_server_info") as mock_get_info:
             mock_get_info.return_value = mock_server_info
 
             result = await connector_service.get_connector(GetConnectorRequest(connector_id="my-mcp"))
@@ -201,7 +201,7 @@ class TestGetConnector:
         mock_server_info.description = None
         mock_server_info.version = None
 
-        with patch("llama_stack.core.connectors.connectors.get_mcp_server_info") as mock_get_info:
+        with patch("ogx.core.connectors.connectors.get_mcp_server_info") as mock_get_info:
             mock_get_info.return_value = mock_server_info
 
             await connector_service.get_connector(
@@ -381,7 +381,7 @@ class TestConnectorIdResolution:
 
     async def test_connector_id_resolved_to_server_url(self, mock_connectors_api, sample_connector):
         """Test that connector_id is resolved to server_url via connectors API."""
-        from llama_stack.providers.inline.responses.builtin.responses.streaming import (
+        from ogx.providers.inline.responses.builtin.responses.streaming import (
             resolve_mcp_connector_id,
         )
 
@@ -401,7 +401,7 @@ class TestConnectorIdResolution:
 
     async def test_server_url_not_overwritten_when_provided(self, mock_connectors_api):
         """Test that existing server_url is not overwritten even if connector_id provided."""
-        from llama_stack.providers.inline.responses.builtin.responses.streaming import (
+        from ogx.providers.inline.responses.builtin.responses.streaming import (
             resolve_mcp_connector_id,
         )
 
@@ -422,7 +422,7 @@ class TestConnectorIdResolution:
 
     async def test_connector_id_resolution_propagates_not_found_error(self, mock_connectors_api):
         """Test that ConnectorNotFoundError propagates when connector doesn't exist."""
-        from llama_stack.providers.inline.responses.builtin.responses.streaming import (
+        from ogx.providers.inline.responses.builtin.responses.streaming import (
             resolve_mcp_connector_id,
         )
 

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,8 +6,8 @@
 
 import yaml
 
-from llama_stack.core.datatypes import StackConfig
-from llama_stack.core.storage.datatypes import (
+from ogx.core.datatypes import StackConfig
+from ogx.core.storage.datatypes import (
     PostgresKVStoreConfig,
     PostgresSqlStoreConfig,
     SqliteKVStoreConfig,
@@ -17,7 +17,7 @@ from llama_stack.core.storage.datatypes import (
 
 def test_starter_distribution_config_loads_and_resolves():
     """Integration: Actual starter config should parse and have correct storage structure."""
-    with open("llama_stack/distributions/starter/config.yaml") as f:
+    with open("ogx/distributions/starter/config.yaml") as f:
         config_dict = yaml.safe_load(f)
 
     config = StackConfig(**config_dict)
@@ -47,7 +47,7 @@ def test_starter_distribution_config_loads_and_resolves():
 
 def test_postgres_demo_distribution_config_loads():
     """Integration: Postgres demo should use Postgres backend for all stores."""
-    with open("llama_stack/distributions/postgres-demo/config.yaml") as f:
+    with open("ogx/distributions/postgres-demo/config.yaml") as f:
         config_dict = yaml.safe_load(f)
 
     config = StackConfig(**config_dict)

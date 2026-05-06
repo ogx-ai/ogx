@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" font-family="'Inter','SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <defs>
+    <filter id="shadow"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.15"/></filter>
+    <linearGradient id="g-green" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#16a34a"/><stop offset="100%" stop-color="#4ade80"/></linearGradient>
+    <linearGradient id="g-blue" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient>
+    <linearGradient id="g-purple" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient>
+    <linearGradient id="g-teal" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0d9488"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient>
+    <linearGradient id="g-orange" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ea580c"/><stop offset="100%" stop-color="#fb923c"/></linearGradient>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#60a5fa"/></marker>
+    <marker id="arrow-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#a78bfa"/></marker>
+    <marker id="arrow-teal" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#2dd4bf"/></marker>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#fb923c"/></marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="420" rx="12" fill="#0c0a1d"/>
+  <rect width="800" height="420" rx="12" fill="#0ea5e9" fill-opacity="0.03"/>
+
+  <!-- Title -->
+  <text x="400" y="32" text-anchor="middle" fill="#94a3b8" font-size="14" font-weight="600" letter-spacing="2">GOOGLE INTERACTIONS API — REQUEST FLOW</text>
+
+  <!-- ========== ROW 1: Client ========== -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="60" width="160" height="80" rx="8" fill="#052e16" stroke="#16a34a" stroke-width="0.5" stroke-opacity="0.5"/>
+    <rect x="30" y="60" width="160" height="24" rx="8" fill="url(#g-green)"/>
+    <rect x="30" y="76" width="160" height="8" fill="url(#g-green)"/>
+    <text x="110" y="77" text-anchor="middle" fill="#fff" font-size="10" font-weight="600" letter-spacing="1">CLIENT</text>
+    <text x="110" y="102" text-anchor="middle" fill="#86efac" font-size="9">Google GenAI SDK</text>
+    <text x="110" y="118" text-anchor="middle" fill="#86efac" font-size="8" font-style="italic">google-genai</text>
+  </g>
+
+  <!-- Arrow: Client -> Endpoint -->
+  <line x1="190" y1="100" x2="248" y2="100" stroke="#60a5fa" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="220" y="93" text-anchor="middle" fill="#475569" font-size="7">POST</text>
+
+  <!-- ========== ROW 1: Endpoint ========== -->
+  <g filter="url(#shadow)">
+    <rect x="255" y="60" width="200" height="80" rx="8" fill="#172554" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.5"/>
+    <rect x="255" y="60" width="200" height="24" rx="8" fill="url(#g-blue)"/>
+    <rect x="255" y="76" width="200" height="8" fill="url(#g-blue)"/>
+    <text x="355" y="77" text-anchor="middle" fill="#fff" font-size="10" font-weight="600" letter-spacing="1">FASTAPI ROUTER</text>
+    <text x="355" y="100" text-anchor="middle" fill="#93c5fd" font-size="9" font-weight="500">/v1alpha/interactions</text>
+    <text x="355" y="116" text-anchor="middle" fill="#64748b" font-size="7.5">Validates request, routes to provider</text>
+  </g>
+
+  <!-- Arrow: Endpoint -> Translation -->
+  <line x1="455" y1="100" x2="513" y2="100" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+  <!-- ========== ROW 1: Translation Layer ========== -->
+  <g filter="url(#shadow)">
+    <rect x="520" y="60" width="240" height="80" rx="8" fill="#1e1b4b" stroke="#7c3aed" stroke-width="0.5" stroke-opacity="0.5"/>
+    <rect x="520" y="60" width="240" height="24" rx="8" fill="url(#g-purple)"/>
+    <rect x="520" y="76" width="240" height="8" fill="url(#g-purple)"/>
+    <text x="640" y="77" text-anchor="middle" fill="#fff" font-size="10" font-weight="600" letter-spacing="1">TRANSLATION LAYER</text>
+    <text x="640" y="100" text-anchor="middle" fill="#c4b5fd" font-size="9" font-weight="500">BuiltinInteractionsImpl</text>
+    <text x="640" y="116" text-anchor="middle" fill="#64748b" font-size="7.5">Google format ↔ OpenAI format</text>
+  </g>
+
+  <!-- ========== TRANSLATION DETAIL BOX ========== -->
+  <g filter="url(#shadow)">
+    <rect x="120" y="175" width="560" height="100" rx="8" fill="#0f172a" stroke="#334155" stroke-width="0.5"/>
+    <text x="400" y="196" text-anchor="middle" fill="#64748b" font-size="9" font-weight="600" letter-spacing="1">TRANSLATION DETAIL</text>
+
+    <!-- Request side -->
+    <rect x="135" y="210" width="240" height="52" rx="6" fill="#052e16" stroke="#16a34a" stroke-width="0.5" stroke-opacity="0.3"/>
+    <text x="255" y="228" text-anchor="middle" fill="#4ade80" font-size="8" font-weight="600">REQUEST (Google → OpenAI)</text>
+    <text x="255" y="244" text-anchor="middle" fill="#86efac" font-size="7">input → messages  |  model role → assistant</text>
+    <text x="255" y="256" text-anchor="middle" fill="#86efac" font-size="7">system_instruction → system msg  |  gen_config → params</text>
+
+    <!-- Arrow -->
+    <text x="400" y="240" text-anchor="middle" fill="#475569" font-size="14">→</text>
+
+    <!-- Response side -->
+    <rect x="425" y="210" width="240" height="52" rx="6" fill="#1e1b4b" stroke="#7c3aed" stroke-width="0.5" stroke-opacity="0.3"/>
+    <text x="545" y="228" text-anchor="middle" fill="#a78bfa" font-size="8" font-weight="600">RESPONSE (OpenAI → Google)</text>
+    <text x="545" y="244" text-anchor="middle" fill="#c4b5fd" font-size="7">choices[0].content → outputs[{type:text}]</text>
+    <text x="545" y="256" text-anchor="middle" fill="#c4b5fd" font-size="7">prompt_tokens → total_input_tokens  |  + timestamps</text>
+  </g>
+
+  <!-- Arrow: Translation -> Inference API -->
+  <line x1="640" y1="140" x2="640" y2="298" stroke="#2dd4bf" stroke-width="1.5" marker-end="url(#arrow-teal)"/>
+  <text x="650" y="223" fill="#475569" font-size="7" transform="rotate(90,650,223)">openai_chat_completion()</text>
+
+  <!-- ========== ROW 3: Inference API ========== -->
+  <g filter="url(#shadow)">
+    <rect x="520" y="305" width="240" height="80" rx="8" fill="#042f2e" stroke="#0d9488" stroke-width="0.5" stroke-opacity="0.5"/>
+    <rect x="520" y="305" width="240" height="24" rx="8" fill="url(#g-teal)"/>
+    <rect x="520" y="321" width="240" height="8" fill="url(#g-teal)"/>
+    <text x="640" y="322" text-anchor="middle" fill="#fff" font-size="10" font-weight="600" letter-spacing="1">INFERENCE API</text>
+    <text x="640" y="348" text-anchor="middle" fill="#99f6e4" font-size="9">OpenAI Chat Completions</text>
+    <text x="640" y="364" text-anchor="middle" fill="#64748b" font-size="7.5">Routes to configured provider</text>
+  </g>
+
+  <!-- Arrow: Inference -> Provider -->
+  <line x1="520" y1="345" x2="462" y2="345" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+
+  <!-- ========== ROW 3: Provider ========== -->
+  <g filter="url(#shadow)">
+    <rect x="255" y="305" width="200" height="80" rx="8" fill="#1c1917" stroke="#ea580c" stroke-width="0.5" stroke-opacity="0.5"/>
+    <rect x="255" y="305" width="200" height="24" rx="8" fill="url(#g-orange)"/>
+    <rect x="255" y="321" width="200" height="8" fill="url(#g-orange)"/>
+    <text x="355" y="322" text-anchor="middle" fill="#fff" font-size="10" font-weight="600" letter-spacing="1">PROVIDER</text>
+    <text x="355" y="345" text-anchor="middle" fill="#fdba74" font-size="9">Ollama / vLLM / OpenAI /</text>
+    <text x="355" y="360" text-anchor="middle" fill="#fdba74" font-size="9">Bedrock / Azure / Gemini / ...</text>
+  </g>
+
+  <!-- ========== STREAMING SECTION ========== -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="175" width="75" height="210" rx="8" fill="#0f172a" stroke="#334155" stroke-width="0.5"/>
+    <text x="67" y="196" text-anchor="middle" fill="#64748b" font-size="8" font-weight="600" letter-spacing="0.5">SSE EVENTS</text>
+    <text x="67" y="216" fill="#4ade80" font-size="7" text-anchor="middle">interaction.start</text>
+    <text x="67" y="234" fill="#86efac" font-size="7" text-anchor="middle">content.start</text>
+    <text x="67" y="252" fill="#86efac" font-size="7" text-anchor="middle">content.delta</text>
+    <text x="67" y="270" fill="#86efac" font-size="7" text-anchor="middle">content.delta</text>
+    <text x="67" y="288" fill="#86efac" font-size="7" text-anchor="middle">···</text>
+    <text x="67" y="306" fill="#86efac" font-size="7" text-anchor="middle">content.stop</text>
+    <text x="67" y="326" fill="#4ade80" font-size="7" text-anchor="middle">interaction</text>
+    <text x="67" y="338" fill="#4ade80" font-size="7" text-anchor="middle">.complete</text>
+
+    <!-- Streaming direction arrow -->
+    <line x1="67" y1="350" x2="67" y2="375" stroke="#4ade80" stroke-width="1" marker-end="url(#arrow-blue)"/>
+    <text x="67" y="385" text-anchor="middle" fill="#475569" font-size="6.5">to client</text>
+  </g>
+
+  <!-- Footer -->
+  <text x="400" y="410" text-anchor="middle" fill="#475569" font-size="10" letter-spacing="1">Any model · Any provider · Native Google GenAI SDK compatibility</text>
+</svg>

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,23 +10,23 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from llama_stack.core.datatypes import User
-from llama_stack_api import OpenAIFilePurpose
+from ogx.core.datatypes import User
+from ogx_api import OpenAIFilePurpose
 
 purpose = OpenAIFilePurpose.ASSISTANTS
 
 
 @pytest.fixture()
-def provider_type_is_openai(llama_stack_client):
-    providers = [provider for provider in llama_stack_client.providers.list() if provider.api == "files"]
+def provider_type_is_openai(ogx_client):
+    providers = [provider for provider in ogx_client.providers.list() if provider.api == "files"]
     assert len(providers) == 1, "Expected exactly one files provider"
     return providers[0].provider_type == "remote::openai"
 
 
 # a fixture to skip all these tests if a files provider is not available
 @pytest.fixture(autouse=True)
-def skip_if_no_files_provider(llama_stack_client):
-    if not [provider for provider in llama_stack_client.providers.list() if provider.api == "files"]:
+def skip_if_no_files_provider(ogx_client):
+    if not [provider for provider in ogx_client.providers.list() if provider.api == "files"]:
         pytest.skip("No files providers found")
 
 
@@ -175,12 +175,12 @@ def test_expires_after_requests(openai_client):
 
 
 @pytest.mark.xfail(message="User isolation broken for current providers, must be fixed.")
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
-def test_files_authentication_isolation(mock_get_authenticated_user, llama_stack_client):
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+def test_files_authentication_isolation(mock_get_authenticated_user, ogx_client):
     """Test that users can only access their own files."""
     from llama_stack_client import NotFoundError
 
-    client = llama_stack_client
+    client = ogx_client
 
     # Create two test users
     user1 = User("user1", {"roles": ["user"], "teams": ["team-a"]})
@@ -275,12 +275,10 @@ def test_files_authentication_isolation(mock_get_authenticated_user, llama_stack
         raise e
 
 
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
-def test_files_authentication_shared_attributes(
-    mock_get_authenticated_user, llama_stack_client, provider_type_is_openai
-):
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+def test_files_authentication_shared_attributes(mock_get_authenticated_user, ogx_client, provider_type_is_openai):
     """Test access control with users having identical attributes."""
-    client = llama_stack_client
+    client = ogx_client
 
     # Create users with identical attributes (required for default policy)
     user_a = User("user-a", {"roles": ["user"], "teams": ["shared-team"]})
@@ -335,11 +333,9 @@ def test_files_authentication_shared_attributes(
         raise e
 
 
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
-def test_files_authentication_anonymous_access(
-    mock_get_authenticated_user, llama_stack_client, provider_type_is_openai
-):
-    client = llama_stack_client
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+def test_files_authentication_anonymous_access(mock_get_authenticated_user, ogx_client, provider_type_is_openai):
+    client = ogx_client
 
     # Simulate anonymous user (no authentication)
     mock_get_authenticated_user.return_value = None

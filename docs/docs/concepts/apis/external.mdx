@@ -1,19 +1,19 @@
 ---
 title: External APIs
-description: Understanding external APIs in Llama Stack
+description: Understanding external APIs in OGX
 sidebar_label: External APIs
 sidebar_position: 3
 ---
 # External APIs
 
-Llama Stack supports external APIs that live outside of the main codebase. This allows you to:
+OGX supports external APIs that live outside of the main codebase. This allows you to:
 - Create and maintain your own APIs independently
 - Share APIs with others without contributing to the main codebase
-- Keep API-specific code separate from the core Llama Stack code
+- Keep API-specific code separate from the core OGX code
 
 ## Configuration
 
-To enable external APIs, you need to configure the `external_apis_dir` in your Llama Stack configuration. This directory should contain your external API specifications:
+To enable external APIs, you need to configure the `external_apis_dir` in your OGX configuration. This directory should contain your external API specifications:
 
 ```yaml
 external_apis_dir: ~/.llama/apis.d/
@@ -42,7 +42,7 @@ api_dependencies:
 protocol: WeatherAPI
 name: weather
 pip_packages:
-  - llama-stack-api-weather
+  - ogx-api-weather
 ```
 
 ### API Specification Fields
@@ -61,12 +61,12 @@ External API modules must expose three things:
 3. **`create_router()`** - returns a FastAPI router that maps HTTP endpoints to the protocol methods
 
 ```python
-# llama_stack_api_weather/weather.py
+# ogx_api_weather/weather.py
 from typing import Protocol
 
 from fastapi import APIRouter
 
-from llama_stack_api import Api, ProviderSpec, RemoteProviderSpec
+from ogx_api import Api, ProviderSpec, RemoteProviderSpec
 
 
 def available_providers() -> list[ProviderSpec]:
@@ -75,9 +75,9 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.weather,
             provider_type="remote::kaze",
             adapter_type="kaze",
-            module="llama_stack_provider_kaze",
-            pip_packages=["llama_stack_provider_kaze"],
-            config_class="llama_stack_provider_kaze.KazeProviderConfig",
+            module="ogx_provider_kaze",
+            pip_packages=["ogx_provider_kaze"],
+            config_class="ogx_provider_kaze.KazeProviderConfig",
         ),
     ]
 
@@ -103,8 +103,8 @@ def create_router(impl: WeatherProvider) -> APIRouter:
 The `__init__.py` must re-export these:
 
 ```python
-# llama_stack_api_weather/__init__.py
-"""Weather API for Llama Stack."""
+# ogx_api_weather/__init__.py
+"""Weather API for OGX."""
 
 from .weather import WeatherProvider, available_providers, create_router
 
@@ -118,8 +118,8 @@ Using the weather API shown above, here's the full setup:
 1. Create the API package:
 
 ```bash
-mkdir -p llama-stack-api-weather/src/llama_stack_api_weather
-cd llama-stack-api-weather
+mkdir -p ogx-api-weather/src/ogx_api_weather
+cd ogx-api-weather
 uv init
 ```
 
@@ -127,11 +127,11 @@ uv init
 
 ```toml
 [project]
-name = "llama-stack-api-weather"
+name = "ogx-api-weather"
 version = "0.1.0"
-description = "Weather API for Llama Stack"
+description = "Weather API for OGX"
 requires-python = ">=3.12"
-dependencies = ["llama-stack-api", "fastapi"]
+dependencies = ["ogx-api", "fastapi"]
 
 [build-system]
 requires = ["setuptools"]
@@ -139,7 +139,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["llama_stack_api_weather", "llama_stack_api_weather.*"]
+include = ["ogx_api_weather", "ogx_api_weather.*"]
 ```
 
 3. Add the `weather.py` and `__init__.py` files shown in the [Required Implementation](#required-implementation) section above.
@@ -148,9 +148,9 @@ include = ["llama_stack_api_weather", "llama_stack_api_weather.*"]
 
 ```yaml
 # ~/.llama/apis.d/weather.yaml
-module: llama_stack_api_weather
+module: ogx_api_weather
 name: weather
-pip_packages: ["llama-stack-api-weather"]
+pip_packages: ["ogx-api-weather"]
 protocol: WeatherProvider
 ```
 
@@ -177,8 +177,8 @@ The API is now available at `/v1/weather/locations`.
 1. Create the provider package:
 
 ```bash
-mkdir -p llama-stack-provider-kaze
-cd llama-stack-provider-kaze
+mkdir -p ogx-provider-kaze
+cd ogx-provider-kaze
 uv init
 ```
 
@@ -186,12 +186,12 @@ uv init
 
 ```toml
 [project]
-name = "llama-stack-provider-kaze"
+name = "ogx-provider-kaze"
 version = "0.1.0"
-description = "Kaze weather provider for Llama Stack"
+description = "Kaze weather provider for OGX"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["llama-stack", "pydantic", "aiohttp"]
+dependencies = ["ogx", "pydantic", "aiohttp"]
 
 [build-system]
 requires = ["setuptools"]
@@ -199,14 +199,14 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["llama_stack_provider_kaze", "llama_stack_provider_kaze.*"]
+include = ["ogx_provider_kaze", "ogx_provider_kaze.*"]
 ```
 
 3. Create the initial files:
 
 ```bash
-touch src/llama_stack_provider_kaze/__init__.py
-touch src/llama_stack_provider_kaze/kaze.py
+touch src/ogx_provider_kaze/__init__.py
+touch src/ogx_provider_kaze/kaze.py
 ```
 
 4. Create the provider implementation:
@@ -215,8 +215,8 @@ touch src/llama_stack_provider_kaze/kaze.py
 Initialization function:
 
 ```python
-# llama-stack-provider-kaze/src/llama_stack_provider_kaze/__init__.py
-"""Kaze weather provider for Llama Stack."""
+# ogx-provider-kaze/src/ogx_provider_kaze/__init__.py
+"""Kaze weather provider for OGX."""
 
 from .config import KazeProviderConfig
 from .kaze import WeatherKazeAdapter
@@ -235,7 +235,7 @@ async def get_adapter_impl(config: KazeProviderConfig, _deps):
 Configuration:
 
 ```python
-# llama-stack-provider-kaze/src/llama_stack_provider_kaze/config.py
+# ogx-provider-kaze/src/ogx_provider_kaze/config.py
 from pydantic import BaseModel, Field
 
 
@@ -251,8 +251,8 @@ class KazeProviderConfig(BaseModel):
 Main implementation:
 
 ```python
-# llama-stack-provider-kaze/src/llama_stack_provider_kaze/kaze.py
-from llama_stack_api_weather.api import WeatherProvider
+# ogx-provider-kaze/src/ogx_provider_kaze/kaze.py
+from ogx_api_weather.api import WeatherProvider
 
 from .config import KazeProviderConfig
 
@@ -279,9 +279,9 @@ class WeatherKazeAdapter(WeatherProvider):
 ```yaml
 # ~/.llama/providers.d/remote/weather/kaze.yaml
 adapter_type: kaze
-pip_packages: ["llama_stack_provider_kaze"]
-config_class: llama_stack_provider_kaze.config.KazeProviderConfig
-module: llama_stack_provider_kaze
+pip_packages: ["ogx_provider_kaze"]
+config_class: ogx_provider_kaze.config.KazeProviderConfig
+module: ogx_provider_kaze
 optional_api_dependencies: []
 ```
 
@@ -291,12 +291,12 @@ optional_api_dependencies: []
 uv pip install -e .
 ```
 
-7. Configure Llama Stack to use the provider:
+7. Configure OGX to use the provider:
 
 ```yaml
 # ~/.llama/config.yaml
 version: "2"
-distro_name: "llama-stack-api-weather"
+distro_name: "ogx-api-weather"
 apis:
   - weather
 providers:
@@ -313,7 +313,7 @@ server:
 8. Run the server:
 
 ```bash
-llama stack run ~/.llama/config.yaml
+ogx run ~/.llama/config.yaml
 ```
 
 9. Test the API:
@@ -327,7 +327,7 @@ curl -sSf http://127.0.0.1:8321/v1/weather/locations
 
 1. **Package Naming**: Use a clear and descriptive name for your API package.
 
-2. **Version Management**: Keep your API package versioned and compatible with the Llama Stack version you're using.
+2. **Version Management**: Keep your API package versioned and compatible with the OGX version you're using.
 
 3. **Dependencies**: Only include the minimum required dependencies in your API package.
 
@@ -337,7 +337,7 @@ curl -sSf http://127.0.0.1:8321/v1/weather/locations
    - API endpoints and usage
    - Any limitations or known issues
 
-5. **Testing**: Include tests in your API package to ensure it works correctly with Llama Stack.
+5. **Testing**: Include tests in your API package to ensure it works correctly with OGX.
 
 ## Troubleshooting
 
@@ -346,5 +346,5 @@ If your external API isn't being loaded:
 1. Check that the `external_apis_dir` path is correct and accessible.
 2. Verify that the YAML files are properly formatted.
 3. Ensure all required Python packages are installed.
-4. Check the Llama Stack server logs for any error messages - turn on debug logging to get more information using `LLAMA_STACK_LOGGING=all=debug`.
+4. Check the OGX server logs for any error messages - turn on debug logging to get more information using `OGX_LOGGING=all=debug`.
 5. Verify that the API package is installed in your Python environment.

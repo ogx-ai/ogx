@@ -1,6 +1,6 @@
 ---
 title: Building Custom Distributions
-description: Building a Llama Stack distribution from scratch
+description: Building a OGX distribution from scratch
 sidebar_label: Build your own Distribution
 sidebar_position: 3
 ---
@@ -9,7 +9,7 @@ This guide walks you through inspecting existing distributions, customising thei
 
 ### Explore existing distributions
 
-All first-party distributions live under `llama_stack/distributions/`. Each directory contains:
+All first-party distributions live under `ogx/distributions/`. Each directory contains:
 
 - `build.yaml` – the distribution specification (providers, additional dependencies, optional external provider directories).
 - `config.yaml` – sample run configuration (when provided).
@@ -23,7 +23,7 @@ import TabItem from '@theme/TabItem';
 <Tabs>
 <TabItem value="container" label="Building a container">
 
-Use the Containerfile at `containers/Containerfile`, which installs `llama-stack`, resolves distribution dependencies via `llama stack list-deps`, and sets the entrypoint to `llama stack run`.
+Use the Containerfile at `containers/Containerfile`, which installs `ogx`, resolves distribution dependencies via `ogx list-deps`, and sets the entrypoint to `ogx run`.
 
 **Single-architecture build:**
 
@@ -31,7 +31,7 @@ Use the Containerfile at `containers/Containerfile`, which installs `llama-stack
 docker build . \
   -f containers/Containerfile \
   --build-arg DISTRO_NAME=starter \
-  --tag llama-stack:starter
+  --tag ogx:starter
 ```
 
 **Multi-architecture build:**
@@ -47,7 +47,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   --push \
   -f containers/Containerfile \
   --build-arg DISTRO_NAME=starter \
-  --tag docker.io/llamastack/distribution-starter:latest .
+  --tag docker.io/ogx/distribution-starter:latest .
 ```
 
 To add more architectures in the future, extend the `--platform` flag:
@@ -57,7 +57,7 @@ docker buildx build --platform linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
   --push \
   -f containers/Containerfile \
   --build-arg DISTRO_NAME=starter \
-  --tag docker.io/llamastack/distribution-starter:latest .
+  --tag docker.io/ogx/distribution-starter:latest .
 ```
 
 </TabItem>
@@ -69,7 +69,7 @@ podman buildx build --platform linux/amd64,linux/arm64 \
   --push \
   -f containers/Containerfile \
   --build-arg DISTRO_NAME=starter \
-  --tag docker.io/llamastack/distribution-starter:latest .
+  --tag docker.io/ogx/distribution-starter:latest .
 ```
 
 To add more architectures in the future, extend the `--platform` flag:
@@ -79,7 +79,7 @@ podman buildx build --platform linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
   --push \
   -f containers/Containerfile \
   --build-arg DISTRO_NAME=starter \
-  --tag docker.io/llamastack/distribution-starter:latest .
+  --tag docker.io/ogx/distribution-starter:latest .
 ```
 
 </TabItem>
@@ -89,8 +89,8 @@ Handy build arguments:
 
 - `DISTRO_NAME` – distribution directory name (defaults to `starter`).
 - `RUN_CONFIG_PATH` – absolute path inside the build context for a run config that should be baked into the image (e.g. `/workspace/config.yaml`).
-- `INSTALL_MODE=editable` – install the repository copied into `/workspace` with `uv pip install -e`. Pair it with `--build-arg LLAMA_STACK_DIR=/workspace`.
-- `LLAMA_STACK_CLIENT_DIR` – optional editable install of the Python client.
+- `INSTALL_MODE=editable` – install the repository copied into `/workspace` with `uv pip install -e`. Pair it with `--build-arg OGX_DIR=/workspace`.
+- `OGX_CLIENT_DIR` – optional editable install of the Python client.
 - `PYPI_VERSION` / `TEST_PYPI_VERSION` – pin specific releases when not using editable installs.
 - `KEEP_WORKSPACE=1` – retain `/workspace` in the final image if you need to access additional files (such as sample configs or provider bundles).
 
@@ -118,18 +118,18 @@ external_providers_dir: /workspace/providers.d
 Inside `providers.d/custom_ollama/provider.py`, define `get_provider_spec()` so the CLI can discover dependencies:
 
 ```python
-from llama_stack_api.providers.datatypes import ProviderSpec
+from ogx_api.providers.datatypes import ProviderSpec
 
 
 def get_provider_spec() -> ProviderSpec:
     return ProviderSpec(
         provider_type="remote::custom_ollama",
-        module="llama_stack_ollama_provider",
-        config_class="llama_stack_ollama_provider.config.OllamaImplConfig",
+        module="ogx_ollama_provider",
+        config_class="ogx_ollama_provider.config.OllamaImplConfig",
         pip_packages=[
             "ollama",
             "aiohttp",
-            "llama-stack-provider-ollama",
+            "ogx-provider-ollama",
         ],
     )
 ```
@@ -142,9 +142,9 @@ adapter:
   pip_packages:
     - ollama
     - aiohttp
-    - llama-stack-provider-ollama  # This is the provider package
-  config_class: llama_stack_ollama_provider.config.OllamaImplConfig
-  module: llama_stack_ollama_provider
+    - ogx-provider-ollama  # This is the provider package
+  config_class: ogx_ollama_provider.config.OllamaImplConfig
+  module: ogx_ollama_provider
 api_dependencies: []
 optional_api_dependencies: []
 ```
@@ -166,7 +166,7 @@ The  container `Dockerfile/Containerfile` already includes this step. When build
 
 ```dockerfile
 # Pre-cache tiktoken encoding for air-gapped deployments.
-# Must come after llama-stack (and tiktoken) are installed.
+# Must come after ogx (and tiktoken) are installed.
 ENV TIKTOKEN_CACHE_DIR="/.cache/tiktoken"
 RUN python3 -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 ```
@@ -195,23 +195,23 @@ tiktoken.get_encoding('p50k_base')
 
 ### Run your stack server
 
-After building the image, launch it directly with Docker or Podman—the entrypoint calls `llama stack run` using the baked distribution or the bundled run config:
+After building the image, launch it directly with Docker or Podman—the entrypoint calls `ogx run` using the baked distribution or the bundled run config:
 
 ```bash
 docker run -d \
-  -p $LLAMA_STACK_PORT:$LLAMA_STACK_PORT \
+  -p $OGX_PORT:$OGX_PORT \
   -v ~/.llama:/root/.llama \
   -e INFERENCE_MODEL=$INFERENCE_MODEL \
   -e OLLAMA_URL=http://host.docker.internal:11434 \
-  llama-stack:starter \
-  --port $LLAMA_STACK_PORT
+  ogx:starter \
+  --port $OGX_PORT
 ```
 
 Here are the docker flags and their uses:
 
 * `-d`: Runs the container in the detached mode as a background process
 
-* `-p $LLAMA_STACK_PORT:$LLAMA_STACK_PORT`: Maps the container port to the host port for accessing the server
+* `-p $OGX_PORT:$OGX_PORT`: Maps the container port to the host port for accessing the server
 
 * `-v ~/.llama:/root/.llama`: Mounts the local .llama directory to persist configurations and data
 
@@ -221,7 +221,7 @@ Here are the docker flags and their uses:
 
 * `-e OLLAMA_URL=http://host.docker.internal:11434`: Sets the OLLAMA_URL environment variable in the container
 
-* `--port $LLAMA_STACK_PORT`: Port number for the server to listen on
+* `--port $OGX_PORT`: Port number for the server to listen on
 
 
 
@@ -229,8 +229,8 @@ If you prepared a custom run config, mount it into the container and reference i
 
 ```bash
 docker run \
-  -p $LLAMA_STACK_PORT:$LLAMA_STACK_PORT \
+  -p $OGX_PORT:$OGX_PORT \
   -v $(pwd)/config.yaml:/app/config.yaml \
-  llama-stack:starter \
+  ogx:starter \
   /app/config.yaml
 ```

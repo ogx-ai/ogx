@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,8 +9,8 @@ from datetime import datetime
 import pytest
 import yaml
 
-from llama_stack.core.configure import (
-    LLAMA_STACK_RUN_CONFIG_VERSION,
+from ogx.core.configure import (
+    OGX_RUN_CONFIG_VERSION,
     parse_and_maybe_upgrade_config,
 )
 
@@ -19,7 +19,7 @@ from llama_stack.core.configure import (
 def config_with_distro_name_int():
     return yaml.safe_load(
         f"""
-        version: {LLAMA_STACK_RUN_CONFIG_VERSION}
+        version: {OGX_RUN_CONFIG_VERSION}
         distro_name: 1234
         apis_to_serve: []
         built_at: {datetime.now().isoformat()}
@@ -74,7 +74,7 @@ def config_with_distro_name_int():
 def up_to_date_config():
     return yaml.safe_load(
         f"""
-        version: {LLAMA_STACK_RUN_CONFIG_VERSION}
+        version: {OGX_RUN_CONFIG_VERSION}
         distro_name: foo
         apis_to_serve: []
         built_at: {datetime.now().isoformat()}
@@ -171,13 +171,13 @@ def invalid_config():
 
 def test_parse_and_maybe_upgrade_config_up_to_date(up_to_date_config):
     result = parse_and_maybe_upgrade_config(up_to_date_config)
-    assert result.version == LLAMA_STACK_RUN_CONFIG_VERSION
+    assert result.version == OGX_RUN_CONFIG_VERSION
     assert "inference" in result.providers
 
 
 def test_parse_and_maybe_upgrade_config_old_format(old_config):
     result = parse_and_maybe_upgrade_config(old_config)
-    assert result.version == LLAMA_STACK_RUN_CONFIG_VERSION
+    assert result.version == OGX_RUN_CONFIG_VERSION
     assert all(api in result.providers for api in ["inference", "safety", "memory"])
     safety_provider = result.providers["safety"][0]
     assert safety_provider.provider_type == "inline::llama-guard"
@@ -230,7 +230,7 @@ def test_parse_and_maybe_upgrade_config_preserves_custom_external_providers_dir(
 
 def test_generate_run_config_from_providers():
     """Test that run_config_from_dynamic_config_spec creates a valid config for the providers-run distro"""
-    from llama_stack.core.stack import run_config_from_dynamic_config_spec
+    from ogx.core.stack import run_config_from_dynamic_config_spec
 
     config = run_config_from_dynamic_config_spec(
         "inference=remote::openai",
@@ -263,7 +263,7 @@ def test_providers_flag_generates_config_with_api_keys():
     import argparse
     from unittest.mock import patch
 
-    from llama_stack.cli.stack.run import StackRun
+    from ogx.cli.stack.run import StackRun
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
@@ -284,7 +284,7 @@ def test_providers_flag_generates_config_with_api_keys():
         stack_run._run_stack_run_cmd(args)
 
     # Read the generated config file
-    from llama_stack.core.utils.config_dirs import DISTRIBS_BASE_DIR
+    from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
     config_file = DISTRIBS_BASE_DIR / "providers-run" / "config.yaml"
     with open(config_file) as f:
@@ -306,7 +306,7 @@ def config_with_image_name():
     """Test config using deprecated image_name field."""
     return yaml.safe_load(
         f"""
-        version: {LLAMA_STACK_RUN_CONFIG_VERSION}
+        version: {OGX_RUN_CONFIG_VERSION}
         image_name: my-old-distro
         apis_to_serve: []
         built_at: {datetime.now().isoformat()}
@@ -362,7 +362,7 @@ def test_parse_config_with_deprecated_image_name(config_with_image_name):
 
     # Verify distro_name is set from image_name
     assert result.distro_name == "my-old-distro"
-    assert result.version == LLAMA_STACK_RUN_CONFIG_VERSION
+    assert result.version == OGX_RUN_CONFIG_VERSION
 
 
 def test_parse_config_with_both_names_prefers_distro_name():
@@ -371,7 +371,7 @@ def test_parse_config_with_both_names_prefers_distro_name():
 
     config = yaml.safe_load(
         f"""
-        version: {LLAMA_STACK_RUN_CONFIG_VERSION}
+        version: {OGX_RUN_CONFIG_VERSION}
         image_name: old-name
         distro_name: new-name
         apis_to_serve: []

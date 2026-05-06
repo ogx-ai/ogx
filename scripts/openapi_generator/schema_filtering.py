@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,15 +10,15 @@ Schema filtering and version filtering for OpenAPI generation.
 
 from typing import Any
 
-from llama_stack_api.schema_utils import (
+from ogx_api.schema_utils import (
     get_json_schema_type_info,
     iter_json_schema_types,
     iter_registered_schema_types,
 )
-from llama_stack_api.version import (
-    LLAMA_STACK_API_V1,
-    LLAMA_STACK_API_V1ALPHA,
-    LLAMA_STACK_API_V1BETA,
+from ogx_api.version import (
+    OGX_API_V1,
+    OGX_API_V1ALPHA,
+    OGX_API_V1BETA,
 )
 
 
@@ -169,17 +169,15 @@ def _path_starts_with_version(path: str, version: str) -> bool:
 def _is_stable_path(path: str) -> bool:
     """Check if a path is a stable v1 path (not v1alpha or v1beta)."""
     return (
-        _path_starts_with_version(path, LLAMA_STACK_API_V1)
-        and not _path_starts_with_version(path, LLAMA_STACK_API_V1ALPHA)
-        and not _path_starts_with_version(path, LLAMA_STACK_API_V1BETA)
+        _path_starts_with_version(path, OGX_API_V1)
+        and not _path_starts_with_version(path, OGX_API_V1ALPHA)
+        and not _path_starts_with_version(path, OGX_API_V1BETA)
     )
 
 
 def _is_experimental_path(path: str) -> bool:
     """Check if a path is an experimental path (v1alpha or v1beta)."""
-    return _path_starts_with_version(path, LLAMA_STACK_API_V1ALPHA) or _path_starts_with_version(
-        path, LLAMA_STACK_API_V1BETA
-    )
+    return _path_starts_with_version(path, OGX_API_V1ALPHA) or _path_starts_with_version(path, OGX_API_V1BETA)
 
 
 def _is_path_deprecated(path_item: dict[str, Any]) -> bool:

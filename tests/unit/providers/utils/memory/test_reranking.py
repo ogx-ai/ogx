@@ -1,12 +1,12 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 
-from llama_stack.providers.utils.memory.vector_store import RERANKER_TYPE_RRF, RERANKER_TYPE_WEIGHTED
-from llama_stack.providers.utils.vector_io.vector_utils import WeightedInMemoryAggregator
+from ogx.providers.utils.memory.vector_store import RERANKER_TYPE_RRF, RERANKER_TYPE_WEIGHTED
+from ogx.providers.utils.vector_io.vector_utils import WeightedInMemoryAggregator
 
 
 class TestNormalizeScores:

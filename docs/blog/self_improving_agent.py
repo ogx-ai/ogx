@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 """
-Self-improving research agent using Llama Stack APIs.
+Self-improving research agent using OGX APIs.
 
 The ResearchAgent answers questions from an internal engineering knowledge base
 using the Responses API agentic loop (server-side ``file_search`` + client-side

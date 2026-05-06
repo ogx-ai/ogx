@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@
 Test that models can be routed using provider_id/model_id format
 when the provider is configured but the specific model is not registered.
 
-This test validates the fix in src/llama_stack/core/routers/inference.py
+This test validates the fix in src/ogx/core/routers/inference.py
 that enables routing based on provider_data alone.
 """
 
@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
-from llama_stack_api import (
+from ogx.core.library_client import OGXAsLibraryClient
+from ogx_api import (
     Api,
     OpenAIChatCompletion,
     OpenAIChatCompletionResponseMessage,
@@ -40,7 +40,7 @@ def test_unregistered_model_routing_with_provider_data(client_with_models):
     Without the fix, this would raise ModelNotFoundError immediately.
     With the fix, the routing succeeds and the request reaches the provider.
     """
-    if not isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if not isinstance(client_with_models, OGXAsLibraryClient):
         pytest.skip("Test requires library client for provider-level patching")
 
     client = client_with_models

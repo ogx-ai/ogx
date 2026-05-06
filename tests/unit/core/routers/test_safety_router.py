@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,9 +6,9 @@
 
 from unittest.mock import AsyncMock
 
-from llama_stack.core.datatypes import SafetyConfig
-from llama_stack.core.routers.safety import SafetyRouter
-from llama_stack_api import (
+from ogx.core.datatypes import SafetyConfig
+from ogx.core.routers.safety import SafetyRouter
+from ogx_api import (
     ListShieldsResponse,
     ModerationObject,
     ModerationObjectResults,

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 import pytest
 from pydantic import ValidationError
 
-from llama_stack.core.datatypes import (
+from ogx.core.datatypes import (
     ChunkRetrievalParams,
     QualifiedModel,
     RerankerModel,
@@ -53,7 +53,7 @@ class TestVectorStoresConfigValidation:
 
     def test_template_validation_errors(self):
         """Test that templates fail validation for common errors."""
-        from llama_stack.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
+        from ogx.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
 
         # Empty templates fail
         with pytest.raises(ValidationError, match="must not be empty"):
@@ -97,7 +97,7 @@ class TestVectorStoresConfigValidation:
 
     def test_custom_configuration(self):
         """Test complete custom configuration."""
-        from llama_stack.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
+        from ogx.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
 
         config = VectorStoresConfig(
             default_provider_id="test-provider",

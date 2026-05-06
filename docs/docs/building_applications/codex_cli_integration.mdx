@@ -1,0 +1,79 @@
+# Codex CLI Integration (Alpha)
+
+OGX can act as a proxy server for [Codex CLI](https://github.com/openai/codex), enabling you to use your existing Codex workflows while leveraging OGX's unified provider architecture and conversation compaction features.
+
+:::warning Alpha Feature
+This integration is in early development (alpha status). While core functionality works well, some features like memory persistence are not yet supported. Configuration may change in future releases.
+:::
+
+## Quick Start
+
+# 1. Start OGX with Codex support
+```bash
+export OPENAI_API_KEY="your-key-here"
+ogx run starter
+```
+
+# 2. Configure Codex CLI
+Add the following to your `~/.codex/config.toml`:
+
+```toml
+model = "openai/gpt-4o"
+model_provider = "ogx"
+
+[model_providers.ogx]
+name = "OpenAI"
+base_url = "http://localhost:8321/v1"
+wire_api = "responses"
+supports_websockets = false
+```
+
+# 3. Test the integration
+codex "Write a hello world function in Python"
+```
+
+## How It Works
+
+The integration works as a proxy chain: **Codex CLI → OGX → LLM Provider (OpenAI, etc.)**
+
+Key benefits:
+- **Unified provider access**: Use any OGX-supported provider through Codex
+- **Conversation compaction**: Automatic compression of long conversation histories
+- **Consistent APIs**: Leverage OGX's standardized provider interface
+- **Tool execution**: Full support for shell commands, file operations, and code generation
+
+## Configuration
+
+### Model Compatibility
+
+Choose models that support OpenAI Chat Completions format:
+- ✅ `openai/gpt-4o`, `openai/gpt-4o-mini`
+- ✅ `anthropic/claude-3-5-sonnet-20241022`
+- ❌ `gpt-5.4` (Responses-only, no Chat Completions support)
+
+## Known Limitations
+
+Current limitations of this alpha integration:
+
+1. **No memory persistence**: Conversation history isn't saved between Codex sessions
+2. **Limited error handling**: Some provider-specific errors may not surface clearly
+3. **Performance overhead**: Additional proxy layer adds latency
+
+## Troubleshooting
+
+**"Model not found" errors**: Verify the model ID format matches your provider (e.g., `openai/gpt-4o`)
+
+**Request compression errors**: The integration uses zstd compression. Ensure your OGX distribution supports request decompression.
+
+**Tool execution failures**: Check that Codex has proper permissions for file/shell operations.
+
+## Future Development
+
+Planned improvements:
+- **Memory API integration**: Persistent conversation storage
+- **Enhanced error messages**: Better debugging information
+- **Performance optimizations**: Reduced proxy overhead
+
+---
+
+For more information about OGX's provider architecture, see [Providers Overview](/docs/providers). For Codex CLI documentation, visit the [Codex GitHub repository](https://github.com/openai/codex).

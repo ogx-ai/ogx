@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import pytest
 from pydantic import BaseModel, Field, SecretStr
 
-from llama_stack.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
-from llama_stack.providers.utils.inference.openai_mixin import OpenAIMixin
-from llama_stack_api import Model, ModelType
+from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
+from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx_api import Model, ModelType
 
 
 class OpenAIMixinImpl(OpenAIMixin):

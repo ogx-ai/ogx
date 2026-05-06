@@ -1,28 +1,40 @@
 ---
 title: Architecture
-description: How Llama Stack works internally
+description: How OGX works internally
 sidebar_label: Architecture
 sidebar_position: 2
 ---
 
 # Architecture
 
-Llama Stack is a server that exposes a unified, OpenAI-compatible API for AI capabilities: inference, responses, safety, vector storage, and more. It is provider-agnostic - the same API works whether the backend is Ollama, OpenAI, vLLM, Bedrock, or dozens of other services.
+OGX is an AI application server that composes inference, vector stores, file storage, safety, tools, and agentic orchestration behind a unified, OpenAI-compatible API. It is provider-agnostic: the same API works whether the backend is Ollama, OpenAI, vLLM, Bedrock, or dozens of other services.
 
-<img src="/img/architecture-animated.svg" alt="Llama Stack Architecture" style={{width: '100%', maxWidth: '800px', margin: '0 auto', display: 'block'}} />
+This is a server-level abstraction, not a library. Your application talks to OGX over HTTP. It doesn't import a Python SDK, doesn't couple to a specific framework, and doesn't manage provider connections. The server handles provider routing, tool execution, safety checks, and multi-turn orchestration. Your application makes HTTP calls.
+
+<img src="/img/architecture-animated.svg" alt="OGX Architecture" style={{width: '100%', maxWidth: '800px', margin: '0 auto', display: 'block'}} />
+
+## API Surface
+
+OGX exposes three API families through a single server:
+
+- **OpenAI API** — Chat Completions, Responses, Embeddings, Vector Stores, Files, Batches, Models, Moderations, Conversations. This is the primary API surface. Any OpenAI SDK works.
+- **Anthropic API** — Messages endpoint (`/v1/messages`). An adapter that translates Anthropic-format requests to the inference API. Teams using the Anthropic SDK can point it at OGX without code changes. See the [Messages provider docs](/docs/providers/messages/) for current limitations.
+- **Native APIs** — Connectors, Tools, File Processors, and Safety shields. These extend beyond the OpenAI and Anthropic specs for capabilities like MCP tool registration and document ingestion.
+
+The Responses API (`/v1/responses`) deserves special attention. It implements server-side agentic orchestration: when a model requests tool calls, the server executes them (file search, web search, MCP tools), feeds results back, and repeats until the model produces a final response. Your application sends one request and gets back a complete, tool-augmented answer. This orchestration runs on the server, not in your application code.
 
 ## Two Packages
 
 The codebase is split into two packages:
 
-- **`llama-stack-api`** - Lightweight package with API protocol definitions, Pydantic data types, and provider specs. No server code. Third-party providers depend only on this.
-- **`llama-stack`** - The server: provider resolution, routing, storage, CLI, and all built-in providers.
+- **`ogx-api`** - Lightweight package with API protocol definitions, Pydantic data types, and provider specs. No server code. Third-party providers depend only on this.
+- **`ogx`** - The server: provider resolution, routing, storage, CLI, and all built-in providers.
 
 ## Request Flow
 
 ```mermaid
 flowchart TD
-    Client["Client\n(OpenAI SDK, curl, any HTTP client)"]
+    Client["Client\n(OpenAI SDK, Anthropic SDK, curl)"]
     Server["FastAPI Server"]
     Auth["Authentication & Quotas"]
     Router["API Router"]
@@ -41,15 +53,15 @@ flowchart TD
     Inline --> Local
     Remote --> External
 
-    style Client fill:#7c3aed,color:#fff,stroke:none
-    style Server fill:#1e1e2e,color:#cdd6f4,stroke:#313244
-    style Auth fill:#1e1e2e,color:#cdd6f4,stroke:#313244
-    style Router fill:#1e1e2e,color:#cdd6f4,stroke:#313244
-    style RT fill:#1e1e2e,color:#cdd6f4,stroke:#313244
-    style Inline fill:#14b8a6,color:#fff,stroke:none
-    style Remote fill:#0ea5e9,color:#fff,stroke:none
-    style Local fill:#14b8a6,color:#fff,stroke:none
-    style External fill:#0ea5e9,color:#fff,stroke:none
+    style Client fill:#0d7377,color:#fff,stroke:none
+    style Server fill:#131e2a,color:#bcc5d0,stroke:#1e3040
+    style Auth fill:#131e2a,color:#bcc5d0,stroke:#1e3040
+    style Router fill:#131e2a,color:#bcc5d0,stroke:#1e3040
+    style RT fill:#131e2a,color:#bcc5d0,stroke:#1e3040
+    style Inline fill:#0b6165,color:#fff,stroke:none
+    style Remote fill:#0d7377,color:#fff,stroke:none
+    style Local fill:#0b6165,color:#fff,stroke:none
+    style External fill:#0d7377,color:#fff,stroke:none
 ```
 
 **Example**: `POST /v1/chat/completions` with `model: "ollama/llama3.2:3b"`:
@@ -66,10 +78,10 @@ Providers come in two types:
 
 | Type | Example | How it works |
 |------|---------|--------------|
-| **Inline** (`inline::`) | `inline::faiss`, `inline::sentence-transformers` | Runs in the Llama Stack process |
+| **Inline** (`inline::`) | `inline::faiss`, `inline::sentence-transformers` | Runs in the OGX process |
 | **Remote** (`remote::`) | `remote::ollama`, `remote::openai` | Adapts an external service |
 
-Each provider declares which API it implements, its config class, and its dependencies. The provider registry (`src/llama_stack/providers/registry/`) lists all available providers per API.
+Each provider declares which API it implements, its config class, and its dependencies. The provider registry (`src/ogx/providers/registry/`) lists all available providers per API.
 
 ### Auto-Routing
 
@@ -112,15 +124,16 @@ Key features:
 
 A distribution is a pre-configured run config for a target environment. Think Kubernetes distributions (AKS, EKS, GKE) - the API stays the same, each distribution wires different backends.
 
-| Distribution | Use case |
-|-------------|----------|
-| `starter` | General purpose, supports most providers |
-| `dell`, `nvidia` | Hardware-specific optimizations |
-| Custom | Build your own with `llama stack build` |
+| Distribution | Use case | Container Image | Documentation |
+|--------------|----------|-----------------|---------------|
+| `starter` | General purpose, supports most providers | [`llamastack/distribution-starter`](https://hub.docker.com/r/llamastack/distribution-starter) | [Starter Guide](/docs/distributions/self_hosted_distro/starter) |
+| `postgres-demo` | Starter with PostgreSQL storage | [`llamastack/distribution-postgres-demo`](https://hub.docker.com/r/llamastack/distribution-postgres-demo) | — |
+| `nvidia` | NVIDIA-specific hardware optimizations | — | [NVIDIA Guide](/docs/distributions/self_hosted_distro/nvidia) |
+| Custom | Build your own by creating a custom `config.yaml` | — | [Building Custom Distributions](/docs/distributions/building_distro) |
 
 ## Storage
 
-Llama Stack persists state (registered models, conversation history, vector stores) using pluggable storage backends:
+OGX persists state (registered models, conversation history, vector stores) using pluggable storage backends:
 
 | Backend | Use case |
 |---------|----------|

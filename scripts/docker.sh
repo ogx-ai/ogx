@@ -1,5 +1,5 @@
-#!/bin/bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+#!/usr/bin/env bash
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,8 +7,8 @@
 
 set -euo pipefail
 
-# Docker container management script for Llama Stack
-# Allows starting/stopping/restarting a Llama Stack docker container for testing
+# Docker container management script for OGX
+# Allows starting/stopping/restarting a OGX docker container for testing
 
 # Default values
 DISTRO=""
@@ -148,10 +148,10 @@ fi
 
 # If distro not provided for stop/status/logs, try to infer from running containers
 if [[ -z "$DISTRO" && ("$COMMAND" == "stop" || "$COMMAND" == "status" || "$COMMAND" == "logs") ]]; then
-    # Look for any llama-stack-test-* container
-    RUNNING_CONTAINERS=$(docker ps -a --filter "name=llama-stack-test-" --format "{{.Names}}" | head -1)
+    # Look for any ogx-test-* container
+    RUNNING_CONTAINERS=$(docker ps -a --filter "name=ogx-test-" --format "{{.Names}}" | head -1)
     if [[ -n "$RUNNING_CONTAINERS" ]]; then
-        DISTRO=$(echo "$RUNNING_CONTAINERS" | sed 's/llama-stack-test-//')
+        DISTRO=$(echo "$RUNNING_CONTAINERS" | sed 's/ogx-test-//')
         echo "Found running container for distro: $DISTRO"
     else
         echo "Error: --distro is required (no running containers found)"
@@ -163,7 +163,7 @@ fi
 # Remove docker: prefix if present
 DISTRO=$(echo "$DISTRO" | sed 's/^docker://')
 
-CONTAINER_NAME="llama-stack-test-$DISTRO"
+CONTAINER_NAME="ogx-test-$DISTRO"
 
 should_copy_source() {
     if [[ "$USE_COPY_NOT_MOUNT" == "true" ]]; then
@@ -213,6 +213,23 @@ build_image() {
         exit 1
     fi
 
+    # Determine version for labels
+    local version
+    if ! version=$(git describe --tags --always --dirty 2>&1); then
+        echo "❌ Failed to determine version from git: $version"
+        exit 1
+    fi
+
+    # Generate config labels (one per line, read into array)
+    echo "Generating config labels for distribution: $DISTRO"
+    local config_labels_output
+    if ! config_labels_output=$("$script_dir/generate-config-labels.sh" "$DISTRO" "$version"); then
+        echo "❌ Failed to generate config labels"
+        exit 1
+    fi
+    local config_labels
+    mapfile -t config_labels <<< "$config_labels_output"
+
     # Determine if we should use buildx for multi-arch builds
     local use_buildx=false
     if [[ -n "$PLATFORM" ]]; then
@@ -225,7 +242,7 @@ build_image() {
             exit 1
         fi
         # Create buildx builder if it doesn't exist
-        docker buildx create --name llama-stack-builder --use 2>/dev/null || docker buildx use llama-stack-builder 2>/dev/null || true
+        docker buildx create --name ogx-builder --use 2>/dev/null || docker buildx use ogx-builder 2>/dev/null || true
     fi
 
     local build_cmd
@@ -241,7 +258,7 @@ build_image() {
             --tag "localhost/distribution-$DISTRO:dev"
             --build-arg "DISTRO_NAME=$DISTRO"
             --build-arg "INSTALL_MODE=editable"
-            --build-arg "LLAMA_STACK_DIR=/workspace"
+            --build-arg "OGX_DIR=/workspace"
         )
     else
         build_cmd=(
@@ -252,7 +269,7 @@ build_image() {
             --tag "localhost/distribution-$DISTRO:dev"
             --build-arg "DISTRO_NAME=$DISTRO"
             --build-arg "INSTALL_MODE=editable"
-            --build-arg "LLAMA_STACK_DIR=/workspace"
+            --build-arg "OGX_DIR=/workspace"
         )
     fi
 
@@ -266,11 +283,14 @@ build_image() {
         build_cmd+=(--build-arg "UV_INDEX_STRATEGY=$UV_INDEX_STRATEGY")
     fi
 
+    # Add config labels to build command
+    build_cmd+=("${config_labels[@]}")
+
     if ! "${build_cmd[@]}"; then
         echo "❌ Failed to build Docker image"
         exit 1
     fi
-    echo "✅ Docker image built successfully"
+    echo "✅ Docker image built successfully with embedded config labels"
 }
 
 # Function to start container
@@ -321,8 +341,8 @@ start_container() {
 
     # Build environment variables for docker run
     DOCKER_ENV_VARS=""
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e LLAMA_STACK_TEST_INFERENCE_MODE=$INFERENCE_MODE"
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server"
+    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_INFERENCE_MODE=$INFERENCE_MODE"
+    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_STACK_CONFIG_TYPE=server"
 
     # Set default OLLAMA_URL if not provided
     # On macOS/Windows, use host.docker.internal to reach host from container

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -66,7 +66,7 @@ class TestPromptGuardLazyImports:
     def test_no_torch_transformers_on_import(self):
         """Verify prompt_guard module import doesn't load torch or transformers."""
         result = _check_module_import_isolation(
-            "from llama_stack.providers.inline.safety.prompt_guard import prompt_guard",
+            "from ogx.providers.inline.safety.prompt_guard import prompt_guard",
             ["torch", "transformers"],
         )
 
@@ -101,7 +101,7 @@ class TestEmbeddingMixinLazyImports:
 
     def test_no_torch_on_import(self):
         ok, loaded = _check_no_forbidden_imports(
-            "llama_stack.providers.utils.inference.embedding_mixin",
+            "ogx.providers.utils.inference.embedding_mixin",
             ["torch"],
         )
         assert ok, f"embedding_mixin.py eagerly loaded: {loaded}"
@@ -112,7 +112,7 @@ class TestFaissLazyImports:
 
     def test_no_faiss_numpy_on_import(self):
         ok, loaded = _check_no_forbidden_imports(
-            "llama_stack.providers.inline.vector_io.faiss.faiss",
+            "ogx.providers.inline.vector_io.faiss.faiss",
             ["faiss", "numpy"],
         )
         assert ok, f"faiss.py eagerly loaded: {loaded}"
@@ -123,7 +123,7 @@ class TestSqliteVecLazyImports:
 
     def test_no_numpy_sqlite_vec_on_import(self):
         ok, loaded = _check_no_forbidden_imports(
-            "llama_stack.providers.inline.vector_io.sqlite_vec.sqlite_vec",
+            "ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec",
             ["numpy", "sqlite_vec"],
         )
         assert ok, f"sqlite_vec.py eagerly loaded: {loaded}"
@@ -134,7 +134,7 @@ class TestVectorStoreLazyImports:
 
     def test_no_numpy_on_import(self):
         ok, loaded = _check_no_forbidden_imports(
-            "llama_stack.providers.utils.memory.vector_store",
+            "ogx.providers.utils.memory.vector_store",
             ["numpy"],
         )
         assert ok, f"vector_store.py eagerly loaded: {loaded}"

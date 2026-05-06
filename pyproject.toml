@@ -12,9 +12,9 @@ constraint-dependencies = [
 ]
 
 [project]
-name = "llama_stack"
+name = "ogx"
 dynamic = ["version"]
-authors = [{ name = "Meta Llama", email = "llama-oss@meta.com" }]
+authors = [{ name = "The OGX Contributors", email = "contributors@ogx.dev" }]
 description = "Open-source, OpenAI-compatible API server with pluggable providers for any model and any infrastructure"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -37,7 +37,7 @@ dependencies = [
     "httpx",
     "jinja2>=3.1.6",
     "jsonschema",
-    "llama-stack-api",                                # API and provider specifications (local dev via tool.uv.sources)
+    "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
     "openai>=2.30.0",
     "prompt-toolkit",
     "python-dotenv",
@@ -89,7 +89,7 @@ starter = [
     "fire",
     "fireworks-ai<=0.17.16",
     "fonttools>=4.60.2",
-    "google-genai",
+    "google-genai>=1.69.0",
     "h11>=0.16.0",
     "httpx",
     "langdetect",
@@ -227,6 +227,7 @@ test = [
     "langchain-openai",
     "langchain-core",
     "langgraph",
+    "google-genai>=1.69.0",
 ]
 docs = [
     "setuptools",
@@ -251,17 +252,17 @@ codegen = ["rich", "pydantic>=2.11.9", "jinja2>=3.1.6"]
 benchmark = ["locust>=2.39.1"]
 
 [project.urls]
-Homepage = "https://github.com/llamastack/llama-stack"
+Homepage = "https://github.com/ogx-ai/ogx"
 
 [project.scripts]
-llama = "llama_stack.cli.llama:main"
-install-wheel-from-presigned = "llama_stack.cli.scripts.run:install_wheel_from_presigned"
+ogx = "ogx.cli.ogx:main"
+install-wheel-from-presigned = "ogx.cli.scripts.run:install_wheel_from_presigned"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = [
-    "llama_stack",
-    "llama_stack.*",
+    "ogx",
+    "ogx.*",
 ]
 
 [[tool.uv.index]]
@@ -272,7 +273,7 @@ explicit = true
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu" }]
 torchvision = [{ index = "pytorch-cpu" }]
-llama-stack-api = [{ path = "src/llama_stack_api", editable = true }]
+ogx-api = [{ path = "src/ogx_api", editable = true }]
 
 [tool.ruff]
 line-length = 120
@@ -337,29 +338,29 @@ convention = "google"
 "benchmarking/**/*.py" = ["D101"] # Ignore docstring rules for benchmarking scripts
 "client-sdks/**/*.py" = ["D101"] # Ignore docstring rules for client SDKs
 "scripts/**/*.py" = ["D101"] # Ignore docstring rules for scripts
-"src/llama_stack/providers/inline/scoring/basic/utils/ifeval_support.py" = [
+"src/ogx/providers/inline/scoring/basic/utils/ifeval_support.py" = [
     "RUF001",
 ]
-"src/llama_stack/providers/inline/scoring/basic/utils/ifeval_checkers_core.py" = [
+"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_core.py" = [
     "RUF001",
 ]
-"src/llama_stack/providers/inline/scoring/basic/utils/ifeval_checkers_format.py" = [
+"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_format.py" = [
     "RUF001",
 ]
-"src/llama_stack/providers/inline/scoring/basic/utils/ifeval_word_list.py" = [
+"src/ogx/providers/inline/scoring/basic/utils/ifeval_word_list.py" = [
     "RUF001",
 ]
-"src/llama_stack/providers/inline/scoring/basic/scoring_fn/fn_defs/regex_parser_multiple_choice_answer.py" = [
+"src/ogx/providers/inline/scoring/basic/scoring_fn/fn_defs/regex_parser_multiple_choice_answer.py" = [
     "RUF001",
     "PLE2515",
 ]
-"src/llama_stack/apis/**/__init__.py" = [
+"src/ogx/apis/**/__init__.py" = [
     "F403",
 ] # Using import * is acceptable (or at least tolerated) in an __init__.py of a package API
 
 [tool.mypy]
 mypy_path = ["src"]
-packages = ["llama_stack", "llama_stack_api"]
+packages = ["ogx", "ogx_api"]
 plugins = ['pydantic.mypy']
 disable_error_code = []
 warn_return_any = true
@@ -375,140 +376,130 @@ exclude = [
     # All files now have type annotations! 🎉
     #
     # ============================================================================
-    # Section 2: Files that need strict typing issues fixed (131 files)
+    # Section 2: Files that need strict typing issues fixed (109 files)
     # ============================================================================
     # These files have some type hints but fail strict type checking due to
     # incomplete annotations, Any usage, or other strict mode violations.
     #
-    # llama_stack_api files (3 files)
-    "^src/llama_stack_api/models/models\\.py$",
-    "^src/llama_stack_api/prompts/models\\.py$",
-    # Core files (15 files)
-    "^src/llama_stack/core/distribution\\.py$",
-    "^src/llama_stack/core/library_client\\.py$",
-    "^src/llama_stack/core/server/quota\\.py$",
-    "^src/llama_stack/core/server/routes\\.py$",
-    "^src/llama_stack/core/server/server\\.py$",
-    "^src/llama_stack/core/stack\\.py$",
-    "^src/llama_stack/core/store/registry\\.py$",
-    "^src/llama_stack/core/task\\.py$",
-    "^src/llama_stack/core/testing_context\\.py$",
-    "^src/llama_stack/core/utils/exec\\.py$",
-    "^src/llama_stack/core/utils/serialize\\.py$",
+    # Core files (4 files)
+    "^src/ogx/core/server/quota\\.py$",
+    "^src/ogx/core/server/routes\\.py$",
+    "^src/ogx/core/server/server\\.py$",
+    "^src/ogx/core/store/registry\\.py$",
     # CLI files (8 files)
-    "^src/llama_stack/cli/stack/_list_deps\\.py$",
-    "^src/llama_stack/cli/stack/list_apis\\.py$",
-    "^src/llama_stack/cli/stack/list_deps\\.py$",
-    "^src/llama_stack/cli/stack/list_providers\\.py$",
-    "^src/llama_stack/cli/stack/run\\.py$",
-    "^src/llama_stack/cli/stack/utils\\.py$",
-    "^src/llama_stack/cli/subcommand\\.py$",
-    "^src/llama_stack/cli/utils\\.py$",
+    "^src/ogx/cli/stack/_list_deps\\.py$",
+    "^src/ogx/cli/stack/list_apis\\.py$",
+    "^src/ogx/cli/stack/list_deps\\.py$",
+    "^src/ogx/cli/stack/list_providers\\.py$",
+    "^src/ogx/cli/stack/run\\.py$",
+    "^src/ogx/cli/stack/utils\\.py$",
+    "^src/ogx/cli/subcommand\\.py$",
+    "^src/ogx/cli/utils\\.py$",
     # Providers - Inline (27 files)
-    "^src/llama_stack/providers/inline/batches/reference/__init__\\.py$",
-    "^src/llama_stack/providers/inline/batches/reference/batches\\.py$",
-    "^src/llama_stack/providers/inline/eval/builtin/__init__\\.py$",
-    "^src/llama_stack/providers/inline/eval/builtin/eval\\.py$",
-    "^src/llama_stack/providers/inline/file_processor/pypdf/__init__\\.py$",
-    "^src/llama_stack/providers/inline/file_processor/pypdf/adapter\\.py$",
-    "^src/llama_stack/providers/inline/file_processor/pypdf/pypdf\\.py$",
-    "^src/llama_stack/providers/inline/files/localfs/__init__\\.py$",
-    "^src/llama_stack/providers/inline/inference/sentence_transformers/__init__\\.py$",
-    "^src/llama_stack/providers/inline/inference/sentence_transformers/config\\.py$",
-    "^src/llama_stack/providers/inline/inference/sentence_transformers/sentence_transformers\\.py$",
-    "^src/llama_stack/providers/inline/inference/transformers/__init__\\.py$",
-    "^src/llama_stack/providers/inline/inference/transformers/config\\.py$",
-    "^src/llama_stack/providers/inline/inference/transformers/transformers\\.py$",
-    "^src/llama_stack/providers/inline/safety/prompt_guard/__init__\\.py$",
-    "^src/llama_stack/providers/inline/safety/prompt_guard/config\\.py$",
-    "^src/llama_stack/providers/inline/safety/prompt_guard/prompt_guard\\.py$",
-    "^src/llama_stack/providers/inline/tool_runtime/file_search/__init__\\.py$",
-    "^src/llama_stack/providers/inline/tool_runtime/file_search/context_retriever\\.py$",
-    "^src/llama_stack/providers/inline/tool_runtime/file_search/file_search\\.py$",
-    "^src/llama_stack/providers/inline/vector_io/chroma/__init__\\.py$",
-    "^src/llama_stack/providers/inline/vector_io/faiss/__init__\\.py$",
-    "^src/llama_stack/providers/inline/vector_io/faiss/faiss\\.py$",
-    "^src/llama_stack/providers/inline/vector_io/milvus/__init__\\.py$",
-    "^src/llama_stack/providers/inline/vector_io/qdrant/__init__\\.py$",
-    "^src/llama_stack/providers/inline/vector_io/sqlite_vec/__init__\\.py$",
-    "^src/llama_stack/providers/inline/vector_io/sqlite_vec/sqlite_vec\\.py$",
+    "^src/ogx/providers/inline/batches/reference/__init__\\.py$",
+    "^src/ogx/providers/inline/batches/reference/batches\\.py$",
+    "^src/ogx/providers/inline/eval/builtin/__init__\\.py$",
+    "^src/ogx/providers/inline/eval/builtin/eval\\.py$",
+    "^src/ogx/providers/inline/file_processor/pypdf/__init__\\.py$",
+    "^src/ogx/providers/inline/file_processor/pypdf/adapter\\.py$",
+    "^src/ogx/providers/inline/file_processor/pypdf/pypdf\\.py$",
+    "^src/ogx/providers/inline/files/localfs/__init__\\.py$",
+    "^src/ogx/providers/inline/inference/sentence_transformers/__init__\\.py$",
+    "^src/ogx/providers/inline/inference/sentence_transformers/config\\.py$",
+    "^src/ogx/providers/inline/inference/sentence_transformers/sentence_transformers\\.py$",
+    "^src/ogx/providers/inline/inference/transformers/__init__\\.py$",
+    "^src/ogx/providers/inline/inference/transformers/config\\.py$",
+    "^src/ogx/providers/inline/inference/transformers/transformers\\.py$",
+    "^src/ogx/providers/inline/safety/prompt_guard/__init__\\.py$",
+    "^src/ogx/providers/inline/safety/prompt_guard/config\\.py$",
+    "^src/ogx/providers/inline/safety/prompt_guard/prompt_guard\\.py$",
+    "^src/ogx/providers/inline/tool_runtime/file_search/__init__\\.py$",
+    "^src/ogx/providers/inline/tool_runtime/file_search/context_retriever\\.py$",
+    "^src/ogx/providers/inline/tool_runtime/file_search/file_search\\.py$",
+    "^src/ogx/providers/inline/vector_io/chroma/__init__\\.py$",
+    "^src/ogx/providers/inline/vector_io/faiss/__init__\\.py$",
+    "^src/ogx/providers/inline/vector_io/faiss/faiss\\.py$",
+    "^src/ogx/providers/inline/vector_io/milvus/__init__\\.py$",
+    "^src/ogx/providers/inline/vector_io/qdrant/__init__\\.py$",
+    "^src/ogx/providers/inline/vector_io/sqlite_vec/__init__\\.py$",
+    "^src/ogx/providers/inline/vector_io/sqlite_vec/sqlite_vec\\.py$",
     # Providers - Remote (43 files)
-    "^src/llama_stack/providers/remote/eval/nvidia/__init__\\.py$",
-    "^src/llama_stack/providers/remote/eval/nvidia/config\\.py$",
-    "^src/llama_stack/providers/remote/eval/nvidia/eval\\.py$",
-    "^src/llama_stack/providers/remote/files/openai/__init__\\.py$",
-    "^src/llama_stack/providers/remote/files/s3/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/anthropic/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/anthropic/anthropic\\.py$",
-    "^src/llama_stack/providers/remote/inference/anthropic/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/azure/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/azure/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/cerebras/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/cerebras/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/databricks/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/fireworks/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/fireworks/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/gemini/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/gemini/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/gemini/gemini\\.py$",
-    "^src/llama_stack/providers/remote/inference/groq/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/groq/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/llama_cpp_server/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/llama_cpp_server/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/llama_openai_compat/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/llama_openai_compat/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/ollama/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/ollama/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/ollama/ollama\\.py$",
-    "^src/llama_stack/providers/remote/inference/openai/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/openai/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/sambanova/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/sambanova/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/together/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/together/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/together/together\\.py$",
-    "^src/llama_stack/providers/remote/inference/vertexai/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/vertexai/config\\.py$",
-    "^src/llama_stack/providers/remote/inference/vertexai/vertexai\\.py$",
-    "^src/llama_stack/providers/remote/inference/vllm/__init__\\.py$",
-    "^src/llama_stack/providers/remote/inference/vllm/config\\.py$",
-    "^src/llama_stack/providers/remote/vector_io/infinispan/__init__\\.py$",
-    "^src/llama_stack/providers/remote/vector_io/infinispan/infinispan\\.py$",
-    "^src/llama_stack/providers/remote/vector_io/oci/__init__\\.py$",
-    "^src/llama_stack/providers/remote/vector_io/oci/oci26ai\\.py$",
+    "^src/ogx/providers/remote/eval/nvidia/__init__\\.py$",
+    "^src/ogx/providers/remote/eval/nvidia/config\\.py$",
+    "^src/ogx/providers/remote/eval/nvidia/eval\\.py$",
+    "^src/ogx/providers/remote/files/openai/__init__\\.py$",
+    "^src/ogx/providers/remote/files/s3/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/anthropic/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/anthropic/anthropic\\.py$",
+    "^src/ogx/providers/remote/inference/anthropic/config\\.py$",
+    "^src/ogx/providers/remote/inference/azure/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/azure/config\\.py$",
+    "^src/ogx/providers/remote/inference/cerebras/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/cerebras/config\\.py$",
+    "^src/ogx/providers/remote/inference/databricks/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/fireworks/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/fireworks/config\\.py$",
+    "^src/ogx/providers/remote/inference/gemini/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/gemini/config\\.py$",
+    "^src/ogx/providers/remote/inference/gemini/gemini\\.py$",
+    "^src/ogx/providers/remote/inference/groq/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/groq/config\\.py$",
+    "^src/ogx/providers/remote/inference/llama_cpp_server/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/llama_cpp_server/config\\.py$",
+    "^src/ogx/providers/remote/inference/llama_openai_compat/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/llama_openai_compat/config\\.py$",
+    "^src/ogx/providers/remote/inference/ollama/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/ollama/config\\.py$",
+    "^src/ogx/providers/remote/inference/ollama/ollama\\.py$",
+    "^src/ogx/providers/remote/inference/openai/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/openai/config\\.py$",
+    "^src/ogx/providers/remote/inference/sambanova/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/sambanova/config\\.py$",
+    "^src/ogx/providers/remote/inference/together/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/together/config\\.py$",
+    "^src/ogx/providers/remote/inference/together/together\\.py$",
+    "^src/ogx/providers/remote/inference/vertexai/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/vertexai/config\\.py$",
+    "^src/ogx/providers/remote/inference/vertexai/vertexai\\.py$",
+    "^src/ogx/providers/remote/inference/vllm/__init__\\.py$",
+    "^src/ogx/providers/remote/inference/vllm/config\\.py$",
+    "^src/ogx/providers/remote/vector_io/infinispan/__init__\\.py$",
+    "^src/ogx/providers/remote/vector_io/infinispan/infinispan\\.py$",
+    "^src/ogx/providers/remote/vector_io/oci/__init__\\.py$",
+    "^src/ogx/providers/remote/vector_io/oci/oci26ai\\.py$",
     # Providers - Utils (26 files)
-    "^src/llama_stack/providers/utils/bedrock/client\\.py$",
-    "^src/llama_stack/providers/utils/bedrock/config\\.py$",
-    "^src/llama_stack/providers/utils/bedrock/refreshable_boto_session\\.py$",
-    "^src/llama_stack/providers/utils/common/data_schema_validator\\.py$",
-    "^src/llama_stack/providers/utils/common/data_url\\.py$",
-    "^src/llama_stack/providers/utils/datasetio/url_utils\\.py$",
-    "^src/llama_stack/providers/utils/inference/embedding_mixin\\.py$",
-    "^src/llama_stack/providers/utils/inference/inference_store\\.py$",
-    "^src/llama_stack/providers/utils/inference/model_registry\\.py$",
-    "^src/llama_stack/providers/utils/inference/openai_compat\\.py$",
-    "^src/llama_stack/providers/utils/inference/openai_mixin\\.py$",
-    "^src/llama_stack/providers/utils/inference/prompt_adapter\\.py$",
-    "^src/llama_stack/providers/utils/kvstore/kvstore\\.py$",
-    "^src/llama_stack/providers/utils/kvstore/postgres/postgres\\.py$",
-    "^src/llama_stack/providers/utils/kvstore/redis/redis\\.py$",
-    "^src/llama_stack/providers/utils/memory/vector_store\\.py$",
-    "^src/llama_stack/providers/utils/responses/responses_store\\.py$",
-    "^src/llama_stack/providers/utils/scheduler\\.py$",
-    "^src/llama_stack/providers/utils/scoring/aggregation_utils\\.py$",
-    "^src/llama_stack/providers/utils/scoring/base_scoring_fn\\.py$",
-    "^src/llama_stack/providers/utils/telemetry/dataset_mixin\\.py$",
-    "^src/llama_stack/providers/utils/telemetry/trace_protocol\\.py$",
-    "^src/llama_stack/providers/utils/telemetry/tracing\\.py$",
-    "^src/llama_stack/providers/utils/tools/mcp\\.py$",
-    "^src/llama_stack/providers/utils/tools/ttl_dict\\.py$",
-    "^src/llama_stack/providers/utils/vector_io/vector_utils\\.py$",
+    "^src/ogx/providers/utils/bedrock/client\\.py$",
+    "^src/ogx/providers/utils/bedrock/config\\.py$",
+    "^src/ogx/providers/utils/bedrock/refreshable_boto_session\\.py$",
+    "^src/ogx/providers/utils/common/data_schema_validator\\.py$",
+    "^src/ogx/providers/utils/common/data_url\\.py$",
+    "^src/ogx/providers/utils/datasetio/url_utils\\.py$",
+    "^src/ogx/providers/utils/inference/embedding_mixin\\.py$",
+    "^src/ogx/providers/utils/inference/inference_store\\.py$",
+    "^src/ogx/providers/utils/inference/model_registry\\.py$",
+    "^src/ogx/providers/utils/inference/openai_compat\\.py$",
+    "^src/ogx/providers/utils/inference/openai_mixin\\.py$",
+    "^src/ogx/providers/utils/inference/prompt_adapter\\.py$",
+    "^src/ogx/providers/utils/kvstore/kvstore\\.py$",
+    "^src/ogx/providers/utils/kvstore/postgres/postgres\\.py$",
+    "^src/ogx/providers/utils/kvstore/redis/redis\\.py$",
+    "^src/ogx/providers/utils/memory/vector_store\\.py$",
+    "^src/ogx/providers/utils/responses/responses_store\\.py$",
+    "^src/ogx/providers/utils/scheduler\\.py$",
+    "^src/ogx/providers/utils/scoring/aggregation_utils\\.py$",
+    "^src/ogx/providers/utils/scoring/base_scoring_fn\\.py$",
+    "^src/ogx/providers/utils/telemetry/dataset_mixin\\.py$",
+    "^src/ogx/providers/utils/telemetry/trace_protocol\\.py$",
+    "^src/ogx/providers/utils/telemetry/tracing\\.py$",
+    "^src/ogx/providers/utils/tools/mcp\\.py$",
+    "^src/ogx/providers/utils/tools/ttl_dict\\.py$",
+    "^src/ogx/providers/utils/vector_io/vector_utils\\.py$",
     # Distributions (1 files)
-    "^src/llama_stack/distributions/template\\.py$",
+    "^src/ogx/distributions/template\\.py$",
     # Other (3 files)
-    "^src/llama_stack/log\\.py$",
-    "^src/llama_stack/models/llama/sku_types\\.py$",
-    "^src/llama_stack/testing/api_recorder\\.py$",
+    "^src/ogx/log\\.py$",
+    "^src/ogx/models/llama/sku_types\\.py$",
+    "^src/ogx/testing/api_recorder\\.py$",
     #
     # ============================================================================
     # Directory Excludes (35 directories)
@@ -518,42 +509,42 @@ exclude = [
     # or Section 2 as appropriate.
     #
     # Core directories
-    "^src/llama_stack/core/routers/",
-    "^src/llama_stack/core/routing_tables/",
+    "^src/ogx/core/routers/",
+    "^src/ogx/core/routing_tables/",
     # Provider directories - Inline
-    "^src/llama_stack/providers/inline/datasetio/localfs/",
-    "^src/llama_stack/providers/inline/safety/code_scanner/",
-    "^src/llama_stack/providers/inline/safety/llama_guard/",
-    "^src/llama_stack/providers/inline/scoring/basic/",
-    "^src/llama_stack/providers/inline/scoring/braintrust/",
-    "^src/llama_stack/providers/inline/scoring/llm_as_judge/",
+    "^src/ogx/providers/inline/datasetio/localfs/",
+    "^src/ogx/providers/inline/safety/code_scanner/",
+    "^src/ogx/providers/inline/safety/llama_guard/",
+    "^src/ogx/providers/inline/scoring/basic/",
+    "^src/ogx/providers/inline/scoring/braintrust/",
+    "^src/ogx/providers/inline/scoring/llm_as_judge/",
     # Provider directories - Remote
-    "^src/llama_stack/providers/remote/agents/sample/",
-    "^src/llama_stack/providers/remote/datasetio/huggingface/",
-    "^src/llama_stack/providers/remote/datasetio/nvidia/",
-    "^src/llama_stack/providers/remote/inference/bedrock/",
-    "^src/llama_stack/providers/remote/inference/nvidia/",
-    "^src/llama_stack/providers/remote/inference/oci/",
-    "^src/llama_stack/providers/remote/inference/passthrough/",
-    "^src/llama_stack/providers/remote/inference/runpod/",
+    "^src/ogx/providers/remote/agents/sample/",
+    "^src/ogx/providers/remote/datasetio/huggingface/",
+    "^src/ogx/providers/remote/datasetio/nvidia/",
+    "^src/ogx/providers/remote/inference/bedrock/",
+    "^src/ogx/providers/remote/inference/nvidia/",
+    "^src/ogx/providers/remote/inference/oci/",
+    "^src/ogx/providers/remote/inference/passthrough/",
+    "^src/ogx/providers/remote/inference/runpod/",
 
-    "^src/llama_stack/providers/remote/inference/watsonx/",
-    "^src/llama_stack/providers/remote/post_training/nvidia/",
-    "^src/llama_stack/providers/remote/safety/bedrock/",
-    "^src/llama_stack/providers/remote/safety/nvidia/",
-    "^src/llama_stack/providers/remote/safety/sambanova/",
-    "^src/llama_stack/providers/remote/safety/sample/",
-    "^src/llama_stack/providers/remote/tool_runtime/bing_search/",
-    "^src/llama_stack/providers/remote/tool_runtime/brave_search/",
-    "^src/llama_stack/providers/remote/tool_runtime/model_context_protocol/",
-    "^src/llama_stack/providers/remote/tool_runtime/tavily_search/",
-    "^src/llama_stack/providers/remote/tool_runtime/wolfram_alpha/",
-    "^src/llama_stack/providers/remote/vector_io/chroma/",
-    "^src/llama_stack/providers/remote/vector_io/elasticsearch/",
-    "^src/llama_stack/providers/remote/vector_io/milvus/",
-    "^src/llama_stack/providers/remote/vector_io/pgvector/",
-    "^src/llama_stack/providers/remote/vector_io/qdrant/",
-    "^src/llama_stack/providers/remote/vector_io/weaviate/",
+    "^src/ogx/providers/remote/inference/watsonx/",
+    "^src/ogx/providers/remote/post_training/nvidia/",
+    "^src/ogx/providers/remote/safety/bedrock/",
+    "^src/ogx/providers/remote/safety/nvidia/",
+    "^src/ogx/providers/remote/safety/sambanova/",
+    "^src/ogx/providers/remote/safety/sample/",
+    "^src/ogx/providers/remote/tool_runtime/bing_search/",
+    "^src/ogx/providers/remote/tool_runtime/brave_search/",
+    "^src/ogx/providers/remote/tool_runtime/model_context_protocol/",
+    "^src/ogx/providers/remote/tool_runtime/tavily_search/",
+    "^src/ogx/providers/remote/tool_runtime/wolfram_alpha/",
+    "^src/ogx/providers/remote/vector_io/chroma/",
+    "^src/ogx/providers/remote/vector_io/elasticsearch/",
+    "^src/ogx/providers/remote/vector_io/milvus/",
+    "^src/ogx/providers/remote/vector_io/pgvector/",
+    "^src/ogx/providers/remote/vector_io/qdrant/",
+    "^src/ogx/providers/remote/vector_io/weaviate/",
 ]
 
 [[tool.mypy.overrides]]

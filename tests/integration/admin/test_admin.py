@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,33 +6,33 @@
 
 from llama_stack_client import LlamaStackClient
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
 
 class TestAdmin:
-    def test_admin_providers_list(self, llama_stack_client: LlamaStackAsLibraryClient | LlamaStackClient):
-        provider_list = llama_stack_client.alpha.admin.list_providers()
+    def test_admin_providers_list(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+        provider_list = ogx_client.alpha.admin.list_providers()
         assert provider_list is not None
         assert len(provider_list) > 0
 
         for provider in provider_list:
             pid = provider.provider_id
-            provider = llama_stack_client.alpha.admin.inspect_provider(pid)
+            provider = ogx_client.alpha.admin.inspect_provider(pid)
             assert provider is not None
 
-    def test_health(self, llama_stack_client: LlamaStackAsLibraryClient | LlamaStackClient):
-        health = llama_stack_client.alpha.admin.health()
+    def test_health(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+        health = ogx_client.alpha.admin.health()
         assert health is not None
         assert health.status == "OK"
 
-    def test_version(self, llama_stack_client: LlamaStackAsLibraryClient | LlamaStackClient):
-        version = llama_stack_client.alpha.admin.version()
+    def test_version(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+        version = ogx_client.alpha.admin.version()
         assert version is not None
         assert version.version is not None
 
-    def test_list_routes_default(self, llama_stack_client: LlamaStackAsLibraryClient | LlamaStackClient):
+    def test_list_routes_default(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
         """Test list_routes with default filter (non-deprecated v1 routes)."""
-        routes = llama_stack_client.alpha.admin.list_routes()
+        routes = ogx_client.alpha.admin.list_routes()
         assert routes is not None
         assert len(routes) > 0
 
@@ -46,18 +46,18 @@ class TestAdmin:
         assert "/inspect/routes" in paths or "/v1/inspect/routes" in paths
         assert "/health" in paths or "/v1/health" in paths
 
-    def test_list_routes_filter_by_deprecated(self, llama_stack_client: LlamaStackAsLibraryClient | LlamaStackClient):
+    def test_list_routes_filter_by_deprecated(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
         """Test list_routes with deprecated filter."""
-        routes = llama_stack_client.alpha.admin.list_routes(api_filter="deprecated")
+        routes = ogx_client.alpha.admin.list_routes(api_filter="deprecated")
         assert routes is not None
 
         # When filtering for deprecated, we should get deprecated routes
         # Verify we get some deprecated routes (e.g., /toolgroups, /shields, /models, etc.)
         assert len(routes) > 0, "Deprecated filter should return some deprecated routes"
 
-    def test_list_routes_filter_by_v1(self, llama_stack_client: LlamaStackAsLibraryClient | LlamaStackClient):
+    def test_list_routes_filter_by_v1(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
         """Test list_routes with v1 filter."""
-        routes = llama_stack_client.alpha.admin.list_routes(api_filter="v1")
+        routes = ogx_client.alpha.admin.list_routes(api_filter="v1")
         assert routes is not None
         assert len(routes) > 0
 

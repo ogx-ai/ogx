@@ -1,0 +1,56 @@
+version: 2
+distribution_spec:
+  description: Quick start template for running OGX with several popular providers.
+    This distribution is intended for CPU-only environments.
+  providers:
+    inference:
+    - provider_type: remote::cerebras
+    - provider_type: remote::ollama
+    - provider_type: remote::vllm
+    - provider_type: remote::fireworks
+    - provider_type: remote::together
+    - provider_type: remote::bedrock
+    - provider_type: remote::nvidia
+    - provider_type: remote::openai
+    - provider_type: remote::anthropic
+    - provider_type: remote::gemini
+    - provider_type: remote::vertexai
+    - provider_type: remote::groq
+    - provider_type: remote::sambanova
+    - provider_type: remote::azure
+    - provider_type: inline::sentence-transformers
+    - provider_type: inline::transformers
+    vector_io:
+    - provider_type: inline::faiss
+    - provider_type: inline::sqlite-vec
+    - provider_type: inline::milvus
+    - provider_type: remote::chromadb
+    - provider_type: remote::pgvector
+    - provider_type: remote::qdrant
+    - provider_type: remote::weaviate
+    - provider_type: remote::elasticsearch
+    files:
+    - provider_type: inline::localfs
+    file_processors:
+    - provider_type: inline::pypdf
+    safety:
+    - provider_type: inline::llama-guard
+    - provider_type: inline::code-scanner
+    responses:
+    - provider_type: inline::builtin
+    - provider_type: inline::builtin
+    - provider_type: remote::huggingface
+    - provider_type: inline::localfs
+    - provider_type: remote::brave-search
+    - provider_type: remote::tavily-search
+    - provider_type: inline::file-search
+    - provider_type: remote::model-context-protocol
+    batches:
+    - provider_type: inline::reference
+image_type: venv
+additional_pip_packages:
+- aiosqlite
+- asyncpg
+- psycopg2-binary
+- sqlalchemy[asyncio]
+- pypdf

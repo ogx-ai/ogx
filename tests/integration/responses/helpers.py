@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,6 +6,7 @@
 
 import time
 
+import pytest
 from langchain_openai import ChatOpenAI
 
 from ..helpers import assert_text_contains, normalize_text
@@ -14,12 +15,33 @@ __all__ = [
     "assert_text_contains",
     "normalize_text",
     "new_vector_store",
+    "provider_from_model",
+    "skip_if_provider_is_vertexai",
     "upload_file",
     "wait_for_file_attachment",
     "setup_mcp_tools",
     "extract_text_content",
     "langchain_chat",
 ]
+
+
+def provider_from_model(client_with_models, model_id):
+    models = {m.id: m for m in client_with_models.models.list()}
+    models.update(
+        {m.custom_metadata["provider_resource_id"]: m for m in client_with_models.models.list() if m.custom_metadata}
+    )
+    provider_id = models[model_id].custom_metadata["provider_id"]
+    providers = {p.provider_id: p for p in client_with_models.providers.list()}
+    return providers[provider_id]
+
+
+def skip_if_provider_is_vertexai(client_with_models, model_id, reason=""):
+    provider = provider_from_model(client_with_models, model_id)
+    if provider.provider_type == "remote::vertexai":
+        msg = f"Model {model_id} hosted by {provider.provider_type}"
+        if reason:
+            msg += f": {reason}"
+        pytest.skip(msg)
 
 
 def new_vector_store(openai_client, name, embedding_model, embedding_dimension):

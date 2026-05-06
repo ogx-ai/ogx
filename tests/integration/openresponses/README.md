@@ -6,9 +6,9 @@ to replay underlying OpenAI API calls without needing a live API key.
 
 ## How recordings work
 
-The llama-stack server intercepts outbound inference calls (e.g., to OpenAI) and
+The ogx server intercepts outbound inference calls (e.g., to OpenAI) and
 stores each request/response pair as a JSON file named by the SHA-256 hash of the
-normalized request. In CI the server runs with `LLAMA_STACK_TEST_INFERENCE_MODE=replay`
+normalized request. In CI the server runs with `OGX_TEST_INFERENCE_MODE=replay`
 and looks up those files instead of making real network calls.
 
 ## Adding or updating recordings
@@ -30,4 +30,4 @@ git commit -m "chore: update OpenResponses conformance recordings"
 ## Known conformance gaps
 
 See [`CONFORMANCE_GAPS.md`](./CONFORMANCE_GAPS.md) for a full breakdown of why
-tests currently fail and what needs to change in the llama-stack implementation.
+tests currently fail and what needs to change in the ogx implementation.

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,17 +10,18 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.core.datatypes import (
+from ogx.core.datatypes import (
     QualifiedModel,
     RerankerModel,
     RewriteQueryParams,
     SafetyConfig,
+    ServerConfig,
     StackConfig,
     VectorStoresConfig,
 )
-from llama_stack.core.stack import register_connectors, validate_safety_config, validate_vector_stores_config
-from llama_stack.core.storage.datatypes import ServerStoresConfig, StorageConfig
-from llama_stack_api import (
+from ogx.core.stack import register_connectors, validate_safety_config, validate_vector_stores_config
+from ogx.core.storage.datatypes import ServerStoresConfig, StorageConfig
+from ogx_api import (
     Api,
     Connector,
     ConnectorInput,
@@ -393,3 +394,47 @@ class TestRegisterConnectors:
         await register_connectors(config, {})
 
         # Should complete without error (early return)
+
+
+class TestServerConfigRegistryRefreshInterval:
+    def test_default_value(self):
+        """Test that registry_refresh_interval_seconds defaults to 300."""
+        config = ServerConfig()
+        assert config.registry_refresh_interval_seconds == 300
+
+    def test_custom_value(self):
+        """Test that registry_refresh_interval_seconds can be set to a custom value."""
+        config = ServerConfig(registry_refresh_interval_seconds=60)
+        assert config.registry_refresh_interval_seconds == 60
+
+    def test_rejects_zero(self):
+        """Test that registry_refresh_interval_seconds rejects zero."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="registry_refresh_interval_seconds"):
+            ServerConfig(registry_refresh_interval_seconds=0)
+
+    def test_rejects_negative(self):
+        """Test that registry_refresh_interval_seconds rejects negative values."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="registry_refresh_interval_seconds"):
+            ServerConfig(registry_refresh_interval_seconds=-1)
+
+    def test_value_threads_to_stack_config(self):
+        """Test that registry_refresh_interval_seconds is accessible via StackConfig.server."""
+        stack_config = StackConfig(
+            distro_name="test",
+            providers={},
+            storage=StorageConfig(
+                backends={},
+                stores=ServerStoresConfig(
+                    metadata=None,
+                    inference=None,
+                    conversations=None,
+                    prompts=None,
+                ),
+            ),
+            server=ServerConfig(registry_refresh_interval_seconds=120),
+        )
+        assert stack_config.server.registry_refresh_interval_seconds == 120

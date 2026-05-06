@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -23,4 +23,4 @@ NAMESPACE = "nvidia-e2e-tutorial"
 PROJECT_ID = ""
 
 # (Optional) Directory to save the Customized model
-CUSTOMIZED_MODEL_DIR = "nvidia-e2e-tutorial/test-llama-stack@v1"
+CUSTOMIZED_MODEL_DIR = "nvidia-e2e-tutorial/test-ogx@v1"

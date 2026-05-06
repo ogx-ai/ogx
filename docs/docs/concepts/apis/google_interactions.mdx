@@ -1,0 +1,54 @@
+---
+title: Google Interactions API
+description: Google Interactions API compatibility layer in OGX
+sidebar_label: Google Interactions
+sidebar_position: 5
+---
+
+# Google Interactions API
+
+OGX provides a compatibility layer for the [Google Interactions API](https://ai.google.dev/gemini-api/docs/interactions) (v1alpha). This lets teams using the Google GenAI SDK point at a OGX server with minimal code changes, similar to how the OpenAI compatibility layer works.
+
+## How it works
+
+The adapter translates Google Interactions requests into OpenAI Chat Completion calls through OGX's inference API. Any inference provider that OGX supports (vLLM, Ollama, OpenAI, Bedrock, etc.) can serve the Google Interactions API.
+
+```
+Google GenAI SDK → /v1alpha/interactions → OGX Inference → Any Provider
+```
+
+## Quick example
+
+```python
+from google import genai
+
+client = genai.Client(
+    http_options={"api_version": "v1alpha"},
+    vertexai=False,
+    api_key="fake",
+)
+# Override the base URL to point at OGX
+client._api_client._url = "http://localhost:8321"
+
+response = client.models.generate_interaction(
+    model="llama-3.3-70b",
+    input="Hello",
+)
+print(response.outputs[0].text)
+```
+
+## What is supported
+
+- Text generation with string or multi-turn conversation input
+- Streaming via Server-Sent Events matching Google's event format
+- System instructions
+- Generation config parameters (temperature, top_p, top_k, max_output_tokens)
+
+## What is not yet supported
+
+- Multimodal inputs (images, audio, video, documents)
+- Tool declarations (Function, GoogleSearch, CodeExecution, MCP)
+- Background execution and interaction storage
+- GET, DELETE, and Cancel endpoints
+
+For a full property-level breakdown, see the [conformance report](/docs/api-google-interactions/conformance).

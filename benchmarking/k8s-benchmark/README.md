@@ -1,20 +1,20 @@
-# Llama Stack Benchmark Suite on Kubernetes
+# OGX Benchmark Suite on Kubernetes
 
 ## Motivation
 
-Performance benchmarking is critical for understanding the overhead and characteristics of the Llama Stack abstraction layer compared to direct inference engines like vLLM.
+Performance benchmarking is critical for understanding the overhead and characteristics of the OGX abstraction layer compared to direct inference engines like vLLM.
 
 ### Why This Benchmark Suite Exists
 
-**Performance Validation**: The Llama Stack provides a unified API layer across multiple inference providers, but this abstraction introduces potential overhead. This benchmark suite quantifies the performance impact by comparing:
+**Performance Validation**: The OGX provides a unified API layer across multiple inference providers, but this abstraction introduces potential overhead. This benchmark suite quantifies the performance impact by comparing:
 
-- Llama Stack inference (with vLLM backend)
+- OGX inference (with vLLM backend)
 - Direct vLLM inference calls
 - Both under identical Kubernetes deployment conditions
 
 **Production Readiness Assessment**: Real-world deployments require understanding performance characteristics under load. This suite simulates concurrent user scenarios with configurable parameters (duration, concurrency, request patterns) to validate production readiness.
 
-**Regression Detection (TODO)**: As the Llama Stack evolves, this benchmark provides automated regression detection for performance changes. CI/CD pipelines can leverage these benchmarks to catch performance degradations before production deployments.
+**Regression Detection (TODO)**: As the OGX evolves, this benchmark provides automated regression detection for performance changes. CI/CD pipelines can leverage these benchmarks to catch performance degradations before production deployments.
 
 **Resource Planning**: By measuring throughput, latency percentiles, and resource utilization patterns, teams can make informed decisions about:
 
@@ -53,7 +53,7 @@ cd ../../docs/source/distributions/k8s
 
 ```bash
 kubectl get pods
-# Should see: llama-stack-benchmark-server, vllm-server, etc.
+# Should see: ogx-benchmark-server, vllm-server, etc.
 ```
 
 ## Benchmark Results
@@ -62,7 +62,7 @@ We use [GuideLLM](https://github.com/neuralmagic/guidellm) against our k8s deplo
 
 ### Performance - 1 vLLM Replica
 
-We vary the number of Llama Stack replicas with 1 vLLM replica and compare performance below.
+We vary the number of OGX replicas with 1 vLLM replica and compare performance below.
 
 ![Performance - 1 vLLM Replica](results/vllm_replica1_benchmark_results.png)
 
@@ -88,7 +88,7 @@ This script will automatically:
 
 ### Individual Benchmarks
 
-**Benchmark Llama Stack (runs against current cluster setup):**
+**Benchmark OGX (runs against current cluster setup):**
 
 ```bash
 ./scripts/run-guidellm-benchmark.sh --target stack
@@ -196,14 +196,14 @@ Options:
   -r, --rate-type <type>        Rate type (default: concurrent)
   -c, --rate                    Rate (default: 1,2,4,8,16,32,64,128)
   --output-file <path>          Output file path (default: auto-generated)
-  --stack-deployment <name>     Name of the stack deployment (default: llama-stack-benchmark-server)
+  --stack-deployment <name>     Name of the stack deployment (default: ogx-benchmark-server)
   --vllm-deployment <name>      Name of the vllm deployment (default: vllm-server)
-  --stack-url <url>             URL of the stack service (default: http://llama-stack-benchmark-service:8323/v1/openai)
+  --stack-url <url>             URL of the stack service (default: http://ogx-benchmark-service:8323/v1/openai)
   -h, --help                    Show help message
 
 Examples:
   ./scripts/run-guidellm-benchmark.sh --target vllm                              # Benchmark vLLM direct
-  ./scripts/run-guidellm-benchmark.sh --target stack                             # Benchmark Llama Stack (default)
+  ./scripts/run-guidellm-benchmark.sh --target stack                             # Benchmark OGX (default)
   ./scripts/run-guidellm-benchmark.sh -t vllm -s 60 -p 512 -o 256               # vLLM with custom parameters
   ./scripts/run-guidellm-benchmark.sh --output-file results/my-benchmark.txt     # Specify custom output file
   ./scripts/run-guidellm-benchmark.sh --stack-deployment my-stack-server         # Use custom stack deployment name
@@ -232,7 +232,7 @@ uv run python openai-mock-server.py --port 8080
 **2. Start Stack server:**
 
 ```bash
-LLAMA_STACK_CONFIG=benchmarking/k8s-benchmark/stack_run_config.yaml uv run uvicorn llama_stack.core.server.server:create_app --port 8321 --workers 4 --factory
+OGX_CONFIG=benchmarking/k8s-benchmark/stack_run_config.yaml uv run uvicorn ogx.core.server.server:create_app --port 8321 --workers 4 --factory
 ```
 
 **3. Run GuideLLM benchmark:**

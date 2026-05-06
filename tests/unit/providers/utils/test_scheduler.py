@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@ import asyncio
 
 import pytest
 
-from llama_stack.providers.utils.scheduler import JobStatus, Scheduler
+from ogx.providers.utils.scheduler import JobStatus, Scheduler
 
 
 async def test_scheduler_unknown_backend():

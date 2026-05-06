@@ -1,0 +1,90 @@
+---
+title: Starting a OGX Server
+description: Different ways to run OGX
+sidebar_label: Starting OGX Server
+sidebar_position: 7
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Starting a OGX Server
+
+<Tabs>
+<TabItem value="uv" label="uv (recommended)" default>
+
+The fastest way to get started. No global install needed:
+
+```bash
+uvx --from 'ogx[starter]' ogx run starter
+```
+
+Or if you have a project with ogx as a dependency:
+
+```bash
+uv run ogx run starter
+```
+
+</TabItem>
+<TabItem value="container" label="Container">
+
+Run a pre-built container image:
+
+```bash
+docker run -it \
+  -p 8321:8321 \
+  -v ~/.llama:/root/.llama \
+  -e OLLAMA_URL=http://host.docker.internal:11434 \
+  ogx/distribution-starter
+```
+
+Other pre-built images are available on [Docker Hub](https://hub.docker.com/u/llamastack):
+
+| Image | Description |
+|-------|-------------|
+| [`llamastack/distribution-starter`](https://hub.docker.com/r/llamastack/distribution-starter) | General purpose (recommended) |
+| [`llamastack/distribution-postgres-demo`](https://hub.docker.com/r/llamastack/distribution-postgres-demo) | Starter with PostgreSQL storage |
+
+See [Building Custom Distributions](./building_distro) to create your own image.
+
+</TabItem>
+<TabItem value="library" label="As a Library">
+
+Use OGX directly in your Python process without running a server:
+
+```python
+from ogx.core.library_client import OGXAsLibraryClient
+
+client = OGXAsLibraryClient("starter")
+client.initialize()
+```
+
+See [Using OGX as a Library](importing_as_library) for details.
+
+</TabItem>
+<TabItem value="kubernetes" label="Kubernetes">
+
+Deploy the container image to a Kubernetes cluster. See the [Kubernetes Deployment Guide](../deploying/kubernetes_deployment).
+
+</TabItem>
+</Tabs>
+
+The server runs at `http://localhost:8321` by default. Use `--port` to change it.
+
+## Logging
+
+Control log output via environment variables:
+
+```bash
+# Per-component levels
+OGX_LOGGING=server=debug,core=info ogx run starter
+
+# Global level
+OGX_LOGGING=all=debug ogx run starter
+
+# Log to file
+OGX_LOG_FILE=/tmp/ogx.log ogx run starter
+```
+
+Categories: `all`, `core`, `server`, `router`, `inference`, `safety`, `tools`, `client`.
+Levels: `debug`, `info`, `warning`, `error`, `critical`.

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llama_stack.core.routers.vector_io import VectorIORouter
-from llama_stack.telemetry.vector_io_metrics import (
+from ogx.core.routers.vector_io import VectorIORouter
+from ogx.telemetry.vector_io_metrics import (
     create_vector_metric_attributes,
     vector_chunks_processed_total,
     vector_deletes_total,
@@ -108,7 +108,7 @@ class TestVectorMetricsConstants:
     """Test that metric constants follow naming conventions."""
 
     def test_metric_names_follow_convention(self):
-        from llama_stack.telemetry.constants import (
+        from ogx.telemetry.constants import (
             VECTOR_CHUNKS_PROCESSED_TOTAL,
             VECTOR_DELETES_TOTAL,
             VECTOR_FILES_TOTAL,
@@ -127,12 +127,12 @@ class TestVectorMetricsConstants:
             VECTOR_FILES_TOTAL,
             VECTOR_CHUNKS_PROCESSED_TOTAL,
         ]:
-            assert name.startswith("llama_stack.")
+            assert name.startswith("ogx.")
             assert "vector_io" in name
             assert name.endswith("_total")
 
         for name in [VECTOR_INSERT_DURATION, VECTOR_RETRIEVAL_DURATION]:
-            assert name.startswith("llama_stack.")
+            assert name.startswith("ogx.")
             assert "vector_io" in name
             assert name.endswith("_seconds")
 

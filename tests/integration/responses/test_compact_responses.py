@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,6 +6,8 @@
 
 import pytest
 from llama_stack_client import LlamaStackClient
+
+from .helpers import skip_if_provider_is_vertexai
 
 
 @pytest.fixture(autouse=True)
@@ -174,7 +176,7 @@ class TestCompactResponses:
             assert item.type != "compaction"
 
     def test_compact_chain_through_compaction(self, responses_client, text_model_id):
-        """previous_response_id should work through compacted conversations."""
+        """previous_response_id should work directly on a compacted response."""
         compact_result = responses_client.responses.compact(
             model=text_model_id,
             input=[
@@ -183,18 +185,27 @@ class TestCompactResponses:
             ],
         )
 
-        # Access output directly from typed response
-        resp1 = responses_client.responses.create(
-            model=text_model_id,
-            input=compact_result.output + [{"role": "user", "content": "What did we discuss?"}],
-            store=True,
-        )
-        resp2 = responses_client.responses.create(
+        # Chain directly through the compacted response ID — no manual concatenation needed
+        resp = responses_client.responses.create(
             model=text_model_id,
             input="What was the secret word?",
-            previous_response_id=resp1.id,
+            previous_response_id=compact_result.id,
         )
-        assert "banana" in resp2.output_text.lower()
+        assert "banana" in resp.output_text.lower()
+
+    def test_compact_response_is_retrievable(self, responses_client, text_model_id):
+        """Compacted response should be stored and retrievable by ID."""
+        compact_result = responses_client.responses.compact(
+            model=text_model_id,
+            input=[
+                {"role": "user", "content": "Hello there!"},
+                {"role": "assistant", "content": "Hi! How can I help?"},
+            ],
+        )
+
+        retrieved = responses_client.responses.retrieve(compact_result.id)
+        assert retrieved.id == compact_result.id
+        assert retrieved.status == "completed"
 
     def test_compact_double_compaction(self, responses_client, text_model_id):
         """Compacting an already-compacted conversation should work."""
@@ -239,6 +250,14 @@ class TestContextManagement:
     def _skip_non_openai_client(self, responses_client):
         if isinstance(responses_client, LlamaStackClient):
             pytest.skip("Context management tests require OpenAI client")
+
+    @pytest.fixture(autouse=True)
+    def _skip_vertexai(self, client_with_models, text_model_id):
+        skip_if_provider_is_vertexai(
+            client_with_models,
+            text_model_id,
+            reason="tiktoken does not support vertexai model names for token counting",
+        )
 
     def test_context_management_auto_compacts_large_input(self, responses_client, text_model_id):
         """When input exceeds compact_threshold, context should be auto-compacted."""

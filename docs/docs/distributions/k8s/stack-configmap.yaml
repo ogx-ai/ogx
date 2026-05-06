@@ -41,9 +41,9 @@ data:
             type: postgres
             host: ${env.POSTGRES_HOST:=localhost}
             port: ${env.POSTGRES_PORT:=5432}
-            db: ${env.POSTGRES_DB:=llamastack}
-            user: ${env.POSTGRES_USER:=llamastack}
-            password: ${env.POSTGRES_PASSWORD:=llamastack}
+            db: ${env.POSTGRES_DB:=ogx}
+            user: ${env.POSTGRES_USER:=ogx}
+            password: ${env.POSTGRES_PASSWORD:=ogx}
       files:
       - provider_id: builtin-files
         provider_type: inline::localfs
@@ -93,17 +93,17 @@ data:
           type: kv_postgres
           host: ${env.POSTGRES_HOST:=localhost}
           port: ${env.POSTGRES_PORT:=5432}
-          db: ${env.POSTGRES_DB:=llamastack}
-          user: ${env.POSTGRES_USER:=llamastack}
-          password: ${env.POSTGRES_PASSWORD:=llamastack}
-          table_name: ${env.POSTGRES_TABLE_NAME:=llamastack_kvstore}
+          db: ${env.POSTGRES_DB:=ogx}
+          user: ${env.POSTGRES_USER:=ogx}
+          password: ${env.POSTGRES_PASSWORD:=ogx}
+          table_name: ${env.POSTGRES_TABLE_NAME:=ogx_kvstore}
         sql_default:
           type: sql_postgres
           host: ${env.POSTGRES_HOST:=localhost}
           port: ${env.POSTGRES_PORT:=5432}
-          db: ${env.POSTGRES_DB:=llamastack}
-          user: ${env.POSTGRES_USER:=llamastack}
-          password: ${env.POSTGRES_PASSWORD:=llamastack}
+          db: ${env.POSTGRES_DB:=ogx}
+          user: ${env.POSTGRES_USER:=ogx}
+          password: ${env.POSTGRES_PASSWORD:=ogx}
       stores:
         metadata:
           backend: kv_default
@@ -150,4 +150,4 @@ data:
           type: github_token
 kind: ConfigMap
 metadata:
-  name: llama-stack-config
+  name: ogx-config

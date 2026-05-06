@@ -62,7 +62,7 @@ runs:
         # Download the test dataset
         uv run python -c "
         from datasets import load_dataset
-        load_dataset('llamastack/simpleqa', split='train')
+        load_dataset('ogx/simpleqa', split='train')
         print('Dataset cached')
         " 2>/dev/null || echo "Dataset download failed (may already be cached)"
 
@@ -82,15 +82,15 @@ runs:
       run: |
         sudo docker rm -f postgres-ci || true
         sudo docker run -d --name postgres-ci \
-          -e POSTGRES_USER=llamastack \
-          -e POSTGRES_PASSWORD=llamastack \
-          -e POSTGRES_DB=llamastack \
+          -e POSTGRES_USER=ogx \
+          -e POSTGRES_PASSWORD=ogx \
+          -e POSTGRES_DB=ogx \
           -p 5432:5432 \
           postgres:16
 
         echo "Waiting for Postgres to become ready..."
         for i in {1..30}; do
-          if sudo docker exec postgres-ci pg_isready -U llamastack -d llamastack >/dev/null 2>&1; then
+          if sudo docker exec postgres-ci pg_isready -U ogx -d ogx >/dev/null 2>&1; then
             echo "Postgres is ready"
             break
           fi
@@ -105,20 +105,20 @@ runs:
     - name: Verify client installation
       shell: bash
       run: |
-        echo "Verifying llama-stack-client installation:"
-        uv pip show llama-stack-client || echo "llama-stack-client not found"
+        echo "Verifying ogx-client installation:"
+        uv pip show ogx-client || echo "ogx-client not found"
         echo ""
-        echo "All installed llama packages:"
-        uv pip list | grep llama || true
+        echo "All installed ogx packages:"
+        uv pip list | grep ogx || true
 
-    - name: Build Llama Stack
+    - name: Build OGX
       shell: bash
       run: |
         # Client is already installed by setup-runner (handles both main and release branches)
-        echo "Building Llama Stack"
+        echo "Building OGX"
 
-        LLAMA_STACK_DIR=. \
-          uv run --no-sync llama stack list-deps ci-tests | xargs -L1 uv pip install
+        OGX_DIR=. \
+          uv run --no-sync ogx stack list-deps ci-tests | xargs -L1 uv pip install
 
     - name: Configure git for commits
       shell: bash

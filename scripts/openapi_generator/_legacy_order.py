@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -293,6 +293,11 @@ LEGACY_RESPONSE_ORDER = ["BadRequest400", "TooManyRequests429", "InternalServerE
 
 LEGACY_TAGS = [
     {
+        "description": "Administrative APIs for inspecting providers, routes, health, and version.",
+        "name": "Admin",
+        "x-displayName": "Admin",
+    },
+    {
         "description": "APIs for creating and interacting with agentic systems.",
         "name": "Agents",
         "x-displayName": "Agents",
@@ -308,17 +313,27 @@ LEGACY_TAGS = [
         "x-displayName": "Batches",
     },
     {
+        "description": "External tool and service connectors.",
+        "name": "Connectors",
+        "x-displayName": "Connectors",
+    },
+    {
         "description": "Protocol for conversation management operations.",
         "name": "Conversations",
         "x-displayName": "Conversations",
     },
     {
-        "description": "This API is used to upload documents that can be used with other Llama Stack APIs.",
+        "description": "Document ingestion and chunking.",
+        "name": "File Processors",
+        "x-displayName": "File Processors",
+    },
+    {
+        "description": "This API is used to upload documents that can be used with other OGX APIs.",
         "name": "Files",
         "x-displayName": "Files",
     },
     {
-        "description": "Llama Stack Inference API for generating completions, chat completions, and embeddings.\n"
+        "description": "OGX Inference API for generating completions, chat completions, and embeddings.\n"
         "\n"
         "This API provides the raw interface to the underlying models. Three kinds of models are supported:\n"
         '- LLM models: these models generate "raw" and "chat" (conversational) completions.\n'
@@ -328,10 +343,20 @@ LEGACY_TAGS = [
         "x-displayName": "Inference",
     },
     {
-        "description": "APIs for inspecting the Llama Stack service, including health status, available API routes with "
+        "description": "APIs for inspecting the OGX service, including health status, available API routes with "
         "methods and implementing providers.",
         "name": "Inspect",
         "x-displayName": "Inspect",
+    },
+    {
+        "description": "Google Interactions API compatibility layer.",
+        "name": "Interactions",
+        "x-displayName": "Interactions",
+    },
+    {
+        "description": "Anthropic Messages API compatibility layer for creating messages and counting tokens.",
+        "name": "Messages",
+        "x-displayName": "Messages",
     },
     {"description": "", "name": "Models"},
     {"description": "Protocol for prompt management operations.", "name": "Prompts", "x-displayName": "Prompts"},
@@ -344,23 +369,40 @@ LEGACY_TAGS = [
     {"description": "", "name": "Shields"},
     {"description": "", "name": "ToolGroups"},
     {"description": "", "name": "ToolRuntime"},
+    {
+        "description": "Tool listing and management.",
+        "name": "Tools",
+        "x-displayName": "Tools",
+    },
     {"description": "", "name": "VectorIO"},
+    {
+        "description": "OpenAI Responses API for agent orchestration with tool use, multi-turn conversations, and background processing.",
+        "name": "Responses",
+        "x-displayName": "Responses",
+    },
 ]
 
 LEGACY_TAG_ORDER = [
+    "Admin",
     "Agents",
     "Batches",
+    "Connectors",
     "Conversations",
+    "File Processors",
     "Files",
     "Inference",
     "Inspect",
+    "Interactions",
+    "Messages",
     "Models",
     "Prompts",
     "Providers",
+    "Responses",
     "Safety",
     "Shields",
     "ToolGroups",
     "ToolRuntime",
+    "Tools",
     "VectorIO",
 ]
 
@@ -368,19 +410,26 @@ LEGACY_TAG_GROUPS = [
     {
         "name": "Operations",
         "tags": [
+            "Admin",
             "Agents",
             "Batches",
+            "Connectors",
             "Conversations",
+            "File Processors",
             "Files",
             "Inference",
             "Inspect",
+            "Interactions",
+            "Messages",
             "Models",
             "Prompts",
             "Providers",
+            "Responses",
             "Safety",
             "Shields",
             "ToolGroups",
             "ToolRuntime",
+            "Tools",
             "VectorIO",
         ],
     }

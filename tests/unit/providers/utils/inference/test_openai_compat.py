@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,7 +6,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from llama_stack.providers.utils.inference.openai_compat import (
+from ogx.providers.utils.inference.openai_compat import (
     get_stream_options_for_telemetry,
 )
 

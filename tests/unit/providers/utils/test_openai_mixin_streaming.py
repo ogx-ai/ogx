@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llama_stack.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
-from llama_stack.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
+from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 
 
 class MockAsyncStream:

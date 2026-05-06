@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -19,26 +19,26 @@ from openai.types.conversations.conversation import Conversation as OpenAIConver
 from openai.types.conversations.conversation_item import ConversationItem as OpenAIConversationItem
 from pydantic import TypeAdapter
 
-from llama_stack.core.conversations.conversations import (
+from ogx.core.conversations.conversations import (
     ConversationServiceConfig,
     ConversationServiceImpl,
 )
-from llama_stack.core.datatypes import StackConfig
-from llama_stack.core.storage.datatypes import (
+from ogx.core.datatypes import StackConfig
+from ogx.core.storage.datatypes import (
     ServerStoresConfig,
     SqliteSqlStoreConfig,
     SqlStoreReference,
     StorageConfig,
 )
-from llama_stack.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from llama_stack_api import (
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx_api import (
     ConversationItemNotFoundError,
     ConversationNotFoundError,
     InvalidParameterError,
     OpenAIResponseInputMessageContentText,
     OpenAIResponseMessage,
 )
-from llama_stack_api.conversations import (
+from ogx_api.conversations import (
     AddItemsRequest,
     CreateConversationRequest,
     DeleteConversationRequest,
@@ -118,7 +118,7 @@ async def test_invalid_conversation_id_on_retrieve(service):
 
 
 async def test_invalid_conversation_id_on_update(service):
-    from llama_stack_api.conversations import UpdateConversationRequest
+    from ogx_api.conversations import UpdateConversationRequest
 
     with pytest.raises(InvalidParameterError, match="Conversation ID must match format"):
         await service.update_conversation("bad_id", UpdateConversationRequest(metadata={}))
@@ -200,8 +200,8 @@ async def test_items_not_returned_on_creation_or_retrieval(service):
 
 
 async def test_policy_configuration():
-    from llama_stack.core.access_control.datatypes import Action, Scope
-    from llama_stack.core.datatypes import AccessRule
+    from ogx.core.access_control.datatypes import Action, Scope
+    from ogx.core.datatypes import AccessRule
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_conversations_policy.db"

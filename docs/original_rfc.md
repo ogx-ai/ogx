@@ -1,4 +1,4 @@
-# The Llama Stack API
+# The OGX API
 
 <!-- markdownlint-disable-next-line MD036 -->
 *Originally authored Jul 23, 2024*
@@ -9,7 +9,7 @@
 
 ## Summary
 
-As part of the Llama 3.1 release, Meta is releasing an RFC for ‘Llama Stack’, a comprehensive set of interfaces / API for ML developers building on top of Llama foundation models. We are looking for feedback on where the API can be improved, any corner cases we may have missed and your general thoughts on how useful this will be. Ultimately, our hope is to create a standard for working with Llama models in order to simplify the developer experience and foster innovation across the Llama ecosystem.
+As part of the Llama 3.1 release, Meta is releasing an RFC for ‘OGX’, a comprehensive set of interfaces / API for ML developers building on top of Llama foundation models. We are looking for feedback on where the API can be improved, any corner cases we may have missed and your general thoughts on how useful this will be. Ultimately, our hope is to create a standard for working with Llama models in order to simplify the developer experience and foster innovation across the Llama ecosystem.
 
 ## Motivation
 
@@ -17,7 +17,7 @@ Llama models were always intended to work as part of an overall system that can 
 
 While building the reference implementation, we realized that having a clean and consistent way to interface between components could be valuable not only for us but for anyone leveraging Llama models and other components as part of their system. We’ve also heard from the community as they face a similar challenge as components exist with overlapping functionality and there are incompatible interfaces and yet don't cover the end-to-end model life cycle.
 
-With these motivations, we engaged folks in industry, startups, and the broader developer community to help better define the interfaces of these components. We’re releasing this Llama Stack RFC as a set of standardized and opinionated interfaces for how to surface canonical toolchain components (like inference, fine-tuning, evals, synthetic data generation) and agentic applications to ML developers. Our hope is to have these become well adopted across the ecosystem, which should help with easier interoperability. We would like for builders of multiple components to provide implementations to these standard APIs so that there can be vertically integrated “distributions” of the Llama Stack that can work out of the box easily.
+With these motivations, we engaged folks in industry, startups, and the broader developer community to help better define the interfaces of these components. We’re releasing this OGX RFC as a set of standardized and opinionated interfaces for how to surface canonical toolchain components (like inference, fine-tuning, evals, synthetic data generation) and agentic applications to ML developers. Our hope is to have these become well adopted across the ecosystem, which should help with easier interoperability. We would like for builders of multiple components to provide implementations to these standard APIs so that there can be vertically integrated “distributions” of the OGX that can work out of the box easily.
 
 We welcome feedback and ways to improve the proposal. We’re excited to grow the ecosystem around Llama and lower barriers for both developers and platform providers.
 
@@ -62,23 +62,23 @@ The sequence diagram that details the steps is in the [agentic system docs](http
   * /session - each session consists of multiple turns that the model is reasoning over
   * /memory_bank - a memory bank allows for the agentic system to perform retrieval augmented generation
 
-## Llama Stack API/CLI
+## OGX API/CLI
 
-We define the Llama Stack as a layer cake shown below.
+We define the OGX as a layer cake shown below.
 
-![Figure 3: Llama Stack](resources/llama-stack.png)
+![Figure 3: OGX](resources/ogx.png)
 
-The API is defined in the [YAML](_static/llama-stack-spec.yaml) and [HTML](_static/llama-stack-spec.html) files.
+The API is defined in the [YAML](_static/ogx-spec.yaml) and [HTML](_static/ogx-spec.html) files.
 
 ## Sample implementations
 
-To prove out the API, we implemented a handful of use cases to make things more concrete. The [llama-stack-apps](https://github.com/meta-llama/llama-stack-apps) repository contains [6 different examples](https://github.com/meta-llama/llama-stack-apps/tree/main/examples) ranging from very basic to a multi turn agent.
+To prove out the API, we implemented a handful of use cases to make things more concrete. The [ogx-apps](https://github.com/ogx-ai/ogx-apps) repository contains [6 different examples](https://github.com/ogx-ai/ogx-apps/tree/main/examples) ranging from very basic to a multi turn agent.
 
-There is also a sample inference endpoint implementation in the [llama-stack](https://github.com/meta-llama/llama-stack/blob/main/llama_stack.core/server/server.py) repository.
+There is also a sample inference endpoint implementation in the [ogx](https://github.com/ogx-ai/ogx/blob/main/ogx.core/server/server.py) repository.
 
 ## Limitations
 
-The reference implementation for Llama Stack APIs to date only includes sample implementations using the inference API. We are planning to flesh out the design of Llama Stack Distributions (distros) by combining capabilities from different providers into a single vertically integrated stack. We plan to implement other APIs and, of course, we’d love contributions!!
+The reference implementation for OGX APIs to date only includes sample implementations using the inference API. We are planning to flesh out the design of OGX Distributions (distros) by combining capabilities from different providers into a single vertically integrated stack. We plan to implement other APIs and, of course, we’d love contributions!!
 
 Thank you in advance for your feedback, support and contributions to make this a better API.
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides a comprehensive overview of file operations and Vector Store API support across all available vector store providers in Llama Stack. As of release 0.2.24, the following providers support full file operations integration.
+This document provides a comprehensive overview of file operations and Vector Store API support across all available vector store providers in OGX. As of release 0.2.24, the following providers support full file operations integration.
 
 ## Supported Providers
 
@@ -162,7 +162,7 @@ files:
 ### Python Client
 
 ```python
-from llama_stack import LlamaStackClient
+from ogx import LlamaStackClient
 
 client = LlamaStackClient("http://localhost:8000")
 
@@ -288,4 +288,4 @@ Planned improvements for file operations support:
 - **API Reference**: Files API
 - **Provider Docs**: [Vector Store Providers](../vector_io/)
 - **Examples**: [Getting Started](../../getting_started/)
-- **Community**: [GitHub Issues](https://github.com/meta-llama/llama-stack/issues)
+- **Community**: [GitHub Issues](https://github.com/ogx-ai/ogx/issues)

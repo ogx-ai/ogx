@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from llama_stack.core.datatypes import (
+from ogx.core.datatypes import (
     AuthenticationConfig,
     AuthProviderType,
     CustomAuthConfig,
@@ -21,8 +21,8 @@ from llama_stack.core.datatypes import (
     OAuth2JWKSConfig,
     OAuth2TokenAuthConfig,
 )
-from llama_stack.core.server.auth import AuthenticationMiddleware
-from llama_stack.core.server.auth_providers import (
+from ogx.core.server.auth import AuthenticationMiddleware
+from ogx.core.server.auth_providers import (
     get_attributes_from_claims,
 )
 
@@ -30,8 +30,8 @@ from llama_stack.core.server.auth_providers import (
 @pytest.fixture
 def suppress_auth_errors(caplog):
     """Suppress expected ERROR/WARNING logs for tests that deliberately trigger authentication errors"""
-    caplog.set_level(logging.CRITICAL, logger="llama_stack.core.server.auth")
-    caplog.set_level(logging.CRITICAL, logger="llama_stack.core.server.auth_providers")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth_providers")
 
 
 class MockResponse:
@@ -142,7 +142,7 @@ def middleware_with_mocks(mock_auth_endpoint):
     )
     middleware = AuthenticationMiddleware(mock_app, auth_config, {})
 
-    from llama_stack.core.server.routes import RouteAuthInfo
+    from ogx.core.server.routes import RouteAuthInfo
 
     routes = {
         ("POST", "/test/scoped"): RouteAuthInfo(),
@@ -159,10 +159,10 @@ def middleware_with_mocks(mock_auth_endpoint):
             return None, {}, path, webmethod
         raise ValueError("No matching route")
 
-    import llama_stack.core.server.auth
+    import ogx.core.server.auth
 
-    llama_stack.core.server.auth.find_matching_route = mock_find_matching_route
-    llama_stack.core.server.auth.initialize_route_impls = lambda impls: {}
+    ogx.core.server.auth.find_matching_route = mock_find_matching_route
+    ogx.core.server.auth.initialize_route_impls = lambda impls: {}
 
     return middleware, mock_app
 
@@ -301,7 +301,7 @@ def oauth2_app():
             jwks=OAuth2JWKSConfig(
                 uri="http://mock-authz-service/token/introspect",
             ),
-            audience="llama-stack",
+            audience="ogx",
         ),
         access_policy=[],
     )
@@ -341,7 +341,7 @@ def jwt_token_valid():
             "sub": "my-user",
             "groups": ["group1", "group2"],
             "scope": "foo bar",
-            "aud": "llama-stack",
+            "aud": "ogx",
         },
         key="foobarbaz",
         algorithm="HS256",
@@ -437,7 +437,7 @@ def oauth2_app_with_jwks_token():
                 key_recheck_period=3600,
                 token="my-jwks-token",
             ),
-            audience="llama-stack",
+            audience="ogx",
         ),
         access_policy=[],
     )
@@ -473,7 +473,7 @@ def test_get_attributes_from_claims():
         "sub": "my-user",
         "groups": ["group1", "group2"],
         "scope": "foo bar",
-        "aud": "llama-stack",
+        "aud": "ogx",
     }
     attributes = get_attributes_from_claims(claims, {"sub": "roles", "groups": "teams"})
     assert attributes["roles"] == ["my-user"]
@@ -511,11 +511,11 @@ def test_get_attributes_from_claims():
     # Test nested claims with dot notation (e.g., Keycloak resource_access structure)
     claims = {
         "sub": "user123",
-        "resource_access": {"llamastack": {"roles": ["inference_max", "admin"]}, "other-client": {"roles": ["viewer"]}},
+        "resource_access": {"ogx": {"roles": ["inference_max", "admin"]}, "other-client": {"roles": ["viewer"]}},
         "realm_access": {"roles": ["offline_access", "uma_authorization"]},
     }
     attributes = get_attributes_from_claims(
-        claims, {"resource_access.llamastack.roles": "roles", "realm_access.roles": "realm_roles"}
+        claims, {"resource_access.ogx.roles": "roles", "realm_access.roles": "realm_roles"}
     )
     assert set(attributes["roles"]) == {"inference_max", "admin"}
     assert set(attributes["realm_roles"]) == {"offline_access", "uma_authorization"}
@@ -543,7 +543,7 @@ def test_get_attributes_from_claims():
     attributes = get_attributes_from_claims(
         claims,
         {
-            "resource_access.llamastack.roles": "roles",  # Missing nested path
+            "resource_access.ogx.roles": "roles",  # Missing nested path
             "resource_access.missing.key": "missing_attr",  # Missing nested path
             "completely.missing.path": "another_missing",  # Completely missing
             "sub": "username",  # Existing path

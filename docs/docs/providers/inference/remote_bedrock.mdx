@@ -34,11 +34,25 @@ AWS Bedrock inference provider using OpenAI compatible endpoint.
 | `network.timeout.connect` | `float \| None` | No |  | Connection timeout in seconds. |
 | `network.timeout.read` | `float \| None` | No |  | Read timeout in seconds. |
 | `network.headers` | `dict[str, str] \| None` | No |  | Additional HTTP headers to include in all requests. |
-| `region_name` | `str` | No | us-east-2 | AWS Region for the Bedrock Runtime endpoint |
+| `aws_access_key_id` | `SecretStr \| None` | No |  | The AWS access key to use. Default use environment variable: AWS_ACCESS_KEY_ID |
+| `aws_secret_access_key` | `SecretStr \| None` | No |  | The AWS secret access key to use. Default use environment variable: AWS_SECRET_ACCESS_KEY |
+| `aws_session_token` | `SecretStr \| None` | No |  | The AWS session token to use. Default use environment variable: AWS_SESSION_TOKEN |
+| `aws_role_arn` | `str \| None` | No |  | The AWS role ARN to assume. Default use environment variable: AWS_ROLE_ARN |
+| `aws_web_identity_token_file` | `str \| None` | No |  | The path to the web identity token file. Default use environment variable: AWS_WEB_IDENTITY_TOKEN_FILE |
+| `aws_role_session_name` | `str \| None` | No |  | The session name to use when assuming a role. Default use environment variable: AWS_ROLE_SESSION_NAME |
+| `region_name` | `str \| None` | No | us-east-2 | AWS Region for the Bedrock Runtime endpoint |
+| `profile_name` | `str \| None` | No |  | The profile name that contains credentials to use.Default use environment variable: AWS_PROFILE |
+| `total_max_attempts` | `int \| None` | No |  | An integer representing the maximum number of attempts that will be made for a single request, including the initial attempt. Default use environment variable: AWS_MAX_ATTEMPTS |
+| `retry_mode` | `str \| None` | No |  | A string representing the type of retries Boto3 will perform.Default use environment variable: AWS_RETRY_MODE |
+| `connect_timeout` | `float \| None` | No | 60.0 | The time in seconds till a timeout exception is thrown when attempting to make a connection. The default is 60 seconds. |
+| `read_timeout` | `float \| None` | No | 60.0 | The time in seconds till a timeout exception is thrown when attempting to read from a connection.The default is 60 seconds. |
+| `session_ttl` | `int \| None` | No | 3600 | The time in seconds till a session expires. The default is 3600 seconds (1 hour). |
 
 ## Sample Configuration
 
 ```yaml
 api_key: ${env.AWS_BEARER_TOKEN_BEDROCK:=}
 region_name: ${env.AWS_DEFAULT_REGION:=us-east-2}
+aws_role_arn: ${env.AWS_ROLE_ARN:=}
+aws_web_identity_token_file: ${env.AWS_WEB_IDENTITY_TOKEN_FILE:=}
 ```

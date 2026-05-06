@@ -1,315 +1,316 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 500" font-family="'Inter','SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 540" font-family="'Archivo','Public Sans',-apple-system,BlinkMacSystemFont,sans-serif">
+  <style>
+    :root {
+      --bg: #0e1520;
+      --grid-stroke: #fff;
+      --grid-opacity: 0.04;
+      --col-label: #4b6478;
+      --col-divider: #1e2d3d;
+      --flow-stroke: #1a5c5e;
+      --flow-dot: #2dbdc2;
+      --card-bg: #131e2a;
+      --card-stroke: #1e3040;
+      --item-bg: #182838;
+      --item-text: #7fb8c4;
+      --server-bg: #0d1a24;
+      --server-accent: #0d7377;
+      --server-label: #e0f5f5;
+      --section-label: #2dbdc2;
+      --block-bg: #111f2d;
+      --block-stroke: #1a3545;
+      --block-title: #5da8b0;
+      --block-text: #6b8d96;
+      --muted-text: #3d5a6e;
+      --tagline: #3d5a6e;
+      --shadow-opacity: 0.12;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8f9fa;
+        --grid-stroke: #000;
+        --grid-opacity: 0.04;
+        --col-label: #6b7d8e;
+        --col-divider: #d8dee4;
+        --flow-stroke: #0d7377;
+        --flow-dot: #0d7377;
+        --card-bg: #ffffff;
+        --card-stroke: #d8dee4;
+        --item-bg: #f0f3f5;
+        --item-text: #2d4a56;
+        --server-bg: #ffffff;
+        --server-accent: #0d7377;
+        --server-label: #ffffff;
+        --section-label: #0b6165;
+        --block-bg: #f5f7f8;
+        --block-stroke: #d8dee4;
+        --block-title: #0b6165;
+        --block-text: #4a6570;
+        --muted-text: #6b7d8e;
+        --tagline: #6b7d8e;
+        --shadow-opacity: 0.06;
+      }
+    }
+  </style>
   <defs>
-    <!-- Glow filters -->
-    <filter id="glow-soft" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="12" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <filter id="card-shadow"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000" flood-opacity="0.2"/></filter>
-    <filter id="dot-glow" filterUnits="objectBoundingBox" x="-300%" y="-300%" width="700%" height="700%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-
-    <!-- Background gradient mesh (aurora) -->
-    <radialGradient id="aurora1" cx="15%" cy="30%" r="40%"><stop offset="0%" stop-color="#4f46e5" stop-opacity="0.08"/><stop offset="100%" stop-color="transparent"/></radialGradient>
-    <radialGradient id="aurora2" cx="50%" cy="60%" r="35%"><stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.06"/><stop offset="100%" stop-color="transparent"/></radialGradient>
-    <radialGradient id="aurora3" cx="85%" cy="25%" r="30%"><stop offset="0%" stop-color="#14b8a6" stop-opacity="0.06"/><stop offset="100%" stop-color="transparent"/></radialGradient>
-
-    <!-- Shimmer gradient for header bars -->
-    <linearGradient id="shimmer" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
-      <stop offset="40%" stop-color="#fff" stop-opacity="0"/>
-      <stop offset="50%" stop-color="#fff" stop-opacity="0.12"/>
-      <stop offset="60%" stop-color="#fff" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
-      <animate attributeName="x1" values="-1;2" dur="4s" repeatCount="indefinite"/>
-      <animate attributeName="x2" values="0;3" dur="4s" repeatCount="indefinite"/>
-    </linearGradient>
-
-    <!-- Header gradients -->
-    <linearGradient id="purple-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient>
-    <linearGradient id="blue-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient>
-    <linearGradient id="teal-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0d9488"/><stop offset="100%" stop-color="#2dd4bf"/></linearGradient>
+    <filter id="s"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="var(--shadow-opacity, 0.12)"/></filter>
   </defs>
 
   <!-- Background -->
-  <rect width="760" height="500" rx="16" fill="#0c0a1d"/>
-  <rect width="760" height="500" rx="16" fill="url(#aurora1)"/>
-  <rect width="760" height="500" rx="16" fill="url(#aurora2)"/>
-  <rect width="760" height="500" rx="16" fill="url(#aurora3)"/>
+  <rect width="780" height="540" rx="8" fill="var(--bg)"/>
 
-  <!-- Subtle dot grid -->
-  <g opacity="0.05">
-    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
-      <circle cx="12" cy="12" r="0.8" fill="#fff"/>
+  <!-- Subtle grid -->
+  <g opacity="var(--grid-opacity)">
+    <pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40,0 L0,0 0,40" fill="none" stroke="var(--grid-stroke)" stroke-width="0.5"/>
     </pattern>
-    <rect width="760" height="500" fill="url(#dots)"/>
+    <rect width="780" height="540" fill="url(#g)"/>
   </g>
 
-  <!-- ========== SAME API BAR ========== -->
-  <line x1="90" y1="30" x2="725" y2="30" stroke="#475569" stroke-width="0.5" stroke-opacity="0.4" stroke-dasharray="4,4"/>
-  <text x="380" y="24" text-anchor="middle" fill="#64748b" font-size="9" font-weight="500" letter-spacing="2">SAME API EVERYWHERE</text>
-  <!-- Small ticks down to each section -->
-  <line x1="90" y1="30" x2="90" y2="85" stroke="#475569" stroke-width="0.5" stroke-opacity="0.2" stroke-dasharray="2,3"/>
-  <line x1="330" y1="30" x2="330" y2="45" stroke="#475569" stroke-width="0.5" stroke-opacity="0.2" stroke-dasharray="2,3"/>
-  <line x1="612" y1="30" x2="612" y2="45" stroke="#475569" stroke-width="0.5" stroke-opacity="0.2" stroke-dasharray="2,3"/>
+  <!-- ========== COLUMN LABELS ========== -->
+  <text x="88" y="30" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">YOUR APP</text>
+  <text x="340" y="30" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">OGX</text>
+  <text x="640" y="30" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">PROVIDERS</text>
 
-  <!-- ========== FLOW LINES (behind cards) ========== -->
-  <!-- Clients -> Server (converge from spread to single entry) -->
-  <path d="M160,150 C175,150 185,140 200,138 Q212,137 225,145" stroke="#8b5cf6" stroke-width="2" stroke-opacity="0.15" fill="none" stroke-linecap="round"/>
-  <path d="M160,210 C180,210 195,205 225,205" stroke="#8b5cf6" stroke-width="2" stroke-opacity="0.15" fill="none" stroke-linecap="round"/>
-  <path d="M160,270 C175,270 185,280 200,282 Q212,283 225,275" stroke="#8b5cf6" stroke-width="2" stroke-opacity="0.15" fill="none" stroke-linecap="round"/>
+  <!-- Column dividers -->
+  <line x1="195" y1="20" x2="195" y2="450" stroke="var(--col-divider)" stroke-width="1"/>
+  <line x1="490" y1="20" x2="490" y2="450" stroke="var(--col-divider)" stroke-width="1"/>
 
-  <!-- Server -> Router (fan out with arcs) -->
-  <path d="M435,150 C455,150 460,130 470,115 Q478,105 500,100" stroke="#3b82f6" stroke-width="2" stroke-opacity="0.15" fill="none" stroke-linecap="round"/>
-  <path d="M435,230 C458,230 470,230 500,230" stroke="#3b82f6" stroke-width="2" stroke-opacity="0.15" fill="none" stroke-linecap="round"/>
-  <path d="M435,310 C455,310 460,325 470,335 Q478,345 500,350" stroke="#3b82f6" stroke-width="2" stroke-opacity="0.15" fill="none" stroke-linecap="round"/>
+  <!-- ========== FLOW LINES ========== -->
+  <path d="M160,120 L210,120" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M160,195 L210,195" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M160,270 L210,270" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M160,345 L210,345" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M475,100 L505,100" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M475,195 L505,195" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M475,290 L505,290" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M475,380 L505,380" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
 
-  <!-- ========== ANIMATED DOTS ON PATHS ========== -->
-  <!-- Clients -> Server -->
-  <circle r="4" fill="#a78bfa" filter="url(#dot-glow)" opacity="0.9">
-    <animateMotion dur="2s" repeatCount="indefinite" path="M160,210 C180,210 195,205 225,205"/>
+  <!-- Animated dots -->
+  <circle r="3" fill="var(--flow-dot)" opacity="0.8">
+    <animateMotion dur="1.8s" repeatCount="indefinite" path="M160,120 L210,120"/>
   </circle>
-  <circle r="3" fill="#a78bfa" filter="url(#dot-glow)" opacity="0.7">
-    <animateMotion dur="2.2s" repeatCount="indefinite" begin="0.5s" path="M160,150 C175,150 185,140 200,138 Q212,137 225,145"/>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.8">
+    <animateMotion dur="1.8s" repeatCount="indefinite" begin="0.4s" path="M160,270 L210,270"/>
   </circle>
-  <circle r="3" fill="#a78bfa" filter="url(#dot-glow)" opacity="0.7">
-    <animateMotion dur="2.2s" repeatCount="indefinite" begin="1.1s" path="M160,270 C175,270 185,280 200,282 Q212,283 225,275"/>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.6">
+    <animateMotion dur="1.5s" repeatCount="indefinite" begin="0.2s" path="M475,100 L505,100"/>
   </circle>
-
-  <!-- Server -> Router -->
-  <circle r="4" fill="#60a5fa" filter="url(#dot-glow)" opacity="0.9">
-    <animateMotion dur="1.8s" repeatCount="indefinite" begin="0.3s" path="M435,150 C455,150 460,130 470,115 Q478,105 500,100"/>
-  </circle>
-  <circle r="3" fill="#60a5fa" filter="url(#dot-glow)" opacity="0.7">
-    <animateMotion dur="1.6s" repeatCount="indefinite" begin="0.8s" path="M435,230 C458,230 470,230 500,230"/>
-  </circle>
-  <circle r="3" fill="#60a5fa" filter="url(#dot-glow)" opacity="0.7">
-    <animateMotion dur="1.8s" repeatCount="indefinite" begin="1.2s" path="M435,310 C455,310 460,325 470,335 Q478,345 500,350"/>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.6">
+    <animateMotion dur="1.5s" repeatCount="indefinite" begin="0.8s" path="M475,290 L505,290"/>
   </circle>
 
-  <!-- ========== SECTION 1: CLIENTS ========== -->
-  <g filter="url(#card-shadow)">
-    <rect x="20" y="85" width="140" height="280" rx="10" fill="#1e1b4b" stroke="#6d28d9" stroke-width="0.5" stroke-opacity="0.4"/>
-    <rect x="20" y="85" width="140" height="28" rx="10" fill="url(#purple-grad)"/>
-    <rect x="20" y="103" width="140" height="10" fill="url(#purple-grad)"/>
-    <rect x="20" y="85" width="140" height="28" rx="10" fill="url(#shimmer)"/>
-    <text x="90" y="104" text-anchor="middle" fill="#fff" font-size="11" font-weight="600" letter-spacing="1">CLIENTS</text>
+  <!-- ========== YOUR APP (left column) ========== -->
+  <g filter="url(#s)">
+    <rect x="18" y="55" width="140" height="340" rx="6" fill="var(--card-bg)" stroke="var(--card-stroke)" stroke-width="1"/>
 
-    <g transform="translate(32, 128)">
-      <circle cx="5" cy="5" r="3" fill="#a78bfa"/>
-      <text x="14" y="8" fill="#c4b5fd" font-size="9">OpenAI SDK</text>
+    <g transform="translate(30, 72)">
+      <rect width="116" height="28" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="18" fill="var(--item-text)" font-size="10" font-weight="500">OpenAI SDK</text>
     </g>
-    <g transform="translate(32, 150)">
-      <circle cx="5" cy="5" r="3" fill="#a78bfa"/>
-      <text x="14" y="8" fill="#c4b5fd" font-size="9">Anthropic SDK</text>
+    <g transform="translate(30, 108)">
+      <rect width="116" height="28" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="18" fill="var(--item-text)" font-size="10" font-weight="500">Anthropic SDK</text>
     </g>
-    <g transform="translate(32, 172)">
-      <circle cx="5" cy="5" r="3" fill="#a78bfa"/>
-      <text x="14" y="8" fill="#c4b5fd" font-size="9">LangChain</text>
+    <g transform="translate(30, 144)">
+      <rect width="116" height="28" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="18" fill="var(--item-text)" font-size="10" font-weight="500">Google GenAI SDK</text>
     </g>
-    <g transform="translate(32, 194)">
-      <circle cx="5" cy="5" r="3" fill="#a78bfa"/>
-      <text x="14" y="8" fill="#c4b5fd" font-size="9">LlamaIndex</text>
+    <g transform="translate(30, 180)">
+      <rect width="116" height="28" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="18" fill="var(--item-text)" font-size="10" font-weight="500">Python / Node.js</text>
     </g>
-    <g transform="translate(32, 216)">
-      <circle cx="5" cy="5" r="3" fill="#a78bfa"/>
-      <text x="14" y="8" fill="#c4b5fd" font-size="9">CrewAI</text>
+    <g transform="translate(30, 180)">
+      <rect width="116" height="28" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="18" fill="var(--item-text)" font-size="10" font-weight="500">Go / Rust</text>
     </g>
-    <g transform="translate(32, 238)">
-      <circle cx="5" cy="5" r="3" fill="#a78bfa"/>
-      <text x="14" y="8" fill="#c4b5fd" font-size="9">curl / HTTP</text>
+    <g transform="translate(30, 216)">
+      <rect width="116" height="28" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="18" fill="var(--item-text)" font-size="10" font-weight="500">curl / HTTP</text>
     </g>
-    <g transform="translate(32, 260)">
-      <circle cx="5" cy="5" r="3" fill="#a78bfa"/>
-      <text x="14" y="8" fill="#c4b5fd" font-size="9">Any OpenAI client</text>
+    <g transform="translate(30, 252)">
+      <rect width="116" height="28" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="18" fill="var(--item-text)" font-size="10" font-weight="500">Any framework</text>
     </g>
+
+    <text x="88" y="310" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">Standard HTTP</text>
+    <text x="88" y="322" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">OpenAI-compatible</text>
+    <path d="M88,335 L88,370 L95,363 M88,370 L81,363" stroke="var(--muted-text)" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <text x="88" y="385" text-anchor="middle" fill="var(--muted-text)" font-size="7.5">Language agnostic</text>
   </g>
 
-  <!-- Pulse animation on clients -->
-  <rect x="20" y="85" width="140" height="280" rx="10" fill="none" stroke="#a78bfa" stroke-width="1.5" opacity="0">
-    <animate attributeName="opacity" values="0;0.3;0" dur="3.5s" repeatCount="indefinite"/>
-  </rect>
+  <!-- ========== OGX SERVER (center column) ========== -->
+  <g filter="url(#s)">
+    <rect x="210" y="55" width="265" height="445" rx="6" fill="var(--server-bg)" stroke="var(--server-accent)" stroke-width="1.5"/>
 
-  <!-- ========== SECTION 2: LLAMA STACK SERVER ========== -->
-  <g filter="url(#card-shadow)">
-    <rect x="225" y="45" width="210" height="410" rx="10" fill="#0f172a" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.4"/>
-    <rect x="225" y="45" width="210" height="28" rx="10" fill="url(#blue-grad)"/>
-    <rect x="225" y="63" width="210" height="10" fill="url(#blue-grad)"/>
-    <rect x="225" y="45" width="210" height="28" rx="10" fill="url(#shimmer)"/>
-    <text x="330" y="64" text-anchor="middle" fill="#fff" font-size="11" font-weight="600" letter-spacing="1">ENDPOINTS</text>
+    <rect x="210" y="55" width="265" height="30" rx="6" fill="var(--server-accent)"/>
+    <rect x="210" y="79" width="265" height="6" fill="var(--server-accent)"/>
+    <text x="342" y="75" text-anchor="middle" fill="var(--server-label)" font-size="11" font-weight="700" letter-spacing="1">OGX SERVER</text>
 
-    <!-- Breathing glow on server card -->
-    <rect x="225" y="45" width="210" height="410" rx="10" fill="none" stroke="#60a5fa" stroke-width="1" opacity="0">
-      <animate attributeName="opacity" values="0;0.2;0" dur="4s" repeatCount="indefinite" begin="1s"/>
-    </rect>
+    <text x="228" y="108" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">ENDPOINTS</text>
 
-    <!-- API endpoint groups -->
-    <!-- OpenAI API -->
-    <g transform="translate(237, 88)">
-      <rect width="186" height="98" rx="6" fill="#172554" stroke="#3b82f6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="93" y="18" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">OpenAI API</text>
-      <line x1="20" y1="26" x2="166" y2="26" stroke="#3b82f6" stroke-width="0.5" stroke-opacity="0.15"/>
-      <text x="93" y="42" text-anchor="middle" fill="#93c5fd" font-size="7.5">chat/completions, responses,</text>
-      <text x="93" y="55" text-anchor="middle" fill="#93c5fd" font-size="7.5">embeddings, moderations, files,</text>
-      <text x="93" y="68" text-anchor="middle" fill="#93c5fd" font-size="7.5">batches, vector_stores, models,</text>
-      <text x="93" y="81" text-anchor="middle" fill="#93c5fd" font-size="7.5">conversations</text>
-      <text x="176" y="93" text-anchor="end" fill="#475569" font-size="7">10 endpoints</text>
+    <!-- OpenAI block -->
+    <g transform="translate(222, 115)">
+      <rect width="243" height="68" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="18" fill="var(--block-title)" font-size="8.5" font-weight="600">OpenAI API</text>
+      <line x1="10" y1="24" x2="233" y2="24" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="38" fill="var(--block-text)" font-size="7.5">chat/completions  responses  embeddings</text>
+      <text x="10" y="50" fill="var(--block-text)" font-size="7.5">vector_stores  files  batches  models</text>
+      <text x="10" y="62" fill="var(--block-text)" font-size="7.5">moderations  conversations</text>
     </g>
 
-    <!-- Anthropic API -->
-    <g transform="translate(237, 198)">
-      <rect width="186" height="48" rx="6" fill="#172554" stroke="#3b82f6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="93" y="18" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">Anthropic API</text>
-      <line x1="20" y1="26" x2="166" y2="26" stroke="#3b82f6" stroke-width="0.5" stroke-opacity="0.15"/>
-      <text x="93" y="40" text-anchor="middle" fill="#93c5fd" font-size="7.5">messages</text>
+    <!-- Anthropic block -->
+    <g transform="translate(222, 190)">
+      <rect width="243" height="38" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="16" fill="var(--block-title)" font-size="8.5" font-weight="600">Anthropic API</text>
+      <line x1="10" y1="22" x2="233" y2="22" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="33" fill="var(--block-text)" font-size="7.5">messages</text>
     </g>
 
-    <!-- Native APIs -->
-    <g transform="translate(237, 258)">
-      <rect width="186" height="60" rx="6" fill="#172554" stroke="#3b82f6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="93" y="18" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">Llama Stack Native</text>
-      <line x1="20" y1="26" x2="166" y2="26" stroke="#3b82f6" stroke-width="0.5" stroke-opacity="0.15"/>
-      <text x="93" y="42" text-anchor="middle" fill="#93c5fd" font-size="7.5">connectors, tools,</text>
-      <text x="93" y="55" text-anchor="middle" fill="#93c5fd" font-size="7.5">file_processors, safety/run-shield</text>
+    <!-- Google API block -->
+    <g transform="translate(222, 235)">
+      <rect width="243" height="38" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="16" fill="var(--block-title)" font-size="8.5" font-weight="600">Google API</text>
+      <line x1="10" y1="22" x2="233" y2="22" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="33" fill="var(--block-text)" font-size="7.5">interactions</text>
+    </g>
+
+    <!-- Native APIs block -->
+    <g transform="translate(222, 280)">
+      <rect width="243" height="38" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="16" fill="var(--block-title)" font-size="8.5" font-weight="600">Native APIs</text>
+      <line x1="10" y1="22" x2="233" y2="22" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="33" fill="var(--block-text)" font-size="7.5">connectors  tools  safety/run-shield</text>
+    </g>
+
+    <!-- Orchestration -->
+    <text x="228" y="341" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">ORCHESTRATION</text>
+    <g transform="translate(222, 348)">
+      <rect width="243" height="38" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="16" fill="var(--block-title)" font-size="8.5" font-weight="600">Responses Engine</text>
+      <line x1="10" y1="22" x2="233" y2="22" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="33" fill="var(--block-text)" font-size="7.5">tool calling  MCP  multi-turn  streaming</text>
     </g>
 
     <!-- Middleware -->
-    <text x="330" y="348" text-anchor="middle" fill="#475569" font-size="8" letter-spacing="0.5">MIDDLEWARE</text>
-    <g transform="translate(240, 356)">
-      <rect width="58" height="18" rx="3" fill="#1e3a5f" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.2"/>
-      <text x="29" y="9" text-anchor="middle" dominant-baseline="central" fill="#7dd3fc" font-size="7">Auth</text>
+    <text x="228" y="410" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">MIDDLEWARE</text>
+    <g transform="translate(222, 418)">
+      <rect width="55" height="20" rx="3" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="27" y="14" text-anchor="middle" fill="var(--block-title)" font-size="7.5">Auth</text>
     </g>
-    <g transform="translate(301, 356)">
-      <rect width="58" height="18" rx="3" fill="#1e3a5f" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.2"/>
-      <text x="29" y="9" text-anchor="middle" dominant-baseline="central" fill="#7dd3fc" font-size="7">Telemetry</text>
+    <g transform="translate(282, 418)">
+      <rect width="65" height="20" rx="3" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="32" y="14" text-anchor="middle" fill="var(--block-title)" font-size="7.5">Telemetry</text>
     </g>
-    <g transform="translate(362, 356)">
-      <rect width="58" height="18" rx="3" fill="#1e3a5f" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.2"/>
-      <text x="29" y="9" text-anchor="middle" dominant-baseline="central" fill="#7dd3fc" font-size="7">Metrics</text>
+    <g transform="translate(352, 418)">
+      <rect width="55" height="20" rx="3" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="27" y="14" text-anchor="middle" fill="var(--block-title)" font-size="7.5">Metrics</text>
     </g>
-    <g transform="translate(238, 380)">
-      <rect width="58" height="18" rx="3" fill="#1e3a5f" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.2"/>
-      <text x="29" y="9" text-anchor="middle" dominant-baseline="central" fill="#7dd3fc" font-size="7">RBAC</text>
+    <g transform="translate(412, 418)">
+      <rect width="55" height="20" rx="3" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="27" y="14" text-anchor="middle" fill="var(--block-title)" font-size="7.5">Storage</text>
     </g>
-    <g transform="translate(299, 380)">
-      <rect width="58" height="18" rx="3" fill="#1e3a5f" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.2"/>
-      <text x="29" y="9" text-anchor="middle" dominant-baseline="central" fill="#7dd3fc" font-size="7">Quota</text>
-    </g>
-    <g transform="translate(360, 380)">
-      <rect width="62" height="18" rx="3" fill="#1e3a5f" stroke="#2563eb" stroke-width="0.5" stroke-opacity="0.2"/>
-      <text x="31" y="9" text-anchor="middle" dominant-baseline="central" fill="#7dd3fc" font-size="7">Storage</text>
-    </g>
+
+    <text x="342" y="475" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">Pluggable provider routing</text>
+    <text x="342" y="487" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">One config, swap backends</text>
   </g>
 
-  <!-- ========== SECTION 3: PROVIDERS ========== -->
-  <g filter="url(#card-shadow)">
-    <rect x="500" y="45" width="225" height="410" rx="10" fill="#042f2e" stroke="#0d9488" stroke-width="0.5" stroke-opacity="0.4"/>
-    <rect x="500" y="45" width="225" height="28" rx="10" fill="url(#teal-grad)"/>
-    <rect x="500" y="63" width="225" height="10" fill="url(#teal-grad)"/>
-    <rect x="500" y="45" width="225" height="28" rx="10" fill="url(#shimmer)"/>
-    <text x="612" y="64" text-anchor="middle" fill="#fff" font-size="11" font-weight="600" letter-spacing="1">PROVIDERS</text>
+  <!-- ========== PROVIDERS (right column) ========== -->
+  <g filter="url(#s)">
+    <rect x="505" y="55" width="258" height="445" rx="6" fill="var(--card-bg)" stroke="var(--card-stroke)" stroke-width="1"/>
 
     <!-- Inference -->
-    <text x="520" y="90" fill="#5eead4" font-size="9" font-weight="600">Inference (20+)</text>
-    <g transform="translate(512, 96)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Ollama</text>
+    <text x="520" y="80" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">INFERENCE (23)</text>
+    <g transform="translate(517, 88)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Ollama</text>
     </g>
-    <g transform="translate(614, 96)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">vLLM</text>
+    <g transform="translate(635, 88)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">vLLM</text>
     </g>
-    <g transform="translate(512, 118)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">AWS Bedrock</text>
+    <g transform="translate(517, 114)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">AWS Bedrock</text>
     </g>
-    <g transform="translate(614, 118)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Azure OpenAI</text>
+    <g transform="translate(635, 114)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Azure OpenAI</text>
     </g>
-    <g transform="translate(512, 140)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">OpenAI</text>
+    <g transform="translate(517, 140)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">OpenAI</text>
     </g>
-    <g transform="translate(614, 140)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Anthropic</text>
+    <g transform="translate(635, 140)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Anthropic</text>
     </g>
 
-    <!-- Separator -->
-    <line x1="518" y1="168" x2="700" y2="168" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.15"/>
+    <line x1="517" y1="172" x2="747" y2="172" stroke="var(--col-divider)" stroke-width="0.5"/>
 
     <!-- Vector Stores -->
-    <text x="520" y="184" fill="#5eead4" font-size="9" font-weight="600">Vector Stores (11+)</text>
-    <g transform="translate(512, 190)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Milvus</text>
+    <text x="520" y="190" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">VECTOR STORES (15)</text>
+    <g transform="translate(517, 198)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">PGVector</text>
     </g>
-    <g transform="translate(614, 190)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">PGVector</text>
+    <g transform="translate(635, 198)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Qdrant</text>
     </g>
-    <g transform="translate(512, 212)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Qdrant</text>
+    <g transform="translate(517, 224)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">ChromaDB</text>
     </g>
-    <g transform="translate(614, 212)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">ChromaDB</text>
-    </g>
-    <g transform="translate(512, 234)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Weaviate</text>
-    </g>
-    <g transform="translate(614, 234)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Elasticsearch</text>
+    <g transform="translate(635, 224)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Milvus</text>
     </g>
 
-    <!-- Separator -->
-    <line x1="518" y1="262" x2="700" y2="262" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.15"/>
+    <line x1="517" y1="256" x2="747" y2="256" stroke="var(--col-divider)" stroke-width="0.5"/>
 
     <!-- Safety -->
-    <text x="520" y="278" fill="#5eead4" font-size="9" font-weight="600">Safety</text>
-    <g transform="translate(512, 284)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Llama Guard</text>
+    <text x="520" y="274" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">SAFETY (7)</text>
+    <g transform="translate(517, 282)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Llama Guard</text>
     </g>
-    <g transform="translate(614, 284)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Prompt Guard</text>
+    <g transform="translate(635, 282)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Prompt Guard</text>
     </g>
-    <g transform="translate(512, 306)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Code Scanner</text>
+    <g transform="translate(517, 308)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Code Scanner</text>
     </g>
-    <g transform="translate(614, 306)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Bedrock Safety</text>
-    </g>
-
-    <!-- Separator -->
-    <line x1="518" y1="334" x2="700" y2="334" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.15"/>
-
-    <!-- Tools & Storage -->
-    <text x="520" y="350" fill="#5eead4" font-size="9" font-weight="600">Tools &amp; Storage</text>
-    <g transform="translate(512, 356)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">MCP Servers</text>
-    </g>
-    <g transform="translate(614, 356)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Web Search</text>
-    </g>
-    <g transform="translate(512, 378)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">Local FS / S3</text>
-    </g>
-    <g transform="translate(614, 378)">
-      <rect width="96" height="18" rx="3" fill="#134e4a" stroke="#14b8a6" stroke-width="0.5" stroke-opacity="0.3"/>
-      <text x="8" y="13" fill="#99f6e4" font-size="8">PDF / Docling</text>
+    <g transform="translate(635, 308)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Bedrock Safety</text>
     </g>
 
+    <line x1="517" y1="340" x2="747" y2="340" stroke="var(--col-divider)" stroke-width="0.5"/>
+
+    <!-- Tools & Files -->
+    <text x="520" y="358" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">TOOLS &amp; FILES</text>
+    <g transform="translate(517, 366)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">MCP Servers</text>
+    </g>
+    <g transform="translate(635, 366)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Web Search</text>
+    </g>
+    <g transform="translate(517, 392)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Local FS / S3</text>
+    </g>
+    <g transform="translate(635, 392)">
+      <rect width="112" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">PDF / Docling</text>
+    </g>
   </g>
 
   <!-- ========== TAGLINE ========== -->
-  <text x="380" y="487" text-anchor="middle" fill="#94a3b8" font-size="13" font-weight="600" letter-spacing="3">
-    OpenAI + Anthropic Compatible  ·  Any Model  ·  Your Infrastructure
+  <text x="390" y="528" text-anchor="middle" fill="var(--tagline)" font-size="10" font-weight="600" letter-spacing="2">
+    OPEN SOURCE  ·  OPENAI · ANTHROPIC · GOOGLE COMPATIBLE  ·  YOUR INFRASTRUCTURE
   </text>
 </svg>

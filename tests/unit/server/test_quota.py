@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,16 +12,16 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from llama_stack.core.datatypes import QuotaConfig, QuotaPeriod
-from llama_stack.core.server.quota import QuotaMiddleware
-from llama_stack.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore import register_kvstore_backends
+from ogx.core.datatypes import QuotaConfig, QuotaPeriod
+from ogx.core.server.quota import QuotaMiddleware
+from ogx.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
+from ogx.core.storage.kvstore import register_kvstore_backends
 
 
 @pytest.fixture
 def suppress_quota_warnings(caplog):
     """Suppress expected WARNING logs for SQLite backend and quota exceeded"""
-    caplog.set_level(logging.CRITICAL, logger="llama_stack.core.server.quota")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.quota")
 
 
 class InjectClientIDMiddleware(BaseHTTPMiddleware):

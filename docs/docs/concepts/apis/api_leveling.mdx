@@ -1,13 +1,13 @@
 ---
 title: API Stability Leveling
-description: Understanding API stability levels and versioning in Llama Stack
+description: Understanding API stability levels and versioning in OGX
 sidebar_label: API Stability
 sidebar_position: 4
 ---
 
-# Llama Stack API Stability Leveling
+# OGX API Stability Leveling
 
-In order to provide a stable experience in Llama Stack, the various APIs need different stability levels indicating the level of support, backwards compatability, and overall production readiness.
+In order to provide a stable experience in OGX, the various APIs need different stability levels indicating the level of support, backwards compatibility, and overall production readiness.
 
 ## Different Levels
 
@@ -42,7 +42,7 @@ In order to provide a stable experience in Llama Stack, the various APIs need di
   - Y-stream breaking changes must go through the proper approval and announcement process.
 - Datatypes for a route and its return types cannot change between Z-streams
   - Y-stream datatype changes should be sparing, unless the changes are additional net-new parameters
-- Must have proper conformance testing as outlined in https://github.com/llamastack/llama-stack/issues/3237
+- Must have proper conformance testing as outlined in https://github.com/ogx-ai/ogx/issues/3237
 
 ### v2+ (Major Versions)
 
@@ -64,7 +64,7 @@ When a `/v2` API is introduced, a clear and generous deprecation policy for the 
 
 ### Deprecated APIs
 
-Deprecated APIs are those that are no longer actively maintained or supported. Depreated APIs are marked with the flag `deprecated = True` in the OpenAPI spec. These APIs will be removed in a future release.
+Deprecated APIs are those that are no longer actively maintained or supported. Deprecated APIs are marked with the flag `deprecated = True` in the OpenAPI spec. These APIs will be removed in a future release.
 
 ### API Stability vs. Provider Stability
 
@@ -88,7 +88,7 @@ If a PR has proper approvals, labels, and commit/title hygiene, the failing API 
 
 Instead of placing every API under `/v1`, any API that is not fully stable or complete should go under `/v1alpha` or `/v1beta`. For example, at the time of this writing,  `post_training` belongs here, as well as any OpenAI-compatible API whose surface does not exactly match the upstream OpenAI API it mimics.
 
-This migration is crucial as we get Llama Stack in the hands of users who intend to productize various APIs. A clear view of what is stable and what is actively being developed will enable users to pick and choose various APIs to build their products on.
+This migration is crucial as we get OGX in the hands of users who intend to productize various APIs. A clear view of what is stable and what is actively being developed will enable users to pick and choose various APIs to build their products on.
 
 This migration will be a breaking change for any API moving out of `/v1`. Ideally, this should happen before 0.3.0 and especially 1.0.0.
 
@@ -98,7 +98,7 @@ This migration will be a breaking change for any API moving out of `/v1`. Ideall
 
 ### Testing
 
-The testing of each stable API is already outlined in [issue #3237](https://github.com/llamastack/llama-stack/issues/3237) and is being worked on. These sorts of conformance tests should apply primarily to `/v1` APIs only, with `/v1alpha` and `/v1beta` having any tests the maintainers see fit as well as basic testing to ensure the routing works properly.
+The testing of each stable API is already outlined in [issue #3237](https://github.com/ogx-ai/ogx/issues/3237) and is being worked on. These sorts of conformance tests should apply primarily to `/v1` APIs only, with `/v1alpha` and `/v1beta` having any tests the maintainers see fit as well as basic testing to ensure the routing works properly.
 
 ### New APIs going forward
 

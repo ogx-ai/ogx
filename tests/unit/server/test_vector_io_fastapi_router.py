@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from llama_stack.core.server.fastapi_router_registry import build_fastapi_router
-from llama_stack_api import VectorStoreListResponse, VectorStoreSearchResponsePage
-from llama_stack_api.datatypes import Api
+from ogx.core.server.fastapi_router_registry import build_fastapi_router
+from ogx_api import VectorStoreListResponse, VectorStoreSearchResponsePage
+from ogx_api.datatypes import Api
 
 
 def test_vector_io_router_list_vector_stores() -> None:

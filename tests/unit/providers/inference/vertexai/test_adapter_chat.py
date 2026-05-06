@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.providers.remote.inference.vertexai.config import VertexAIConfig
-from llama_stack.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter, _build_http_options
-from llama_stack.providers.utils.inference.model_registry import NetworkConfig, ProxyConfig, TimeoutConfig, TLSConfig
-from llama_stack_api.inference.models import OpenAIChatCompletionRequestWithExtraBody
+from ogx.providers.remote.inference.vertexai.config import VertexAIConfig
+from ogx.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter, _build_http_options
+from ogx.providers.utils.inference.model_registry import NetworkConfig, ProxyConfig, TimeoutConfig, TLSConfig
+from ogx_api.inference.models import OpenAIChatCompletionRequestWithExtraBody
 
 from .conftest import _make_fake_streaming_chunk
 
@@ -29,7 +29,7 @@ class TestOpenAIChatCompletionImagePreDownload:
 
         localize_image_content_mock = AsyncMock(return_value=(b"fake image bytes", "jpeg"))
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.localize_image_content",
+            "ogx.providers.remote.inference.vertexai.vertexai.localize_image_content",
             localize_image_content_mock,
         )
 
@@ -61,7 +61,7 @@ class TestOpenAIChatCompletionImagePreDownload:
 
         localize_image_content_mock = AsyncMock()
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.localize_image_content",
+            "ogx.providers.remote.inference.vertexai.vertexai.localize_image_content",
             localize_image_content_mock,
         )
 
@@ -92,7 +92,7 @@ class TestOpenAIChatCompletionImagePreDownload:
 
         localize_image_content_mock = AsyncMock(return_value=None)
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.localize_image_content",
+            "ogx.providers.remote.inference.vertexai.vertexai.localize_image_content",
             localize_image_content_mock,
         )
 
@@ -339,37 +339,39 @@ class TestVertexAIClientWithNetworkConfig:
     """Tests that client factory methods thread http_options into Client() calls."""
 
     def test_create_client_with_token_passes_http_options(self, monkeypatch):
-        """Test that create client with token passes http options."""
+        """Test that create client with token passes http options (lazy initialization)."""
         client_ctor = MagicMock(return_value=object())
-        monkeypatch.setattr("llama_stack.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
+        monkeypatch.setattr("ogx.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
 
-        adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
-        http_opts = _build_http_options(NetworkConfig(headers={"X-Test": "1"}))
-        adapter._http_options = http_opts
-
+        adapter = VertexAIInferenceAdapter(
+            config=VertexAIConfig(project="p", location="l", network=NetworkConfig(headers={"X-Test": "1"}))
+        )
+        # _create_client triggers _ensure_http_options which builds from config.network
         adapter._create_client(project="p", location="l", access_token="tok")
 
         kwargs = client_ctor.call_args.kwargs
-        assert kwargs.get("http_options") is http_opts
+        assert "http_options" in kwargs
+        assert kwargs["http_options"].headers == {"X-Test": "1"}
 
     def test_create_adc_client_passes_http_options(self, monkeypatch):
-        """Test that create adc client passes http options."""
+        """Test that create adc client passes http options (lazy initialization)."""
         client_ctor = MagicMock(return_value=object())
-        monkeypatch.setattr("llama_stack.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
+        monkeypatch.setattr("ogx.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
 
-        adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
-        http_opts = _build_http_options(NetworkConfig(headers={"X-Test": "1"}))
-        adapter._http_options = http_opts
-
+        adapter = VertexAIInferenceAdapter(
+            config=VertexAIConfig(project="p", location="l", network=NetworkConfig(headers={"X-Test": "1"}))
+        )
+        # _create_adc_client triggers _ensure_http_options which builds from config.network
         adapter._create_adc_client(project="p", location="l")
 
         kwargs = client_ctor.call_args.kwargs
-        assert kwargs.get("http_options") is http_opts
+        assert "http_options" in kwargs
+        assert kwargs["http_options"].headers == {"X-Test": "1"}
 
     def test_create_client_no_network_config_no_http_options(self, monkeypatch):
         """Test that create client no network config no http options."""
         client_ctor = MagicMock(return_value=object())
-        monkeypatch.setattr("llama_stack.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
+        monkeypatch.setattr("ogx.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
 
         adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
         # _http_options is None by default (no network config)
@@ -381,8 +383,8 @@ class TestVertexAIClientWithNetworkConfig:
         # http_options should not be in kwargs when network config is not set
         assert "http_options" not in kwargs
 
-    async def test_initialize_builds_http_options_from_config(self, monkeypatch):
-        """Test that initialize builds http options from config."""
+    async def test_initialize_does_not_build_http_options(self, monkeypatch):
+        """Test that initialize does NOT build http options (lazy initialization)."""
         adapter = VertexAIInferenceAdapter(
             config=VertexAIConfig(
                 project="p",
@@ -395,9 +397,9 @@ class TestVertexAIClientWithNetworkConfig:
 
         await adapter.initialize()
 
-        # After initialize(), _http_options should be populated from config.network
-        assert adapter._http_options is not None
-        assert adapter._http_options.headers == {"X-Custom": "val"}
+        # With lazy initialization, _http_options should NOT be populated during initialize()
+        assert adapter._http_options is None
+        assert adapter._http_options_initialized is False
 
     async def test_shutdown_closes_managed_httpx_async_client(self, monkeypatch):
         """Test that shutdown closes managed httpx async client."""
@@ -421,28 +423,28 @@ class TestVertexAIClientWithNetworkConfig:
         assert adapter._http_options is None
         assert adapter._default_client is None
 
-    async def test_initialize_closes_existing_managed_httpx_async_client(self, monkeypatch):
-        """Test that initialize closes existing managed httpx async client."""
+    async def test_ensure_http_options_is_idempotent(self, monkeypatch):
+        """Test that _ensure_http_options() is idempotent (only initializes once)."""
         adapter = VertexAIInferenceAdapter(
             config=VertexAIConfig(
                 project="p",
                 location="l",
-                network=NetworkConfig(headers={"X-New": "1"}),
+                network=NetworkConfig(headers={"X-Test": "1"}),
             )
         )
-        adapter._http_options = _build_http_options(NetworkConfig(tls=TLSConfig(verify=False)))
-        assert adapter._http_options is not None
-        old_client = adapter._http_options.httpx_async_client
-        assert old_client is not None
-        aclose_mock = AsyncMock()
-        monkeypatch.setattr(old_client, "aclose", aclose_mock)
-        monkeypatch.setattr(adapter, "_create_client", lambda **kw: object())
 
-        await adapter.initialize()
+        # First call should initialize
+        adapter._ensure_http_options()
+        assert adapter._http_options_initialized is True
+        first_options = adapter._http_options
 
-        aclose_mock.assert_awaited_once()
-        assert adapter._http_options is not None
-        assert adapter._http_options.headers == {"X-New": "1"}
+        # Second call should not reinitialize
+        adapter._ensure_http_options()
+        assert adapter._http_options is first_options  # Same object
+
+        # Third call should also not reinitialize
+        adapter._ensure_http_options()
+        assert adapter._http_options is first_options  # Still same object
 
 
 class TestBuildThinkingConfig:

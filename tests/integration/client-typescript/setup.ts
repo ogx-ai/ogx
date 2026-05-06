@@ -1,4 +1,4 @@
-// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Copyright (c) The OGX Contributors.
 // All rights reserved.
 //
 // This source code is licensed under the terms described in the LICENSE file in
@@ -17,9 +17,9 @@ import LlamaStackClient from 'llama-stack-client';
  */
 function loadTestConfig() {
   const baseURL = process.env['TEST_API_BASE_URL'];
-  const setupName = process.env['LLAMA_STACK_TEST_SETUP'];
-  const textModel = process.env['LLAMA_STACK_TEST_TEXT_MODEL'];
-  const embeddingModel = process.env['LLAMA_STACK_TEST_EMBEDDING_MODEL'];
+  const setupName = process.env['OGX_TEST_SETUP'];
+  const textModel = process.env['OGX_TEST_TEXT_MODEL'];
+  const embeddingModel = process.env['OGX_TEST_EMBEDDING_MODEL'];
 
   if (!baseURL) {
     throw new Error(
@@ -57,17 +57,17 @@ beforeAll(() => {
 
 /**
  * Create a client instance for integration tests.
- * Mimics pytest's `llama_stack_client` fixture.
+ * Mimics pytest's `ogx_client` fixture.
  *
- * @param testId - Test ID to send in X-LlamaStack-Provider-Data header for replay mode.
+ * @param testId - Test ID to send in X-OGX-Provider-Data header for replay mode.
  *                 Format: "tests/integration/responses/test_basic_responses.py::test_name[params]"
  */
 export function createTestClient(testId?: string): LlamaStackClient {
   const headers: Record<string, string> = {};
 
   // In server mode with replay, send test ID for recording isolation
-  if (process.env['LLAMA_STACK_TEST_STACK_CONFIG_TYPE'] === 'server' && testId) {
-    headers['X-LlamaStack-Provider-Data'] = JSON.stringify({
+  if (process.env['OGX_TEST_STACK_CONFIG_TYPE'] === 'server' && testId) {
+    headers['X-OGX-Provider-Data'] = JSON.stringify({
       __test_id: testId,
     });
   }
@@ -87,7 +87,7 @@ export function skipIfNoModel(modelType: 'text' | 'embedding'): typeof test {
   const model = modelType === 'text' ? TEST_CONFIG.textModel : TEST_CONFIG.embeddingModel;
 
   if (!model) {
-    const envVar = modelType === 'text' ? 'LLAMA_STACK_TEST_TEXT_MODEL' : 'LLAMA_STACK_TEST_EMBEDDING_MODEL';
+    const envVar = modelType === 'text' ? 'OGX_TEST_TEXT_MODEL' : 'OGX_TEST_EMBEDDING_MODEL';
     const message = `Skipping: ${modelType} model not configured (set ${envVar})`;
     return test.skip.bind(test) as typeof test;
   }
@@ -102,7 +102,7 @@ export function skipIfNoModel(modelType: 'text' | 'embedding'): typeof test {
 export function requireTextModel(): string {
   if (!TEST_CONFIG.textModel) {
     throw new Error(
-      'LLAMA_STACK_TEST_TEXT_MODEL environment variable is required. ' +
+      'OGX_TEST_TEXT_MODEL environment variable is required. ' +
         'Run tests using: ./scripts/integration-test.sh',
     );
   }
@@ -116,7 +116,7 @@ export function requireTextModel(): string {
 export function requireEmbeddingModel(): string {
   if (!TEST_CONFIG.embeddingModel) {
     throw new Error(
-      'LLAMA_STACK_TEST_EMBEDDING_MODEL environment variable is required. ' +
+      'OGX_TEST_EMBEDDING_MODEL environment variable is required. ' +
         'Run tests using: ./scripts/integration-test.sh',
     );
   }
@@ -127,7 +127,7 @@ export function requireEmbeddingModel(): string {
  * Extracts aggregated text output from a ResponseObject.
  * This concatenates all text content from the response's output array.
  *
- * Copied from llama-stack-client's response-helpers until it's available in published version.
+ * Copied from ogx-client's response-helpers until it's available in published version.
  */
 export function getResponseOutputText(response: any): string {
   const pieces: string[] = [];

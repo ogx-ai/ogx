@@ -1,24 +1,24 @@
-# Llama Stack: from Zero to Hero
+# OGX: from Zero to Hero
 
-Llama Stack defines and standardizes the set of core building blocks needed to bring generative AI applications to market. These building blocks are presented in the form of interoperable APIs with a broad set of Providers providing their implementations. These building blocks are assembled into Distributions which are easy for developers to get from zero to production.
+OGX defines and standardizes the set of core building blocks needed to bring generative AI applications to market. These building blocks are presented in the form of interoperable APIs with a broad set of Providers providing their implementations. These building blocks are assembled into Distributions which are easy for developers to get from zero to production.
 
-This guide will walk you through an end-to-end workflow with Llama Stack with Ollama as the inference provider and ChromaDB as the VectorIO provider. Please note the steps for configuring your provider and distribution will vary depending on the services you use. However, the user experience will remain universal - this is the power of Llama-Stack.
+This guide will walk you through an end-to-end workflow with OGX with Ollama as the inference provider and ChromaDB as the VectorIO provider. Please note the steps for configuring your provider and distribution will vary depending on the services you use. However, the user experience will remain universal - this is the power of Llama-Stack.
 
 If you're looking for more specific topics, we have a [Zero to Hero Guide](#next-steps) that covers everything from 'Tool Calling' to 'Agents' in detail. Feel free to skip to the end to explore the advanced topics you're interested in.
 
-> If you'd prefer not to set up a local server, explore our notebook on [tool calling with the Together API](Tool_Calling101_Using_Together_Llama_Stack_Server.ipynb). This notebook will show you how to leverage together.ai's Llama Stack Server API, allowing you to get started with Llama Stack without the need for a locally built and running server.
+> If you'd prefer not to set up a local server, explore our notebook on [tool calling with the Together API](Tool_Calling101_Using_Together_Llama_Stack_Server.ipynb). This notebook will show you how to leverage together.ai's OGX Server API, allowing you to get started with OGX without the need for a locally built and running server.
 
 ## Table of Contents
 
-- [Llama Stack: from Zero to Hero](#llama-stack-from-zero-to-hero)
+- [OGX: from Zero to Hero](#ogx-from-zero-to-hero)
   - [Table of Contents](#table-of-contents)
   - [Setup ollama](#setup-ollama)
   - [Install Dependencies and Set Up Environment](#install-dependencies-and-set-up-environment)
-  - [Build, Configure, and Run Llama Stack](#build-configure-and-run-llama-stack)
-  - [Test with `llama-stack-client` CLI](#test-with-llama-stack-client-cli)
+  - [Build, Configure, and Run OGX](#build-configure-and-run-ogx)
+  - [Test with `ogx-client` CLI](#test-with-ogx-client-cli)
   - [Test with `curl`](#test-with-curl)
   - [Test with Python](#test-with-python)
-    - [1. Create Python Script (`test_llama_stack.py`)](#1-create-python-script-test_llama_stackpy)
+    - [1. Create Python Script (`test_ogx.py`)](#1-create-python-script-test_ogxpy)
     - [2. Create a Chat Completion Request in Python](#2-create-a-chat-completion-request-in-python)
     - [3. Run the Python Script](#3-run-the-python-script)
   - [Next Steps](#next-steps)
@@ -50,7 +50,7 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
    ```
 
    **Note**:
-     - The supported models for llama stack for now is listed in the [Ollama models file](https://github.com/meta-llama/llama-stack/blob/main/llama_stack/providers/remote/inference/ollama/models.py)
+     - The supported models for ogx for now is listed in the [Ollama models file](https://github.com/ogx-ai/ogx/blob/main/ogx/providers/remote/inference/ollama/models.py)
      - `keepalive -1m` is used so that ollama continues to keep the model in memory indefinitely. Otherwise, ollama frees up memory and you would have to run `ollama run` again.
 
 ---
@@ -84,66 +84,66 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
 
 ---
 
-## Build, Configure, and Run Llama Stack
+## Build, Configure, and Run OGX
 
 1. **Install dependencies**:
 
    ```bash
-   llama stack list-deps starter | xargs -L1 uv pip install
+   ogx list-deps starter | xargs -L1 uv pip install
    ```
 
 2. **Start the distribution**:
 
    ```bash
-   llama stack run starter
+   ogx run starter
    ```
 
 3. **Set the ENV variables by exporting them to the terminal**:
 
    ```bash
    export OLLAMA_URL="http://localhost:11434"
-   export LLAMA_STACK_PORT=8321
+   export OGX_PORT=8321
    export INFERENCE_MODEL="meta-llama/Llama-3.2-3B-Instruct"
    export SAFETY_MODEL="meta-llama/Llama-Guard-3-1B"
    ```
 
-4. **Run the Llama Stack**:
+4. **Run the OGX**:
    Run the stack using uv:
 
    ```bash
    INFERENCE_MODEL=$INFERENCE_MODEL \
    SAFETY_MODEL=$SAFETY_MODEL \
    OLLAMA_URL=$OLLAMA_URL \
-   uv run --with llama-stack llama stack run starter \
-      --port $LLAMA_STACK_PORT
+   uv run --with ogx ogx run starter \
+      --port $OGX_PORT
    ```
 
-   Note: Every time you run a new model with `ollama run`, you will need to restart the llama stack. Otherwise it won't see the new model.
+   Note: Every time you run a new model with `ollama run`, you will need to restart the ogx. Otherwise it won't see the new model.
 
 The server will start and listen on `http://localhost:8321`.
 
 ---
 
-## Test with `llama-stack-client` CLI
+## Test with `ogx-client` CLI
 
-After setting up the server, open a new terminal window and configure the llama-stack-client.
+After setting up the server, open a new terminal window and configure the ogx-client.
 
-1. Configure the CLI to point to the llama-stack server.
+1. Configure the CLI to point to the ogx server.
 
    ```bash
-   uv run --with llama-stack-client llama-stack-client configure --endpoint http://localhost:8321
+   uv run --with ogx-client ogx-client configure --endpoint http://localhost:8321
    ```
 
    **Expected Output:**
 
    ```bash
-   Done! You can now use the Llama Stack Client CLI with endpoint http://localhost:8321
+   Done! You can now use the OGX Client CLI with endpoint http://localhost:8321
    ```
 
 2. Test the CLI by running inference:
 
    ```bash
-   uv run --with llama-stack-client llama-stack-client inference chat-completion --message "Write me a 2-sentence poem about the moon"
+   uv run --with ogx-client ogx-client inference chat-completion --message "Write me a 2-sentence poem about the moon"
    ```
 
    **Expected Output:**
@@ -188,7 +188,7 @@ After setting up the server, open a new terminal window and configure the llama-
 After setting up the server, open a new terminal window and verify it's working by sending a `POST` request using `curl`:
 
 ```bash
-curl http://localhost:$LLAMA_STACK_PORT/v1/chat/completions
+curl http://localhost:$OGX_PORT/v1/chat/completions
 -H "Content-Type: application/json"
 -d @- <<EOF
 {
@@ -205,7 +205,7 @@ curl http://localhost:$LLAMA_STACK_PORT/v1/chat/completions
 EOF
 ```
 
-You can check the available models with the command `uv run --with llama-stack-client llama-stack-client models list`.
+You can check the available models with the command `uv run --with ogx-client ogx-client models list`.
 
 **Expected Output:**
 
@@ -221,17 +221,17 @@ You can check the available models with the command `uv run --with llama-stack-c
 
 ## Test with Python
 
-You can also interact with the Llama Stack server using a simple Python script. Below is an example:
+You can also interact with the OGX server using a simple Python script. Below is an example:
 
-### 1. Create Python Script (`test_llama_stack.py`)
+### 1. Create Python Script (`test_ogx.py`)
 
 ```bash
-touch test_llama_stack.py
+touch test_ogx.py
 ```
 
 ### 2. Create a Chat Completion Request in Python
 
-In `test_llama_stack.py`, write the following code:
+In `test_ogx.py`, write the following code:
 
 ```python
 import os
@@ -244,7 +244,7 @@ INFERENCE_MODEL = os.environ.get("INFERENCE_MODEL")
 if INFERENCE_MODEL is None:
     raise ValueError("The environment variable 'INFERENCE_MODEL' is not set.")
 
-# Initialize the clien
+# Initialize the client
 client = LlamaStackClient(base_url="http://localhost:8321")
 
 # Create a chat completion request
@@ -263,7 +263,7 @@ print(response.choices[0].message.content)
 ### 3. Run the Python Script
 
 ```bash
-uv run --with llama-stack-client python test_llama_stack.py
+uv run --with ogx-client python test_ogx.py
 ```
 
 **Expected Output:**
@@ -273,9 +273,9 @@ The moon glows softly in the midnight sky,
 A beacon of wonder, as it catches the eye.
 ```
 
-With these steps, you should have a functional Llama Stack setup capable of generating text using the specified model. For more detailed information and advanced configurations, refer to some of our documentation below.
+With these steps, you should have a functional OGX setup capable of generating text using the specified model. For more detailed information and advanced configurations, refer to some of our documentation below.
 
-This command initializes the model to interact with your local Llama Stack instance.
+This command initializes the model to interact with your local OGX instance.
 
 ---
 
@@ -283,25 +283,25 @@ This command initializes the model to interact with your local Llama Stack insta
 
 **Explore Other Guides**: Dive deeper into specific topics by following these guides:
 
-- [Understanding Distribution](https://llamastack.github.io/latest/concepts/index.html#distributions)
+- [Understanding Distribution](https://ogx-ai.github.io/latest/concepts/index.html#distributions)
 - [Inference 101](00_Inference101.ipynb)
 - [Local and Cloud Model Toggling 101](01_Local_Cloud_Inference101.ipynb)
 - [Prompt Engineering](02_Prompt_Engineering101.ipynb)
-- [Chat with Image - LlamaStack Vision API](03_Image_Chat101.ipynb)
+- [Chat with Image - OGX Vision API](03_Image_Chat101.ipynb)
 - [Tool Calling: How to and Details](04_Tool_Calling101.ipynb)
 - [Memory API: Show Simple In-Memory Retrieval](05_Memory101.ipynb)
 - [Using Safety API in Conversation](06_Safety101.ipynb)
 - [Agents API: Explain Components](07_Agents101.ipynb)
 
-**Explore Client SDKs**: Utilize our client SDKs for various languages to integrate Llama Stack into your applications:
+**Explore Client SDKs**: Utilize our client SDKs for various languages to integrate OGX into your applications:
 
 - [Python SDK](https://github.com/meta-llama/llama-stack-client-python)
-- [Node SDK](https://github.com/meta-llama/llama-stack-client-node)
-- [Swift SDK](https://github.com/meta-llama/llama-stack-client-swift)
-- [Kotlin SDK](https://github.com/meta-llama/llama-stack-client-kotlin)
+- [Node SDK](https://github.com/ogx-ai/ogx-client-node)
+- [Swift SDK](https://github.com/ogx-ai/ogx-client-swift)
+- [Kotlin SDK](https://github.com/ogx-ai/ogx-client-kotlin)
 
-**Advanced Configuration**: Learn how to customize your Llama Stack distribution by referring to the [Building a Llama Stack Distribution](https://llamastack.github.io/latest/distributions/building_distro.html) guide.
+**Advanced Configuration**: Learn how to customize your OGX distribution by referring to the [Building a OGX Distribution](https://ogx-ai.github.io/latest/distributions/building_distro.html) guide.
 
-**Explore Example Apps**: Check out [llama-stack-apps](https://github.com/meta-llama/llama-stack-apps/tree/main/examples) for example applications built using Llama Stack.
+**Explore Example Apps**: Check out [ogx-apps](https://github.com/ogx-ai/ogx-apps/tree/main/examples) for example applications built using OGX.
 
 ---

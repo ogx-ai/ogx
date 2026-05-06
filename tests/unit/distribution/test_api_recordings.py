@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,7 +13,7 @@ import httpx
 import pytest
 from openai import AsyncOpenAI, NotFoundError
 
-from llama_stack.testing.api_recorder import (
+from ogx.testing.api_recorder import (
     APIRecordingMode,
     ResponseStorage,
     api_recording,
@@ -21,7 +21,7 @@ from llama_stack.testing.api_recorder import (
 )
 
 # Import the real Pydantic response types instead of using Mocks
-from llama_stack_api import (
+from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionResponseMessage,
     OpenAIChoice,

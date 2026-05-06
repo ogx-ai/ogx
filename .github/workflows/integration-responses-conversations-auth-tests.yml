@@ -13,8 +13,8 @@ on:
       - 'release-[0-9]+.[0-9]+.x'
     paths:
       - 'distributions/**'
-      - 'src/llama_stack/**'
-      - '!src/llama_stack_ui/**'
+      - 'src/ogx/**'
+      - '!src/ogx_ui/**'
       - 'tests/integration/**'
       - 'uv.lock'
       - 'pyproject.toml'
@@ -61,10 +61,10 @@ jobs:
       - name: Configure Kube Auth
         if: ${{ matrix.auth-provider == 'oauth2_token' }}
         run: |
-          kubectl create namespace llama-stack
-          for account in llama-stack-auth llama-stack-user1 llama-stack-user2; do
-            kubectl create serviceaccount $account -n llama-stack
-            kubectl create token $account -n llama-stack > $account-token
+          kubectl create namespace ogx
+          for account in ogx-auth ogx-user1 ogx-user2; do
+            kubectl create serviceaccount $account -n ogx
+            kubectl create token $account -n ogx > $account-token
           done
 
       - name: Set Kubernetes Config
@@ -74,8 +74,8 @@ jobs:
             echo "KUBERNETES_API_SERVER_URL=$(kubectl get --raw /.well-known/openid-configuration| jq -r .jwks_uri)"
             echo "KUBERNETES_CA_CERT_PATH=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.certificate-authority}')"
             echo "KUBERNETES_ISSUER=$(kubectl get --raw /.well-known/openid-configuration| jq -r .issuer)"
-            echo "KUBERNETES_AUDIENCE=$(kubectl create token llama-stack-auth -n llama-stack --duration=1h | cut -d. -f2 | base64 -d | jq -r '.aud[0]')"
-            echo "TOKEN=$(cat llama-stack-auth-token)"
+            echo "KUBERNETES_AUDIENCE=$(kubectl create token ogx-auth -n ogx --duration=1h | cut -d. -f2 | base64 -d | jq -r '.aud[0]')"
+            echo "TOKEN=$(cat ogx-auth-token)"
           } >> "$GITHUB_ENV"
 
       - name: List response recordings (replay)
@@ -88,12 +88,12 @@ jobs:
         env:
           OPENAI_API_KEY: "dummy-key-for-replay-mode"
           # Enable replay so the server uses checked-in recordings instead of calling the API
-          LLAMA_STACK_TEST_INFERENCE_MODE: "replay"
+          OGX_TEST_INFERENCE_MODE: "replay"
           # Pin recording dir to workspace so the server finds tests/integration/*/recordings/
-          LLAMA_STACK_TEST_RECORDING_DIR: ${{ github.workspace }}/tests/integration/common
+          OGX_TEST_RECORDING_DIR: ${{ github.workspace }}/tests/integration/common
           # Tell the server to sync test context from client headers so recordings
           # are looked up in the correct per-test-directory (e.g. responses/recordings/)
-          LLAMA_STACK_TEST_STACK_CONFIG_TYPE: "server"
+          OGX_TEST_STACK_CONFIG_TYPE: "server"
         if: ${{ matrix.auth-provider == 'oauth2_token' }}
         run: |
           run_dir=$(mktemp -d)
@@ -228,29 +228,29 @@ jobs:
           cat "$run_dir/config.yaml"
 
           # avoid line breaks in the server log, especially because we grep it below.
-          export LLAMA_STACK_LOG_WIDTH=200
+          export OGX_LOG_WIDTH=200
           # OPENAI_API_KEY is set via env at step level
-          nohup uv run llama stack run "$run_dir/config.yaml" > server.log 2>&1 &
+          nohup uv run ogx stack run "$run_dir/config.yaml" > server.log 2>&1 &
 
-      - name: Wait for Llama Stack server to be ready
+      - name: Wait for OGX server to be ready
         run: |
-          echo "Waiting for Llama Stack server..."
+          echo "Waiting for OGX server..."
           for _ in {1..30}; do
             # Note: /v1/health does not require authentication
             if curl -s -L http://localhost:8321/v1/health | grep -q "OK"; then
-              echo "Llama Stack server is up!"
+              echo "OGX server is up!"
               if grep -q "Enabling authentication.*provider=${{ matrix.auth-provider }}" server.log; then
-                echo "Llama Stack server is configured to use ${{ matrix.auth-provider }} auth"
+                echo "OGX server is configured to use ${{ matrix.auth-provider }} auth"
                 exit 0
               else
-                echo "Llama Stack server is not configured to use ${{ matrix.auth-provider }} auth"
+                echo "OGX server is not configured to use ${{ matrix.auth-provider }} auth"
                 cat server.log
                 exit 1
               fi
             fi
             sleep 1
           done
-          echo "Llama Stack server failed to start"
+          echo "OGX server failed to start"
           cat server.log
           exit 1
 
@@ -263,5 +263,5 @@ jobs:
       - name: Server log on failure
         if: failure()
         run: |
-          echo "=== Llama Stack server log (last 500 lines) ==="
+          echo "=== OGX server log (last 500 lines) ==="
           tail -500 server.log

@@ -1,0 +1,52 @@
+{
+  "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_streaming_basic[txt=gemini/gemini-2.5-flash-lite]",
+  "request": {
+    "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_streaming_basic[txt=gemini/gemini-2.5-flash-lite]",
+    "url": "https://generativelanguage.googleapis.com/v1beta/interactions",
+    "method": "POST",
+    "payload": {
+      "model": "gemini-2.5-flash-lite",
+      "input": "Count from 1 to 5, separated by commas.",
+      "stream": true
+    }
+  },
+  "response": {
+    "body": [
+      "event: interaction.start",
+      "data: {\"interaction\":{\"id\":\"v1_ChczUkhlYWNlMU9jaUd4czBQdmVPUzRRZxIXM1JIZWFjZTFPY2lHeHMwUHZlT1M0UWc\",\"status\":\"in_progress\",\"object\":\"interaction\",\"model\":\"gemini-2.5-flash-lite\"},\"event_type\":\"interaction.start\"}",
+      "",
+      "event: interaction.status_update",
+      "data: {\"interaction_id\":\"v1_ChczUkhlYWNlMU9jaUd4czBQdmVPUzRRZxIXM1JIZWFjZTFPY2lHeHMwUHZlT1M0UWc\",\"status\":\"in_progress\",\"event_type\":\"interaction.status_update\"}",
+      "",
+      "event: content.start",
+      "data: {\"index\":0,\"content\":{\"type\":\"thought\"},\"event_type\":\"content.start\"}",
+      "",
+      "event: content.delta",
+      "data: {\"index\":0,\"delta\":{\"signature\":\"CiRlMjQ4MzBhNy01Y2Q2LTQyZmUtOTk4Yi1lZTUzOWU3MmI5YzM=\",\"type\":\"thought_signature\"},\"event_type\":\"content.delta\"}",
+      "",
+      "event: content.stop",
+      "data: {\"index\":0,\"event_type\":\"content.stop\"}",
+      "",
+      "event: content.start",
+      "data: {\"index\":1,\"content\":{\"type\":\"text\"},\"event_type\":\"content.start\"}",
+      "",
+      "event: content.delta",
+      "data: {\"index\":1,\"delta\":{\"text\":\"1, 2, \",\"type\":\"text\"},\"event_type\":\"content.delta\"}",
+      "",
+      "event: content.delta",
+      "data: {\"index\":1,\"delta\":{\"text\":\"3, 4, 5\",\"type\":\"text\"},\"event_type\":\"content.delta\"}",
+      "",
+      "event: content.stop",
+      "data: {\"index\":1,\"event_type\":\"content.stop\"}",
+      "",
+      "event: interaction.complete",
+      "data: {\"interaction\":{\"id\":\"v1_ChczUkhlYWNlMU9jaUd4czBQdmVPUzRRZxIXM1JIZWFjZTFPY2lHeHMwUHZlT1M0UWc\",\"status\":\"completed\",\"usage\":{\"total_tokens\":25,\"total_input_tokens\":13,\"input_tokens_by_modality\":[{\"modality\":\"text\",\"tokens\":13}],\"total_cached_tokens\":0,\"total_output_tokens\":12,\"total_tool_use_tokens\":0,\"total_thought_tokens\":0},\"role\":\"model\",\"created\":\"2026-04-14T10:07:27Z\",\"updated\":\"2026-04-14T10:07:27Z\",\"service_tier\":\"standard\",\"object\":\"interaction\",\"model\":\"gemini-2.5-flash-lite\"},\"event_type\":\"interaction.complete\"}",
+      "",
+      "event: done",
+      "data: [DONE]",
+      ""
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

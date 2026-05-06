@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore import kvstore_impl, register_kvstore_backends
-from llama_stack.providers.inline.batches.reference.batches import ReferenceBatchesImpl
-from llama_stack.providers.inline.batches.reference.config import ReferenceBatchesImplConfig
+from ogx.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
+from ogx.core.storage.kvstore import kvstore_impl, register_kvstore_backends
+from ogx.providers.inline.batches.reference.batches import ReferenceBatchesImpl
+from ogx.providers.inline.batches.reference.config import ReferenceBatchesImplConfig
 
 
 @pytest.fixture

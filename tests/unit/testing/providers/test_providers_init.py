@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,14 +14,14 @@ import pytest
 from ollama import ResponseError
 from openai import NotFoundError
 
-from llama_stack.testing.exception_utils import GenericProviderError
-from llama_stack.testing.providers import (
+from ogx.testing.exception_utils import GenericProviderError
+from ogx.testing.providers import (
     PROVIDERS,
     ProviderConfig,
     create_provider_error,
     detect_provider,
 )
-from llama_stack.testing.providers._config import _validate_provider
+from ogx.testing.providers._config import _validate_provider
 
 
 class TestDetectProvider:

@@ -1,0 +1,250 @@
+{
+  "anthropic_spec": "docs/static/anthropic-spec.json",
+  "llama_spec": "docs/static/ogx-spec.yaml",
+  "summary": {
+    "endpoints": {
+      "implemented": 2,
+      "total": 6,
+      "missing": [
+        "/v1/messages/batches",
+        "/v1/messages/batches/{message_batch_id}",
+        "/v1/messages/batches/{message_batch_id}/cancel",
+        "/v1/messages/batches/{message_batch_id}/results"
+      ]
+    },
+    "conformance": {
+      "score": 95.8,
+      "issues": 24,
+      "missing_properties": 15,
+      "total_problems": 39,
+      "total_properties": 930
+    }
+  },
+  "categories": {
+    "Messages": {
+      "score": 95.8,
+      "issues": 24,
+      "missing_properties": 15,
+      "total_properties": 930,
+      "endpoints": [
+        {
+          "path": "/v1/messages",
+          "operations": [
+            {
+              "method": "POST",
+              "missing_properties": [
+                "POST.parameters.header.anthropic-version",
+                "POST.requestBody.content.application/json.properties.cache_control",
+                "POST.requestBody.content.application/json.properties.container",
+                "POST.requestBody.content.application/json.properties.inference_geo",
+                "POST.requestBody.content.application/json.properties.metadata.properties.user_id",
+                "POST.requestBody.content.application/json.properties.output_config",
+                "POST.responses.200.content.application/json.properties.container",
+                "POST.responses.200.content.application/json.properties.stop_details",
+                "POST.responses.4XX"
+              ],
+              "conformance_issues": [
+                {
+                  "property": "POST.requestBody.content.application/json.properties.messages.items.properties.content",
+                  "details": [
+                    "Union variants added: 2",
+                    "Union variants removed: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.metadata",
+                  "details": [
+                    "Type removed: ['object']",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.model",
+                  "details": [
+                    "Type added: ['string']",
+                    "Union variants removed: 17"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.service_tier",
+                  "details": [
+                    "Enum removed: ['auto', 'standard_only']",
+                    "Type removed: ['string']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.stop_sequences",
+                  "details": [
+                    "Type removed: ['array']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.stream",
+                  "details": [
+                    "Type removed: ['boolean']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2",
+                    "Default changed: None -> False"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.system",
+                  "details": [
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 3",
+                    "Union variants removed: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.temperature",
+                  "details": [
+                    "Type removed: ['number']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.thinking",
+                  "details": [
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.tool_choice",
+                  "details": [
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.tools",
+                  "details": [
+                    "Type removed: ['array']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.top_k",
+                  "details": [
+                    "Type removed: ['integer']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.top_p",
+                  "details": [
+                    "Type removed: ['number']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.content.items",
+                  "details": [
+                    "Union variants added: 5",
+                    "Union variants removed: 12"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.model",
+                  "details": [
+                    "Type added: ['string']",
+                    "Union variants removed: 17"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.role",
+                  "details": [
+                    "Default changed: assistant -> None"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.stop_reason",
+                  "details": [
+                    "Union variants added: 1",
+                    "Union variants removed: 1"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.type",
+                  "details": [
+                    "Default changed: message -> None"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.usage.properties.input_tokens",
+                  "details": [
+                    "Default changed: None -> 0"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.usage.properties.output_tokens",
+                  "details": [
+                    "Default changed: None -> 0"
+                  ]
+                }
+              ],
+              "missing_count": 9,
+              "issues_count": 20
+            }
+          ]
+        },
+        {
+          "path": "/v1/messages/count_tokens",
+          "operations": [
+            {
+              "method": "POST",
+              "missing_properties": [
+                "POST.parameters.header.anthropic-version",
+                "POST.requestBody.content.application/json.properties.cache_control",
+                "POST.requestBody.content.application/json.properties.output_config",
+                "POST.requestBody.content.application/json.properties.thinking",
+                "POST.requestBody.content.application/json.properties.tool_choice",
+                "POST.responses.4XX"
+              ],
+              "conformance_issues": [
+                {
+                  "property": "POST.requestBody.content.application/json.properties.messages.items.properties.content",
+                  "details": [
+                    "Union variants added: 2",
+                    "Union variants removed: 2"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.model",
+                  "details": [
+                    "Type added: ['string']",
+                    "Union variants removed: 17"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.system",
+                  "details": [
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2",
+                    "Union variants removed: 1"
+                  ]
+                },
+                {
+                  "property": "POST.requestBody.content.application/json.properties.tools",
+                  "details": [
+                    "Type removed: ['array']",
+                    "Nullable added (Anthropic non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                }
+              ],
+              "missing_count": 6,
+              "issues_count": 4
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

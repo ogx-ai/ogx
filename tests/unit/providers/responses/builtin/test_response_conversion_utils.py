@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from llama_stack.providers.inline.responses.builtin.responses.utils import (
+from ogx.providers.inline.responses.builtin.responses.utils import (
     _extract_citations_from_text,
     convert_chat_choice_to_response_message,
     convert_response_content_to_chat_content,
@@ -18,8 +18,8 @@ from llama_stack.providers.inline.responses.builtin.responses.utils import (
     get_message_type_by_role,
     is_function_tool_call,
 )
-from llama_stack_api import RetrieveFileContentRequest, RetrieveFileRequest
-from llama_stack_api.inference import (
+from ogx_api import RetrieveFileContentRequest, RetrieveFileRequest
+from ogx_api.inference import (
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
@@ -35,7 +35,7 @@ from llama_stack_api.inference import (
     OpenAIToolMessageParam,
     OpenAIUserMessageParam,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
     MCPListToolsTool,
     OpenAIResponseAnnotationFileCitation,
     OpenAIResponseInputFunctionToolCallOutput,

@@ -13,8 +13,8 @@ on:
       - 'release-[0-9]+.[0-9]+.x'
     paths:
       - 'distributions/**'
-      - 'src/llama_stack/**'
-      - '!src/llama_stack_ui/**'
+      - 'src/ogx/**'
+      - '!src/ogx_ui/**'
       - 'tests/integration/**'
       - 'uv.lock'
       - 'pyproject.toml'
@@ -58,10 +58,10 @@ jobs:
       - name: Configure Kube Auth
         if: ${{ matrix.auth-provider == 'oauth2_token' }}
         run: |
-          kubectl create namespace llama-stack
-          for account in llama-stack-auth llama-stack-user1 llama-stack-user2; do
-            kubectl create serviceaccount $account -n llama-stack
-            kubectl create token $account -n llama-stack > $account-token
+          kubectl create namespace ogx
+          for account in ogx-auth ogx-user1 ogx-user2; do
+            kubectl create serviceaccount $account -n ogx
+            kubectl create token $account -n ogx > $account-token
           done
 
       - name: Set Kubernetes Config
@@ -71,8 +71,8 @@ jobs:
             echo "KUBERNETES_API_SERVER_URL=$(kubectl get --raw /.well-known/openid-configuration| jq -r .jwks_uri)"
             echo "KUBERNETES_CA_CERT_PATH=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.certificate-authority}')"
             echo "KUBERNETES_ISSUER=$(kubectl get --raw /.well-known/openid-configuration| jq -r .issuer)"
-            echo "KUBERNETES_AUDIENCE=$(kubectl create token llama-stack-auth -n llama-stack --duration=1h | cut -d. -f2 | base64 -d | jq -r '.aud[0]')"
-            echo "TOKEN=$(cat llama-stack-auth-token)"
+            echo "KUBERNETES_AUDIENCE=$(kubectl create token ogx-auth -n ogx --duration=1h | cut -d. -f2 | base64 -d | jq -r '.aud[0]')"
+            echo "TOKEN=$(cat ogx-auth-token)"
           } >> "$GITHUB_ENV"
 
       - name: Set Kube Auth Config and run server
@@ -126,7 +126,7 @@ jobs:
                     actions: [read, delete]
                     resource: sql_record::openai_files::*
                   when:
-                    - user with system:serviceaccount:llama-stack:llama-stack-user1 in roles
+                    - user with system:serviceaccount:ogx:ogx-user1 in roles
                     - user in owners roles
                   description: User1 can read and delete their Files
                 - permit:
@@ -155,28 +155,28 @@ jobs:
           cat "$run_dir/config.yaml"
 
           # avoid line breaks in the server log, especially because we grep it below.
-          export LLAMA_STACK_LOG_WIDTH=200
-          nohup uv run llama stack run "$run_dir/config.yaml" > server.log 2>&1 &
+          export OGX_LOG_WIDTH=200
+          nohup uv run ogx stack run "$run_dir/config.yaml" > server.log 2>&1 &
 
-      - name: Wait for Llama Stack server to be ready
+      - name: Wait for OGX server to be ready
         run: |
-          echo "Waiting for Llama Stack server..."
+          echo "Waiting for OGX server..."
           for _ in {1..30}; do
             # Note: /v1/health does not require authentication
             if curl -s -L http://localhost:8321/v1/health | grep -q "OK"; then
-              echo "Llama Stack server is up!"
+              echo "OGX server is up!"
               if grep -q "Enabling authentication.*provider=${{ matrix.auth-provider }}" server.log; then
-                echo "Llama Stack server is configured to use ${{ matrix.auth-provider }} auth"
+                echo "OGX server is configured to use ${{ matrix.auth-provider }} auth"
                 exit 0
               else
-                echo "Llama Stack server is not configured to use ${{ matrix.auth-provider }} auth"
+                echo "OGX server is not configured to use ${{ matrix.auth-provider }} auth"
                 cat server.log
                 exit 1
               fi
             fi
             sleep 1
           done
-          echo "Llama Stack server failed to start"
+          echo "OGX server failed to start"
           cat server.log
           exit 1
 

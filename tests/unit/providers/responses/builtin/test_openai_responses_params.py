@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,30 +15,30 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCallFunction,
 )
 
-from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     OpenAIResponsesImpl,
 )
-from llama_stack.providers.remote.inference.openai.config import OpenAIConfig
-from llama_stack.providers.remote.inference.openai.openai import OpenAIInferenceAdapter
-from llama_stack.providers.utils.responses.responses_store import (
+from ogx.providers.remote.inference.openai.config import OpenAIConfig
+from ogx.providers.remote.inference.openai.openai import OpenAIInferenceAdapter
+from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
-from llama_stack_api import (
+from ogx_api import (
     ResponseStreamOptions,
     ResponseTruncation,
 )
-from llama_stack_api.inference import (
+from ogx_api.inference import (
     OpenAIAssistantMessageParam,
     OpenAIUserMessageParam,
     ServiceTier,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
     OpenAIResponseInputToolFunction,
     OpenAIResponseMessage,
     OpenAIResponseText,
     OpenAIResponseTextFormat,
 )
-from llama_stack_api.tools import ToolDef, ToolInvocationResult
+from ogx_api.tools import ToolDef, ToolInvocationResult
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
 
@@ -282,7 +282,7 @@ async def test_params_passed_through_full_chain_to_backend_service(
         connectors_api=AsyncMock(),
     )
 
-    with patch("llama_stack.providers.utils.inference.openai_mixin.AsyncOpenAI") as mock_openai_class:
+    with patch("ogx.providers.utils.inference.openai_mixin.AsyncOpenAI") as mock_openai_class:
         mock_client = MagicMock()
         mock_chat_completions = AsyncMock()
         mock_client.chat.completions.create = mock_chat_completions

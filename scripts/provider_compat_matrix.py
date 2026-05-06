@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -257,7 +257,7 @@ def _compute_summary(provider_map: dict[str, ProviderResults]) -> dict:
 def _load_provider_names() -> dict[str, str]:
     """Build display names from the inference provider registry's adapter_type values."""
     try:
-        from llama_stack.providers.registry.inference import available_providers
+        from ogx.providers.registry.inference import available_providers
 
         names: dict[str, str] = {}
         for spec in available_providers():
@@ -276,8 +276,8 @@ _REGISTRY_PROVIDERS: set[str] = set(_load_provider_names().keys())
 
 _PROVIDER_NOTES: dict[str, str] = {
     "bedrock": (
-        "AWS Bedrock integration uses the OpenAI-compatible Mantle API, which only "
-        "supports GPT-OSS models (e.g. `openai.gpt-oss-20b`). Native AWS models "
+        "AWS Bedrock integration uses the OpenAI-compatible Chat Completions API, which only "
+        "supports GPT-OSS models (e.g. `openai.gpt-oss-20b-1:0`). Native AWS models "
         "(Amazon Nova, Anthropic Claude, etc.) are not yet supported. "
         "No vision model is available — image tests are skipped."
     ),

@@ -1,5 +1,5 @@
 ---
-description: Get up and running with Llama Stack in under a minute.
+description: Get up and running with OGX in under a minute.
 sidebar_label: Quickstart
 sidebar_position: 1
 title: Quickstart
@@ -19,7 +19,8 @@ Install [Ollama](https://ollama.com/download), then pull a model and start the s
 
 ```bash
 ollama pull llama3.2:3b
-uvx --from 'llama-stack[starter]' llama stack run starter
+export OLLAMA_URL=http://localhost:11434/v1
+uvx --from 'ogx[starter]' ogx run starter
 ```
 
 </TabItem>
@@ -27,7 +28,20 @@ uvx --from 'llama-stack[starter]' llama stack run starter
 
 ```bash
 export OPENAI_API_KEY=sk-xxx
-uvx --from 'llama-stack[starter]' llama stack run starter
+uvx --from 'ogx[starter]' ogx run starter
+```
+
+</TabItem>
+<TabItem value="docker" label="Docker">
+
+Run a pre-built container image from [Docker Hub](https://hub.docker.com/r/ogx/distribution-starter):
+
+```bash
+docker run -it \
+  -p 8321:8321 \
+  -v ~/.llama:/root/.llama \
+  -e OLLAMA_URL=http://host.docker.internal:11434 \
+  ogx/distribution-starter
 ```
 
 </TabItem>
@@ -38,8 +52,9 @@ The `uvx` command above is great for trying things out. For a real project, inst
 
 ```bash
 uv init my-ai-app && cd my-ai-app
-uv add 'llama-stack[starter]' openai
-uv run llama stack run starter
+uv add 'ogx[starter]' openai
+export OLLAMA_URL=http://localhost:11434/v1
+uv run ogx run starter
 ```
 :::
 
@@ -77,9 +92,9 @@ You should see output listing available models, for example:
 {
     "data": [
         {
-            "id": "llama3.2:3b",
+            "id": "ollama/llama3.2:3b",
             "object": "model",
-            "owned_by": "ollama",
+            "owned_by": "ogx",
             ...
         }
     ]
@@ -98,8 +113,8 @@ from openai import OpenAI
 client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 
 response = client.responses.create(
-    model="llama3.2:3b",
-    input="What is Llama Stack?",
+    model="ollama/llama3.2:3b",
+    input="What is OGX?",
 )
 print(response.output_text)
 ```
@@ -131,7 +146,7 @@ vector_store = client.vector_stores.create(
 
 # Ask questions with file search
 response = client.responses.create(
-    model="llama3.2:3b",
+    model="ollama/llama3.2:3b",
     input="Summarize the key points",
     tools=[{
         "type": "file_search",
@@ -151,7 +166,7 @@ That's it. Same OpenAI SDK, local model, your own vector store.
 If you see `Address already in use`, another process is using port 8321. Either stop it or run on a different port:
 
 ```bash
-uvx --from 'llama-stack[starter]' llama stack run starter --port 8322
+uvx --from 'ogx[starter]' ogx run starter --port 8322
 ```
 
 </details>
@@ -172,7 +187,7 @@ If the API returns an error about a model not being found, make sure you pulled 
 ollama pull llama3.2:3b
 ```
 
-Then restart the Llama Stack server. You can verify available models with `curl http://localhost:8321/v1/models`.
+Then restart the OGX server. You can verify available models with `curl http://localhost:8321/v1/models`.
 
 </details>
 

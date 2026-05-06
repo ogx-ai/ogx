@@ -2,7 +2,7 @@
 
 ## Overview
 
-As of release 0.2.14, Llama Stack provides comprehensive file operations and Vector Store API integration, following the [OpenAI Vector Store Files API specification](https://platform.openai.com/docs/api-reference/vector-stores-files).
+As of release 0.2.14, OGX provides comprehensive file operations and Vector Store API integration, following the [OpenAI Vector Store Files API specification](https://platform.openai.com/docs/api-reference/vector-stores-files).
 
 > **Note**: For detailed overview and implementation details, see [Overview](openai_file_operations_support.md#overview) in the full documentation.
 

@@ -7,21 +7,21 @@ sidebar_position: 2
 
 # OpenAI Implementation Guide
 
-This guide provides detailed code examples and implementation details for using OpenAI-compatible APIs with Llama Stack. For a comprehensive overview of OpenAI compatibility features, see our [OpenAI API Compatibility Guide](/docs/api-openai/).
+This guide provides detailed code examples and implementation details for using OpenAI-compatible APIs with OGX. For a comprehensive overview of OpenAI compatibility features, see our [OpenAI API Compatibility Guide](/docs/api-openai/).
 
 ## OpenAI API Compatibility
 
 ### Server path
 
-Llama Stack exposes OpenAI-compatible API endpoints at `/v1`. So, for a Llama Stack server running locally on port `8321`, the full url to the OpenAI-compatible API endpoint is `http://localhost:8321/v1`.
+OGX exposes OpenAI-compatible API endpoints at `/v1`. So, for a OGX server running locally on port `8321`, the full url to the OpenAI-compatible API endpoint is `http://localhost:8321/v1`.
 
 ### Clients
 
-You should be able to use any client that speaks OpenAI APIs with Llama Stack. We regularly test with the official Llama Stack clients as well as OpenAI's official Python client.
+You should be able to use any client that speaks OpenAI APIs with OGX. We regularly test with the official OGX clients as well as OpenAI's official Python client.
 
-#### Llama Stack Client
+#### OGX Client
 
-When using the Llama Stack client, set the `base_url` to the root of your Llama Stack server. It will automatically route OpenAI-compatible requests to the right server endpoint for you.
+When using the OGX client, set the `base_url` to the root of your OGX server. It will automatically route OpenAI-compatible requests to the right server endpoint for you.
 
 ```python
 from llama_stack_client import LlamaStackClient
@@ -31,7 +31,7 @@ client = LlamaStackClient(base_url="http://localhost:8321")
 
 #### OpenAI Client
 
-When using an OpenAI client, set the `base_url` to the `/v1` path on your Llama Stack server.
+When using an OpenAI client, set the `base_url` to the `/v1` path on your OGX server.
 
 ```python
 from openai import OpenAI
@@ -45,7 +45,7 @@ Regardless of the client you choose, the following code examples should all work
 
 #### Models
 
-Many of the APIs require you to pass in a model parameter. To see the list of models available in your Llama Stack server:
+Many of the APIs require you to pass in a model parameter. To see the list of models available in your OGX server:
 
 ```python
 models = client.models.list()
@@ -53,7 +53,7 @@ models = client.models.list()
 
 #### Responses
 
-> **Note:** The Responses API implementation is still in active development. While it is quite usable, there are still unimplemented parts of the API.  See [Known Limitations of the OpenAI-compatible Responses API in Llama Stack](/docs/providers/openai_responses_limitations) for more details.
+> **Note:** The Responses API implementation is still in active development. While it is quite usable, there are still unimplemented parts of the API.  See [Known Limitations of the OpenAI-compatible Responses API in OGX](/docs/providers/openai_responses_limitations) for more details.
 
 ##### Simple inference
 

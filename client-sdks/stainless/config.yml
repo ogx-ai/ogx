@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=https://app.stainlessapi.com/config-internal.schema.json
 
 organization:
-  name: llama-stack-client
-  docs: https://llama-stack.readthedocs.io/en/latest/
-  contact: llamastack@meta.com
+  name: ogx-client
+  docs: https://ogx.readthedocs.io/en/latest/
+  contact: contributors@ogx.dev
 security:
 - {}
 - BearerAuth: []
@@ -13,35 +13,35 @@ security_schemes:
     scheme: bearer
 targets:
   node:
-    package_name: llama-stack-client
-    production_repo: llamastack/llama-stack-client-typescript
+    package_name: ogx-client
+    production_repo: ogx-ai/ogx-client-typescript
     publish:
       npm: false
   python:
-    package_name: llama_stack_client
-    production_repo: llamastack/llama-stack-client-python
+    package_name: ogx_client
+    production_repo: ogx-ai/ogx-client-python
     options:
       use_uv: true
     publish:
       pypi: true
-    project_name: llama_stack_client
+    project_name: ogx_client
   go:
-    package_name: llama-stack-client
-    production_repo: llamastack/llama-stack-client-go
+    package_name: ogx-client
+    production_repo: ogx-ai/ogx-client-go
     options:
       enable_v2: true
       back_compat_use_shared_package: false
 client_settings:
-  default_env_prefix: LLAMA_STACK_CLIENT
+  default_env_prefix: OGX_CLIENT
   opts:
     api_key:
       type: string
-      read_env: LLAMA_STACK_CLIENT_API_KEY
+      read_env: OGX_CLIENT_API_KEY
       auth:
         security_scheme: BearerAuth
       nullable: true
 environments:
-  production: http://any-hosted-llama-stack.com
+  production: http://any-hosted-ogx.com
 pagination:
 - name: openai_cursor_page
   type: cursor
@@ -73,7 +73,7 @@ settings:
   license: MIT
   unwrap_response_fields:
   - data
-  file_header: 'Copyright (c) Meta Platforms, Inc. and affiliates.
+  file_header: 'Copyright (c) The OGX Contributors.
 
     All rights reserved.
 

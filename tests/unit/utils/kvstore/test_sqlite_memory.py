@@ -1,12 +1,12 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 
-from llama_stack.core.storage.kvstore.config import SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
+from ogx.core.storage.kvstore.config import SqliteKVStoreConfig
+from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
 
 
 async def test_memory_kvstore_persistence_behavior():

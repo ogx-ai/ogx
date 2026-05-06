@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from llama_stack.providers.remote.safety.passthrough.config import PassthroughSafetyConfig
-from llama_stack_api import (
+from ogx.providers.remote.safety.passthrough.config import PassthroughSafetyConfig
+from ogx_api import (
     GetShieldRequest,
     OpenAIUserMessageParam,
     ResourceType,

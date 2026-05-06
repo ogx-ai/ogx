@@ -120,7 +120,7 @@ jobs:
           echo "Pushed tag $DEV_TAG to main ($MAIN_SHA)"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       # -----------------------------------------------------------------------
       # Step B: Bump fallback_version on main and open PR
@@ -145,11 +145,11 @@ jobs:
           # Update fallback_version in root pyproject.toml
           sed -i "s/^fallback_version = .*/fallback_version = \"${NEXT_FALLBACK}\"/" pyproject.toml
 
-          # Update fallback_version in src/llama_stack_api/pyproject.toml
-          sed -i "s/^fallback_version = .*/fallback_version = \"${NEXT_FALLBACK}\"/" src/llama_stack_api/pyproject.toml
+          # Update fallback_version in src/ogx_api/pyproject.toml
+          sed -i "s/^fallback_version = .*/fallback_version = \"${NEXT_FALLBACK}\"/" src/ogx_api/pyproject.toml
 
-          # Bump llama-stack-client minimum version to match the release
-          sed -i "s/\"llama-stack-client>=.*\"/\"llama-stack-client>=${VERSION}\"/" pyproject.toml
+          # Bump ogx-client minimum version to match the release
+          sed -i "s/\"ogx-client>=.*\"/\"ogx-client>=${VERSION}\"/" pyproject.toml
 
           # Regenerate lockfile to resolve the updated client version
           uv lock
@@ -162,7 +162,7 @@ jobs:
 
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml src/llama_stack_api/pyproject.toml uv.lock
+          git add pyproject.toml src/ogx_api/pyproject.toml uv.lock
           git commit -s -m "chore: bump fallback_version to ${NEXT_FALLBACK} after ${VERSION} release"
           git push origin "$BRANCH"
 
@@ -184,7 +184,7 @@ jobs:
       # Step C: Update npm lockfile on release branch via PR
       # -----------------------------------------------------------------------
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
@@ -216,8 +216,8 @@ jobs:
           uv lock
 
           # Update npm lockfile
-          cd src/llama_stack_ui
-          npm install "llama-stack-client@^${VERSION}"
+          cd src/ogx_ui
+          npm install "ogx-client@^${VERSION}"
           cd ../..
 
           # Check if there are changes
@@ -228,18 +228,18 @@ jobs:
 
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add uv.lock src/llama_stack_ui/package.json src/llama_stack_ui/package-lock.json
-          git commit -s -m "chore: update llama-stack-client to ^${VERSION} in UI lockfile"
+          git add uv.lock src/ogx_ui/package.json src/ogx_ui/package-lock.json
+          git commit -s -m "chore: update ogx-client to ^${VERSION} in UI lockfile"
           git push origin "$BRANCH"
 
           gh pr create \
             --base "$RELEASE_BRANCH" \
             --head "$BRANCH" \
-            --title "chore: update llama-stack-client to ^${VERSION} in UI lockfile" \
+            --title "chore: update ogx-client to ^${VERSION} in UI lockfile" \
             --body "$(cat <<EOF
           Automated post-release npm lockfile update after v${VERSION}.
 
-          Updates llama-stack-client to ^${VERSION} in the UI package lockfile.
+          Updates ogx-client to ^${VERSION} in the UI package lockfile.
 
           This PR was created automatically by the post-release workflow.
           EOF

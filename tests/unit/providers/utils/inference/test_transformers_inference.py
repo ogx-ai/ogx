@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,15 +9,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from llama_stack.providers.inline.inference.transformers.transformers import (
+from ogx.providers.inline.inference.transformers.transformers import (
     DEFAULT_RERANKER_INSTRUCTION,
     TransformersInferenceImpl,
 )
-from llama_stack_api import (
+from ogx_api import (
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
 )
-from llama_stack_api.inference import RerankRequest
+from ogx_api.inference import RerankRequest
 
 
 class ConcreteRerankerImpl(TransformersInferenceImpl):

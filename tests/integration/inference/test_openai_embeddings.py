@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,7 +10,7 @@ import struct
 import pytest
 from openai import OpenAI
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
 ASYMMETRIC_EMBEDDING_MODELS_BY_PROVIDER = {
     "remote::nvidia": [
@@ -122,9 +122,9 @@ def skip_if_model_doesnt_support_variable_dimensions(client_with_models, model_i
         )
 
 
-@pytest.fixture(params=["openai_client", "llama_stack_client"])
+@pytest.fixture(params=["openai_client", "ogx_client"])
 def compat_client(request, client_with_models):
-    if request.param == "openai_client" and isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if request.param == "openai_client" and isinstance(client_with_models, OGXAsLibraryClient):
         pytest.skip("OpenAI client tests not supported with library client")
     return request.getfixturevalue(request.param)
 

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,15 +7,15 @@
 
 import pytest
 
-from llama_stack.core.datatypes import VectorStoreWithOwner
-from llama_stack.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore import kvstore_impl, register_kvstore_backends
-from llama_stack.core.store.registry import (
+from ogx.core.datatypes import VectorStoreWithOwner
+from ogx.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
+from ogx.core.storage.kvstore import kvstore_impl, register_kvstore_backends
+from ogx.core.store.registry import (
     KEY_FORMAT,
     CachedDiskDistributionRegistry,
     DiskDistributionRegistry,
 )
-from llama_stack_api import Model, VectorStore
+from ogx_api import Model, VectorStore
 
 
 @pytest.fixture
@@ -309,7 +309,7 @@ async def test_restart_registration_with_owner_mismatch(disk_dist_registry):
     is not in the incoming object's ``model_fields_set``, it is treated
     as an unset field and the existing record is accepted as-is.
     """
-    from llama_stack.core.datatypes import User
+    from ogx.core.datatypes import User
 
     # First registration with owner (as if set during initial startup)
     vector_store_with_owner = VectorStoreWithOwner(
@@ -344,8 +344,8 @@ async def test_restart_registration_with_owner_mismatch(disk_dist_registry):
 
 async def test_double_registration_with_cache_conflict(cached_disk_dist_registry):
     """Test that re-registration with conflicting fields raises ValueError and preserves cache."""
-    from llama_stack.core.datatypes import ModelWithOwner
-    from llama_stack_api import ModelType
+    from ogx.core.datatypes import ModelWithOwner
+    from ogx_api import ModelType
 
     model1 = ModelWithOwner(
         identifier="test_model",

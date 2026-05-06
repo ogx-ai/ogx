@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,9 +10,9 @@ from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
 
-from llama_stack.core.exceptions.mapping import translate_exception_to_http
-from llama_stack.core.exceptions.translation import translate_exception
-from llama_stack_api.common.errors import (
+from ogx.core.exceptions.mapping import translate_exception_to_http
+from ogx.core.exceptions.translation import translate_exception
+from ogx_api.common.errors import (
     BatchNotFoundError,
     ClientListCommand,
     ConflictError,
@@ -20,9 +20,9 @@ from llama_stack_api.common.errors import (
     ConversationNotFoundError,
     InternalServerError,
     InvalidParameterError,
-    LlamaStackError,
     ModelNotFoundError,
     ModelTypeError,
+    OGXError,
     ResourceNotFoundError,
     ResponseInputItemNotFoundError,
     ResponseNotFoundError,
@@ -124,8 +124,8 @@ class TestTranslateExceptionToHttp:
         assert result is not None
         assert result.status_code == httpx.codes.BAD_REQUEST
 
-    def test_llama_stack_error_not_in_map(self):
-        """LlamaStackError subclasses (single inheritance) are not in
+    def test_ogx_error_not_in_map(self):
+        """OGXError subclasses (single inheritance) are not in
         EXCEPTION_MAP and should return None from translate_exception_to_http.
         They are handled separately by translate_exception."""
         exc = ResourceNotFoundError("abc", "Widget")
@@ -191,12 +191,12 @@ class TestTranslateExceptionToHttp:
         exc = Exception("generic")
         assert translate_exception_to_http(exc) is None
 
-    def test_llama_stack_error_base_not_in_map(self):
-        """LlamaStackError inherits from Exception which is NOT in the
+    def test_ogx_error_base_not_in_map(self):
+        """OGXError inherits from Exception which is NOT in the
         map. The base class itself should not match since it's handled
         separately by translate_exception via its status_code attr."""
 
-        class BareStackError(LlamaStackError):
+        class BareStackError(OGXError):
             status_code = httpx.codes.IM_A_TEAPOT
 
         exc = BareStackError("teapot")
@@ -276,16 +276,16 @@ class TestTranslateException:
                 f"translate_exception({type(exc).__name__}) did not return HTTPException"
             )
 
-    # ── LlamaStackError uses its own status_code, NOT EXCEPTION_MAP ──
+    # ── OGXError uses its own status_code, NOT EXCEPTION_MAP ──
 
     def test_resource_not_found_error_uses_404(self):
-        """ResourceNotFoundError(LlamaStackError) has status_code 404."""
+        """ResourceNotFoundError(OGXError) has status_code 404."""
         exc = ResourceNotFoundError("abc", "Widget")
         result = translate_exception(exc)
         assert result.status_code == httpx.codes.NOT_FOUND
 
     def test_model_not_found_error_uses_404(self):
-        """ModelNotFoundError -> ResourceNotFoundError -> LlamaStackError.
+        """ModelNotFoundError -> ResourceNotFoundError -> OGXError.
         Three levels deep, should still get 404."""
         exc = ModelNotFoundError("gpt-missing")
         result = translate_exception(exc)
@@ -297,19 +297,19 @@ class TestTranslateException:
         assert result.status_code == httpx.codes.NOT_FOUND
 
     def test_conflict_error_uses_409(self):
-        """ConflictError(LlamaStackError) has status_code 409 CONFLICT."""
+        """ConflictError(OGXError) has status_code 409 CONFLICT."""
         exc = ConflictError("resource already exists")
         result = translate_exception(exc)
         assert result.status_code == httpx.codes.CONFLICT
 
     def test_token_validation_error_uses_401(self):
-        """TokenValidationError(LlamaStackError) has status_code 401 UNAUTHORIZED."""
+        """TokenValidationError(OGXError) has status_code 401 UNAUTHORIZED."""
         exc = TokenValidationError("expired token")
         result = translate_exception(exc)
         assert result.status_code == httpx.codes.UNAUTHORIZED
 
     def test_model_type_error_uses_400(self):
-        """ModelTypeError(LlamaStackError) has status_code 400 BAD_REQUEST."""
+        """ModelTypeError(OGXError) has status_code 400 BAD_REQUEST."""
         exc = ModelTypeError("llama-3", "embedding", "llm")
         result = translate_exception(exc)
         assert result.status_code == httpx.codes.BAD_REQUEST
@@ -354,13 +354,13 @@ class TestTranslateException:
         result = translate_exception(exc)
         assert result.status_code == httpx.codes.NOT_FOUND
 
-    def test_llama_stack_error_preserves_message(self):
+    def test_ogx_error_preserves_message(self):
         exc = ModelNotFoundError("llama-3")
         result = translate_exception(exc)
         assert "llama-3" in result.detail
         assert "not found" in result.detail.lower()
 
-    # ── Mapped exceptions (non-LlamaStackError) ─────────────────────
+    # ── Mapped exceptions (non-OGXError) ─────────────────────
 
     def test_plain_value_error_maps_to_400(self):
         exc = ValueError("invalid input")

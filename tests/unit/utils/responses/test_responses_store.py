@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,10 +10,10 @@ from uuid import uuid4
 
 import pytest
 
-from llama_stack.core.storage.datatypes import ResponsesStoreReference, SqliteSqlStoreConfig
-from llama_stack.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from llama_stack.providers.utils.responses.responses_store import ResponsesStore
-from llama_stack_api import (
+from ogx.core.storage.datatypes import ResponsesStoreReference, SqliteSqlStoreConfig
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx.providers.utils.responses.responses_store import ResponsesStore
+from ogx_api import (
     InvalidParameterError,
     OpenAIMessageParam,
     OpenAIResponseInput,
@@ -51,7 +51,7 @@ def create_test_response_object(
 
 def create_test_response_input(content: str, input_id: str) -> OpenAIResponseInput:
     """Helper to create a test response input."""
-    from llama_stack_api import OpenAIResponseMessage
+    from ogx_api import OpenAIResponseMessage
 
     return OpenAIResponseMessage(
         id=input_id,

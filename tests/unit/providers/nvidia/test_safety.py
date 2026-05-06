@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llama_stack.providers.remote.safety.nvidia.config import NVIDIASafetyConfig
-from llama_stack.providers.remote.safety.nvidia.nvidia import NVIDIASafetyAdapter
-from llama_stack_api import (
+from ogx.providers.remote.safety.nvidia.config import NVIDIASafetyConfig
+from ogx.providers.remote.safety.nvidia.nvidia import NVIDIASafetyAdapter
+from ogx_api import (
     GetShieldRequest,
     OpenAIAssistantMessageParam,
     OpenAIUserMessageParam,
@@ -54,7 +54,7 @@ def nvidia_adapter():
 @pytest.fixture
 def mock_guardrails_post():
     """Mock the HTTP request methods."""
-    with patch("llama_stack.providers.remote.safety.nvidia.nvidia.NeMoGuardrails._guardrails_post") as mock_post:
+    with patch("ogx.providers.remote.safety.nvidia.nvidia.NeMoGuardrails._guardrails_post") as mock_post:
         mock_post.return_value = {"status": "allowed"}
         yield mock_post
 
@@ -315,7 +315,7 @@ async def test_run_shield_http_error(nvidia_adapter, mock_guardrails_post):
 
 
 def test_init_nemo_guardrails():
-    from llama_stack.providers.remote.safety.nvidia.nvidia import NeMoGuardrails
+    from ogx.providers.remote.safety.nvidia.nvidia import NeMoGuardrails
 
     os.environ["NVIDIA_GUARDRAILS_URL"] = "http://nemo.test"
 
@@ -347,7 +347,7 @@ def test_init_nemo_guardrails():
 
 
 def test_init_nemo_guardrails_invalid_temperature():
-    from llama_stack.providers.remote.safety.nvidia.nvidia import NeMoGuardrails
+    from ogx.providers.remote.safety.nvidia.nvidia import NeMoGuardrails
 
     os.environ["NVIDIA_GUARDRAILS_URL"] = "http://nemo.test"
 

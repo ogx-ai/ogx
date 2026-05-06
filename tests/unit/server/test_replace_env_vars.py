@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from llama_stack.core.stack import EnvVarError, replace_env_vars
+from ogx.core.stack import EnvVarError, replace_env_vars
 
 
 @pytest.fixture
@@ -194,7 +194,7 @@ def test_auth_provider_disabled_when_type_not_set(setup_env_vars):
             "auth": {
                 "provider_config": {
                     "type": "${env.AUTH_PROVIDER:+oauth2_token}",
-                    "audience": "llama-stack",
+                    "audience": "ogx",
                     "issuer": "https://auth.example.com",
                 },
                 "route_policy": [],
@@ -217,7 +217,7 @@ def test_auth_provider_enabled_when_type_is_set(setup_env_vars):
                 "auth": {
                     "provider_config": {
                         "type": "${env.AUTH_PROVIDER:+oauth2_token}",
-                        "audience": "llama-stack",
+                        "audience": "ogx",
                         "issuer": "https://auth.example.com",
                     },
                     "route_policy": [],
@@ -228,7 +228,7 @@ def test_auth_provider_enabled_when_type_is_set(setup_env_vars):
         # AUTH_PROVIDER is set, so provider_config should be preserved with resolved type
         assert result["server"]["auth"]["provider_config"] is not None
         assert result["server"]["auth"]["provider_config"]["type"] == "oauth2_token"
-        assert result["server"]["auth"]["provider_config"]["audience"] == "llama-stack"
+        assert result["server"]["auth"]["provider_config"]["audience"] == "ogx"
         assert result["server"]["auth"]["provider_config"]["issuer"] == "https://auth.example.com"
     finally:
         del os.environ["AUTH_PROVIDER"]
@@ -241,7 +241,7 @@ def test_auth_provider_disabled_when_type_is_empty(setup_env_vars):
             "auth": {
                 "provider_config": {
                     "type": "${env.NOT_SET:=}",
-                    "audience": "llama-stack",
+                    "audience": "ogx",
                 },
                 "route_policy": [],
             }
@@ -259,7 +259,7 @@ def test_auth_provider_with_hardcoded_type(setup_env_vars):
             "auth": {
                 "provider_config": {
                     "type": "oauth2_token",
-                    "audience": "llama-stack",
+                    "audience": "ogx",
                     "issuer": "https://auth.example.com",
                 },
                 "route_policy": [],
@@ -270,7 +270,7 @@ def test_auth_provider_with_hardcoded_type(setup_env_vars):
     # Hardcoded type should be preserved as-is
     assert result["server"]["auth"]["provider_config"] is not None
     assert result["server"]["auth"]["provider_config"]["type"] == "oauth2_token"
-    assert result["server"]["auth"]["provider_config"]["audience"] == "llama-stack"
+    assert result["server"]["auth"]["provider_config"]["audience"] == "ogx"
 
 
 def test_auth_provider_with_complex_config(setup_env_vars):
@@ -284,8 +284,8 @@ def test_auth_provider_with_complex_config(setup_env_vars):
                     "provider_config": {
                         "type": "${env.ENABLE_AUTH:+oauth2_token}",
                         "audience": "account",
-                        "issuer": "${env.KEYCLOAK_URL}/realms/llamastack",
-                        "jwks": {"uri": "${env.KEYCLOAK_URL}/realms/llamastack/protocol/openid-connect/certs"},
+                        "issuer": "${env.KEYCLOAK_URL}/realms/ogx",
+                        "jwks": {"uri": "${env.KEYCLOAK_URL}/realms/ogx/protocol/openid-connect/certs"},
                     }
                 }
             }
@@ -293,10 +293,10 @@ def test_auth_provider_with_complex_config(setup_env_vars):
         result = replace_env_vars(data, "")
         assert result["server"]["auth"]["provider_config"] is not None
         assert result["server"]["auth"]["provider_config"]["type"] == "oauth2_token"
-        assert result["server"]["auth"]["provider_config"]["issuer"] == "http://keycloak:8080/realms/llamastack"
+        assert result["server"]["auth"]["provider_config"]["issuer"] == "http://keycloak:8080/realms/ogx"
         assert (
             result["server"]["auth"]["provider_config"]["jwks"]["uri"]
-            == "http://keycloak:8080/realms/llamastack/protocol/openid-connect/certs"
+            == "http://keycloak:8080/realms/ogx/protocol/openid-connect/certs"
         )
     finally:
         del os.environ["ENABLE_AUTH"]

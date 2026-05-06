@@ -35,13 +35,6 @@ repos:
     hooks:
     -   id: actionlint
 
--   repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.6.0
-    hooks:
-    -   id: conventional-pre-commit
-        stages: [commit-msg]
-        args: [--verbose]
-
 -   repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: v1.5.5
     hooks:
@@ -110,7 +103,7 @@ repos:
         language: python
         pass_filenames: false
         require_serial: true
-        files: ^src/llama_stack/distributions/.*$|^src/llama_stack/providers/.*/inference/.*/models\.py$
+        files: ^src/ogx/distributions/.*$|^src/ogx/providers/.*/inference/.*/models\.py$
       - id: provider-codegen
         name: Provider Codegen
         additional_dependencies:
@@ -119,7 +112,7 @@ repos:
         language: python
         pass_filenames: false
         require_serial: true
-        files: ^src/llama_stack/providers/.*$|^scripts/run_openapi_generator.sh$
+        files: ^src/ogx/providers/.*$|^scripts/run_openapi_generator.sh$
       - id: openapi-codegen
         name: API Spec Codegen
         additional_dependencies:
@@ -128,16 +121,16 @@ repos:
         language: python
         pass_filenames: false
         require_serial: true
-        files: ^src/llama_stack_api/.*$
+        files: ^src/ogx_api/.*$
       - id: api-conformance
         name: Check API spec for breaking changes
         entry: ./scripts/check-api-conformance.sh
         language: golang
         additional_dependencies:
-          - github.com/oasdiff/oasdiff@latest
+          - github.com/oasdiff/oasdiff@v1.15.0
         pass_filenames: false
         require_serial: true
-        files: ^docs/static/(llama-stack-spec|stable-llama-stack-spec|experimental-llama-stack-spec|deprecated-llama-stack-spec)\.yaml$
+        files: ^docs/static/(ogx-spec|stable-ogx-spec|experimental-ogx-spec|deprecated-ogx-spec)\.yaml$
       - id: openai-coverage
         name: OpenAI API Coverage
         additional_dependencies:
@@ -146,7 +139,25 @@ repos:
         language: python
         pass_filenames: false
         require_serial: true
-        files: ^docs/static/(llama-stack-spec\.yaml|openai-spec.*\.yml|openresponses-spec\.json|openai-coverage\.json)$|^docs/docs/api-openai/conformance\.mdx$|^scripts/(openai_coverage|generate_openai_coverage_docs)\.py$
+        files: ^docs/static/(ogx-spec\.yaml|openai-spec.*\.yml|openresponses-spec\.json|openai-coverage\.json)$|^docs/docs/api-openai/conformance\.mdx$|^scripts/(openai_coverage|generate_openai_coverage_docs)\.py$
+      - id: anthropic-coverage
+        name: Anthropic Messages API Coverage
+        additional_dependencies:
+          - *uv-dependency
+        entry: ./scripts/uv-run-with-index.sh run python scripts/anthropic_coverage.py --check-regression --update --generate-docs --quiet
+        language: python
+        pass_filenames: false
+        require_serial: true
+        files: ^docs/static/(ogx-spec\.yaml|anthropic-spec\.json|anthropic-coverage\.json)$|^docs/docs/api-anthropic-messages/conformance\.mdx$|^scripts/(anthropic_coverage|generate_anthropic_coverage_docs)\.py$|^src/ogx_api/messages/models\.py$
+      - id: google-interactions-coverage
+        name: Google Interactions API Coverage
+        additional_dependencies:
+          - *uv-dependency
+        entry: ./scripts/uv-run-with-index.sh run python scripts/google_interactions_coverage.py --check-regression --update --generate-docs --quiet
+        language: python
+        pass_filenames: false
+        require_serial: true
+        files: ^docs/static/google-interactions-(spec|coverage)\.json$|^docs/docs/api-google-interactions/conformance\.mdx$|^scripts/(google_interactions_coverage|generate_google_interactions_coverage_docs)\.py$|^src/ogx_api/interactions/models\.py$
       - id: provider-compat-matrix
         name: Provider Compatibility Matrix
         additional_dependencies:
@@ -171,7 +182,7 @@ repos:
         pass_filenames: false
         require_serial: true
         always_run: true
-        files: ^src/llama_stack/.*$
+        files: ^src/ogx/.*$
       - id: forbid-pytest-asyncio
         name: Block @pytest.mark.asyncio and @pytest_asyncio.fixture
         entry: bash
@@ -201,12 +212,12 @@ repos:
         name: Format & Lint UI
         entry: bash ./scripts/run-ui-linter.sh
         language: system
-        files: ^src/llama_stack_ui/.*\.(ts|tsx)$
+        files: ^src/ogx_ui/.*\.(ts|tsx)$
         pass_filenames: false
         require_serial: true
 
       - id: check-log-usage
-        name: Ensure 'llama_stack.log' usage for logging
+        name: Ensure 'ogx.log' usage for logging
         entry: bash
         exclude: '^client-sdks/openapi/.*$'
         language: system
@@ -219,7 +230,7 @@ repos:
             if [ -n "$matches" ]; then
               # GitHub Actions annotation format
               while IFS=: read -r file line_num rest; do
-                echo "::error file=$file,line=$line_num::Do not use 'import logging' or 'from logging import' in $file. Use the custom log instead: from llama_stack.log import get_logger; logger = get_logger(). If direct logging is truly needed, add: # allow-direct-logging"
+                echo "::error file=$file,line=$line_num::Do not use 'import logging' or 'from logging import' in $file. Use the custom log instead: from ogx.log import get_logger; logger = get_logger(). If direct logging is truly needed, add: # allow-direct-logging"
               done <<< "$matches"
               exit 1
             fi
@@ -229,10 +240,10 @@ repos:
         entry: ./scripts/check-no-fstring-logging.sh
         language: script
         types: [python]
-        files: ^src/llama_stack/
+        files: ^src/ogx/
         exclude: testing/api_recorder\.py
       - id: fips-compliance
-        name: Ensure llama-stack remains FIPS compliant
+        name: Ensure ogx remains FIPS compliant
         entry: bash
         language: system
         types: [python]
@@ -276,23 +287,23 @@ repos:
               exit 1;
             } || true
       - id: check-api-independence
-        name: Ensure llama_stack_api does not import llama_stack
+        name: Ensure ogx_api does not import ogx
         entry: bash
         language: system
         pass_filenames: false
         require_serial: true
         always_run: true
-        files: ^src/llama_stack_api/.*$
+        files: ^src/ogx_api/.*$
         args:
           - -c
           - |
-            API_DIR="src/llama_stack_api"
-            grep -rn --include="*.py" -E '^[^#]*(import llama_stack\b|from llama_stack\b)' "$API_DIR" 2>/dev/null && {
-              echo "llama_stack_api must not import llama_stack";
+            API_DIR="src/ogx_api"
+            grep -rn --include="*.py" -E '^[^#]*(import ogx\b|from ogx\b)' "$API_DIR" 2>/dev/null && {
+              echo "ogx_api must not import ogx";
               exit 1;
             }
-            [ -f "$API_DIR/pyproject.toml" ] && grep -n 'llama_stack[^_]' "$API_DIR/pyproject.toml" && {
-              echo "llama_stack_api must not depend on llama_stack in pyproject.toml";
+            [ -f "$API_DIR/pyproject.toml" ] && grep -Pn '"ogx["\s>=<]|^\s*ogx\s*[>=<]' "$API_DIR/pyproject.toml" && {
+              echo "ogx_api must not depend on ogx in pyproject.toml";
               exit 1;
             }
             exit 0

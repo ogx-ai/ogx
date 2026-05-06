@@ -1,0 +1,1257 @@
+{
+  "test_id": "tests/integration/responses/test_langgraph_responses.py::test_langgraph_multi_node[openai_client-vertexai/publishers/google/models/gemini-2.0-flash-vertexai/publishers/google/models/gemini-2.0-flash-sentence-transformers/nomic-ai/nomic-embed-text-v1.5-None-transformers/Qwen/Qwen3-Reranker-0.6B]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content_stream",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What is important to know about Python programming?"
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Okay, let's break down the important aspects of Python programming. I'll cover core concepts, best practices, and areas to focus on as you learn and grow.\n\n**I. Core Language Fundamentals**\n\n*   **Syntax and Semantics:**\n    *   **Indentation is Key:** Python uses indentation (spaces or tabs) to define code blocks.  Incorrect indentation leads to errors.  Be consistent!  The standard is 4 spaces per indentation level.\n    *   **Data Types:** Understand the fundamental data types:\n        *   `int`: Integers (e.g., 10, -5, 0)\n        *   `float`: Floating-point numbers (e.g., 3.14, -2.5, 0.0)\n        *   `str`: Strings (text) (e.g., \"Hello\", 'Python')\n        *   `bool`: Booleans (True or False)\n        *   `list`: Ordered, mutable (changeable) collections of items (e.g., `[1, 2, \"apple\"]`)\n        *   `tuple`: Ordered, immutable (unchangeable) collections of items (e.g., `(1, 2, \"apple\")`)\n        *   `dict`: Dictionaries (key-value pairs) (e.g., `{\"name\": \"Alice\", \"age\": 30}`)\n        *   `set`: Unordered collections of unique items (e.g., `{1, 2, 3}`)\n    *   **Variables:** Variables are used to store data.  Variable names are case-sensitive (`myVar` is different from `myvar`).  Choose descriptive variable names.\n    *   **Operators:**  Arithmetic operators (`+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo), `**` (exponentiation)), comparison operators (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical operators (`and`, `or`, `not`), assignment operators (`=`, `+=`, `-=`, etc.), and membership operators (`in`, `not in`).\n    *   **Control Flow:**\n        *   `if`, `elif`, `else`: Conditional statements for executing different code blocks based on conditions.\n        *   `for` loops:  Iterating over sequences (lists, tuples, strings, ranges, etc.).\n        *   `while` loops:  Repeating a block of code as long as a condition is true.\n        *   `break`:  Exits a loop prematurely.\n        *   `continue`: Skips the rest of the current iteration of a loop and proceeds to the next.\n    *   **Functions:**  Reusable blocks of code.\n        *   `def` keyword:  Defines a function.\n        *   `return` statement:  Returns a value from a function.\n        *   Function arguments:  Values passed into a function.  Understand positional arguments, keyword arguments, and default argument values.\n        *   `*args` and `**kwargs`:  Used to pass a variable number of positional and keyword arguments to a function, respectively.\n    *   **Comments:** Use comments (`#` for single-line comments, `\"\"\"...\"\"\"` or `'''...'''` for multi-line comments/docstrings) to explain your code.\n\n*   **Data Structures:**\n    *   **Lists:** Extremely versatile.  Learn about list comprehensions, slicing, methods like `append()`, `insert()`, `remove()`, `pop()`, `sort()`, `reverse()`.\n    *   **Tuples:** Immutable, often used for representing fixed collections of data.\n    *   **Dictionaries:**  Key-value pairs provide efficient lookups.  Understand dictionary comprehensions, methods like `get()`, `keys()`, `values()`, `items()`, `update()`.\n    *   **Sets:** Useful for removing duplicates and performing set operations (union, intersection, difference).\n\n**II. Object-Oriented Programming (OOP)**\n\n*   **Classes and Objects:**\n    *   `class` keyword:  Defines a class, which is a blueprint for creating objects.\n    *   Objects:  Instances of a class.\n    *   Attributes:  Data associated with an object (variables).\n    *   Methods:  Functions associated with an object (actions).\n    *   `self`:  A reference to the current object within a method.\n    *   `__init__`:  The constructor method, called when an object is created.  Used to initialize the object's attributes.\n*   **Inheritance:**  Creating new classes based on existing classes.  Promotes code reuse and creates a hierarchy of classes.\n*   **Polymorphism:**  The ability of objects of different classes to respond to the same method call in their own way.\n*   **Encapsulation:**  Bundling data and methods that operate on that data within a class.  Helps protect data from unintended modification.\n*   **Abstraction:**  Hiding complex implementation details and exposing only the essential features of an object.\n\n**III. Modules and Packages**\n\n*   **Modules:**  Files containing Python code.  Organize your code into reusable modules.\n*   **Packages:**  Directories containing modules (and optionally a `__init__.py` file, which can be empty in newer versions of Python).  Used to structure larger projects.\n*   `import` statement:  Used to import modules and packages.\n    *   `import module_name`\n    *   `from module_name import function_name, class_name`\n    *   `import module_name as alias` (for renaming a module)\n*   **The Python Standard Library:**  A vast collection of pre-built modules that provide functionality for various tasks (e.g., `os`, `sys`, `math`, `datetime`, `random`, `json`, `urllib`).  Get familiar with the modules relevant to your projects.\n*   **Third-Party Packages:** Install using `pip` (Python's package installer).  Examples: `requests` (for making HTTP requests), `numpy` (for numerical computing), `pandas` (for data analysis), `matplotlib` (for plotting), `scikit-learn` (for machine learning), `flask` or `django` (for web development).\n\n**IV. Error Handling**\n\n*   **Exceptions:**  Errors that occur during program execution.\n*   `try`, `except`, `finally`:  Used to handle exceptions gracefully.\n    *   `try`:  The block of code that might raise an exception.\n    *   `except`:  The block of code that handles a specific exception.  You can have multiple `except` blocks for different exception types.\n    *   `finally`:  The block of code that is always executed, regardless of whether an exception occurred.  Often used for cleanup tasks (e.g., closing files).\n*   `raise`:  Used to explicitly raise an exception.\n*   Common Exception Types: `TypeError`, `ValueError`, `IndexError`, `KeyError`, `FileNotFoundError`, `ImportError`.\n*   Custom Exceptions:  You can define your own exception classes to represent specific error conditions in your code.\n\n**V. File I/O (Input/Output)**\n\n*   `open()` function:  Opens a file for reading or writing.\n*   File Modes:  `'r'` (read), `'w'` (write), `'a'` (append), `'b'` (binary), `'+'` (read and write).\n*   `read()`, `readline()`, `readlines()`:  Methods for reading data from a file.\n*   `write()`, `writelines()`:  Methods for writing data to a file.\n*   `close()`:  Closes a file (important to release resources).\n*   `with` statement:  Provides automatic resource management (automatically closes the file).  Recommended for file handling.\n    ```python\n    with open(\"my_file.txt\", \"r\") as f:\n        contents = f.read()\n        print(contents)\n    # File is automatically closed here\n    ```\n\n**VI. Best Practices and Style**\n\n*   **PEP 8:**  The official style guide for Python code.  Follow PEP 8 to make your code more readable and consistent.  Use a linter (like `flake8` or `pylint`) to check your code for PEP 8 violations.\n*   **Docstrings:**  Write docstrings (using triple quotes `\"\"\"...\"\"\"`) to document your functions, classes, and modules.  Docstrings are used by documentation generators (like Sphinx) and help other developers understand your code.\n*   **Meaningful Names:** Choose descriptive names for variables, functions, and classes.\n*   **Keep Functions Short and Focused:**  Each function should do one thing well.\n*   **Avoid Global Variables:**  Global variables can make code harder to understand and maintain.  Use them sparingly.\n*   **Use Virtual Environments:**  Create virtual environments (using `venv` or `virtualenv`) to isolate project dependencies.  This prevents conflicts between different projects.\n*   **Write Tests:**  Write unit tests to ensure that your code works correctly.  Use a testing framework like `pytest` or `unittest`.\n*   **Version Control:**  Use a version control system (like Git) to track changes to your code.\n*   **Code Reviews:**  Have other developers review your code to catch errors and improve quality.\n\n**VII. Advanced Topics (Worth Exploring After the Basics)**\n\n*   **Decorators:**  Functions that modify the behavior of other functions.\n*   **Generators:**  Functions that produce a sequence of values using the `yield` keyword.  Generators are memory-efficient for large datasets.\n*   **Context Managers:**  Objects that define setup and teardown actions to be performed before and after a block of code.  Used with the `with` statement.\n*   **Multithreading and Multiprocessing:**  Techniques for running code concurrently to improve performance.  Be aware of the Global Interpreter Lock (GIL) in CPython, which can limit the effectiveness of multithreading for CPU-bound tasks.\n*   **Asynchronous Programming (asyncio):**  A framework for writing concurrent code using asynchronous functions and coroutines.  Useful for I/O-bound tasks.\n*   **Metaclasses:**  Classes that create other classes.  Advanced topic, but can be useful for customizing class creation.\n*   **Typing:**  Using type hints to specify the types of variables, function arguments, and return values.  Improves code readability and helps catch type errors.  Use `mypy` to check type hints.\n\n**VIII. Learning Resources**\n\n*   **Official Python Documentation:**  The definitive source of information about Python.  [https://docs.python.org/3/](https://docs.python.org/3/)\n*   **Tutorials:**\n    *   The Python Tutorial: [https://docs.python.org/3/tutorial/](https://docs.python.org/3/tutorial/)\n    *   Real Python: [https://realpython.com/](https://realpython.com/)\n    *   W3Schools Python Tutorial: [https://www.w3schools.com/python/](https://www.w3schools.com/python/)\n*   **Books:**\n    *   \"Python Crash Course\" by Eric Matthes\n    *   \"Automate the Boring Stuff with Python\" by Al Sweigart\n    *   \"Fluent Python\" by Luciano Ramalho (more advanced)\n*   **Online Courses:**\n    *   Coursera, edX, Udacity, Udemy, DataCamp\n*   **Stack Overflow:**  A great resource for finding answers to your Python questions.\n*   **Python Community:**  Join Python communities online (e.g., Reddit, Discord) to ask questions, share your knowledge, and learn from others.\n\n**IX. Key Strategies for Learning**\n\n*   **Practice, Practice, Practice:** The best way to learn Python is to write code.  Work on small projects to apply what you've learned.\n*   **Read Code:**  Read other people's Python code to see how they solve problems and to learn new techniques.  GitHub is a great place to find open-source Python projects.\n*   **Experiment:**  Don't be afraid to experiment with different approaches and try new things.\n*   **Debug:**  Learn how to use a debugger to find and fix errors in your code.  `pdb` (the Python debugger) is a good starting point.\n*   **Ask for Help:**  Don't be afraid to ask for help when you get stuck.  The Python community is very welcoming and helpful.\n*   **Stay Up-to-Date:**  Python is constantly evolving.  Keep up with the latest features and best practices.\n\nBy focusing on these areas, you'll build a solid foundation in Python and be well-equipped to tackle a wide range of programming tasks.  Good luck!\n"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Can you give me a specific example?"
+            }
+          ]
+        }
+      ],
+      "config": {
+        "system_instruction": "You are an expert on Python programming."
+      }
+    },
+    "endpoint": "/generate_content_stream",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "Okay"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ", let'"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "s create a specific example that ties together several of the concepts I mentioned: a simple command"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "-line To-Do List application using object-oriented programming, file I/O, and"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " error handling.\n\n```python\nimport os\nimport json\n\nclass TodoList:\n    \"\"\"\n    Represents a to-do list.  Stores"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " tasks and provides methods to\n    add, remove, mark as complete, and save/load to/from a file.\n    \"\"\"\n\n    def __"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "init__(self, filename=\"todo.json\"):\n        \"\"\"\n        Initializes the TodoList object.\n\n        Args:\n            filename (str, optional): The name of the file to save/load\n                the to-do list"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ".  Defaults to \"todo.json\".\n        \"\"\"\n        self.filename = filename\n        self.tasks = []  # List of task dictionaries\n        self.load_tasks() # Load any existing tasks from the file\n\n    def"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " add_task(self, task_description):\n        \"\"\"Adds a new task to the to-do list.\"\"\"\n        task = {\"description\": task_description, \"completed\": False}\n        self.tasks.append(task)\n        self.save_tasks()\n        print(f\"Task added"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ": {task_description}\")\n\n    def remove_task(self, task_index):\n        \"\"\"Removes a task from the to-do list.\"\"\"\n        try:\n            task_index = int(task_index)\n            if 0 <= task_index < len(self.tasks):"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "\n                removed_task = self.tasks.pop(task_index)\n                self.save_tasks()\n                print(f\"Task removed: {removed_task['description']}\")\n            else:\n                print(\"Invalid task index.\")\n        except ValueError:\n            print(\"Invalid task index.  Please"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " enter a number.\")\n\n    def complete_task(self, task_index):\n        \"\"\"Marks a task as complete.\"\"\"\n        try:\n            task_index = int(task_index)\n            if 0 <= task_index < len(self.tasks):\n                self.tasks["
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "task_index][\"completed\"] = True\n                self.save_tasks()\n                print(f\"Task marked as complete: {self.tasks[task_index]['description']}\")\n            else:\n                print(\"Invalid task index.\")\n        except ValueError:\n            print(\"Invalid task index.  "
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "Please enter a number.\")\n\n    def display_tasks(self):\n        \"\"\"Displays the tasks in the to-do list.\"\"\"\n        if not self.tasks:\n            print(\"No tasks in the to-do list.\")\n            return\n\n        for index, task in enumerate(self.tasks):\n            status"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " = \"[x]\" if task[\"completed\"] else \"[ ]\"\n            print(f\"{index}. {status} {task['description']}\")\n\n    def save_tasks(self):\n        \"\"\"Saves the to-do list to a JSON file.\"\"\"\n        try:\n            with open(self.filename,"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " \"w\") as f:\n                json.dump(self.tasks, f)  # Serialize the list to JSON\n        except IOError as e:\n            print(f\"Error saving tasks: {e}\")\n\n    def load_tasks(self):\n        \"\"\"Loads the to-do list from"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " a JSON file.\"\"\"\n        try:\n            if os.path.exists(self.filename):  # Check if the file exists\n                with open(self.filename, \"r\") as f:\n                    self.tasks = json.load(f)  # Deserialize JSON to a list\n        except"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " FileNotFoundError:  # Handle the case where the file doesn't exist initially\n            self.tasks = []  # Start with an empty list\n        except json.JSONDecodeError: # Handle corrupted JSON file\n            print(\"Error: To-do list file is corrupted. Starting with an empty list.\")\n            self"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ".tasks = [] # Start with an empty list\n        except IOError as e:\n            print(f\"Error loading tasks: {e}\")\n            self.tasks = []\n\ndef main():\n    \"\"\"The main function to run the to-do list application.\"\"\"\n    todo_list = TodoList()"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " # Creates the to do list Object\n\n    while True:\n        print(\"\\nTo-Do List Application\")\n        print(\"1. Add task\")\n        print(\"2. Remove task\")\n        print(\"3. Complete task\")\n        print(\"4. Display tasks\")\n        print(\"5"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ". Exit\")\n\n        choice = input(\"Enter your choice: \")\n\n        if choice == \"1\":\n            description = input(\"Enter task description: \")\n            todo_list.add_task(description)\n        elif choice == \"2\":\n            index = input(\"Enter the index of the task"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " to remove: \")\n            todo_list.remove_task(index)\n        elif choice == \"3\":\n            index = input(\"Enter the index of the task to complete: \")\n            todo_list.complete_task(index)\n        elif choice == \"4\":\n            todo_"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "list.display_tasks()\n        elif choice == \"5\":\n            print(\"Exiting...\")\n            break\n        else:\n            print(\"Invalid choice.  Please try again.\")\n\nif __name__ == \"__main__\":\n    main()  # Execute the main function if the script is run"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " directly\n```\n\n**Explanation and Key Concepts Illustrated:**\n\n1.  **Object-Oriented Programming (OOP):**\n    *   The `TodoList` class encapsulates the data (the `tasks` list) and the methods (functions) that operate on that data.\n    *   The `__init__"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "` method initializes the object when it's created.  It loads tasks from the file if it exists.\n    *   Methods like `add_task`, `remove_task`, `complete_task`, and `display_tasks` define the behavior of the `TodoList` object.\n\n2.  **"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "File I/O (JSON):**\n    *   The `save_tasks` method saves the list of tasks to a JSON file using `json.dump()`.  JSON (JavaScript Object Notation) is a common format for storing data.\n    *   The `load_tasks` method loads tasks from the JSON file"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " using `json.load()`.\n    *   The `with open(...)` statement ensures that the file is automatically closed, even if errors occur.\n    *   `os.path.exists(self.filename)` checks if the file exists before trying to load from it.\n\n3.  **Error"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " Handling:**\n    *   `try...except` blocks are used to handle potential errors, such as:\n        *   `ValueError`:  If the user enters non-numeric input when asked for a task index.\n        *   `IOError`: If there are problems reading or writing to the file."
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "\n        *   `FileNotFoundError`: If the todo.json file does not exist, it will create one.\n        *   `json.JSONDecodeError`: Handles the case where the file contains corrupted or invalid JSON data\n    *   The code provides informative error messages to the user.\n\n4.  **Data Structures"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ":**\n    *   The `tasks` attribute is a list of dictionaries. Each dictionary represents a single task and has keys \"description\" (the task text) and \"completed\" (a boolean indicating whether the task is complete).\n\n5.  **Control Flow:**\n    *   `if...elif...else`"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " statements are used to handle different user choices.\n    *   The `while` loop keeps the application running until the user chooses to exit.\n    *   `for` loop iterates through the list of tasks when displaying them.\n\n6.  **Functions:**\n    *   The `main()` function organizes"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " the main logic of the application.\n    *   The `TodoList` class methods are functions that operate on the `TodoList` object.\n\n7.  **Modularity:**\n    *   The code is organized into a class and functions to improve readability and maintainability.\n\n**How to Run the Example:**\n\n1"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ".  Save the code as a Python file (e.g., `todo.py`).\n2.  Open a terminal or command prompt.\n3.  Navigate to the directory where you saved the file.\n4.  Run the script using `python todo.py`.\n\nThe application will then start"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " and prompt you for choices: adding tasks, removing them, marking them as complete, displaying the list, or exiting. The tasks will be saved to a file named `todo.json` in the same directory as the script, so they will persist between runs.\n\nThis example is relatively simple, but it demonstrates many of the"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:42:29 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " fundamental concepts of Python programming in a practical context. It's a good starting point for building more complex applications.\n"
+                }
+              ],
+              "role": "model"
+            },
+            "finish_reason": "STOP"
+          }
+        ],
+        "create_time": "2026-04-24T15:42:29.539630Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "ZY_rae73IJ7u2fMP7ICDgAU",
+        "usage_metadata": {
+          "candidates_token_count": 1924,
+          "candidates_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 1924
+            }
+          ],
+          "prompt_token_count": 2866,
+          "prompt_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 2866
+            }
+          ],
+          "total_token_count": 4790,
+          "traffic_type": "ON_DEMAND"
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

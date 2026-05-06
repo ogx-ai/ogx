@@ -1,4 +1,4 @@
-// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Copyright (c) The OGX Contributors.
 // All rights reserved.
 //
 // This source code is licensed under the terms described in the LICENSE file in
@@ -6,7 +6,7 @@
 
 /**
  * Integration tests for Inference API (Chat Completions).
- * Ported from: llama-stack/tests/integration/inference/test_openai_completion.py
+ * Ported from: ogx/tests/integration/inference/test_openai_completion.py
  *
  * IMPORTANT: Test cases must match EXACTLY with Python tests to use recorded API responses.
  */
@@ -14,7 +14,7 @@
 import { createTestClient, requireTextModel } from '../setup';
 
 describe('Inference API - Chat Completions', () => {
-  // Test cases matching llama-stack/tests/integration/test_cases/inference/chat_completion.json
+  // Test cases matching ogx/tests/integration/test_cases/inference/chat_completion.json
   const chatCompletionTestCases = [
     {
       id: 'non_streaming_01',

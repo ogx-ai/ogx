@@ -18,6 +18,6 @@ runs:
         fi
 
         echo "Starting Ollama with image: $image"
-        docker run -d --name ollama -p 11434:11434 docker.io/llamastack/$image
+        docker run -d --name ollama -p 11434:11434 docker.io/ogx/$image
         echo "Verifying Ollama status..."
         timeout 30 bash -c 'while ! curl -s -L http://127.0.0.1:11434; do sleep 1 && echo "."; done'

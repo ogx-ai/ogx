@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,17 +15,17 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCallFunction,
 )
 
-from llama_stack_api import (
+from ogx_api import (
     InternalServerError,
     OpenAISystemMessageParam,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
     OpenAIResponseError,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseObject,
     OpenAIResponseObjectStreamResponseFailed,
 )
-from llama_stack_api.tools import ToolDef, ToolInvocationResult
+from ogx_api.tools import ToolDef, ToolInvocationResult
 
 
 async def test_failed_stream_persists_non_system_messages(openai_responses_impl, mock_responses_store):
@@ -51,7 +51,7 @@ async def test_failed_stream_persists_non_system_messages(openai_responses_impl,
             yield OpenAIResponseObjectStreamResponseFailed(response=failed_response, sequence_number=0)
 
     with patch(
-        "llama_stack.providers.inline.responses.builtin.responses.openai_responses.StreamingResponseOrchestrator",
+        "ogx.providers.inline.responses.builtin.responses.openai_responses.StreamingResponseOrchestrator",
         FakeOrchestrator,
     ):
         stream = await openai_responses_impl.create_openai_response(
@@ -119,7 +119,7 @@ async def test_failed_stream_raises_internal_server_error_in_non_streaming_mode(
             yield OpenAIResponseObjectStreamResponseFailed(response=failed_response, sequence_number=0)
 
     with patch(
-        "llama_stack.providers.inline.responses.builtin.responses.openai_responses.StreamingResponseOrchestrator",
+        "ogx.providers.inline.responses.builtin.responses.openai_responses.StreamingResponseOrchestrator",
         FakeOrchestrator,
     ):
         with pytest.raises(InternalServerError) as exc_info:
@@ -138,7 +138,7 @@ async def test_failed_stream_raises_internal_server_error_in_non_streaming_mode(
 
 def test_response_object_incomplete_details_null_when_completed():
     """Test that completed response has incomplete_details as null."""
-    from llama_stack_api.openai_responses import OpenAIResponseObject
+    from ogx_api.openai_responses import OpenAIResponseObject
 
     response = OpenAIResponseObject(
         created_at=1234567890,
@@ -159,7 +159,7 @@ def test_response_object_incomplete_details_null_when_completed():
 
 def test_response_object_incomplete_details_with_max_output_tokens_reason():
     """Test that incomplete response has incomplete_details with max_output_tokens reason."""
-    from llama_stack_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
+    from ogx_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
 
     response = OpenAIResponseObject(
         created_at=1234567890,
@@ -182,7 +182,7 @@ def test_response_object_incomplete_details_with_max_output_tokens_reason():
 
 def test_response_object_incomplete_details_with_length_reason():
     """Test that incomplete response has incomplete_details with length reason."""
-    from llama_stack_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
+    from ogx_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
 
     response = OpenAIResponseObject(
         created_at=1234567890,
@@ -205,7 +205,7 @@ def test_response_object_incomplete_details_with_length_reason():
 
 def test_response_object_incomplete_details_with_max_iterations_exceeded_reason():
     """Test that incomplete response has incomplete_details with max_iterations_exceeded reason."""
-    from llama_stack_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
+    from ogx_api.openai_responses import OpenAIResponseIncompleteDetails, OpenAIResponseObject
 
     response = OpenAIResponseObject(
         created_at=1234567890,

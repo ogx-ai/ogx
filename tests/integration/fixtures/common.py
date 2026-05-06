@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,7 +15,7 @@ import time
 from urllib.parse import urlparse
 
 # Initialize logging early before any loggers get created
-from llama_stack.log import setup_logging
+from ogx.log import setup_logging
 
 setup_logging()
 
@@ -25,11 +25,11 @@ import yaml
 from llama_stack_client import LlamaStackClient
 from openai import OpenAI
 
-from llama_stack.core.datatypes import QualifiedModel, RerankerModel, VectorStoresConfig
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
-from llama_stack.core.stack import run_config_from_dynamic_config_spec
-from llama_stack.core.utils.config_resolution import resolve_config_or_distro
-from llama_stack.env import get_env_or_fail
+from ogx.core.datatypes import QualifiedModel, RerankerModel, VectorStoresConfig
+from ogx.core.library_client import OGXAsLibraryClient
+from ogx.core.stack import run_config_from_dynamic_config_spec
+from ogx.core.utils.config_resolution import resolve_config_or_distro
+from ogx.env import get_env_or_fail
 
 DEFAULT_PORT = 8321
 
@@ -44,23 +44,23 @@ def is_port_available(port: int, host: str = "localhost") -> bool:
         return False
 
 
-def start_llama_stack_server(config_name: str, *, log_stderr: bool | None = None) -> subprocess.Popen:
-    """Start a llama stack server with the given config."""
+def start_ogx_server(config_name: str, *, log_stderr: bool | None = None) -> subprocess.Popen:
+    """Start a ogx server with the given config."""
     if log_stderr is None:
-        log_stderr = os.environ.get("LLAMA_STACK_TEST_LOG_STDERR", "1") == "1"
+        log_stderr = os.environ.get("OGX_TEST_LOG_STDERR", "1") == "1"
 
     # remove server.log if it exists
     if os.path.exists("server.log"):
         os.remove("server.log")
 
-    cmd = f"llama stack run {config_name}"
+    cmd = f"ogx run {config_name}"
     devnull = open(os.devnull, "w")
     process = subprocess.Popen(
         shlex.split(cmd),
         stdout=devnull,  # redirect stdout to devnull to prevent deadlock
         stderr=subprocess.PIPE if log_stderr else subprocess.DEVNULL,
         text=True,
-        env={**os.environ, "LLAMA_STACK_LOG_FILE": "server.log"},
+        env={**os.environ, "OGX_LOG_FILE": "server.log"},
         # Create new process group so we can kill all child processes
         preexec_fn=os.setsid,
     )
@@ -150,8 +150,8 @@ def get_provider_data():
 
 
 @pytest.fixture(scope="session")
-def inference_provider_type(llama_stack_client):
-    providers = llama_stack_client.providers.list()
+def inference_provider_type(ogx_client):
+    providers = ogx_client.providers.list()
     inference_providers = [p for p in providers if p.api == "inference"]
     assert len(inference_providers) > 0, "No inference providers found"
     return inference_providers[0].provider_type
@@ -159,14 +159,14 @@ def inference_provider_type(llama_stack_client):
 
 @pytest.fixture(scope="session")
 def client_with_models(
-    llama_stack_client,
+    ogx_client,
     text_model_id,
     vision_model_id,
     embedding_model_id,
     judge_model_id,
     rerank_model_id,
 ):
-    client = llama_stack_client
+    client = ogx_client
 
     providers = [p for p in client.providers.list() if p.api == "inference"]
     assert len(providers) > 0, "No inference providers found"
@@ -189,13 +189,13 @@ def client_with_models(
 
 
 @pytest.fixture(scope="session")
-def available_shields(llama_stack_client):
-    return [shield.identifier for shield in llama_stack_client.shields.list()]
+def available_shields(ogx_client):
+    return [shield.identifier for shield in ogx_client.shields.list()]
 
 
 @pytest.fixture(scope="session")
-def model_providers(llama_stack_client):
-    return {x.provider_id for x in llama_stack_client.providers.list() if x.api == "inference"}
+def model_providers(ogx_client):
+    return {x.provider_id for x in ogx_client.providers.list() if x.api == "inference"}
 
 
 @pytest.fixture(autouse=True)
@@ -218,20 +218,20 @@ def skip_if_no_model(request):
 
 
 @pytest.fixture(scope="session")
-def llama_stack_client(request):
+def ogx_client(request):
     # ideally, we could do this in session start given all the complex logs during initialization
     # don't clobber the test one-liner outputs. however, this also means all tests in a sub-directory
-    # would be forced to use llama_stack_client, which is not what we want.
-    print("\ninstantiating llama_stack_client")
+    # would be forced to use ogx_client, which is not what we want.
+    print("\ninstantiating ogx_client")
     start_time = time.time()
 
     # Patch httpx to inject test ID for server-mode test isolation
-    from llama_stack.testing.api_recorder import patch_httpx_for_test_id
+    from ogx.testing.api_recorder import patch_httpx_for_test_id
 
     patch_httpx_for_test_id()
 
-    client = instantiate_llama_stack_client(request.session)
-    print(f"llama_stack_client instantiated in {time.time() - start_time:.3f}s")
+    client = instantiate_ogx_client(request.session)
+    print(f"ogx_client instantiated in {time.time() - start_time:.3f}s")
     return client
 
 
@@ -253,13 +253,13 @@ def extract_model(model: str | None, default: str) -> str:
     return model.split("/", 1)[1]
 
 
-def instantiate_llama_stack_client(session):
+def instantiate_ogx_client(session):
     config = session.config.getoption("--stack-config")
     if not config:
-        config = get_env_or_fail("LLAMA_STACK_CONFIG")
+        config = get_env_or_fail("OGX_CONFIG")
 
     if not config:
-        raise ValueError("You must specify either --stack-config or LLAMA_STACK_CONFIG")
+        raise ValueError("You must specify either --stack-config or OGX_CONFIG")
 
     # Handle server:<config_name> format or server:<config_name>:<port>
     # Also handles server:<distro>::<run_file.yaml> format
@@ -270,26 +270,26 @@ def instantiate_llama_stack_client(session):
         # Check for :: (distro::runfile format)
         if "::" in config_part:
             config_name = config_part
-            port = int(os.environ.get("LLAMA_STACK_PORT", DEFAULT_PORT))
+            port = int(os.environ.get("OGX_PORT", DEFAULT_PORT))
         else:
             # Single colon format: either <name> or <name>:<port>
             parts = config_part.split(":")
             config_name = parts[0]
-            port = int(parts[1]) if len(parts) > 1 else int(os.environ.get("LLAMA_STACK_PORT", DEFAULT_PORT))
+            port = int(parts[1]) if len(parts) > 1 else int(os.environ.get("OGX_PORT", DEFAULT_PORT))
 
         base_url = f"http://localhost:{port}"
 
-        force_restart = os.environ.get("LLAMA_STACK_TEST_FORCE_SERVER_RESTART") == "1"
+        force_restart = os.environ.get("OGX_TEST_FORCE_SERVER_RESTART") == "1"
         if force_restart:
             print(f"Forcing restart of the server on port {port}")
             stop_server_on_port(port)
 
         # Check if port is available
         if is_port_available(port):
-            print(f"Starting llama stack server with config '{config_name}' on port {port}...")
+            print(f"Starting ogx server with config '{config_name}' on port {port}...")
 
             # Start server
-            server_process = start_llama_stack_server(config_name)
+            server_process = start_ogx_server(config_name)
 
             # Wait for server to be ready
             if not wait_for_server_ready(base_url, timeout=120, process=server_process):
@@ -303,14 +303,14 @@ def instantiate_llama_stack_client(session):
             print(f"Server is ready at {base_url}")
 
             # Store process for potential cleanup (pytest will handle termination at session end)
-            session._llama_stack_server_process = server_process
+            session._ogx_server_process = server_process
         else:
             print(f"Port {port} is already in use, assuming server is already running...")
 
         return LlamaStackClient(
             base_url=base_url,
             provider_data=get_provider_data(),
-            timeout=int(os.environ.get("LLAMA_STACK_CLIENT_TIMEOUT", "30")),
+            timeout=int(os.environ.get("OGX_CLIENT_TIMEOUT", "30")),
         )
 
     # check if this looks like a URL using proper URL parsing
@@ -363,7 +363,7 @@ def instantiate_llama_stack_client(session):
         # Handle distro::config.yaml format (e.g., ci-tests::run.yaml)
         config = str(resolve_config_or_distro(config))
 
-    client = LlamaStackAsLibraryClient(
+    client = OGXAsLibraryClient(
         config,
         provider_data=get_provider_data(),
         skip_logger_removal=True,
@@ -372,21 +372,21 @@ def instantiate_llama_stack_client(session):
 
 
 @pytest.fixture(scope="session")
-def require_server(llama_stack_client):
+def require_server(ogx_client):
     """
     Skip test if no server is running.
 
-    We use the llama_stack_client to tell if a server was started or not.
+    We use the ogx_client to tell if a server was started or not.
 
     We use this with openai_client because it relies on a running server.
     """
-    if isinstance(llama_stack_client, LlamaStackAsLibraryClient):
+    if isinstance(ogx_client, OGXAsLibraryClient):
         pytest.skip("No server running")
 
 
 @pytest.fixture(scope="session")
-def openai_client(llama_stack_client, require_server):
-    base_url = f"{llama_stack_client.base_url}/v1"
+def openai_client(ogx_client, require_server):
+    base_url = f"{ogx_client.base_url}/v1"
     client = OpenAI(base_url=base_url, api_key="fake", max_retries=0, timeout=30.0)
     yield client
     # Cleanup: close HTTP connections
@@ -398,13 +398,13 @@ def openai_client(llama_stack_client, require_server):
 
 @pytest.fixture(params=["openai_client", "client_with_models"])
 def compat_client(request, client_with_models):
-    if request.param == "openai_client" and isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if request.param == "openai_client" and isinstance(client_with_models, OGXAsLibraryClient):
         # OpenAI client expects a server, so unless we also rewrite OpenAI client's requests
         # to go via the Stack library client (which itself rewrites requests to be served inline),
         # we cannot do this.
         #
-        # This means when we are using Stack as a library, we will test only via the Llama Stack client.
-        # When we are using a server setup, we can exercise both OpenAI and Llama Stack clients.
+        # This means when we are using Stack as a library, we will test only via the OGX client.
+        # When we are using a server setup, we can exercise both OpenAI and OGX clients.
         pytest.skip("(OpenAI) Compat client cannot be used with Stack library client")
 
     return request.getfixturevalue(request.param)
@@ -415,11 +415,11 @@ def cleanup_server_process(request):
     """Cleanup server process at the end of the test session."""
     yield  # Run tests
 
-    if hasattr(request.session, "_llama_stack_server_process"):
-        server_process = request.session._llama_stack_server_process
+    if hasattr(request.session, "_ogx_server_process"):
+        server_process = request.session._ogx_server_process
         if server_process:
             if server_process.poll() is None:
-                print("Terminating llama stack server process...")
+                print("Terminating ogx server process...")
             else:
                 print(f"Server process already terminated with return code: {server_process.returncode}")
                 return

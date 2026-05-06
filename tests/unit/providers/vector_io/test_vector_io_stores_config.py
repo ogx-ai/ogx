@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from psycopg2 import sql
 
-from llama_stack_api import (
+from ogx_api import (
     OpenAICreateVectorStoreRequestWithExtraBody,
     QueryChunksResponse,
     VectorStore,
@@ -30,7 +30,7 @@ from llama_stack_api import (
 def mock_resume_file_batches(request):
     """Mock the resume functionality to prevent stale file batches from being processed during tests."""
     with patch(
-        "llama_stack.providers.utils.memory.openai_vector_store_mixin.OpenAIVectorStoreMixin._resume_incomplete_batches",
+        "ogx.providers.utils.memory.openai_vector_store_mixin.OpenAIVectorStoreMixin._resume_incomplete_batches",
         new_callable=AsyncMock,
     ):
         yield
@@ -111,8 +111,8 @@ async def test_embedding_config_consistency_check_passes(vector_io_adapter):
     assert vector_store["metadata"]["embedding_dimension"] == "768"
 
 
-async def test_embedding_config_defaults_when_missing(vector_io_adapter):
-    """Test that embedding dimension defaults to 768 when not provided."""
+async def test_embedding_config_dimension_required(vector_io_adapter):
+    """Test that embedding dimension is required when not provided."""
 
     # Set provider_id attribute for the adapter
     vector_io_adapter.__provider_id__ = "test_provider"
@@ -126,12 +126,9 @@ async def test_embedding_config_defaults_when_missing(vector_io_adapter):
         },
     )
 
-    result = await vector_io_adapter.openai_create_vector_store(params)
-
-    # Should default to 768 dimensions
-    vector_store = vector_io_adapter.openai_vector_stores[result.id]
-    assert vector_store["metadata"]["embedding_model"] == "model-without-dimension"
-    assert vector_store["metadata"]["embedding_dimension"] == "768"
+    # Should raise ValueError because embedding_dimension is not provided
+    with pytest.raises(ValueError, match="Embedding dimension is required"):
+        await vector_io_adapter.openai_create_vector_store(params)
 
 
 async def test_embedding_config_required_model_missing(vector_io_adapter):
@@ -173,7 +170,7 @@ async def test_search_vector_store_ignores_rewrite_query(vector_io_adapter):
 
     # Test that rewrite_query=True doesn't cause an error (it's ignored at mixin level)
     # The mixin should process the search request without attempting to rewrite the query
-    from llama_stack_api import OpenAISearchVectorStoreRequest
+    from ogx_api import OpenAISearchVectorStoreRequest
 
     request = OpenAISearchVectorStoreRequest(
         query="test query",
@@ -193,8 +190,8 @@ async def test_search_vector_store_ignores_rewrite_query(vector_io_adapter):
 async def test_create_gin_index_executes_correct_sql():
     from unittest.mock import MagicMock
 
-    from llama_stack.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
-    from llama_stack.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
     connection = MagicMock()
     cursor = MagicMock()
@@ -209,7 +206,7 @@ async def test_create_gin_index_executes_correct_sql():
         provider_id="pgvector",
     )
 
-    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
+    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
         index = PGVectorIndex(
             vector_store=vector_store,
             dimension=768,
@@ -235,8 +232,8 @@ async def test_create_gin_index_raises_runtime_error_on_db_error():
 
     import psycopg2
 
-    from llama_stack.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
-    from llama_stack.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
     connection = MagicMock()
     cursor = MagicMock()
@@ -252,7 +249,7 @@ async def test_create_gin_index_raises_runtime_error_on_db_error():
         provider_id="pgvector",
     )
 
-    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
+    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
         index = PGVectorIndex(
             vector_store=vector_store,
             dimension=768,
@@ -270,8 +267,8 @@ async def test_create_gin_index_raises_runtime_error_on_db_error():
 async def test_gin_index_creation_in_initialize_call():
     from unittest.mock import MagicMock
 
-    from llama_stack.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
-    from llama_stack.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
     connection = MagicMock()
     cursor = MagicMock()
@@ -286,7 +283,7 @@ async def test_gin_index_creation_in_initialize_call():
         provider_id="pgvector",
     )
 
-    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.psycopg2") as mock_psycopg2:
+    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2") as mock_psycopg2:
         mock_psycopg2.extras.DictCursor = MagicMock()
 
         index = PGVectorIndex(
@@ -303,8 +300,8 @@ async def test_gin_index_creation_in_initialize_call():
 
 
 async def test_set_ef_search_called_before_select_in_query_vector(mock_psycopg2_connection, embedding_dimension):
-    from llama_stack.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
-    from llama_stack.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
     connection, cursor = mock_psycopg2_connection
     cursor.fetchall.return_value = []
@@ -339,8 +336,8 @@ async def test_set_ef_search_called_before_select_in_query_vector(mock_psycopg2_
 
 
 async def test_apply_default_ef_search_for_query_vector(mock_psycopg2_connection, embedding_dimension):
-    from llama_stack.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
-    from llama_stack.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
     connection, cursor = mock_psycopg2_connection
     cursor.fetchall.return_value = []

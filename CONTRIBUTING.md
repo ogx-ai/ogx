@@ -1,4 +1,4 @@
-# Contributing to Llama Stack
+# Contributing to OGX
 
 We want to make contributing to this project as easy and transparent as
 possible.
@@ -11,26 +11,26 @@ You can install `uv` by following this [guide](https://docs.astral.sh/uv/getting
 You can install the dependencies by running:
 
 ```bash
-cd llama-stack
+cd ogx
 uv venv --python 3.12
 uv sync --group dev
 uv pip install -e .
 source .venv/bin/activate
 ```
 
-**Note:** If you are making changes to Llama Stack, it is essential that you use Python 3.12 as shown above.
-Llama Stack can work with Python 3.13 but the pre-commit hooks used to validate code changes only work with Python 3.12.
+**Note:** If you are making changes to OGX, it is essential that you use Python 3.12 as shown above.
+OGX can work with Python 3.13 but the pre-commit hooks used to validate code changes only work with Python 3.12.
 If you don't specify a Python version, `uv` will automatically select a Python version according to the `requires-python`
-section of the `pyproject.toml`, which is fine for running Llama Stack but not for committing changes.
+section of the `pyproject.toml`, which is fine for running OGX but not for committing changes.
 For more info, see the [uv docs around Python versions](https://docs.astral.sh/uv/concepts/python-versions/).
 
 Note that you can create a dotenv file `.env` that includes necessary environment variables:
 
 ```text
-LLAMA_STACK_BASE_URL=http://localhost:8321
-LLAMA_STACK_CLIENT_LOG=debug
-LLAMA_STACK_PORT=8321
-LLAMA_STACK_CONFIG=server:ci-tests
+OGX_BASE_URL=http://localhost:8321
+OGX_CLIENT_LOG=debug
+OGX_PORT=8321
+OGX_CONFIG=server:ci-tests
 TAVILY_SEARCH_API_KEY=
 BRAVE_SEARCH_API_KEY=
 ```
@@ -52,7 +52,7 @@ uv pip install 'pre-commit>=4.4.0'
 uv run pre-commit install
 ```
 
-Note that the pre-commit version used in continuous integration for Llama Stack is `>=4.4.0`. It is essential that you use the version specifier as shown above. Once you have run these commands, pre-commit hooks will run automatically before each commit.
+Note that the pre-commit version used in continuous integration for OGX is `>=4.4.0`. It is essential that you use the version specifier as shown above. Once you have run these commands, pre-commit hooks will run automatically before each commit.
 
 Alternatively, if you don't want to install the pre-commit hooks (or if you want to check if your changes are ready before committing),
 you can run the checks manually by running:
@@ -83,21 +83,21 @@ uv run --group dev --group type_checking mypy
 
 We actively welcome your pull requests. However, please read the following. This is heavily inspired by [Ghostty](https://github.com/ghostty-org/ghostty/blob/main/CONTRIBUTING.md).
 
-If in doubt, please open a [issue](https://github.com/llamastack/llama-stack/issues).
+If in doubt, please open a [issue](https://github.com/ogx-ai/ogx/issues).
 
 ### Issues
 
 We use GitHub issues to track public bugs. Please ensure your description is
 clear and has sufficient instructions to be able to reproduce the issue.
 
-Meta has a [bounty program](http://facebook.com/whitehat/info) for the safe
+The OGX Contributors has a [bounty program](http://facebook.com/whitehat/info) for the safe
 disclosure of security bugs. In those cases, please go through the process
 outlined on that page and do not file a public issue.
 
 ### Contributor License Agreement ("CLA")
 
 In order to accept your pull request, we need you to submit a CLA. You only need
-to do this once to work on any of Meta's open source projects.
+to do this once to work on any of The OGX Contributors's open source projects.
 
 Complete your CLA here: <https://code.facebook.com/cla>
 
@@ -129,7 +129,7 @@ Please avoid picking up too many issues at once. This helps you stay focused and
 
 ### I have a question
 
-1. Open a "discussion-type" issue or use [Discord](https://discord.gg/llama-stack).
+1. Open a "discussion-type" issue or use [Slack](https://join.slack.com/t/ogx-ai/shared_invite/zt-3uyw5bxj9-tSEwsNZncgkGEKbd4dXIpw).
 
 ### Opening a Pull Request
 
@@ -158,11 +158,11 @@ To ensure a smooth review process for both reviewers and contributors, please fo
 
 3. **Address review comments with new commits.** When responding to feedback, add new commits rather than modifying existing ones. This makes it easy for reviewers to see exactly how each comment was addressed. You can also use GitHub's "Accept suggestion" feature directly in the UI, which automatically creates new commits for you.
 
-Since Llama Stack uses squash merge, all commits will be combined into a single commit when the PR is merged. This means you don't need to worry about having a "clean" commit history during review; what matters is making the review process as clear as possible.
+Since OGX uses squash merge, all commits will be combined into a single commit when the PR is merged. This means you don't need to worry about having a "clean" commit history during review; what matters is making the review process as clear as possible.
 
 ### API Enhancement Pull Requests
 
-If your pull request modifies or extends the Llama Stack API, you must include a comprehensive **Test Plan** in your PR description. This helps reviewers verify the correctness of your changes and ensures the API behaves as expected.
+If your pull request modifies or extends the OGX API, you must include a comprehensive **Test Plan** in your PR description. This helps reviewers verify the correctness of your changes and ensures the API behaves as expected.
 
 Your Test Plan should include:
 
@@ -180,15 +180,15 @@ This practice:
 
 ### Adding a New Provider
 
-Llama Stack has "out-of-tree" providers referred to as [external providers](https://llamastack.github.io/docs/providers/external) as well as "in-tree" providers that are a part of the core project. The Llama Stack community is accepting of [new in-tree provider contributions](https://llamastack.github.io/docs/contributing/new_api_provider) so long as there is merit seen in the addition.
+OGX has "out-of-tree" providers referred to as [external providers](https://ogx-ai.github.io/docs/providers/external) as well as "in-tree" providers that are a part of the core project. The OGX community is accepting of [new in-tree provider contributions](https://ogx-ai.github.io/docs/contributing/new_api_provider) so long as there is merit seen in the addition.
 
 If you wish to include a new in-tree provider in the Core project, please follow these steps:
 
-1. **Open a discussion issue**: Open an issue with label "discussion" describing the provider you want to add, its use case, and how it fits into the Llama Stack ecosystem.
+1. **Open a discussion issue**: Open an issue with label "discussion" describing the provider you want to add, its use case, and how it fits into the OGX ecosystem.
 
 2. **Present at a community call** (optional): Bring your proposal to a [community call](README.md#community) to gather feedback, answer questions, and build consensus with other contributors and maintainers.
 
-3. **Implement and submit a PR**: Once approved, use the [Adding a New API Provider](https://llamastack.github.io/docs/contributing/new_api_provider) guide to help you get started. Once approved, follow the standard pull request process outlined above.
+3. **Implement and submit a PR**: Once approved, use the [Adding a New API Provider](https://ogx-ai.github.io/docs/contributing/new_api_provider) guide to help you get started. Once approved, follow the standard pull request process outlined above.
 
 This process helps ensure that new providers are well-designed, avoid duplication of effort, and integrate smoothly with the rest of the project.
 
@@ -214,7 +214,7 @@ This process helps ensure that new providers are well-designed, avoid duplicatio
   that describes the configuration. These descriptions will be used to generate the provider
   documentation.
 - When possible, use keyword arguments only when calling functions.
-- Llama Stack utilizes [custom Exception classes](src/llama_stack_api/common/errors.py) for certain Resources that should be used where applicable.
+- OGX utilizes [custom Exception classes](src/ogx_api/common/errors.py) for certain Resources that should be used where applicable.
 
 ### License
 
@@ -223,25 +223,25 @@ under the LICENSE file in the root directory of this source tree.
 
 ## Common Tasks
 
-Some tips about common tasks you work on while contributing to Llama Stack:
+Some tips about common tasks you work on while contributing to OGX:
 
 ### Installing dependencies of distributions
 
-When installing dependencies for a distribution, you can use `llama stack list-deps` to view and install the required packages.
+When installing dependencies for a distribution, you can use `ogx list-deps` to view and install the required packages.
 
 Example:
 
 ```bash
 cd work/
-git clone https://github.com/llamastack/llama-stack.git
-git clone https://github.com/llamastack/llama-stack-client-python.git
-cd llama-stack
+git clone https://github.com/ogx-ai/ogx.git
+git clone https://github.com/meta-llama/llama-stack-client-python.git
+cd ogx
 
 # Show dependencies for a distribution
-llama stack list-deps <distro-name>
+ogx list-deps <distro-name>
 
 # Install dependencies
-llama stack list-deps <distro-name> | xargs -L1 uv pip install
+ogx list-deps <distro-name> | xargs -L1 uv pip install
 ```
 
 ### Updating distribution configurations
@@ -260,7 +260,7 @@ Note that the provider "description" field will be used to generate the provider
 
 ### Building the Documentation
 
-If you are making changes to the documentation at [https://llamastack.github.io/](https://llamastack.github.io/), you can use the following command to build the documentation and preview your changes.
+If you are making changes to the documentation at [https://ogx-ai.github.io/](https://ogx-ai.github.io/), you can use the following command to build the documentation and preview your changes.
 
 ```bash
 # This rebuilds the documentation pages and the OpenAPI spec.
@@ -285,4 +285,4 @@ The generated API schema will be available in `docs/static/`. Make sure to revie
 
 ## Release Process
 
-For information about how Llama Stack versions are released, including release schedules, testing requirements, and how to contribute to releases, see [RELEASE_PROCESS.md](./RELEASE_PROCESS.md).
+For information about how OGX versions are released, including release schedules, testing requirements, and how to contribute to releases, see [RELEASE_PROCESS.md](./RELEASE_PROCESS.md).

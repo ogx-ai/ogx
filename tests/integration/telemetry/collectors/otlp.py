@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -30,7 +30,7 @@ class OtlpHttpTestCollector(BaseTelemetryCollector):
             daemon_threads = True
             allow_reuse_address = True
 
-        configured_port = int(os.environ.get("LLAMA_STACK_TEST_COLLECTOR_PORT", "0"))
+        configured_port = int(os.environ.get("OGX_TEST_COLLECTOR_PORT", "0"))
 
         self._server = _ThreadingHTTPServer(("127.0.0.1", configured_port), _CollectorHandler)
         self._server.collector = self  # type: ignore[attr-defined]

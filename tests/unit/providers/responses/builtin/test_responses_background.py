@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,15 +14,15 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
-from llama_stack.core.datatypes import User
-from llama_stack.core.request_headers import PROVIDER_DATA_VAR, get_authenticated_user
-from llama_stack.core.task import capture_request_context, create_detached_background_task
-from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+from ogx.core.datatypes import User
+from ogx.core.request_headers import PROVIDER_DATA_VAR, get_authenticated_user
+from ogx.core.task import capture_request_context, create_detached_background_task
+from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     OpenAIResponsesImpl,
     _BackgroundWorkItem,
 )
-from llama_stack.providers.utils.responses.responses_store import _OpenAIResponseObjectWithInputAndMessages
-from llama_stack_api import ConflictError, OpenAIResponseError, OpenAIResponseObject
+from ogx.providers.utils.responses.responses_store import _OpenAIResponseObjectWithInputAndMessages
+from ogx_api import ConflictError, OpenAIResponseError, OpenAIResponseObject
 
 
 class TestBackgroundFieldInResponseObject:

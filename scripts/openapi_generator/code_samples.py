@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -67,7 +67,7 @@ client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 
 response = client.embeddings.create(
     model="all-MiniLM-L6-v2",
-    input="Llama Stack is awesome",
+    input="OGX is awesome",
 )
 print(response.data[0].embedding[:5])
 """,
@@ -393,10 +393,31 @@ client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 
 results = client.vector_stores.search(
     vector_store_id="vs_abc123",
-    query="What is Llama Stack?",
+    query="What is OGX?",
 )
 for result in results:
     print(result)
+""",
+}
+
+# Google GenAI SDK code samples for Interactions API endpoints.
+_GOOGLE_CODE_SAMPLES: dict[tuple[str, str], str] = {
+    ("/v1alpha/interactions", "post"): """\
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    api_key="fake",
+    http_options=types.HttpOptions(
+        base_url="http://localhost:8321",
+        api_version="v1alpha",
+    ),
+)
+interaction = client.interactions.create(
+    model="meta-llama/Llama-3.1-8B-Instruct",
+    input="What is the capital of France?",
+)
+print(interaction.outputs[0].text)
 """,
 }
 
@@ -419,7 +440,7 @@ message = client.messages.create(
     model="llama-3.3-70b",
     max_tokens=1024,
     messages=[
-        {"role": "user", "content": "What is Llama Stack?"}
+        {"role": "user", "content": "What is OGX?"}
     ],
 )
 
@@ -439,7 +460,7 @@ const client = new Anthropic({
 const message = await client.messages.create({
   model: "llama-3.3-70b",
   max_tokens: 1024,
-  messages: [{ role: "user", content: "What is Llama Stack?" }],
+  messages: [{ role: "user", content: "What is OGX?" }],
 });
 
 console.log(message.content[0].text);""",
@@ -493,4 +514,31 @@ def _add_openai_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         samples_added += 1
 
     print(f"Added OpenAI Python code samples to {samples_added} operations")
+    return openapi_schema
+
+
+def _add_google_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
+    """Add x-codeSamples with Google GenAI SDK examples to Interactions API endpoints."""
+    paths = openapi_schema.get("paths", {})
+    samples_added = 0
+
+    for (path, method), source_code in _GOOGLE_CODE_SAMPLES.items():
+        if path not in paths:
+            continue
+        if method not in paths[path]:
+            continue
+
+        code_sample = {
+            "lang": "Python",
+            "label": "Google GenAI",
+            "source": source_code.rstrip("\n"),
+        }
+
+        operation = paths[path][method]
+        if "x-codeSamples" not in operation:
+            operation["x-codeSamples"] = []
+        operation["x-codeSamples"].append(code_sample)
+        samples_added += 1
+
+    print(f"Added Google GenAI Python code samples to {samples_added} operations")
     return openapi_schema

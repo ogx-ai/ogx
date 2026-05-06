@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,16 +7,18 @@
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from llama_stack.core.access_control.access_control import default_policy, is_action_allowed
-from llama_stack.core.access_control.datatypes import Action
-from llama_stack.core.datatypes import User
-from llama_stack.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, SqlRecord
-from llama_stack.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
-from llama_stack.core.storage.sqlstore.sqlstore import SqliteSqlStoreConfig
-from llama_stack_api.internal.sqlstore import ColumnType
+import pytest
+
+from ogx.core.access_control.access_control import AccessDeniedError, default_policy, is_action_allowed
+from ogx.core.access_control.datatypes import Action
+from ogx.core.datatypes import User
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, SqlRecord
+from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
+from ogx.core.storage.sqlstore.sqlstore import SqliteSqlStoreConfig
+from ogx_api.internal.sqlstore import ColumnType
 
 
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 async def test_authorized_fetch_with_where_sql_access_control(mock_get_authenticated_user):
     """Test that fetch_all works correctly with where_sql for access control"""
     with TemporaryDirectory() as tmp_dir:
@@ -78,7 +80,7 @@ async def test_authorized_fetch_with_where_sql_access_control(mock_get_authentic
         assert row["title"] == "User Document"
 
 
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 async def test_sql_policy_consistency(mock_get_authenticated_user):
     """Test that SQL WHERE clause logic exactly matches is_action_allowed policy logic"""
     with TemporaryDirectory() as tmp_dir:
@@ -180,7 +182,7 @@ async def test_sql_policy_consistency(mock_get_authenticated_user):
             )
 
 
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 async def test_authorized_store_user_attribute_capture(mock_get_authenticated_user):
     """Test that user attributes are properly captured during insert"""
     with TemporaryDirectory() as tmp_dir:
@@ -227,3 +229,319 @@ async def test_authorized_store_user_attribute_capture(mock_get_authenticated_us
         # Third item should have null attributes (no authenticated user)
         assert result.data[2]["id"] == "item3"
         assert result.data[2]["access_attributes"] is None
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_update_enforces_access_control(mock_get_authenticated_user):
+    """Test that update() raises AccessDeniedError when user lacks permission."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_update_acl.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        owner = User("alice", {"roles": ["admin"], "teams": ["eng"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "title": "Original"})
+
+        # A different user with non-overlapping attributes should be denied
+        other_user = User("bob", {"roles": ["viewer"], "teams": ["marketing"]})
+        mock_get_authenticated_user.return_value = other_user
+
+        with pytest.raises(AccessDeniedError):
+            await sqlstore.update("docs", {"title": "Hacked"}, where={"id": "doc1"})
+
+        # Verify the row was not modified
+        mock_get_authenticated_user.return_value = owner
+        row = await sqlstore.fetch_one("docs", where={"id": "doc1"})
+        assert row is not None
+        assert row["title"] == "Original"
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_update_preserves_ownership(mock_get_authenticated_user):
+    """Test that update() does not transfer ownership to the calling user."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_update_ownership.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        owner = User("alice", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "title": "Original"})
+
+        # A user with matching attributes can update, but ownership stays with alice
+        teammate = User("carol", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = teammate
+        await sqlstore.update("docs", {"title": "Updated"}, where={"id": "doc1"})
+
+        # Read from the raw store to inspect ownership columns directly
+        raw = await base_sqlstore.fetch_all("docs", where={"id": "doc1"})
+        assert len(raw.data) == 1
+        assert raw.data[0]["title"] == "Updated"
+        assert raw.data[0]["owner_principal"] == "alice"
+        assert raw.data[0]["access_attributes"] == {"roles": ["admin"]}
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_delete_enforces_access_control(mock_get_authenticated_user):
+    """Test that delete() raises AccessDeniedError when user lacks permission."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_delete_acl.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        owner = User("alice", {"roles": ["admin"], "teams": ["eng"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "title": "Secret"})
+
+        # A different user with non-overlapping attributes should be denied
+        other_user = User("bob", {"roles": ["viewer"], "teams": ["marketing"]})
+        mock_get_authenticated_user.return_value = other_user
+
+        with pytest.raises(AccessDeniedError):
+            await sqlstore.delete("docs", where={"id": "doc1"})
+
+        # Verify the row was not deleted
+        mock_get_authenticated_user.return_value = owner
+        row = await sqlstore.fetch_one("docs", where={"id": "doc1"})
+        assert row is not None
+        assert row["title"] == "Secret"
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_delete_allowed_for_authorized_user(mock_get_authenticated_user):
+    """Test that delete() succeeds when the user has matching attributes."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_delete_allowed.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        owner = User("alice", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "title": "To Delete"})
+
+        # A user with matching roles can delete
+        teammate = User("carol", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = teammate
+        await sqlstore.delete("docs", where={"id": "doc1"})
+
+        # Verify deletion
+        mock_get_authenticated_user.return_value = owner
+        row = await sqlstore.fetch_one("docs", where={"id": "doc1"})
+        assert row is None
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_update_and_delete_allow_public_records(mock_get_authenticated_user):
+    """Test that update() and delete() allow access to unowned (public) records."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_public_acl.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        # Insert a public record (no authenticated user)
+        mock_get_authenticated_user.return_value = None
+        await sqlstore.insert("docs", {"id": "pub1", "title": "Public"})
+
+        # Any authenticated user should be able to update/delete public records
+        any_user = User("anyone", {"roles": ["viewer"]})
+        mock_get_authenticated_user.return_value = any_user
+        await sqlstore.update("docs", {"title": "Updated Public"}, where={"id": "pub1"})
+
+        raw = await base_sqlstore.fetch_all("docs", where={"id": "pub1"})
+        assert raw.data[0]["title"] == "Updated Public"
+
+        await sqlstore.delete("docs", where={"id": "pub1"})
+        raw = await base_sqlstore.fetch_all("docs", where={"id": "pub1"})
+        assert len(raw.data) == 0
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_update_with_access_control_fields_only_is_noop(mock_get_authenticated_user):
+    """Test that update() safely no-ops when only ACL metadata fields are provided."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_update_noop.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        owner = User("alice", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "title": "Original"})
+
+        await sqlstore.update(
+            "docs",
+            {"owner_principal": "mallory", "access_attributes": {"roles": ["viewer"]}},
+            where={"id": "doc1"},
+        )
+
+        raw = await base_sqlstore.fetch_one("docs", where={"id": "doc1"})
+        assert raw is not None
+        assert raw["title"] == "Original"
+        assert raw["owner_principal"] == "alice"
+        assert raw["access_attributes"] == {"roles": ["admin"]}
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_update_race_does_not_modify_newly_inserted_unauthorized_rows(mock_get_authenticated_user):
+    """Test that UPDATE ACL filtering also protects rows inserted after pre-check."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_update_race_guard.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "tag": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        owner = User("alice", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "tag": "target", "title": "Original"})
+
+        updater = User("carol", {"roles": ["admin"]})
+        intruder = User("bob", {"roles": ["viewer"]})
+        mock_get_authenticated_user.return_value = updater
+
+        real_update = base_sqlstore.update
+
+        async def update_with_race(
+            table: str,
+            data: dict[str, str],
+            where: dict[str, str],
+            where_sql: str | None = None,
+            where_sql_params: dict[str, str] | None = None,
+        ) -> None:
+            mock_get_authenticated_user.return_value = intruder
+            await sqlstore.insert("docs", {"id": "doc2", "tag": "target", "title": "Secret"})
+            mock_get_authenticated_user.return_value = updater
+            await real_update(
+                table,
+                data,
+                where,
+                where_sql=where_sql,
+                where_sql_params=where_sql_params,
+            )
+
+        with patch.object(base_sqlstore, "update", side_effect=update_with_race):
+            await sqlstore.update("docs", {"title": "Updated"}, where={"tag": "target"})
+
+        raw = await base_sqlstore.fetch_all("docs", where={"tag": "target"}, order_by=[("id", "asc")])
+        assert len(raw.data) == 2
+        assert raw.data[0]["id"] == "doc1"
+        assert raw.data[0]["title"] == "Updated"
+        assert raw.data[1]["id"] == "doc2"
+        assert raw.data[1]["title"] == "Secret"
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_invalid_attribute_keys_are_rejected(mock_get_authenticated_user):
+    """Test that attribute keys containing non-alphanumeric characters are skipped during SQL filtering."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_invalid_keys.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        victim = User("victim", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = victim
+        await sqlstore.insert("docs", {"id": "doc1", "title": "Secret Document"})
+
+        # Simulate an attacker whose attributes contain a malicious key
+        attacker = User("attacker", {"') OR 1=1--": ["anything"]})
+        mock_get_authenticated_user.return_value = attacker
+
+        result = await sqlstore.fetch_all("docs")
+        assert len(result.data) == 0, "Attacker with invalid attribute key must not see other users' documents"
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_json_extract_text_rejects_malicious_path(mock_get_authenticated_user):
+    """Test that _json_extract_text raises ValueError for paths with special characters."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_json_path.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        with pytest.raises(ValueError, match="Invalid attribute key"):
+            sqlstore._json_extract_text("access_attributes", "') OR 1=1--")
+
+        with pytest.raises(ValueError, match="Invalid attribute key"):
+            sqlstore._json_extract("access_attributes", "roles'; DROP TABLE docs;--")
+
+        # Valid keys should work fine
+        sqlstore._json_extract_text("access_attributes", "roles")
+        sqlstore._json_extract_text("access_attributes", "teams")
+        sqlstore._json_extract("access_attributes", "projects")
+        sqlstore._json_extract("access_attributes", "namespaces")
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_delete_race_does_not_remove_newly_inserted_unauthorized_rows(mock_get_authenticated_user):
+    """Test that DELETE ACL filtering also protects rows inserted after pre-check."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_delete_race_guard.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={"id": ColumnType.STRING, "tag": ColumnType.STRING, "title": ColumnType.STRING},
+        )
+
+        owner = User("alice", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "tag": "target", "title": "Keep/Drop"})
+
+        deleter = User("carol", {"roles": ["admin"]})
+        intruder = User("bob", {"roles": ["viewer"]})
+        mock_get_authenticated_user.return_value = deleter
+
+        real_delete = base_sqlstore.delete
+
+        async def delete_with_race(
+            table: str,
+            where: dict[str, str],
+            where_sql: str | None = None,
+            where_sql_params: dict[str, str] | None = None,
+        ) -> None:
+            mock_get_authenticated_user.return_value = intruder
+            await sqlstore.insert("docs", {"id": "doc2", "tag": "target", "title": "Secret"})
+            mock_get_authenticated_user.return_value = deleter
+            await real_delete(
+                table,
+                where,
+                where_sql=where_sql,
+                where_sql_params=where_sql_params,
+            )
+
+        with patch.object(base_sqlstore, "delete", side_effect=delete_with_race):
+            await sqlstore.delete("docs", where={"tag": "target"})
+
+        raw = await base_sqlstore.fetch_all("docs", where={"tag": "target"}, order_by=[("id", "asc")])
+        assert len(raw.data) == 1
+        assert raw.data[0]["id"] == "doc2"
+        assert raw.data[0]["title"] == "Secret"

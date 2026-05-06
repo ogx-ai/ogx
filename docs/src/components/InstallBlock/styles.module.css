@@ -1,7 +1,9 @@
 .installBlock {
   width: 100%;
+  max-width: 100%;
   margin: 0 auto 1.5rem;
   text-align: left;
+  overflow: hidden;
 }
 
 .tagline {
@@ -102,9 +104,12 @@
   flex: 1;
   min-width: 0;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   line-height: 1.6;
   color: var(--ifm-font-color-base);
+  white-space: nowrap;
+  overflow-x: auto;
+  text-align: center;
 }
 
 .commandReveal {
@@ -129,7 +134,7 @@
 }
 
 /* ========== SYNTAX COLORS ========== */
-.tokenBinary { color: #0369a1; font-weight: 700; margin-left: 1rem; }
+.tokenBinary { color: #0369a1; font-weight: 700; }
 .tokenFlag { color: #2563eb; }
 .tokenPackage { color: #7c3aed; }
 .tokenCommand { color: #0f172a; font-weight: 600; }
@@ -199,14 +204,38 @@
 @media (max-width: 640px) {
   .commandRow {
     flex-wrap: wrap;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .command {
+    font-size: 0.72rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    width: 100%;
   }
 
   .copyBtn {
     width: 100%;
     justify-content: center;
+    margin-top: 0.35rem;
   }
 
-  .command {
+  .tabRow {
+    gap: 0.35rem;
+  }
+
+  .tab {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.72rem;
+  }
+
+  .tagline {
     font-size: 0.78rem;
+  }
+
+  .tokenBinary {
+    margin-left: 0;
   }
 }

@@ -12,22 +12,22 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: llama-stack-benchmark-server
+  name: ogx-benchmark-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: llama-stack-benchmark
+      app.kubernetes.io/name: ogx-benchmark
       app.kubernetes.io/component: server
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: llama-stack-benchmark
+        app.kubernetes.io/name: ogx-benchmark
         app.kubernetes.io/component: server
     spec:
       containers:
-      - name: llama-stack-benchmark
-        image: llamastack/distribution-starter:latest
+      - name: ogx-benchmark
+        image: ogx/distribution-starter:latest
         imagePullPolicy: Always # since we have specified latest instead of a version
         env:
         - name: ENABLE_CHROMADB
@@ -52,13 +52,13 @@ spec:
           value: http://vllm-server-safety.default.svc.cluster.local:8001/v1
         - name: VLLM_TLS_VERIFY
           value: "false"
-        - name: LLAMA_STACK_LOGGING
+        - name: OGX_LOGGING
           value: "all=WARNING"
-        - name: LLAMA_STACK_CONFIG
+        - name: OGX_CONFIG
           value: "/etc/config/stack_run_config.yaml"
-        - name: LLAMA_STACK_WORKERS
-          value: "${LLAMA_STACK_WORKERS}"
-        command: ["uvicorn", "llama_stack.core.server.server:create_app", "--host", "0.0.0.0", "--port", "8323", "--workers", "$(LLAMA_STACK_WORKERS)", "--factory"]
+        - name: OGX_WORKERS
+          value: "${OGX_WORKERS}"
+        command: ["uvicorn", "ogx.core.server.server:create_app", "--host", "0.0.0.0", "--port", "8323", "--workers", "$(OGX_WORKERS)", "--factory"]
         ports:
           - containerPort: 8323
         resources:
@@ -77,15 +77,15 @@ spec:
           claimName: llama-benchmark-pvc
       - name: llama-config
         configMap:
-          name: llama-stack-config
+          name: ogx-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: llama-stack-benchmark-service
+  name: ogx-benchmark-service
 spec:
   selector:
-    app.kubernetes.io/name: llama-stack-benchmark
+    app.kubernetes.io/name: ogx-benchmark
     app.kubernetes.io/component: server
   ports:
   - name: http

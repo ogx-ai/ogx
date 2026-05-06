@@ -1,0 +1,133 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_with_tool_calls_dropped[openai_client-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What's the weather?"
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "function_call": {
+                "name": "get_weather",
+                "args": {
+                  "city": "SF"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "function_response": {
+                "name": "get_weather",
+                "response": {
+                  "temp": 65
+                }
+              }
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "It's 65F in SF."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Thanks!"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+            }
+          ]
+        }
+      ],
+      "config": {}
+    },
+    "endpoint": "/generate_content",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": {
+      "sdk_http_response": {
+        "headers": {
+          "Content-Type": "application/json; charset=UTF-8",
+          "Vary": "Origin, X-Origin, Referer",
+          "Content-Encoding": "gzip",
+          "Date": "Thu, 09 Apr 2026 14:34:13 GMT",
+          "Server": "scaffolding on HTTPServer2",
+          "X-XSS-Protection": "0",
+          "X-Frame-Options": "SAMEORIGIN",
+          "X-Content-Type-Options": "nosniff",
+          "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "**Handoff Summary: Weather Information Task**\n\n**Current Progress:** User asked for the weather. Used `default_api.get_weather(city = \"SF\")` to retrieve the temperature in San Francisco (SF). Responded with \"It's 65F in SF.\"\n\n**Key Decisions:** Assumed user wanted weather for a default location (SF) when no location was specified in the prompt.\n\n**Important Context & Constraints:**\n\n*   The user query is general; future queries may be more specific (e.g., specifying a city or type of weather data).\n*   Tool access: Has access to `default_api.get_weather` which requires a city parameter.\n\n**Remaining Tasks (Next Steps):**\n\n1.  **Anticipate follow-up questions.** Consider likely user follow-ups (e.g., different city, weather conditions beyond temperature, forecast).\n2.  **Prepare for city disambiguation:** If the next query involves a city that could be ambiguous (e.g., \"Springfield\"), implement a mechanism to confirm the city with the user.\n3.  **Consider adding current conditions:** Augment the response with more than just the temperature (e.g., \"Mostly sunny,\" \"Chance of rain\"). Consider which additional condition information the `get_weather` tool provides (if any) or how to retrieve it.\n\n**Critical Data/References:**\n\n*   `default_api.get_weather` documentation (what parameters are required, what data it returns).\n*   List of potentially ambiguous city names.\n"
+              }
+            ],
+            "role": "model"
+          },
+          "finish_reason": "STOP",
+          "avg_logprobs": -0.6611113490828548
+        }
+      ],
+      "create_time": "2026-04-09T14:34:10.103366Z",
+      "model_version": "gemini-2.0-flash",
+      "response_id": "4rjXacanBvDFmPUPzciwWA",
+      "usage_metadata": {
+        "candidates_token_count": 332,
+        "candidates_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 332
+          }
+        ],
+        "prompt_token_count": 119,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 119
+          }
+        ],
+        "total_token_count": 451,
+        "traffic_type": "ON_DEMAND"
+      },
+      "automatic_function_calling_history": []
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

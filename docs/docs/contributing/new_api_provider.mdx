@@ -1,6 +1,6 @@
 ---
 title: Adding a New API Provider
-description: Guide for adding new API providers to Llama Stack
+description: Guide for adding new API providers to OGX
 sidebar_label: New API Provider
 sidebar_position: 2
 ---
@@ -8,30 +8,30 @@ sidebar_position: 2
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide will walk you through the process of adding a new API provider to Llama Stack.
+This guide will walk you through the process of adding a new API provider to OGX.
 
 
-- Begin by reviewing the [core concepts](../concepts/) of Llama Stack and choose the API your provider belongs to (Inference, Safety, VectorIO, etc.)
-- Determine the provider type ([Remote](https://github.com/meta-llama/llama-stack/tree/main/llama_stack/providers/remote) or [Inline](https://github.com/meta-llama/llama-stack/tree/main/llama_stack/providers/inline)). Remote providers make requests to external services, while inline providers execute implementation locally.
-- Add your provider to the appropriate [Registry](https://github.com/meta-llama/llama-stack/tree/main/llama_stack/providers/registry/). Specify pip dependencies necessary.
-- Update any distribution [Templates](https://github.com/meta-llama/llama-stack/tree/main/llama_stack/distributions/) `config.yaml` files if they should include your provider by default. Run [./scripts/distro_codegen.py](https://github.com/meta-llama/llama-stack/blob/main/scripts/distro_codegen.py) if necessary. Note that `distro_codegen.py` will fail if the new provider causes any distribution template to attempt to import provider-specific dependencies. This usually means the distribution's `get_distribution_template()` code path should only import any necessary Config or model alias definitions from each provider and not the provider's actual implementation.
+- Begin by reviewing the [core concepts](../concepts/) of OGX and choose the API your provider belongs to (Inference, Safety, VectorIO, etc.)
+- Determine the provider type ([Remote](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/remote) or [Inline](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/inline)). Remote providers make requests to external services, while inline providers execute implementation locally.
+- Add your provider to the appropriate [Registry](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/registry/). Specify pip dependencies necessary.
+- Update any distribution [Templates](https://github.com/ogx-ai/ogx/tree/main/ogx/distributions/) `config.yaml` files if they should include your provider by default. Run [./scripts/distro_codegen.py](https://github.com/ogx-ai/ogx/blob/main/scripts/distro_codegen.py) if necessary. Note that `distro_codegen.py` will fail if the new provider causes any distribution template to attempt to import provider-specific dependencies. This usually means the distribution's `get_distribution_template()` code path should only import any necessary Config or model alias definitions from each provider and not the provider's actual implementation.
 
 
 Here are some example PRs to help you get started:
-   - [Grok Inference Implementation](https://github.com/meta-llama/llama-stack/pull/609)
-   - [Nvidia Inference Implementation](https://github.com/meta-llama/llama-stack/pull/355)
-   - [Model context protocol Tool Runtime](https://github.com/meta-llama/llama-stack/pull/665)
+   - [Grok Inference Implementation](https://github.com/ogx-ai/ogx/pull/609)
+   - [Nvidia Inference Implementation](https://github.com/ogx-ai/ogx/pull/355)
+   - [Model context protocol Tool Runtime](https://github.com/ogx-ai/ogx/pull/665)
 
 ## Guidelines for creating Internal or External Providers
 
 |**Type** |Internal (In-tree) |External (out-of-tree)
 |---------|-------------------|---------------------|
-|**Description** |A provider that is directly in the Llama Stack code|A provider that is outside of the Llama stack core codebase but is still accessible and usable by Llama Stack.
-|**Benefits** |Ability to interact with the provider with minimal additional configurations or installations| Contributors do not have to add directly to the code to create providers accessible on Llama Stack. Keep provider-specific code separate from the core Llama Stack code.
+|**Description** |A provider that is directly in the OGX code|A provider that is outside of the Llama stack core codebase but is still accessible and usable by OGX.
+|**Benefits** |Ability to interact with the provider with minimal additional configurations or installations| Contributors do not have to add directly to the code to create providers accessible on OGX. Keep provider-specific code separate from the core OGX code.
 
 ## Inference Provider Patterns
 
-When implementing Inference providers for OpenAI-compatible APIs, Llama Stack provides several mixin classes to simplify development and ensure consistent behavior across providers.
+When implementing Inference providers for OpenAI-compatible APIs, OGX provides several mixin classes to simplify development and ensure consistent behavior across providers.
 
 ### OpenAIMixin
 
@@ -67,13 +67,13 @@ def get_base_url(self) -> str:
 
 ## Testing the Provider
 
-Before running tests, you must have required dependencies installed. This depends on the providers or distributions you are testing. For example, if you are testing the `together` distribution, install its dependencies with `llama stack list-deps together | xargs -L1 uv pip install`.
+Before running tests, you must have required dependencies installed. This depends on the providers or distributions you are testing. For example, if you are testing the `together` distribution, install its dependencies with `ogx list-deps together | xargs -L1 uv pip install`.
 
 ### 1. Integration Testing
 
-Integration tests are located in [tests/integration](https://github.com/meta-llama/llama-stack/tree/main/tests/integration). These tests use the python client-SDK APIs (from the `llama_stack_client` package) to test functionality. Since these tests use client APIs, they can be run either by pointing to an instance of the Llama Stack server or "inline" by using `LlamaStackAsLibraryClient`.
+Integration tests are located in [tests/integration](https://github.com/ogx-ai/ogx/tree/main/tests/integration). These tests use the python client-SDK APIs (from the `ogx_client` package) to test functionality. Since these tests use client APIs, they can be run either by pointing to an instance of the OGX server or "inline" by using `OGXAsLibraryClient`.
 
-Consult [tests/integration/README.md](https://github.com/meta-llama/llama-stack/blob/main/tests/integration/README.md) for more details on how to run the tests.
+Consult [tests/integration/README.md](https://github.com/ogx-ai/ogx/blob/main/tests/integration/README.md) for more details on how to run the tests.
 
 Note that each provider's `sample_run_config()` method (in the configuration class for that provider)
  typically references some environment variables for specifying API keys and the like. You can set these in the environment before running the test command.
@@ -81,14 +81,14 @@ Note that each provider's `sample_run_config()` method (in the configuration cla
 
 ### 2. Unit Testing
 
-Unit tests are located in [tests/unit](https://github.com/meta-llama/llama-stack/tree/main/tests/unit). Provider-specific unit tests are located in [tests/unit/providers](https://github.com/meta-llama/llama-stack/tree/main/tests/unit/providers). These tests are all run automatically as part of the CI process.
+Unit tests are located in [tests/unit](https://github.com/ogx-ai/ogx/tree/main/tests/unit). Provider-specific unit tests are located in [tests/unit/providers](https://github.com/ogx-ai/ogx/tree/main/tests/unit/providers). These tests are all run automatically as part of the CI process.
 
-Consult [tests/unit/README.md](https://github.com/meta-llama/llama-stack/blob/main/tests/unit/README.md) for more details on how to run the tests manually.
+Consult [tests/unit/README.md](https://github.com/ogx-ai/ogx/blob/main/tests/unit/README.md) for more details on how to run the tests manually.
 
 ### 3. Additional end-to-end testing
 
-1. Start a Llama Stack server with your new provider
-2. Verify compatibility with existing client scripts in the [llama-stack-apps](https://github.com/meta-llama/llama-stack-apps/tree/main) repository
+1. Start a OGX server with your new provider
+2. Verify compatibility with existing client scripts in the [ogx-apps](https://github.com/ogx-ai/ogx-apps/tree/main) repository
 3. Document which scripts are compatible with your provider
 
 ## Submitting Your PR

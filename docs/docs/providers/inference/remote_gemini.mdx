@@ -34,9 +34,13 @@ Google Gemini inference provider for accessing Gemini models and Google's AI ser
 | `network.timeout.connect` | `float \| None` | No |  | Connection timeout in seconds. |
 | `network.timeout.read` | `float \| None` | No |  | Read timeout in seconds. |
 | `network.headers` | `dict[str, str] \| None` | No |  | Additional HTTP headers to include in all requests. |
+| `access_token` | `SecretStr \| None` | No |  | OAuth2 access token for Gemini. When set, used instead of api_key for Bearer authentication. |
+| `project` | `str \| None` | No |  | Google Cloud project ID for quota attribution when using OAuth/ADC credentials. |
 
 ## Sample Configuration
 
 ```yaml
 api_key: ${env.GEMINI_API_KEY:=}
+access_token: ${env.GEMINI_ACCESS_TOKEN:=}
+project: ${env.GEMINI_AI_PROJECT:=}
 ```

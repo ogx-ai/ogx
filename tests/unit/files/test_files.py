@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,15 +7,15 @@
 
 import pytest
 
-from llama_stack.core.access_control.access_control import default_policy
-from llama_stack.core.storage.datatypes import SqliteSqlStoreConfig, SqlStoreReference
-from llama_stack.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from llama_stack.providers.inline.files.localfs import (
+from ogx.core.access_control.access_control import default_policy
+from ogx.core.storage.datatypes import SqliteSqlStoreConfig, SqlStoreReference
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx.providers.inline.files.localfs import (
     LocalfsFilesImpl,
     LocalfsFilesImplConfig,
 )
-from llama_stack_api import OpenAIFilePurpose, Order, ResourceNotFoundError
-from llama_stack_api.files.models import (
+from ogx_api import OpenAIFilePurpose, Order, ResourceNotFoundError
+from ogx_api.files.models import (
     DeleteFileRequest,
     ListFilesRequest,
     OpenAIFileObject,
@@ -379,8 +379,8 @@ class TestOpenAIFilesAPI:
         """Test that /files/{file_id}/content response schema is type: string (not $ref to Response)."""
         from unittest.mock import AsyncMock
 
-        from llama_stack_api.files.api import Files
-        from llama_stack_api.files.fastapi_routes import create_router
+        from ogx_api.files.api import Files
+        from ogx_api.files.fastapi_routes import create_router
 
         mock_impl = AsyncMock(spec=Files)
         router = create_router(mock_impl)

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from llama_stack.core.request_headers import request_provider_data_context
-from llama_stack.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
+from ogx.core.request_headers import request_provider_data_context
+from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
 from tests.unit.providers.utils.inference.openai_mixin_helpers import (
     CustomListProviderModelIdsImplementation,
     OpenAIMixinImpl,
@@ -171,21 +171,19 @@ class TestOpenAIMixinProviderDataApiKey:
 
     def test_with_provider_data(self, mixin_with_provider_data_field):
         """Test that provider data API key overrides config API key"""
-        with request_provider_data_context(
-            {"x-llamastack-provider-data": json.dumps({"test_api_key": "provider-data-key"})}
-        ):
+        with request_provider_data_context({"x-ogx-provider-data": json.dumps({"test_api_key": "provider-data-key"})}):
             assert mixin_with_provider_data_field.client.api_key == "provider-data-key"
 
     def test_with_wrong_key(self, mixin_with_provider_data_field):
         """Test fallback to config when provider data doesn't have the required key"""
-        with request_provider_data_context({"x-llamastack-provider-data": json.dumps({"wrong_key": "some-value"})}):
+        with request_provider_data_context({"x-ogx-provider-data": json.dumps({"wrong_key": "some-value"})}):
             assert mixin_with_provider_data_field.client.api_key == "default-api-key"
 
     def test_error_when_no_config_and_provider_data_has_wrong_key(
         self, mixin_with_provider_data_field_and_none_api_key
     ):
         """Test that ValueError is raised when provider data exists but doesn't have required key"""
-        with request_provider_data_context({"x-llamastack-provider-data": json.dumps({"wrong_key": "some-value"})}):
+        with request_provider_data_context({"x-ogx-provider-data": json.dumps({"wrong_key": "some-value"})}):
             with pytest.raises(ValueError, match="API key not provided"):
                 _ = mixin_with_provider_data_field_and_none_api_key.client
 
@@ -196,4 +194,4 @@ class TestOpenAIMixinProviderDataApiKey:
 
         error_message = str(exc_info.value)
         assert "test_api_key" in error_message
-        assert "x-llamastack-provider-data" in error_message
+        assert "x-ogx-provider-data" in error_message

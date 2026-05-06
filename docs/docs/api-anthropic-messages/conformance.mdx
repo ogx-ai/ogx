@@ -1,0 +1,148 @@
+---
+title: Anthropic Messages API Conformance
+description: Detailed conformance status of OGX against the Anthropic Messages API specification
+sidebar_label: Conformance
+sidebar_position: 2
+---
+
+# Anthropic Messages API Conformance Report
+
+This page provides a detailed breakdown of OGX's conformance to the Anthropic Messages API specification.
+The conformance score increases as schema issues are fixed and missing properties are implemented.
+
+:::info Auto-generated
+This documentation is auto-generated from the Anthropic Messages API specification comparison.
+:::
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| **Overall Conformance Score** | 95.8% |
+| **Endpoints Implemented** | 2/6 |
+| **Total Properties Checked** | 930 |
+| **Schema/Type Issues** | 24 |
+| **Missing Properties** | 15 |
+| **Total Issues to Fix** | 39 |
+
+## Category Scores
+
+Categories are sorted by conformance score (lowest first, needing most attention).
+
+| Category | Score | Properties | Issues | Missing |
+|----------|-------|------------|--------|---------|
+| Messages | 95.8% | 930 | 24 | 15 |
+
+## Missing Endpoints
+
+The following Anthropic API endpoints are not yet implemented in OGX:
+
+### /messages
+
+- `/v1/messages/batches`
+- `/v1/messages/batches/{message_batch_id}`
+- `/v1/messages/batches/{message_batch_id}/cancel`
+- `/v1/messages/batches/{message_batch_id}/results`
+
+## Detailed Category Breakdown
+
+Below is a detailed breakdown of conformance issues and missing properties for each category.
+
+### Messages
+
+**Score:** 95.8% · **Issues:** 24 · **Missing:** 15
+
+#### `/v1/messages`
+
+**POST**
+
+<details>
+<summary>Missing Properties (9)</summary>
+
+- `parameters.header.anthropic-version`
+- `requestBody.content.application/json.properties.cache_control`
+- `requestBody.content.application/json.properties.container`
+- `requestBody.content.application/json.properties.inference_geo`
+- `requestBody.content.application/json.properties.metadata.properties.user_id`
+- `requestBody.content.application/json.properties.output_config`
+- `responses.200.content.application/json.properties.container`
+- `responses.200.content.application/json.properties.stop_details`
+- `responses.4XX`
+
+</details>
+
+<details>
+<summary>Schema Issues (20)</summary>
+
+| Property | Issues |
+|----------|--------|
+| `requestBody.content.application/json.properties.messages.items.properties.content` | Union variants added: 2; Union variants removed: 2 |
+| `requestBody.content.application/json.properties.metadata` | Type removed: ['object']; Union variants added: 2 |
+| `requestBody.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 17 |
+| `requestBody.content.application/json.properties.service_tier` | Enum removed: ['auto', 'standard_only']; Type removed: ['string']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+| `requestBody.content.application/json.properties.stop_sequences` | Type removed: ['array']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+| `requestBody.content.application/json.properties.stream` | Type removed: ['boolean']; Nullable added (Anthropic non-nullable); Union variants added: 2; Default changed: None -&gt; False |
+| `requestBody.content.application/json.properties.system` | Nullable added (Anthropic non-nullable); Union variants added: 3; Union variants removed: 2 |
+| `requestBody.content.application/json.properties.temperature` | Type removed: ['number']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+| `requestBody.content.application/json.properties.thinking` | Union variants added: 2 |
+| `requestBody.content.application/json.properties.tool_choice` | Union variants added: 2 |
+| `requestBody.content.application/json.properties.tools` | Type removed: ['array']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+| `requestBody.content.application/json.properties.top_k` | Type removed: ['integer']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+| `requestBody.content.application/json.properties.top_p` | Type removed: ['number']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+| `responses.200.content.application/json.properties.content.items` | Union variants added: 5; Union variants removed: 12 |
+| `responses.200.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 17 |
+| `responses.200.content.application/json.properties.role` | Default changed: assistant -&gt; None |
+| `responses.200.content.application/json.properties.stop_reason` | Union variants added: 1; Union variants removed: 1 |
+| `responses.200.content.application/json.properties.type` | Default changed: message -&gt; None |
+| `responses.200.content.application/json.properties.usage.properties.input_tokens` | Default changed: None -&gt; 0 |
+| `responses.200.content.application/json.properties.usage.properties.output_tokens` | Default changed: None -&gt; 0 |
+
+</details>
+
+#### `/v1/messages/count_tokens`
+
+**POST**
+
+<details>
+<summary>Missing Properties (6)</summary>
+
+- `parameters.header.anthropic-version`
+- `requestBody.content.application/json.properties.cache_control`
+- `requestBody.content.application/json.properties.output_config`
+- `requestBody.content.application/json.properties.thinking`
+- `requestBody.content.application/json.properties.tool_choice`
+- `responses.4XX`
+
+</details>
+
+<details>
+<summary>Schema Issues (4)</summary>
+
+| Property | Issues |
+|----------|--------|
+| `requestBody.content.application/json.properties.messages.items.properties.content` | Union variants added: 2; Union variants removed: 2 |
+| `requestBody.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 17 |
+| `requestBody.content.application/json.properties.system` | Nullable added (Anthropic non-nullable); Union variants added: 2; Union variants removed: 1 |
+| `requestBody.content.application/json.properties.tools` | Type removed: ['array']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+
+</details>
+
+## How to Improve Conformance
+
+To improve conformance scores:
+
+1. **Fix Schema Issues**: Update Pydantic models in `src/ogx_api/messages/` to match Anthropic's schema
+2. **Add Missing Properties**: Implement missing fields in request/response models
+3. **Add Missing Endpoints**: Implement endpoints listed in the Missing Endpoints section
+
+Run the coverage analyzer to check your progress:
+
+```bash
+python scripts/anthropic_coverage.py --update
+```
+
+Then regenerate this documentation:
+
+```bash
+python scripts/generate_anthropic_coverage_docs.py
+```

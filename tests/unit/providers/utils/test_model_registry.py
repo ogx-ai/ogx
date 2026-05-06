@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -35,8 +35,8 @@
 
 import pytest
 
-from llama_stack.providers.utils.inference.model_registry import ModelRegistryHelper, ProviderModelEntry
-from llama_stack_api import Model, UnsupportedModelError
+from ogx.providers.utils.inference.model_registry import ModelRegistryHelper, ProviderModelEntry
+from ogx_api import Model, UnsupportedModelError
 
 
 @pytest.fixture
@@ -162,7 +162,7 @@ async def test_register_model_existing_different(
         await helper.register_model(known_model)
 
 
-# TODO: unregister_model functionality was removed/disabled by https://github.com/meta-llama/llama-stack/pull/2916
+# TODO: unregister_model functionality was removed/disabled by https://github.com/ogx-ai/ogx/pull/2916
 # async def test_unregister_model(helper: ModelRegistryHelper, known_model: Model) -> None:
 #     await helper.register_model(known_model)  # duplicate entry
 #     assert helper.get_provider_model_id(known_model.model_id) == known_model.provider_model_id
@@ -170,7 +170,7 @@ async def test_register_model_existing_different(
 #     assert helper.get_provider_model_id(known_model.model_id) is None
 
 
-# TODO: unregister_model functionality was removed/disabled by https://github.com/meta-llama/llama-stack/pull/2916
+# TODO: unregister_model functionality was removed/disabled by https://github.com/ogx-ai/ogx/pull/2916
 # async def test_unregister_unknown_model(helper: ModelRegistryHelper, unknown_model: Model) -> None:
 #     with pytest.raises(ValueError):
 #         await helper.unregister_model(unknown_model.model_id)
@@ -180,7 +180,7 @@ async def test_register_model_during_init(helper: ModelRegistryHelper, known_mod
     assert helper.get_provider_model_id(known_model.provider_resource_id) == known_model.provider_model_id
 
 
-# TODO: unregister_model functionality was removed/disabled by https://github.com/meta-llama/llama-stack/pull/2916
+# TODO: unregister_model functionality was removed/disabled by https://github.com/ogx-ai/ogx/pull/2916
 # async def test_unregister_model_during_init(helper: ModelRegistryHelper, known_model: Model) -> None:
 #     assert helper.get_provider_model_id(known_model.provider_resource_id) == known_model.provider_model_id
 #     await helper.unregister_model(known_model.provider_resource_id)

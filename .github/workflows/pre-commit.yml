@@ -44,33 +44,37 @@ jobs:
             .pre-commit-config.yaml
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{matrix.node-version}}
           cache: 'npm'
-          cache-dependency-path: 'src/llama_stack_ui/'
+          cache-dependency-path: 'src/ogx_ui/'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       - name: Install npm dependencies
         run: npm ci
-        working-directory: src/llama_stack_ui
+        working-directory: src/ogx_ui
 
       - name: Install pre-commit
         run: python -m pip install 'pre-commit>=4.4.0'
 
       - name: Cache pre-commit
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
 
       # Install oasdiff: https://github.com/oasdiff/oasdiff, a tool for detecting breaking changes in OpenAPI specs.
+      # Pin the version to avoid CI/local drift in generated coverage files.
       - name: Install oasdiff
+        env:
+          OASDIFF_VERSION: "1.15.0"
         run: |
           for i in 1 2 3; do
-            curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh && break
+            curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz" \
+              | tar xz -C /usr/local/bin oasdiff && break
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
@@ -149,7 +153,7 @@ jobs:
 
       - name: Configure client installation
         id: client-config
-        uses: ./.github/actions/install-llama-stack-client
+        uses: ./.github/actions/install-ogx-client
 
       - name: Sync dev + type_checking dependencies
         run: |
@@ -157,7 +161,7 @@ jobs:
 
           # Install specific client version after sync if needed
           if [ "${{ steps.client-config.outputs.install-after-sync }}" = "true" ]; then
-            echo "Installing llama-stack-client from: ${{ steps.client-config.outputs.install-source }}"
+            echo "Installing ogx-client from: ${{ steps.client-config.outputs.install-source }}"
             uv pip install ${{ steps.client-config.outputs.install-source }}
           fi
 
@@ -174,7 +178,7 @@ jobs:
       - name: Check if any unused recordings
         run: |
           set -e
-          PYTHONPATH=$PWD uv run ./scripts/cleanup_recordings.py --delete
+          PYTHONPATH=$PWD uv run --group test ./scripts/cleanup_recordings.py --delete
           changes=$(git status --short tests/integration | grep 'recordings' || true)
           if [ -n "$changes" ]; then
             echo "::error::Unused integration recordings detected. Run 'PYTHONPATH=$(pwd) uv run ./scripts/cleanup_recordings.py --delete' locally and commit the deletions."

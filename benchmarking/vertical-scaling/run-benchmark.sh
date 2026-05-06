@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -29,7 +29,7 @@ Runs complete vertical scaling benchmark: starts services, runs load test, clean
 Server Options:
     --workers NUMBER         Number of uvicorn workers (default: 1)
     --mock-port NUMBER       Port for mock server (default: 8080)
-    --stack-port NUMBER      Port for Llama Stack server (default: 8321)
+    --stack-port NUMBER      Port for OGX server (default: 8321)
 
 Benchmark Options:
     --users NUMBER          Number of concurrent users (default: 1)
@@ -135,7 +135,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "==================================================================="
-echo "  Llama Stack Vertical Scaling Benchmark"
+echo "  OGX Vertical Scaling Benchmark"
 echo "==================================================================="
 echo ""
 
@@ -174,7 +174,7 @@ echo "Workers: $WORKERS"
 echo "Backend: $MOCK_URL"
 echo ""
 
-OPENAI_BASE_URL="$MOCK_URL/v1" OPENAI_API_KEY="fake-token" uv run llama stack run --providers inference=remote::openai --port $STACK_PORT > "$SCRIPT_DIR/stack.log" 2>&1 &
+OPENAI_BASE_URL="$MOCK_URL/v1" OPENAI_API_KEY="fake-token" uv run ogx run --providers inference=remote::openai --port $STACK_PORT > "$SCRIPT_DIR/stack.log" 2>&1 &
 STACK_PID=$!
 echo "$STACK_PID" >> "$PIDS_FILE"
 echo "Stack Server PID: $STACK_PID"

@@ -1,5 +1,5 @@
 version: "2"
-distro_name: "llama-stack-api-weather"
+distro_name: "ogx-api-weather"
 apis:
   - weather
 providers:
@@ -11,10 +11,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/external}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/external}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/external}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/external}/sql_store.db
   stores:
     metadata:
       namespace: registry
@@ -28,7 +28,7 @@ storage:
     prompts:
       namespace: prompts
       backend: kv_default
-external_apis_dir: ~/.llama/apis.d
-external_providers_dir: ~/.llama/providers.d
+external_apis_dir: ~/.ogx/apis.d
+external_providers_dir: ~/.ogx/providers.d
 server:
   port: 8321
