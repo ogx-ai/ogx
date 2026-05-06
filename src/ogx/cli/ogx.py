@@ -12,9 +12,9 @@ from ogx.log import setup_logging
 # Initialize logging early before any loggers get created
 setup_logging()
 
+from .launch import LaunchParser  # type: ignore[attr-defined]
 from .letsgo import LetsGo
 from .run import Run
-from .launch import LaunchParser  # type: ignore[attr-defined]
 from .stack import StackParser  # type: ignore[attr-defined]
 from .stack.utils import print_subcommand_description
 
