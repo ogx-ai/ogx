@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +71,7 @@ export default function ChatPlaygroundPage() {
 
 function ChatPlaygroundContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const conversationParam = searchParams.get("conversation");
 
   const [currentSession, setCurrentSession] = useState<SimpleSession | null>(
@@ -251,7 +252,7 @@ function ChatPlaygroundContent() {
         setError(
           "Failed to load conversation. It may have been deleted. Starting a new chat."
         );
-        // Fall back to a new session
+        router.replace("/chat-playground");
         createNewSession();
       } finally {
         setLoadingConversation(false);
