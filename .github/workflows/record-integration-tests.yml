@@ -21,10 +21,6 @@ on:
       - 'tests/integration/**'
       - 'src/ogx/**'
       - '!src/ogx_ui/**'
-      # Temporary: trigger on workflow/action changes to validate this PR
-      - '.github/workflows/record-integration-tests.yml'
-      - '.github/actions/setup-ollama/**'
-      - '.github/actions/setup-test-environment/**'
   workflow_dispatch:
     inputs:
       pr_number:
@@ -248,6 +244,9 @@ jobs:
           project_id: ${{ secrets.VERTEX_AI_PROJECT }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
+      # TODO: Update pinned SHA after this PR merges to main. Using checkout-relative
+      # refs temporarily because the setup-test-environment and setup-ollama fixes
+      # (startsWith matching, record-if-missing support, model pull) are not on main yet.
       - name: Setup test environment
         if: steps.should_run.outputs.run == 'true'
         uses: ./.github/actions/setup-test-environment
