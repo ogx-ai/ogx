@@ -257,3 +257,70 @@ async def test_create_conversation_defaults_message_type(service):
 
     assert len(listed.data) == 1
     assert listed.data[0].type == "message"
+
+
+async def test_list_items_has_more_pagination(service):
+    """Test that has_more is True when more items exist beyond the requested limit."""
+    conversation = await service.create_conversation(CreateConversationRequest())
+
+    items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
+            status="completed",
+        )
+        for i in range(5)
+    ]
+    await service.add_items(conversation.id, AddItemsRequest(items=items))
+
+    result = await service.list_items(ListItemsRequest(conversation_id=conversation.id, limit=3))
+    assert len(result.data) == 3
+    assert result.has_more is True
+
+    result_all = await service.list_items(ListItemsRequest(conversation_id=conversation.id, limit=5))
+    assert len(result_all.data) == 5
+    assert result_all.has_more is False
+
+    result_over = await service.list_items(ListItemsRequest(conversation_id=conversation.id, limit=10))
+    assert len(result_over.data) == 5
+    assert result_over.has_more is False
+
+
+async def test_list_items_cursor_pagination(service):
+    """Test that the after cursor skips items and has_more reflects remaining items."""
+    conversation = await service.create_conversation(CreateConversationRequest())
+
+    items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
+            status="completed",
+        )
+        for i in range(5)
+    ]
+    await service.add_items(conversation.id, AddItemsRequest(items=items))
+
+    first_page = await service.list_items(ListItemsRequest(conversation_id=conversation.id, limit=2, order="asc"))
+    assert len(first_page.data) == 2
+    assert first_page.has_more is True
+
+    second_page = await service.list_items(
+        ListItemsRequest(conversation_id=conversation.id, limit=2, order="asc", after=first_page.last_id)
+    )
+    assert len(second_page.data) == 2
+    assert second_page.has_more is True
+
+    third_page = await service.list_items(
+        ListItemsRequest(conversation_id=conversation.id, limit=2, order="asc", after=second_page.last_id)
+    )
+    assert len(third_page.data) == 1
+    assert third_page.has_more is False
+
+    first_page_ids = {item.id for item in first_page.data}
+    second_page_ids = {item.id for item in second_page.data}
+    third_page_ids = {item.id for item in third_page.data}
+    assert first_page_ids.isdisjoint(second_page_ids)
+    assert second_page_ids.isdisjoint(third_page_ids)
+    assert len(first_page_ids | second_page_ids | third_page_ids) == 5
