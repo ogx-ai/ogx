@@ -41,6 +41,8 @@ from ogx_api import (
     ToolInvocationResult,
     ToolRuntime,
     VectorIO,
+    WebSearchActionSearch,
+    WebSearchSource,
 )
 
 from .types import ChatCompletionContext, ToolExecutionResult
@@ -496,6 +498,17 @@ class ToolExecutor:
                 )
                 if has_error:
                     message.status = "failed"
+                elif result and (metadata := getattr(result, "metadata", None)):
+                    sources = []
+                    for source in metadata.get("sources", []):
+                        if "url" in source:
+                            sources.append(WebSearchSource(url=source["url"]))
+                    query = metadata.get("query", tool_kwargs.get("query", ""))
+                    message.action = WebSearchActionSearch(
+                        query=query,
+                        queries=[query],
+                        sources=sources,
+                    )
             elif function.name in ("knowledge_search", "file_search"):
                 message = OpenAIResponseOutputMessageFileSearchToolCall(
                     id=item_id,
