@@ -25,6 +25,8 @@ from .config import BraveSearchToolConfig
 class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequestProviderData):
     """Tool runtime for performing web searches using the Brave Search API."""
 
+    _CONTEXT_SIZE_TO_COUNT = {"low": 3, "medium": 5, "high": 10}
+
     def __init__(self, config: BraveSearchToolConfig):
         self.config = config
 
@@ -83,7 +85,24 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
             "Accept-Encoding": "gzip",
             "Accept": "application/json",
         }
-        payload = {"q": kwargs["query"]}
+
+        query = kwargs["query"]
+
+        allowed_domains = kwargs.get("allowed_domains")
+        if allowed_domains:
+            site_filter = " OR ".join(f"site:{domain}" for domain in allowed_domains)
+            query = f"{query} ({site_filter})"
+
+        payload: dict[str, Any] = {"q": query}
+
+        user_location = kwargs.get("user_location")
+        if user_location and user_location.get("country"):
+            payload["country"] = user_location["country"]
+
+        search_context_size = kwargs.get("search_context_size")
+        if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
+            payload["count"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
+
         async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.get(
                 url=url,
