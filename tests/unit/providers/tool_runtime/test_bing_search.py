@@ -104,3 +104,14 @@ async def test_invoke_with_empty_allowed_domains(bing_search, mock_bing_response
         )
         call_kwargs = mock_get.call_args
         assert call_kwargs.kwargs["params"]["q"] == "test query"
+
+
+async def test_invoke_returns_source_metadata(bing_search, mock_bing_response):
+    """Test that invoke_tool returns source URLs in metadata."""
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_bing_response):
+        result = await bing_search.invoke_tool(tool_name="web_search", kwargs={"query": "test query"})
+        assert result.metadata is not None
+        assert "sources" in result.metadata
+        assert len(result.metadata["sources"]) == 1
+        assert result.metadata["sources"][0]["url"] == "https://example.com"
+        assert result.metadata["query"] == "test query"

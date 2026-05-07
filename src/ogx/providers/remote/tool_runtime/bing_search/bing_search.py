@@ -115,7 +115,16 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
             )
             response.raise_for_status()
 
-        return ToolInvocationResult(content=json.dumps(self._clean_response(response.json())))
+        response_json = response.json()
+        sources = []
+        if "webPages" in response_json:
+            for page in response_json["webPages"]["value"]:
+                if "url" in page:
+                    sources.append({"url": page["url"]})
+        return ToolInvocationResult(
+            content=json.dumps(self._clean_response(response_json)),
+            metadata={"query": kwargs["query"], "sources": sources},
+        )
 
     def _clean_response(self, search_response):
         clean_response = []

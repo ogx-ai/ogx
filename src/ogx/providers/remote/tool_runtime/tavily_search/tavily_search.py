@@ -100,7 +100,15 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
             )
             response.raise_for_status()
 
-        return ToolInvocationResult(content=json.dumps(self._clean_tavily_response(response.json())))
+        response_json = response.json()
+        sources = []
+        for r in response_json.get("results", []):
+            if "url" in r:
+                sources.append({"url": r["url"]})
+        return ToolInvocationResult(
+            content=json.dumps(self._clean_tavily_response(response_json)),
+            metadata={"query": kwargs["query"], "sources": sources},
+        )
 
     def _clean_tavily_response(self, search_response, top_k=3):
         return {"query": search_response["query"], "top_k": search_response["results"]}

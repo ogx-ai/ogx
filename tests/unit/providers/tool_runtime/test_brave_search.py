@@ -124,3 +124,14 @@ async def test_invoke_with_empty_allowed_domains(brave_search, mock_brave_respon
         )
         call_kwargs = mock_get.call_args
         assert call_kwargs.kwargs["params"]["q"] == "test query"
+
+
+async def test_invoke_returns_source_metadata(brave_search, mock_brave_response):
+    """Test that invoke_tool returns source URLs in metadata."""
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response):
+        result = await brave_search.invoke_tool(tool_name="web_search", kwargs={"query": "test query"})
+        assert result.metadata is not None
+        assert "sources" in result.metadata
+        assert len(result.metadata["sources"]) == 1
+        assert result.metadata["sources"][0]["url"] == "https://example.com"
+        assert result.metadata["query"] == "test query"

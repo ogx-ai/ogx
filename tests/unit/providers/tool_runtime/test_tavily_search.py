@@ -107,3 +107,14 @@ async def test_invoke_with_empty_allowed_domains(tavily_search, mock_tavily_resp
         call_kwargs = mock_post.call_args
         request_body = call_kwargs.kwargs["json"]
         assert "include_domains" not in request_body
+
+
+async def test_invoke_returns_source_metadata(tavily_search, mock_tavily_response):
+    """Test that invoke_tool returns source URLs in metadata."""
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_tavily_response):
+        result = await tavily_search.invoke_tool(tool_name="web_search", kwargs={"query": "test query"})
+        assert result.metadata is not None
+        assert "sources" in result.metadata
+        assert len(result.metadata["sources"]) == 1
+        assert result.metadata["sources"][0]["url"] == "https://example.com"
+        assert result.metadata["query"] == "test query"

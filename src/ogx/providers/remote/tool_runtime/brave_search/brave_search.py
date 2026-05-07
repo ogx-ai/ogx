@@ -110,11 +110,32 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
                 headers=headers,
             )
             response.raise_for_status()
-        results = self._clean_brave_response(response.json())
+        response_json = response.json()
+        results = self._clean_brave_response(response_json)
         content_items = "\n".join([str(result) for result in results])
+        sources = self._extract_sources(response_json)
         return ToolInvocationResult(
             content=content_items,
+            metadata={"query": kwargs["query"], "sources": sources},
         )
+
+    def _extract_sources(self, search_response: dict) -> list[dict[str, str]]:
+        sources = []
+        if "mixed" in search_response:
+            for m in search_response["mixed"]["main"][: self.config.max_results]:
+                r_type = m["type"]
+                if r_type in search_response:
+                    results = search_response[r_type].get("results", [])
+                    idx = m.get("index")
+                    if idx is not None and idx < len(results):
+                        item = results[idx]
+                    elif isinstance(results, list) and results:
+                        item = results[0]
+                    else:
+                        continue
+                    if isinstance(item, dict) and "url" in item:
+                        sources.append({"url": item["url"]})
+        return sources
 
     def _clean_brave_response(self, search_response):
         clean_response = []
