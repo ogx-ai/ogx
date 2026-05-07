@@ -8,14 +8,23 @@ fallback_version = "0.8.1.dev0"
 [tool.uv]
 required-version = ">=0.7.0"
 constraint-dependencies = [
-    "aiohttp>=3.13.3",
+    "aiohttp>=3.13.4",                # CVE-2026-34514 + 9 more: CRLF injection, header leak, DoS
+    "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
+    "cryptography>=46.0.7",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
     "fonttools>=4.60.2",
+    "gitpython>=3.1.47",               # Command injection via Git options bypass
     "h11>=0.16.0",
-    "pyasn1>=0.6.3",  # CVE-2026-30922: DoS via unbounded recursion
+    "litellm<1.83.7",                   # >=1.83.7 pins pydantic==2.12.5 which breaks int coercion in openai model recordings
+    "pydantic>=2.11.9,<2.12.0",        # 2.12 breaks int coercion in openai.types.model.Model during test replay
+    "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
+    "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
     "python-multipart>=0.0.22",
+    "python-socketio>=5.14.0",         # CVE-2025-61765: RCE via pickle deserialization
     "starlette>=0.49.1",
     "tornado>=6.5.5",
     "urllib3>=2.6.3",
+    "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
+    "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
 
 [project]
@@ -58,7 +67,6 @@ dependencies = [
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "psycopg2-binary",
     "mcp>=1.23.0",                                    # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
 ]
@@ -100,7 +108,7 @@ starter = [
     "pymilvus[milvus-lite]>=2.4.10",
     "pymongo",
     "markitdown[all]",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "pythainlp",
     "qdrant-client",
     "redis",
@@ -140,7 +148,7 @@ dev = [
     "ollama",
     "ogx-client>=0.8.0",
     "chardet",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "together",
     "boto3",
     "anthropic",
@@ -154,7 +162,7 @@ type_checking = [
     "types-setuptools",
     "types-jsonschema",
     "markitdown[all]",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "pandas-stubs",
     "types-psutil",
     "types-tqdm",
@@ -194,7 +202,7 @@ unit = [
     "aiohttp",
     "psycopg2-binary>=2.9.0",
     "markitdown[all]",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "mcp>=1.23.0",
     "chardet",
     "sqlalchemy",
@@ -217,7 +225,7 @@ test = [
     "torchvision>=0.21.0",
     "chardet",
     "psycopg2-binary>=2.9.0",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "mcp>=1.23.0",
     "datasets>=4.0.0",
     "autoevals",

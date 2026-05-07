@@ -8,8 +8,8 @@
 import pytest
 
 from ogx.core.datatypes import VectorStoreWithOwner
-from ogx.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
-from ogx.core.storage.kvstore import kvstore_impl, register_kvstore_backends
+from ogx.core.storage.datatypes import SqliteKVStoreConfig
+from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
 from ogx.core.store.registry import (
     KEY_FORMAT,
     CachedDiskDistributionRegistry,
@@ -69,14 +69,13 @@ async def test_cached_registry_initialization(sqlite_kvstore, sample_vector_stor
     await disk_registry.register(sample_vector_store)
     await disk_registry.register(sample_model)
 
-    # Test cached version loads from disk
+    # Test cached version loads from disk via a fresh KVStore pointing at the same DB
     db_path = sqlite_kvstore.db_path
-    backend_name = "kv_cached_test"
-    register_kvstore_backends({backend_name: SqliteKVStoreConfig(db_path=db_path)})
+    fresh_config = SqliteKVStoreConfig(db_path=db_path)
+    fresh_kvstore = SqliteKVStoreImpl(fresh_config)
+    await fresh_kvstore.initialize()
     # Use cache_ttl_seconds=0 for tests to ensure immediate synchronization
-    cached_registry = CachedDiskDistributionRegistry(
-        await kvstore_impl(KVStoreReference(backend=backend_name, namespace="registry")), cache_ttl_seconds=0
-    )
+    cached_registry = CachedDiskDistributionRegistry(fresh_kvstore, cache_ttl_seconds=0)
     await cached_registry.initialize()
 
     result_vector_store = await cached_registry.get("vector_store", "test_vector_store")
@@ -103,13 +102,12 @@ async def test_cached_registry_updates(cached_disk_dist_registry):
     assert result_vector_store.identifier == new_vector_store.identifier
     assert result_vector_store.provider_id == new_vector_store.provider_id
 
-    # Verify persisted to disk
+    # Verify persisted to disk via a fresh KVStore pointing at the same DB
     db_path = cached_disk_dist_registry.kvstore.db_path
-    backend_name = "kv_cached_new"
-    register_kvstore_backends({backend_name: SqliteKVStoreConfig(db_path=db_path)})
-    new_registry = DiskDistributionRegistry(
-        await kvstore_impl(KVStoreReference(backend=backend_name, namespace="registry"))
-    )
+    fresh_config = SqliteKVStoreConfig(db_path=db_path)
+    fresh_kvstore = SqliteKVStoreImpl(fresh_config)
+    await fresh_kvstore.initialize()
+    new_registry = DiskDistributionRegistry(fresh_kvstore)
     await new_registry.initialize()
     result_vector_store = await new_registry.get("vector_store", "test_vector_store_2")
     assert result_vector_store is not None

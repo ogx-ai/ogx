@@ -275,23 +275,21 @@ class ConversationServiceImpl(Conversations):
         # get_conversation validates the ID format and checks existence
         await self.get_conversation(GetConversationRequest(conversation_id=request.conversation_id))
 
+        order = request.order if request.order is not None else "desc"
+        limit = request.limit or 20
+
         result = await self.sql_store.fetch_all(
-            table="conversation_items", where={"conversation_id": request.conversation_id}
+            table="conversation_items",
+            where={"conversation_id": request.conversation_id},
+            order_by=[("created_at", order)],
+            cursor=("id", request.after) if request.after else None,
+            limit=limit,
         )
-        records = result.data
-
-        if request.order is not None and request.order == "asc":
-            records.sort(key=lambda x: x["created_at"])
-        else:
-            records.sort(key=lambda x: x["created_at"], reverse=True)
-
-        actual_limit = request.limit or 20
-
-        records = records[:actual_limit]
-        items = [record["item_data"] for record in records]
 
         adapter: TypeAdapter[ConversationItem] = TypeAdapter(ConversationItem)
-        response_items: list[ConversationItem] = [adapter.validate_python(item) for item in items]
+        response_items: list[ConversationItem] = [
+            adapter.validate_python(record["item_data"]) for record in result.data
+        ]
 
         first_id = response_items[0].id if response_items else None
         last_id = response_items[-1].id if response_items else None
@@ -300,7 +298,7 @@ class ConversationServiceImpl(Conversations):
             data=response_items,
             first_id=first_id,
             last_id=last_id,
-            has_more=False,
+            has_more=result.has_more,
         )
 
     async def openai_delete_conversation_item(self, request: DeleteItemRequest) -> ConversationItemDeletedResource:

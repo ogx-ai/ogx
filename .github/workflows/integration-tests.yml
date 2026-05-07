@@ -105,15 +105,31 @@ jobs:
         with:
           ref: ${{ inputs.pr_head_sha || github.event.pull_request.head.sha || github.sha }}
 
+      - name: Get changed files for PR
+        id: changed-files
+        if: github.event_name == 'pull_request'
+        run: |
+          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
+          # Pass as a single-line escaped string for the argument
+          {
+            echo "files<<EOF"
+            echo "$CHANGED"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Generate test matrix
         id: set-matrix
         run: |
           # Generate matrix from CI_MATRIX in tests/integration/ci_matrix.json
           # Supports schedule-based, manual input, and workflow_call overrides
+          # On PRs, pass changed files to filter matrix to relevant providers
           MATRIX=$(PYTHONPATH=. python3 scripts/generate_ci_matrix.py \
             --schedule "${{ github.event.schedule }}" \
             --test-setup "${{ github.event.inputs.test-setup || '' }}" \
-            --matrix-key "${{ inputs.matrix_key || 'default' }}")
+            --matrix-key "${{ inputs.matrix_key || 'default' }}" \
+            --changed-files "${{ steps.changed-files.outputs.files || '' }}")
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "Generated matrix: $MATRIX"
 
@@ -122,6 +138,7 @@ jobs:
     # Always run even if generate-matrix was skipped (when matrix_json is provided)
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # When disable_cache is true, set UV_NO_CACHE to prevent uv from using cached packages.
     # This is a security measure for pull_request_target contexts to prevent cache poisoning.
     env:
