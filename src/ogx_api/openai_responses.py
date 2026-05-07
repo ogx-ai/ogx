@@ -225,17 +225,73 @@ class OpenAIResponseMessage(BaseModel):
 
 
 @json_schema_type
+class WebSearchSource(BaseModel):
+    """A source URL returned by a web search action.
+
+    :param type: Source type, always "url"
+    :param url: The URL of the source
+    """
+
+    type: Literal["url"] = "url"
+    url: str
+
+
+@json_schema_type
+class WebSearchActionSearch(BaseModel):
+    """Web search action: performs a search query.
+
+    :param type: Action type, always "search"
+    :param query: The search query (deprecated in favor of queries)
+    :param queries: The search queries
+    :param sources: Source URLs found by the search
+    """
+
+    type: Literal["search"] = "search"
+    query: str
+    queries: list[str] | None = None
+    sources: list[WebSearchSource] | None = None
+
+
+@json_schema_type
+class WebSearchActionOpenPage(BaseModel):
+    """Web search action: opens a specific URL from search results.
+
+    :param type: Action type, always "open_page"
+    :param url: The URL opened by the model
+    """
+
+    type: Literal["open_page"] = "open_page"
+    url: str | None = None
+
+
+@json_schema_type
+class WebSearchActionFind(BaseModel):
+    """Web search action: searches for a pattern within a loaded page.
+
+    :param type: Action type, always "find_in_page"
+    :param url: The URL of the page searched
+    :param pattern: The pattern or text to search for
+    """
+
+    type: Literal["find_in_page"] = "find_in_page"
+    url: str
+    pattern: str
+
+
+@json_schema_type
 class OpenAIResponseOutputMessageWebSearchToolCall(BaseModel):
     """Web search tool call output message for OpenAI responses.
 
     :param id: Unique identifier for this tool call
     :param status: Current status of the web search operation
     :param type: Tool call type identifier, always "web_search_call"
+    :param action: Details of the search action performed
     """
 
     id: str
     status: str
     type: Literal["web_search_call"] = "web_search_call"
+    action: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind | None = None
 
 
 class OpenAIResponseOutputMessageFileSearchToolCallResults(BaseModel):
