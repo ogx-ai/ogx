@@ -5904,25 +5904,25 @@ components:
       title: OpenAIFileObject
       description: OpenAI File object as defined in the OpenAI Files API.
     ExpiresAfter:
-      description: Control expiration of uploaded files.
       properties:
         anchor:
-          description: The anchor point for expiration, must be 'created_at'.
-          title: Anchor
           type: string
+          title: Anchor
+          description: The anchor point for expiration, must be 'created_at'.
           enum:
           - created_at
         seconds:
-          description: Seconds until expiration, between 3600 (1 hour) and 2592000 (30 days).
-          maximum: 2592000
-          minimum: 3600
-          title: Seconds
           type: integer
+          maximum: 2592000.0
+          minimum: 3600.0
+          title: Seconds
+          description: Seconds until expiration, between 3600 (1 hour) and 2592000 (30 days).
+      type: object
       required:
       - anchor
       - seconds
       title: ExpiresAfter
-      type: object
+      description: Control expiration of uploaded files.
     OpenAIFileDeleteResponse:
       properties:
         id:
@@ -10417,25 +10417,12 @@ components:
           $ref: '#/components/schemas/OpenAIFileUploadPurpose'
           description: The intended purpose of the uploaded file.
         expires_after:
-          properties:
-            anchor:
-              type: string
-              title: Anchor
-              description: The anchor point for expiration, must be 'created_at'.
-              enum:
-              - created_at
-            seconds:
-              type: integer
-              maximum: 2592000.0
-              minimum: 3600.0
-              title: Seconds
-              description: Seconds until expiration, between 3600 (1 hour) and 2592000 (30 days).
-          type: object
-          required:
-          - anchor
-          - seconds
-          title: ExpiresAfter
+          anyOf:
+          - $ref: '#/components/schemas/ExpiresAfter'
+            title: ExpiresAfter
+          - type: 'null'
           description: Optional expiration settings for the file.
+          title: ExpiresAfter
       type: object
       required:
       - file

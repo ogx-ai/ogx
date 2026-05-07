@@ -9,7 +9,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, UploadFile
 from fastapi.param_functions import File, Form
 from fastapi.responses import Response
-from pydantic import WithJsonSchema
 
 from ogx_api.common.upload_safety import (
     DEFAULT_MAX_UPLOAD_SIZE_BYTES,
@@ -120,22 +119,15 @@ def create_router(impl: Files, max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_S
         file: Annotated[UploadFile, File(description="The file to upload.")],
         purpose: Annotated[OpenAIFileUploadPurpose, Form(description="The intended purpose of the uploaded file.")],
         expires_after: Annotated[
-            str | None,
+            ExpiresAfter | None,
             Form(description="Optional expiration settings for the file."),
-            WithJsonSchema(ExpiresAfter.model_json_schema()),
         ] = None,
     ) -> OpenAIFileObject:
-        import json as json_mod
-
-        parsed_expires_after = None
-        if expires_after is not None:
-            parsed_expires_after = ExpiresAfter.model_validate(json_mod.loads(expires_after))
-
         content = await read_upload_with_size_limit(file, max_upload_size_bytes)
         safe_file = PreReadUploadFile(content, filename=file.filename, content_type=file.content_type)
         request = UploadFileRequest(
             purpose=purpose,
-            expires_after=parsed_expires_after,
+            expires_after=expires_after,
         )
         return await impl.openai_upload_file(request, safe_file)
 
