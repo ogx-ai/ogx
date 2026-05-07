@@ -3143,9 +3143,24 @@ components:
         search_context_size:
           anyOf:
           - type: string
-            pattern: ^low|medium|high$
+            enum:
+            - low
+            - medium
+            - high
           - type: 'null'
           default: medium
+        filters:
+          anyOf:
+          - $ref: '#/components/schemas/WebSearchFilters'
+            title: WebSearchFilters
+          - type: 'null'
+          title: WebSearchFilters
+        user_location:
+          anyOf:
+          - $ref: '#/components/schemas/WebSearchUserLocation'
+            title: WebSearchUserLocation
+          - type: 'null'
+          title: WebSearchUserLocation
       type: object
       title: OpenAIResponseInputToolWebSearch
       description: Web search tool configuration for OpenAI response inputs.
@@ -8030,6 +8045,43 @@ components:
       - file_id
       title: VectorStoreFileBatchFileEntry
       description: A file entry for creating a vector store file batch with per-file options.
+    WebSearchFilters:
+      properties:
+        allowed_domains:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+      type: object
+      title: WebSearchFilters
+      description: Domain filters for web search results.
+    WebSearchUserLocation:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - approximate
+        city:
+          anyOf:
+          - type: string
+          - type: 'null'
+        country:
+          anyOf:
+          - type: string
+          - type: 'null'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+        timezone:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      title: WebSearchUserLocation
+      description: Approximate user location to refine web search results.
     _URLOrData:
       properties:
         url:

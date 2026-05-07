@@ -473,11 +473,41 @@ WebSearchToolTypes = ["web_search", "web_search_preview", "web_search_preview_20
 
 
 @json_schema_type
+class WebSearchFilters(BaseModel):
+    """Domain filters for web search results.
+
+    :param allowed_domains: List of domains to restrict search results to
+    """
+
+    allowed_domains: list[str] | None = None
+
+
+@json_schema_type
+class WebSearchUserLocation(BaseModel):
+    """Approximate user location to refine web search results.
+
+    :param type: Location type, always "approximate"
+    :param city: Free-text city name
+    :param country: ISO 3166-1 alpha-2 country code
+    :param region: Free-text region or state name
+    :param timezone: IANA timezone identifier
+    """
+
+    type: Literal["approximate"] = "approximate"
+    city: str | None = None
+    country: str | None = None
+    region: str | None = None
+    timezone: str | None = None
+
+
+@json_schema_type
 class OpenAIResponseInputToolWebSearch(BaseModel):
     """Web search tool configuration for OpenAI response inputs.
 
     :param type: Web search tool type variant to use
     :param search_context_size: (Optional) Size of search context, must be "low", "medium", or "high"
+    :param filters: (Optional) Domain filters to restrict search results
+    :param user_location: (Optional) Approximate user location to refine results
     """
 
     # Must match values of WebSearchToolTypes above
@@ -487,9 +517,9 @@ class OpenAIResponseInputToolWebSearch(BaseModel):
         | Literal["web_search_preview_2025_03_11"]
         | Literal["web_search_2025_08_26"]
     ) = "web_search"
-    # TODO: actually use search_context_size somewhere...
-    search_context_size: str | None = Field(default="medium", pattern="^low|medium|high$")
-    # TODO: add user_location
+    search_context_size: Literal["low", "medium", "high"] | None = "medium"
+    filters: WebSearchFilters | None = None
+    user_location: WebSearchUserLocation | None = None
 
 
 @json_schema_type
