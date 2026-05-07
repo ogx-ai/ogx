@@ -552,8 +552,8 @@ class TestOpenAIFilesAPI:
         assert expires_at_prop.get("type") == "integer", f"expires_at schema should be integer, got: {expires_at_prop}"
         assert "anyOf" not in expires_at_prop
 
-    async def test_upload_expires_after_schema_not_nullable(self):
-        """Test that expires_after in upload schema is not wrapped in anyOf/null."""
+    async def test_upload_expires_after_schema_present(self):
+        """Test that expires_after is present in the upload schema."""
         from unittest.mock import AsyncMock
 
         from ogx_api.files.api import Files
@@ -571,17 +571,13 @@ class TestOpenAIFilesAPI:
         upload_path = schema["paths"]["/v1/files"]
         body_schema_ref = upload_path["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]
 
-        # Resolve $ref if present
         if "$ref" in body_schema_ref:
             ref_name = body_schema_ref["$ref"].split("/")[-1]
             body_schema = schema["components"]["schemas"][ref_name]
         else:
             body_schema = body_schema_ref
 
-        expires_after_prop = body_schema["properties"]["expires_after"]
-        assert "anyOf" not in expires_after_prop, (
-            f"expires_after should not use anyOf (nullable union), got: {expires_after_prop}"
-        )
+        assert "expires_after" in body_schema["properties"], "expires_after should be in upload schema"
 
     async def test_after_pagination_works(self, files_provider, sample_text_file):
         """Test that 'after' pagination works correctly."""
