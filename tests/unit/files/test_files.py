@@ -19,6 +19,7 @@ from ogx_api.files.models import (
     DeleteFileRequest,
     ListFilesRequest,
     OpenAIFileObject,
+    OpenAIFileUploadPurpose,
     RetrieveFileContentRequest,
     RetrieveFileRequest,
     UploadFileRequest,
@@ -96,7 +97,7 @@ class TestOpenAIFilesAPI:
 
     async def test_upload_different_purposes(self, files_provider, sample_text_file):
         """Test uploading files with different purposes."""
-        purposes = list(OpenAIFilePurpose)
+        purposes = list(OpenAIFileUploadPurpose)
 
         uploaded_files = []
         for purpose in purposes:
@@ -104,7 +105,7 @@ class TestOpenAIFilesAPI:
                 request=UploadFileRequest(purpose=purpose), file=sample_text_file
             )
             uploaded_files.append(result)
-            assert result.purpose == purpose
+            assert result.purpose == OpenAIFilePurpose(purpose.value)
 
     async def test_upload_different_file_types(self, files_provider, sample_text_file, sample_json_file, large_file):
         """Test uploading different types and sizes of files."""
@@ -446,6 +447,65 @@ class TestOpenAIFilesAPI:
         )
         assert result.status == "processed"
         assert result.status_details == ""
+
+    async def test_upload_purpose_fine_tune(self, files_provider, sample_text_file):
+        """Test uploading a file with fine-tune purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.FINE_TUNE), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.FINE_TUNE
+
+    async def test_upload_purpose_vision(self, files_provider, sample_text_file):
+        """Test uploading a file with vision purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.VISION), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.VISION
+
+    async def test_upload_purpose_user_data(self, files_provider, sample_text_file):
+        """Test uploading a file with user_data purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.USER_DATA), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.USER_DATA
+
+    async def test_upload_purpose_evals(self, files_provider, sample_text_file):
+        """Test uploading a file with evals purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.EVALS), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.EVALS
+
+    async def test_response_purpose_includes_output_types(self):
+        """Test that OpenAIFilePurpose includes system-generated output purpose values."""
+        assert OpenAIFilePurpose.ASSISTANTS_OUTPUT == "assistants_output"
+        assert OpenAIFilePurpose.BATCH_OUTPUT == "batch_output"
+        assert OpenAIFilePurpose.FINE_TUNE_RESULTS == "fine-tune-results"
+
+    async def test_list_files_filter_by_fine_tune_purpose(self, files_provider, sample_text_file):
+        """Test listing files filtered by fine-tune purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.FINE_TUNE), file=sample_text_file
+        )
+        await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS), file=sample_text_file
+        )
+
+        result = await files_provider.openai_list_files(
+            request=ListFilesRequest(purpose=OpenAIFilePurpose.FINE_TUNE)
+        )
+        assert len(result.data) == 1
+        assert result.data[0].purpose == OpenAIFilePurpose.FINE_TUNE
 
     async def test_after_pagination_works(self, files_provider, sample_text_file):
         """Test that 'after' pagination works correctly."""

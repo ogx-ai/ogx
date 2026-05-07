@@ -13,13 +13,29 @@ from ogx_api.common.responses import Order
 from ogx_api.schema_utils import json_schema_type
 
 
-class OpenAIFilePurpose(StrEnum):
-    """
-    Valid purpose values for OpenAI Files API.
-    """
+class OpenAIFileUploadPurpose(StrEnum):
+    """Valid purpose values for the OpenAI Files upload endpoint."""
 
     ASSISTANTS = "assistants"
     BATCH = "batch"
+    FINE_TUNE = "fine-tune"
+    VISION = "vision"
+    USER_DATA = "user_data"
+    EVALS = "evals"
+
+
+class OpenAIFilePurpose(StrEnum):
+    """Valid purpose values on the OpenAI File response object."""
+
+    ASSISTANTS = "assistants"
+    ASSISTANTS_OUTPUT = "assistants_output"
+    BATCH = "batch"
+    BATCH_OUTPUT = "batch_output"
+    EVALS = "evals"
+    FINE_TUNE = "fine-tune"
+    FINE_TUNE_RESULTS = "fine-tune-results"
+    VISION = "vision"
+    USER_DATA = "user_data"
 
 
 @json_schema_type
@@ -115,5 +131,5 @@ class RetrieveFileContentRequest(BaseModel):
 class UploadFileRequest(BaseModel):
     """Request model for uploading a file."""
 
-    purpose: OpenAIFilePurpose = Field(..., description="The intended purpose of the uploaded file.")
+    purpose: OpenAIFileUploadPurpose = Field(..., description="The intended purpose of the uploaded file.")
     expires_after: ExpiresAfter | None = Field(default=None, description="Optional expiration settings for the file.")
