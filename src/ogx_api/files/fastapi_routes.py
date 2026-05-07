@@ -27,7 +27,6 @@ from .models import (
     ListOpenAIFileResponse,
     OpenAIFileDeleteResponse,
     OpenAIFileObject,
-    OpenAIFilePurpose,
     OpenAIFileUploadPurpose,
     RetrieveFileContentRequest,
     RetrieveFileRequest,

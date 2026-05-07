@@ -501,9 +501,7 @@ class TestOpenAIFilesAPI:
             request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS), file=sample_text_file
         )
 
-        result = await files_provider.openai_list_files(
-            request=ListFilesRequest(purpose=OpenAIFilePurpose.FINE_TUNE)
-        )
+        result = await files_provider.openai_list_files(request=ListFilesRequest(purpose=OpenAIFilePurpose.FINE_TUNE))
         assert len(result.data) == 1
         assert result.data[0].purpose == OpenAIFilePurpose.FINE_TUNE
 
@@ -551,9 +549,7 @@ class TestOpenAIFilesAPI:
         """Test that expires_at JSON schema type is integer (not a union with null)."""
         schema = OpenAIFileObject.model_json_schema()
         expires_at_prop = schema["properties"]["expires_at"]
-        assert expires_at_prop.get("type") == "integer", (
-            f"expires_at schema should be integer, got: {expires_at_prop}"
-        )
+        assert expires_at_prop.get("type") == "integer", f"expires_at schema should be integer, got: {expires_at_prop}"
         assert "anyOf" not in expires_at_prop
 
     async def test_upload_expires_after_schema_not_nullable(self):
