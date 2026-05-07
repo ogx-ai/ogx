@@ -333,17 +333,17 @@ async def test_list_items_has_more_with_limit(service):
     """has_more should be True when more items exist beyond the limit."""
     conversation = await service.create_conversation(CreateConversationRequest())
 
-    for i in range(5):
-        items = [
-            OpenAIResponseMessage(
-                type="message",
-                role="user",
-                content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
-                id=f"msg_{'0' * 44}{i:04d}",
-                status="completed",
-            )
-        ]
-        await service.add_items(conversation.id, AddItemsRequest(items=items))
+    items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
+            id=f"msg_{'0' * 44}{i:04d}",
+            status="completed",
+        )
+        for i in range(5)
+    ]
+    await service.add_items(conversation.id, AddItemsRequest(items=items))
 
     result = await service.list_items(ListItemsRequest(conversation_id=conversation.id, limit=3))
 
@@ -378,17 +378,17 @@ async def test_list_items_after_cursor(service):
     """after parameter should return items after the given cursor."""
     conversation = await service.create_conversation(CreateConversationRequest())
 
-    for i in range(5):
-        items = [
-            OpenAIResponseMessage(
-                type="message",
-                role="user",
-                content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
-                id=f"msg_{'0' * 44}{i:04d}",
-                status="completed",
-            )
-        ]
-        await service.add_items(conversation.id, AddItemsRequest(items=items))
+    items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
+            id=f"msg_{'0' * 44}{i:04d}",
+            status="completed",
+        )
+        for i in range(5)
+    ]
+    await service.add_items(conversation.id, AddItemsRequest(items=items))
 
     # List all items first (desc order = newest first)
     all_items = await service.list_items(ListItemsRequest(conversation_id=conversation.id, limit=100))
@@ -407,17 +407,17 @@ async def test_list_items_after_cursor_with_asc_order(service):
     """after parameter with asc order should return items after the cursor in ascending order."""
     conversation = await service.create_conversation(CreateConversationRequest())
 
-    for i in range(5):
-        items = [
-            OpenAIResponseMessage(
-                type="message",
-                role="user",
-                content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
-                id=f"msg_{'0' * 44}{i:04d}",
-                status="completed",
-            )
-        ]
-        await service.add_items(conversation.id, AddItemsRequest(items=items))
+    items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
+            id=f"msg_{'0' * 44}{i:04d}",
+            status="completed",
+        )
+        for i in range(5)
+    ]
+    await service.add_items(conversation.id, AddItemsRequest(items=items))
 
     # List all in asc order (oldest first)
     all_items = await service.list_items(ListItemsRequest(conversation_id=conversation.id, order="asc", limit=100))
@@ -436,17 +436,17 @@ async def test_list_items_after_cursor_with_has_more(service):
     """after cursor combined with limit should correctly compute has_more."""
     conversation = await service.create_conversation(CreateConversationRequest())
 
-    for i in range(10):
-        items = [
-            OpenAIResponseMessage(
-                type="message",
-                role="user",
-                content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
-                id=f"msg_{'0' * 44}{i:04d}",
-                status="completed",
-            )
-        ]
-        await service.add_items(conversation.id, AddItemsRequest(items=items))
+    items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Message {i}")],
+            id=f"msg_{'0' * 44}{i:04d}",
+            status="completed",
+        )
+        for i in range(10)
+    ]
+    await service.add_items(conversation.id, AddItemsRequest(items=items))
 
     # Get all items in desc order
     all_items = await service.list_items(ListItemsRequest(conversation_id=conversation.id, limit=100))
@@ -467,6 +467,74 @@ async def test_list_items_after_invalid_cursor_raises_error(service):
 
     with pytest.raises(ConversationItemNotFoundError):
         await service.list_items(ListItemsRequest(conversation_id=conversation.id, after="msg_nonexistent"))
+
+
+async def test_list_items_after_cursor_from_other_conversation_raises_error(service):
+    """after cursor from a different conversation should raise an error, not silently return wrong results."""
+    conv1 = await service.create_conversation(CreateConversationRequest())
+    conv2 = await service.create_conversation(CreateConversationRequest())
+
+    conv1_items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text="Hello from conv1")],
+            id="msg_" + "b" * 48,
+            status="completed",
+        )
+    ]
+    conv2_items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text="Hello from conv2")],
+            id="msg_" + "c" * 48,
+            status="completed",
+        )
+    ]
+    await service.add_items(conv1.id, AddItemsRequest(items=conv1_items))
+    await service.add_items(conv2.id, AddItemsRequest(items=conv2_items))
+
+    # Get the item ID from conv1
+    listed = await service.list_items(ListItemsRequest(conversation_id=conv1.id))
+    cursor_from_conv1 = listed.data[0].id
+
+    # Using conv1's cursor on conv2 should raise an error
+    with pytest.raises(ConversationItemNotFoundError):
+        await service.list_items(ListItemsRequest(conversation_id=conv2.id, after=cursor_from_conv1))
+
+
+async def test_create_conversation_with_items_supports_pagination(service):
+    """Items created via create_conversation should have unique timestamps for correct pagination."""
+    items = [
+        OpenAIResponseMessage(
+            type="message",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"Initial {i}")],
+            id=f"msg_{'0' * 44}{i:04d}",
+            status="completed",
+        )
+        for i in range(5)
+    ]
+    conversation = await service.create_conversation(CreateConversationRequest(items=items))
+
+    # Paginate with limit=2 to verify no items are lost
+    all_ids = set()
+    after = None
+    pages = 0
+    while True:
+        result = await service.list_items(
+            ListItemsRequest(conversation_id=conversation.id, limit=2, order="asc", after=after)
+        )
+        for item in result.data:
+            all_ids.add(item.id)
+        pages += 1
+        if not result.has_more:
+            break
+        after = result.last_id
+
+    assert len(all_ids) == 5, f"Expected 5 items across all pages, got {len(all_ids)}"
+    assert pages == 3
 
 
 async def test_list_items_empty_conversation(service):

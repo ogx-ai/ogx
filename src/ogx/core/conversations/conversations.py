@@ -118,14 +118,15 @@ class ConversationServiceImpl(Conversations):
 
         if request.items:
             item_records = []
-            for item in request.items:
+            base_time = created_at
+            for i, item in enumerate(request.items):
                 item_dict = item.model_dump()
                 item_id = self._get_or_generate_item_id(item, item_dict)
 
                 item_record = {
                     "id": item_id,
                     "conversation_id": conversation_id,
-                    "created_at": created_at,
+                    "created_at": base_time + i,
                     "item_data": item_dict,
                 }
 
@@ -273,32 +274,29 @@ class ConversationServiceImpl(Conversations):
         """List items in the conversation with cursor pagination."""
         await self.get_conversation(GetConversationRequest(conversation_id=request.conversation_id))
 
-        result = await self.sql_store.fetch_all(
-            table="conversation_items", where={"conversation_id": request.conversation_id}
-        )
-        records = result.data
-
-        is_asc = request.order == "asc"
-        records.sort(key=lambda x: x["created_at"], reverse=not is_asc)
+        order = request.order if request.order is not None else "desc"
+        limit = request.limit or 20
 
         if request.after:
-            cursor_index = None
-            for i, record in enumerate(records):
-                if record["id"] == request.after:
-                    cursor_index = i
-                    break
-            if cursor_index is None:
+            cursor_record = await self.sql_store.fetch_one(
+                table="conversation_items",
+                where={"id": request.after, "conversation_id": request.conversation_id},
+            )
+            if cursor_record is None:
                 raise ConversationItemNotFoundError(request.after, request.conversation_id)
-            records = records[cursor_index + 1 :]
 
-        actual_limit = request.limit or 20
-        has_more = len(records) > actual_limit
-        records = records[:actual_limit]
-
-        items = [record["item_data"] for record in records]
+        result = await self.sql_store.fetch_all(
+            table="conversation_items",
+            where={"conversation_id": request.conversation_id},
+            order_by=[("created_at", order)],
+            cursor=("id", request.after) if request.after else None,
+            limit=limit,
+        )
 
         adapter: TypeAdapter[ConversationItem] = TypeAdapter(ConversationItem)
-        response_items: list[ConversationItem] = [adapter.validate_python(item) for item in items]
+        response_items: list[ConversationItem] = [
+            adapter.validate_python(record["item_data"]) for record in result.data
+        ]
 
         first_id = response_items[0].id if response_items else ""
         last_id = response_items[-1].id if response_items else ""
@@ -307,7 +305,7 @@ class ConversationServiceImpl(Conversations):
             data=response_items,
             first_id=first_id,
             last_id=last_id,
-            has_more=has_more,
+            has_more=result.has_more,
         )
 
     async def openai_delete_conversation_item(self, request: DeleteItemRequest) -> Conversation:
