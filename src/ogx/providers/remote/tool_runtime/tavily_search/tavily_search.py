@@ -26,6 +26,8 @@ from .config import TavilySearchToolConfig
 class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequestProviderData):
     """Tool runtime for performing AI-optimized web searches using the Tavily API."""
 
+    _CONTEXT_SIZE_TO_COUNT = {"low": 3, "medium": 5, "high": 10}
+
     def __init__(self, config: TavilySearchToolConfig):
         self.config = config
 
@@ -78,10 +80,23 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
+        request_body: dict[str, Any] = {
+            "api_key": api_key,
+            "query": kwargs["query"],
+        }
+
+        allowed_domains = kwargs.get("allowed_domains")
+        if allowed_domains:
+            request_body["include_domains"] = allowed_domains
+
+        search_context_size = kwargs.get("search_context_size")
+        if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
+            request_body["max_results"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
+
         async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.post(
                 "https://api.tavily.com/search",
-                json={"api_key": api_key, "query": kwargs["query"]},
+                json=request_body,
             )
             response.raise_for_status()
 
