@@ -4,17 +4,21 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from unittest.mock import MagicMock, patch
+"""Unit tests for PostgresKVStoreImpl.
+
+Since unit tests cannot depend on a running Postgres server, these tests
+use mocked asyncpg to verify SQL query correctness, namespace prefixing,
+expiration filtering, and error handling.
+"""
+
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ogx.core.storage.kvstore.postgres.postgres import PostgresKVStoreImpl
+from ogx.core.storage.datatypes import PostgresKVStoreConfig
 
 
-def _make_config(namespace=None, table_name="ogx_kvstore"):
-    """Build a PostgresKVStoreConfig without hitting the real import of psycopg2."""
-    from ogx.core.storage.datatypes import PostgresKVStoreConfig
-
+def _make_config(namespace: str | None = None, table_name: str = "test_kvstore") -> PostgresKVStoreConfig:
     return PostgresKVStoreConfig(
         host="localhost",
         port=5432,
@@ -26,271 +30,205 @@ def _make_config(namespace=None, table_name="ogx_kvstore"):
     )
 
 
-def _mock_cursor():
-    """Return a MagicMock that behaves like a psycopg2 DictCursor."""
-    cursor = MagicMock()
-    cursor.fetchone.return_value = None
-    cursor.fetchall.return_value = []
-    return cursor
+def _make_store_with_mock_conn(config: PostgresKVStoreConfig):
+    """Create a PostgresKVStoreImpl with a mocked _connect() that returns a mock connection."""
+    from ogx.core.storage.kvstore.postgres.postgres import PostgresKVStoreImpl
 
-
-@pytest.fixture
-def mock_pg():
-    """Patch psycopg2.connect and yield (mock_psycopg2, mock_conn, cursor)."""
-    with patch("ogx.core.storage.kvstore.postgres.postgres.psycopg2") as mock_psycopg2:
-        mock_conn = MagicMock()
-        cursor = _mock_cursor()
-        mock_conn.cursor.return_value = cursor
-        mock_psycopg2.connect.return_value = mock_conn
-
-        yield mock_psycopg2, mock_conn, cursor
-
-
-async def _init_store(mock_pg, namespace=None):
-    """Create and initialise a PostgresKVStoreImpl with a mocked connection."""
-    _, _, cursor = mock_pg
-    config = _make_config(namespace=namespace)
     store = PostgresKVStoreImpl(config)
-    await store.initialize()
-    cursor.reset_mock()
-    return store, cursor
+    store._table_created = True
+    mock_conn = AsyncMock()
+    mock_conn.close = AsyncMock()
+    store._connect = AsyncMock(return_value=mock_conn)
+    return store, mock_conn
 
 
-# -- 1. keys_in_range filters expired rows --
+# -- Namespace prefixing -------------------------------------------------------
 
 
-async def test_keys_in_range_sql_should_filter_expired_rows(mock_pg):
-    """keys_in_range must include the expiration guard so expired rows are excluded."""
-    store, cursor = await _init_store(mock_pg)
-    cursor.fetchall.return_value = []
+async def test_set_applies_namespace():
+    store, conn = _make_store_with_mock_conn(_make_config(namespace="quota"))
+    await store.set("user:123", "5", expiration=None)
 
-    await store.keys_in_range("a", "z")
-
-    sql = cursor.execute.call_args[0][0]
-    assert "expiration" in sql, "keys_in_range SQL must filter on expiration"
-    assert "NOW()" in sql, "keys_in_range SQL must compare expiration against NOW()"
+    conn.execute.assert_called_once()
+    args = conn.execute.call_args
+    assert args[0][1] == "quota:user:123"
 
 
-# -- 2. keys_in_range returns non-expired rows --
+async def test_get_applies_namespace():
+    store, conn = _make_store_with_mock_conn(_make_config(namespace="quota"))
+    conn.fetchrow.return_value = None
+
+    await store.get("user:123")
+
+    args = conn.fetchrow.call_args
+    assert args[0][1] == "quota:user:123"
 
 
-async def test_keys_in_range_returns_non_expired_rows(mock_pg):
-    """Rows with NULL or future expiration should be returned."""
-    store, cursor = await _init_store(mock_pg)
-    cursor.fetchall.return_value = [["key1"], ["key2"], ["key3"]]
+async def test_delete_applies_namespace():
+    store, conn = _make_store_with_mock_conn(_make_config(namespace="myns"))
 
-    result = await store.keys_in_range("a", "z")
+    await store.delete("k1")
 
-    assert result == ["key1", "key2", "key3"]
-
-
-# -- 3. keys_in_range and values_in_range return consistent key sets --
+    args = conn.execute.call_args
+    assert args[0][1] == "myns:k1"
 
 
-async def test_range_queries_use_same_expiration_filter(mock_pg):
-    """Both keys_in_range and values_in_range must apply the same expiration guard."""
-    store, cursor = await _init_store(mock_pg)
-    cursor.fetchall.return_value = []
+async def test_no_namespace_passes_key_through():
+    store, conn = _make_store_with_mock_conn(_make_config(namespace=None))
+    conn.fetchrow.return_value = None
 
-    await store.keys_in_range("a", "z")
-    keys_sql = cursor.execute.call_args[0][0]
+    await store.get("raw_key")
 
-    cursor.reset_mock()
-    cursor.fetchall.return_value = []
-
-    await store.values_in_range("a", "z")
-    values_sql = cursor.execute.call_args[0][0]
-
-    keys_has_expiration = "expiration IS NULL OR expiration > NOW()" in keys_sql
-    values_has_expiration = "expiration IS NULL OR expiration > NOW()" in values_sql
-
-    assert keys_has_expiration, "keys_in_range must include expiration filtering"
-    assert values_has_expiration, "values_in_range must include expiration filtering"
+    args = conn.fetchrow.call_args
+    assert args[0][1] == "raw_key"
 
 
-# -- 4. keys_in_range uses half-open range --
+# -- SQL query correctness ----------------------------------------------------
 
 
-async def test_keys_in_range_half_open_range(mock_pg):
-    """start_key is inclusive (>=), end_key is exclusive (<)."""
-    store, cursor = await _init_store(mock_pg)
-    cursor.fetchall.return_value = []
+async def test_get_filters_expired_keys():
+    """get() SQL includes expiration > NOW() filter."""
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetchrow.return_value = None
 
-    await store.keys_in_range("abc", "def")
+    await store.get("k1")
 
-    sql = cursor.execute.call_args[0][0]
-    params = cursor.execute.call_args[0][1]
-
-    normalized_sql = " ".join(sql.split())
-    assert "key >= %s" in normalized_sql, "start_key must be inclusive (>=)"
-    assert "key < %s" in normalized_sql, "end_key must be exclusive (<)"
-    assert "key <= %s" not in normalized_sql, "end_key must not be inclusive (<=)"
-    assert params == ("abc", "def")
+    sql = conn.fetchrow.call_args[0][0]
+    assert "expiration IS NULL OR expiration > NOW()" in sql
 
 
-# -- 5. keys_in_range results are ordered by key --
+async def test_set_uses_upsert():
+    """set() SQL uses INSERT ... ON CONFLICT DO UPDATE."""
+    store, conn = _make_store_with_mock_conn(_make_config())
+    await store.set("k1", "v1")
+
+    sql = conn.execute.call_args[0][0]
+    assert "ON CONFLICT" in sql
+    assert "DO UPDATE" in sql
 
 
-async def test_keys_in_range_ordered_by_key(mock_pg):
-    """keys_in_range must ORDER BY key for deterministic results."""
-    store, cursor = await _init_store(mock_pg)
-    cursor.fetchall.return_value = []
+async def test_values_in_range_uses_half_open_interval():
+    """values_in_range SQL uses >= start AND < end."""
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetch.return_value = []
 
-    await store.keys_in_range("a", "z")
+    await store.values_in_range("a", "c")
 
-    sql = " ".join(cursor.execute.call_args[0][0].upper().split())
-    assert "ORDER BY KEY" in sql, "keys_in_range must include ORDER BY key"
-
-
-# -- 6. get returns None for expired keys --
+    sql = conn.fetch.call_args[0][0]
+    assert "key >= $1 AND key < $2" in sql
+    assert "key <= $" not in sql
 
 
-async def test_get_returns_none_for_expired_keys(mock_pg):
-    """get() filters expired rows via SQL; a fetchone returning None means expired."""
-    store, cursor = await _init_store(mock_pg)
-    cursor.fetchone.return_value = None
-
-    result = await store.get("expired_key")
-
-    assert result is None
-    sql = cursor.execute.call_args[0][0]
-    assert "expiration" in sql
-
-
-async def test_get_returns_value_for_valid_key(mock_pg):
-    """get() returns the value when the row is not expired."""
-    store, cursor = await _init_store(mock_pg)
-    cursor.fetchone.return_value = ["hello"]
-
-    result = await store.get("valid_key")
-
-    assert result == "hello"
-
-
-# -- 7. Namespace prefixing in range queries --
-
-
-async def test_namespace_prefix_applied_in_keys_in_range(mock_pg):
-    """When namespace is set, keys_in_range must prefix start_key and end_key."""
-    store, cursor = await _init_store(mock_pg, namespace="ns")
-    cursor.fetchall.return_value = []
-
-    await store.keys_in_range("a", "z")
-
-    params = cursor.execute.call_args[0][1]
-    assert params == ("ns:a", "ns:z")
-
-
-async def test_namespace_prefix_applied_in_values_in_range(mock_pg):
-    """When namespace is set, values_in_range must prefix start_key and end_key."""
-    store, cursor = await _init_store(mock_pg, namespace="ns")
-    cursor.fetchall.return_value = []
+async def test_values_in_range_filters_expired():
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetch.return_value = []
 
     await store.values_in_range("a", "z")
 
-    params = cursor.execute.call_args[0][1]
-    assert params == ("ns:a", "ns:z")
+    sql = conn.fetch.call_args[0][0]
+    assert "expiration IS NULL OR expiration > NOW()" in sql
 
 
-async def test_no_namespace_leaves_keys_unmodified(mock_pg):
-    """When namespace is None, keys should not be prefixed."""
-    store, cursor = await _init_store(mock_pg, namespace=None)
-    cursor.fetchall.return_value = []
+async def test_keys_in_range_uses_half_open_interval():
+    """keys_in_range SQL uses >= start AND < end."""
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetch.return_value = []
 
-    await store.keys_in_range("start", "end")
+    await store.keys_in_range("a", "c")
 
-    params = cursor.execute.call_args[0][1]
-    assert params == ("start", "end")
-
-
-async def test_namespace_prefix_applied_in_get(mock_pg):
-    """get() must prefix the key with the namespace."""
-    store, cursor = await _init_store(mock_pg, namespace="ns")
-    cursor.fetchone.return_value = ["value"]
-
-    await store.get("mykey")
-
-    params = cursor.execute.call_args[0][1]
-    assert params == ("ns:mykey",)
+    sql = conn.fetch.call_args[0][0]
+    assert "key >= $1 AND key < $2" in sql
 
 
-async def test_namespace_prefix_applied_in_set(mock_pg):
-    """set() must prefix the key with the namespace."""
-    store, cursor = await _init_store(mock_pg, namespace="ns")
+async def test_keys_in_range_filters_expired():
+    """keys_in_range must also filter expired keys (bug fix verification)."""
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetch.return_value = []
 
-    await store.set("mykey", "myvalue")
+    await store.keys_in_range("a", "z")
 
-    params = cursor.execute.call_args[0][1]
-    assert params[0] == "ns:mykey"
-
-
-async def test_namespace_prefix_applied_in_delete(mock_pg):
-    """delete() must prefix the key with the namespace."""
-    store, cursor = await _init_store(mock_pg, namespace="ns")
-
-    await store.delete("mykey")
-
-    params = cursor.execute.call_args[0][1]
-    assert params == ("ns:mykey",)
+    sql = conn.fetch.call_args[0][0]
+    assert "expiration IS NULL OR expiration > NOW()" in sql
 
 
-# -- 8. keys_in_range strips namespace from returned keys --
+async def test_range_queries_apply_namespace():
+    store, conn = _make_store_with_mock_conn(_make_config(namespace="ns"))
+    conn.fetch.return_value = []
+
+    await store.values_in_range("a", "z")
+
+    args = conn.fetch.call_args[0]
+    assert args[1] == "ns:a"
+    assert args[2] == "ns:z"
 
 
-async def test_keys_in_range_strips_namespace_from_results(mock_pg):
+async def test_keys_in_range_strips_namespace_from_results():
     """keys_in_range returns un-namespaced keys so callers can pass them to get()."""
-    store, cursor = await _init_store(mock_pg, namespace="ns")
-    cursor.fetchall.return_value = [("ns:key1",), ("ns:key2",)]
+    store, conn = _make_store_with_mock_conn(_make_config(namespace="ns"))
+    conn.fetch.return_value = [{"key": "ns:key1"}, {"key": "ns:key2"}]
 
     keys = await store.keys_in_range("a", "z")
 
     assert keys == ["key1", "key2"]
 
 
-# -- 9. Error handling --
+async def test_values_in_range_returns_values():
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetch.return_value = [{"value": "v1"}, {"value": "v2"}]
+
+    values = await store.values_in_range("a", "z")
+
+    assert values == ["v1", "v2"]
 
 
-async def test_cursor_or_raise_when_uninitialized():
+async def test_get_returns_value_when_found():
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetchrow.return_value = {"value": "hello"}
+
+    result = await store.get("k1")
+
+    assert result == "hello"
+
+
+async def test_get_returns_none_when_not_found():
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetchrow.return_value = None
+
+    result = await store.get("missing")
+
+    assert result is None
+
+
+# -- Error handling ------------------------------------------------------------
+
+
+async def test_connect_wraps_connection_error():
+    """_connect() wraps connection errors in RuntimeError."""
+    from ogx.core.storage.kvstore.postgres.postgres import PostgresKVStoreImpl
+
     config = _make_config()
     store = PostgresKVStoreImpl(config)
 
-    with pytest.raises(RuntimeError, match="not initialized"):
-        await store.get("k1")
-
-
-async def test_initialize_wraps_connection_error():
-    config = _make_config()
-    store = PostgresKVStoreImpl(config)
-
-    with patch("ogx.core.storage.kvstore.postgres.postgres.psycopg2") as mock_psycopg2:
-        mock_psycopg2.connect.side_effect = Exception("connection refused")
+    with patch("ogx.core.storage.kvstore.postgres.postgres.asyncpg") as mock_asyncpg:
+        mock_asyncpg.connect = AsyncMock(side_effect=Exception("connection refused"))
         with pytest.raises(RuntimeError, match="Could not connect"):
-            await store.initialize()
+            await store.get("k1")
 
 
-# -- 10. Shutdown --
+# -- Connection lifecycle ------------------------------------------------------
 
 
-async def test_shutdown_closes_cursor_and_connection(mock_pg):
-    store, cursor = await _init_store(mock_pg)
-    _, mock_conn, _ = mock_pg
+async def test_each_operation_closes_connection():
+    """Each operation opens and closes its own connection."""
+    store, conn = _make_store_with_mock_conn(_make_config())
+    conn.fetchrow.return_value = None
 
-    await store.shutdown()
+    await store.get("k1")
 
-    cursor.close.assert_called_once()
-    mock_conn.close.assert_called_once()
-    assert store._cursor is None
-    assert store._conn is None
+    conn.close.assert_called_once()
 
 
-async def test_shutdown_idempotent(mock_pg):
-    store, _ = await _init_store(mock_pg)
-
-    await store.shutdown()
-    await store.shutdown()
-
-
-# -- 11. Config validation --
+# -- Config validation ---------------------------------------------------------
 # NOTE: PostgresKVStoreConfig.validate_table_name is currently broken because
 # @classmethod is stacked before @field_validator, making Pydantic ignore it.
 # These tests document the DESIRED behavior; they are marked xfail until the

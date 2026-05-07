@@ -123,7 +123,7 @@ class PostgresKVStoreConfig(CommonConfig):
 
     @classmethod
     def pip_packages(cls) -> list[str]:
-        return ["psycopg2-binary"]
+        return ["asyncpg"]
 
 
 class MongoDBKVStoreConfig(CommonConfig):
