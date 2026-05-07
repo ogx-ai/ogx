@@ -56,7 +56,7 @@ class OpenAIFileObject(BaseModel):
         description="Deprecated. The current status of the file.",
         deprecated=True,
     )
-    status_details: str | None = Field(
+    status_details: Annotated[str | None, WithJsonSchema({"type": "string"})] = Field(
         default=None,
         description="Deprecated. For details on why a fine-tuning training file failed validation, see the error field on fine_tuning.job.",
         deprecated=True,
