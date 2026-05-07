@@ -244,12 +244,9 @@ jobs:
           project_id: ${{ secrets.VERTEX_AI_PROJECT }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
-      # TODO: Update pinned SHA after this PR merges to main. Using checkout-relative
-      # refs temporarily because the setup-test-environment and setup-ollama fixes
-      # (startsWith matching, record-if-missing support, model pull) are not on main yet.
       - name: Setup test environment
         if: steps.should_run.outputs.run == 'true'
-        uses: ./.github/actions/setup-test-environment
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@e1ba4f9f10fa45750f5b4f186a0c4ae59bc93e4d
         with:
           python-version: "3.12"
           client-version: "latest"
@@ -266,7 +263,7 @@ jobs:
 
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
-        uses: ./.github/actions/run-and-record-tests
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@e1ba4f9f10fa45750f5b4f186a0c4ae59bc93e4d
         env:
           OPENAI_API_KEY: ${{ matrix.provider.setup == 'gpt' && secrets.OPENAI_API_KEY || '' }}
           AZURE_API_KEY: ${{ matrix.provider.setup == 'azure' && secrets.AZURE_API_KEY || '' }}
