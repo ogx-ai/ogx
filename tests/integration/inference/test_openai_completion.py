@@ -569,7 +569,7 @@ def test_openai_chat_completion_reasoning_passthrough(openai_client, client_with
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is 2+2? Think step by step."},
     ]
-    resp1 = openai_client.chat.completions.create(model=text_model_id, messages=messages)
+    resp1 = openai_client.chat.completions.create(model=text_model_id, messages=messages, timeout=120)
     msg1 = resp1.choices[0].message
 
     # Reasoning content arrives as a non-spec field; it lives in model_extra
@@ -585,7 +585,7 @@ def test_openai_chat_completion_reasoning_passthrough(openai_client, client_with
     messages.append(msg1.model_dump())
     messages.append({"role": "user", "content": "Now multiply that result by 3."})
 
-    resp2 = openai_client.chat.completions.create(model=text_model_id, messages=messages)
+    resp2 = openai_client.chat.completions.create(model=text_model_id, messages=messages, timeout=120)
     msg2 = resp2.choices[0].message
 
     assert msg2.content, "Expected a non-empty response in turn 2"
