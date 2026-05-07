@@ -5,9 +5,9 @@
 # the root directory of this source tree.
 
 from enum import StrEnum
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, WithJsonSchema
 
 from ogx_api.common.responses import Order
 from ogx_api.schema_utils import json_schema_type
@@ -46,8 +46,8 @@ class OpenAIFileObject(BaseModel):
     id: str = Field(..., description="The file identifier, which can be referenced in the API endpoints.")
     bytes: int = Field(..., description="The size of the file, in bytes.")
     created_at: int = Field(..., description="The Unix timestamp (in seconds) for when the file was created.")
-    expires_at: int | None = Field(
-        default=None, description="The Unix timestamp (in seconds) for when the file expires."
+    expires_at: Annotated[int | None, WithJsonSchema({"type": "integer"})] = Field(
+        default=None, description="The Unix timestamp (in seconds) for when the file will expire."
     )
     filename: str = Field(..., description="The name of the file.")
     purpose: OpenAIFilePurpose = Field(..., description="The intended purpose of the file.")
@@ -56,8 +56,8 @@ class OpenAIFileObject(BaseModel):
         description="Deprecated. The current status of the file.",
         deprecated=True,
     )
-    status_details: str = Field(
-        ...,
+    status_details: str | None = Field(
+        default=None,
         description="Deprecated. For details on why a fine-tuning training file failed validation, see the error field on fine_tuning.job.",
         deprecated=True,
     )

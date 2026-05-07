@@ -507,6 +507,55 @@ class TestOpenAIFilesAPI:
         assert len(result.data) == 1
         assert result.data[0].purpose == OpenAIFilePurpose.FINE_TUNE
 
+    async def test_expires_at_excluded_from_json_when_none(self):
+        """Test that expires_at is excluded from serialized output when None."""
+        file_obj = OpenAIFileObject(
+            id="file-abc123",
+            bytes=100,
+            created_at=1234567890,
+            expires_at=None,
+            filename="test.txt",
+            purpose=OpenAIFilePurpose.ASSISTANTS,
+            status="processed",
+            status_details="",
+        )
+        data = file_obj.model_dump(exclude_none=True)
+        assert "expires_at" not in data
+
+    async def test_status_details_excluded_from_json_when_empty(self):
+        """Test that status_details is excluded from serialized output when empty."""
+        file_obj = OpenAIFileObject(
+            id="file-abc123",
+            bytes=100,
+            created_at=1234567890,
+            filename="test.txt",
+            purpose=OpenAIFilePurpose.ASSISTANTS,
+            status="processed",
+        )
+        data = file_obj.model_dump(exclude_none=True)
+        assert "status_details" not in data
+
+    async def test_status_details_optional(self):
+        """Test that status_details can be omitted when constructing OpenAIFileObject."""
+        file_obj = OpenAIFileObject(
+            id="file-abc123",
+            bytes=100,
+            created_at=1234567890,
+            filename="test.txt",
+            purpose=OpenAIFilePurpose.ASSISTANTS,
+            status="processed",
+        )
+        assert file_obj.status_details is None
+
+    async def test_expires_at_json_schema_is_integer(self):
+        """Test that expires_at JSON schema type is integer (not a union with null)."""
+        schema = OpenAIFileObject.model_json_schema()
+        expires_at_prop = schema["properties"]["expires_at"]
+        assert expires_at_prop.get("type") == "integer", (
+            f"expires_at schema should be integer, got: {expires_at_prop}"
+        )
+        assert "anyOf" not in expires_at_prop
+
     async def test_after_pagination_works(self, files_provider, sample_text_file):
         """Test that 'after' pagination works correctly."""
         # Upload multiple files to test pagination
