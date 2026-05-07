@@ -78,7 +78,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
             temperature=0.1,
             tools=[
                 OpenAIResponseInputToolWebSearch(
-                    name=tool_name,
+                    type=tool_name,
                 )
             ],
         )
@@ -98,7 +98,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
         openai_responses_impl.tool_groups_api.get_tool.assert_called_once_with("web_search")
         openai_responses_impl.tool_runtime_api.invoke_tool.assert_called_once_with(
             tool_name="web_search",
-            kwargs={"query": "What is the capital of Ireland?"},
+            kwargs={"query": "What is the capital of Ireland?", "search_context_size": "medium"},
         )
 
         openai_responses_impl.responses_store.upsert_response_object.assert_called()
@@ -927,3 +927,61 @@ async def test_function_tool_strict_false_included(openai_responses_impl, mock_i
     tool_function = params.tools[0]["function"]
     assert "strict" in tool_function, "strict field should be included when explicitly set to False"
     assert tool_function["strict"] is False, "strict field should be False"
+
+
+def _setup_web_search_mocks(openai_responses_impl, mock_inference_api):
+    """Set up common mocks for web search config tests."""
+    openai_responses_impl.tool_groups_api.get_tool.return_value = ToolDef(
+        name="web_search",
+        toolgroup_id="web_search",
+        description="Search the web",
+        input_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+    )
+    openai_responses_impl.tool_runtime_api.invoke_tool.return_value = ToolInvocationResult(
+        status="completed",
+        content="Dublin",
+    )
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("tool_call_completion.yaml"),
+        fake_stream(),
+    ]
+
+
+async def test_web_search_with_filters_and_location(openai_responses_impl, mock_inference_api):
+    """Test that web search filters and user_location are passed to invoke_tool."""
+    _setup_web_search_mocks(openai_responses_impl, mock_inference_api)
+    await openai_responses_impl.create_openai_response(
+        input="What is the capital of Ireland?",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        temperature=0.1,
+        tools=[
+            OpenAIResponseInputToolWebSearch(
+                type="web_search",
+                search_context_size="high",
+                filters={"allowed_domains": ["arxiv.org", "scholar.google.com"]},
+                user_location={"type": "approximate", "country": "US", "city": "San Francisco"},
+            )
+        ],
+    )
+    call_kwargs = openai_responses_impl.tool_runtime_api.invoke_tool.call_args.kwargs["kwargs"]
+    assert call_kwargs["query"] == "What is the capital of Ireland?"
+    assert call_kwargs["allowed_domains"] == ["arxiv.org", "scholar.google.com"]
+    assert call_kwargs["user_location"]["country"] == "US"
+    assert call_kwargs["user_location"]["city"] == "San Francisco"
+    assert call_kwargs["search_context_size"] == "high"
+
+
+async def test_web_search_without_config_passes_only_query(openai_responses_impl, mock_inference_api):
+    """Test that web search without filters/location only passes query + default search_context_size."""
+    _setup_web_search_mocks(openai_responses_impl, mock_inference_api)
+    await openai_responses_impl.create_openai_response(
+        input="What is the capital of Ireland?",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        temperature=0.1,
+        tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
+    )
+    call_kwargs = openai_responses_impl.tool_runtime_api.invoke_tool.call_args.kwargs["kwargs"]
+    assert call_kwargs["query"] == "What is the capital of Ireland?"
+    assert call_kwargs["search_context_size"] == "medium"
+    assert "allowed_domains" not in call_kwargs
+    assert "user_location" not in call_kwargs

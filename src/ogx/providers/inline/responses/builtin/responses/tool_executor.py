@@ -21,6 +21,7 @@ from ogx_api import (
     OpenAIImageURL,
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolWebSearch,
     OpenAIResponseObjectStreamResponseFileSearchCallCompleted,
     OpenAIResponseObjectStreamResponseFileSearchCallInProgress,
     OpenAIResponseObjectStreamResponseFileSearchCallSearching,
@@ -376,6 +377,22 @@ class ToolExecutor:
                             response_file_search_tool=response_file_search_tool,
                         )
             else:
+                # For web_search, inject config from response_tools into kwargs
+                if function_name == "web_search" and ctx.response_tools:
+                    response_web_search_tool = next(
+                        (t for t in ctx.response_tools if isinstance(t, OpenAIResponseInputToolWebSearch)),
+                        None,
+                    )
+                    if response_web_search_tool:
+                        if response_web_search_tool.filters and response_web_search_tool.filters.allowed_domains:
+                            tool_kwargs["allowed_domains"] = response_web_search_tool.filters.allowed_domains
+                        if response_web_search_tool.user_location:
+                            tool_kwargs["user_location"] = response_web_search_tool.user_location.model_dump(
+                                exclude_none=True
+                            )
+                        if response_web_search_tool.search_context_size:
+                            tool_kwargs["search_context_size"] = response_web_search_tool.search_context_size
+
                 attributes = {
                     "tool_name": function_name,
                 }
