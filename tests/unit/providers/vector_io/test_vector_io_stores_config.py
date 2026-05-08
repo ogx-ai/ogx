@@ -4,11 +4,11 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import asyncpg
 import numpy as np
 import pytest
-from psycopg2 import sql
 
 from ogx_api import (
     OpenAICreateVectorStoreRequestWithExtraBody,
@@ -16,13 +16,33 @@ from ogx_api import (
     VectorStore,
 )
 
+
+def _make_mock_asyncpg_pool():
+    """Create a mock asyncpg pool with acquire() as async context manager."""
+    pool = MagicMock()
+    mock_conn = AsyncMock()
+    mock_conn.execute = AsyncMock()
+    mock_conn.executemany = AsyncMock()
+    mock_conn.fetch = AsyncMock(return_value=[])
+    mock_conn.fetchrow = AsyncMock(return_value=None)
+    mock_conn.fetchval = AsyncMock(return_value=None)
+
+    acm = AsyncMock()
+    acm.__aenter__ = AsyncMock(return_value=mock_conn)
+    acm.__aexit__ = AsyncMock(return_value=False)
+    pool.acquire = MagicMock(return_value=acm)
+    pool.close = AsyncMock()
+
+    return pool, mock_conn
+
+
 # This test is a unit test for the inline VectorIO providers. This should only contain
 # tests which are specific to this class. More general (API-level) tests should be placed in
 # tests/integration/vector_io/
 #
 # How to run this test:
 #
-# pytest tests/unit/providers/vector_io/test_vector_io_openai_vector_stores.py \
+# pytest tests/unit/providers/vector_io/test_vector_io_stores_config.py \
 # -v -s --tb=short --disable-warnings --asyncio-mode=auto
 
 
@@ -188,16 +208,10 @@ async def test_search_vector_store_ignores_rewrite_query(vector_io_adapter):
 
 
 async def test_create_gin_index_executes_correct_sql():
-    from unittest.mock import MagicMock
-
     from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
     from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
-    connection = MagicMock()
-    cursor = MagicMock()
-    cursor.__enter__ = MagicMock(return_value=cursor)
-    cursor.__exit__ = MagicMock()
-    connection.cursor.return_value = cursor
+    pool, mock_conn = _make_mock_asyncpg_pool()
 
     vector_store = VectorStore(
         identifier="test-vector-db",
@@ -206,21 +220,20 @@ async def test_create_gin_index_executes_correct_sql():
         provider_id="pgvector",
     )
 
-    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
-        index = PGVectorIndex(
-            vector_store=vector_store,
-            dimension=768,
-            conn=connection,
-            distance_metric="COSINE",
-            vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
-        )
-        index.table_name = "vs_test_table"
-        index._table_sql = sql.Identifier("vs_test_table")
+    index = PGVectorIndex(
+        vector_store=vector_store,
+        dimension=768,
+        pool=pool,
+        distance_metric="COSINE",
+        vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
+    )
+    index.table_name = "vs_test_table"
+    index._quoted_table = '"vs_test_table"'
 
-    await index.create_gin_index(cursor)
+    await index.create_gin_index(mock_conn)
 
-    cursor.execute.assert_called_once()
-    executed_sql = repr(cursor.execute.call_args[0][0])
+    mock_conn.execute.assert_called_once()
+    executed_sql = mock_conn.execute.call_args[0][0]
     assert "CREATE INDEX IF NOT EXISTS" in executed_sql
     assert "vs_test_table_content_gin_idx" in executed_sql
     assert "vs_test_table" in executed_sql
@@ -228,19 +241,11 @@ async def test_create_gin_index_executes_correct_sql():
 
 
 async def test_create_gin_index_raises_runtime_error_on_db_error():
-    from unittest.mock import MagicMock
-
-    import psycopg2
-
     from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
     from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
-    connection = MagicMock()
-    cursor = MagicMock()
-    cursor.__enter__ = MagicMock(return_value=cursor)
-    cursor.__exit__ = MagicMock()
-    cursor.execute.side_effect = psycopg2.Error("mock database error")
-    connection.cursor.return_value = cursor
+    pool, mock_conn = _make_mock_asyncpg_pool()
+    mock_conn.execute = AsyncMock(side_effect=asyncpg.PostgresError("mock database error"))
 
     vector_store = VectorStore(
         identifier="test-vector-db",
@@ -249,32 +254,25 @@ async def test_create_gin_index_raises_runtime_error_on_db_error():
         provider_id="pgvector",
     )
 
-    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
-        index = PGVectorIndex(
-            vector_store=vector_store,
-            dimension=768,
-            conn=connection,
-            distance_metric="COSINE",
-            vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
-        )
-        index.table_name = "vs_test_table"
-        index._table_sql = sql.Identifier("vs_test_table")
+    index = PGVectorIndex(
+        vector_store=vector_store,
+        dimension=768,
+        pool=pool,
+        distance_metric="COSINE",
+        vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
+    )
+    index.table_name = "vs_test_table"
+    index._quoted_table = '"vs_test_table"'
 
     with pytest.raises(RuntimeError, match="Failed to create GIN index"):
-        await index.create_gin_index(cursor)
+        await index.create_gin_index(mock_conn)
 
 
 async def test_gin_index_creation_in_initialize_call():
-    from unittest.mock import MagicMock
-
     from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
     from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
-    connection = MagicMock()
-    cursor = MagicMock()
-    cursor.__enter__ = MagicMock(return_value=cursor)
-    cursor.__exit__ = MagicMock()
-    connection.cursor.return_value = cursor
+    pool, mock_conn = _make_mock_asyncpg_pool()
 
     vector_store = VectorStore(
         identifier="test-vector-db",
@@ -283,28 +281,25 @@ async def test_gin_index_creation_in_initialize_call():
         provider_id="pgvector",
     )
 
-    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2") as mock_psycopg2:
-        mock_psycopg2.extras.DictCursor = MagicMock()
+    index = PGVectorIndex(
+        vector_store=vector_store,
+        dimension=768,
+        pool=pool,
+        distance_metric="COSINE",
+        vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
+    )
 
-        index = PGVectorIndex(
-            vector_store=vector_store,
-            dimension=768,
-            conn=connection,
-            distance_metric="COSINE",
-            vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
-        )
-
-        with patch.object(index, "create_gin_index") as mock_gin:
-            await index.initialize()
-            mock_gin.assert_called_once()
+    with patch.object(index, "create_gin_index", new_callable=AsyncMock) as mock_gin:
+        await index.initialize()
+        mock_gin.assert_called_once()
 
 
-async def test_set_ef_search_called_before_select_in_query_vector(mock_psycopg2_connection, embedding_dimension):
+async def test_set_ef_search_called_before_select_in_query_vector(mock_asyncpg_pool, embedding_dimension):
     from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
     from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
-    connection, cursor = mock_psycopg2_connection
-    cursor.fetchall.return_value = []
+    pool, mock_conn = mock_asyncpg_pool
+    mock_conn.fetch = AsyncMock(return_value=[])
 
     index = PGVectorIndex(
         vector_store=VectorStore(
@@ -314,33 +309,36 @@ async def test_set_ef_search_called_before_select_in_query_vector(mock_psycopg2_
             provider_id="pgvector",
         ),
         dimension=embedding_dimension,
-        conn=connection,
+        pool=pool,
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=50),
     )
     index.table_name = "test_table"
-    index._table_sql = sql.Identifier("test_table")
+    index._quoted_table = '"test_table"'
 
     embedding = np.random.rand(embedding_dimension).astype(np.float32)
     await index.query_vector(embedding, k=5, score_threshold=0.5)
 
-    calls = cursor.execute.call_args_list
-    assert len(calls) == 2, f"Expected exactly 2 execute calls (SET + SELECT), got {len(calls)}"
+    execute_calls = mock_conn.execute.call_args_list
+    fetch_calls = mock_conn.fetch.call_args_list
 
-    set_call_sql = str(calls[0])
-    select_call_sql = repr(calls[1][0][0])
+    assert len(execute_calls) == 1, f"Expected 1 execute call (SET), got {len(execute_calls)}"
+    assert len(fetch_calls) == 1, f"Expected 1 fetch call (SELECT), got {len(fetch_calls)}"
+
+    set_call_sql = str(execute_calls[0])
+    select_call_sql = str(fetch_calls[0])
     assert f"SET hnsw.ef_search = {index.vector_index.ef_search}" in set_call_sql, (
         f"First call should be SET, got: {set_call_sql}"
     )
     assert "SELECT document" in select_call_sql, f"Second call should be SELECT, got: {select_call_sql}"
 
 
-async def test_apply_default_ef_search_for_query_vector(mock_psycopg2_connection, embedding_dimension):
+async def test_apply_default_ef_search_for_query_vector(mock_asyncpg_pool, embedding_dimension):
     from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
     from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
 
-    connection, cursor = mock_psycopg2_connection
-    cursor.fetchall.return_value = []
+    pool, mock_conn = mock_asyncpg_pool
+    mock_conn.fetch = AsyncMock(return_value=[])
 
     index = PGVectorIndex(
         vector_store=VectorStore(
@@ -350,18 +348,18 @@ async def test_apply_default_ef_search_for_query_vector(mock_psycopg2_connection
             provider_id="pgvector",
         ),
         dimension=embedding_dimension,
-        conn=connection,
+        pool=pool,
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
     )
     index.table_name = "test_table"
-    index._table_sql = sql.Identifier("test_table")
+    index._quoted_table = '"test_table"'
 
     embedding = np.random.rand(embedding_dimension).astype(np.float32)
     await index.query_vector(embedding, k=5, score_threshold=0.5)
 
-    calls = cursor.execute.call_args_list
-    set_call_sql = str(calls[0])
+    execute_calls = mock_conn.execute.call_args_list
+    set_call_sql = str(execute_calls[0])
     assert f"SET hnsw.ef_search = {PGVectorHNSWVectorIndex().ef_search}" in set_call_sql, (
         f"Expected default 'SET hnsw.ef_search = {PGVectorHNSWVectorIndex().ef_search}' when ef_search is not explicitly configured, got: {set_call_sql}"
     )
