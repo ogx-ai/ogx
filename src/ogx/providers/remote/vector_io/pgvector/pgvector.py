@@ -779,7 +779,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 try:
                     await self.pool.close()
                 except Exception:
-                    pass
+                    log.debug("Failed to close stale connection pool during recreation")
                 self.pool = None
                 self._pool_initialized = False
 
