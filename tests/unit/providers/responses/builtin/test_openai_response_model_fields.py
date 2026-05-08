@@ -4,12 +4,6 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the terms described in the LICENSE file in
-# the root directory of this source tree.
-
 """Tests that id and status fields are always str (never None) on response models."""
 
 import pytest
@@ -77,6 +71,13 @@ class TestOpenAIResponseOutputMessageFunctionToolCallFields:
     def test_none_status_rejected(self):
         with pytest.raises(ValidationError):
             OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}", status=None)
+
+    def test_status_transition_preserves_id(self):
+        tc = OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}")
+        assert tc.status == "in_progress"
+        completed = tc.model_copy(update={"status": "completed"})
+        assert completed.status == "completed"
+        assert completed.id == tc.id
 
 
 class TestOpenAIResponseInputFunctionToolCallOutputFields:
