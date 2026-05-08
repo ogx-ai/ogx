@@ -14,7 +14,9 @@ OGX ships two related but distinct stability surfaces:
 1. **The HTTP API surface** — routes mounted under `/v1`, `/v1beta`, `/v1alpha`. These are what application developers consume over the wire.
 2. **The `ogx-api` Python package** — the typed contract used by external/out-of-tree provider implementations and by SDK code generation. These are what provider authors import.
 
-Both surfaces follow the same level taxonomy below, but the rules for what "stable" means differ slightly between them. See [Public Datatype Stability](#public-datatype-stability) for the package surface.
+Both surfaces follow the same level taxonomy below, but the rules for what "stable" means differ slightly between them. See [Public Datatype Stability](#public-datatype-stability) for the package surface and [Data storage compatibility](#data-storage-compatibility) for what happens to bytes on disk across upgrades.
+
+> **Versioning terminology.** OGX releases follow `X.Y.Z` SemVer. **X-stream** changes are major releases (e.g. `1.x` → `2.0`); **Y-stream** changes are minor releases (e.g. `1.4.x` → `1.5.0`); **Z-stream** changes are patch releases (e.g. `1.4.2` → `1.4.3`). The terms "major version bump" and "X-stream release" are used interchangeably.
 
 ## Different Levels
 
@@ -176,10 +178,10 @@ Unlike API datatypes, the Provider SDK is levelled **as a single cohesive surfac
 Removals at `v1` are not allowed mid-major-version, but **deprecations are**. To remove a Provider SDK symbol:
 
 1. Mark it deprecated (Python `warnings.warn(DeprecationWarning, stacklevel=2)` from the symbol, plus a `Deprecated since X.Y; will be removed in 2.0` note in the docstring).
-2. Keep it functional and exported until the next major version.
-3. Remove it in the major release.
+2. Keep it functional and exported until the next X-stream release.
+3. Remove it in that X-stream release.
 
-This applies symmetrically to renames: add the new name, alias the old name with a deprecation warning, drop the old name in the next major.
+This applies symmetrically to renames: add the new name, alias the old name with a deprecation warning, drop the old name in the next X-stream release.
 
 #### Pinning recommendation for external providers
 
@@ -204,6 +206,30 @@ A breaking change in *either* surface (an API datatype graduating past `v1` rule
 Internal helpers and base classes that are not part of either surface should not be re-exported from `ogx_api.types` or `ogx_api.provider`. If a symbol must be public for an external provider but doesn't fit cleanly into the API datatype track, it belongs in the Provider SDK surface.
 
 Shared resource/value types (`Model`, `Shield`, `ToolGroup`, `VectorStore`) live canonically in `ogx_api.types` and are re-exported from `ogx_api.provider` for convenience — these are the only symbols intentionally present in both namespaces.
+
+### Configuration files
+
+Distribution `config.yaml` files — and the `StackConfig` / provider config Pydantic models that parse them — are themselves `ogx_api.types` datatypes and are governed by the same rules as any other `v1` datatype:
+
+- A `config.yaml` that loads on `1.4.2` must load on `1.4.3`. No config schema changes within a Z-stream.
+- A `config.yaml` that loads on `1.4.2` must load on `1.5.0`. New optional fields with safe defaults are non-breaking across a Y-stream upgrade; required-field additions are not.
+- Removing or renaming a config field requires the deprecate-then-remove cycle described under [Deprecation timeline](#deprecation-timeline). Renames are deprecations.
+- A breaking config schema change requires a major version bump of OGX itself (e.g. `1.5.0` → `2.0.0`).
+
+Enforcement is wired up in `.github/workflows/backward-compat.yml`, which on every PR loads `main`'s and the latest published release's `config.yaml` against the PR branch.
+
+## Data storage compatibility
+
+Beyond config and API datatypes, OGX persists state to disk: the kvstore (sqlite/postgres/redis), the sqlstore (sqlite/postgres), the responses store, vector stores, and file storage. None of these schemas are part of the `ogx_api` package — they are server-internal — but upgrading users still depend on them surviving across releases.
+
+The contract for stored data, in the `1.x` line:
+
+- **Z-stream upgrades** (e.g. `1.4.2` → `1.4.3`): no schema changes. Data written by `1.4.2` is readable by `1.4.3` and vice versa.
+- **Y-stream upgrades** (e.g. `1.4.2` → `1.5.0`): data written by `1.4.2` must remain readable by `1.5.0` with no manual operator action. Schema changes are limited to additive, auto-migrating ones — new optional columns, new tables, new kvstore keys with safe defaults. The infrastructure for this lives in `src/ogx/core/storage/` and is exercised by `tests/unit/utils/kvstore/test_kvstore_contract.py` and `tests/unit/core/test_sqlstore_add_column.py`.
+- **X-stream (major) upgrades** (e.g. `1.5.0` → `2.0.0`): may require an explicit, documented migration. A migration script and release-notes callout are mandatory; a major version is the only release where data may need operator intervention to load.
+- **Downgrades**: out of scope. A server downgraded from `1.5.0` to `1.4.2` is not guaranteed to load data written by `1.5.0`. Operators who need rollback should snapshot before upgrading.
+
+Test recordings under `tests/integration/*/recordings/` are developer artifacts and are not part of this contract.
 
 ### Approval and Announcement Process for Breaking Changes
 
