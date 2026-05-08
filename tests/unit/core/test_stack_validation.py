@@ -48,6 +48,7 @@ class TestVectorStoresValidation:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             vector_stores=VectorStoresConfig(
@@ -80,6 +81,7 @@ class TestVectorStoresValidation:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             vector_stores=VectorStoresConfig(
@@ -174,6 +176,7 @@ class TestRegisterConnectors:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             connectors=connectors,
@@ -433,6 +436,7 @@ class TestServerConfigRegistryRefreshInterval:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             server=ServerConfig(registry_refresh_interval_seconds=120),

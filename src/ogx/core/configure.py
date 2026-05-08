@@ -226,8 +226,17 @@ def _migrate_prompts_kv_to_sql(config_dict: dict[str, Any]) -> None:
     if prompts_cfg and "namespace" in prompts_cfg and "table_name" not in prompts_cfg:
         logger.info("Migrating prompts store config from KVStoreReference to SqlStoreReference")
         prompts_cfg["table_name"] = prompts_cfg.pop("namespace")
-        if prompts_cfg.get("backend") == "kv_default":
+        backend = prompts_cfg.get("backend", "")
+        if backend == "kv_default":
             prompts_cfg["backend"] = "sql_default"
+        elif backend.startswith("kv_"):
+            sql_backend = "sql_" + backend[3:]
+            logger.info(
+                "Remapping prompts backend from KV to SQL variant",
+                kv_backend=backend,
+                sql_backend=sql_backend,
+            )
+            prompts_cfg["backend"] = sql_backend
 
 
 def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:

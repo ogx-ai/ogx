@@ -41,6 +41,7 @@ async def temp_prompt_store(tmp_path_factory):
             inference=InferenceStoreReference(backend="sql_test", table_name="inference"),
             conversations=SqlStoreReference(backend="sql_test", table_name="conversations"),
             prompts=SqlStoreReference(backend="sql_test", table_name="prompts"),
+            connectors=SqlStoreReference(backend="sql_test", table_name="connectors"),
         ),
     )
 

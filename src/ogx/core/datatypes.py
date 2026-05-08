@@ -972,4 +972,5 @@ can be instantiated multiple times (with different configs) if necessary.
         _ensure_backend(stores.conversations, sql_backends, "storage.stores.conversations")
         _ensure_backend(stores.responses, sql_backends, "storage.stores.responses")
         _ensure_backend(stores.prompts, sql_backends, "storage.stores.prompts")
+        _ensure_backend(stores.connectors, sql_backends, "storage.stores.connectors")
         return self

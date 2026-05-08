@@ -730,7 +730,7 @@ def add_internal_implementations(impls: dict[Api, Any], config: StackConfig, pol
     impls[Api.conversations] = conversations_impl
 
     connectors_impl = ConnectorServiceImpl(
-        ConnectorServiceConfig(config=config),
+        ConnectorServiceConfig(config=config, policy=policy),
     )
     impls[Api.connectors] = connectors_impl
 
@@ -991,7 +991,7 @@ def run_config_from_dynamic_config_spec(
                 inference=InferenceStoreReference(backend="sql_default", table_name="inference_store"),
                 conversations=SqlStoreReference(backend="sql_default", table_name="openai_conversations"),
                 prompts=SqlStoreReference(backend="sql_default", table_name="prompts"),
-                connectors=KVStoreReference(backend="kv_default", namespace="connectors"),
+                connectors=SqlStoreReference(backend="sql_default", table_name="connectors"),
             ),
         ),
     )
