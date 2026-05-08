@@ -6,10 +6,12 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 
 
-class TavilySearchToolConfig(BaseModel):
+class TavilySearchToolConfig(BaseToolRuntimeConfig):
     """Configuration for the Tavily Search tool runtime."""
 
     api_key: str | None = Field(

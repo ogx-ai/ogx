@@ -18,12 +18,12 @@ This documentation is auto-generated from the OpenAI API specification compariso
 
 | Metric | Value |
 |--------|-------|
-| **Overall Conformance Score** | 91.8% |
+| **Overall Conformance Score** | 92.0% |
 | **Endpoints Implemented** | 30/146 |
 | **Total Properties Checked** | 3487 |
-| **Schema/Type Issues** | 184 |
-| **Missing Properties** | 101 |
-| **Total Issues to Fix** | 285 |
+| **Schema/Type Issues** | 180 |
+| **Missing Properties** | 98 |
+| **Total Issues to Fix** | 278 |
 
 ## Integration Test Coverage
 
@@ -53,7 +53,7 @@ Categories are sorted by conformance score (lowest first, needing most attention
 | Responses | 88.9% | 225 | 25 | 0 |
 | Models | 93.3% | 15 | 1 | 0 |
 | Chat | 98.7% | 449 | 5 | 1 |
-| Conversations | 98.9% | 2165 | 19 | 4 |
+| Conversations | 99.3% | 2165 | 15 | 1 |
 
 ## Missing Endpoints
 
@@ -906,7 +906,7 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 
 ### Conversations
 
-**Score:** 98.9% · **Issues:** 19 · **Missing:** 4
+**Score:** 99.3% · **Issues:** 15 · **Missing:** 1
 
 #### `/conversations`
 
@@ -932,7 +932,7 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 | Property | Issues | Tested |
 |----------|--------|--------|
 | `responses.200.content.application/json.properties.deleted` | Default changed: None -&gt; True | No |
-| `responses.200.content.application/json.properties.object` | Enum removed: ['conversation.deleted'] | No |
+| `responses.200.content.application/json.properties.object` | Default changed: conversation.deleted -&gt; None | No |
 
 </details>
 
@@ -964,15 +964,13 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 **GET**
 
 <details>
-<summary>Schema Issues (5)</summary>
+<summary>Schema Issues (3)</summary>
 
 | Property | Issues | Tested |
 |----------|--------|--------|
-| `responses.200.content.application/json.properties.data.items` | Union variants added: 10; Union variants removed: 25 | No |
+| `responses.200.content.application/json.properties.data.items` | Union variants added: 11; Union variants removed: 25 | No |
 | `responses.200.content.application/json.properties.first_id` | Type removed: ['string']; Nullable added (OpenAI non-nullable); Union variants added: 2 | No |
-| `responses.200.content.application/json.properties.has_more` | Default changed: None -&gt; False | No |
 | `responses.200.content.application/json.properties.last_id` | Type removed: ['string']; Nullable added (OpenAI non-nullable); Union variants added: 2 | No |
-| `responses.200.content.application/json.properties.object` | Enum removed: ['list']; Default changed: None -&gt; list | No |
 
 </details>
 
@@ -986,16 +984,14 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 </details>
 
 <details>
-<summary>Schema Issues (6)</summary>
+<summary>Schema Issues (4)</summary>
 
 | Property | Issues | Tested |
 |----------|--------|--------|
-| `requestBody.content.application/json.properties.items.items` | Union variants added: 10; Union variants removed: 3 | No |
-| `responses.200.content.application/json.properties.data.items` | Union variants added: 10; Union variants removed: 25 | No |
+| `requestBody.content.application/json.properties.items.items` | Union variants added: 11; Union variants removed: 3 | No |
+| `responses.200.content.application/json.properties.data.items` | Union variants added: 11; Union variants removed: 25 | No |
 | `responses.200.content.application/json.properties.first_id` | Type removed: ['string']; Nullable added (OpenAI non-nullable); Union variants added: 2 | No |
-| `responses.200.content.application/json.properties.has_more` | Default changed: None -&gt; False | No |
 | `responses.200.content.application/json.properties.last_id` | Type removed: ['string']; Nullable added (OpenAI non-nullable); Union variants added: 2 | No |
-| `responses.200.content.application/json.properties.object` | Enum removed: ['list']; Default changed: None -&gt; list | No |
 
 </details>
 
@@ -1004,28 +1000,11 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 **DELETE**
 
 <details>
-<summary>Missing Properties (2)</summary>
-
-- `responses.200.content.application/json.properties.created_at`
-- `responses.200.content.application/json.properties.metadata`
-
-</details>
-
-<details>
 <summary>Schema Issues (1)</summary>
 
 | Property | Issues | Tested |
 |----------|--------|--------|
-| `responses.200.content.application/json.properties.object` | Enum removed: ['conversation']; Default changed: conversation -&gt; conversation.item.deleted | No |
-
-</details>
-
-**GET**
-
-<details>
-<summary>Missing Properties (1)</summary>
-
-- `parameters.query.include`
+| `responses.200.content.application/json.properties.metadata` | Union variants added: 2 | Yes |
 
 </details>
 

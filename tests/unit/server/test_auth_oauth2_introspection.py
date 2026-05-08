@@ -7,6 +7,7 @@
 import logging  # allow-direct-logging
 from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import pytest
 
 from ogx.core.datatypes import (
@@ -57,11 +58,12 @@ def _mock_async_client(mock_client_cls):
 async def test_introspection_uses_verify_true_by_default(introspection_provider):
     """Introspection uses system CA bundle (verify=True) when verify_tls is True and no tls_cafile."""
     with patch("httpx.AsyncClient") as mock_client_cls:
-        _mock_async_client(mock_client_cls)
+        mock_client = _mock_async_client(mock_client_cls)
 
         await introspection_provider.introspect_token("some-token")
 
-        mock_client_cls.assert_called_once_with(verify=True)
+        mock_client_cls.assert_called_once_with(verify=True, timeout=httpx.Timeout(10.0, connect=5.0))
+        assert "timeout" not in mock_client.post.call_args.kwargs
 
 
 async def test_introspection_uses_custom_ca_file(mock_introspection_endpoint, tmp_path):
@@ -89,7 +91,7 @@ async def test_introspection_uses_custom_ca_file(mock_introspection_endpoint, tm
         await provider.introspect_token("some-token")
 
         mock_ssl_ctx.assert_called_once_with(cafile=ca_file.as_posix())
-        mock_client_cls.assert_called_once_with(verify=mock_ctx)
+        mock_client_cls.assert_called_once_with(verify=mock_ctx, timeout=httpx.Timeout(10.0, connect=5.0))
 
 
 async def test_introspection_disables_verification_when_verify_tls_false(mock_introspection_endpoint, caplog):
@@ -112,5 +114,5 @@ async def test_introspection_disables_verification_when_verify_tls_false(mock_in
         with caplog.at_level(logging.WARNING):
             await provider.introspect_token("some-token")
 
-        mock_client_cls.assert_called_once_with(verify=False)
+        mock_client_cls.assert_called_once_with(verify=False, timeout=httpx.Timeout(10.0, connect=5.0))
         assert any("TLS verification is disabled" in r.message for r in caplog.records)
