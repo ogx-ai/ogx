@@ -1,0 +1,41 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_response_headers[txt=ollama/llama3.2:3b-instruct-fp16]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_response_headers[txt=ollama/llama3.2:3b-instruct-fp16]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "llama3.2:3b-instruct-fp16",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "max_tokens": 16,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_10c2035b29a8da0c94e02d36",
+      "type": "message",
+      "role": "assistant",
+      "model": "llama3.2:3b-instruct-fp16",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello! How can I assist you today?"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 26,
+        "output_tokens": 10
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

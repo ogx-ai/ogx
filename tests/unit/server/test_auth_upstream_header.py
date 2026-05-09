@@ -280,3 +280,163 @@ async def test_provider_validate_token_none_scope():
     provider = UpstreamHeaderAuthProvider(config)
     with pytest.raises(ValueError, match="Missing required authentication header"):
         await provider.validate_token("", None)
+
+
+# attribute_headers tests (multi-header identity mapping)
+
+
+async def test_attribute_headers_plain_string():
+    """Test that a plain string header value is treated as a single-element list."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-auth-user-id",
+        attribute_headers={"x-maas-subscription": "namespaces"},
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "headers": [
+            (b"x-auth-user-id", b"alice"),
+            (b"x-maas-subscription", b"premium-sub"),
+        ],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+    assert user.attributes == {"namespaces": ["premium-sub"]}
+
+
+async def test_attribute_headers_json_array():
+    """Test that a JSON array header value is parsed into a list."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-auth-user-id",
+        attribute_headers={"x-maas-group": "teams"},
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "headers": [
+            (b"x-auth-user-id", b"alice"),
+            (b"x-maas-group", b'["team-a","premium-users"]'),
+        ],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+    assert user.attributes == {"teams": ["team-a", "premium-users"]}
+
+
+async def test_attribute_headers_multiple_headers():
+    """Test that multiple separate headers map to different attribute categories."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-auth-user-id",
+        attribute_headers={
+            "x-maas-group": "teams",
+            "x-maas-subscription": "namespaces",
+        },
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "headers": [
+            (b"x-auth-user-id", b"alice"),
+            (b"x-maas-group", b'["team-a"]'),
+            (b"x-maas-subscription", b"premium-sub"),
+        ],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+    assert user.attributes == {
+        "teams": ["team-a"],
+        "namespaces": ["premium-sub"],
+    }
+
+
+async def test_attribute_headers_merged_with_attributes_header():
+    """Test that attribute_headers values merge with attributes_header values."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-auth-user-id",
+        attributes_header="x-auth-attributes",
+        attribute_headers={"x-maas-group": "teams"},
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    attributes = json.dumps({"roles": ["admin"], "teams": ["existing-team"]})
+    scope = {
+        "headers": [
+            (b"x-auth-user-id", b"alice"),
+            (b"x-auth-attributes", attributes.encode()),
+            (b"x-maas-group", b'["extra-team"]'),
+        ],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+    assert user.attributes["roles"] == ["admin"]
+    assert "existing-team" in user.attributes["teams"]
+    assert "extra-team" in user.attributes["teams"]
+
+
+async def test_attribute_headers_missing_optional_header():
+    """Test that missing optional attribute headers are silently skipped."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-auth-user-id",
+        attribute_headers={
+            "x-maas-group": "teams",
+            "x-maas-subscription": "namespaces",
+        },
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "headers": [
+            (b"x-auth-user-id", b"alice"),
+            (b"x-maas-group", b'["team-a"]'),
+            # x-maas-subscription is absent
+        ],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+    assert user.attributes == {"teams": ["team-a"]}
+    assert "namespaces" not in user.attributes
+
+
+async def test_attribute_headers_case_insensitive():
+    """Test that attribute_headers matching is case-insensitive (HTTP standard)."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="X-Auth-User-Id",
+        attribute_headers={"X-MaaS-Group": "teams"},
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "headers": [
+            (b"x-auth-user-id", b"alice"),
+            (b"x-maas-group", b'["team-a"]'),
+        ],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+    assert user.attributes == {"teams": ["team-a"]}
+
+
+def test_attribute_headers_middleware_integration(upstream_header_app):
+    """Test attribute_headers through the full middleware stack."""
+    app = FastAPI()
+    auth_config = AuthenticationConfig(
+        provider_config=UpstreamHeaderAuthConfig(
+            type=AuthProviderType.UPSTREAM_HEADER,
+            principal_header="x-auth-user-id",
+            attribute_headers={
+                "x-maas-group": "teams",
+                "x-maas-subscription": "namespaces",
+            },
+        ),
+        access_policy=[],
+    )
+    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+
+    @app.get("/test")
+    def test_endpoint():
+        return {"message": "ok"}
+
+    client = TestClient(app)
+    response = client.get(
+        "/test",
+        headers={
+            "x-auth-user-id": "alice",
+            "x-maas-group": '["team-a"]',
+            "x-maas-subscription": "premium",
+        },
+    )
+    assert response.status_code == 200

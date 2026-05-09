@@ -32,6 +32,7 @@ def create_router(impl: Safety) -> APIRouter:
         responses={
             200: {"description": "The shield response indicating any violations detected."},
         },
+        deprecated=True,
     )
     async def run_shield(
         request: Annotated[RunShieldRequest, Body(...)],

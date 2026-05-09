@@ -41,9 +41,9 @@ def test_openai_client_compatibility():
 
 
 def test_conversation_item_list():
-    item_list = ConversationItemList(data=[])
+    item_list = ConversationItemList(data=[], first_id="", last_id="", has_more=False)
     assert item_list.object == "list"
     assert item_list.data == []
-    assert item_list.first_id is None
-    assert item_list.last_id is None
+    assert item_list.first_id == ""
+    assert item_list.last_id == ""
     assert item_list.has_more is False

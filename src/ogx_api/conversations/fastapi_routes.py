@@ -29,7 +29,6 @@ from .models import (
     Conversation,
     ConversationDeletedResource,
     ConversationItem,
-    ConversationItemDeletedResource,
     ConversationItemInclude,
     ConversationItemList,
     CreateConversationRequest,
@@ -55,10 +54,17 @@ class _ListItemsQueryParams(BaseModel):
     order: Literal["asc", "desc"] | None = None
 
 
+class _IncludeQueryParams(BaseModel):
+    """Query parameters for endpoints that accept include."""
+
+    include: list[ConversationItemInclude] | None = None
+
+
 # Dependency functions for request models
 get_conversation_request = create_path_dependency(GetConversationRequest)
 delete_conversation_request = create_path_dependency(DeleteConversationRequest)
 get_list_items_query_params = create_query_dependency(_ListItemsQueryParams)
+get_include_query_params = create_query_dependency(_IncludeQueryParams)
 
 
 def create_router(impl: Conversations) -> APIRouter:
@@ -129,6 +135,7 @@ def create_router(impl: Conversations) -> APIRouter:
     async def add_items(
         conversation_id: Annotated[str, Path(description="The conversation identifier.")],
         request: Annotated[AddItemsRequest, Body(...)],
+        include: Annotated[_IncludeQueryParams, Depends(get_include_query_params)],
     ) -> ConversationItemList:
         return await impl.add_items(conversation_id, request)
 
@@ -142,6 +149,7 @@ def create_router(impl: Conversations) -> APIRouter:
     async def retrieve_item(
         conversation_id: Annotated[str, Path(description="The conversation identifier.")],
         item_id: Annotated[str, Path(description="The item identifier.")],
+        include: Annotated[_IncludeQueryParams, Depends(get_include_query_params)],
     ) -> ConversationItem:
         request = RetrieveItemRequest(conversation_id=conversation_id, item_id=item_id)
         return await impl.retrieve(request)
@@ -168,15 +176,15 @@ def create_router(impl: Conversations) -> APIRouter:
 
     @router.delete(
         "/conversations/{conversation_id}/items/{item_id}",
-        response_model=ConversationItemDeletedResource,
+        response_model=Conversation,
         summary="Delete an item.",
         description="Delete a conversation item.",
-        responses={200: {"description": "The deleted item resource."}},
+        responses={200: {"description": "The parent conversation object."}},
     )
     async def delete_item(
         conversation_id: Annotated[str, Path(description="The conversation identifier.")],
         item_id: Annotated[str, Path(description="The item identifier.")],
-    ) -> ConversationItemDeletedResource:
+    ) -> Conversation:
         request = DeleteItemRequest(conversation_id=conversation_id, item_id=item_id)
         return await impl.openai_delete_conversation_item(request)
 

@@ -220,6 +220,25 @@ def upgrade_from_routing_table(
     return config_dict
 
 
+def _migrate_prompts_kv_to_sql(config_dict: dict[str, Any]) -> None:
+    """Migrate prompts store from legacy KVStoreReference to SqlStoreReference in-place."""
+    prompts_cfg = config_dict.get("storage", {}).get("stores", {}).get("prompts")
+    if prompts_cfg and "namespace" in prompts_cfg and "table_name" not in prompts_cfg:
+        logger.info("Migrating prompts store config from KVStoreReference to SqlStoreReference")
+        prompts_cfg["table_name"] = prompts_cfg.pop("namespace")
+        backend = prompts_cfg.get("backend", "")
+        if backend == "kv_default":
+            prompts_cfg["backend"] = "sql_default"
+        elif backend.startswith("kv_"):
+            sql_backend = "sql_" + backend[3:]
+            logger.info(
+                "Remapping prompts backend from KV to SQL variant",
+                kv_backend=backend,
+                sql_backend=sql_backend,
+            )
+            prompts_cfg["backend"] = sql_backend
+
+
 def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
     """Parse a configuration dictionary into a StackConfig, upgrading from legacy format if needed.
 
@@ -232,6 +251,8 @@ def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
     if "routing_table" in config_dict:
         logger.info("Upgrading config...")
         config_dict = upgrade_from_routing_table(config_dict)
+
+    _migrate_prompts_kv_to_sql(config_dict)
 
     config_dict["version"] = OGX_RUN_CONFIG_VERSION
 

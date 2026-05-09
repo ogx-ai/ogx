@@ -48,7 +48,7 @@ def _default_storage() -> StorageConfig:
             metadata=KVStoreReference(backend="kv_default", namespace="registry"),
             inference=InferenceStoreReference(backend="sql_default", table_name="inference_store"),
             conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
-            prompts=KVStoreReference(backend="kv_default", namespace="prompts"),
+            prompts=SqlStoreReference(backend="sql_default", table_name="prompts"),
         ),
     )
 

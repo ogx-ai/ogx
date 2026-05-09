@@ -1925,6 +1925,7 @@ components:
     ConversationItem:
       discriminator:
         mapping:
+          compaction: '#/components/schemas/OpenAIResponseCompaction'
           file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
           function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
           function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -1957,7 +1958,9 @@ components:
         title: OpenAIResponseOutputMessageMCPListTools
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
         title: OpenAIResponseOutputMessageReasoningItem
-      title: OpenAIResponseMessage | ... (10 variants)
+      - $ref: '#/components/schemas/OpenAIResponseCompaction'
+        title: OpenAIResponseCompaction
+      title: OpenAIResponseMessage | ... (11 variants)
     OpenAIResponseAnnotationCitation:
       properties:
         type:
@@ -2576,9 +2579,12 @@ components:
                 title: OpenAIResponseOutputMessageMCPListTools
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
                 title: OpenAIResponseOutputMessageReasoningItem
+              - $ref: '#/components/schemas/OpenAIResponseCompaction'
+                title: OpenAIResponseCompaction
               discriminator:
                 propertyName: type
                 mapping:
+                  compaction: '#/components/schemas/OpenAIResponseCompaction'
                   file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                   function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
                   function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -2589,7 +2595,7 @@ components:
                   message: '#/components/schemas/OpenAIResponseMessage-Input'
                   reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
                   web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-              title: OpenAIResponseMessage-Input | ... (10 variants)
+              title: OpenAIResponseMessage-Input | ... (11 variants)
             type: array
           - type: 'null'
           description: Initial items to include in the conversation context.
@@ -2627,14 +2633,6 @@ components:
             type: object
           - type: 'null'
           description: Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard.
-        items:
-          anyOf:
-          - items:
-              additionalProperties: true
-              type: object
-            type: array
-          - type: 'null'
-          description: Initial items to include in the conversation context. You may add up to 20 items at a time.
       type: object
       required:
       - id
@@ -2664,7 +2662,8 @@ components:
           type: string
           title: Object
           description: Object type
-          default: conversation.deleted
+          enum:
+          - conversation.deleted
         deleted:
           type: boolean
           title: Deleted
@@ -2680,8 +2679,9 @@ components:
         object:
           type: string
           title: Object
-          description: Object type
-          default: list
+          description: The type of object returned, must be list.
+          enum:
+          - list
         data:
           items:
             oneOf:
@@ -2705,9 +2705,12 @@ components:
               title: OpenAIResponseOutputMessageMCPListTools
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
               title: OpenAIResponseOutputMessageReasoningItem
+            - $ref: '#/components/schemas/OpenAIResponseCompaction'
+              title: OpenAIResponseCompaction
             discriminator:
               propertyName: type
               mapping:
+                compaction: '#/components/schemas/OpenAIResponseCompaction'
                 file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                 function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
                 function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -2718,7 +2721,7 @@ components:
                 message: '#/components/schemas/OpenAIResponseMessage-Output'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
                 web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-            title: OpenAIResponseMessage-Output | ... (10 variants)
+            title: OpenAIResponseMessage-Output | ... (11 variants)
           type: array
           title: Data
           description: List of conversation items
@@ -2726,20 +2729,22 @@ components:
           anyOf:
           - type: string
           - type: 'null'
-          description: The ID of the first item in the list
+          description: The ID of the first item in the list.
         last_id:
           anyOf:
           - type: string
           - type: 'null'
-          description: The ID of the last item in the list
+          description: The ID of the last item in the list.
         has_more:
           type: boolean
           title: Has More
-          description: Whether there are more items available
-          default: false
+          description: Whether there are more items available.
       type: object
       required:
       - data
+      - first_id
+      - last_id
+      - has_more
       title: ConversationItemList
       description: List of conversation items with pagination.
     AddItemsRequest:
@@ -2767,9 +2772,12 @@ components:
               title: OpenAIResponseOutputMessageMCPListTools
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
               title: OpenAIResponseOutputMessageReasoningItem
+            - $ref: '#/components/schemas/OpenAIResponseCompaction'
+              title: OpenAIResponseCompaction
             discriminator:
               propertyName: type
               mapping:
+                compaction: '#/components/schemas/OpenAIResponseCompaction'
                 file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                 function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
                 function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -2780,7 +2788,7 @@ components:
                 message: '#/components/schemas/OpenAIResponseMessage-Input'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
                 web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-            title: OpenAIResponseMessage-Input | ... (10 variants)
+            title: OpenAIResponseMessage-Input | ... (11 variants)
           type: array
           maxItems: 20
           title: Items
@@ -2791,26 +2799,27 @@ components:
       title: AddItemsRequest
       description: Request model for adding items to a conversation.
     ConversationItemDeletedResource:
+      description: Response for deleted conversation item.
       properties:
         id:
-          type: string
-          title: Id
           description: The deleted item identifier
-        object:
+          title: Id
           type: string
-          title: Object
+        object:
           description: Object type
-          default: conversation.item.deleted
+          title: Object
+          type: string
+          enum:
+          - conversation.item.deleted
         deleted:
-          type: boolean
-          title: Deleted
-          description: Whether the object was deleted
           default: true
-      type: object
+          description: Whether the object was deleted
+          title: Deleted
+          type: boolean
       required:
       - id
       title: ConversationItemDeletedResource
-      description: Response for deleted conversation item.
+      type: object
     OpenAIEmbeddingsRequestWithExtraBody:
       properties:
         model:
@@ -10697,6 +10706,7 @@ components:
           items:
             discriminator:
               mapping:
+                compaction: '#/components/schemas/OpenAIResponseCompaction'
                 file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                 function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
                 function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -10729,7 +10739,9 @@ components:
               title: OpenAIResponseOutputMessageMCPListTools
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
               title: OpenAIResponseOutputMessageReasoningItem
-            title: OpenAIResponseMessage | ... (10 variants)
+            - $ref: '#/components/schemas/OpenAIResponseCompaction'
+              title: OpenAIResponseCompaction
+            title: OpenAIResponseMessage | ... (11 variants)
           maxItems: 20
           title: Items
           type: array
