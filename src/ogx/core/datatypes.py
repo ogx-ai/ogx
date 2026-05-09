@@ -337,6 +337,15 @@ class UpstreamHeaderAuthConfig(BaseModel):
         default=None,
         description="HTTP header containing JSON-encoded user attributes for access control (e.g. x-auth-attributes)",
     )
+    attribute_headers: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "Mapping of HTTP header names to attribute category names. "
+            "Each header value is parsed as a JSON array or plain string. "
+            "Values are merged with any attributes from attributes_header. "
+            "Example: {'X-MaaS-Group': 'teams', 'X-MaaS-Subscription': 'namespaces'}"
+        ),
+    )
 
 
 AuthProviderConfig = Annotated[
@@ -962,5 +971,6 @@ can be instantiated multiple times (with different configs) if necessary.
         _ensure_backend(stores.inference, sql_backends, "storage.stores.inference")
         _ensure_backend(stores.conversations, sql_backends, "storage.stores.conversations")
         _ensure_backend(stores.responses, sql_backends, "storage.stores.responses")
-        _ensure_backend(stores.prompts, kv_backends, "storage.stores.prompts")
+        _ensure_backend(stores.prompts, sql_backends, "storage.stores.prompts")
+        _ensure_backend(stores.connectors, sql_backends, "storage.stores.connectors")
         return self

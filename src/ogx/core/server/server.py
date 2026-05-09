@@ -46,8 +46,6 @@ from ogx.core.server.fastapi_router_registry import (
 )
 from ogx.core.stack import (
     Stack,
-    cast_distro_name_to_string,
-    replace_env_vars,
 )
 from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.config_dirs import migrate_legacy_config_dir
@@ -253,8 +251,9 @@ def create_app() -> StackApp:
 
         logger = get_logger(name=__name__, category="core::server", config=logger_config)
 
-        config = replace_env_vars(config_contents)
-        config = StackConfig(**cast_distro_name_to_string(config))
+        from ogx.core.configure import parse_and_maybe_upgrade_config
+
+        config = parse_and_maybe_upgrade_config(config_contents)
 
     _log_run_config(run_config=config)
 

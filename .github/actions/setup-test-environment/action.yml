@@ -67,13 +67,14 @@ runs:
         " 2>/dev/null || echo "Dataset download failed (may already be cached)"
 
     - name: Setup ollama
-      if: ${{ (inputs.setup == 'ollama' || inputs.setup == 'ollama-vision') && inputs.inference-mode == 'record' }}
+      if: ${{ startsWith(inputs.setup, 'ollama') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-ollama
       with:
         suite: ${{ inputs.suite }}
+        setup: ${{ inputs.setup }}
 
     - name: Setup vllm
-      if: ${{ inputs.setup == 'vllm' && inputs.inference-mode == 'record' }}
+      if: ${{ startsWith(inputs.setup, 'vllm') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-vllm
 
     - name: Start Postgres service

@@ -585,6 +585,34 @@ def test_get_attributes_from_claims():
     assert attributes["tenant"] == ["tenant1"]
     assert attributes["region"] == ["us-west"]
 
+    # Test escaped dots for keys with literal dots (e.g., Kubernetes "kubernetes.io")
+    claims = {
+        "kubernetes.io": {
+            "namespace": "ogx",
+            "serviceaccount": {"name": "tenant-a", "uid": "abc-123"},
+        },
+        "sub": "system:serviceaccount:ogx:tenant-a",
+    }
+    attributes = get_attributes_from_claims(
+        claims, {"kubernetes\\.io.serviceaccount.name": "teams", "sub": "principal"}
+    )
+    assert attributes["teams"] == ["tenant-a"]
+    assert attributes["principal"] == ["system:serviceaccount:ogx:tenant-a"]
+
+    # Test fully escaped literal key (all dots escaped)
+    claims = {
+        "my.dotted.key": "literal-value",
+    }
+    attributes = get_attributes_from_claims(claims, {"my\\.dotted\\.key": "test"})
+    assert attributes["test"] == ["literal-value"]
+
+    # Test mixing escaped and unescaped dots
+    claims = {
+        "resource.access": {"ogx": {"roles": ["admin", "user"]}},
+    }
+    attributes = get_attributes_from_claims(claims, {"resource\\.access.ogx.roles": "roles"})
+    assert set(attributes["roles"]) == {"admin", "user"}
+
 
 # TODO: add more tests for oauth2 token provider
 

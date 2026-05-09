@@ -1,0 +1,42 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_temperature[txt=ollama/llama3.2:3b-instruct-fp16]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_temperature[txt=ollama/llama3.2:3b-instruct-fp16]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "llama3.2:3b-instruct-fp16",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say hello."
+        }
+      ],
+      "max_tokens": 32,
+      "stream": false,
+      "temperature": 0.0
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_162f7dc7441ef0b86812e25e",
+      "type": "message",
+      "role": "assistant",
+      "model": "llama3.2:3b-instruct-fp16",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 28,
+        "output_tokens": 25
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

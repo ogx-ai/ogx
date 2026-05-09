@@ -35,7 +35,7 @@ Models, endpoints, and versions used during test recordings.
 |----------|----------|----------|--------------|
 | azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.30.0 |
 | bedrock | openai.gpt-oss-20b-1:0 | bedrock-runtime.us-west-2.amazonaws.com | openai sdk: 2.30.0 |
-| ollama | gpt-oss:20b | — | openai sdk: 2.5.0, vllm server: 0.9.2rc2.dev136+g0b382b53a.d20250924 |
+| ollama | deepseek-r1:1.5b | — | openai sdk: 2.30.0 |
 | openai | gpt-4o, o4-mini, text-embedding-3-small | api.openai.com | openai sdk: 2.5.0 |
 | vertexai | publishers/google/models/gemini-2.0-flash | — | openai sdk: 2.5.0, provider: vertexai |
 | vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.18.1rc1.dev197+g0e9358c11 |

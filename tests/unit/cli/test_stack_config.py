@@ -45,8 +45,8 @@ def config_with_distro_name_int():
               backend: sql_default
               table_name: responses
             prompts:
-              backend: kv_default
-              namespace: prompts
+              backend: sql_default
+              table_name: prompts
         providers:
           inference:
             - provider_id: provider1
@@ -247,7 +247,7 @@ def test_generate_run_config_from_providers():
     assert "storage" in config_dict
     stores = config_dict["storage"]["stores"]
     assert "prompts" in stores
-    assert stores["prompts"]["namespace"] == "prompts"
+    assert stores["prompts"]["table_name"] == "prompts"
 
     # Verify config can be parsed back
     parsed = parse_and_maybe_upgrade_config(config_dict)
@@ -332,8 +332,8 @@ def config_with_image_name():
               backend: sql_default
               table_name: responses
             prompts:
-              backend: kv_default
-              namespace: prompts
+              backend: sql_default
+              table_name: prompts
         providers:
           inference:
             - provider_id: provider1
@@ -398,8 +398,8 @@ def test_parse_config_with_both_names_prefers_distro_name():
               backend: sql_default
               table_name: responses
             prompts:
-              backend: kv_default
-              namespace: prompts
+              backend: sql_default
+              table_name: prompts
         providers:
           inference:
             - provider_id: provider1

@@ -34,6 +34,14 @@ class VLLMInferenceAdapterConfig(RemoteInferenceProviderConfig):
         alias="api_token",
         description="The API token",
     )
+    fairness_header_attribute: str | None = Field(
+        default=None,
+        description=(
+            "User attribute category whose value is injected as the "
+            "x-gateway-inference-fairness-id header on outgoing requests. "
+            "Used by llm-d EPP Flow Control for per-tenant fair scheduling."
+        ),
+    )
     tls_verify: bool | str | None = Field(
         default=None,
         deprecated=True,

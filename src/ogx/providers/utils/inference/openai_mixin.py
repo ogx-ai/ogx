@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
+from openai.types.chat import ChatCompletionChunk
 from pydantic import BaseModel, ConfigDict, Field
 
 from ogx.core.request_headers import NeedsRequestProviderData
@@ -90,6 +91,12 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     # Set to False for providers that don't support stream_options (e.g., Ollama, vLLM)
     supports_stream_options: bool = True
 
+    # Some providers (e.g. Gemini's OpenAI-compatible endpoint) violate the OpenAI spec by
+    # including usage in every streaming chunk instead of only the final empty-choices chunk.
+    # Set to True to strip usage from all intermediate chunks and emit a single compliant
+    # final usage chunk, preventing callers from overcounting tokens.
+    coalesce_streaming_usage: bool = False
+
     # Allow subclasses to control whether the provider supports tokenized embeddings input
     # Set to True for providers that support pre-tokenized input (list[int] and list[list[int]])
     supports_tokenized_embeddings_input: bool = False
@@ -146,6 +153,17 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         :return: A dictionary of extra parameters
         """
         return {}
+
+    def _get_extra_request_headers(self) -> dict[str, str] | None:
+        """Get extra headers to inject on individual outgoing API calls.
+
+        Child classes can override this to inject per-request headers (e.g. tenant
+        identity for upstream gateway fair scheduling). Unlike get_extra_client_params,
+        these headers are evaluated per-request so they can vary by authenticated user.
+
+        :return: A dictionary of extra headers, or None
+        """
+        return None
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         """
@@ -300,15 +318,35 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             raise ValueError(f"Model {model} has no provider_resource_id")
         return model_obj.provider_resource_id
 
-    async def _maybe_overwrite_id(self, resp: Any, stream: bool | None) -> Any:
+    async def _postprocess_chunk(self, resp: Any, stream: bool | None) -> Any:
         if stream:
             new_id = f"cltsd-{uuid.uuid4()}" if self.overwrite_completion_id else None
+            fix_usage = self.coalesce_streaming_usage
 
             async def _gen():
+                last_usage = None
+                last_id = None
+                last_created = None
+                last_model = None
                 async for chunk in resp:
                     if new_id:
                         chunk.id = new_id
+                    if fix_usage and chunk.usage is not None:
+                        last_usage = chunk.usage
+                        last_id = chunk.id
+                        last_created = chunk.created
+                        last_model = chunk.model
+                        chunk.usage = None
                     yield chunk
+                if fix_usage and last_usage is not None:
+                    yield ChatCompletionChunk(
+                        id=last_id,
+                        choices=[],
+                        created=last_created,
+                        model=last_model,
+                        object="chat.completion.chunk",
+                        usage=last_usage,
+                    )
 
             return _gen()
         else:
@@ -353,9 +391,11 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         )
         if extra_body := params.model_extra:
             completion_kwargs["extra_body"] = extra_body
+        if extra_headers := self._get_extra_request_headers():
+            completion_kwargs["extra_headers"] = extra_headers
         resp = await self.client.completions.create(**completion_kwargs)
 
-        return await self._maybe_overwrite_id(resp, params.stream)  # type: ignore[no-any-return]
+        return await self._postprocess_chunk(resp, params.stream)  # type: ignore[no-any-return]
 
     async def openai_chat_completion(
         self,
@@ -424,9 +464,11 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
         if extra_body := params.model_extra:
             request_params["extra_body"] = extra_body
+        if extra_headers := self._get_extra_request_headers():
+            request_params["extra_headers"] = extra_headers
         resp = await self.client.chat.completions.create(**request_params)
 
-        return await self._maybe_overwrite_id(resp, params.stream)  # type: ignore[no-any-return]
+        return await self._postprocess_chunk(resp, params.stream)  # type: ignore[no-any-return]
 
     async def openai_embeddings(
         self,
@@ -456,6 +498,8 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             request_params["user"] = params.user
         if params.model_extra:
             request_params["extra_body"] = params.model_extra
+        if extra_headers := self._get_extra_request_headers():
+            request_params["extra_headers"] = extra_headers
 
         response = await self.client.embeddings.create(**request_params)
 
