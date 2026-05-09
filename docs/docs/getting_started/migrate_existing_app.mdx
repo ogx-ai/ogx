@@ -1,11 +1,11 @@
 ---
-description: Switch an existing OpenAI or Anthropic application to Llama Stack with minimal code changes.
+description: Switch an existing OpenAI or Anthropic application to OGX with minimal code changes.
 sidebar_label: Migrate an existing app
 sidebar_position: 2
 title: Migrate an existing app
 ---
 
-If you already have an application built on the OpenAI or Anthropic SDK, migrating to Llama Stack is straightforward. In most cases you only need to change the `base_url`
+If you already have an application built on the OpenAI or Anthropic SDK, migrating to OGX is straightforward. In most cases you only need to change the `base_url`
 and the 'model' name to include the provider for the model you wish to use.
 
 ## From OpenAI
@@ -26,14 +26,14 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-**After** (talking to Llama Stack):
+**After** (talking to OGX):
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8321/v1",
-    api_key="fake",  # not validated by Llama Stack
+    api_key="fake",  # not validated by OGX
 )
 
 response = client.chat.completions.create(
@@ -47,7 +47,7 @@ The only changes are `base_url`, `api_key`, and `model`. Everything else stays t
 
 ## From Anthropic
 
-The Anthropic SDK uses a different interface, so you will need to switch to the OpenAI SDK. Llama Stack implements the OpenAI API.
+The Anthropic SDK uses a different interface, so you will need to switch to the OpenAI SDK. OGX implements the OpenAI API.
 
 **Before** (Anthropic SDK):
 
@@ -64,7 +64,7 @@ message = client.messages.create(
 print(message.content[0].text)
 ```
 
-**After** (OpenAI SDK pointing to Llama Stack):
+**After** (OpenAI SDK pointing to OGX):
 
 ```python
 from openai import OpenAI
@@ -96,8 +96,8 @@ See the full [OpenAI compatibility guide](/docs/api-openai) for details on suppo
 
 ## What's different
 
-**Provider configuration.** Llama Stack routes requests to configurable backends (Ollama, vLLM, Bedrock, etc.). The server's `run.yaml` controls which providers are active. You do not configure providers in your application code.
+**Provider configuration.** OGX routes requests to configurable backends (Ollama, vLLM, Bedrock, etc.). The server's `run.yaml` controls which providers are active. You do not configure providers in your application code.
 
 **Model names.** Model identifiers depend on the provider. For example, Ollama uses names like `llama3.2:3b` while remote providers use their own naming conventions. Run `GET /v1/models` to see what is available on your server.
 
-**API key.** Llama Stack does not validate API keys by default. You can pass any string (or `"fake"`) as the key. Authentication can be configured separately if needed.
+**API key.** OGX does not validate API keys by default. You can pass any string (or `"fake"`) as the key. Authentication can be configured separately if needed.

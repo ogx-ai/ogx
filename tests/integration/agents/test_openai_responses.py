@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,7 +6,7 @@
 import pytest
 from openai import NotFoundError, OpenAI
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
 
 @pytest.mark.parametrize(
@@ -37,7 +37,7 @@ from llama_stack.core.library_client import LlamaStackAsLibraryClient
 )
 def test_responses_store(compat_client, text_model_id, stream, tools):
     if not isinstance(compat_client, OpenAI):
-        pytest.skip("OpenAI client is required until responses.delete() exists in llama-stack-client")
+        pytest.skip("OpenAI client is required until responses.delete() exists in ogx-client")
 
     message = "What's the weather in Tokyo?" + (
         " YOU MUST USE THE get_weather function to get the weather." if tools else ""
@@ -123,7 +123,7 @@ def test_list_response_input_items(compat_client, text_model_id):
 
 def test_list_response_input_items_with_limit_and_order(openai_client, client_with_models, text_model_id):
     """Test the list input items endpoint with limit and order parameters."""
-    if isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if isinstance(client_with_models, OGXAsLibraryClient):
         pytest.skip("OpenAI responses are not supported when testing with library client yet.")
 
     client = openai_client
@@ -216,7 +216,7 @@ def test_list_response_input_items_with_limit_and_order(openai_client, client_wi
 @pytest.mark.skip(reason="Tool calling is not reliable.")
 def test_function_call_output_response(openai_client, client_with_models, text_model_id):
     """Test handling of function call outputs in responses."""
-    if isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if isinstance(client_with_models, OGXAsLibraryClient):
         pytest.skip("OpenAI responses are not supported when testing with library client yet.")
 
     client = openai_client
@@ -268,7 +268,7 @@ def test_function_call_output_response(openai_client, client_with_models, text_m
 
 def test_function_call_output_response_with_none_arguments(openai_client, client_with_models, text_model_id):
     """Test handling of function call outputs in responses when function does not accept arguments."""
-    if isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if isinstance(client_with_models, OGXAsLibraryClient):
         pytest.skip("OpenAI responses are not supported when testing with library client yet.")
 
     client = openai_client
@@ -303,7 +303,7 @@ def test_function_call_output_response_with_none_arguments(openai_client, client
 def test_input_safety_guardrails(compat_client, text_model_id, stream):
     """Test that input safety guardrails block inappropriate content."""
     if not isinstance(compat_client, OpenAI):
-        pytest.skip("OpenAI client is required until responses API exists in llama-stack-client")
+        pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
     # Test with guardrail that should block inappropriate content
     # Note: This test assumes guardrails are configured in the test environment
@@ -349,7 +349,7 @@ def test_input_safety_guardrails(compat_client, text_model_id, stream):
 def test_output_safety_guardrails_unsafe_content(compat_client, text_model_id, stream):
     """Test that output safety guardrails block unsafe content."""
     if not isinstance(compat_client, OpenAI):
-        pytest.skip("OpenAI client is required until responses API exists in llama-stack-client")
+        pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
     # Use an unsafe prompt that should be blocked by guardrail evaluation
     response = compat_client.responses.create(
@@ -391,7 +391,7 @@ def test_output_safety_guardrails_unsafe_content(compat_client, text_model_id, s
 def test_output_safety_guardrails_safe_content(compat_client, text_model_id, stream):
     """Test that output safety guardrails allow safe content."""
     if not isinstance(compat_client, OpenAI):
-        pytest.skip("OpenAI client is required until responses API exists in llama-stack-client")
+        pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
     # Use a safe prompt that should pass guardrail evaluation
     response = compat_client.responses.create(
@@ -432,7 +432,7 @@ def test_output_safety_guardrails_safe_content(compat_client, text_model_id, str
 def test_guardrails_with_tools(compat_client, text_model_id):
     """Test that guardrails work correctly when tools are present."""
     if not isinstance(compat_client, OpenAI):
-        pytest.skip("OpenAI client is required until responses API exists in llama-stack-client")
+        pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
     response = compat_client.responses.create(
         model=text_model_id,
@@ -470,7 +470,7 @@ def test_guardrails_with_tools(compat_client, text_model_id):
 
 def test_response_with_instructions(openai_client, client_with_models, text_model_id):
     """Test instructions parameter in the responses object."""
-    if isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if isinstance(client_with_models, OGXAsLibraryClient):
         pytest.skip("OpenAI responses are not supported when testing with library client yet.")
 
     client = openai_client

@@ -12,22 +12,22 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: llama-stack-server
+  name: ogx-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: llama-stack
+      app.kubernetes.io/name: ogx
       app.kubernetes.io/component: server
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: llama-stack
+        app.kubernetes.io/name: ogx
         app.kubernetes.io/component: server
     spec:
       containers:
-      - name: llama-stack
-        image: llamastack/distribution-starter:latest
+      - name: ogx
+        image: ogx/distribution-starter:latest
         imagePullPolicy: Always # since we have specified latest instead of a version
         env:
         - name: ENABLE_CHROMADB
@@ -66,4 +66,4 @@ spec:
           claimName: llama-pvc
       - name: llama-config
         configMap:
-          name: llama-stack-config
+          name: ogx-config

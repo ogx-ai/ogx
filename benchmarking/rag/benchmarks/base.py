@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -35,6 +35,7 @@ class BenchmarkRunner(ABC):
         resume: bool = False,
         use_batch_api: bool = False,
         batch_id: str | None = None,
+        extra_body: dict | None = None,
     ):
         self.client = client
         self.base_url = base_url
@@ -46,6 +47,7 @@ class BenchmarkRunner(ABC):
         self.resume = resume
         self.use_batch_api = use_batch_api
         self.batch_id = batch_id
+        self.extra_body = extra_body
 
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -70,14 +72,6 @@ class BenchmarkRunner(ABC):
         """Full pipeline: download -> load -> ingest -> evaluate."""
         logger.info(f"=== Running {self.name} benchmark ===")
 
-        # Skip if metrics already exist and we're resuming
-        results_path = self.output_dir / "metrics.json"
-        if self.resume and results_path.exists():
-            metrics = json.loads(results_path.read_text())
-            logger.info(f"Skipping {self.name} — metrics already exist at {results_path}")
-            self._print_metrics(metrics)
-            return metrics
-
         logger.info("Step 1: Download")
         self.download()
 
@@ -91,11 +85,40 @@ class BenchmarkRunner(ABC):
         metrics = self.evaluate()
 
         # Save results
+        results_path = self.output_dir / "metrics.json"
         results_path.write_text(json.dumps(metrics, indent=2))
         logger.info(f"Results saved to {results_path}")
 
         self._print_metrics(metrics)
         return metrics
+
+    def _load_per_query_results(self) -> dict:
+        """Load existing per_query_results.json if resuming, else empty dict."""
+        path = self.output_dir / "per_query_results.json"
+        if self.resume and path.exists():
+            data = json.loads(path.read_text())
+            logger.info(f"Resumed {len(data)} existing results from {path}")
+            return data
+        return {}
+
+    def _save_per_query_results(self, results: dict) -> None:
+        """Write per_query_results.json with the full accumulated results."""
+        path = self.output_dir / "per_query_results.json"
+        path.write_text(json.dumps(results, indent=2))
+
+    def _load_per_query_retrieval_results(self) -> dict:
+        """Load existing per_query_retrieval_results.json if resuming."""
+        path = self.output_dir / "per_query_retrieval_results.json"
+        if self.resume and path.exists():
+            data = json.loads(path.read_text())
+            logger.info(f"Resumed {len(data)} existing retrieval results from {path}")
+            return data
+        return {}
+
+    def _save_per_query_retrieval_results(self, results: dict) -> None:
+        """Write per_query_retrieval_results.json."""
+        path = self.output_dir / "per_query_retrieval_results.json"
+        path.write_text(json.dumps(results, indent=2))
 
     def _print_metrics(self, metrics: dict) -> None:
         """Pretty-print metrics summary."""

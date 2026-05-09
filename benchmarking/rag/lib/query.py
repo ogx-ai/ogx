@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -30,6 +30,7 @@ def rag_query(
     max_num_results: int = 10,
     previous_response_id: str | None = None,
     search_mode: str | None = None,
+    extra_body: dict | None = None,
 ) -> dict:
     """Execute a single RAG query via Responses API.
 
@@ -57,6 +58,8 @@ def rag_query(
     }
     if previous_response_id:
         kwargs["previous_response_id"] = previous_response_id
+    if extra_body:
+        kwargs["extra_body"] = extra_body
 
     response = retry_with_backoff(lambda: client.responses.create(**kwargs))
 
@@ -105,12 +108,14 @@ def rag_query_batch(
     search_mode: str | None = None,
     use_batch_api: bool = False,
     batch_id: str | None = None,
+    extra_body: dict | None = None,
+    checkpoint_path: str | None = None,
 ) -> dict[str, dict]:
     """Run RAG queries for a batch of independent questions.
 
     Args:
         use_batch_api: If True, use OpenAI Batch API for 50% cost savings and
-            higher throughput. Only works with OpenAI SaaS, not Llama Stack.
+            higher throughput. Only works with OpenAI SaaS, not OGX.
         batch_id: If provided, resume polling an existing batch instead of submitting.
 
     Returns:
@@ -128,8 +133,17 @@ def rag_query_batch(
             batch_id=batch_id,
         )
 
+    # Load checkpoint if it exists
+    checkpoint_path = Path(checkpoint_path) if checkpoint_path else None
     results = {}
+    if checkpoint_path and checkpoint_path.exists():
+        results = json.loads(checkpoint_path.read_text())
+        logger.info(f"Resumed {len(results)} cached query results from {checkpoint_path}")
+
+    completed = 0
     for qid, query_text in progress_bar(queries.items(), desc="RAG queries", total=len(queries)):
+        if qid in results:
+            continue
         try:
             result = rag_query(
                 client=client,
@@ -139,11 +153,22 @@ def rag_query_batch(
                 mapping=mapping,
                 max_num_results=max_num_results,
                 search_mode=search_mode,
+                extra_body=extra_body,
             )
             results[qid] = result
         except Exception as e:
             logger.error(f"RAG query failed for {qid}: {e}")
             results[qid] = {"answer": "", "response_id": None, "retrieved_docs": {}, "retrieved_chunks": []}
+
+        completed += 1
+        if checkpoint_path and completed % 50 == 0:
+            checkpoint_path.write_text(json.dumps(results))
+            logger.info(f"Checkpointed {len(results)} results to {checkpoint_path}")
+
+    # Final save
+    if checkpoint_path:
+        checkpoint_path.write_text(json.dumps(results))
+
     return results
 
 
@@ -338,6 +363,7 @@ def rag_conversation(
     mapping: IDMapping,
     max_num_results: int = 10,
     search_mode: str | None = None,
+    extra_body: dict | None = None,
 ) -> list[dict]:
     """Process a multi-turn conversation sequentially, threading via previous_response_id.
 
@@ -361,6 +387,7 @@ def rag_conversation(
                 max_num_results=max_num_results,
                 previous_response_id=prev_response_id,
                 search_mode=search_mode,
+                extra_body=extra_body,
             )
             prev_response_id = result["response_id"]
         except Exception as e:

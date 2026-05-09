@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@
 """
 Google Interactions API Coverage Analyzer
 
-Compares Llama Stack's Interactions implementation against Google's official
+Compares OGX's Interactions implementation against Google's official
 OpenAPI spec and generates a coverage report showing:
 - Which endpoints are implemented
 - Which request/response properties are supported
@@ -112,11 +112,11 @@ def _collect_streaming_events(spec: dict[str, Any]) -> list[str]:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Llama Stack implementation model
+# OGX implementation model
 # ──────────────────────────────────────────────────────────────────────
 
-# What Llama Stack currently implements, derived from the Pydantic models
-# in src/llama_stack_api/interactions/models.py and the FastAPI routes.
+# What OGX currently implements, derived from the Pydantic models
+# in src/ogx_api/interactions/models.py and the FastAPI routes.
 
 IMPLEMENTED_ENDPOINTS = {
     "POST /{api_version}/interactions": True,
@@ -131,6 +131,7 @@ IMPLEMENTED_REQUEST_PROPS = {
     "input",
     "system_instruction",
     "generation_config",
+    "tools",
     "stream",
     "response_modalities",
 }
@@ -166,10 +167,15 @@ IMPLEMENTED_USAGE_PROPS = {
 # Content types we support
 IMPLEMENTED_CONTENT_TYPES = {
     "TextContent",
+    "FunctionCallContent",
+    "FunctionResultContent",
+    "ThoughtContent",
 }
 
 # Tool types we support
-IMPLEMENTED_TOOL_TYPES: set[str] = set()
+IMPLEMENTED_TOOL_TYPES = {
+    "Function",
+}
 
 # Streaming events we support
 IMPLEMENTED_STREAMING_EVENTS = {
@@ -205,7 +211,7 @@ def _compare_properties(
         "missing": missing,
     }
     if extra:
-        result["extra_in_llama_stack"] = extra
+        result["extra_in_ogx"] = extra
     return result
 
 
@@ -355,9 +361,9 @@ def print_summary(report: dict[str, Any]) -> None:
         print(f"  Missing ({section['missing_count']}):")
         for item in section["missing"]:
             print(f"    - {item}")
-        if section.get("extra_in_llama_stack"):
-            print("  Extra in Llama Stack:")
-            for item in section["extra_in_llama_stack"]:
+        if section.get("extra_in_ogx"):
+            print("  Extra in OGX:")
+            for item in section["extra_in_ogx"]:
                 print(f"    + {item}")
         print()
 

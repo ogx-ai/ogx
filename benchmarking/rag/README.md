@@ -1,8 +1,8 @@
 # RAG Benchmark Suite
 
-Evaluates RAG quality through Llama Stack's OpenAI-compatible API surface
+Evaluates RAG quality through OGX's OpenAI-compatible API surface
 (Files → Vector Stores → Responses with `file_search`). The same code runs
-against both **OpenAI SaaS** and **Llama Stack** — swap `--base-url` to
+against both **OpenAI SaaS** and **OGX** — swap `--base-url` to
 switch backends.
 
 ## Benchmarks
@@ -17,8 +17,8 @@ switch backends.
 ## Prerequisites
 
 - Python 3.11+
-- An OpenAI API key (for OpenAI SaaS runs, or for Llama Stack's `remote::openai` inference)
-- For Llama Stack runs: a running Milvus instance and a Llama Stack server
+- An OpenAI API key (for OpenAI SaaS runs, or for OGX's `remote::openai` inference)
+- For OGX runs: a running Milvus instance and a OGX server
 
 ## Quick Start
 
@@ -43,13 +43,13 @@ python run_benchmark.py --benchmark qrecc --base-url https://api.openai.com/v1
 python run_benchmark.py --benchmark doc2dial --base-url https://api.openai.com/v1
 ```
 
-## Running Against Llama Stack
+## Running Against OGX
 
-First, start Llama Stack with the included config:
+First, start OGX with the included config:
 
 ```bash
 # Start Milvus (if not already running)
-# Start Llama Stack
+# Start OGX
 bash start_stack.sh
 ```
 
@@ -66,7 +66,7 @@ python run_benchmark.py --benchmark multihop --base-url http://localhost:8321/v1
 bash run_all.sh
 ```
 
-This runs all four benchmarks against both OpenAI SaaS and Llama Stack
+This runs all four benchmarks against both OpenAI SaaS and OGX
 (vector and hybrid search modes).
 
 ## Comparing Results
@@ -79,6 +79,26 @@ python compare_results.py --format csv # CSV output
 python compare_results.py --format json --output results.json
 ```
 
+## Running with Open-Source Models via vLLM
+
+The benchmark suite supports any OpenAI-compatible inference backend. To use a
+self-hosted model via vLLM:
+
+1. Register vLLM as a `remote::openai` provider in `config.yaml`
+2. Point `--model` at the registered model ID
+3. For reasoning models that require `enable_thinking=False`, pass `--disable-thinking`
+
+```bash
+python run_benchmark.py --benchmark doc2dial \
+  --base-url http://localhost:8321/v1 \
+  --model vllm/google/gemma-4-31B-it \
+  --search-mode hybrid \
+  --disable-thinking
+```
+
+See `results/REPORT.md` for benchmark results comparing OpenAI SaaS, OGX with
+GPT-4.1, and OGX with Gemma 4 31B-IT.
+
 ## CLI Options
 
 ```text
@@ -88,11 +108,12 @@ Options:
   --benchmark       beir | multihop | qrecc | doc2dial (required)
   --dataset         BEIR dataset name (nfcorpus, scifact, arguana, fiqa, trec-covid)
   --base-url        API base URL (default: https://api.openai.com/v1)
-  --search-mode     vector | hybrid | keyword (Llama Stack only)
+  --search-mode     vector | hybrid | keyword (OGX only)
   --model           Model for end-to-end RAG (default: gpt-4.1)
   --max-queries     Limit number of queries (useful for testing)
   --max-conversations  Limit conversations for QReCC/Doc2Dial
   --resume          Resume from checkpoint
+  --disable-thinking  Disable thinking for reasoning models (vLLM)
   --output-dir      Custom output directory
   --data-dir        Custom data directory
   --verbose         Enable debug logging
@@ -118,8 +139,8 @@ benchmarking/rag/
 ├── run_benchmark.py      # CLI entry point
 ├── run_all.sh            # Run all benchmarks
 ├── compare_results.py    # Generate comparison tables
-├── config.yaml           # Llama Stack server config
-├── start_stack.sh        # Launch Llama Stack
+├── config.yaml           # OGX server config
+├── start_stack.sh        # Launch OGX
 ├── requirements.txt      # Python dependencies
 └── .env.example          # Environment variables template
 ```

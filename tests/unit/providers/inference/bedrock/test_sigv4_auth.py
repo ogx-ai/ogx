@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -30,7 +30,7 @@ class TestBedrockSigV4Auth:
 
     def test_auth_flow_signs_request(self):
         """SigV4 auth should add AWS signature headers to request."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         # Mock boto3 credentials
         mock_creds = MagicMock()
@@ -69,7 +69,7 @@ class TestBedrockSigV4Auth:
 
     def test_auth_flow_with_explicit_role_assumption(self):
         """SigV4 auth should use RefreshableBotoSession when role_arn is provided."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "ASIAEXP_ROLE_KEY"
@@ -77,7 +77,7 @@ class TestBedrockSigV4Auth:
         mock_frozen_creds.token = "exp_token"
 
         with patch(
-            "llama_stack.providers.utils.bedrock.refreshable_boto_session.RefreshableBotoSession"
+            "ogx.providers.utils.bedrock.refreshable_boto_session.RefreshableBotoSession"
         ) as mock_refreshable_cls:
             mock_refreshable = MagicMock()
             mock_refreshable_cls.return_value = mock_refreshable
@@ -117,7 +117,7 @@ class TestBedrockSigV4Auth:
 
     def test_auth_flow_with_session_token(self):
         """SigV4 auth should include X-Amz-Security-Token for STS credentials."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "ASIAIOSFODNN7EXAMPLE"
@@ -147,7 +147,7 @@ class TestBedrockSigV4Auth:
 
     def test_auth_raises_on_missing_credentials(self):
         """SigV4 auth should raise clear error when credentials unavailable."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         with patch("boto3.Session") as mock_session_class:
             mock_session = MagicMock()
@@ -172,7 +172,7 @@ class TestBedrockConfigAuthDetection:
 
     def test_has_bearer_token_with_token(self):
         """Config should detect when bearer token is present."""
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         # Use api_key as that's the alias for auth_credential
         config = BedrockConfig(api_key="my-bearer-token")
@@ -180,21 +180,21 @@ class TestBedrockConfigAuthDetection:
 
     def test_has_bearer_token_without_token(self):
         """Config should detect when bearer token is absent."""
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig()
         assert config.has_bearer_token() is False
 
     def test_has_bearer_token_with_empty_string(self):
         """Empty string should be treated as no token."""
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(api_key="")
         assert config.has_bearer_token() is False
 
     def test_has_bearer_token_with_whitespace(self):
         """Whitespace-only string should be treated as no token."""
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(api_key="   ")
         assert config.has_bearer_token() is False
@@ -205,8 +205,8 @@ class TestBedrockInferenceAdapterAuthMode:
 
     def test_should_use_sigv4_when_no_bearer_token(self):
         """Adapter should use SigV4 when no bearer token configured."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-east-1")
         adapter = BedrockInferenceAdapter(config=config)
@@ -217,8 +217,8 @@ class TestBedrockInferenceAdapterAuthMode:
 
     def test_should_not_use_sigv4_when_bearer_token_in_config(self):
         """Adapter should use bearer auth when token in config."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(
             region_name="us-east-1",
@@ -231,8 +231,8 @@ class TestBedrockInferenceAdapterAuthMode:
 
     def test_should_not_use_sigv4_when_bearer_token_in_provider_data(self):
         """Adapter should use bearer auth when token in provider data."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import (
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import (
             BedrockConfig,
             BedrockProviderDataValidator,
         )
@@ -253,8 +253,8 @@ class TestBedrockInferenceAdapterAuthMode:
         """
         from unittest.mock import MagicMock
 
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import (
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import (
             BedrockConfig,
             BedrockProviderDataValidator,
         )
@@ -277,8 +277,8 @@ class TestBedrockInferenceAdapterAuthMode:
         """SigV4 client is returned when no per-request bearer token is present."""
         from unittest.mock import MagicMock
 
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-east-1")
         adapter = BedrockInferenceAdapter(config=config)
@@ -291,8 +291,8 @@ class TestBedrockInferenceAdapterAuthMode:
 
     def test_should_use_sigv4_when_provider_data_token_is_whitespace(self):
         """Adapter should use SigV4 when provider data token is whitespace-only."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import (
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import (
             BedrockConfig,
             BedrockProviderDataValidator,
         )
@@ -307,8 +307,8 @@ class TestBedrockInferenceAdapterAuthMode:
 
     def test_get_api_key_returns_placeholder_for_sigv4(self):
         """When using SigV4, get_api_key should return placeholder to satisfy OpenAIMixin validation."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-east-1")
         adapter = BedrockInferenceAdapter(config=config)
@@ -322,13 +322,13 @@ class TestBedrockInferenceAdapterAuthMode:
     @pytest.mark.skipif(not HAS_BOTO3, reason="boto3 not installed")
     def test_client_uses_sigv4_auth_when_no_bearer_token(self):
         """_build_sigv4_http_client should use correct service name and pass config fields."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-west-2")
         adapter = BedrockInferenceAdapter(config=config)
 
-        with patch("llama_stack.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth_cls:
+        with patch("ogx.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth_cls:
             mock_auth_cls.return_value = MagicMock()
             adapter._build_sigv4_http_client()
 
@@ -340,8 +340,8 @@ class TestBedrockInferenceAdapterAuthMode:
     @pytest.mark.skipif(not HAS_BOTO3, reason="boto3 not installed")
     def test_sigv4_http_client_cached_after_initialize(self):
         """_sigv4_http_client should be created once in initialize() and reused."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-east-1")
         adapter = BedrockInferenceAdapter(config=config)
@@ -364,9 +364,9 @@ class TestBedrockInferenceAdapterAuthErrors:
 
     def test_sigv4_auth_error_preserves_detail_in_internal_server_error(self):
         """SigV4 auth failures should return a clear, generic 500 message."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
-        from llama_stack_api.common.errors import InternalServerError
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx_api.common.errors import InternalServerError
 
         adapter = BedrockInferenceAdapter(config=BedrockConfig(region_name="us-east-1"))
 
@@ -388,9 +388,9 @@ class TestBedrockInferenceAdapterAuthErrors:
 
     def test_bearer_auth_error_preserves_detail_in_internal_server_error(self):
         """Bearer auth failures should be actionable without exposing internal header/config details."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
-        from llama_stack_api.common.errors import InternalServerError
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx_api.common.errors import InternalServerError
 
         adapter = BedrockInferenceAdapter(config=BedrockConfig(region_name="us-east-1"))
 
@@ -406,14 +406,14 @@ class TestBedrockInferenceAdapterAuthErrors:
             message == "Authentication failed because the provided request credential was rejected. "
             "Please verify that the credential is valid, unexpired, and authorized for this request."
         )
-        assert "x-llamastack-provider-data" not in message
+        assert "x-ogx-provider-data" not in message
         assert "Bedrock" not in message
 
     def test_expired_bearer_auth_error_preserves_sanitized_detail(self):
         """Expired bearer auth failures should stay actionable without exposing config names."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
-        from llama_stack_api.common.errors import InternalServerError
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx_api.common.errors import InternalServerError
 
         adapter = BedrockInferenceAdapter(config=BedrockConfig(region_name="us-east-1"))
 
@@ -439,7 +439,7 @@ class TestSigV4MockTransport:
 
     def test_sigv4_adds_aws4_signature_header(self):
         """SigV4 auth should add AWS4-HMAC-SHA256 Authorization header."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         # Track the request that gets sent
         captured_request = None
@@ -482,7 +482,7 @@ class TestSigV4MockTransport:
 
     def test_sigv4_no_bearer_header_when_empty_api_key(self):
         """When api_key is empty, no Bearer header should be added."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 
@@ -519,7 +519,7 @@ class TestSigV4MockTransport:
 
     def test_sigv4_includes_security_token_for_sts(self):
         """SigV4 auth should include x-amz-security-token for STS credentials."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 
@@ -555,7 +555,7 @@ class TestSigV4MockTransport:
 
     def test_sigv4_replaces_existing_bearer_header(self):
         """SigV4 auth should replace any existing Bearer Authorization header."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 
@@ -595,7 +595,7 @@ class TestSigV4MockTransport:
 
     def test_sigv4_host_header_includes_port(self):
         """Host header should include port for non-default ports."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 
@@ -658,7 +658,7 @@ class TestWebIdentityFederation:
         which returns temporary credentials with a session token. This token must
         be included in the x-amz-security-token header for the request to succeed.
         """
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 
@@ -713,8 +713,8 @@ class TestWebIdentityFederation:
         This simulates the Kubernetes/GitHub Actions scenario where no bearer token
         is configured but AWS credentials are available via web identity federation.
         """
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         # Set web identity environment variables
         monkeypatch.setenv("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/test-role")
@@ -741,7 +741,7 @@ class TestWebIdentityFederation:
         chain handles refresh automatically, but we need to call get_frozen_credentials()
         on each request to get the current valid credentials.
         """
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         call_count = 0
         captured_requests = []
@@ -808,7 +808,7 @@ class TestAsyncAuthFlow:
 
     async def test_async_auth_flow_signs_request(self):
         """Async auth flow should sign requests without blocking the event loop."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 
@@ -850,7 +850,7 @@ class TestAsyncAuthFlow:
 
     async def test_async_auth_flow_includes_session_token(self):
         """Async auth flow should include x-amz-security-token for STS credentials."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 

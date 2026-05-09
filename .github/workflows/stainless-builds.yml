@@ -30,8 +30,8 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'PR number to run Stainless build for'
-        required: true
+        description: 'PR number to run Stainless build for. Leave empty to force-upload the current OpenAPI spec from main.'
+        required: false
         type: number
       sdk_install_url:
         description: 'Python SDK install URL (optional, for testing specific builds)'
@@ -65,7 +65,34 @@ env:
   #   Stainless organization dashboard
 
 jobs:
+  force-upload:
+    # Push the OpenAPI spec from main to Stainless without a PR. Triggered
+    # manually via workflow_dispatch with no pr_number. Skips preview and
+    # integration tests; just uploads the spec on the main branch.
+    if: github.event_name == 'workflow_dispatch' && inputs.pr_number == ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+
+      - name: Upload OpenAPI spec to Stainless
+        uses: stainless-api/upload-openapi-spec-action/build@020053e7fbf853281174bd3029eb3bfa7a54c039 # 1.13.0
+        with:
+          stainless_api_key: ${{ secrets.STAINLESS_API_KEY }}
+          org: ${{ env.STAINLESS_ORG }}
+          project: ${{ env.STAINLESS_PROJECT }}
+          oas_path: ${{ env.OAS_PATH }}
+          config_path: ${{ env.CONFIG_PATH }}
+          fail_on: ${{ env.FAIL_ON }}
+          branch: main
+          make_comment: false
+
   compute-branch:
+    if: github.event_name == 'pull_request_target' || (github.event_name == 'workflow_dispatch' && inputs.pr_number != '')
     runs-on: ubuntu-latest
     outputs:
       preview_branch: ${{ steps.compute.outputs.preview_branch }}

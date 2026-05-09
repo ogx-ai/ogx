@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.core.datatypes import RegistryEntrySource
-from llama_stack.core.routing_tables.models import ModelsRoutingTable
-from llama_stack.core.routing_tables.shields import ShieldsRoutingTable
-from llama_stack.core.routing_tables.toolgroups import ToolGroupsRoutingTable
-from llama_stack_api import (
+from ogx.core.datatypes import RegistryEntrySource
+from ogx.core.routing_tables.models import ModelsRoutingTable
+from ogx.core.routing_tables.shields import ShieldsRoutingTable
+from ogx.core.routing_tables.toolgroups import ToolGroupsRoutingTable
+from ogx_api import (
     URL,
     Api,
     GetShieldRequest,
@@ -134,7 +134,7 @@ async def test_models_routing_table(cached_disk_dist_registry):
     assert "test_provider/test-model" in openai_model_ids
     assert "test_provider/test-model-2" in openai_model_ids
 
-    # Verify custom_metadata is populated with Llama Stack-specific data
+    # Verify custom_metadata is populated with OGX-specific data
     for openai_model in openai_models.data:
         assert openai_model.custom_metadata is not None
         assert "model_type" in openai_model.custom_metadata
@@ -287,7 +287,7 @@ async def test_model_has_openai_compatible_fields(cached_disk_dist_registry):
     assert model.id == "test_provider/test-model"
     assert model.object == "model"
     assert isinstance(model.created, int)
-    assert model.owned_by == "llama_stack"
+    assert model.owned_by == "ogx"
 
     # Verify the fields appear in serialized output
     data = model.model_dump()

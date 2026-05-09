@@ -1,35 +1,35 @@
 ---
 slug: open-responses-openai-compatibility
-title: "Llama Stack Achieves 100% Open Responses Compliance: Enterprise-Grade OpenAI Compatibility for Your Infrastructure"
+title: "OGX Achieves 100% Open Responses Compliance: Enterprise-Grade OpenAI Compatibility for Your Infrastructure"
 authors: [franciscojavierarceo, cdoern]
 tags: [openai-compatibility, open-responses, enterprise, mcp, connectors]
 date: 2026-03-20
 ---
 
-We're excited to share that Llama Stack has achieved **100% compliance with the Open Responses specification** and been officially recognized as part of the [Open Responses community](https://github.com/openresponses/openresponses/pull/29). This milestone represents more than just compatibility: it's about bringing enterprise-grade AI capabilities to your own infrastructure with the familiarity of OpenAI APIs.
+We're excited to share that OGX has achieved **100% compliance with the Open Responses specification** and been officially recognized as part of the [Open Responses community](https://github.com/openresponses/openresponses/pull/29). This milestone represents more than just compatibility: it's about bringing enterprise-grade AI capabilities to your own infrastructure with the familiarity of OpenAI APIs.
 
-With comprehensive support for Files, Vector Stores, Search, Conversations, Prompts, Chat Completions, the full Responses API, plus powerful extensions like MCP tool integration, Tool Calling, and Connectors, Llama Stack offers something unique in the AI infrastructure landscape: a SaaS-like experience that runs entirely on your terms.
+With comprehensive support for Files, Vector Stores, Search, Conversations, Prompts, Chat Completions, the full Responses API, plus powerful extensions like MCP tool integration, Tool Calling, and Connectors, OGX offers something unique in the AI infrastructure landscape: a SaaS-like experience that runs entirely on your terms.
 
-{/*truncate*/}
+<!--truncate-->
 
 ## Recognition by the Open Responses Community
 
-The [Open Responses initiative](https://www.openresponses.org/) represents a collaborative effort to standardize agentic AI interfaces across the industry, with backing from OpenAI, Hugging Face, and leading providers like Ollama, vLLM, and LM Studio. Our acceptance into this community validates Llama Stack's commitment to open standards and interoperability.
+The [Open Responses initiative](https://www.openresponses.org/) represents a collaborative effort to standardize agentic AI interfaces across the industry, with backing from OpenAI, Hugging Face, and leading providers like Ollama, vLLM, and LM Studio. Our acceptance into this community validates OGX's commitment to open standards and interoperability.
 
 What makes this recognition particularly meaningful is our approach to compliance. We don't just aim for compatibility—**we run the full Open Responses acceptance test suite on every pull request as a blocking requirement**. This means our perfect 6/6 test pass rate isn't a one-time achievement; it's a maintained standard that ensures consistent, reliable behavior for developers building on open standards.
 
 ## Comprehensive OpenAI API Feature Support
 
-Llama Stack delivers comprehensive feature parity across multiple API surfaces, giving you the full power of modern AI APIs.
+OGX delivers comprehensive feature parity across multiple API surfaces, giving you the full power of modern AI APIs.
 
-> **A note on model IDs:** The model ID you pass depends on the inference provider backing your Llama Stack server. For example, with Ollama you'd use `ollama/llama3.2:3b`, while with Fireworks or Together you'd use the HuggingFace-style `meta-llama/Llama-3.2-3B-Instruct`. The API calls are identical either way.
+> **A note on model IDs:** The model ID you pass depends on the inference provider backing your OGX server. For example, with Ollama you'd use `ollama/llama3.2:3b`, while with Fireworks or Together you'd use the HuggingFace-style `meta-llama/Llama-3.2-3B-Instruct`. The API calls are identical either way.
 
 ### **Files API** - OpenAI-Compatible Document Management
 
 Upload, manage, and process documents with the same interface you'd use with OpenAI:
 
 ```python
-# Works identically with OpenAI or Llama Stack clients
+# Works identically with OpenAI or OGX clients
 from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:8321/v1/", api_key="none")
@@ -99,12 +99,12 @@ response = client.responses.create(
 
 ### **Prompts API** - Programmatic Prompt Management
 
-Llama Stack extends OpenAI compatibility with full programmatic prompt management. With OpenAI, prompts are created through their admin portal and referenced by ID in the Responses API. Llama Stack provides the same referencing pattern, plus a complete CRUD API for creating and managing prompts programmatically:
+OGX extends OpenAI compatibility with full programmatic prompt management. With OpenAI, prompts are created through their admin portal and referenced by ID in the Responses API. OGX provides the same referencing pattern, plus a complete CRUD API for creating and managing prompts programmatically:
 
 ```python
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
-ls_client = LlamaStackClient()
+ls_client = OgxClient()
 
 # Create reusable prompt templates with variables
 prompt = ls_client.prompts.create(
@@ -151,13 +151,13 @@ MCP tools support per-request authorization, allowed tool filtering, and automat
 
 ### **Connectors** - Declarative Service Integration
 
-Connectors provide a configuration-driven approach to integrating external services with your Llama Stack deployment. Define your data sources and services in your stack configuration, and they're automatically available as tools for your agents to use.
+Connectors provide a configuration-driven approach to integrating external services with your OGX deployment. Define your data sources and services in your stack configuration, and they're automatically available as tools for your agents to use.
 
 ## The Value Proposition: SaaS Experience, Your Infrastructure
 
 ### **Data Sovereignty & Security**
 
-For regulated industries like finance, healthcare, and government, sending sensitive documents to external APIs isn't an option. Llama Stack solves this by running entirely on your infrastructure:
+For regulated industries like finance, healthcare, and government, sending sensitive documents to external APIs isn't an option. OGX solves this by running entirely on your infrastructure:
 
 - **Documents never leave your environment**: RAG pipelines, vector storage, and model inference all happen locally
 - **Compliance-ready**: Meet HIPAA, SOC 2, GDPR, and other regulatory requirements
@@ -165,7 +165,7 @@ For regulated industries like finance, healthcare, and government, sending sensi
 
 ### **Cost Control & Predictability**
 
-Unlike consumption-based pricing models, Llama Stack offers:
+Unlike consumption-based pricing models, OGX offers:
 
 - **Fixed infrastructure costs**: Pay for compute, not tokens
 - **No usage surprises**: Predictable costs regardless of application load
@@ -183,7 +183,7 @@ for model in ["ollama/gpt-oss:20b", "ollama/llama3.2:3b", "your-org/custom-model
 
 ## Getting Started in Minutes
 
-Whether you're prototyping locally or deploying at scale, Llama Stack makes it easy:
+Whether you're prototyping locally or deploying at scale, OGX makes it easy:
 
 ### **Local Development**
 
@@ -191,16 +191,16 @@ Whether you're prototyping locally or deploying at scale, Llama Stack makes it e
 # Set up your environment
 uv venv --python 3.12 --seed
 source .venv/bin/activate
-uv pip install -U llama-stack
-uv run llama stack list-deps starter | xargs -L1 uv pip install
+uv pip install -U ogx
+uv run ogx list-deps starter | xargs -L1 uv pip install
 
 # Start Ollama and pull a model
 ollama serve
 ollama run gpt-oss:20b
 
-# Launch Llama Stack with the starter distribution
+# Launch OGX with the starter distribution
 
-OLLAMA_URL=http://localhost:11434/v1 uv run llama stack run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run ogx stack run starter
 ```
 
 ```python
@@ -220,12 +220,12 @@ print(response.output_text)
 ```bash
 # Deploy with your preferred infrastructure
 # Docker, Kubernetes, or bare metal — your choice
-docker run -p 8321:8321 llamastack/distribution-starter:latest
+docker run -p 8321:8321 ogx/distribution-starter:latest
 ```
 
 ## Framework Ecosystem Compatibility
 
-One of Llama Stack's biggest advantages is **drop-in compatibility** with existing tooling:
+One of OGX's biggest advantages is **drop-in compatibility** with existing tooling:
 
 ### **Direct OpenAI Client**
 
@@ -233,7 +233,7 @@ One of Llama Stack's biggest advantages is **drop-in compatibility** with existi
 from openai import OpenAI
 
 # Same code, different backend
-client = OpenAI(base_url="http://your-llama-stack/v1", api_key="none")
+client = OpenAI(base_url="http://your-ogx/v1", api_key="none")
 ```
 
 ### **LangChain Integration**
@@ -241,26 +241,26 @@ client = OpenAI(base_url="http://your-llama-stack/v1", api_key="none")
 ```python
 from langchain_openai import ChatOpenAI
 
-# Point to your Llama Stack server
+# Point to your OGX server
 llm = ChatOpenAI(
-    base_url="http://your-llama-stack/v1/openai/v1",
+    base_url="http://your-ogx/v1/openai/v1",
     api_key="none",
     model="ollama/gpt-oss:20b",
 )
 ```
 
-### **Native Llama Stack Client**
+### **Native OGX Client**
 
 ```python
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
-# Access the full Llama Stack API surface
-client = LlamaStackClient(base_url="http://your-llama-stack")
+# Access the full OGX API surface
+client = OgxClient(base_url="http://your-ogx")
 ```
 
 ## Built for Open Standards
 
-Our 100% Open Responses compliance reflects a broader philosophy: **open standards enable innovation**. When you build on Llama Stack, you're not just adopting our implementation—you're investing in an ecosystem where:
+Our 100% Open Responses compliance reflects a broader philosophy: **open standards enable innovation**. When you build on OGX, you're not just adopting our implementation—you're investing in an ecosystem where:
 
 - **Applications are portable**: Move between providers without rewriting code
 - **Standards evolve collaboratively**: Community-driven development rather than vendor dictates
@@ -277,7 +277,7 @@ Achieving 100% Open Responses compliance required rigorous engineering:
 
 ## What's Next
 
-Llama Stack's OpenAI compatibility is just the beginning. We're actively working on:
+OGX's OpenAI compatibility is just the beginning. We're actively working on:
 
 - **Enhanced streaming support**: Improved real-time response handling
 - **Extended MCP ecosystem**: Deeper tool integration and connector development
@@ -286,14 +286,14 @@ Llama Stack's OpenAI compatibility is just the beginning. We're actively working
 
 ## Join the Open AI Infrastructure Movement
 
-Llama Stack represents something new in the AI infrastructure landscape: **enterprise-grade capabilities without vendor lock-in**. Whether you're a startup building your first AI application or an enterprise looking to bring AI workloads in-house, Llama Stack provides the reliability, security, and compatibility you need.
+OGX represents something new in the AI infrastructure landscape: **enterprise-grade capabilities without vendor lock-in**. Whether you're a startup building your first AI application or an enterprise looking to bring AI workloads in-house, OGX provides the reliability, security, and compatibility you need.
 
 Ready to get started?
 
-- **📚 [Documentation](https://llamastack.github.io/docs/)**: Comprehensive guides and API references
-- **🚀 [Getting Started](https://llamastack.github.io/docs/getting_started/)**: Quick setup tutorials
-- **🔧 [OpenAI Implementation Guide](https://llamastack.github.io/docs/providers/openai)**: Detailed compatibility examples
-- **🔌 [MCP Integration](https://llamastack.github.io/docs/building_applications/)**: Tool ecosystem and connector guides
-- **💬 [Community](https://github.com/llamastack/llama-stack)**: Join discussions and contribute
+- **📚 [Documentation](https://ogx-ai.github.io/docs/)**: Comprehensive guides and API references
+- **🚀 [Getting Started](https://ogx-ai.github.io/docs/getting_started/)**: Quick setup tutorials
+- **🔧 [OpenAI Implementation Guide](https://ogx-ai.github.io/docs/providers/openai)**: Detailed compatibility examples
+- **🔌 [MCP Integration](https://ogx-ai.github.io/docs/building_applications/)**: Tool ecosystem and connector guides
+- **💬 [Community](https://github.com/ogx-ai/ogx)**: Join discussions and contribute
 
-The future of AI infrastructure is open, interoperable, and under your control. Welcome to Llama Stack.
+The future of AI infrastructure is open, interoperable, and under your control. Welcome to OGX.

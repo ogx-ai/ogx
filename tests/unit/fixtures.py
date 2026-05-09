@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,9 +6,9 @@
 
 import pytest
 
-from llama_stack.core.storage.kvstore.config import SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore.sqlite import SqliteKVStoreImpl
-from llama_stack.core.store.registry import CachedDiskDistributionRegistry, DiskDistributionRegistry
+from ogx.core.storage.kvstore.config import SqliteKVStoreConfig
+from ogx.core.storage.kvstore.sqlite import SqliteKVStoreImpl
+from ogx.core.store.registry import CachedDiskDistributionRegistry, DiskDistributionRegistry
 
 
 @pytest.fixture(scope="function")

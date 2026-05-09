@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,10 +14,10 @@ import pytest
 from fastapi import UploadFile
 from pydantic import SecretStr
 
-from llama_stack.providers.remote.file_processor.docling_serve.config import DoclingServeFileProcessorConfig
-from llama_stack.providers.remote.file_processor.docling_serve.docling_serve import DoclingServeFileProcessor
-from llama_stack_api.file_processors import ProcessFileRequest
-from llama_stack_api.vector_io import (
+from ogx.providers.remote.file_processor.docling_serve.config import DoclingServeFileProcessorConfig
+from ogx.providers.remote.file_processor.docling_serve.docling_serve import DoclingServeFileProcessor
+from ogx_api.file_processors import ProcessFileRequest
+from ogx_api.vector_io import (
     VectorStoreChunkingStrategyAuto,
     VectorStoreChunkingStrategyStatic,
     VectorStoreChunkingStrategyStaticConfig,

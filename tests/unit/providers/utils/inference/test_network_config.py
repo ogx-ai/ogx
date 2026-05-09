@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,15 +11,15 @@ from pathlib import Path
 import httpx
 import pytest
 
-from llama_stack.providers.utils.inference.http_client import (
+from ogx.providers.utils.inference.http_client import (
     _build_proxy_mounts,
     _build_ssl_context,
     build_http_client,
 )
-from llama_stack.providers.utils.inference.http_client import (
+from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
-from llama_stack.providers.utils.inference.model_registry import (
+from ogx.providers.utils.inference.model_registry import (
     NetworkConfig,
     ProxyConfig,
     TimeoutConfig,
@@ -493,7 +493,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_legacy_tls_verify_true(self):
         """Test that legacy tls_verify=True is migrated."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
             config = VLLMInferenceAdapterConfig(tls_verify=True)
@@ -504,7 +504,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_legacy_tls_verify_false(self):
         """Test that legacy tls_verify=False is migrated."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
             config = VLLMInferenceAdapterConfig(tls_verify=False)
@@ -515,7 +515,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_legacy_tls_verify_path(self):
         """Test that legacy tls_verify path is migrated."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as f:
             f.write(b"fake cert")
@@ -533,7 +533,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_new_network_config_style(self):
         """Test that new network config style works."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         config = VLLMInferenceAdapterConfig(
             network=NetworkConfig(
@@ -548,7 +548,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_network_not_overwritten_by_tls_verify(self):
         """Test that existing network.tls is not overwritten by tls_verify."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
             config = VLLMInferenceAdapterConfig(

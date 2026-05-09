@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -29,8 +29,8 @@ class TestBedrockOpenAISDKIntegration:
 
     def test_base_url_uses_bedrock_runtime_hostname(self):
         """Base URL should use bedrock-runtime hostname (endpoint prefix)."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-east-1")
         adapter = BedrockInferenceAdapter(config=config)
@@ -47,13 +47,13 @@ class TestBedrockOpenAISDKIntegration:
         but the SigV4 credential scope uses the signing name 'bedrock'.
         This is defined in botocore's service metadata.
         """
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-west-2")
         adapter = BedrockInferenceAdapter(config=config)
 
-        with patch("llama_stack.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth_cls:
+        with patch("ogx.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth_cls:
             mock_auth_cls.return_value = MagicMock()
             adapter._build_sigv4_http_client()
 
@@ -65,15 +65,15 @@ class TestBedrockOpenAISDKIntegration:
 
     def test_sigv4_mode_uses_placeholder_api_key(self):
         """In SigV4 mode, api_key should be a placeholder (SigV4 auth replaces the header)."""
-        from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-        from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
         config = BedrockConfig(region_name="us-east-1")
         adapter = BedrockInferenceAdapter(config=config)
 
         with patch.object(adapter, "get_request_provider_data", return_value=None):
             # Patch SigV4Auth to avoid actual boto3 calls
-            with patch("llama_stack.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth_cls:
+            with patch("ogx.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth_cls:
                 mock_auth = MagicMock()
                 mock_auth_cls.return_value = mock_auth
 
@@ -86,7 +86,7 @@ class TestBedrockOpenAISDKIntegration:
 
     def test_sigv4_authorization_header_format(self):
         """SigV4 Authorization header should start with AWS4-HMAC-SHA256, not Bearer."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         captured_request = None
 
@@ -124,7 +124,7 @@ class TestBedrockOpenAISDKIntegration:
 
     def test_sts_credentials_include_security_token(self):
         """SigV4 auth should include x-amz-security-token for STS credentials."""
-        from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+        from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "ASIAIOSFODNN7EXAMPLE"

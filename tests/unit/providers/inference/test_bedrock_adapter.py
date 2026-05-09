@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,9 +11,9 @@ import pytest
 from openai import AuthenticationError
 from pydantic import SecretStr
 
-from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
-from llama_stack_api import InternalServerError, OpenAIChatCompletionRequestWithExtraBody
+from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+from ogx.providers.remote.inference.bedrock.config import BedrockConfig
+from ogx_api import InternalServerError, OpenAIChatCompletionRequestWithExtraBody
 
 
 def test_adapter_initialization():
@@ -80,7 +80,7 @@ async def test_authentication_error_handling():
             "Please verify that the credential is valid, unexpired, and authorized for this request."
         )
         assert "Bedrock" not in message
-        assert "x-llamastack-provider-data" not in message
+        assert "x-ogx-provider-data" not in message
     finally:
         # Restore original method
         BedrockInferenceAdapter.__bases__[0].openai_chat_completion = original_method

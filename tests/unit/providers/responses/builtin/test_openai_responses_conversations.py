@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,17 +14,17 @@ from openai.types.chat.chat_completion_chunk import (
 from openai.types.completion_usage import CompletionUsage
 
 # Fixtures imported from test_openai_responses via root conftest.py for pytest 8.4+ compatibility
-from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     OpenAIResponsesImpl,
 )
-from llama_stack_api.common.errors import (
+from ogx_api.common.errors import (
     ConversationNotFoundError,
     InvalidParameterError,
 )
-from llama_stack_api.conversations import (
+from ogx_api.conversations import (
     ConversationItemList,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
     OpenAIResponseMessage,
     OpenAIResponseObject,
     OpenAIResponseObjectStreamResponseCompleted,
@@ -264,7 +264,7 @@ class TestIntegrationWorkflow:
 
 
 class TestStoreFalseConversationLeak:
-    """Regression tests for https://github.com/llamastack/llama-stack/issues/5304
+    """Regression tests for https://github.com/ogx-ai/ogx/issues/5304
 
     When store=False, conversation messages must NOT be synced to the database.
     """

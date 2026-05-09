@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -35,7 +35,7 @@ def search_queries(
         queries: {query_id: query_text}
         mapping: File-ID-to-doc-ID mapping from ingestion.
         max_num_results: Top-k results to retrieve.
-        search_mode: "vector", "hybrid", or "keyword" (Llama Stack only).
+        search_mode: "vector", "hybrid", or "keyword" (OGX only).
 
     Returns:
         pytrec_eval format: {query_id: {doc_id: score}}

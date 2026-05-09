@@ -1,6 +1,6 @@
 # Codex CLI Integration (Alpha)
 
-Llama Stack can act as a proxy server for [Codex CLI](https://github.com/openai/codex), enabling you to use your existing Codex workflows while leveraging Llama Stack's unified provider architecture and conversation compaction features.
+OGX can act as a proxy server for [Codex CLI](https://github.com/openai/codex), enabling you to use your existing Codex workflows while leveraging OGX's unified provider architecture and conversation compaction features.
 
 :::warning Alpha Feature
 This integration is in early development (alpha status). While core functionality works well, some features like memory persistence are not yet supported. Configuration may change in future releases.
@@ -8,10 +8,10 @@ This integration is in early development (alpha status). While core functionalit
 
 ## Quick Start
 
-# 1. Start Llama Stack with Codex support
+# 1. Start OGX with Codex support
 ```bash
 export OPENAI_API_KEY="your-key-here"
-llama stack run starter
+ogx stack run starter
 ```
 
 # 2. Configure Codex CLI
@@ -19,9 +19,9 @@ Add the following to your `~/.codex/config.toml`:
 
 ```toml
 model = "openai/gpt-4o"
-model_provider = "llama-stack"
+model_provider = "ogx"
 
-[model_providers.llama-stack]
+[model_providers.ogx]
 name = "OpenAI"
 base_url = "http://localhost:8321/v1"
 wire_api = "responses"
@@ -34,12 +34,12 @@ codex "Write a hello world function in Python"
 
 ## How It Works
 
-The integration works as a proxy chain: **Codex CLI → Llama Stack → LLM Provider (OpenAI, etc.)**
+The integration works as a proxy chain: **Codex CLI → OGX → LLM Provider (OpenAI, etc.)**
 
 Key benefits:
-- **Unified provider access**: Use any Llama Stack-supported provider through Codex
+- **Unified provider access**: Use any OGX-supported provider through Codex
 - **Conversation compaction**: Automatic compression of long conversation histories
-- **Consistent APIs**: Leverage Llama Stack's standardized provider interface
+- **Consistent APIs**: Leverage OGX's standardized provider interface
 - **Tool execution**: Full support for shell commands, file operations, and code generation
 
 ## Configuration
@@ -63,7 +63,7 @@ Current limitations of this alpha integration:
 
 **"Model not found" errors**: Verify the model ID format matches your provider (e.g., `openai/gpt-4o`)
 
-**Request compression errors**: The integration uses zstd compression. Ensure your Llama Stack distribution supports request decompression.
+**Request compression errors**: The integration uses zstd compression. Ensure your OGX distribution supports request decompression.
 
 **Tool execution failures**: Check that Codex has proper permissions for file/shell operations.
 
@@ -76,4 +76,4 @@ Planned improvements:
 
 ---
 
-For more information about Llama Stack's provider architecture, see [Providers Overview](/docs/providers). For Codex CLI documentation, visit the [Codex GitHub repository](https://github.com/openai/codex).
+For more information about OGX's provider architecture, see [Providers Overview](/docs/providers). For Codex CLI documentation, visit the [Codex GitHub repository](https://github.com/openai/codex).

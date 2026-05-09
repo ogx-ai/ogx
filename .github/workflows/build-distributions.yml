@@ -22,7 +22,7 @@ permissions:
   actions: write
 
 env:
-  IMAGE_PREFIX: llamastack/distribution
+  IMAGE_PREFIX: ogx/distribution
 
 jobs:
   generate-matrix:
@@ -66,7 +66,7 @@ jobs:
             distros=$(echo "${{ github.event.inputs.distributions }}" | tr ',' '\n' | jq -R -s -c 'split("\n") | map(select(length > 0))')
           else
             # Get all distributions, excluding ci-tests and __pycache__
-            distros=$(find src/llama_stack/distributions -mindepth 2 -maxdepth 2 -name '*build.yaml' 2>/dev/null | \
+            distros=$(find src/ogx/distributions -mindepth 2 -maxdepth 2 -name '*build.yaml' 2>/dev/null | \
               awk -F'/' '{print $(NF-1)}' | \
               grep -v '^ci-tests$' | \
               grep -v '^__pycache__$' | \

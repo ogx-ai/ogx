@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,8 +15,8 @@ from typing import get_args, get_origin
 import pytest
 from pydantic import BaseModel, SecretStr
 
-from llama_stack.core.distribution import get_provider_registry, providable_apis
-from llama_stack.core.utils.dynamic import instantiate_class_type
+from ogx.core.distribution import get_provider_registry, providable_apis
+from ogx.core.utils.dynamic import instantiate_class_type
 
 
 def _is_secretstr(annotation) -> bool:

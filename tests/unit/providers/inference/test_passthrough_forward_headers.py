@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,11 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from llama_stack.core.request_headers import RequestProviderDataContext
-from llama_stack.providers.remote.inference.passthrough import PassthroughProviderDataValidator
-from llama_stack.providers.remote.inference.passthrough.config import PassthroughImplConfig
-from llama_stack.providers.remote.inference.passthrough.passthrough import PassthroughInferenceAdapter
-from llama_stack.providers.utils.forward_headers import (
+from ogx.core.request_headers import RequestProviderDataContext
+from ogx.providers.remote.inference.passthrough import PassthroughProviderDataValidator
+from ogx.providers.remote.inference.passthrough.config import PassthroughImplConfig
+from ogx.providers.remote.inference.passthrough.passthrough import PassthroughInferenceAdapter
+from ogx.providers.utils.forward_headers import (
     build_forwarded_headers,
     get_effective_blocked_forward_headers,
     validate_forward_headers_config,
@@ -24,7 +24,7 @@ from llama_stack.providers.utils.forward_headers import (
 # helpers
 # ---------------------------------------------------------------------------
 
-_PROVIDER_VALIDATOR_PATH = "llama_stack.providers.remote.inference.passthrough.PassthroughProviderDataValidator"
+_PROVIDER_VALIDATOR_PATH = "ogx.providers.remote.inference.passthrough.PassthroughProviderDataValidator"
 
 
 def _make_adapter(
@@ -170,7 +170,7 @@ class TestForwardHeaderPolicyHelpers:
 
 
 class TestPassthroughForwardHeaders:
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_forwards_listed_key_as_correct_header_name(self, mock_openai: MagicMock):
         adapter = _make_adapter(forward_headers={"maas_api_token": "Authorization"})
         with RequestProviderDataContext({"maas_api_token": "Bearer sk-abc123", "other": "ignored"}):
@@ -181,7 +181,7 @@ class TestPassthroughForwardHeaders:
         # via _build_request_headers — static key wins, so check default_headers has it
         assert "Authorization" in (call_kwargs.get("default_headers") or {})
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_default_deny_unlisted_keys_not_forwarded(self, mock_openai: MagicMock):
         adapter = _make_adapter(forward_headers={"token": "Authorization"})
         with RequestProviderDataContext({"token": "Bearer abc", "secret": "must-not-leak"}):
@@ -192,7 +192,7 @@ class TestPassthroughForwardHeaders:
         assert "secret" not in str(headers)
         assert "must-not-leak" not in str(headers)
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_static_api_key_used_when_no_forward_headers(self, mock_openai: MagicMock):
         adapter = _make_adapter(forward_headers=None)
         with RequestProviderDataContext({"maas_api_token": "Bearer abc"}):
@@ -202,7 +202,7 @@ class TestPassthroughForwardHeaders:
         headers = call_kwargs.get("default_headers") or {}
         assert headers == {"Authorization": "Bearer sk-test"}
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_missing_key_in_provider_data_skips_silently(self, mock_openai: MagicMock):
         adapter = _make_adapter(forward_headers={"missing_key": "X-Custom-Auth"})
         with RequestProviderDataContext({"other_key": "irrelevant"}):
@@ -212,7 +212,7 @@ class TestPassthroughForwardHeaders:
         headers = call_kwargs.get("default_headers") or {}
         assert "X-Custom-Auth" not in headers
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_provider_data_passthrough_api_key_used_when_no_static_key(self, mock_openai: MagicMock):
         config = PassthroughImplConfig(
             base_url="http://downstream.example.com",  # type: ignore[arg-type]
@@ -231,7 +231,7 @@ class TestPassthroughForwardHeaders:
         assert headers.get("Authorization") == "Bearer sk-user-key"
         assert headers.get("X-Tenant-ID") == "acme"
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_empty_static_api_key_falls_back_to_provider_data_key(self, mock_openai: MagicMock):
         config = PassthroughImplConfig(
             base_url="http://downstream.example.com",  # type: ignore[arg-type]
@@ -251,7 +251,7 @@ class TestPassthroughForwardHeaders:
         assert headers.get("Authorization") == "Bearer sk-user-key"
         assert headers.get("X-Tenant-ID") == "acme"
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_forwarded_auth_used_when_no_static_credential(self, mock_openai: MagicMock):
         # forward_headers supplies auth; no static api_key → api_key="" so SDK adds no extra Authorization
         config = PassthroughImplConfig(
@@ -270,7 +270,7 @@ class TestPassthroughForwardHeaders:
         assert call_kwargs["api_key"] == ""
         assert call_kwargs["default_headers"] == {"Authorization": "Bearer real-token"}
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_tenant_only_forward_adds_no_authorization(self, mock_openai: MagicMock):
         # forward_headers → X-Tenant-ID only, no api_key → Authorization must not appear
         config = PassthroughImplConfig(
@@ -291,7 +291,7 @@ class TestPassthroughForwardHeaders:
         assert "Authorization" not in headers
         assert headers.get("X-Tenant-ID") == "acme"
 
-    @patch("llama_stack.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_static_key_takes_priority_over_forwarded_auth(self, mock_openai: MagicMock):
         # static api_key + forwarded auth token → static wins
         adapter = _make_adapter(

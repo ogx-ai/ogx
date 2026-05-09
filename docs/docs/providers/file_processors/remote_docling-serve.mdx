@@ -4,7 +4,7 @@ description: |
   delegates document parsing and chunking to a running Docling Serve instance. It provides the same
   layout-aware, structure-preserving document conversion as the inline Docling provider, but runs as a
   separate service — enabling GPU acceleration, horizontal scaling, and shared processing across
-  multiple Llama Stack instances.
+  multiple OGX instances.
 
   Docling Serve supports PDF, DOCX, PPTX, HTML, images, and more.
 
@@ -14,7 +14,7 @@ description: |
   - **Structure-aware chunking** — splits at semantic boundaries using Docling's HybridChunker
   - **Layout preservation** — tables, lists, and nested structures are converted to Markdown
   - **Multi-format support** — PDF, DOCX, PPTX, HTML, and images
-  - **Scalable architecture** — run Docling Serve as a shared service for multiple Llama Stack instances
+  - **Scalable architecture** — run Docling Serve as a shared service for multiple OGX instances
 
   ## Usage
 
@@ -24,10 +24,10 @@ description: |
   docker run -p 5001:5001 quay.io/docling-project/docling-serve
   ```
 
-  Then start Llama Stack with the remote Docling Serve provider:
+  Then start OGX with the remote Docling Serve provider:
 
   ```bash
-  DOCLING_SERVE_URL=http://localhost:5001/v1 llama stack run \
+  DOCLING_SERVE_URL=http://localhost:5001/v1 ogx stack run \
     --providers "file_processors=remote::docling-serve,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \
     --port 8321
   ```
@@ -59,7 +59,7 @@ title: remote::docling-serve
 delegates document parsing and chunking to a running Docling Serve instance. It provides the same
 layout-aware, structure-preserving document conversion as the inline Docling provider, but runs as a
 separate service — enabling GPU acceleration, horizontal scaling, and shared processing across
-multiple Llama Stack instances.
+multiple OGX instances.
 
 Docling Serve supports PDF, DOCX, PPTX, HTML, images, and more.
 
@@ -69,7 +69,7 @@ Docling Serve supports PDF, DOCX, PPTX, HTML, images, and more.
 - **Structure-aware chunking** — splits at semantic boundaries using Docling's HybridChunker
 - **Layout preservation** — tables, lists, and nested structures are converted to Markdown
 - **Multi-format support** — PDF, DOCX, PPTX, HTML, and images
-- **Scalable architecture** — run Docling Serve as a shared service for multiple Llama Stack instances
+- **Scalable architecture** — run Docling Serve as a shared service for multiple OGX instances
 
 ## Usage
 
@@ -79,10 +79,10 @@ Start Docling Serve (see [Docling Serve docs](https://github.com/docling-project
 docker run -p 5001:5001 quay.io/docling-project/docling-serve
 ```
 
-Then start Llama Stack with the remote Docling Serve provider:
+Then start OGX with the remote Docling Serve provider:
 
 ```bash
-DOCLING_SERVE_URL=http://localhost:5001/v1 llama stack run \
+DOCLING_SERVE_URL=http://localhost:5001/v1 ogx stack run \
   --providers "file_processors=remote::docling-serve,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \
   --port 8321
 ```

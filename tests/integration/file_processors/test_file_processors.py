@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,17 +12,17 @@ import requests
 
 
 @pytest.fixture(autouse=True)
-def skip_if_no_file_processor_provider(llama_stack_client, require_server):
+def skip_if_no_file_processor_provider(ogx_client, require_server):
     """Skip tests if not running against a server or no file_processors provider is registered."""
-    providers = [p for p in llama_stack_client.providers.list() if p.api == "file_processors"]
+    providers = [p for p in ogx_client.providers.list() if p.api == "file_processors"]
     if not providers:
         pytest.skip("No file_processors provider registered")
 
 
 @pytest.fixture(scope="session")
-def process_url(llama_stack_client):
+def process_url(ogx_client):
     """URL for the file-processors/process endpoint."""
-    return f"{llama_stack_client.base_url}/v1alpha/file-processors/process"
+    return f"{ogx_client.base_url}/v1alpha/file-processors/process"
 
 
 @pytest.fixture(scope="session")
@@ -32,7 +32,7 @@ def test_pdf_path() -> Path:
         / "responses"
         / "fixtures"
         / "pdfs"
-        / "llama_stack_and_models.pdf"
+        / "ogx_and_models.pdf"
     )
 
 

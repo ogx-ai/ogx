@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
-from llama_stack.core.datatypes import User
-from llama_stack.providers.remote.files.s3.files import S3FilesImpl
-from llama_stack_api import (
+from ogx.core.datatypes import User
+from ogx.providers.remote.files.s3.files import S3FilesImpl
+from ogx_api import (
     DeleteFileRequest,
     ListFilesRequest,
     OpenAIFilePurpose,
@@ -26,14 +26,14 @@ async def test_listing_hides_other_users_file(s3_provider, sample_text_file):
     user_a = User("user-a", {"roles": ["team-a"]})
     user_b = User("user-b", {"roles": ["team-b"]})
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_a
         uploaded = await s3_provider.openai_upload_file(
             request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
             file=sample_text_file,
         )
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_b
         listed = await s3_provider.openai_list_files(request=ListFilesRequest())
         assert all(f.id != uploaded.id for f in listed.data)
@@ -67,14 +67,14 @@ async def test_cannot_access_other_user_file(s3_provider, sample_text_file, op, 
     user_a = User("user-a", {"roles": ["team-a"]})
     user_b = User("user-b", {"roles": ["team-b"]})
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_a
         uploaded = await s3_provider.openai_upload_file(
             request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
             file=sample_text_file,
         )
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_b
         with pytest.raises(ResourceNotFoundError):
             await op(s3_provider, _make_request_for_op(op_name, uploaded.id))
@@ -85,14 +85,14 @@ async def test_shared_role_allows_listing(s3_provider, sample_text_file):
     user_a = User("user-a", {"roles": ["shared-role"]})
     user_b = User("user-b", {"roles": ["shared-role"]})
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_a
         uploaded = await s3_provider.openai_upload_file(
             request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
             file=sample_text_file,
         )
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_b
         listed = await s3_provider.openai_list_files(request=ListFilesRequest())
         assert any(f.id == uploaded.id for f in listed.data)
@@ -115,13 +115,13 @@ async def test_shared_role_allows_access(s3_provider, sample_text_file, op, op_n
     user_x = User("user-x", {"roles": ["shared-role"]})
     user_y = User("user-y", {"roles": ["shared-role"]})
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_x
         uploaded = await s3_provider.openai_upload_file(
             request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
             file=sample_text_file,
         )
 
-    with patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
+    with patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user") as mock_get_user:
         mock_get_user.return_value = user_y
         await op(s3_provider, _make_request_for_op(op_name, uploaded.id))

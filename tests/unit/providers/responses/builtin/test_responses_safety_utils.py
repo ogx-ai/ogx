@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,15 +8,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     OpenAIResponsesImpl,
 )
-from llama_stack.providers.inline.responses.builtin.responses.utils import (
+from ogx.providers.inline.responses.builtin.responses.utils import (
     extract_guardrail_ids,
     run_guardrails,
 )
-from llama_stack_api.responses import ResponseGuardrailSpec
-from llama_stack_api.safety import ModerationObject, ModerationObjectResults
+from ogx_api.responses import ResponseGuardrailSpec
+from ogx_api.safety import ModerationObject, ModerationObjectResults
 
 
 @pytest.fixture

@@ -1,4 +1,10 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.core.routing_tables.models import ModelsRoutingTable
-from llama_stack_api import Model, ModelType
+from ogx.core.routing_tables.models import ModelsRoutingTable
+from ogx_api import Model, ModelType
 
 
 @pytest.fixture

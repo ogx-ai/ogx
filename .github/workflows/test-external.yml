@@ -8,8 +8,8 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - 'src/llama_stack/**'
-      - '!src/llama_stack_ui/**'
+      - 'src/ogx/**'
+      - '!src/ogx_ui/**'
       - 'tests/integration/**'
       - 'uv.lock'
       - 'pyproject.toml'
@@ -34,47 +34,47 @@ jobs:
 
       - name: Create API configuration
         run: |
-          mkdir -p /home/runner/.llama/apis.d
-          cp tests/external/weather.yaml /home/runner/.llama/apis.d/weather.yaml
+          mkdir -p /home/runner/.ogx/apis.d
+          cp tests/external/weather.yaml /home/runner/.ogx/apis.d/weather.yaml
 
       - name: Create provider configuration
         run: |
-          mkdir -p /home/runner/.llama/providers.d/remote/weather
-          cp tests/external/kaze.yaml /home/runner/.llama/providers.d/remote/weather/kaze.yaml
+          mkdir -p /home/runner/.ogx/providers.d/remote/weather
+          cp tests/external/kaze.yaml /home/runner/.ogx/providers.d/remote/weather/kaze.yaml
 
       - name: Print distro dependencies
         run: |
-          uv run --no-sync llama stack list-deps tests/external/config.yaml
+          uv run --no-sync ogx stack list-deps tests/external/config.yaml
 
       - name: Build distro from config file
         run: |
           uv venv ci-test
           source ci-test/bin/activate
           uv pip install -e .
-          LLAMA_STACK_LOGGING=all=CRITICAL llama stack list-deps tests/external/config.yaml | xargs -L1 uv pip install
+          OGX_LOGGING=all=CRITICAL ogx stack list-deps tests/external/config.yaml | xargs -L1 uv pip install
 
-      - name: Start Llama Stack server in background
+      - name: Start OGX server in background
         if: matrix.image-type == 'venv'
         env:
           INFERENCE_MODEL: "meta-llama/Llama-3.2-3B-Instruct"
-          LLAMA_STACK_LOG_FILE: "server.log"
+          OGX_LOG_FILE: "server.log"
         run: |
           # Use the virtual environment created by the build step (name comes from build config)
           source ci-test/bin/activate
           uv pip list
-          nohup llama stack run tests/external/config.yaml > server.log 2>&1 &
+          nohup ogx stack run tests/external/config.yaml > server.log 2>&1 &
 
-      - name: Wait for Llama Stack server to be ready
+      - name: Wait for OGX server to be ready
         run: |
-          echo "Waiting for Llama Stack server..."
+          echo "Waiting for OGX server..."
           for _ in {1..30}; do
             if curl -sSf http://localhost:8321/v1/health | grep -q "OK"; then
-              echo "Llama Stack server is up!"
+              echo "OGX server is up!"
               exit 0
             fi
             sleep 1
           done
-          echo "Llama Stack server failed to start"
+          echo "OGX server failed to start"
           cat server.log
           exit 1
 

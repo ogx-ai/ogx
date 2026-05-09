@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from llama_stack.core.routers.vector_io import VectorIORouter
-from llama_stack.core.routing_tables.vector_stores import VectorStoresRoutingTable
-from llama_stack_api import (
+from ogx.core.routers.vector_io import VectorIORouter
+from ogx.core.routing_tables.vector_stores import VectorStoresRoutingTable
+from ogx_api import (
     ChunkMetadata,
     EmbeddedChunk,
     InsertChunksRequest,
@@ -175,8 +175,8 @@ def router_with_real_routing_table(mock_provider):
 
     # Mock get_object_by_identifier to return a mock vector store object
     # This is needed by assert_action_allowed to check permissions
-    from llama_stack.core.datatypes import VectorStoreWithOwner
-    from llama_stack_api import ResourceType
+    from ogx.core.datatypes import VectorStoreWithOwner
+    from ogx_api import ResourceType
 
     mock_vector_store = VectorStoreWithOwner(
         identifier="vs_123",

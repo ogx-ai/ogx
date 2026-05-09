@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -91,14 +91,14 @@ def generate_docs(
     lines = [
         "---",
         "title: OpenAI API Conformance",
-        "description: Detailed conformance status of Llama Stack against the OpenAI API specification",
+        "description: Detailed conformance status of OGX against the OpenAI API specification",
         "sidebar_label: Conformance",
         "sidebar_position: 2",
         "---",
         "",
         "# OpenAI API Conformance Report",
         "",
-        "This page provides a detailed breakdown of Llama Stack's conformance to the OpenAI API specification.",
+        "This page provides a detailed breakdown of OGX's conformance to the OpenAI API specification.",
         "The conformance score increases as schema issues are fixed and missing properties are implemented.",
         "",
         ":::info Auto-generated",
@@ -157,7 +157,7 @@ def generate_docs(
             "",
             "## Missing Endpoints",
             "",
-            "The following OpenAI API endpoints are not yet implemented in Llama Stack:",
+            "The following OpenAI API endpoints are not yet implemented in OGX:",
             "",
         ]
     )
@@ -252,6 +252,8 @@ def generate_docs(
                         details = details.replace("|", "\\|")
                         # Escape < and > for MDX compatibility (prevents JSX parse errors)
                         details = details.replace("<", "&lt;").replace(">", "&gt;")
+                        # Escape curly braces for MDX (prevents acorn parse errors)
+                        details = details.replace("{", "\\{").replace("}", "\\}")
                         if show_tested:
                             prop_name = _extract_property_name(issue["property"])
                             is_tested = prop_name in tested_properties if prop_name else False
@@ -269,7 +271,7 @@ def generate_docs(
             "",
             "To improve conformance scores:",
             "",
-            "1. **Fix Schema Issues**: Update Pydantic models in `src/llama_stack_api/` to match OpenAI's schema",
+            "1. **Fix Schema Issues**: Update Pydantic models in `src/ogx_api/` to match OpenAI's schema",
             "2. **Add Missing Properties**: Implement missing fields in response models",
             "3. **Add Missing Endpoints**: Implement endpoints listed in the Missing Endpoints section",
             "",

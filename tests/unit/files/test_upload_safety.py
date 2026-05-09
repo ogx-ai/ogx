@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,8 +9,8 @@ import io
 import pytest
 from fastapi import UploadFile
 
-from llama_stack_api.common.errors import FileTooLargeError
-from llama_stack_api.common.upload_safety import (
+from ogx_api.common.errors import FileTooLargeError
+from ogx_api.common.upload_safety import (
     PreReadUploadFile,
     read_upload_with_size_limit,
 )

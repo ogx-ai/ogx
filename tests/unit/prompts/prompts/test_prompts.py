@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 
 import pytest
 
-from llama_stack_api import (
+from ogx_api import (
     CreatePromptRequest,
     DeletePromptRequest,
     GetPromptRequest,

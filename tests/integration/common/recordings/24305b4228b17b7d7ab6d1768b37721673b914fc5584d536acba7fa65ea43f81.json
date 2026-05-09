@@ -1,0 +1,193 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-mantle.us-east-2.api.aws/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant that summarizes reasoning traces."
+        },
+        {
+          "role": "user",
+          "content": "Summarize the following chain-of-thought reasoning in one or two sentences. Focus only on the final conclusion and the most important reasoning step.\n\nReasoning:\nWe have a user question: \"What is 2 + 2? Think step by step.\" It's a very simple arithmetic. The user requests step by step. Just need to answer: 2 + 2 = 4. Step by step: starting from 2, add 2 to get 4. The conversation is simple. Possibly there's a joke or something. We need to answer as ChatGPT. The answer: 2 + 2 = 4. Step by step explanation: if you have 2, you can think of counting. Just answer. There's minimal analysis. The correct answer: 4. Provide step by step: \n\nWe can do: 2 plus 1 equals 3, plus another 1 equals 4. Or add them side-by-side: 2 + 2 = 4. So correct. We should answer succinctly. Use a few sentences. Possibly mention real addition. We should not get lost. In the style of ChatGPT: \"Sure! Step 1: start with 2. Step 2: add 2. Step 3: result is 4.\" That's fine."
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.3
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.5.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-24305b4228b1",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "HAEuV6lDtVll7tdQa6zY3ALyYeJ8UDLCdNVvnwjBXEvC1Dbf5vd5oOC1xHbEIP9If5SQ6VCWNQu4S7jECV5Pi8m91J5mGNiymc927XkiHzcFBG"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-24305b4228b1",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null,
+                "reasoning": "The user asks: Summarize the chain-of-thought reasoning in one or two sentences, focusing only on the final conclusion and the most important reasoning step. The reasoning is: 2+2=4, step by step explanation. So summarise: The conclusion is 4, and the key step is adding 2 to 2. So produce one or two sentences: \""
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "qaZorzjUZJtxm0fosGua55Vt8w4c9TQ4Ea8cGXx4eTVIAXkhiFimI7FzoB3HeQxKoociktRT2SGMhJko"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-24305b4228b1",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null,
+                "reasoning": "The answer is 4, obtained by adding the two numbers together.\" That is it."
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "XBGLkpKVz9MSUt9APl3wJZS1oSX1iG1d8054Xqc4suKPsMVKKXe"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-24305b4228b1",
+          "choices": [
+            {
+              "delta": {
+                "content": "The answer is 4, reached by adding the two numbers together (starting with 2 and adding another 2).",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "UAi4ndOLHmS36rGgLv72EghPR2pO5B4RUqwwwANOn53uXBksVTVpgMGonjys5PDt7ul1HLvDlu28wvNSTJqpLpZ2pNs3972IFkMSAFHTZAFncuucygvWHvKKHFJxD"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-24305b4228b1",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "SGlKMZCynJXzWKi4r2kx4tOsHcM7xt1O4yb7NwV1Yu0epTLfNxL5ZBnAkbkGdN6G6UzcS"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-24305b4228b1",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 130,
+            "prompt_tokens": 345,
+            "total_tokens": 475,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

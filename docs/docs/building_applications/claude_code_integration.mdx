@@ -1,0 +1,355 @@
+---
+title: Claude Code Integration
+description: Using Claude Code CLI with Llama Stack
+sidebar_label: Claude Code
+sidebar_position: 4
+---
+
+# Claude Code Integration
+
+Llama Stack can act as a backend for [Claude Code](https://claude.com/claude-code), Anthropic's AI coding assistant. Point Claude Code at your Llama Stack server and use any model—from local open models (vLLM, Ollama) to cloud providers (OpenAI, Fireworks, Groq).
+
+## Quick Start
+
+### 1. Start Llama Stack
+
+```bash
+# With any provider (examples)
+export OPENAI_API_KEY="your-key-here"
+llama stack run starter
+
+# Or with vLLM
+export VLLM_URL="http://localhost:8000/v1"
+llama stack run starter
+
+# Or with Ollama
+export OLLAMA_URL="http://localhost:11434/v1"
+llama stack run starter
+```
+
+### 2. Configure Claude Code
+
+Point Claude Code at your Llama Stack server using the `ANTHROPIC_BASE_URL` environment variable:
+
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:8321"
+export ANTHROPIC_API_KEY="fake"  # Not validated when using local providers
+
+# Use Claude Code normally
+claude "Write a hello world function in Python"
+```
+
+### 3. Test it out
+
+```bash
+# Simple query
+claude "What is 2+2?"
+
+# Code generation with file creation
+claude "Create a Flask hello world app"
+
+# Multi-turn conversation
+claude "Write a quicksort in Rust"
+claude "Add documentation and tests"
+```
+
+## How It Works
+
+Claude Code sends requests to the Anthropic Messages API (`/v1/messages`). Llama Stack implements this API, translating between formats as needed:
+
+```
+Claude Code → Llama Stack /v1/messages → Provider
+                          ↓
+                     (translate if needed)
+                          ↓
+                     OpenAI, vLLM, etc.
+```
+
+**What gets translated:**
+- **Messages format**: Anthropic → OpenAI format (when provider doesn't support Messages API natively)
+- **Tool calls**: Anthropic `tool_use` blocks → OpenAI `tool_calls`
+- **Streaming**: OpenAI SSE events → Anthropic format (`message_start`, `content_block_delta`, etc.)
+- **Thinking blocks**: Extended thinking support for supported models
+
+**Native passthrough** (no translation needed):
+- Ollama with `/v1/messages` support
+- vLLM with Anthropic format support
+
+## Model Configuration
+
+### Specifying Models
+
+You can use `--model` to specify which OGX model to use directly:
+
+```bash
+claude --model "ollama/llama3.2:3b" "Hello world"
+claude --model "vllm/Qwen/Qwen3-8B" "Write code"
+```
+
+:::note
+Some providers may return errors when Claude Code requests a `max_tokens` value higher than the model supports (e.g., OpenAI models). In that case, use the environment variable approach below, which lets OGX handle the mapping automatically.
+:::
+
+### Model Aliasing via Environment Variables (Recommended)
+
+The recommended approach is to let OGX map Claude's internal model names to your backend models. Claude Code internally uses Claude model names (e.g., `claude-sonnet-4-5`, `claude-haiku-4-5-20251001`) for different tiers of work. You control which backend model each tier maps to with environment variables:
+
+```bash
+# Map Claude model tiers to your backend models
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="openai/gpt-4o-mini"   # Fast/cheap tier
+export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"       # Balanced tier
+export ANTHROPIC_DEFAULT_OPUS_MODEL="openai/o1"              # Most capable tier
+```
+
+When Claude Code sends a request for `claude-haiku-4-5-20251001`, OGX routes it to the model specified by `ANTHROPIC_DEFAULT_HAIKU_MODEL`. The starter distribution automatically registers these aliases across all providers:
+
+```yaml
+# Pre-configured in starter config.yaml
+registered_resources:
+  models:
+  - model_id: claude-haiku-4-5-20251001
+    provider_id: "all"  # Registers alias across ALL providers
+    provider_model_id: "auto"  # Auto-maps to appropriate model
+    model_type: llm
+```
+
+## Supported Features
+
+### Core Capabilities
+- ✅ **All Messages API features**: Multi-turn conversations, system messages, streaming
+- ✅ **Tool use**: File operations, shell commands, code execution (via Claude Code's built-in tools)
+- ✅ **Extended thinking**: Thinking blocks for reasoning transparency
+- ✅ **Token counting**: `/v1/messages/count_tokens` endpoint
+- ✅ **Prompt caching**: When using providers that support it (Anthropic, Bedrock)
+- ✅ **Any inference provider**: OpenAI, vLLM, Ollama, Fireworks, Together, Groq, Bedrock, etc.
+
+### Provider-Specific Features
+Different providers have different strengths when used with Claude Code:
+
+| Provider | Native Messages API | Thinking Support | Prompt Caching | Notes |
+|----------|-------------------|------------------|----------------|-------|
+| **OpenAI** | ❌ (translated) | ⚠️ (via reasoning) | ❌ | Works well, no translation overhead for responses |
+| **vLLM** | ✅ | ❌ | ❌ | Serves Messages API natively with compatible models |
+| **Ollama** | ✅ | ❌ | ❌ | Serves Messages API natively with compatible models |
+| **Bedrock, Fireworks, Groq, Together** | ❌ (translated) | ❌ | ❌ | Works via OpenAI translation |
+
+## Configuration Examples
+
+### Using OpenAI Models
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_BASE_URL="http://localhost:8321"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="openai/gpt-4o-mini"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"
+
+llama stack run starter
+claude "Implement a binary search tree"
+```
+
+### Using vLLM with Qwen Models
+
+```bash
+# Start vLLM server
+vllm serve Qwen/Qwen3-8B --api-key fake
+
+# Start Llama Stack
+export VLLM_URL="http://localhost:8000/v1"
+export ANTHROPIC_BASE_URL="http://localhost:8321"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="vllm/Qwen/Qwen3-8B"
+
+llama stack run starter
+claude "Write a Fibonacci function"
+```
+
+### Using Ollama with Llama Models
+
+```bash
+# Start Ollama
+ollama serve
+
+# Pull a model
+ollama pull llama3.3:70b
+
+# Start Llama Stack
+export OLLAMA_URL="http://localhost:11434/v1"
+export ANTHROPIC_BASE_URL="http://localhost:8321"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="ollama/llama3.3:70b"
+
+llama stack run starter
+claude "Explain quicksort"
+```
+
+### Using Multiple Providers
+
+You can configure different Claude model tiers to route to different providers:
+
+```bash
+# Fast model → local vLLM
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="vllm/Qwen/Qwen3-8B"
+
+# Balanced model → OpenAI GPT-4o
+export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"
+
+# Most capable → OpenAI o1
+export ANTHROPIC_DEFAULT_OPUS_MODEL="openai/o1"
+
+# Claude Code routes based on which model name it sends internally
+claude "Quick task"  # Uses haiku → vLLM
+claude "Complex task"  # Uses sonnet → OpenAI GPT-4o
+```
+
+## Troubleshooting
+
+### "Model not found" errors
+
+**Symptom**: `404 Model 'claude-haiku-4-5-20251001' not found`
+
+**Solution**: Either pass the model directly or set the appropriate environment variable:
+
+```bash
+# Option 1: Direct model specification
+claude --model "your-provider/your-model" "your prompt"
+
+# Option 2: Environment variable mapping (recommended)
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="your-provider/your-model"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="your-provider/your-model"
+```
+
+### "API key not valid" errors when using local providers
+
+**Symptom**: Authentication errors even though you're using a local provider
+
+**Solution**: Set a fake API key (not validated by llama-stack):
+
+```bash
+export ANTHROPIC_API_KEY="fake"
+```
+
+### `max_tokens` errors with OpenAI models
+
+**Symptom**: `BadRequestError: max_tokens is too large: 32000. This model supports at most 16384 completion tokens`
+
+**Explanation**: Claude Code requests a `max_tokens` value based on Claude model limits, which may exceed what the backend model supports. This is common with OpenAI models.
+
+**Workaround**: Use a model that supports a higher token limit, or use the environment variable approach which allows OGX to handle the mapping. This is a known limitation when using `--model` with providers that enforce strict token limits.
+
+### Claude Code ignores `ANTHROPIC_BASE_URL`
+
+**Symptom**: Claude Code connects directly to Anthropic (or Vertex AI / Bedrock) instead of your OGX server.
+
+**Explanation**: If `CLAUDE_CODE_USE_VERTEX=1`, `CLAUDE_CODE_USE_BEDROCK=1`, or related Vertex/Bedrock environment variables are set, Claude Code bypasses `ANTHROPIC_BASE_URL` entirely.
+
+**Solution**: Unset these variables before starting Claude Code:
+
+```bash
+unset CLAUDE_CODE_USE_VERTEX
+unset ANTHROPIC_VERTEX_PROJECT_ID
+unset CLAUDE_CODE_USE_BEDROCK
+unset ANTHROPIC_BEDROCK_SESSION_TOKEN
+```
+
+### Slow responses with cloud providers
+
+**Symptom**: Long latency when using OpenAI, Fireworks, etc.
+
+**Explanation**: There's a double proxy overhead (Claude Code → llama-stack → provider). Consider using local providers (vLLM, Ollama) for better performance.
+
+### Tool use not working
+
+**Symptom**: Claude Code can't execute shell commands or file operations
+
+**Explanation**: Tool execution happens in Claude Code's runtime, not llama-stack. Ensure Claude Code has proper permissions and your model supports tool use.
+
+## Performance Considerations
+
+### Latency Breakdown
+
+```
+Total latency = Claude Code overhead + llama-stack processing + provider API call + translation overhead
+```
+
+- **Local providers** (vLLM, Ollama): Minimal translation overhead, total latency dominated by inference
+- **Cloud providers** (OpenAI, Groq): Network round-trip is the bottleneck
+- **Format translation**: Adds ~5-20ms depending on message complexity
+
+### Optimization Tips
+
+1. **Use local providers** when possible (vLLM, Ollama) to minimize network latency
+2. **Enable prompt caching** with providers that support it (set `ANTHROPIC_API_KEY` to use Bedrock)
+3. **Configure native Messages API** support in vLLM/Ollama to skip translation overhead
+4. **Use streaming** (enabled by default in Claude Code) for faster perceived response times
+
+## Differences from Anthropic Claude
+
+While llama-stack provides full Messages API compatibility, there are some behavioral differences when using alternative models:
+
+| Feature | Anthropic Claude | Open Models (via llama-stack) |
+|---------|------------------|-------------------------------|
+| **Thinking blocks** | Native support | Varies by model (GPT-4o has reasoning) |
+| **Prompt caching** | Available | Only if provider supports it |
+| **Extended context** | 200K+ tokens | Depends on model (Qwen3: 32K, Llama3: 128K) |
+| **Tool use format** | Optimized for Claude | Translated to OpenAI format |
+| **Response quality** | Claude-specific | Depends on underlying model |
+
+## Advanced Configuration
+
+### Custom Model Mappings
+
+If you want more control over how Claude model names map to your providers, you can register models explicitly:
+
+```bash
+# Start llama stack
+llama stack run starter
+
+# Register models via API (after startup)
+curl http://localhost:8321/v1/models \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_id": "claude-haiku-4-5-20251001",
+    "provider_id": "vllm",
+    "provider_model_id": "Qwen/Qwen3-8B",
+    "model_type": "llm"
+  }'
+```
+
+Or add to your `config.yaml`:
+
+```yaml
+registered_resources:
+  models:
+  - model_id: claude-haiku-4-5-20251001
+    provider_id: vllm
+    provider_model_id: Qwen/Qwen3-8B
+    model_type: llm
+```
+
+### Using with Claude Agent SDK
+
+If you're building custom agents with the Claude Agent SDK, llama-stack works as a drop-in backend:
+
+```python
+from claude_agent_sdk import Agent
+
+agent = Agent(
+    base_url="http://localhost:8321",
+    api_key="fake",  # Not validated
+    model="vllm/Qwen/Qwen3-8B",
+)
+
+response = agent.send("Write a function to parse CSV files")
+```
+
+## Related Documentation
+
+- [Anthropic Messages API](/docs/api-anthropic-messages) - Full API reference and conformance details
+- [Providers](/docs/providers) - Available inference providers and configuration
+- [Starter Distribution](/docs/distributions/starter) - Default distribution setup
+
+## Contributing
+
+Found an issue or want to improve Claude Code integration? Contributions welcome:
+
+- **Report bugs**: [GitHub Issues](https://github.com/meta-llama/llama-stack/issues)
+- **Improve docs**: [Documentation source](https://github.com/meta-llama/llama-stack/tree/main/docs)
+- **Add features**: See [CONTRIBUTING.md](https://github.com/meta-llama/llama-stack/blob/main/CONTRIBUTING.md)

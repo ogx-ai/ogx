@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -22,17 +22,17 @@ from openai import (
     ConflictError as OpenAIConflictError,
 )
 
-from llama_stack.core.exceptions.translation import translate_exception
-from llama_stack.testing.exception_utils import (
+from ogx.core.exceptions.translation import translate_exception
+from ogx.testing.exception_utils import (
     deserialize_exception,
     is_provider_sdk_exception,
     serialize_exception,
 )
-from llama_stack_api.common.errors import (
+from ogx_api.common.errors import (
     BatchNotFoundError,
     ConflictError,
-    LlamaStackError,
     ModelNotFoundError,
+    OGXError,
 )
 
 
@@ -46,10 +46,10 @@ def _openai_error(cls, status_code, body, message):
 class TestSerializeException:
     """Test exception categorization and serialization for recording."""
 
-    def test_llama_stack_error_serializes_as_llama_stack_category(self):
+    def test_ogx_error_serializes_as_ogx_category(self):
         exc = ModelNotFoundError("llama-3")
         data = serialize_exception(exc)
-        assert data["category"] == "llama_stack"
+        assert data["category"] == "ogx"
         assert data["type"] == "ModelNotFoundError"
         assert "llama-3" in data["message"]
         assert data["status_code"] == 404
@@ -88,11 +88,11 @@ class TestSerializeException:
 class TestDeserializeException:
     """Test exception reconstruction from recorded data."""
 
-    def test_llama_stack_roundtrip_preserves_status_and_message(self):
+    def test_ogx_roundtrip_preserves_status_and_message(self):
         exc = BatchNotFoundError("batch-xyz")
         data = serialize_exception(exc)
         reconstructed = deserialize_exception(data)
-        assert isinstance(reconstructed, LlamaStackError)
+        assert isinstance(reconstructed, OGXError)
         assert reconstructed.status_code == 404
         assert "batch-xyz" in str(reconstructed)
 
@@ -182,8 +182,8 @@ class TestProviderSDKRoundTrip:
 class TestReconstructedExceptionInterface:
     """Verify reconstructed exceptions work with server's translate_exception."""
 
-    def test_llama_stack_reconstructed_translates_to_http(self):
-        data = {"category": "llama_stack", "status_code": 404, "message": "Batch xyz not found"}
+    def test_ogx_reconstructed_translates_to_http(self):
+        data = {"category": "ogx", "status_code": 404, "message": "Batch xyz not found"}
         exc = deserialize_exception(data)
         http_exc = translate_exception(exc)
         assert http_exc.status_code == 404
@@ -227,11 +227,11 @@ class TestIsProviderSdkException:
     def test_ollama_exception_detected(self):
         assert is_provider_sdk_exception(ResponseError(error="x", status_code=404))
 
-    def test_llama_stack_not_detected_as_provider_sdk(self):
-        """LlamaStackError has status_code but is handled separately (llama_stack category)."""
+    def test_ogx_not_detected_as_provider_sdk(self):
+        """OGXError has status_code but is handled separately (ogx category)."""
         exc = ConflictError("conflict")
         data = serialize_exception(exc)
-        assert data["category"] == "llama_stack"
+        assert data["category"] == "ogx"
 
     def test_plain_exception_not_detected(self):
         assert not is_provider_sdk_exception(ValueError("x"))

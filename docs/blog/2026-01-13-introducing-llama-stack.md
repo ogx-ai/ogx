@@ -1,28 +1,28 @@
 ---
-slug: introducing-llama-stack
-title: Introducing Llama Stack - The Open-Source Platform for Building AI Applications
-authors: [llama-stack-team]
+slug: introducing-ogx
+title: Introducing OGX - The Open-Source Platform for Building AI Applications
+authors: [ogx-team]
 tags: [announcement, introduction, getting-started]
 date: 2026-01-22
 ---
 
 Welcome to our blog!
 
-We're excited to introduce you to **Llama Stack** - the open-source platform that simplifies building production-ready generative AI applications.
+We're excited to introduce you to **OGX** - the open-source platform that simplifies building production-ready generative AI applications.
 
 <!--truncate-->
 
-## What is Llama Stack?
+## What is OGX?
 
-Llama Stack defines and standardizes the core building blocks needed to bring generative AI applications to market, centered on the [Open Responses specification](https://www.openresponses.org/). By aligning with OpenAI’s open-sourced Responses API, Llama Stack provides a consistent, interoperable foundation for building agentic and generative systems. It offers a growing suite of open-source APIs—including prompts, conversations, files, models, embeddings, fine-tuning, and MCP—enabling seamless transitions from local development to production across providers and environments.
+OGX defines and standardizes the core building blocks needed to bring generative AI applications to market, centered on the [Open Responses specification](https://www.openresponses.org/). By aligning with OpenAI’s open-sourced Responses API, OGX provides a consistent, interoperable foundation for building agentic and generative systems. It offers a growing suite of open-source APIs—including prompts, conversations, files, models, embeddings, fine-tuning, and MCP—enabling seamless transitions from local development to production across providers and environments.
 
-Think of Llama Stack as a universal interface that abstracts away the complexity of working with different AI tools and provider (e.g., vector databases, model inference providers, and deployment environments). Whether you're building locally, deploying on-premises, or scaling in the cloud, Llama Stack provides a consistent developer experience.
+Think of OGX as a universal interface that abstracts away the complexity of working with different AI tools and provider (e.g., vector databases, model inference providers, and deployment environments). Whether you're building locally, deploying on-premises, or scaling in the cloud, OGX provides a consistent developer experience.
 
 ## Key Features
 
 ### Unified API Layer
 
-Llama Stack provides standardized APIs across six core capabilities:
+OGX provides standardized APIs across six core capabilities:
 
 - **Inference**: Run models locally or in the cloud with a consistent interface
 - **Vector Stores**: Build knowledge and agentic retrieval systems
@@ -44,13 +44,13 @@ Distributions are pre-configured bundles of provider implementations that make i
 
 ### Multiple Developer Interfaces
 
-Llama Stack supports various developer interfaces:
+OGX supports various developer interfaces:
 
 - **CLI**: Command-line tools for server management
-- **Python SDK**: [`llama-stack-client-python`](https://github.com/meta-llama/llama-stack-client-python)
-- **TypeScript SDK**: [`llama-stack-client-typescript`](https://github.com/meta-llama/llama-stack-client-typescript)
+- **Python SDK**: [`ogx-client-python`](https://github.com/ogx-ai/ogx-client-python)
+- **TypeScript SDK**: [`ogx-client-typescript`](https://github.com/ogx-ai/ogx-client-typescript)
 
-## Why Llama Stack?
+## Why OGX?
 
 ### Flexibility Without Compromise
 
@@ -65,7 +65,7 @@ All while maintaining the same codebase and APIs.
 
 ### Consistent Experience
 
-With unified APIs, Llama Stack makes it easier to:
+With unified APIs, OGX makes it easier to:
 
 - Build applications with consistent behavior
 - Test across different environments
@@ -74,7 +74,7 @@ With unified APIs, Llama Stack makes it easier to:
 
 ### Robust Ecosystem
 
-Llama Stack integrates with distribution partners including:
+OGX integrates with distribution partners including:
 
 - **Cloud Providers**: AWS Bedrock, Together, Fireworks, and more
 - **Hardware Vendors**: NVIDIA, Cerebras, SambaNova
@@ -85,30 +85,30 @@ For a complete list, check out our [Providers Documentation](/docs/providers).
 
 ## How It Works
 
-Llama Stack consists of two main components:
+OGX consists of two main components:
 
 1. **Server**: A server with pluggable API providers that can run in various environments
 2. **Client SDKs**: Libraries for your applications to interact with the server
 
 The server handles all the complexity of managing different providers, while the client SDKs provide a simple, consistent interface for your application code.
 
-Refer to the [Quick Start Guide](https://llamastack.github.io/docs/getting_started/quickstart) to get started building your first AI application with Llama Stack.
+Refer to the [Quick Start Guide](https://ogx-ai.github.io/docs/getting_started/quickstart) to get started building your first AI application with OGX.
 
 ## What's Next?
 
-See the [Llama Stack Office Hours Content Calendar](https://docs.google.com/document/d/1it-OsGFgAIwAUctQRQ-j1CBxFHhvSm530YR67eYGW1I/edit?tab=t.4uf22mux1a94) for upcoming topics and the blog roadmap.
+See the [OGX Office Hours Content Calendar](https://docs.google.com/document/d/1it-OsGFgAIwAUctQRQ-j1CBxFHhvSm530YR67eYGW1I/edit?tab=t.4uf22mux1a94) for upcoming topics and the blog roadmap.
 
 ## Join the Community
 
 We'd love to have you join our growing community:
 
-- [Star us on GitHub](https://github.com/llamastack/llama-stack)
-- [Join our Discord](https://discord.gg/llama-stack)
+- [Star us on GitHub](https://github.com/ogx-ai/ogx)
+- [Join our Discord](https://discord.gg/ZAFjsrcw)
 - [Read the Documentation](/docs)
-- [Report Issues](https://github.com/llamastack/llama-stack/issues)
+- [Report Issues](https://github.com/ogx-ai/ogx/issues)
 
 ## Conclusion
 
-Llama Stack is designed to make building AI applications simpler, more flexible, and more maintainable. By providing unified APIs and a rich ecosystem of providers, we're enabling developers to focus on what matters most - building great applications.
+OGX is designed to make building AI applications simpler, more flexible, and more maintainable. By providing unified APIs and a rich ecosystem of providers, we're enabling developers to focus on what matters most - building great applications.
 
-Whether you're just getting started with AI or building production systems at scale, Llama Stack has something to offer. We're excited to see what you'll build!
+Whether you're just getting started with AI or building production systems at scale, OGX has something to offer. We're excited to see what you'll build!

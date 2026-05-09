@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,7 +11,7 @@ Tests the new input_schema and output_schema fields.
 
 from pydantic import ValidationError
 
-from llama_stack_api import ToolDef
+from ogx_api import ToolDef
 
 
 class TestToolDefValidation:

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,17 +10,17 @@ from unittest.mock import patch
 
 import pytest
 
-from llama_stack.core.access_control.access_control import default_policy
-from llama_stack.core.datatypes import User
-from llama_stack.core.storage.datatypes import SqlStoreReference
-from llama_stack.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from llama_stack.core.storage.sqlstore.sqlstore import (
+from ogx.core.access_control.access_control import default_policy
+from ogx.core.datatypes import User
+from ogx.core.storage.datatypes import SqlStoreReference
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
+from ogx.core.storage.sqlstore.sqlstore import (
     PostgresSqlStoreConfig,
     SqliteSqlStoreConfig,
     register_sqlstore_backends,
     sqlstore_impl,
 )
-from llama_stack_api.internal.sqlstore import ColumnType
+from ogx_api.internal.sqlstore import ColumnType
 
 
 def get_postgres_config():
@@ -28,9 +28,9 @@ def get_postgres_config():
     return PostgresSqlStoreConfig(
         host=os.environ.get("POSTGRES_HOST", "localhost"),
         port=int(os.environ.get("POSTGRES_PORT", "5432")),
-        db=os.environ.get("POSTGRES_DB", "llamastack"),
-        user=os.environ.get("POSTGRES_USER", "llamastack"),
-        password=os.environ.get("POSTGRES_PASSWORD", "llamastack"),
+        db=os.environ.get("POSTGRES_DB", "ogx"),
+        user=os.environ.get("POSTGRES_USER", "ogx"),
+        password=os.environ.get("POSTGRES_PASSWORD", "ogx"),
     )
 
 
@@ -96,7 +96,7 @@ async def cleanup_records(sql_store, table_name, record_ids):
 
 
 @pytest.mark.parametrize("backend_config", BACKEND_CONFIGS)
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 async def test_authorized_store_attributes(mock_get_authenticated_user, authorized_store, request):
     """Test that JSON column comparisons work correctly for both PostgreSQL and SQLite"""
     backend_name = request.node.callspec.id
@@ -200,10 +200,10 @@ async def test_authorized_store_attributes(mock_get_authenticated_user, authoriz
 
 
 @pytest.mark.parametrize("backend_config", BACKEND_CONFIGS)
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 async def test_user_ownership_policy(mock_get_authenticated_user, authorized_store, request):
     """Test that 'user is owner' policies work correctly with record ownership"""
-    from llama_stack.core.access_control.datatypes import AccessRule, Action, Scope
+    from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 
     backend_name = request.node.callspec.id
 
@@ -260,7 +260,7 @@ async def test_user_ownership_policy(mock_get_authenticated_user, authorized_sto
 
 
 @pytest.mark.parametrize("backend_config", BACKEND_CONFIGS)
-@patch("llama_stack.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 async def test_sqlrecord_created_with_no_owner(mock_get_authenticated_user, authorized_store, request):
     """Test that SqlRecord is created with no owner == None when owner_principal is empty/missing"""
     backend_name = request.node.callspec.id
@@ -278,7 +278,7 @@ async def test_sqlrecord_created_with_no_owner(mock_get_authenticated_user, auth
 
         # Test fetching with no user - should create SqlRecord with no owner
         with patch(
-            "llama_stack.core.storage.sqlstore.authorized_sqlstore.is_action_allowed", return_value=True
+            "ogx.core.storage.sqlstore.authorized_sqlstore.is_action_allowed", return_value=True
         ) as mock_is_action_allowed:
             result = await authorized_store.fetch_all(table_name)
             mock_is_action_allowed.assert_called_once()

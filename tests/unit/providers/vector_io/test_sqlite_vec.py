@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,12 +10,12 @@ import time
 import numpy as np
 import pytest
 
-from llama_stack.providers.inline.vector_io.sqlite_vec.sqlite_vec import (
+from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import (
     SQLiteVecIndex,
     SQLiteVecVectorIOAdapter,
     _create_sqlite_connection,
 )
-from llama_stack_api import Chunk, ChunkMetadata, EmbeddedChunk, QueryChunksResponse
+from ogx_api import Chunk, ChunkMetadata, EmbeddedChunk, QueryChunksResponse
 
 # This test is a unit test for the SQLiteVecVectorIOAdapter class. This should only contain
 # tests which are specific to this class. More general (API-level) tests should be placed in
@@ -671,7 +671,7 @@ async def test_query_chunks_hybrid_tie_breaking(
     sqlite_vec_index, sample_embeddings, embedding_dimension, tmp_path_factory
 ):
     """Test tie-breaking and determinism when scores are equal."""
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     # Create two chunks with the same content and embedding
     chunk1_id = generate_chunk_id("docA", "identical")

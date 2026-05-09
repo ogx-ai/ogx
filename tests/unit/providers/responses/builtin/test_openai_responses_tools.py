@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,15 +14,15 @@ from openai.types.chat.chat_completion_chunk import (
     ChoiceDeltaToolCallFunction,
 )
 
-from llama_stack.core.datatypes import VectorStoresConfig
-from llama_stack.providers.inline.responses.builtin.responses.tool_executor import ToolExecutor
-from llama_stack.providers.utils.responses.responses_store import (
+from ogx.core.datatypes import VectorStoresConfig
+from ogx.providers.inline.responses.builtin.responses.tool_executor import ToolExecutor
+from ogx.providers.utils.responses.responses_store import (
     _OpenAIResponseObjectWithInputAndMessages,
 )
-from llama_stack_api import (
+from ogx_api import (
     GetConnectorRequest,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
@@ -30,8 +30,8 @@ from llama_stack_api.openai_responses import (
     OpenAIResponseMessage,
     WebSearchToolTypes,
 )
-from llama_stack_api.tools import ListToolDefsResponse, ToolDef, ToolInvocationResult
-from llama_stack_api.vector_io import (
+from ogx_api.tools import ListToolDefsResponse, ToolDef, ToolInvocationResult
+from ogx_api.vector_io import (
     VectorStoreContent,
     VectorStoreSearchResponse,
     VectorStoreSearchResponsePage,
@@ -316,7 +316,7 @@ async def test_create_openai_response_with_tool_call_function_arguments_none(ope
     mock_inference_api.openai_chat_completion.return_value = fake_stream_toolcall()
 
 
-@patch("llama_stack.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
 async def test_reuse_mcp_tool_list(
     mock_list_mcp_tools, openai_responses_impl, mock_responses_store, mock_inference_api
 ):
@@ -368,12 +368,12 @@ async def test_reuse_mcp_tool_list(
     assert listings[0].tools[0].name == "test_tool"
 
 
-@patch("llama_stack.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
+@patch("ogx.providers.inline.responses.builtin.responses.streaming.list_mcp_tools")
 async def test_mcp_tool_connector_id_resolved_to_server_url(
     mock_list_mcp_tools, openai_responses_impl, mock_responses_store, mock_inference_api, mock_connectors_api
 ):
     """Test that connector_id is resolved to server_url when using MCP tools."""
-    from llama_stack_api import Connector, ConnectorType
+    from ogx_api import Connector, ConnectorType
 
     # Setup mock connector that will be returned when resolving connector_id
     mock_connector = Connector(
@@ -417,7 +417,7 @@ async def test_mcp_tool_connector_id_resolved_to_server_url(
 
 async def test_file_search_uses_default_search_mode_from_config(mock_vector_io_api):
     """Test that file_search tool executor passes default_search_mode from VectorStoresConfig."""
-    from llama_stack.core.datatypes import ChunkRetrievalParams
+    from ogx.core.datatypes import ChunkRetrievalParams
 
     query = "What is machine learning?"
     vector_store_id = "test_vector_store"

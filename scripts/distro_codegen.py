@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -48,14 +48,14 @@ def process_distro(distro_dir: Path, progress, change_tracker: ChangedPathTracke
 
     try:
         # Import the module directly
-        module_name = f"llama_stack.distributions.{distro_dir.name}"
+        module_name = f"ogx.distributions.{distro_dir.name}"
         module = importlib.import_module(module_name)
 
         # Get and save the distribution template
         if template_func := getattr(module, "get_distribution_template", None):
             distro = template_func()
 
-            yaml_output_dir = REPO_ROOT / "src" / "llama_stack" / "distributions" / distro.name
+            yaml_output_dir = REPO_ROOT / "src" / "ogx" / "distributions" / distro.name
             doc_output_dir = REPO_ROOT / "docs/docs/distributions" / f"{distro.distro_type}_distro"
             change_tracker.add_paths(yaml_output_dir, doc_output_dir)
             distro.save_distribution(
@@ -88,12 +88,12 @@ def check_for_changes(change_tracker: ChangedPathTracker) -> bool:
 def pre_import_distros(distro_dirs: list[Path]) -> None:
     # Pre-import all distro modules to avoid deadlocks.
     for distro_dir in distro_dirs:
-        module_name = f"llama_stack.distributions.{distro_dir.name}"
+        module_name = f"ogx.distributions.{distro_dir.name}"
         importlib.import_module(module_name)
 
 
 def main():
-    distros_dir = REPO_ROOT / "src" / "llama_stack" / "distributions"
+    distros_dir = REPO_ROOT / "src" / "ogx" / "distributions"
     change_tracker = ChangedPathTracker()
 
     with Progress(

@@ -2,10 +2,10 @@
   "google_spec": "docs/static/google-interactions-spec.json",
   "spec_version": "v1beta",
   "summary": {
-    "overall_score": 32.9,
+    "overall_score": 39.0,
     "total_google_items": 82,
-    "total_implemented": 27,
-    "total_missing": 55
+    "total_implemented": 32,
+    "total_missing": 50
   },
   "sections": [
     {
@@ -26,16 +26,17 @@
     {
       "section": "Request Properties",
       "google_total": 13,
-      "implemented": 6,
-      "missing_count": 7,
-      "score": 46.2,
+      "implemented": 7,
+      "missing_count": 6,
+      "score": 53.8,
       "supported": [
         "generation_config",
         "input",
         "model",
         "response_modalities",
         "stream",
-        "system_instruction"
+        "system_instruction",
+        "tools"
       ],
       "missing": [
         "background",
@@ -43,8 +44,7 @@
         "response_format",
         "response_mime_type",
         "service_tier",
-        "store",
-        "tools"
+        "store"
       ]
     },
     {
@@ -66,7 +66,7 @@
       "missing": [
         "agent"
       ],
-      "extra_in_llama_stack": [
+      "extra_in_ogx": [
         "object"
       ]
     },
@@ -90,7 +90,7 @@
         "thinking_summaries",
         "tool_choice"
       ],
-      "extra_in_llama_stack": [
+      "extra_in_ogx": [
         "top_k"
       ]
     },
@@ -118,11 +118,14 @@
     {
       "section": "Content Types",
       "google_total": 20,
-      "implemented": 1,
-      "missing_count": 19,
-      "score": 5.0,
+      "implemented": 4,
+      "missing_count": 16,
+      "score": 20.0,
       "supported": [
-        "TextContent"
+        "FunctionCallContent",
+        "FunctionResultContent",
+        "TextContent",
+        "ThoughtContent"
       ],
       "missing": [
         "AudioContent",
@@ -131,8 +134,6 @@
         "DocumentContent",
         "FileSearchCallContent",
         "FileSearchResultContent",
-        "FunctionCallContent",
-        "FunctionResultContent",
         "GoogleMapsCallContent",
         "GoogleMapsResultContent",
         "GoogleSearchCallContent",
@@ -140,7 +141,6 @@
         "ImageContent",
         "McpServerToolCallContent",
         "McpServerToolResultContent",
-        "ThoughtContent",
         "UrlContextCallContent",
         "UrlContextResultContent",
         "VideoContent"
@@ -149,15 +149,16 @@
     {
       "section": "Tool Types",
       "google_total": 9,
-      "implemented": 0,
-      "missing_count": 9,
-      "score": 0.0,
-      "supported": [],
+      "implemented": 1,
+      "missing_count": 8,
+      "score": 11.1,
+      "supported": [
+        "Function"
+      ],
       "missing": [
         "CodeExecution",
         "ComputerUse",
         "FileSearch",
-        "Function",
         "GoogleMaps",
         "GoogleSearch",
         "McpServer",

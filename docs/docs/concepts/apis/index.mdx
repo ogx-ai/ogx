@@ -1,13 +1,13 @@
 ---
 title: APIs
-description: How Llama Stack's APIs work together
+description: How OGX's APIs work together
 sidebar_label: APIs
 sidebar_position: 1
 ---
 
 # APIs
 
-Llama Stack exposes OpenAI-compatible REST APIs. For the full endpoint list, see the [API Reference](/docs/api-overview).
+OGX exposes OpenAI-compatible REST APIs. For the full endpoint list, see the [API Reference](/docs/api-overview).
 
 ## Stability Levels
 
@@ -21,14 +21,14 @@ These three APIs combine to give you RAG in a few calls:
 
 1. Upload a document via `/v1/files`
 2. Create a vector store and attach the file via `/v1/vector_stores`
-3. Llama Stack automatically chunks, embeds, and indexes the document
+3. OGX automatically chunks, embeds, and indexes the document
 4. Use `file_search` in a `/v1/responses` request to search it
 
 See [File Operations and Vector Store Integration](/docs/concepts/file_operations_vector_stores) for details.
 
 ### Tool Runtime
 
-The Responses API orchestrates tools server-side. The model decides which tools to call, Llama Stack executes them and feeds results back automatically:
+The Responses API orchestrates tools server-side. The model decides which tools to call, OGX executes them and feeds results back automatically:
 
 - **file_search** - searches your vector stores
 - **web_search** - queries configured search providers
@@ -37,4 +37,4 @@ The Responses API orchestrates tools server-side. The model decides which tools 
 
 ### Providers and External APIs
 
-Not every provider supports every feature. See [API Providers](/docs/concepts/apis/api_providers) for how providers map to APIs, and [External APIs](/docs/concepts/apis/external) for extending Llama Stack with custom endpoints.
+Not every provider supports every feature. See [API Providers](/docs/concepts/apis/api_providers) for how providers map to APIs, and [External APIs](/docs/concepts/apis/external) for extending OGX with custom endpoints.

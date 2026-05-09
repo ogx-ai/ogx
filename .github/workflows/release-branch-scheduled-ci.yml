@@ -55,6 +55,7 @@ jobs:
     needs: discover-branches
     if: needs.discover-branches.outputs.branches != '[]'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -91,6 +92,7 @@ jobs:
     needs: discover-branches
     if: needs.discover-branches.outputs.branches != '[]'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -126,7 +128,7 @@ jobs:
 
       - name: Setup Node.js for TypeScript client tests
         if: matrix.client == 'server' && steps.check-ts-client.outputs.exists == 'true'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -158,6 +160,7 @@ jobs:
     needs: discover-branches
     if: needs.discover-branches.outputs.branches != '[]'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -175,30 +178,30 @@ jobs:
           python-version: ${{ matrix.python-version }}
           activate-environment: true
 
-      - name: Build Llama Stack API package
-        if: hashFiles('src/llama_stack_api/pyproject.toml') != ''
-        working-directory: src/llama_stack_api
+      - name: Build OGX API package
+        if: hashFiles('src/ogx_api/pyproject.toml') != ''
+        working-directory: src/ogx_api
         run: uv build
 
-      - name: Build Llama Stack package
+      - name: Build OGX package
         run: uv build
 
-      - name: Install Llama Stack package (with api stubs from local build)
+      - name: Install OGX package (with api stubs from local build)
         run: |
-          if [ -d "src/llama_stack_api/dist" ]; then
-            uv pip install --find-links src/llama_stack_api/dist dist/*.whl
+          if [ -d "src/ogx_api/dist" ]; then
+            uv pip install --find-links src/ogx_api/dist dist/*.whl
           else
             uv pip install dist/*.whl
           fi
 
-      - name: Verify Llama Stack package
+      - name: Verify OGX package
         run: |
           uv pip list
-          uv pip show llama-stack
-          command -v llama
-          llama stack list-apis
-          llama stack list-providers inference
-          llama stack list-deps starter
+          uv pip show ogx
+          command -v ogx
+          ogx stack list-apis
+          ogx stack list-providers inference
+          ogx stack list-deps starter
 
   summary:
     name: Scheduled CI Summary

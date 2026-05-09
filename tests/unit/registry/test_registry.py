@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,15 +7,15 @@
 
 import pytest
 
-from llama_stack.core.datatypes import VectorStoreWithOwner
-from llama_stack.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore import kvstore_impl, register_kvstore_backends
-from llama_stack.core.store.registry import (
+from ogx.core.datatypes import VectorStoreWithOwner
+from ogx.core.storage.datatypes import SqliteKVStoreConfig
+from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
+from ogx.core.store.registry import (
     KEY_FORMAT,
     CachedDiskDistributionRegistry,
     DiskDistributionRegistry,
 )
-from llama_stack_api import Model, VectorStore
+from ogx_api import Model, VectorStore
 
 
 @pytest.fixture
@@ -69,14 +69,13 @@ async def test_cached_registry_initialization(sqlite_kvstore, sample_vector_stor
     await disk_registry.register(sample_vector_store)
     await disk_registry.register(sample_model)
 
-    # Test cached version loads from disk
+    # Test cached version loads from disk via a fresh KVStore pointing at the same DB
     db_path = sqlite_kvstore.db_path
-    backend_name = "kv_cached_test"
-    register_kvstore_backends({backend_name: SqliteKVStoreConfig(db_path=db_path)})
+    fresh_config = SqliteKVStoreConfig(db_path=db_path)
+    fresh_kvstore = SqliteKVStoreImpl(fresh_config)
+    await fresh_kvstore.initialize()
     # Use cache_ttl_seconds=0 for tests to ensure immediate synchronization
-    cached_registry = CachedDiskDistributionRegistry(
-        await kvstore_impl(KVStoreReference(backend=backend_name, namespace="registry")), cache_ttl_seconds=0
-    )
+    cached_registry = CachedDiskDistributionRegistry(fresh_kvstore, cache_ttl_seconds=0)
     await cached_registry.initialize()
 
     result_vector_store = await cached_registry.get("vector_store", "test_vector_store")
@@ -103,13 +102,12 @@ async def test_cached_registry_updates(cached_disk_dist_registry):
     assert result_vector_store.identifier == new_vector_store.identifier
     assert result_vector_store.provider_id == new_vector_store.provider_id
 
-    # Verify persisted to disk
+    # Verify persisted to disk via a fresh KVStore pointing at the same DB
     db_path = cached_disk_dist_registry.kvstore.db_path
-    backend_name = "kv_cached_new"
-    register_kvstore_backends({backend_name: SqliteKVStoreConfig(db_path=db_path)})
-    new_registry = DiskDistributionRegistry(
-        await kvstore_impl(KVStoreReference(backend=backend_name, namespace="registry"))
-    )
+    fresh_config = SqliteKVStoreConfig(db_path=db_path)
+    fresh_kvstore = SqliteKVStoreImpl(fresh_config)
+    await fresh_kvstore.initialize()
+    new_registry = DiskDistributionRegistry(fresh_kvstore)
     await new_registry.initialize()
     result_vector_store = await new_registry.get("vector_store", "test_vector_store_2")
     assert result_vector_store is not None
@@ -309,7 +307,7 @@ async def test_restart_registration_with_owner_mismatch(disk_dist_registry):
     is not in the incoming object's ``model_fields_set``, it is treated
     as an unset field and the existing record is accepted as-is.
     """
-    from llama_stack.core.datatypes import User
+    from ogx.core.datatypes import User
 
     # First registration with owner (as if set during initial startup)
     vector_store_with_owner = VectorStoreWithOwner(
@@ -344,8 +342,8 @@ async def test_restart_registration_with_owner_mismatch(disk_dist_registry):
 
 async def test_double_registration_with_cache_conflict(cached_disk_dist_registry):
     """Test that re-registration with conflicting fields raises ValueError and preserves cache."""
-    from llama_stack.core.datatypes import ModelWithOwner
-    from llama_stack_api import ModelType
+    from ogx.core.datatypes import ModelWithOwner
+    from ogx_api import ModelType
 
     model1 = ModelWithOwner(
         identifier="test_model",

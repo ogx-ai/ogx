@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.providers.inline.messages.config import MessagesConfig
-from llama_stack.providers.inline.messages.impl import BuiltinMessagesImpl
-from llama_stack_api.messages.models import (
+from ogx.providers.inline.messages.config import MessagesConfig
+from ogx.providers.inline.messages.impl import BuiltinMessagesImpl
+from ogx_api.messages.models import (
     AnthropicCreateMessageRequest,
     AnthropicMessage,
     AnthropicTextBlock,

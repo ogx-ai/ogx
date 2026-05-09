@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,7 +13,7 @@ from collections.abc import Generator
 
 import pytest
 
-from llama_stack_api import ViolationLevel
+from ogx_api import ViolationLevel
 
 # Llama Guard models available for text and vision shields
 LLAMA_GUARD_TEXT_MODELS = ["Llama-Guard-4-12B"]
@@ -39,7 +39,7 @@ def text_model(request, client_with_models):
     model_id = request.param
 
     # Check if the model is available
-    available_models = [m.id for m in client_with_models.models.list()]
+    available_models = [m.id for m in client_with_models.models.list().data]
 
     if model_id not in available_models:
         pytest.skip(
@@ -73,7 +73,7 @@ def vision_model(request, client_with_models):
     model_id = request.param
 
     # Check if the model is available
-    available_models = [m.id for m in client_with_models.models.list()]
+    available_models = [m.id for m in client_with_models.models.list().data]
 
     if model_id not in available_models:
         pytest.skip(

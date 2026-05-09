@@ -1,6 +1,6 @@
 ---
 title: Telemetry
-description: Monitor and observe Llama Stack applications with comprehensive telemetry capabilities
+description: Monitor and observe OGX applications with comprehensive telemetry capabilities
 sidebar_label: Telemetry
 sidebar_position: 8
 ---
@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 # Telemetry
 
-Llama Stack uses [OpenTelemetry](https://opentelemetry.io/) for observability. It provides two layers of instrumentation:
+OGX uses [OpenTelemetry](https://opentelemetry.io/) for observability. It provides two layers of instrumentation:
 
 - **Auto-instrumentation** (zero-code) captures HTTP requests, database queries, and GenAI calls from supported SDKs (OpenAI, Bedrock, Vertex AI, etc.)
 - **Manual instrumentation** emits domain-specific metrics for inference latency, tool execution, vector store operations, and request throughput
@@ -32,9 +32,9 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:4318"
 uv run opentelemetry-instrument \
     --traces_exporter otlp \
     --metrics_exporter otlp \
-    --service_name llama-stack-server \
+    --service_name ogx-server \
     -- \
-    llama stack run starter
+    ogx stack run starter
 ```
 
 This sends traces and metrics to an OTLP collector on port 4318. The next section shows how to set up the full observability stack.
@@ -47,8 +47,8 @@ The repository includes a one-command setup script that deploys Jaeger (traces),
 
 ```mermaid
 flowchart TD
-    LS["Llama Stack Server"]
-    App["Llama Stack Client"]
+    LS["OGX Server"]
+    App["OGX Client"]
     Collector["OTel Collector\n:4317 (gRPC) · :4318 (HTTP)"]
     Jaeger["Jaeger\n:16686 (UI)"]
     Prometheus["Prometheus\n:9090"]
@@ -101,7 +101,7 @@ docker network rm llama-telemetry
 
 ## Client-side instrumentation
 
-You can instrument your client application the same way as the server. This captures outbound HTTP calls to Llama Stack and correlates them with server-side traces.
+You can instrument your client application the same way as the server. This captures outbound HTTP calls to OGX and correlates them with server-side traces.
 
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
@@ -109,7 +109,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 uv run opentelemetry-instrument \
     --traces_exporter otlp \
     --metrics_exporter otlp \
-    --service_name my-llama-stack-app \
+    --service_name my-ogx-app \
     -- \
     python my_app.py
 ```
@@ -133,15 +133,15 @@ print(response.choices[0].message.content)
 
 ## Metrics reference
 
-Llama Stack emits metrics across five domains. All metric names use the `llama_stack` prefix.
+OGX emits metrics across five domains. All metric names use the `ogx` prefix.
 
 ### Inference
 
 | Metric | Type | Unit | Description |
 |---|---|---|---|
-| `llama_stack.inference.duration_seconds` | Histogram | s | End-to-end inference latency |
-| `llama_stack.inference.time_to_first_token_seconds` | Histogram | s | Time to first content token (streaming only) |
-| `llama_stack.inference.tokens_per_second` | Histogram | - | Output token throughput |
+| `ogx.inference.duration_seconds` | Histogram | s | End-to-end inference latency |
+| `ogx.inference.time_to_first_token_seconds` | Histogram | s | Time to first content token (streaming only) |
+| `ogx.inference.tokens_per_second` | Histogram | - | Output token throughput |
 
 **Attributes:** `model`, `provider`, `stream`, `status`
 
@@ -149,8 +149,8 @@ Llama Stack emits metrics across five domains. All metric names use the `llama_s
 
 | Metric | Type | Unit | Description |
 |---|---|---|---|
-| `llama_stack.tool_runtime.invocations_total` | Counter | 1 | Total tool invocations |
-| `llama_stack.tool_runtime.duration_seconds` | Histogram | s | Tool execution latency |
+| `ogx.tool_runtime.invocations_total` | Counter | 1 | Total tool invocations |
+| `ogx.tool_runtime.duration_seconds` | Histogram | s | Tool execution latency |
 
 **Attributes:** `tool_group`, `tool_name`, `provider`, `status`
 
@@ -158,14 +158,14 @@ Llama Stack emits metrics across five domains. All metric names use the `llama_s
 
 | Metric | Type | Unit | Description |
 |---|---|---|---|
-| `llama_stack.vector_io.inserts_total` | Counter | 1 | Vector insert operations |
-| `llama_stack.vector_io.queries_total` | Counter | 1 | Vector query/search operations |
-| `llama_stack.vector_io.deletes_total` | Counter | 1 | Vector delete operations |
-| `llama_stack.vector_io.stores_total` | Counter | 1 | Vector stores created |
-| `llama_stack.vector_io.files_total` | Counter | 1 | Files attached to vector stores |
-| `llama_stack.vector_io.chunks_processed_total` | Counter | 1 | Chunks processed across inserts |
-| `llama_stack.vector_io.insert_duration_seconds` | Histogram | s | Insert operation latency |
-| `llama_stack.vector_io.retrieval_duration_seconds` | Histogram | s | Retrieval operation latency |
+| `ogx.vector_io.inserts_total` | Counter | 1 | Vector insert operations |
+| `ogx.vector_io.queries_total` | Counter | 1 | Vector query/search operations |
+| `ogx.vector_io.deletes_total` | Counter | 1 | Vector delete operations |
+| `ogx.vector_io.stores_total` | Counter | 1 | Vector stores created |
+| `ogx.vector_io.files_total` | Counter | 1 | Files attached to vector stores |
+| `ogx.vector_io.chunks_processed_total` | Counter | 1 | Chunks processed across inserts |
+| `ogx.vector_io.insert_duration_seconds` | Histogram | s | Insert operation latency |
+| `ogx.vector_io.retrieval_duration_seconds` | Histogram | s | Retrieval operation latency |
 
 **Attributes:** `vector_db`, `operation`, `provider`, `status`, `search_mode`
 
@@ -173,9 +173,9 @@ Llama Stack emits metrics across five domains. All metric names use the `llama_s
 
 | Metric | Type | Unit | Description |
 |---|---|---|---|
-| `llama_stack.requests_total` | Counter | 1 | Total HTTP requests by API, method, and status |
-| `llama_stack.request_duration_seconds` | Histogram | s | Request latency by API and method |
-| `llama_stack.concurrent_requests` | Gauge | 1 | Current in-flight requests by API |
+| `ogx.requests_total` | Counter | 1 | Total HTTP requests by API, method, and status |
+| `ogx.request_duration_seconds` | Histogram | s | Request latency by API and method |
+| `ogx.concurrent_requests` | Gauge | 1 | Current in-flight requests by API |
 
 **Attributes:** `api`, `method`, `status_code` (counter only)
 
@@ -183,7 +183,7 @@ Llama Stack emits metrics across five domains. All metric names use the `llama_s
 
 | Metric | Type | Unit | Description |
 |---|---|---|---|
-| `llama_stack.responses.parameter_usage_total` | Counter | 1 | Responses API parameter usage tracking |
+| `ogx.responses.parameter_usage_total` | Counter | 1 | Responses API parameter usage tracking |
 
 ## Grafana dashboards
 
@@ -191,7 +191,7 @@ The setup script provisions six pre-built dashboards:
 
 | Dashboard | What it shows |
 |---|---|
-| **Llama Stack** | Overview: token usage by model, P95/P99 HTTP duration, total requests |
+| **OGX** | Overview: token usage by model, P95/P99 HTTP duration, total requests |
 | **Inference Metrics** | Inference latency distribution, time-to-first-token, tokens/sec by model and provider |
 | **Request Metrics** | Request rates, error rates, concurrent requests, latency percentiles by API endpoint |
 | **Responses Metrics** | Responses API parameter usage patterns |
@@ -202,22 +202,22 @@ The setup script provisions six pre-built dashboards:
 
 ```promql
 # Total input token usage by model
-sum by(gen_ai_request_model) (llama_stack_gen_ai_client_token_usage_sum{gen_ai_token_type="input"})
+sum by(gen_ai_request_model) (ogx_gen_ai_client_token_usage_sum{gen_ai_token_type="input"})
 
 # Total output token usage by model
-sum by(gen_ai_request_model) (llama_stack_gen_ai_client_token_usage_sum{gen_ai_token_type="output"})
+sum by(gen_ai_request_model) (ogx_gen_ai_client_token_usage_sum{gen_ai_token_type="output"})
 
 # P95 HTTP server latency
-histogram_quantile(0.95, rate(llama_stack_http_server_duration_milliseconds_bucket[5m]))
+histogram_quantile(0.95, rate(ogx_http_server_duration_milliseconds_bucket[5m]))
 
 # P99 inference duration by model
-histogram_quantile(0.99, rate(llama_stack_inference_duration_seconds_bucket[5m]))
+histogram_quantile(0.99, rate(ogx_inference_duration_seconds_bucket[5m]))
 
 # Tool invocation rate by tool name
-rate(llama_stack_tool_runtime_invocations_total[5m])
+rate(ogx_tool_runtime_invocations_total[5m])
 
 # Vector insert throughput
-rate(llama_stack_vector_io_inserts_total[5m])
+rate(ogx_vector_io_inserts_total[5m])
 ```
 
 ## GenAI message content capture
@@ -271,7 +271,7 @@ Jaeger ingests traces only, not logs. If you set `OTEL_LOGS_EXPORTER=otlp` and p
 |---|---|---|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(none)* | OTLP endpoint URL. Metrics and traces are only exported when set. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Transport protocol for OTLP export |
-| `OTEL_SERVICE_NAME` | `llama-stack` | Service name tag on all telemetry data |
+| `OTEL_SERVICE_NAME` | `ogx` | Service name tag on all telemetry data |
 | `OTEL_METRIC_EXPORT_INTERVAL` | `60000` | Metric export interval in milliseconds |
 | `OTEL_PYTHON_DISABLED_INSTRUMENTATIONS` | *(none)* | Comma-separated list of instrumentors to disable |
 | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | `false` | Capture prompt/response text as log events |

@@ -30,10 +30,10 @@ data:
       - provider_id: builtin-files
         provider_type: inline::localfs
         config:
-          storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/starter/files}
+          storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/starter/files}
           metadata_store:
             type: sqlite
-            db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/files_metadata.db
+            db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/files_metadata.db
       vector_io:
       - provider_id: ${env.ENABLE_CHROMADB:+chromadb}
         provider_type: remote::chromadb
@@ -43,9 +43,9 @@ data:
             type: postgres
             host: ${env.POSTGRES_HOST:=localhost}
             port: ${env.POSTGRES_PORT:=5432}
-            db: ${env.POSTGRES_DB:=llamastack}
-            user: ${env.POSTGRES_USER:=llamastack}
-            password: ${env.POSTGRES_PASSWORD:=llamastack}
+            db: ${env.POSTGRES_DB:=ogx}
+            user: ${env.POSTGRES_USER:=ogx}
+            password: ${env.POSTGRES_PASSWORD:=ogx}
       safety:
       - provider_id: llama-guard
         provider_type: inline::llama-guard
@@ -59,16 +59,16 @@ data:
             type: postgres
             host: ${env.POSTGRES_HOST:=localhost}
             port: ${env.POSTGRES_PORT:=5432}
-            db: ${env.POSTGRES_DB:=llamastack}
-            user: ${env.POSTGRES_USER:=llamastack}
-            password: ${env.POSTGRES_PASSWORD:=llamastack}
+            db: ${env.POSTGRES_DB:=ogx}
+            user: ${env.POSTGRES_USER:=ogx}
+            password: ${env.POSTGRES_PASSWORD:=ogx}
           responses_store:
             type: postgres
             host: ${env.POSTGRES_HOST:=localhost}
             port: ${env.POSTGRES_PORT:=5432}
-            db: ${env.POSTGRES_DB:=llamastack}
-            user: ${env.POSTGRES_USER:=llamastack}
-            password: ${env.POSTGRES_PASSWORD:=llamastack}
+            db: ${env.POSTGRES_DB:=ogx}
+            user: ${env.POSTGRES_USER:=ogx}
+            password: ${env.POSTGRES_PASSWORD:=ogx}
       tool_runtime:
       - provider_id: brave-search
         provider_type: remote::brave-search
@@ -92,17 +92,17 @@ data:
           type: kv_postgres
           host: ${env.POSTGRES_HOST:=localhost}
           port: ${env.POSTGRES_PORT:=5432}
-          db: ${env.POSTGRES_DB:=llamastack}
-          user: ${env.POSTGRES_USER:=llamastack}
-          password: ${env.POSTGRES_PASSWORD:=llamastack}
-          table_name: ${env.POSTGRES_TABLE_NAME:=llamastack_kvstore}
+          db: ${env.POSTGRES_DB:=ogx}
+          user: ${env.POSTGRES_USER:=ogx}
+          password: ${env.POSTGRES_PASSWORD:=ogx}
+          table_name: ${env.POSTGRES_TABLE_NAME:=ogx_kvstore}
         sql_default:
           type: sql_postgres
           host: ${env.POSTGRES_HOST:=localhost}
           port: ${env.POSTGRES_PORT:=5432}
-          db: ${env.POSTGRES_DB:=llamastack}
-          user: ${env.POSTGRES_USER:=llamastack}
-          password: ${env.POSTGRES_PASSWORD:=llamastack}
+          db: ${env.POSTGRES_DB:=ogx}
+          user: ${env.POSTGRES_USER:=ogx}
+          password: ${env.POSTGRES_PASSWORD:=ogx}
       stores:
         metadata:
           backend: kv_default
@@ -141,4 +141,4 @@ data:
       port: 8323
 kind: ConfigMap
 metadata:
-  name: llama-stack-config
+  name: ogx-config

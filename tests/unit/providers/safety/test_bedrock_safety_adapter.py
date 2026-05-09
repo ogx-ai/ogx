@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,8 +6,8 @@
 
 from unittest.mock import MagicMock, call, patch
 
-from llama_stack.providers.remote.safety.bedrock.bedrock import BedrockSafetyAdapter
-from llama_stack.providers.remote.safety.bedrock.config import BedrockSafetyConfig
+from ogx.providers.remote.safety.bedrock.bedrock import BedrockSafetyAdapter
+from ogx.providers.remote.safety.bedrock.config import BedrockSafetyConfig
 
 
 async def test_bedrock_safety_initialize_creates_clients():
@@ -20,7 +20,7 @@ async def test_bedrock_safety_initialize_creates_clients():
 
     runtime_client = MagicMock(name="bedrock-runtime-client")
     bedrock_client = MagicMock(name="bedrock-client")
-    with patch("llama_stack.providers.remote.safety.bedrock.bedrock.create_bedrock_client") as mock_create:
+    with patch("ogx.providers.remote.safety.bedrock.bedrock.create_bedrock_client") as mock_create:
         mock_create.side_effect = [runtime_client, bedrock_client]
 
         await adapter.initialize()

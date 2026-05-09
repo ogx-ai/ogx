@@ -1,0 +1,251 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-mantle.us-east-2.api.aws/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant that summarizes reasoning traces."
+        },
+        {
+          "role": "user",
+          "content": "Summarize the following chain-of-thought reasoning. Preserve the key logical steps, decisions, and conclusions. Be thorough but remove redundancy.\n\nReasoning:\nThe user asks: \"What is 2 + 2? Think step by step.\"\n\nThis is a simple arithmetic: 2 + 2 = 4. The prompt says \"Think step by step.\"\n\nThus I should explain the steps: 2 + 2 = 4. Step by step compute:\n\n- Start with first number 2.\n- Add second number 2.\n- Calculation of sum: 2 + 2 = 4.\n\nPerhaps also show as: 2 + 2 = (2 + 1) + 1? No, simpler: The sum of 2 and 2 is 4. Maybe show as: 2 + 2 = 4.\n\nI can provide a step-by-step explanation with each addition.\n\nBut the prompt might just be a trick: They want me to show some deeper reflection. But it's a simple arithmetic. So we do step by step. Also maybe show as one-liner: 2 + 2 = 4. Provide explanation.\n\nThus answer: Step 1: Recognize numbers: 2, 2. Step 2: Add them. Step 3: Sum = 4.\n\nBut the user might want to check if we think step by step. But it's not a trick. So answer accordingly.\n\nTherefore produce the answer with a step-by-step explanation. Also mention that addition is a binary operation, combining two numbers. Summation uses basic arithmetic.\n\nBecause it's a quick question, I'd answer concisely but with steps:\n\n- Step 1: Start with 2.\n- Step 2: Add 2.\n- Step 3: Result: 4.\n\nThus final answer: 4.\n\nLet's produce the final."
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.3
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.5.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "mL9PaepODoCJh4DLFjQOFKDEp8Ac1g2lHEZRzpYdR8nrpd"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null,
+                "reasoning": "We need to summarize the chain-of-thought reasoning. The reasoning is simple: user asks \"What is 2 + 2? Think step by step.\" The chain-of-thought explains that it's simple arithmetic, steps: start with 2, add 2, result 4. The assistant should preserve key logical steps, decisions, conclusions, and be thorough but remove redundancy. So we need to produce a concise"
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "xmYswjmF82wCyZOnXgqS6IAXvalTaYYRXrtJQ9Hu7D8ewO0Gt60u9aMxM5NF8Ifrq93bHptu5dxiA300uodxTV3ZQ5FDANEor88dP"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null,
+                "reasoning": " summary of the reasoning: user asks, we identify it's arithmetic, we break into steps, we compute, we conclude 4. Also mention that addition is a binary operation. The summary should be thorough but not redundant. So produce a paragraph summarizing the reasoning: user asks, we interpret, we decide to"
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "4Mj7XKDVzprfDLJbgFa8LNR3vXDgU2W85mSJLYJ6dH8AUYzF3UkR4JnnE9COmrV035oMllqtx31E0HCsKDKhw5ohzVjt7yir"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null,
+                "reasoning": " explain step by step, we list steps, we compute, we conclude 4. That is the summary."
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "AxfUHBytIdzyGHMJfKqZmrSk0Wv8ryBd9KXGBYnS2BfHBa1yTrJ7ZB1hlQAGHE0KqkT4Fl9uA75vdYy5WwMNv36e"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [
+            {
+              "delta": {
+                "content": "**Summary of the reasoning**\n\n1. **Interpretation** \u2013 The user requests a step\u2011by\u2011step explanation for the arithmetic question \u201c2\u202f+\u202f2\u201d.\n2. **Identification of operation** \u2013 Recognize that addition is a binary operation",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "NUwYQRrobxJBcoIloEbvWRH0mtASYL9wakbIH7753b7KT1LTd5ZPqW9MPIbFtzRWCPrUqb4UeQr2Yf5Ui7aREI5AKUMQAeMK3QqGmwgGYcvz6IcThjgdp"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [
+            {
+              "delta": {
+                "content": " combining two numbers.\n3. **Step\u2011by\u2011step breakdown**  \n   - Start with the first number: 2.  \n   - Add the second number: 2.  \n   - Perform the addition: 2\u202f+\u202f2.  \n4. **Result** \u2013 The sum equals 4.  \n5. **Conclusion** \u2013 The answer to \u201c2\u202f+\u202f2\u201d is 4, obtained by straightforward addition.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "xVuwLdsQ0IbWGUebrT95QvkonMw4xGJi73MAUGmstguXeF6xDi2RHcVlkZjbM8ZAQ"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "rl4pE2GCgSk8NkIfT5XSSuX63JL9AbWQA6R46feUe4xgTOBDO9wigeCnRh3rOUeMFFplDjZU0Xhmx0miVy8Lghgf"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-8019a21d3845",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 318,
+            "prompt_tokens": 458,
+            "total_tokens": 776,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 96
+            }
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

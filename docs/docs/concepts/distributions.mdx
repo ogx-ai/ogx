@@ -15,21 +15,21 @@ Most users should start with `starter`. It includes all providers and auto-enabl
 
 ```bash
 # With Ollama (local inference)
-OLLAMA_URL=http://localhost:11434 uv run llama stack run starter
+OLLAMA_URL=http://localhost:11434 uv run ogx stack run starter
 
 # With OpenAI (remote inference)
-OPENAI_API_KEY=sk-xxx uv run llama stack run starter
+OPENAI_API_KEY=sk-xxx uv run ogx stack run starter
 ```
 
 The starter distribution uses FAISS for vector storage, sentence-transformers for embeddings, and pypdf for file processing - all running locally with no external dependencies.
 
 ## Types of Distributions
 
-**Self-hosted**: Run Llama Stack on your own infrastructure with your choice of inference backend (Ollama, vLLM, or cloud providers like OpenAI, Bedrock, etc.). The `starter` distribution covers this use case.
+**Self-hosted**: Run OGX on your own infrastructure with your choice of inference backend (Ollama, vLLM, or cloud providers like OpenAI, Bedrock, etc.). The `starter` distribution covers this use case.
 
-**Hardware-specific**: Optimized for specific hardware. Examples include `nvidia` and `dell` distributions with vendor-specific provider configurations. The `dell` distribution is available as a pre-built container image at [`llamastack/distribution-dell`](https://hub.docker.com/r/llamastack/distribution-dell).
+**Hardware-specific**: Optimized for specific hardware. The `nvidia` distribution includes vendor-specific provider configurations.
 
-**Starter variants**: The `postgres-demo` distribution is the starter pre-configured with PostgreSQL storage ([`llamastack/distribution-postgres-demo`](https://hub.docker.com/r/llamastack/distribution-postgres-demo)).
+**Starter variants**: The `postgres-demo` distribution is the starter pre-configured with PostgreSQL storage ([`ogx/distribution-postgres-demo`](https://hub.docker.com/r/ogx/distribution-postgres-demo)).
 
 ## Custom Distributions
 

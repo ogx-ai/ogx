@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llama_stack_api import (
+from ogx_api import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
@@ -391,7 +391,7 @@ class TestOpenAIMixinServiceTier:
 
     async def test_chat_completion_passes_service_tier_to_openai(self, mixin, mock_client_context):
         """Test that service_tier parameter is passed to OpenAI client for chat completion"""
-        from llama_stack_api.inference import ServiceTier
+        from ogx_api.inference import ServiceTier
 
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=MagicMock())

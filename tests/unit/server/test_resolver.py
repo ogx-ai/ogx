@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 from pydantic import BaseModel, Field
 
-from llama_stack.core.datatypes import Api, Provider, StackConfig
-from llama_stack.core.resolver import resolve_impls
-from llama_stack.core.routers.inference import InferenceRouter
-from llama_stack.core.routing_tables.models import ModelsRoutingTable
-from llama_stack.core.storage.datatypes import (
+from ogx.core.datatypes import Api, Provider, StackConfig
+from ogx.core.resolver import resolve_impls
+from ogx.core.routers.inference import InferenceRouter
+from ogx.core.routing_tables.models import ModelsRoutingTable
+from ogx.core.storage.datatypes import (
     InferenceStoreReference,
     KVStoreReference,
     ServerStoresConfig,
@@ -24,9 +24,9 @@ from llama_stack.core.storage.datatypes import (
     SqlStoreReference,
     StorageConfig,
 )
-from llama_stack.core.storage.kvstore import register_kvstore_backends
-from llama_stack.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from llama_stack_api import Inference, InlineProviderSpec, ProviderSpec
+from ogx.core.storage.kvstore import register_kvstore_backends
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx_api import Inference, InlineProviderSpec, ProviderSpec
 
 
 def add_protocol_methods(cls: type, protocol: type[Protocol]) -> None:

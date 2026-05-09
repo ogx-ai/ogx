@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -18,7 +18,7 @@ def anyio_backend():
     return "asyncio"
 
 
-from llama_stack_api import (
+from ogx_api import (
     Connector,
     ConnectorNotFoundError,
     Connectors,
@@ -28,8 +28,8 @@ from llama_stack_api import (
     ListToolsResponse,
     ToolDef,
 )
-from llama_stack_api.connectors.fastapi_routes import create_router
-from llama_stack_api.connectors.models import (
+from ogx_api.connectors.fastapi_routes import create_router
+from ogx_api.connectors.models import (
     GetConnectorRequest,
     ListConnectorToolsRequest,
 )

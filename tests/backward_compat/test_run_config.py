@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -17,10 +17,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from llama_stack.core.datatypes import StackConfig
-from llama_stack.core.distribution import builtin_automatically_routed_apis, get_provider_registry
-from llama_stack.core.resolver import validate_and_prepare_providers
-from llama_stack.core.stack import replace_env_vars
+from ogx.core.datatypes import StackConfig
+from ogx.core.distribution import builtin_automatically_routed_apis, get_provider_registry
+from ogx.core.resolver import validate_and_prepare_providers
+from ogx.core.stack import replace_env_vars
 
 
 def get_test_configs():
@@ -39,7 +39,7 @@ def get_test_configs():
     else:
         # Local mode: test current distribution configs
         repo_root = Path(__file__).parent.parent.parent
-        config_files = sorted((repo_root / "src" / "llama_stack" / "distributions").glob("*/config.yaml"))
+        config_files = sorted((repo_root / "src" / "ogx" / "distributions").glob("*/config.yaml"))
 
         if not config_files:
             pytest.skip("No config.yaml files found in distributions/")

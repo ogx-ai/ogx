@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,7 +9,7 @@
 Responses API Integration Test Coverage Analyzer
 
 The expected feature set is derived from the OpenAI API spec and the
-llama-stack fastapi_routes.py files. Coverage detection uses AST analysis
+ogx fastapi_routes.py files. Coverage detection uses AST analysis
 of integration tests.
 
 Usage:
@@ -31,8 +31,8 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = ROOT / "tests" / "integration" / "responses"
 OPENAI_SPEC = ROOT / "docs" / "static" / "openai-spec-2.3.0.yml"
-AGENTS_ROUTES = ROOT / "src" / "llama_stack_api" / "responses" / "fastapi_routes.py"
-CONVERSATIONS_ROUTES = ROOT / "src" / "llama_stack_api" / "conversations" / "fastapi_routes.py"
+AGENTS_ROUTES = ROOT / "src" / "ogx_api" / "responses" / "fastapi_routes.py"
+CONVERSATIONS_ROUTES = ROOT / "src" / "ogx_api" / "conversations" / "fastapi_routes.py"
 
 
 # ---------------------------------------------------------------------------

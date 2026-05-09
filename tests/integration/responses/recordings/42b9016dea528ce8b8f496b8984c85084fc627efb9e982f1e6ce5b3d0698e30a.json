@@ -1,0 +1,1291 @@
+{
+  "test_id": "tests/integration/responses/test_langgraph_responses.py::test_langgraph_multi_node[client_with_models-vertexai/publishers/google/models/gemini-2.0-flash-vertexai/publishers/google/models/gemini-2.0-flash-sentence-transformers/nomic-ai/nomic-embed-text-v1.5-None-transformers/Qwen/Qwen3-Reranker-0.6B]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content_stream",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What is important to know about Python programming?"
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Okay, let's break down the important things to know about Python programming, covering fundamental concepts, best practices, and areas to focus on as you learn and grow.\n\n**I. Core Language Fundamentals:**\n\n*   **1. Data Types:**\n    *   **Basic Types:** Integers (`int`), Floating-point numbers (`float`), Booleans (`bool`), Strings (`str`).  Understand their properties and how to use them.\n    *   **Collection Types:**\n        *   **Lists:** Ordered, mutable (changeable) sequences of items.  Master list comprehensions for concise code.\n        *   **Tuples:** Ordered, immutable (unchangeable) sequences.  Used for data integrity and as keys in dictionaries.\n        *   **Dictionaries:** Key-value pairs.  Keys must be immutable.  Dictionaries are extremely efficient for lookups.\n        *   **Sets:** Unordered collections of unique items.  Useful for removing duplicates and set operations (union, intersection, difference).\n\n*   **2. Operators:**\n    *   **Arithmetic:** `+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (exponentiation).\n    *   **Comparison:** `==`, `!=`, `>`, `<`, `>=`, `<=`.\n    *   **Logical:** `and`, `or`, `not`.\n    *   **Assignment:** `=`, `+=`, `-=`, `*=`, `/=`, etc.\n    *   **Membership:** `in`, `not in` (check if an element exists in a sequence).\n    *   **Identity:** `is`, `is not` (check if two variables refer to the same object in memory).\n\n*   **3. Control Flow:**\n    *   **`if`, `elif`, `else`:** Conditional execution of code blocks.\n    *   **`for` loops:** Iterating over sequences (lists, tuples, strings, etc.).\n    *   **`while` loops:** Repeating a block of code as long as a condition is true.\n    *   **`break`:** Exits the current loop.\n    *   **`continue`:** Skips the rest of the current iteration and goes to the next.\n    *   **`pass`:** Does nothing (used as a placeholder).\n\n*   **4. Functions:**\n    *   **Defining functions:** `def function_name(parameters): ... return value`\n    *   **Calling functions:** `function_name(arguments)`\n    *   **Parameters and Arguments:** Positional, keyword, default values, `*args` (variable number of positional arguments), `**kwargs` (variable number of keyword arguments).\n    *   **Return values:** Functions can return values or return `None` implicitly.\n    *   **Scope:** Understanding variable scope (local, global, nonlocal).\n\n*   **5. Modules and Packages:**\n    *   **`import` statement:** Importing modules (e.g., `import math`, `import random`).\n    *   **`from ... import ...`:** Importing specific names from a module (e.g., `from math import pi`).\n    *   **Packages:** Organizing modules into directories with an `__init__.py` file.\n    *   **Standard Library:**  Become familiar with essential modules like `os`, `sys`, `datetime`, `collections`, `json`, `re` (regular expressions).\n\n*   **6. Strings:**\n    *   String manipulation: slicing, indexing, concatenation, formatting (using f-strings or `.format()`).\n    *   String methods: `.upper()`, `.lower()`, `.strip()`, `.split()`, `.join()`, `.replace()`, `.find()`, etc.\n    *   Regular expressions (using the `re` module) for pattern matching.\n\n*   **7. Input/Output:**\n    *   **`print()`:** Outputting to the console.\n    *   **`input()`:** Reading user input from the console.\n    *   **File I/O:** Opening, reading, writing, and closing files (`open()`, `.read()`, `.write()`, `.close()`, `with open(...)`).\n\n*   **8. Error Handling:**\n    *   **`try...except` blocks:** Handling exceptions (e.g., `TypeError`, `ValueError`, `IOError`, `IndexError`, `KeyError`).\n    *   **`else` clause:** Executed if no exception occurs in the `try` block.\n    *   **`finally` clause:** Always executed, regardless of whether an exception occurred.\n    *   **Raising exceptions:** `raise Exception(\"Error message\")`\n    *   **Custom exceptions:** Defining your own exception classes.\n\n**II. Object-Oriented Programming (OOP):**\n\n*   **1. Classes and Objects:**\n    *   **Defining classes:** `class MyClass: ...`\n    *   **Creating objects (instances):** `obj = MyClass()`\n    *   **Attributes:** Data associated with an object (e.g., `obj.name = \"Alice\"`).\n    *   **Methods:** Functions associated with an object (e.g., `obj.greet()`).\n    *   **`self`:**  Refers to the instance of the class.\n\n*   **2. Encapsulation:**\n    *   Bundling data and methods that operate on that data within a class.\n    *   **Access modifiers:**  Python doesn't have strict access modifiers like `private` or `protected` in some other languages.  Convention uses a single leading underscore `_` to indicate \"protected\" and double leading underscores `__` for \"name mangling\" (making attributes harder to access from outside the class, but not truly private).\n\n*   **3. Inheritance:**\n    *   Creating new classes (subclasses) that inherit attributes and methods from existing classes (base classes or superclasses).\n    *   **`super()`:**  Calling methods from the superclass.\n    *   **Method overriding:**  Redefining a method in a subclass to provide a specialized implementation.\n\n*   **4. Polymorphism:**\n    *   The ability of objects of different classes to respond to the same method call in their own way.\n    *   **Duck typing:**  \"If it walks like a duck and quacks like a duck, then it is a duck.\"  Python emphasizes behavior over strict type checking.\n\n**III. Advanced Concepts and Best Practices:**\n\n*   **1. List Comprehensions and Generator Expressions:**\n    *   Concise ways to create lists and iterators.  Improve code readability and sometimes performance.\n\n*   **2. Generators:**\n    *   Functions that use the `yield` keyword to produce a sequence of values lazily (one at a time).  Memory-efficient for large datasets.\n\n*   **3. Decorators:**\n    *   Functions that modify the behavior of other functions.  Used for logging, timing, authentication, etc.  `@decorator_name` syntax.\n\n*   **4. Context Managers:**\n    *   Using the `with` statement to ensure resources (e.g., files, network connections) are properly cleaned up, even if exceptions occur.  Requires implementing `__enter__` and `__exit__` methods.\n\n*   **5. Multithreading and Multiprocessing:**\n    *   **Multithreading:**  Concurrency within a single process.  Limited by the Global Interpreter Lock (GIL) in CPython, so often not suitable for CPU-bound tasks.  Good for I/O-bound tasks.\n    *   **Multiprocessing:**  Parallelism using multiple processes.  Bypasses the GIL, allowing for true parallel execution on multi-core CPUs.\n\n*   **6. Asynchronous Programming (asyncio):**\n    *   Writing concurrent code using `async` and `await` keywords.  Suitable for I/O-bound tasks, allowing a single thread to handle multiple operations concurrently.\n\n*   **7. Testing:**\n    *   **Unit testing:** Testing individual components (functions, classes) in isolation.  Use the `unittest` module or `pytest`.\n    *   **Integration testing:** Testing how different components work together.\n    *   **Test-Driven Development (TDD):**  Writing tests before writing the code itself.\n\n*   **8. Version Control (Git):**\n    *   Essential for tracking changes to your code, collaborating with others, and reverting to previous versions.  Learn basic Git commands like `add`, `commit`, `push`, `pull`, `branch`, `merge`.\n\n*   **9. Virtual Environments:**\n    *   Using `venv` or `conda` to create isolated environments for your projects, preventing dependency conflicts.\n\n*   **10. Code Style (PEP 8):**\n    *   Following the Python Enhancement Proposal 8 (PEP 8) for code style guidelines (e.g., indentation, line length, naming conventions).  Use linters like `flake8` or `pylint` to enforce style.\n\n*   **11. Documentation:**\n    *   Writing clear and concise documentation for your code (docstrings, comments).  Use tools like Sphinx to generate documentation from docstrings.\n\n*   **12. Data Serialization:**\n    *   Converting Python objects to a format that can be stored or transmitted (e.g., JSON, XML, Pickle).\n\n**IV. Areas to Focus On Based On Your Interests:**\n\n*   **Web Development:** Frameworks like Django and Flask.  Learn about REST APIs, databases (SQLAlchemy or Django ORM), and front-end technologies (HTML, CSS, JavaScript).\n*   **Data Science:** Libraries like NumPy, Pandas, Scikit-learn, Matplotlib, Seaborn.  Learn about data analysis, machine learning, and data visualization.\n*   **Scripting and Automation:**  Modules like `os`, `sys`, `subprocess`, `shutil`.  Learn about automating tasks on your operating system.\n*   **Game Development:** Libraries like Pygame or frameworks like Pyglet.\n*   **GUI Development:** Libraries like Tkinter, PyQt, or Kivy.\n\n**V. Key Principles:**\n\n*   **Readability:**  Python emphasizes code readability.  Write code that is easy to understand.\n*   **\"Batteries Included\":** Python has a large standard library, providing many useful modules out of the box.\n*   **Zen of Python:**  Type `import this` in the Python interpreter to see a set of guiding principles for Python design.\n\n**VI. Learning Resources:**\n\n*   **Official Python Documentation:**  The definitive source of information about Python.\n*   **Online Tutorials:**  Websites like Real Python, Python.org's tutorial, and Codecademy.\n*   **Books:** \"Python Crash Course,\" \"Automate the Boring Stuff with Python,\" \"Fluent Python,\" etc.\n*   **Online Courses:**  Coursera, edX, Udemy, DataCamp.\n*   **Practice:** The most important thing is to write code!  Work on small projects, solve coding challenges (e.g., on HackerRank or LeetCode), and contribute to open-source projects.\n\nBy focusing on these core concepts, adopting best practices, and continuously practicing, you'll be well on your way to becoming a proficient Python programmer.  Good luck!\n"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Can you give me a specific example?"
+            }
+          ]
+        }
+      ],
+      "config": {
+        "system_instruction": "You are an expert on Python programming."
+      }
+    },
+    "endpoint": "/generate_content_stream",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "Okay"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ", let'"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "s create a specific example that ties together several important Python concepts: a simple class that represents a"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " \"Book\" and some functions to manage a list of books. This will illustrate OOP"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ", data structures, functions, and file I/O.\n\n```python\nimport json\n\nclass Book:\n    \"\"\"\n    Represents a book with a title"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ", author, and publication year.\n    \"\"\"\n    def __init__(self, title, author, year):\n        \"\"\"\n        Initializes a"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " Book object.\n\n        Args:\n            title (str): The title of the book.\n            author (str): The author of the book.\n            year (int): The publication year of the book.\n        \"\"\"\n        "
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "self.title = title\n        self.author = author\n        self.year = year\n\n    def __str__(self):\n        \"\"\"\n        Returns a string representation of the book.\n        \"\"\"\n        return f\""
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "'{self.title}' by {self.author} ({self.year})\"\n\n    def to_dict(self):\n        \"\"\"\n        Returns a dictionary representation of the book. Useful for JSON serialization.\n        \"\"\"\n        return {\n            \"title\": self.title,\n            \"author\": self.author"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ",\n            \"year\": self.year\n        }\n\ndef create_book(title, author, year):\n    \"\"\"\n    Creates a Book object from the provided information.\n    \"\"\"\n    return Book(title, author, year)\n\ndef display_books(books):\n    \"\"\"\n    Displays a"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " list of books in a formatted way.\n\n    Args:\n        books (list): A list of Book objects.\n    \"\"\"\n    if not books:\n        print(\"No books in the list.\")\n        return\n\n    print(\"--- Book List ---\")\n    for book in books:\n        print(book"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ")  # Uses the __str__ method of the Book class\n\ndef save_books_to_json(books, filename=\"books.json\"):\n    \"\"\"\n    Saves a list of books to a JSON file.\n\n    Args:\n        books (list): A list of Book objects.\n        filename"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " (str): The name of the JSON file to save to.\n    \"\"\"\n    book_data = [book.to_dict() for book in books] # Convert each Book object to a dictionary.\n    try:\n        with open(filename, \"w\") as f:  # Use 'with"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "' for automatic file closing\n            json.dump(book_data, f, indent=4) # Save the json with indentation.\n        print(f\"Books saved to {filename}\")\n    except IOError as e:\n        print(f\"Error saving to file: {e}\")\n\ndef load_books"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "_from_json(filename=\"books.json\"):\n    \"\"\"\n    Loads a list of books from a JSON file.\n\n    Args:\n        filename (str): The name of the JSON file to load from.\n\n    Returns:\n        list: A list of Book objects, or an empty list"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " if the file doesn't exist or is empty.\n    \"\"\"\n    try:\n        with open(filename, \"r\") as f:\n            book_data = json.load(f)\n        books = [Book(book[\"title\"], book[\"author\"], book[\"year\"]) for book"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " in book_data]\n        print(f\"Books loaded from {filename}\")\n        return books\n    except FileNotFoundError:\n        print(f\"File {filename} not found.  Returning an empty list.\")\n        return []\n    except json.JSONDecodeError:\n        print(f\"Error"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " decoding JSON from {filename}.  Returning an empty list.\")\n        return []\n    except IOError as e:\n        print(f\"Error loading from file: {e}\")\n        return []\n# Example Usage\nif __name__ == \"__main__\":\n    # Load books from JSON (if the"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " file exists)\n    book_list = load_books_from_json()\n\n    # Add some books\n    book1 = create_book(\"The Lord of the Rings\", \"J.R.R. Tolkien\", 1954)\n    book2 = Book(\"Pride and Prejudice\", \"Jane Austen"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "\", 1813) # create book directly with constructor.\n    book_list.append(book1)\n    book_list.append(book2)\n\n    # Display the books\n    display_books(book_list)\n\n    # Save the books to JSON\n    save_books_"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "to_json(book_list)\n```\n\n**Explanation and Key Concepts Illustrated:**\n\n1.  **`Book` Class (OOP):**\n    *   `class Book:`: Defines a class named `Book`.\n    *   `__init__(self, title, author, year):`:"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " The constructor of the class. It initializes the `title`, `author`, and `year` attributes of a `Book` object.  `self` refers to the instance of the class.\n    *   `__str__(self):`:  Defines how the `Book` object is represented as a string"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " when you use `print(book)`. It's good practice to have a `__str__` method for readability.\n    *   `to_dict(self):`:  Converts the `Book` object into a dictionary. This is useful for serializing the object to JSON.\n\n2.  **Functions"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": ":**\n    *   `create_book(title, author, year):`:  A function that creates a `Book` object.  This demonstrates a simple function to create an instance of the class.\n    *   `display_books(books):`: A function that takes a list of `Book`"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " objects and prints them to the console.  It demonstrates looping through a list and calling the `__str__` method of each `Book` object.\n    *   `save_books_to_json(books, filename=\"books.json\"):`:  Saves a list of `Book` objects to a JSON"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " file.\n        *   Uses a list comprehension `[book.to_dict() for book in books]` to convert the list of `Book` objects into a list of dictionaries.\n        *   Uses the `json.dump()` function to serialize the data to JSON.\n        *   Includes error handling using a"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " `try...except` block to catch potential `IOError` exceptions.\n    *   `load_books_from_json(filename=\"books.json\"):`: Loads a list of `Book` objects from a JSON file.\n        *   Uses `json.load()` to deserialize the JSON data.\n"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "        *   Uses a list comprehension to create `Book` objects from the data.\n        *   Includes error handling for `FileNotFoundError`, `json.JSONDecodeError`, and `IOError`.\n\n3.  **Data Structures:**\n    *   **List:** The `books` variable in the functions represents a"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " list of `Book` objects.\n    *   **Dictionary:** The `to_dict()` method converts a `Book` object to a dictionary for JSON serialization.\n\n4.  **File I/O:**\n    *   `with open(filename, \"w\") as f:`: Opens a file for"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " writing in write mode (`\"w\"`). The `with` statement ensures that the file is closed automatically, even if errors occur.\n    *   `json.dump(book_data, f, indent=4):`: Writes the JSON data to the file with an indent of 4 spaces for readability."
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "\n    *   `with open(filename, \"r\") as f:`: Opens a file for reading in read mode (`\"r\"`).\n    *   `json.load(f):`: Reads the JSON data from the file.\n\n5.  **Error Handling:**\n    *   The `"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "save_books_to_json` and `load_books_from_json` functions use `try...except` blocks to handle potential errors during file I/O and JSON processing.  This prevents the program from crashing and provides informative error messages.\n\n6.  **JSON Serialization:**\n    *   "
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "The `json` module is used to convert Python objects (dictionaries) to JSON format and vice-versa.\n\n7.  **`if __name__ == \"__main__\":` block:**\n    *   This code is executed only when the script is run directly (not when it's imported as a module)."
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " It's a common practice to put your main program logic inside this block.\n\n**How to Run the Example:**\n\n1.  Save the code as a Python file (e.g., `library.py`).\n2.  Run it from your terminal: `python library.py`\n\nThe script will:\n\n"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "*   Load books from `books.json` (if it exists).\n*   Create two new `Book` objects and add them to the list.\n*   Display the list of books.\n*   Save the updated list of books to `books.json`.\n\nThis example demonstrates several important Python concepts in"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Fri, 24 Apr 2026 15:43:03 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " a practical context.  It provides a solid foundation for building more complex applications. Remember to experiment with the code, modify it, and try adding new features.\n"
+                }
+              ],
+              "role": "model"
+            },
+            "finish_reason": "STOP"
+          }
+        ],
+        "create_time": "2026-04-24T15:43:03.048902Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "h4_raYb-AvKktfAPqPbE4QQ",
+        "usage_metadata": {
+          "candidates_token_count": 2002,
+          "candidates_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 2002
+            }
+          ],
+          "prompt_token_count": 2482,
+          "prompt_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 2482
+            }
+          ],
+          "total_token_count": 4484,
+          "traffic_type": "ON_DEMAND"
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

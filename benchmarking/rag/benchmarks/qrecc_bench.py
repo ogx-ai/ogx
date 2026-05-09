@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -17,7 +17,6 @@ import huggingface_hub
 from lib.ingest import ingest_corpus
 from lib.metrics import answer_metrics
 from lib.query import rag_conversation
-from lib.utils import Checkpoint
 
 from benchmarks.base import BenchmarkRunner
 
@@ -96,17 +95,16 @@ class QReCCBenchmark(BenchmarkRunner):
         pass
 
     def evaluate(self) -> dict:
-        all_predictions = {}
-        all_ground_truths = {}
-        conversations_processed = 0
+        per_query = self._load_per_query_results()
+        completed_convs = {qid.rsplit("_", 1)[0] for qid in per_query}
 
-        ckpt = Checkpoint(str(self.output_dir / "eval_checkpoint.json"))
-        completed_convs = set(ckpt.get("completed_conversations", []))
+        total = len(self.conversations)
+        skipped = 0
 
         for conv in self.conversations:
             conv_id = conv["conv_id"]
             if conv_id in completed_convs:
-                logger.info(f"Skipping already-evaluated conversation {conv_id}")
+                skipped += 1
                 continue
 
             # Build scoped corpus: gold passages + distractors
@@ -116,7 +114,6 @@ class QReCCBenchmark(BenchmarkRunner):
                     pid = f"conv{conv_id}_gold_{len(scoped_corpus)}"
                     scoped_corpus[pid] = {"title": "", "text": passage}
 
-            # Add random distractor passages
             pool_ids = list(self.all_passages.keys())
             n_distractors = min(DISTRACTORS_PER_CONV, len(pool_ids))
             distractor_ids = random.sample(pool_ids, n_distractors)
@@ -128,7 +125,6 @@ class QReCCBenchmark(BenchmarkRunner):
                 logger.warning(f"Conversation {conv_id} has no passages, skipping")
                 continue
 
-            # Ingest scoped corpus
             checkpoint_path = str(self.output_dir / f"conv_{conv_id}_checkpoint.json")
             try:
                 vs_id, mapping = ingest_corpus(
@@ -142,7 +138,6 @@ class QReCCBenchmark(BenchmarkRunner):
                 logger.error(f"Ingestion failed for conversation {conv_id}: {e}")
                 continue
 
-            # Run conversation turns
             turns_input = [{"query_id": f"{conv_id}_{t['turn_no']}", "query": t["query"]} for t in conv["turns"]]
 
             try:
@@ -159,42 +154,33 @@ class QReCCBenchmark(BenchmarkRunner):
                 logger.error(f"Query failed for conversation {conv_id}: {e}")
                 continue
 
-            # Collect predictions and ground truths
             for turn, result in zip(conv["turns"], results, strict=False):
                 qid = f"{conv_id}_{turn['turn_no']}"
-                all_predictions[qid] = result["answer"]
-                all_ground_truths[qid] = turn["answer"]
+                per_query[qid] = {
+                    "prediction": result["answer"],
+                    "ground_truth": turn["answer"],
+                }
 
-            conversations_processed += 1
+            self._save_per_query_results(per_query)
             completed_convs.add(conv_id)
-            ckpt.set("completed_conversations", list(completed_convs))
+            logger.info(
+                f"[{len(completed_convs)}/{total}] Conversation {conv_id} complete ({len(per_query)} total queries)"
+            )
 
-            # Clean up vector store to avoid accumulation
             try:
                 self.client.vector_stores.delete(vs_id)
             except Exception:
                 pass
 
-            if conversations_processed % 10 == 0:
-                logger.info(f"Processed {conversations_processed}/{len(self.conversations)} conversations")
+        if skipped:
+            logger.info(f"Skipped {skipped} already-completed conversations")
 
-        # Compute metrics
+        all_predictions = {qid: r["prediction"] for qid, r in per_query.items()}
+        all_ground_truths = {qid: r["ground_truth"] for qid, r in per_query.items()}
         metrics = answer_metrics(all_predictions, all_ground_truths)
         metrics["dataset"] = "qrecc"
         metrics["mode"] = "rewritten" if self.use_rewritten else "original"
-        metrics["num_conversations"] = conversations_processed
+        metrics["num_conversations"] = len(completed_convs)
         metrics["search_mode"] = self.search_mode or "default"
-
-        # Save per-query results
-        per_query_path = self.output_dir / "per_query_results.json"
-        per_query_path.write_text(
-            json.dumps(
-                {
-                    qid: {"prediction": all_predictions[qid], "ground_truth": all_ground_truths[qid]}
-                    for qid in all_predictions
-                },
-                indent=2,
-            )
-        )
 
         return metrics

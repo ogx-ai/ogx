@@ -1,24 +1,24 @@
 ---
-title: Using Llama Stack as a Library
-description: How to use Llama Stack as a Python library instead of running a server
+title: Using OGX as a Library
+description: How to use OGX as a Python library instead of running a server
 sidebar_label: Importing as Library
 sidebar_position: 5
 ---
-# Using Llama Stack as a Library
+# Using OGX as a Library
 
-## Setup Llama Stack without a Server
-If you are planning to use an external service for Inference (even Ollama or vLLM counts as external), it is often easier to use Llama Stack as a library.
+## Setup OGX without a Server
+If you are planning to use an external service for Inference (even Ollama or vLLM counts as external), it is often easier to use OGX as a library.
 This avoids the overhead of setting up a server.
 ```bash
 # setup
-uv pip install llama-stack llama-stack-client
-llama stack list-deps starter | xargs -L1 uv pip install
+uv pip install ogx ogx-client
+ogx list-deps starter | xargs -L1 uv pip install
 ```
 
 ```python
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
-client = LlamaStackAsLibraryClient(
+client = OGXAsLibraryClient(
     "starter",
     # provider_data is optional, but if you need to pass in any provider specific data, you can do so here.
     provider_data={"tavily_search_api_key": os.environ["TAVILY_SEARCH_API_KEY"]},
@@ -36,7 +36,7 @@ response = client.models.list()
 If you've created a [custom distribution](./building_distro), you can also use the config.yaml configuration file directly:
 
 ```python
-client = LlamaStackAsLibraryClient(config_path)
+client = OGXAsLibraryClient(config_path)
 ```
 
 ## Resource Management
@@ -49,9 +49,9 @@ The easiest and most Pythonic way is to use the client as a context manager, whi
 
 ```python
 # Synchronous client
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
-with LlamaStackAsLibraryClient("starter") as client:
+with OGXAsLibraryClient("starter") as client:
     response = client.models.list()
 # Client is automatically shut down here
 ```
@@ -59,9 +59,9 @@ with LlamaStackAsLibraryClient("starter") as client:
 For the async client:
 
 ```python
-from llama_stack.core.library_client import AsyncLlamaStackAsLibraryClient
+from ogx.core.library_client import AsyncOGXAsLibraryClient
 
-async with AsyncLlamaStackAsLibraryClient("starter") as client:
+async with AsyncOGXAsLibraryClient("starter") as client:
     response = await client.models.list()
 # Client is automatically shut down here
 ```
@@ -72,7 +72,7 @@ Alternatively, you can manually call `shutdown()` when you're done:
 
 ```python
 # Synchronous client
-client = LlamaStackAsLibraryClient("starter")
+client = OGXAsLibraryClient("starter")
 try:
     # ... use the client ...
     response = client.models.list()
@@ -83,9 +83,9 @@ finally:
 For the async client:
 
 ```python
-from llama_stack.core.library_client import AsyncLlamaStackAsLibraryClient
+from ogx.core.library_client import AsyncOGXAsLibraryClient
 
-client = AsyncLlamaStackAsLibraryClient("starter")
+client = AsyncOGXAsLibraryClient("starter")
 await client.initialize()
 try:
     # ... use the client ...

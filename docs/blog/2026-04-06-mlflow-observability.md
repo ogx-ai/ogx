@@ -1,19 +1,21 @@
 ---
 slug: mlflow-observability
-title: "Tracing LlamaStack Applications with MLflow: SDK vs OTel Collector"
+title: "Tracing OGX Applications with MLflow: SDK vs OTel Collector"
 authors: [gyliu513]
 tags: [mlflow, observability, opentelemetry, metrics, tracing, monitoring]
 date: 2026-04-06
 ---
 
-As LLM-powered applications grow in complexity, observability becomes essential. You need to understand what your application is doing — what prompts are being sent, what responses come back, how long each call takes, and how many tokens are consumed. [MLflow](https://mlflow.org/) provides a powerful tracing framework that captures all of this, which can be integrated with [llamastack](https://github.com/llamastack/llama-stack) for observability.
+As LLM-powered applications grow in complexity, observability becomes essential. You need to understand what your application is doing — what prompts are being sent, what responses come back, how long each call takes, and how many tokens are consumed. [MLflow](https://mlflow.org/) provides a powerful tracing framework that captures all of this, which can be integrated with [ogx](https://github.com/ogx-ai/ogx) for observability.
 
-In this post, we'll walk through two approaches for exporting LlamaStack traces into MLflow:
+In this post, we'll walk through two approaches for exporting OGX traces into MLflow:
 
 1. **MLflow SDK** — Direct instrumentation using MLflow's built-in tracing and autologging
 2. **OTel Collector** — Decoupled telemetry pipeline using OpenTelemetry auto-instrumentation and an OTel Collector as the intermediary
 
 By the end, you'll understand when to use each approach and how to set them up.
+
+<!--truncate-->
 
 ## MLflow Tracing: A Quick Overview
 
@@ -26,9 +28,9 @@ MLflow is an open-source platform for managing the ML lifecycle. Starting with v
 
 MLflow also supports ingesting traces via the **OpenTelemetry (OTLP) protocol** at its `/v1/traces` endpoint, which opens the door to vendor-neutral instrumentation, more on that in the OTel Collector section.
 
-## LlamaStack and Its OpenAI-Compatible API
+## OGX and Its OpenAI-Compatible API
 
-LlamaStack provides an OpenAI-compatible API, meaning any tooling that works with OpenAI's chat completions API or responses API also works with LlamaStack. This is key for tracing, we can leverage existing OpenAI instrumentation libraries (both MLflow's `openai.autolog()` and OpenTelemetry's `opentelemetry-instrumentation-openai-v2`) to capture traces without writing custom code.
+OGX provides an OpenAI-compatible API, meaning any tooling that works with OpenAI's chat completions API or responses API also works with OGX. This is key for tracing, we can leverage existing OpenAI instrumentation libraries (both MLflow's `openai.autolog()` and OpenTelemetry's `opentelemetry-instrumentation-openai-v2`) to capture traces without writing custom code.
 
 ## Architecture Overview
 
@@ -37,7 +39,7 @@ Before diving into the details, here's a high-level view of both approaches:
 ```mermaid
 graph TB
     subgraph "Approach 1: MLflow SDK"
-        A1[LlamaStack App] -->|MLflow SDK autolog| M1[MLflow Server]
+        A1[OGX App] -->|MLflow SDK autolog| M1[MLflow Server]
         M1 --> U1[MLflow UI]
     end
 ```
@@ -45,7 +47,7 @@ graph TB
 ```mermaid
 graph TB
     subgraph "Approach 2: OTel Collector"
-        A2[LlamaStack App] -->|OTLP/HTTP :4318| C[OTel Collector]
+        A2[OGX App] -->|OTLP/HTTP :4318| C[OTel Collector]
         C -->|OTLP/HTTP /v1/traces| M2[MLflow Server]
         M2 --> U2[MLflow UI]
     end
@@ -56,7 +58,7 @@ graph TB
 For both approaches, you'll need:
 
 - **Python 3.10+**
-- **A running LlamaStack server** (e.g., at `http://localhost:8321`)
+- **A running OGX server** (e.g., at `http://localhost:8321`)
 - **MLflow >= 3.10** with GenAI extras:
 
 ```bash
@@ -82,7 +84,7 @@ This approach uses MLflow's native tracing SDK to capture and export traces dire
 
 ```mermaid
 sequenceDiagram
-    participant App as LlamaStack App
+    participant App as OGX App
     participant SDK as MLflow SDK
     participant Server as MLflow Server
     participant UI as MLflow UI
@@ -96,7 +98,7 @@ sequenceDiagram
 
 ### Step 1: Instrument Your Code
 
-Add MLflow tracing to your LlamaStack client code. The example below uses the [Responses API](https://platform.openai.com/docs/api-reference/responses) (`client.responses.create`), which is the recommended way to interact with LlamaStack:
+Add MLflow tracing to your OGX client code. The example below uses the [Responses API](https://platform.openai.com/docs/api-reference/responses) (`client.responses.create`), which is the recommended way to interact with OGX:
 
 ```python
 import mlflow
@@ -105,13 +107,13 @@ from openai import OpenAI
 
 # Configure MLflow
 mlflow.set_tracking_uri("http://localhost:5000")
-mlflow.set_experiment("LlamaStack Demo")
+mlflow.set_experiment("OGX Demo")
 
 # Enable tracing and OpenAI autologging
 mlflow_tracing.enable()
 mlflow.openai.autolog()
 
-# Create an OpenAI-compatible client pointing to LlamaStack
+# Create an OpenAI-compatible client pointing to OGX
 client = OpenAI(
     base_url="http://localhost:8321/v1",
     api_key="fake",
@@ -119,7 +121,7 @@ client = OpenAI(
 
 response = client.responses.create(
     model="meta-llama/Llama-3.1-8B-Instruct",
-    input="Give a one-sentence description of LlamaStack.",
+    input="Give a one-sentence description of OGX.",
 )
 print(response.output_text)
 ```
@@ -135,14 +137,14 @@ python your_app.py
 
 ### Step 3: View Traces in MLflow
 
-Open [http://localhost:5000](http://localhost:5000), navigate to your experiment ("LlamaStack Demo"), and click the **Traces** tab. You'll see each request with:
+Open [http://localhost:5000](http://localhost:5000), navigate to your experiment ("OGX Demo"), and click the **Traces** tab. You'll see each request with:
 
 - Full input/output payloads
 - Token usage (input, output, total)
 - Latency breakdown
 - Span hierarchy
 
-![MLflow distributed traces for LlamaStack via SDK](./images/mlflow-sdk.png)
+![MLflow distributed traces for OGX via SDK](./images/mlflow-sdk.png)
 
 ### Pros and Cons
 
@@ -159,7 +161,7 @@ This approach decouples instrumentation from the trace backend. The application 
 
 ```mermaid
 sequenceDiagram
-    participant App as LlamaStack App
+    participant App as OGX App
     participant OTel as OTel Auto-Instrumentation
     participant Col as OTel Collector
     participant Server as MLflow Server
@@ -239,7 +241,7 @@ The key difference here: we use `opentelemetry-instrument` to wrap the applicati
 MLFLOW_ENABLE_TRACING=0 \
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
-OTEL_SERVICE_NAME=llamastack-app \
+OTEL_SERVICE_NAME=ogx-app \
 opentelemetry-instrument python your_app.py
 ```
 
@@ -260,7 +262,7 @@ sqlite3 mlflow.db "SELECT count(*) FROM trace_info;"
 
 Then open the MLflow UI at [http://localhost:5000](http://localhost:5000) to explore the traces visually.
 
-![MLflow distributed traces for LlamaStack via OTEL](./images/otel-mlflow.png)
+![MLflow distributed traces for OGX via OTEL](./images/otel-mlflow.png)
 
 ### Pros and Cons
 
@@ -274,7 +276,7 @@ Then open the MLflow UI at [http://localhost:5000](http://localhost:5000) to exp
 
 ### Responses API Support
 
-**Note:** OpenTelemetry auto-instrumentation for the Responses API is not yet available upstream. Progress is tracked in [llamastack/llama-stack#5192](https://github.com/llamastack/llama-stack/issues/5192). In the meantime, Approach 1 (MLflow SDK) fully supports tracing Responses API calls via `mlflow.openai.autolog()`.
+**Note:** OpenTelemetry auto-instrumentation for the Responses API is not yet available upstream. Progress is tracked in [ogx/ogx#5192](https://github.com/ogx-ai/ogx/issues/5192). In the meantime, Approach 1 (MLflow SDK) fully supports tracing Responses API calls via `mlflow.openai.autolog()`.
 
 ## Approach Comparison
 
@@ -305,21 +307,21 @@ graph LR
 | **Best for** | Development, prototyping, quick experiments | Production deployments, multi-tool observability stacks |
 | **Instrumentation** | `mlflow.openai.autolog()` | `opentelemetry-instrument` + OTel OpenAI plugin |
 
-## Bonus: Tracing the LlamaStack Server Itself
+## Bonus: Tracing the OGX Server Itself
 
-Both approaches above trace the **client side** — the application making calls to LlamaStack. But you can also trace the **LlamaStack server** using the OTel approach:
+Both approaches above trace the **client side** — the application making calls to OGX. But you can also trace the **OGX server** using the OTel approach:
 
 ```bash
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:5000/v1/traces \
 OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf \
 OTEL_EXPORTER_OTLP_TRACES_HEADERS="x-mlflow-experiment-id=1" \
-OTEL_SERVICE_NAME=llama-stack-server \
-opentelemetry-instrument llama stack run starter
+OTEL_SERVICE_NAME=ogx-server \
+opentelemetry-instrument ogx stack run starter
 ```
 
-This gives you end-to-end visibility: client-side spans showing the request lifecycle, and server-side spans showing internal LlamaStack processing.
+This gives you end-to-end visibility: client-side spans showing the request lifecycle, and server-side spans showing internal OGX processing.
 
-> **Important:** MLflow SDK tracing only instruments the **client side**. The LlamaStack server itself is not instrumented by MLflow, so server-side spans (inference routing, tool execution, etc.) are only visible through OpenTelemetry auto-instrumentation (Approach 2).
+> **Important:** MLflow SDK tracing only instruments the **client side**. The OGX server itself is not instrumented by MLflow, so server-side spans (inference routing, tool execution, etc.) are only visible through OpenTelemetry auto-instrumentation (Approach 2).
 >
 ## Common Gotchas
 
@@ -335,16 +337,16 @@ This gives you end-to-end visibility: client-side spans showing the request life
 
 ## Conclusion
 
-Both approaches get your LlamaStack traces into MLflow, but they serve different needs:
+Both approaches get your OGX traces into MLflow, but they serve different needs:
 
 - **Start with the MLflow SDK** when you want quick, low-friction observability during development. A few lines of code and you're tracing.
 - **Move to the OTel Collector** when you need production-grade telemetry infrastructure — decoupled from your application, with the ability to fan out to multiple observability backends.
 
-The good news: since LlamaStack exposes an OpenAI-compatible API, both paths leverage existing, well-maintained instrumentation libraries. You're not writing custom tracing code — you're plugging into an ecosystem.
+The good news: since OGX exposes an OpenAI-compatible API, both paths leverage existing, well-maintained instrumentation libraries. You're not writing custom tracing code — you're plugging into an ecosystem.
 
 ## Quick Start With Containers
 
-A pending PR, [feat: add MLflow support for LlamaStack](https://github.com/llamastack/llama-stack/pull/5409), will let you run LlamaStack alongside MLflow, Grafana, and Prometheus in containers with a single command. Once that PR lands, use the [telemetry scripts](https://github.com/llamastack/llama-stack/tree/main/scripts/telemetry) in the LlamaStack repository for the full walkthrough.
+A pending PR, [feat: add MLflow support for OGX](https://github.com/ogx-ai/ogx/pull/5409), will let you run OGX alongside MLflow, Grafana, and Prometheus in containers with a single command. Once that PR lands, use the [telemetry scripts](https://github.com/ogx-ai/ogx/tree/main/scripts/telemetry) in the OGX repository for the full walkthrough.
 
 ## References
 

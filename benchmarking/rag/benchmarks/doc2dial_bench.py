@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,9 +12,10 @@ import json
 import logging  # allow-direct-logging
 
 from lib.ingest import ingest_corpus
-from lib.metrics import answer_metrics
+from lib.metrics import answer_metrics, retrieval_metrics
 from lib.query import rag_conversation
-from lib.utils import Checkpoint, IDMapping
+from lib.search import search_queries
+from lib.utils import IDMapping
 
 from benchmarks.base import BenchmarkRunner
 
@@ -117,22 +118,20 @@ class Doc2DialBenchmark(BenchmarkRunner):
         if not self.vector_store_id:
             return {"error": "No vector store available"}
 
-        all_predictions = {}
-        all_ground_truths = {}
-        conversations_processed = 0
+        per_query = self._load_per_query_results()
+        completed_dials = {qid.rsplit("_", 1)[0] for qid in per_query}
 
-        ckpt = Checkpoint(str(self.output_dir / "eval_checkpoint.json"))
-        completed_dials = set(ckpt.get("completed_dialogues", []))
+        total = len(self.conversations)
+        skipped = 0
 
         for conv in self.conversations:
             dial_id = conv["dial_id"]
             if dial_id in completed_dials:
+                skipped += 1
                 continue
 
             turns_input = [
-                {"query_id": f"{dial_id}_{i}", "query": t["query"]}
-                for i, t in enumerate(conv["turns"])
-                if t["query"]  # skip empty queries
+                {"query_id": f"{dial_id}_{i}", "query": t["query"]} for i, t in enumerate(conv["turns"]) if t["query"]
             ]
 
             if not turns_input:
@@ -147,6 +146,7 @@ class Doc2DialBenchmark(BenchmarkRunner):
                     mapping=self.mapping,
                     max_num_results=10,
                     search_mode=self.search_mode,
+                    extra_body=self.extra_body,
                 )
             except Exception as e:
                 logger.error(f"Conversation {dial_id} failed: {e}")
@@ -155,33 +155,60 @@ class Doc2DialBenchmark(BenchmarkRunner):
             valid_turns = [t for t in conv["turns"] if t["query"]]
             for i, (turn, result) in enumerate(zip(valid_turns, results, strict=False)):
                 qid = f"{dial_id}_{i}"
-                all_predictions[qid] = result["answer"]
-                all_ground_truths[qid] = turn["answer"]
+                per_query[qid] = {
+                    "prediction": result["answer"],
+                    "ground_truth": turn["answer"],
+                    "retrieved_docs": result.get("retrieved_docs", {}),
+                    "doc_id": turn.get("doc_id", ""),
+                }
 
-            conversations_processed += 1
+            self._save_per_query_results(per_query)
             completed_dials.add(dial_id)
-            ckpt.set("completed_dialogues", list(completed_dials))
+            logger.info(
+                f"[{len(completed_dials)}/{total}] Conversation {dial_id} complete ({len(per_query)} total queries)"
+            )
 
-            if conversations_processed % 20 == 0:
-                logger.info(f"Processed {conversations_processed}/{len(self.conversations)} dialogues")
+        if skipped:
+            logger.info(f"Skipped {skipped} already-completed conversations")
 
-        # Compute metrics
+        all_predictions = {qid: r["prediction"] for qid, r in per_query.items()}
+        all_ground_truths = {qid: r["ground_truth"] for qid, r in per_query.items()}
         metrics = answer_metrics(all_predictions, all_ground_truths)
+
+        # Retrieval-only evaluation via Vector Stores Search API
+        queries = {}
+        qrels = {}
+        for conv in self.conversations:
+            dial_id = conv["dial_id"]
+            valid_turns = [t for t in conv["turns"] if t["query"]]
+            for i, turn in enumerate(valid_turns):
+                qid = f"{dial_id}_{i}"
+                queries[qid] = turn["query"]
+                doc_id = turn.get("doc_id", "")
+                if doc_id:
+                    qrels[qid] = {doc_id: 1}
+
+        if qrels and self.mapping:
+            logger.info(f"Running retrieval-only evaluation on {len(queries)} queries...")
+            search_results = search_queries(
+                client=self.client,
+                vector_store_id=self.vector_store_id,
+                queries=queries,
+                mapping=self.mapping,
+                max_num_results=10,
+                search_mode=self.search_mode,
+            )
+            self._save_per_query_retrieval_results(search_results)
+            ret_metrics = retrieval_metrics(qrels, search_results, k_values=[5, 10])
+            metrics.update(ret_metrics)
+            logger.info(
+                f"Retrieval metrics: nDCG@10={ret_metrics.get('ndcg_cut_10', 0):.4f}, "
+                f"Recall@10={ret_metrics.get('recall_10', 0):.4f}"
+            )
+
         metrics["dataset"] = "doc2dial"
-        metrics["num_conversations"] = conversations_processed
+        metrics["num_conversations"] = len(completed_dials)
         metrics["num_documents"] = len(self.corpus)
         metrics["search_mode"] = self.search_mode or "default"
-
-        # Save per-query results
-        per_query_path = self.output_dir / "per_query_results.json"
-        per_query_path.write_text(
-            json.dumps(
-                {
-                    qid: {"prediction": all_predictions.get(qid, ""), "ground_truth": all_ground_truths.get(qid, "")}
-                    for qid in all_predictions
-                },
-                indent=2,
-            )
-        )
 
         return metrics

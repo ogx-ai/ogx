@@ -1,6 +1,6 @@
 # OpenAPI Generator SDK
 
-Alternative SDK generation using [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator) instead of Stainless. See [#4609](https://github.com/llamastack/llama-stack/issues/4609) for context.
+Alternative SDK generation using [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator) instead of Stainless. See [#4609](https://github.com/ogx-ai/ogx/issues/4609) for context.
 
 ## Prerequisites
 

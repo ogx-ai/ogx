@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Compare results across backends: OpenAI SaaS vs Llama Stack (vector vs hybrid)."""
+"""Compare results across backends: OpenAI SaaS vs OGX (vector vs hybrid)."""
 
 import json
 from pathlib import Path
@@ -48,7 +48,7 @@ def find_results() -> list[dict]:
     for backend_dir in sorted(RESULTS_DIR.iterdir()):
         if not backend_dir.is_dir():
             continue
-        backend = backend_dir.name  # "openai" or "llama-stack"
+        backend = backend_dir.name  # "openai" or "ogx"
 
         for bench_dir in sorted(backend_dir.iterdir()):
             if not bench_dir.is_dir():

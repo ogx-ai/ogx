@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 """
 Resource-level ABAC evaluation for multitenant isolation.
 
-Tests Llama Stack's attribute-based access control at the resource level
+Tests OGX's attribute-based access control at the resource level
 (vector stores, models, etc.) — independent of chunk-level metadata filtering.
 
 Metrics produced:
@@ -23,12 +23,12 @@ Run::
 
 import pytest
 
-from llama_stack.core.access_control.access_control import (
+from ogx.core.access_control.access_control import (
     default_policy,
     is_action_allowed,
 )
-from llama_stack.core.access_control.datatypes import AccessRule, Action, Scope
-from llama_stack.core.datatypes import User
+from ogx.core.access_control.datatypes import AccessRule, Action, Scope
+from ogx.core.datatypes import User
 
 from .conftest import (
     TENANT_A,
@@ -70,7 +70,7 @@ TENANT_A_MODEL = _MockResource(
 PUBLIC_MODEL = _MockResource(
     resource_type="model",
     identifier="llama-3-base",
-    owner=User(principal="system", attributes={}),
+    owner=None,
 )
 
 
@@ -235,7 +235,7 @@ class TestABACCorrectnessMetrics:
             for resource in resources:
                 for action in actions:
                     # Determine expected result
-                    if not resource.owner.attributes:
+                    if not resource.owner:
                         # Public resource: accessible to all
                         expected = True
                     elif user == TENANT_ADMIN:

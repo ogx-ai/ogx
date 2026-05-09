@@ -1,16 +1,16 @@
-# Observability Test for Llama Stack
+# Observability Test for OGX
 
-This directory contains configuration files and a setup script to deploy a full observability stack for testing Llama Stack telemetry. It uses OpenTelemetry, Jaeger, Prometheus, and Grafana to collect traces, metrics, and visualize them.
+This directory contains configuration files and a setup script to deploy a full observability stack for testing OGX telemetry. It uses OpenTelemetry, Jaeger, Prometheus, and Grafana to collect traces, metrics, and visualize them.
 
 ## Architecture
 
 ```text
 ┌──────────────┐
-│  Llama Stack │──┐
+│  OGX │──┐
 │  Server      │  │  OTLP     ┌───────────────────┐   scrape    ┌──────────────┐
 └──────────────┘  ├─────────►│  OTel Collector     │◄───────────│  Prometheus  │
 ┌──────────────┐  │  :4318   │  :4317 (gRPC)       │   :9464    │  :9090       │
-│  Llama Stack │──┘          │  :4318 (HTTP)       │            └──────────────┘
+│  OGX │──┘          │  :4318 (HTTP)       │            └──────────────┘
 │  Client      │             └────────┬────────────┘                   ▲
 └──────────────┘                      │ OTLP                           │
                                       ▼                           datasource
@@ -27,12 +27,12 @@ This directory contains configuration files and a setup script to deploy a full 
 | **Jaeger** | Distributed tracing UI | 16686 |
 | **Prometheus** | Metrics storage and querying | 9090 |
 | **Grafana** | Dashboards and visualization | 3000 |
-| **MLflow** | Trace ingest via OTLP `/v1/traces` (container in this stack) | 5000 |
+| **MLflow** | Trace ingest via OTLP `/v1/traces` (container in this stack) | 5001 |
 
 ## Pre-requisites
 
 - **Docker** or **Podman** installed and running
-- **Llama Stack** development environment set up
+- **OGX** development environment set up
 - **OpenTelemetry Python packages** (installed in step 2 below)
 
 ## Files
@@ -44,7 +44,7 @@ This directory contains configuration files and a setup script to deploy a full 
 | `prometheus.yml` | Prometheus scrape configuration (scrapes OTel Collector on port 9464) |
 | `grafana-datasources.yaml` | Grafana datasource provisioning (Prometheus + Jaeger) |
 | `grafana-dashboards.yaml` | Grafana dashboard provisioning configuration |
-| `llama-stack-dashboard.json` | Pre-built Grafana dashboard for Llama Stack (token usage, operation duration, HTTP metrics) |
+| `ogx-dashboard.json` | Pre-built Grafana dashboard for OGX (token usage, operation duration, HTTP metrics) |
 
 ## Steps
 
@@ -65,44 +65,44 @@ This will:
 
 - Create a `llama-telemetry` container network
 - Start Jaeger, OTel Collector, Prometheus, and Grafana containers
-- Provision Grafana with a pre-built Llama Stack dashboard
+- Provision Grafana with a pre-built OGX dashboard
 
 > **MLflow traces**
 >
-> - MLflow is now started as a container in this stack (`mlflow:5000`), OTLP endpoint `/v1/traces`.
-> - Collector exporter `otlphttp/mlflow` points to `http://mlflow:5000/v1/traces`, header `x-mlflow-experiment-id: "1"`. If you need auth, set `MLFLOW_OTEL_HEADERS` (e.g., `Authorization=Bearer <token>`) before running the setup script.
-> - If you prefer an external MLflow, override `MLFLOW_OTEL_ENDPOINT` before running the script (e.g., `http://host.docker.internal:5000`).
+> - MLflow is now started as a container in this stack (`mlflow:5001`), OTLP endpoint `/v1/traces`.
+> - Collector exporter `otlphttp/mlflow` points to `http://mlflow:5001/v1/traces`, header `x-mlflow-experiment-id: "1"`. If you need auth, set `MLFLOW_OTEL_HEADERS` (e.g., `Authorization=Bearer <token>`) before running the setup script.
+> - If you prefer an external MLflow, override `MLFLOW_OTEL_ENDPOINT` before running the script (e.g., `http://host.docker.internal:5001`).
 
-### Install OpenTelemetry instrumentation For Llama Stack Server and Client
+### Install OpenTelemetry instrumentation For OGX Server and Client
 
 ```bash
 uv pip install opentelemetry-distro opentelemetry-exporter-otlp
 uv run opentelemetry-bootstrap -a requirements | uv pip install --requirement -
 ```
 
-### Set environment variables and start Llama Stack Server
+### Set environment variables and start OGX Server
 
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-export OTEL_SERVICE_NAME=llama-stack-server
+export OTEL_SERVICE_NAME=ogx-server
 
-uv run opentelemetry-instrument llama stack run starter
+uv run opentelemetry-instrument ogx stack run starter
 ```
 
 > **Note:** The `opentelemetry-instrument` wrapper automatically instruments the application and sends traces/metrics to the OTel Collector.
 
-### Set environment variables and start Llama Stack Client
+### Set environment variables and start OGX Client
 
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-export OTEL_SERVICE_NAME=my-llama-stack-app
+export OTEL_SERVICE_NAME=my-ogx-app
 
-opentelemetry-instrument python llama-stack-client.py
+opentelemetry-instrument python ogx-client.py
 ```
 
-An example `llama-stack-client.py`
+An example `ogx-client.py`
 
 ```python
 from openai import OpenAI
@@ -131,7 +131,7 @@ Open the following UIs in your browser:
 
 | Service | URL | Credentials |
 |---|---|---|
-| **Mlflow** (traces) | [http://localhost:5000](http://localhost:5000) | N/A |
+| **Mlflow** (traces) | [http://localhost:5001](http://localhost:5001) | N/A |
 | **Jaeger** (traces) | [http://localhost:16686](http://localhost:16686) | N/A |
 | **Prometheus** (metrics) | [http://localhost:9090](http://localhost:9090) | N/A |
 | **Grafana** (dashboards) | [http://localhost:3000](http://localhost:3000) | admin / admin |
@@ -142,21 +142,21 @@ The following metrics are automatically generated by OpenTelemetry auto-instrume
 
 ```promql
 # Total input token usage by model
-sum by(gen_ai_request_model) (llama_stack_gen_ai_client_token_usage_sum{gen_ai_token_type="input"})
+sum by(gen_ai_request_model) (ogx_gen_ai_client_token_usage_sum{gen_ai_token_type="input"})
 
 # Total output token usage by model
-sum by(gen_ai_request_model) (llama_stack_gen_ai_client_token_usage_sum{gen_ai_token_type="output"})
+sum by(gen_ai_request_model) (ogx_gen_ai_client_token_usage_sum{gen_ai_token_type="output"})
 
 # P95 HTTP server latency
-histogram_quantile(0.95, rate(llama_stack_http_server_duration_milliseconds_bucket[5m]))
+histogram_quantile(0.95, rate(ogx_http_server_duration_milliseconds_bucket[5m]))
 
 # Total HTTP request count
-sum(llama_stack_http_server_duration_milliseconds_count)
+sum(ogx_http_server_duration_milliseconds_count)
 ```
 
 #### Grafana dashboard
 
-A pre-provisioned **Llama Stack** dashboard is available in Grafana with panels for:
+A pre-provisioned **OGX** dashboard is available in Grafana with panels for:
 
 - Prompt Tokens (input token usage by model)
 - Completion Tokens (output token usage by model)
@@ -177,7 +177,7 @@ A pre-provisioned **Llama Stack** dashboard is available in Grafana with panels 
 OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true \
 OTEL_TRACES_EXPORTER=console \
 OTEL_LOGS_EXPORTER=console \
-opentelemetry-instrument python llama-stack-client.py
+opentelemetry-instrument python ogx-client.py
 ```
 
 **Send to Collector (recommended):**
@@ -187,7 +187,7 @@ OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true \
 OTEL_TRACES_EXPORTER=otlp \
 OTEL_LOGS_EXPORTER=otlp \
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
-opentelemetry-instrument python llama-stack-client.py
+opentelemetry-instrument python ogx-client.py
 ```
 
 ### Jaeger caveat (logs)
@@ -234,7 +234,7 @@ OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true \
 OTEL_TRACES_EXPORTER=otlp \
 OTEL_LOGS_EXPORTER=otlp \
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
-opentelemetry-instrument python llama-stack-client.py
+opentelemetry-instrument python ogx-client.py
 ```
 
 ## Cleanup

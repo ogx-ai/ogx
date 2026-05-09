@@ -1,10 +1,10 @@
-# Llama Stack Documentation
+# OGX Documentation
 
-Here's a collection of comprehensive guides, examples, and resources for building AI applications with Llama Stack. For the complete documentation, visit our [Github page](https://llamastack.github.io/getting_started/quickstart).
+Here's a collection of comprehensive guides, examples, and resources for building AI applications with OGX. For the complete documentation, visit our [Github page](https://ogx-ai.github.io/getting_started/quickstart).
 
 ## Render locally
 
-From the llama-stack `docs/` directory, run the following commands to render the docs locally:
+From the ogx `docs/` directory, run the following commands to render the docs locally:
 
 ```bash
 npm install
@@ -56,8 +56,8 @@ import ReactMarkdown from 'react-markdown';
 
 ## Content
 
-Try out Llama Stack's capabilities through our detailed Jupyter notebooks:
+Try out OGX's capabilities through our detailed Jupyter notebooks:
 
-- [Building AI Applications Notebook](./getting_started.ipynb) - A comprehensive guide to building production-ready AI applications using Llama Stack
-- [Zero-to-Hero Guide](./zero_to_hero_guide) - Step-by-step guide for getting started with Llama Stack
-- [Migrating from Agent objects to Responses](./notebooks/responses-api-agent-migration.ipynb) - A guide to migrating from legacy Llama Stack Agent APIs to the OpenAI-compatible Responses API
+- [Building AI Applications Notebook](./getting_started.ipynb) - A comprehensive guide to building production-ready AI applications using OGX
+- [Zero-to-Hero Guide](./zero_to_hero_guide) - Step-by-step guide for getting started with OGX
+- [Migrating from Agent objects to Responses](./notebooks/responses-api-agent-migration.ipynb) - A guide to migrating from legacy OGX Agent APIs to the OpenAI-compatible Responses API

@@ -2,18 +2,18 @@
 # Unified PyPI/NPM Release Workflow
 # =============================================================================
 #
-# This workflow builds, tests, and publishes all llama-stack packages:
-# - llama-stack (PyPI)
-# - llama-stack-api (PyPI)
-# - llama-stack-client-python (PyPI, from external repo)
-# - llama-stack-client-typescript (npm, from external repo)
+# This workflow builds, tests, and publishes all ogx packages:
+# - ogx (PyPI)
+# - ogx-api (PyPI)
+# - ogx-client-python (PyPI, from external repo)
+# - ogx-client-typescript (npm, from external repo)
 #
 # =============================================================================
 # REQUIRED SECRETS
 # =============================================================================
 #
 # 1. NPM_TOKEN - npm Access Token
-#    Purpose: Publish llama-stack-client package to npmjs.org (production only)
+#    Purpose: Publish ogx-client package to npmjs.org (production only)
 #
 #    How to create:
 #    - Log in to https://www.npmjs.com/
@@ -23,7 +23,7 @@
 #    Add to repo: Settings > Secrets and variables > Actions > New repository secret
 #    Name: NPM_TOKEN
 #
-#    Note: Token owner must have publish access to llama-stack-client on npm
+#    Note: Token owner must have publish access to ogx-client on npm
 #
 # 2. DOCKERHUB_USERNAME - DockerHub username
 #    Purpose: Authenticate with DockerHub to push distribution images
@@ -52,7 +52,7 @@
 #
 # packages:
 #   - all: Build all packages
-#   - llama-stack-only: Build only llama-stack and llama-stack-api
+#   - ogx-only: Build only ogx and ogx-api
 #   - clients-only: Build only client packages
 #
 # client_ref: Git ref for client repos. Auto-detected from branch:
@@ -107,7 +107,7 @@ on:
         type: choice
         options:
           - all
-          - llama-stack-only
+          - ogx-only
           - clients-only
         default: 'all'
       client_ref:
@@ -127,6 +127,10 @@ env:
 defaults:
   run:
     shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -188,26 +192,27 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
           # Local packages (in this repo)
-          - package: llama-stack-api
-            path: src/llama_stack_api
+          - package: ogx-api
+            path: src/ogx_api
             type: local
             registry: pypi
-          - package: llama-stack
+          - package: ogx
             path: .
             type: local
             registry: pypi
           # External packages (client SDKs from other repos)
-          - package: llama-stack-client-python
-            repo: llamastack/llama-stack-client-python
+          - package: ogx-client-python
+            repo: ogx-ai/ogx-client-python
             type: external
             registry: pypi
-          - package: llama-stack-client-typescript
-            repo: llamastack/llama-stack-client-typescript
+          - package: ogx-client-typescript
+            repo: ogx-ai/ogx-client-typescript
             type: external
             registry: npm
 
@@ -222,7 +227,7 @@ jobs:
 
           if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "llama-stack-only" ] && [ "$TYPE" == "local" ]; then
+          elif [ "$PACKAGES" == "ogx-only" ] && [ "$TYPE" == "local" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "clients-only" ] && [ "$TYPE" == "external" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -300,23 +305,23 @@ jobs:
       # === NODE SETUP (for npm packages) ===
       - name: Set up Node.js
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
       # === LOCAL PYTHON PACKAGE BUILD ===
-      - name: Check for missing package entries (llama-stack-api)
-        if: steps.should-build.outputs.skip != 'true' && matrix.package == 'llama-stack-api'
-        working-directory: src/llama_stack_api
+      - name: Check for missing package entries (ogx-api)
+        if: steps.should-build.outputs.skip != 'true' && matrix.package == 'ogx-api'
+        working-directory: src/ogx_api
         run: |
           for f in *.py; do
             [[ "$f" == "__init__.py" ]] && continue
-            grep -q "llama_stack_api.${f%.py}" pyproject.toml || echo "::warning::Missing from py-modules: ${f%.py}"
+            grep -q "ogx_api.${f%.py}" pyproject.toml || echo "::warning::Missing from py-modules: ${f%.py}"
           done
           for d in */; do
             [[ "$d" =~ ^(__pycache__|dist|build|.*egg-info|\..*)/$ ]] && continue
-            grep -q "llama_stack_api.${d%/}" pyproject.toml || echo "::warning::Missing from packages: ${d%/}"
+            grep -q "ogx_api.${d%/}" pyproject.toml || echo "::warning::Missing from packages: ${d%/}"
           done
 
       - name: Build local Python package
@@ -335,8 +340,8 @@ jobs:
           MATRIX_PACKAGE="${{ matrix.package }}"
 
           # Map matrix package name to actual PyPI package name
-          if [ "$MATRIX_PACKAGE" == "llama-stack-client-python" ]; then
-            PACKAGE="llama-stack-client"
+          if [ "$MATRIX_PACKAGE" == "ogx-client-python" ]; then
+            PACKAGE="ogx-client"
           else
             PACKAGE="$MATRIX_PACKAGE"
           fi
@@ -405,7 +410,7 @@ jobs:
           echo "Setting version to $VERSION"
           sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
           # Also update __version__ in _version.py if it exists
-          VERSION_FILE=$(find . -name "_version.py" -path "*/llama_stack_client/*" | head -1)
+          VERSION_FILE=$(find . -name "_version.py" -path "*/ogx_client/*" | head -1)
           if [ -n "$VERSION_FILE" ]; then
             sed -i "s/__version__ = .*/__version__ = \"$VERSION\"/" "$VERSION_FILE"
           fi
@@ -422,8 +427,8 @@ jobs:
           MATRIX_PACKAGE="${{ matrix.package }}"
 
           # Map matrix package name to actual npm package name
-          if [ "$MATRIX_PACKAGE" == "llama-stack-client-typescript" ]; then
-            PACKAGE="llama-stack-client"
+          if [ "$MATRIX_PACKAGE" == "ogx-client-typescript" ]; then
+            PACKAGE="ogx-client"
           else
             PACKAGE="$MATRIX_PACKAGE"
           fi
@@ -552,10 +557,12 @@ jobs:
   test-package:
     name: Test packages (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build-package
     strategy:
       matrix:
-        python-version: ['3.12', '3.13']
+        # Test 3.13 only on push to main, releases, and scheduled runs
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || fromJSON('["3.12", "3.13"]') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -565,39 +572,39 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
 
-      - name: Download llama-stack-api artifacts
+      - name: Download ogx-api artifacts
         id: download-api
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack-api
+          name: Packages-ogx-api
           path: dist-api
         continue-on-error: true
 
-      - name: Download llama-stack artifacts
+      - name: Download ogx artifacts
         id: download-stack
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack
+          name: Packages-ogx
           path: dist-stack
         continue-on-error: true
 
-      - name: Download llama-stack-client-python artifacts
+      - name: Download ogx-client-python artifacts
         id: download-client-python
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack-client-python
+          name: Packages-ogx-client-python
           path: dist-client-python
         continue-on-error: true
 
-      - name: Download llama-stack-client-typescript artifacts
+      - name: Download ogx-client-typescript artifacts
         id: download-client-ts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack-client-typescript
+          name: Packages-ogx-client-typescript
           path: dist-client-ts
         continue-on-error: true
 
@@ -608,51 +615,51 @@ jobs:
 
           # Install available Python packages
           if [ -d "dist-api" ] && ls dist-api/*.whl 1>/dev/null 2>&1; then
-            echo "Installing llama-stack-api..."
+            echo "Installing ogx-api..."
             uv pip install dist-api/*.whl
           fi
 
           if [ -d "dist-client-python" ] && ls dist-client-python/*.whl 1>/dev/null 2>&1; then
-            echo "Installing llama-stack-client..."
+            echo "Installing ogx-client..."
             uv pip install dist-client-python/*.whl
           fi
 
           if [ -d "dist-stack" ] && ls dist-stack/*.whl 1>/dev/null 2>&1; then
-            echo "Installing llama-stack..."
+            echo "Installing ogx..."
             uv pip install dist-stack/*.whl
           fi
 
-      - name: List Wheel Contents (llama-stack-api)
+      - name: List Wheel Contents (ogx-api)
         if: steps.download-api.outcome == 'success'
         run: |
           source .venv/bin/activate
           python -m zipfile -l dist-api/*.whl
 
-      - name: Verify Llama Stack package
+      - name: Verify OGX package
         if: steps.download-stack.outcome == 'success'
         run: |
           source .venv/bin/activate
           uv pip list
-          uv pip show llama-stack
-          command -v llama
-          llama stack list-apis
-          llama stack list-providers inference
-          llama stack list-deps starter
+          uv pip show ogx
+          command -v ogx
+          ogx stack list-apis
+          ogx stack list-providers inference
+          ogx stack list-deps starter
 
       - name: Verify packages are importable
         run: |
           source .venv/bin/activate
 
           if [ -d "dist-stack" ] && ls dist-stack/*.whl 1>/dev/null 2>&1; then
-            python -c "import llama_stack; print(f'llama_stack imported successfully from {llama_stack.__file__}')"
+            python -c "import ogx; print(f'ogx imported successfully from {ogx.__file__}')"
           fi
 
           if [ -d "dist-api" ] && ls dist-api/*.whl 1>/dev/null 2>&1; then
-            python -c "import llama_stack_api; print(f'llama_stack_api imported successfully from {llama_stack_api.__file__}')"
+            python -c "import ogx_api; print(f'ogx_api imported successfully from {ogx_api.__file__}')"
           fi
 
           if [ -d "dist-client-python" ] && ls dist-client-python/*.whl 1>/dev/null 2>&1; then
-            python -c "import llama_stack_client; print(f'llama_stack_client imported successfully from {llama_stack_client.__file__}')"
+            python -c "import ogx_client; print(f'ogx_client imported successfully from {ogx_client.__file__}')"
           fi
 
       - name: Verify TypeScript package
@@ -670,15 +677,15 @@ jobs:
             echo "TypeScript package installed successfully"
 
             # Verify the package is importable
-            node -e "const pkg = require('llama-stack-client'); console.log('llama-stack-client package loaded successfully');" || echo "Package may use ES modules, skipping require test"
+            node -e "const pkg = require('ogx-client'); console.log('ogx-client package loaded successfully');" || echo "Package may use ES modules, skipping require test"
           fi
 
   # Publish packages to PyPI/npm
-  # Order: llama-stack-client-python, llama-stack-client-typescript, llama-stack-api, llama-stack
+  # Order: ogx-client-python, ogx-client-typescript, ogx-api, ogx
   publish-packages:
     name: Publish ${{ matrix.package }}
     if: |
-      github.repository_owner == 'llamastack' &&
+      github.repository_owner == 'ogx-ai' &&
       (inputs.dry_run || 'test-pypi') != 'build-only' && (
         github.event_name == 'workflow_dispatch' ||
         github.event.action == 'published' ||
@@ -688,22 +695,23 @@ jobs:
       contents: write  # for gh release upload
       id-token: write  # for PyPI trusted publishing
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: test-package
     strategy:
       max-parallel: 1
       matrix:
         include:
           # Order matters! Dependencies are published first
-          - package: llama-stack-client-python
+          - package: ogx-client-python
             registry: pypi
             type: external
-          - package: llama-stack-client-typescript
+          - package: ogx-client-typescript
             registry: npm
             type: external
-          - package: llama-stack-api
+          - package: ogx-api
             registry: pypi
             type: local
-          - package: llama-stack
+          - package: ogx
             registry: pypi
             type: local
 
@@ -718,7 +726,7 @@ jobs:
 
           if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "llama-stack-only" ] && [ "$TYPE" == "local" ]; then
+          elif [ "$PACKAGES" == "ogx-only" ] && [ "$TYPE" == "local" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "clients-only" ] && [ "$TYPE" == "external" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -821,7 +829,7 @@ jobs:
       # === NPM PUBLISHING ===
       - name: Set up Node.js
         if: steps.should-publish.outputs.skip != 'true' && matrix.registry == 'npm' && steps.check-artifacts.outputs.has_artifacts == 'true'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
@@ -872,7 +880,7 @@ jobs:
   # are published to PyPI. CPU distros are built for linux/amd64 and
   # linux/arm64. GPU distros are built for linux/amd64 only.
   #
-  # Images are pushed to: llamastack/distribution-<distro>:<tag>
+  # Images are pushed to: ogx/distribution-<distro>:<tag>
   #   - Production (release or dry_run=off): tagged with VERSION and "latest"
   #   - Test (test-pypi or schedule): tagged with "test-VERSION"
   publish-docker-images:
@@ -881,7 +889,7 @@ jobs:
       always() &&
       needs.compute-version.result == 'success' &&
       (needs.publish-packages.result == 'success' || needs.publish-packages.result == 'skipped') &&
-      github.repository_owner == 'llamastack' &&
+      github.repository_owner == 'ogx-ai' &&
       (inputs.dry_run || 'test-pypi') != 'build-only' &&
       (inputs.packages || 'all') != 'clients-only' && (
         github.event_name == 'workflow_dispatch' ||
@@ -936,7 +944,7 @@ jobs:
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
           DISTRO="${{ matrix.distro }}"
-          IMAGE="llamastack/distribution-${DISTRO}"
+          IMAGE="ogx/distribution-${DISTRO}"
 
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"
@@ -961,17 +969,17 @@ jobs:
         if: steps.meta.outputs.install_mode == 'test-pypi'
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
-          URL="https://test.pypi.org/pypi/llama-stack/${VERSION}/json"
+          URL="https://test.pypi.org/pypi/ogx/${VERSION}/json"
           echo "Polling ${URL} ..."
           for i in $(seq 1 20); do
             if curl -sf "$URL" -o /dev/null; then
-              echo "llama-stack==${VERSION} is available on test PyPI"
+              echo "ogx==${VERSION} is available on test PyPI"
               exit 0
             fi
             echo "Attempt ${i}/20: not yet available, waiting 30s..."
             sleep 30
           done
-          echo "::error::llama-stack==${VERSION} did not appear on test PyPI after 10 minutes"
+          echo "::error::ogx==${VERSION} did not appear on test PyPI after 10 minutes"
           exit 1
 
       - name: Build and push Docker image

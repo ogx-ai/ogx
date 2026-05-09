@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -79,10 +79,10 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "SAFETY_MODEL": "ollama/llama-guard3:1b",
             "POSTGRES_HOST": "127.0.0.1",
             "POSTGRES_PORT": "5432",
-            "POSTGRES_DB": "llamastack",
-            "POSTGRES_USER": "llamastack",
-            "POSTGRES_PASSWORD": "llamastack",
-            "LLAMA_STACK_LOGGING": "openai_responses=info",
+            "POSTGRES_DB": "ogx",
+            "POSTGRES_USER": "ogx",
+            "POSTGRES_PASSWORD": "ogx",
+            "OGX_LOGGING": "openai_responses=info",
         },
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
@@ -105,12 +105,12 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     ),
     "ollama-reasoning": Setup(
         name="ollama",
-        description="Local Ollama provider with a reasoning-capable model (gpt-oss)",
+        description="Local Ollama provider with a reasoning-capable model (deepseek-r1)",
         env={
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
         },
         defaults={
-            "text_model": "ollama/gpt-oss:20b",
+            "text_model": "ollama/deepseek-r1:1.5b",
         },
     ),
     "bedrock": Setup(
@@ -158,6 +158,26 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="IBM WatsonX AI models",
         defaults={
             "text_model": "watsonx/meta-llama/llama-3-3-70b-instruct",
+        },
+    ),
+    "vertexai": Setup(
+        name="vertexai",
+        description="Google Vertex AI with Gemini models",
+        defaults={
+            "text_model": "vertexai/publishers/google/models/gemini-2.0-flash",
+            "vision_model": "vertexai/publishers/google/models/gemini-2.0-flash",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
+        },
+    ),
+    "tgi": Setup(
+        name="tgi",
+        description="Text Generation Inference (TGI) provider with a text model",
+        env={
+            "TGI_URL": "http://localhost:8080",
+        },
+        defaults={
+            "text_model": "tgi/Qwen/Qwen3-0.6B",
         },
     ),
     "together": Setup(
@@ -296,7 +316,17 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
     "messages": Suite(
         name="messages",
         roots=["tests/integration/messages"],
-        default_setup="ollama-reasoning",
+        default_setup="ollama",
+    ),
+    # Exercises the /v1/messages translation path: Anthropic request format is
+    # translated to OpenAI Chat Completions, dispatched to OpenAI, and the response
+    # is translated back to Anthropic format. OpenAI is not in _NATIVE_MESSAGES_MODULES,
+    # so this setup guarantees the translation codepath in providers/inline/messages/impl.py
+    # is covered end-to-end (rather than the native passthrough used by the ollama suite).
+    "messages-openai": Suite(
+        name="messages-openai",
+        roots=["tests/integration/messages"],
+        default_setup="gpt",
     ),
     "interactions": Suite(
         name="interactions",

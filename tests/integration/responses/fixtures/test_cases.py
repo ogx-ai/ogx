@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -121,7 +121,7 @@ file_search_test_cases = [
             input="How many experts does the Llama 4 Maverick model have?",
             tools=[{"type": "file_search"}],
             expected="128",
-            file_path="pdfs/llama_stack_and_models.pdf",
+            file_path="pdfs/ogx_and_models.pdf",
         ),
         id="llama_experts_pdf",
     ),

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
-from llama_stack.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
+from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+from ogx.providers.remote.inference.bedrock.config import BedrockConfig
+from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
 HAS_BOTO3 = importlib.util.find_spec("boto3") is not None
 
@@ -32,11 +32,9 @@ def test_sigv4_auth_initialization():
 
 
 @pytest.mark.skipif(not HAS_BOTO3, reason="boto3 not installed")
-@patch("llama_stack.providers.utils.bedrock.sigv4_auth.logger")
+@patch("ogx.providers.utils.bedrock.sigv4_auth.logger")
 def test_sigv4_auth_gets_refreshable_session(mock_logger):
-    with patch(
-        "llama_stack.providers.utils.bedrock.refreshable_boto_session.RefreshableBotoSession"
-    ) as mock_refreshable:
+    with patch("ogx.providers.utils.bedrock.refreshable_boto_session.RefreshableBotoSession") as mock_refreshable:
         mock_session = MagicMock()
         mock_refreshable.return_value.refreshable_session.return_value = mock_session
 
@@ -71,7 +69,7 @@ def test_adapter_passes_sts_config_to_auth():
     )
     adapter = BedrockInferenceAdapter(config=config)
 
-    with patch("llama_stack.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth:
+    with patch("ogx.providers.utils.bedrock.sigv4_auth.BedrockSigV4Auth") as mock_auth:
         mock_auth.return_value = MagicMock()
         adapter._build_sigv4_http_client()
 

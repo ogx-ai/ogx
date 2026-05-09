@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -257,7 +257,7 @@ def _compute_summary(provider_map: dict[str, ProviderResults]) -> dict:
 def _load_provider_names() -> dict[str, str]:
     """Build display names from the inference provider registry's adapter_type values."""
     try:
-        from llama_stack.providers.registry.inference import available_providers
+        from ogx.providers.registry.inference import available_providers
 
         names: dict[str, str] = {}
         for spec in available_providers():

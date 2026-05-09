@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,9 +13,9 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from llama_stack.core.resolver import api_protocol_map
-from llama_stack.core.server.fastapi_router_registry import build_fastapi_router
-from llama_stack_api import Api
+from ogx.core.resolver import api_protocol_map
+from ogx.core.server.fastapi_router_registry import build_fastapi_router
+from ogx_api import Api
 
 from .state import _protocol_methods_cache
 
@@ -37,7 +37,7 @@ def _get_protocol_method(api: Api, method_name: str) -> Any | None:
     if _protocol_methods_cache is None:
         _protocol_methods_cache = {}
         protocols = api_protocol_map()
-        from llama_stack_api.tools import SpecialToolGroup, ToolRuntime
+        from ogx_api.tools import SpecialToolGroup, ToolRuntime
 
         toolgroup_protocols = {
             SpecialToolGroup.rag_tool: ToolRuntime,
@@ -62,18 +62,18 @@ def _get_protocol_method(api: Api, method_name: str) -> Any | None:
     return _protocol_methods_cache.get(api, {}).get(method_name)
 
 
-def create_llama_stack_app() -> FastAPI:
+def create_ogx_app() -> FastAPI:
     """
-    Create a FastAPI app that represents the Llama Stack API.
+    Create a FastAPI app that represents the OGX API.
     This uses both router-based routes (for migrated APIs) and the existing
     route discovery system for legacy webmethod-based routes.
     """
     app = FastAPI(
-        title="Llama Stack API",
+        title="OGX API",
         description="A comprehensive API for building and deploying AI applications",
         version="1.0.0",
         servers=[
-            {"url": "http://any-hosted-llama-stack.com"},
+            {"url": "http://any-hosted-ogx.com"},
         ],
     )
 

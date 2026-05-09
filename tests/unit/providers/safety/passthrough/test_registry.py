@@ -1,10 +1,10 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from llama_stack.providers.registry.safety import available_providers
+from ogx.providers.registry.safety import available_providers
 
 
 def test_passthrough_in_registry():
@@ -23,7 +23,7 @@ def test_passthrough_registry_has_provider_data_validator():
 def test_passthrough_registry_module_path():
     providers = available_providers()
     passthrough = next(p for p in providers if p.provider_type == "remote::passthrough")
-    assert passthrough.module == "llama_stack.providers.remote.safety.passthrough"
+    assert passthrough.module == "ogx.providers.remote.safety.passthrough"
 
 
 def test_registry_alphabetical_order():

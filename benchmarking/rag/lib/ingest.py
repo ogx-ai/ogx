@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -47,7 +47,7 @@ def ingest_corpus(
     """Upload a corpus and create a vector store.
 
     Args:
-        client: OpenAI client (points at either OpenAI SaaS or Llama Stack).
+        client: OpenAI client (points at either OpenAI SaaS or OGX).
         corpus: {doc_id: {"title": ..., "text": ...}}
         vector_store_name: Name for the vector store.
         checkpoint_path: Path for checkpoint JSON.

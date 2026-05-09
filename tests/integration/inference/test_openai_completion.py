@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,9 +15,13 @@ from ..test_cases.test_case import TestCase
 
 
 def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list()}
+    models = {m.id: m for m in client_with_models.models.list().data}
     models.update(
-        {m.custom_metadata["provider_resource_id"]: m for m in client_with_models.models.list() if m.custom_metadata}
+        {
+            m.custom_metadata["provider_resource_id"]: m
+            for m in client_with_models.models.list().data
+            if m.custom_metadata
+        }
     )
     provider_id = models[model_id].custom_metadata["provider_id"]
     providers = {p.provider_id: p for p in client_with_models.providers.list()}
@@ -147,13 +151,13 @@ def skip_if_provider_doesnt_support_tool_calling(client_with_models, model_id):
         "inference:completion:sanity",
     ],
 )
-def test_openai_completion_non_streaming(llama_stack_client, client_with_models, text_model_id, test_case):
+def test_openai_completion_non_streaming(ogx_client, client_with_models, text_model_id, test_case):
     skip_if_model_doesnt_support_openai_completion(client_with_models, text_model_id)
     tc = TestCase(test_case)
 
     # ollama needs more verbose prompting for some reason here...
     prompt = "Respond to this question and explain your answer. " + tc["content"]
-    response = llama_stack_client.completions.create(
+    response = ogx_client.completions.create(
         model=text_model_id,
         prompt=prompt,
         stream=False,
@@ -169,13 +173,13 @@ def test_openai_completion_non_streaming(llama_stack_client, client_with_models,
         "inference:completion:suffix",
     ],
 )
-def test_openai_completion_non_streaming_suffix(llama_stack_client, client_with_models, text_model_id, test_case):
+def test_openai_completion_non_streaming_suffix(ogx_client, client_with_models, text_model_id, test_case):
     skip_if_model_doesnt_support_openai_completion(client_with_models, text_model_id)
     skip_if_model_doesnt_support_suffix(client_with_models, text_model_id)
     tc = TestCase(test_case)
 
     # ollama needs more verbose prompting for some reason here...
-    response = llama_stack_client.completions.create(
+    response = ogx_client.completions.create(
         model=text_model_id,
         prompt=tc["content"],
         stream=False,
@@ -195,13 +199,13 @@ def test_openai_completion_non_streaming_suffix(llama_stack_client, client_with_
         "inference:completion:sanity",
     ],
 )
-def test_openai_completion_streaming(llama_stack_client, client_with_models, text_model_id, test_case):
+def test_openai_completion_streaming(ogx_client, client_with_models, text_model_id, test_case):
     skip_if_model_doesnt_support_openai_completion(client_with_models, text_model_id)
     tc = TestCase(test_case)
 
     # ollama needs more verbose prompting for some reason here...
     prompt = "Respond to this question and explain your answer. " + tc["content"]
-    response = llama_stack_client.completions.create(
+    response = ogx_client.completions.create(
         model=text_model_id,
         prompt=prompt,
         stream=True,
@@ -212,11 +216,11 @@ def test_openai_completion_streaming(llama_stack_client, client_with_models, tex
     assert len(content_str) > 10
 
 
-def test_openai_completion_guided_choice(llama_stack_client, client_with_models, text_model_id):
+def test_openai_completion_guided_choice(ogx_client, client_with_models, text_model_id):
     skip_if_provider_isnt_vllm(client_with_models, text_model_id)
 
     prompt = "I am feeling really sad today."
-    response = llama_stack_client.completions.create(
+    response = ogx_client.completions.create(
         model=text_model_id,
         prompt=prompt,
         stream=False,
@@ -227,7 +231,7 @@ def test_openai_completion_guided_choice(llama_stack_client, client_with_models,
     assert choice.text in ["joy", "sadness"]
 
 
-# Run the chat-completion tests with both the OpenAI client and the LlamaStack client
+# Run the chat-completion tests with both the OpenAI client and the OGX client
 
 
 @pytest.mark.parametrize(
@@ -372,6 +376,48 @@ def test_inference_store(compat_client, client_with_models, text_model_id, strea
         or retrieved_response.input_messages[0]["content"]
     )
     assert input_content == message, retrieved_response
+    if not hasattr(client.chat.completions, "messages"):
+        return
+
+    first_page = client.chat.completions.messages.list(completion_id=response_id, limit=1)
+    assert first_page.object == "list"
+    assert len(first_page.data) == 1
+    assert first_page.data[0].id == f"{response_id}-0"
+    assert first_page.data[0].role == "user"
+    assert first_page.data[0].content == message
+    assert first_page.first_id == f"{response_id}-0"
+    assert first_page.last_id == f"{response_id}-0"
+    assert first_page.has_more is True
+
+    second_page = client.chat.completions.messages.list(
+        completion_id=response_id,
+        after=first_page.last_id,
+        limit=10,
+    )
+    assert len(second_page.data) == 1
+    assert second_page.data[0].id == f"{response_id}-1"
+    assert second_page.data[0].role == "assistant"
+    assert second_page.has_more is False
+
+    first_page = client.chat.completions.messages.list(completion_id=response_id, limit=1)
+    assert first_page.object == "list"
+    assert len(first_page.data) == 1
+    assert first_page.data[0].id == f"{response_id}-0"
+    assert first_page.data[0].role == "user"
+    assert first_page.data[0].content == message
+    assert first_page.first_id == f"{response_id}-0"
+    assert first_page.last_id == f"{response_id}-0"
+    assert first_page.has_more is True
+
+    second_page = client.chat.completions.messages.list(
+        completion_id=response_id,
+        after=first_page.last_id,
+        limit=10,
+    )
+    assert len(second_page.data) == 1
+    assert second_page.data[0].id == f"{response_id}-1"
+    assert second_page.data[0].role == "assistant"
+    assert second_page.has_more is False
 
 
 @pytest.mark.parametrize(
@@ -494,14 +540,17 @@ def test_openai_chat_completion_non_streaming_with_file(openai_client, client_wi
     assert_text_contains(response.choices[0].message.content, "hello world")
 
 
+_REASONING_MODEL_PATTERNS = ("gpt-oss", "deepseek-r1")
+
+
 def skip_if_model_doesnt_support_reasoning(model_id):
     """Skip if the model is not known to emit reasoning/thinking tokens."""
-    if "gpt-oss" not in model_id.lower():
+    if not any(p in model_id.lower() for p in _REASONING_MODEL_PATTERNS):
         pytest.skip(f"Model {model_id} doesn't emit reasoning tokens; skipping reasoning passthrough test.")
 
 
 def test_openai_chat_completion_reasoning_passthrough(openai_client, client_with_models, text_model_id):
-    """Verify that reasoning tokens survive a round-trip through Llama Stack.
+    """Verify that reasoning tokens survive a round-trip through OGX.
 
     Turn 1: send a prompt, assert that the response carries reasoning content
             in model_extra (transparent passthrough from the provider).
@@ -520,7 +569,7 @@ def test_openai_chat_completion_reasoning_passthrough(openai_client, client_with
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is 2+2? Think step by step."},
     ]
-    resp1 = openai_client.chat.completions.create(model=text_model_id, messages=messages)
+    resp1 = openai_client.chat.completions.create(model=text_model_id, messages=messages, timeout=120)
     msg1 = resp1.choices[0].message
 
     # Reasoning content arrives as a non-spec field; it lives in model_extra
@@ -536,7 +585,7 @@ def test_openai_chat_completion_reasoning_passthrough(openai_client, client_with
     messages.append(msg1.model_dump())
     messages.append({"role": "user", "content": "Now multiply that result by 3."})
 
-    resp2 = openai_client.chat.completions.create(model=text_model_id, messages=messages)
+    resp2 = openai_client.chat.completions.create(model=text_model_id, messages=messages, timeout=120)
     msg2 = resp2.choices[0].message
 
     assert msg2.content, "Expected a non-empty response in turn 2"

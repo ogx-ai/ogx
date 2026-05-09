@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -16,14 +16,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llama_stack.core.datatypes import Api
-from llama_stack.core.storage.datatypes import KVStoreReference, ResponsesStoreReference
-from llama_stack.providers.inline.responses.builtin import get_provider_impl
-from llama_stack.providers.inline.responses.builtin.config import (
+from ogx.core.datatypes import Api
+from ogx.core.storage.datatypes import KVStoreReference, ResponsesStoreReference
+from ogx.providers.inline.responses.builtin import get_provider_impl
+from ogx.providers.inline.responses.builtin.config import (
     BuiltinResponsesImplConfig,
     ResponsesPersistenceConfig,
 )
-from llama_stack.providers.inline.responses.builtin.responses.utils import (
+from ogx.providers.inline.responses.builtin.responses.utils import (
     run_guardrails,
 )
 
@@ -81,7 +81,7 @@ class TestProviderInitialization:
 
         # Mock the initialize method to avoid actual initialization
         with patch(
-            "llama_stack.providers.inline.responses.builtin.impl.BuiltinResponsesImpl.initialize",
+            "ogx.providers.inline.responses.builtin.impl.BuiltinResponsesImpl.initialize",
             new_callable=AsyncMock,
         ):
             # Should not raise any exception
@@ -95,7 +95,7 @@ class TestProviderInitialization:
         # Safety API is NOT in mock_deps - provider should still start
         # Mock the initialize method to avoid actual initialization
         with patch(
-            "llama_stack.providers.inline.responses.builtin.impl.BuiltinResponsesImpl.initialize",
+            "ogx.providers.inline.responses.builtin.impl.BuiltinResponsesImpl.initialize",
             new_callable=AsyncMock,
         ):
             # Should not raise any exception
@@ -135,13 +135,13 @@ class TestGuardrailsFunctionality:
 
     async def test_create_response_rejects_guardrails_without_safety_api(self, mock_persistence_config, mock_deps):
         """Test that create_openai_response raises error when guardrails requested but Safety API unavailable."""
-        from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+        from ogx.providers.inline.responses.builtin.responses.openai_responses import (
             OpenAIResponsesImpl,
         )
-        from llama_stack_api import ResponseGuardrailSpec, ServiceNotEnabledError
+        from ogx_api import ResponseGuardrailSpec, ServiceNotEnabledError
 
         # Create OpenAIResponsesImpl with no safety API
-        with patch("llama_stack.providers.inline.responses.builtin.responses.openai_responses.ResponsesStore"):
+        with patch("ogx.providers.inline.responses.builtin.responses.openai_responses.ResponsesStore"):
             impl = OpenAIResponsesImpl(
                 inference_api=mock_deps[Api.inference],
                 tool_groups_api=mock_deps[Api.tool_groups],
@@ -179,13 +179,13 @@ class TestGuardrailsFunctionality:
         self, mock_persistence_config, mock_deps
     ):
         """Test that create_openai_response works when no guardrails requested and Safety API unavailable."""
-        from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+        from ogx.providers.inline.responses.builtin.responses.openai_responses import (
             OpenAIResponsesImpl,
         )
 
         # Create OpenAIResponsesImpl with no safety API
         with (
-            patch("llama_stack.providers.inline.responses.builtin.responses.openai_responses.ResponsesStore"),
+            patch("ogx.providers.inline.responses.builtin.responses.openai_responses.ResponsesStore"),
             patch.object(OpenAIResponsesImpl, "_create_streaming_response", new_callable=AsyncMock) as mock_stream,
         ):
             # Mock the streaming response to return a simple async generator

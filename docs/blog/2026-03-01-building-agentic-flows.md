@@ -1,6 +1,6 @@
 ---
 slug: building-agentic-flows-with-conversations-and-responses
-title: "Building a Self-Improving Agent with Llama Stack"
+title: "Building a Self-Improving Agent with OGX"
 authors: [raghotham]
 tags: [agents, responses-api, conversations, prompts, tutorial]
 date: 2026-03-01
@@ -10,7 +10,7 @@ What if your AI agent could improve itself? Most agent tutorials show a single l
 
 In this post, we build a **ResearchAgent** that answers questions from an internal engineering knowledge base — and gets better at it automatically. The agent uses the Responses API agentic loop with `file_search` and client-side tools to research questions, and it owns its own system prompt. Every N calls, it benchmarks itself by using a different model to judge the results, and rewrites its own prompt via the Prompts API.
 
-This is literally self-referential: **a Llama Stack agent evaluating and improving itself** using the Responses API, Prompts API, and Vector Stores as its toolkit.
+This is literally self-referential: **a OGX agent evaluating and improving itself** using the Responses API, Prompts API, and Vector Stores as its toolkit.
 
 <!--truncate-->
 
@@ -46,8 +46,8 @@ A single `ResearchAgent` class that does two things:
 ## Prerequisites
 
 - [Ollama](https://ollama.com) running locally with two models pulled: `llama3.1:8b` for the research agent and `gpt-oss:20b` as the judge
-- A Llama Stack server using the starter distribution, pointed at Ollama via the `OLLAMA_URL` environment variable
-- Python SDK: `uv pip install llama-stack-client`
+- A OGX server using the starter distribution, pointed at Ollama via the `OLLAMA_URL` environment variable
+- Python SDK: `uv pip install ogx-client`
 
 ## The Research Loop
 
@@ -240,12 +240,12 @@ class ResearchAgent:
 
 ## Running It
 
-First, pull the models and start Ollama, then run the Llama Stack starter distribution pointing at it:
+First, pull the models and start Ollama, then run the OGX starter distribution pointing at it:
 
 ```bash
 ollama pull llama3.1:8b
 ollama pull gpt-oss:20b
-OLLAMA_URL=http://localhost:11434/v1 uv run --with llama-stack llama stack run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run --with ogx ogx stack run starter
 ```
 
 The `OLLAMA_URL` environment variable tells the starter distribution to use Ollama as its inference provider. The server starts on `http://localhost:8321` by default.
@@ -253,9 +253,9 @@ The `OLLAMA_URL` environment variable tells the starter distribution to use Olla
 Then create the agent with some engineering documents. Some docs are indexed in the vector store up front; others live in a local directory for the agent to discover and index on demand:
 
 ```python
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
-client = LlamaStackClient(base_url="http://localhost:8321")
+client = OgxClient(base_url="http://localhost:8321")
 
 # Create the initial system prompt
 initial = client.prompts.create(
@@ -332,4 +332,4 @@ To learn more:
 - [Conversations API documentation](/docs/api-openai/conformance#conversations)
 - [OpenAI API compatibility](/docs/api-openai)
 - [Vector Stores documentation](/docs/building_applications/rag)
-- [Join our Discord](https://discord.gg/llama-stack)
+- [Join our Discord](https://discord.gg/ZAFjsrcw)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -32,6 +32,12 @@ from lib.utils import setup_logging
     help="Use OpenAI Batch API for queries (50% cheaper, higher throughput)",
 )
 @click.option("--batch-id", default=None, help="Resume polling an existing Batch API job by ID")
+@click.option(
+    "--disable-thinking",
+    is_flag=True,
+    default=False,
+    help="Disable thinking/reasoning mode for models that support it (e.g. vLLM reasoning models)",
+)
 def main(
     benchmark: str,
     dataset: str | None,
@@ -46,6 +52,7 @@ def main(
     verbose: bool,
     batch_api: bool,
     batch_id: str | None,
+    disable_thinking: bool,
 ):
     setup_logging(verbose)
 
@@ -64,6 +71,10 @@ def main(
 
     client = create_client(base_url=base_url)
 
+    extra_body = None
+    if disable_thinking:
+        extra_body = {"chat_template_kwargs": {"enable_thinking": False}}
+
     common_kwargs = {
         "client": client,
         "base_url": base_url,
@@ -75,6 +86,7 @@ def main(
         "resume": resume,
         "use_batch_api": batch_api,
         "batch_id": batch_id,
+        "extra_body": extra_body,
     }
 
     if benchmark == "beir":

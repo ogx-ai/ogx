@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,17 +11,17 @@ import numpy as np
 import pytest
 from psycopg2 import sql
 
-from llama_stack.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore import register_kvstore_backends
-from llama_stack.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
-from llama_stack.providers.inline.vector_io.faiss.faiss import FaissIndex, FaissVectorIOAdapter
-from llama_stack.providers.inline.vector_io.qdrant.config import QdrantVectorIOConfig
-from llama_stack.providers.inline.vector_io.sqlite_vec import SQLiteVectorIOConfig
-from llama_stack.providers.inline.vector_io.sqlite_vec.sqlite_vec import SQLiteVecIndex, SQLiteVecVectorIOAdapter
-from llama_stack.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex, PGVectorVectorIOConfig
-from llama_stack.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex, PGVectorVectorIOAdapter
-from llama_stack.providers.remote.vector_io.qdrant.qdrant import QdrantIndex, QdrantVectorIOAdapter
-from llama_stack_api import Chunk, ChunkMetadata, QueryChunksResponse, VectorStore, VectorStoreNotFoundError
+from ogx.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
+from ogx.core.storage.kvstore import register_kvstore_backends
+from ogx.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
+from ogx.providers.inline.vector_io.faiss.faiss import FaissIndex, FaissVectorIOAdapter
+from ogx.providers.inline.vector_io.qdrant.config import QdrantVectorIOConfig
+from ogx.providers.inline.vector_io.sqlite_vec import SQLiteVectorIOConfig
+from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import SQLiteVecIndex, SQLiteVecVectorIOAdapter
+from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex, PGVectorVectorIOConfig
+from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex, PGVectorVectorIOAdapter
+from ogx.providers.remote.vector_io.qdrant.qdrant import QdrantIndex, QdrantVectorIOAdapter
+from ogx_api import Chunk, ChunkMetadata, QueryChunksResponse, VectorStore, VectorStoreNotFoundError
 
 EMBEDDING_DIMENSION = 768
 COLLECTION_PREFIX = "test_collection"
@@ -47,7 +47,7 @@ def sample_chunks():
     """Generates chunks that force multiple batches for a single document to expose ID conflicts."""
     import time
 
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     n, k = 10, 3
     sample = [
@@ -246,8 +246,8 @@ async def pgvector_vec_index(embedding_dimension, mock_psycopg2_connection):
         provider_resource_id="pgvector:test-vector-db",
     )
 
-    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
-        with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.execute_values"):
+    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
+        with patch("ogx.providers.remote.vector_io.pgvector.pgvector.execute_values"):
             index = PGVectorIndex(
                 vector_store,
                 embedding_dimension,
@@ -292,7 +292,7 @@ async def pgvector_vec_adapter(unique_kvstore_config, mock_inference_api, embedd
 
     adapter = PGVectorVectorIOAdapter(config, mock_inference_api, None)
 
-    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.psycopg2.connect") as mock_connect:
+    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.psycopg2.connect") as mock_connect:
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
@@ -301,17 +301,15 @@ async def pgvector_vec_adapter(unique_kvstore_config, mock_inference_api, embedd
         mock_conn.autocommit = True
         mock_connect.return_value = mock_conn
 
-        with patch(
-            "llama_stack.providers.remote.vector_io.pgvector.pgvector.check_extension_version"
-        ) as mock_check_version:
+        with patch("ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version") as mock_check_version:
             mock_check_version.return_value = "0.5.1"
 
-            with patch("llama_stack.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
+            with patch("ogx.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
                 mock_kvstore = AsyncMock()
                 mock_kvstore_impl.return_value = mock_kvstore
 
                 with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
-                    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.upsert_models"):
+                    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.upsert_models"):
                         await adapter.initialize()
                         adapter.conn = mock_conn
 
@@ -407,10 +405,10 @@ async def qdrant_vec_adapter(unique_kvstore_config, mock_inference_api, embeddin
     mock_client.close = AsyncMock()
     mock_client.upsert = AsyncMock()
 
-    with patch("llama_stack.providers.remote.vector_io.qdrant.qdrant.AsyncQdrantClient") as mock_client_class:
+    with patch("ogx.providers.remote.vector_io.qdrant.qdrant.AsyncQdrantClient") as mock_client_class:
         mock_client_class.return_value = mock_client
 
-        with patch("llama_stack.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
+        with patch("ogx.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
             mock_kvstore = AsyncMock()
             mock_kvstore.values_in_range.return_value = []
             mock_kvstore_impl.return_value = mock_kvstore

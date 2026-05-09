@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,7 +10,7 @@ from contextvars import ContextVar
 
 import pytest
 
-from llama_stack.core.utils.context import preserve_contexts_async_generator
+from ogx.core.utils.context import preserve_contexts_async_generator
 
 
 async def test_preserve_contexts_with_exception():

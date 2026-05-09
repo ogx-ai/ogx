@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-# Integration test runner script for Llama Stack
+# Integration test runner script for OGX
 # This script extracts the integration test logic from GitHub Actions
 # to allow developers to run integration tests locally
 
@@ -156,7 +156,7 @@ if [[ -n "$TEST_FILE" && -z "$TEST_SETUP" ]]; then
     exit 1
 fi
 
-echo "=== Llama Stack Integration Test Runner ==="
+echo "=== OGX Integration Test Runner ==="
 echo "Stack Config: $STACK_CONFIG"
 echo "Setup: $TEST_SETUP"
 echo "Text model: ${TEXT_MODEL:- (from setup)}"
@@ -167,11 +167,11 @@ echo "Test Subdirs: $TEST_SUBDIRS"
 echo "Test Pattern: $TEST_PATTERN"
 echo ""
 
-echo "Checking llama packages"
-uv pip list | grep llama
+echo "Checking ogx packages"
+uv pip list | grep ogx
 
 # Set environment variables
-export LLAMA_STACK_CLIENT_TIMEOUT=300
+export OGX_CLIENT_TIMEOUT=300
 
 THIS_DIR=$(dirname "$0")
 
@@ -193,17 +193,17 @@ fi
 echo "=== Applying Setup Environment Variables ==="
 
 # the server needs this
-export LLAMA_STACK_TEST_INFERENCE_MODE="$INFERENCE_MODE"
+export OGX_TEST_INFERENCE_MODE="$INFERENCE_MODE"
 export SQLITE_STORE_DIR=$(mktemp -d)
 echo "Setting SQLITE_STORE_DIR: $SQLITE_STORE_DIR"
 
 # Determine stack config type for api_recorder test isolation
 if [[ "$COLLECT_ONLY" == false ]]; then
     if [[ "$STACK_CONFIG" == server:* ]] || [[ "$STACK_CONFIG" == docker:* ]] || [[ "$STACK_CONFIG" == http://* ]]; then
-        export LLAMA_STACK_TEST_STACK_CONFIG_TYPE="server"
+        export OGX_TEST_STACK_CONFIG_TYPE="server"
         echo "Setting stack config type: server"
     else
-        export LLAMA_STACK_TEST_STACK_CONFIG_TYPE="library_client"
+        export OGX_TEST_STACK_CONFIG_TYPE="library_client"
         echo "Setting stack config type: library_client"
     fi
 
@@ -214,15 +214,15 @@ if [[ "$COLLECT_ONLY" == false ]]; then
     if [[ "$STACK_CONFIG" == docker:* ]]; then
         if [[ "$(uname)" != "Darwin" ]] && [[ "$(uname)" != *"MINGW"* ]]; then
             # On Linux with host network mode, container shares host network namespace
-            export LLAMA_STACK_TEST_MCP_HOST="localhost"
+            export OGX_TEST_MCP_HOST="localhost"
             echo "Setting MCP host: localhost (docker mode with host network)"
         else
             # On macOS/Windows with bridge network, need special host access
-            export LLAMA_STACK_TEST_MCP_HOST="host.docker.internal"
+            export OGX_TEST_MCP_HOST="host.docker.internal"
             echo "Setting MCP host: host.docker.internal (docker mode with bridge network)"
         fi
     else
-        export LLAMA_STACK_TEST_MCP_HOST="localhost"
+        export OGX_TEST_MCP_HOST="localhost"
         echo "Setting MCP host: localhost (library/server mode)"
     fi
 fi
@@ -234,17 +234,17 @@ eval "$SETUP_ENV"
 echo ""
 
 # Export suite and setup names for TypeScript tests
-export LLAMA_STACK_TEST_SUITE="$TEST_SUITE"
-export LLAMA_STACK_TEST_SETUP="$TEST_SETUP"
+export OGX_TEST_SUITE="$TEST_SUITE"
+export OGX_TEST_SETUP="$TEST_SETUP"
 
 ROOT_DIR="$THIS_DIR/.."
 cd $ROOT_DIR
 
-# check if "llama" and "pytest" are available. this script does not use `uv run` given
+# check if "ogx" and "pytest" are available. this script does not use `uv run` given
 # it can be used in a pre-release environment where we have not been able to tell
 # uv about pre-release dependencies properly (yet).
-if [[ "$COLLECT_ONLY" == false ]] && ! command -v llama &>/dev/null; then
-    echo "llama could not be found, ensure llama-stack is installed"
+if [[ "$COLLECT_ONLY" == false ]] && ! command -v ogx &>/dev/null; then
+    echo "ogx could not be found, ensure ogx is installed"
     exit 1
 fi
 
@@ -280,11 +280,11 @@ run_client_ts_tests() {
     if [[ -d "$TS_CLIENT_PATH" ]]; then
         # It's a directory path - use local checkout
         if [[ ! -f "$TS_CLIENT_PATH/package.json" ]]; then
-            echo "Error: $TS_CLIENT_PATH exists but doesn't look like llama-stack-client-typescript (no package.json)"
+            echo "Error: $TS_CLIENT_PATH exists but doesn't look like ogx-client-typescript (no package.json)"
             popd >/dev/null
             return 1
         fi
-        echo "Using local llama-stack-client-typescript from: $TS_CLIENT_PATH"
+        echo "Using local ogx-client-typescript from: $TS_CLIENT_PATH"
 
         # Build the TypeScript client first
         echo "Building TypeScript client..."
@@ -301,26 +301,26 @@ run_client_ts_tests() {
         fi
 
         # Then install the client from local directory
-        echo "Installing llama-stack-client from: $TS_CLIENT_PATH"
+        echo "Installing ogx-client from: $TS_CLIENT_PATH"
         npm install "$TS_CLIENT_PATH" --silent
     else
         # It's an npm version specifier - install from npm
-        echo "Installing llama-stack-client@${TS_CLIENT_PATH} from npm"
+        echo "Installing ogx-client@${TS_CLIENT_PATH} from npm"
         if [[ "${CI:-}" == "true" || "${CI:-}" == "1" ]]; then
             npm ci --silent
-            npm install "llama-stack-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
         else
-            npm install "llama-stack-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
         fi
     fi
 
     # Verify installation
-    echo "Verifying llama-stack-client installation..."
-    if npm list llama-stack-client 2>/dev/null | grep -q llama-stack-client; then
-        echo "✅ llama-stack-client successfully installed"
-        npm list llama-stack-client
+    echo "Verifying ogx-client installation..."
+    if npm list ogx-client 2>/dev/null | grep -q ogx-client; then
+        echo "✅ ogx-client successfully installed"
+        npm list ogx-client
     else
-        echo "❌ llama-stack-client not found in node_modules"
+        echo "❌ ogx-client not found in node_modules"
         echo "Installed packages:"
         npm list --depth=0
         popd >/dev/null
@@ -333,38 +333,38 @@ run_client_ts_tests() {
     popd >/dev/null
 }
 
-# Start Llama Stack Server if needed
+# Start OGX Server if needed
 if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     # Find an available port for the server
-    LLAMA_STACK_PORT=$(find_available_port 8321)
+    OGX_PORT=$(find_available_port 8321)
     if [[ $? -ne 0 ]]; then
-        echo "Error: $LLAMA_STACK_PORT"
+        echo "Error: $OGX_PORT"
         exit 1
     fi
-    export LLAMA_STACK_PORT
-    export TEST_API_BASE_URL="http://localhost:$LLAMA_STACK_PORT"
-    echo "Will use port: $LLAMA_STACK_PORT"
+    export OGX_PORT
+    export TEST_API_BASE_URL="http://localhost:$OGX_PORT"
+    echo "Will use port: $OGX_PORT"
 
     stop_server() {
-        echo "Stopping Llama Stack Server..."
-        pids=$(lsof -i :$LLAMA_STACK_PORT | awk 'NR>1 {print $2}')
+        echo "Stopping OGX Server..."
+        pids=$(lsof -i :$OGX_PORT | awk 'NR>1 {print $2}')
         if [[ -n "$pids" ]]; then
-            echo "Killing Llama Stack Server processes: $pids"
+            echo "Killing OGX Server processes: $pids"
             kill -9 $pids
         else
-            echo "No Llama Stack Server processes found ?!"
+            echo "No OGX Server processes found ?!"
         fi
-        echo "Llama Stack Server stopped"
+        echo "OGX Server stopped"
     }
 
-    echo "=== Starting Llama Stack Server ==="
-    export LLAMA_STACK_LOG_WIDTH=120
+    echo "=== Starting OGX Server ==="
+    export OGX_LOG_WIDTH=120
 
     # Configure telemetry collector for server mode
     # Use a fixed port for the OTEL collector so the server can connect to it
     COLLECTOR_PORT=4317
-    export LLAMA_STACK_TEST_COLLECTOR_PORT="${COLLECTOR_PORT}"
-    # Disabled: https://github.com/llamastack/llama-stack/issues/4089
+    export OGX_TEST_COLLECTOR_PORT="${COLLECTOR_PORT}"
+    # Disabled: https://github.com/ogx-ai/ogx/issues/4089
     #export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:${COLLECTOR_PORT}"
     export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
     export OTEL_BSP_SCHEDULE_DELAY="200"
@@ -373,16 +373,16 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup llama stack run $stack_config >server.log 2>&1 &
+    nohup ogx stack run $stack_config >server.log 2>&1 &
 
-    echo "Waiting for Llama Stack Server to start on port $LLAMA_STACK_PORT..."
-    for i in {1..30}; do
-        if curl -s http://localhost:$LLAMA_STACK_PORT/v1/health 2>/dev/null | grep -q "OK"; then
-            echo "✅ Llama Stack Server started successfully"
+    echo "Waiting for OGX Server to start on port $OGX_PORT..."
+    for i in {1..60}; do
+        if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
+            echo "✅ OGX Server started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
-            echo "❌ Llama Stack Server failed to start"
+        if [[ $i -eq 60 ]]; then
+            echo "❌ OGX Server failed to start"
             echo "Server logs:"
             cat server.log
             exit 1
@@ -390,10 +390,10 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
         sleep 1
     done
     # Verify IPv6 loopback connectivity
-    if curl -s http://[::1]:$LLAMA_STACK_PORT/v1/health 2>/dev/null | grep -q "OK"; then
-        echo "✅ Llama Stack Server is accessible on IPv6 loopback"
+    if curl -s http://[::1]:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
+        echo "✅ OGX Server is accessible on IPv6 loopback"
     else
-        echo "❌ Llama Stack Server is not accessible on IPv6 loopback"
+        echo "❌ OGX Server is not accessible on IPv6 loopback"
         echo "Server logs:"
         cat server.log
         exit 1
@@ -407,7 +407,7 @@ fi
 if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     stop_container() {
         echo "Stopping Docker container..."
-        container_name="llama-stack-test-$DISTRO"
+        container_name="ogx-test-$DISTRO"
         if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
             echo "Dumping container logs before stopping..."
             docker logs "$container_name" >"docker-${DISTRO}-${INFERENCE_MODE}.log" 2>&1 || true
@@ -423,14 +423,14 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     # Extract distribution name from docker:distro format
     DISTRO=$(echo "$STACK_CONFIG" | sed 's/^docker://')
     # Find an available port for the docker container
-    LLAMA_STACK_PORT=$(find_available_port 8321)
+    OGX_PORT=$(find_available_port 8321)
     if [[ $? -ne 0 ]]; then
-        echo "Error: $LLAMA_STACK_PORT"
+        echo "Error: $OGX_PORT"
         exit 1
     fi
-    export LLAMA_STACK_PORT
-    export TEST_API_BASE_URL="http://localhost:$LLAMA_STACK_PORT"
-    echo "Will use port: $LLAMA_STACK_PORT"
+    export OGX_PORT
+    export TEST_API_BASE_URL="http://localhost:$OGX_PORT"
+    echo "Will use port: $OGX_PORT"
 
     echo "=== Building Docker Image for distribution: $DISTRO ==="
     containerfile="$ROOT_DIR/containers/Containerfile"
@@ -447,7 +447,7 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
         --tag "localhost/distribution-$DISTRO:dev"
         --build-arg "DISTRO_NAME=$DISTRO"
         --build-arg "INSTALL_MODE=editable"
-        --build-arg "LLAMA_STACK_DIR=/workspace"
+        --build-arg "OGX_DIR=/workspace"
     )
 
     # Pass UV index configuration for release branches
@@ -467,7 +467,7 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
 
     echo ""
     echo "=== Starting Docker Container ==="
-    container_name="llama-stack-test-$DISTRO"
+    container_name="ogx-test-$DISTRO"
 
     # Stop and remove existing container if it exists
     docker stop "$container_name" 2>/dev/null || true
@@ -475,15 +475,15 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
 
     # Configure telemetry collector port shared between host and container
     COLLECTOR_PORT=4317
-    export LLAMA_STACK_TEST_COLLECTOR_PORT="${COLLECTOR_PORT}"
+    export OGX_TEST_COLLECTOR_PORT="${COLLECTOR_PORT}"
 
     # Build environment variables for docker run
     DOCKER_ENV_VARS=""
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e LLAMA_STACK_TEST_INFERENCE_MODE=$INFERENCE_MODE"
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e LLAMA_STACK_TEST_STACK_CONFIG_TYPE=server"
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e LLAMA_STACK_TEST_MCP_HOST=${LLAMA_STACK_TEST_MCP_HOST:-host.docker.internal}"
+    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_INFERENCE_MODE=$INFERENCE_MODE"
+    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_STACK_CONFIG_TYPE=server"
+    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_MCP_HOST=${OGX_TEST_MCP_HOST:-host.docker.internal}"
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OTEL_SDK_DISABLED=true"
-    # Disabled: https://github.com/llamastack/llama-stack/issues/4089
+    # Disabled: https://github.com/ogx-ai/ogx/issues/4089
     #DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:${COLLECTOR_PORT}"
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OTEL_METRIC_EXPORT_INTERVAL=200"
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OTEL_BSP_SCHEDULE_DELAY=200"
@@ -506,6 +506,8 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     [ -n "${SAFETY_MODEL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e SAFETY_MODEL=$SAFETY_MODEL"
     [ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK"
     [ -n "${AWS_DEFAULT_REGION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
+    [ -n "${VERTEX_AI_PROJECT:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_PROJECT=$VERTEX_AI_PROJECT"
+    [ -n "${VERTEX_AI_LOCATION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_LOCATION=$VERTEX_AI_LOCATION"
 
     if [[ "$TEST_SETUP" == "vllm" ]]; then
         DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VLLM_URL=http://localhost:8000/v1"
@@ -530,7 +532,7 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
         ADD_HOST_FLAG="--add-host=host.docker.internal:host-gateway"
     else
         # On non-Linux (macOS, Windows), need explicit port mappings for both app and telemetry
-        PORT_MAPPINGS="-p $LLAMA_STACK_PORT:$LLAMA_STACK_PORT -p $COLLECTOR_PORT:$COLLECTOR_PORT"
+        PORT_MAPPINGS="-p $OGX_PORT:$OGX_PORT -p $COLLECTOR_PORT:$COLLECTOR_PORT"
         echo "Using bridge networking with port mapping (non-Linux)"
     fi
 
@@ -539,15 +541,15 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
         $ADD_HOST_FLAG \
         $DOCKER_ENV_VARS \
         "$IMAGE_NAME" \
-        --port $LLAMA_STACK_PORT
+        --port $OGX_PORT
 
     echo "Waiting for Docker container to start..."
-    for i in {1..30}; do
-        if curl -s http://localhost:$LLAMA_STACK_PORT/v1/health 2>/dev/null | grep -q "OK"; then
+    for i in {1..60}; do
+        if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
             echo "✅ Docker container started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
+        if [[ $i -eq 60 ]]; then
             echo "❌ Docker container failed to start"
             echo "Container logs:"
             docker logs "$container_name"
@@ -558,7 +560,7 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     echo ""
 
     # Update STACK_CONFIG to point to the running container
-    STACK_CONFIG="http://localhost:$LLAMA_STACK_PORT"
+    STACK_CONFIG="http://localhost:$OGX_PORT"
 
     trap stop_container EXIT ERR INT TERM
 fi
@@ -661,7 +663,7 @@ else
 fi
 
 # Run TypeScript client tests if TS_CLIENT_PATH is set
-if [[ $exit_code -eq 0 && -n "${TS_CLIENT_PATH:-}" && "${LLAMA_STACK_TEST_STACK_CONFIG_TYPE:-}" == "server" ]]; then
+if [[ $exit_code -eq 0 && -n "${TS_CLIENT_PATH:-}" && "${OGX_TEST_STACK_CONFIG_TYPE:-}" == "server" ]]; then
     run_client_ts_tests
 fi
 

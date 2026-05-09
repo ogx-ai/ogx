@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llama_stack.providers.inline.interactions.config import InteractionsConfig
-from llama_stack.providers.inline.interactions.impl import BuiltinInteractionsImpl
+from ogx.providers.inline.interactions.config import InteractionsConfig
+from ogx.providers.inline.interactions.impl import BuiltinInteractionsImpl
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

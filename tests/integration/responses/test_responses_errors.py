@@ -1,13 +1,13 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 """
-Error handling tests for the Llama Stack Responses and Conversations APIs.
+Error handling tests for the OGX Responses and Conversations APIs.
 
-These tests verify that errors emitted by Llama Stack are correctly typed
+These tests verify that errors emitted by OGX are correctly typed
 and handled by the OpenAI Python SDK, ensuring users don't have breaking
 experiences when error conditions occur.
 
@@ -49,7 +49,7 @@ import pytest
 from openai import APIError, APIStatusError, BadRequestError, NotFoundError
 from openai.types.responses import ResponseError
 
-from llama_stack_api.common.errors import (
+from ogx_api.common.errors import (
     ConversationNotFoundError,
     ModelNotFoundError,
     ResponseNotFoundError,
@@ -65,7 +65,7 @@ VALID_OPENAI_RESPONSE_ERROR_CODES: set[str] = set(get_args(_code_annotation))
 class TestResponsesAPIErrors:
     """Error handling tests for the Responses API.
 
-    These tests verify SDK compatibility by ensuring Llama Stack returns
+    These tests verify SDK compatibility by ensuring OGX returns
     the correct HTTP status codes that trigger the expected OpenAI SDK
     exception types for Responses API operations.
     """
@@ -202,11 +202,9 @@ class TestResponsesAPIErrors:
         assert "error" in body
         assert "message" in body["error"]
 
-    def test_guardrails_without_safety_api_raises_service_unavailable(
-        self, openai_client, llama_stack_client, text_model_id
-    ):
+    def test_guardrails_without_safety_api_raises_service_unavailable(self, openai_client, ogx_client, text_model_id):
         """Guardrails without Safety API configured returns 503."""
-        safety_providers = [p for p in llama_stack_client.providers.list() if p.api == "safety"]
+        safety_providers = [p for p in ogx_client.providers.list() if p.api == "safety"]
         if safety_providers:
             pytest.skip("Server has Safety API enabled")
 
@@ -358,7 +356,7 @@ class TestResponsesAPIStreamingErrors:
         Note: This test requires live mode as incomplete responses cannot be
         reliably recorded (they depend on hitting output limits).
         """
-        inference_mode = os.environ.get("LLAMA_STACK_TEST_INFERENCE_MODE", "replay")
+        inference_mode = os.environ.get("OGX_TEST_INFERENCE_MODE", "replay")
         if inference_mode != "live":
             pytest.skip("Incomplete response test requires live mode (cannot be recorded)")
 

@@ -1,0 +1,47 @@
+{
+  "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_tool_calling_round_trip[txt=gemini/gemini-2.5-flash-lite]",
+  "request": {
+    "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_tool_calling_round_trip[txt=gemini/gemini-2.5-flash-lite]",
+    "url": "https://generativelanguage.googleapis.com/v1beta/interactions",
+    "method": "POST",
+    "payload": {
+      "model": "gemini-2.5-flash-lite",
+      "input": "What is the weather in Tokyo? You must use the get_weather tool.",
+      "tools": [
+        {
+          "type": "function",
+          "function_declarations": [
+            {
+              "name": "get_weather",
+              "description": "Get the current weather for a location.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  }
+                },
+                "required": [
+                  "location"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "message": "invalid JSON  in genai.Interaction @ tools[0].function: message genai.Function,   near 1:48 (offset  47): no such field: 'function_declarations'",
+        "code": "invalid_request"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,6 +1,6 @@
 ---
 title: Detailed Tutorial
-description: Build AI applications with Llama Stack using the standard OpenAI SDK
+description: Build AI applications with OGX using the standard OpenAI SDK
 sidebar_label: Detailed Tutorial
 sidebar_position: 3
 ---
@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 ## Beyond the Quickstart
 
-This tutorial assumes you've completed the [Quickstart](./quickstart) and have a running Llama Stack server. We'll build progressively more complex applications using the standard OpenAI SDK.
+This tutorial assumes you've completed the [Quickstart](./quickstart) and have a running OGX server. We'll build progressively more complex applications using the standard OpenAI SDK.
 
 ### Chat Completions
 
@@ -60,7 +60,7 @@ print()
 
 ### Responses API with Tool Calling
 
-The Responses API provides server-side orchestration. The model decides which tools to call, Llama Stack executes them, and feeds results back automatically:
+The Responses API provides server-side orchestration. The model decides which tools to call, OGX executes them, and feeds results back automatically:
 
 ```python title="tools.py"
 from openai import OpenAI
@@ -91,7 +91,7 @@ for item in response.output:
 
 ### RAG with Vector Stores
 
-Upload documents, create a vector store, and ask questions. Llama Stack handles chunking, embedding, and retrieval:
+Upload documents, create a vector store, and ask questions. OGX handles chunking, embedding, and retrieval:
 
 ```python title="rag.py"
 from openai import OpenAI
@@ -179,7 +179,7 @@ The same code works with any backend. Just change the server config:
 
 ```bash
 export OLLAMA_URL=http://localhost:11434/v1
-uv run llama stack run starter
+uv run ogx stack run starter
 ```
 
 </TabItem>
@@ -187,7 +187,7 @@ uv run llama stack run starter
 
 ```bash
 export OPENAI_API_KEY=sk-xxx
-uv run llama stack run starter
+uv run ogx stack run starter
 ```
 
 Your client code stays the same. Just update the model name:
@@ -195,7 +195,7 @@ Your client code stays the same. Just update the model name:
 ```python
 response = client.responses.create(
     model="openai/gpt-4o",  # now using OpenAI
-    input="What is Llama Stack?",
+    input="What is OGX?",
 )
 ```
 
@@ -204,12 +204,12 @@ response = client.responses.create(
 
 ### Running as a Library
 
-You can also use Llama Stack without running a server, directly in your Python process:
+You can also use OGX without running a server, directly in your Python process:
 
 ```python title="library.py"
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
-client = LlamaStackAsLibraryClient("starter")
+client = OGXAsLibraryClient("starter")
 client.initialize()
 
 # Use the same OpenAI-compatible interface

@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 """
-Unit tests for `llama stack list-deps` CLI command.
+Unit tests for `ogx list-deps` CLI command.
 
 Categories:
   - Arguments: --providers flag is registered and parsed correctly
@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from llama_stack.cli.stack.list_deps import StackListDeps
+from ogx.cli.stack.list_deps import StackListDeps
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ class TestArguments:
 class TestDelegation:
     def _mock_provider_registry(self):
         """Return a mock registry that accepts test provider types."""
-        from llama_stack.core.datatypes import Api
+        from ogx.core.datatypes import Api
 
         return {
             Api.inference: {"fireworks": MagicMock()},
@@ -64,18 +64,18 @@ class TestDelegation:
 
         with (
             patch(
-                "llama_stack.cli.stack._list_deps.run_config_from_dynamic_config_spec",
+                "ogx.cli.stack._list_deps.run_config_from_dynamic_config_spec",
                 return_value=mock_config,
             ) as mock_fn,
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_registry",
+                "ogx.cli.stack._list_deps.get_provider_registry",
                 return_value=self._mock_provider_registry(),
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.add_dependent_providers",
+                "ogx.cli.stack._list_deps.add_dependent_providers",
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_dependencies",
+                "ogx.cli.stack._list_deps.get_provider_dependencies",
                 return_value=([], [], []),
             ),
             patch("builtins.print"),
@@ -93,18 +93,18 @@ class TestDelegation:
 
         with (
             patch(
-                "llama_stack.cli.stack._list_deps.run_config_from_dynamic_config_spec",
+                "ogx.cli.stack._list_deps.run_config_from_dynamic_config_spec",
                 return_value=mock_config,
             ) as mock_fn,
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_registry",
+                "ogx.cli.stack._list_deps.get_provider_registry",
                 return_value=self._mock_provider_registry(),
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.add_dependent_providers",
+                "ogx.cli.stack._list_deps.add_dependent_providers",
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_dependencies",
+                "ogx.cli.stack._list_deps.get_provider_dependencies",
                 return_value=([], [], []),
             ),
             patch("builtins.print"),
@@ -119,7 +119,7 @@ class TestErrorPropagation:
     def test_value_error_causes_exit_1(self, stack_list_deps: StackListDeps):
         with (
             patch(
-                "llama_stack.cli.stack._list_deps.run_config_from_dynamic_config_spec",
+                "ogx.cli.stack._list_deps.run_config_from_dynamic_config_spec",
                 side_effect=ValueError("Failed to parse provider spec 'bad'"),
             ),
             pytest.raises(SystemExit) as exc_info,
@@ -132,7 +132,7 @@ class TestErrorPropagation:
     def test_value_error_message_printed_to_stderr(self, stack_list_deps: StackListDeps, capsys):
         with (
             patch(
-                "llama_stack.cli.stack._list_deps.run_config_from_dynamic_config_spec",
+                "ogx.cli.stack._list_deps.run_config_from_dynamic_config_spec",
                 side_effect=ValueError("Failed to parse provider spec 'bad'"),
             ),
             pytest.raises(SystemExit),
@@ -147,7 +147,7 @@ class TestErrorPropagation:
 class TestOutput:
     def _mock_provider_registry(self):
         """Return a mock registry that accepts test provider types."""
-        from llama_stack.core.datatypes import Api
+        from ogx.core.datatypes import Api
 
         return {
             Api.inference: {"fireworks": MagicMock()},
@@ -159,18 +159,18 @@ class TestOutput:
 
         with (
             patch(
-                "llama_stack.cli.stack._list_deps.run_config_from_dynamic_config_spec",
+                "ogx.cli.stack._list_deps.run_config_from_dynamic_config_spec",
                 return_value=mock_config,
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_registry",
+                "ogx.cli.stack._list_deps.get_provider_registry",
                 return_value=self._mock_provider_registry(),
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.add_dependent_providers",
+                "ogx.cli.stack._list_deps.add_dependent_providers",
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_dependencies",
+                "ogx.cli.stack._list_deps.get_provider_dependencies",
                 return_value=(["httpx", "aiohttp"], [], []),
             ),
         ):
@@ -187,18 +187,18 @@ class TestOutput:
 
         with (
             patch(
-                "llama_stack.cli.stack._list_deps.run_config_from_dynamic_config_spec",
+                "ogx.cli.stack._list_deps.run_config_from_dynamic_config_spec",
                 return_value=mock_config,
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_registry",
+                "ogx.cli.stack._list_deps.get_provider_registry",
                 return_value=self._mock_provider_registry(),
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.add_dependent_providers",
+                "ogx.cli.stack._list_deps.add_dependent_providers",
             ),
             patch(
-                "llama_stack.cli.stack._list_deps.get_provider_dependencies",
+                "ogx.cli.stack._list_deps.get_provider_dependencies",
                 return_value=([], [], []),
             ),
         ):

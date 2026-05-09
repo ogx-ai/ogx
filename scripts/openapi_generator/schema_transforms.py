@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -151,7 +151,7 @@ def _add_error_responses(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         openapi_schema["components"]["responses"] = {}
 
     try:
-        from llama_stack_api.datatypes import Error
+        from ogx_api.datatypes import Error
 
         schema_collection._ensure_components_schemas(openapi_schema)
         if "Error" not in openapi_schema["components"]["schemas"]:
@@ -374,6 +374,7 @@ def _restore_const_enum_defaults(openapi_schema: dict[str, Any]) -> None:
     # These correspond to OpenAI schemas that have explicit defaults on
     # single-value enum fields (verified against openai-spec-2.3.0.yml).
     _defaults_to_restore: dict[str, dict[str, str]] = {
+        "ChatCompletionMessageList": {"object": "list"},
         "Conversation": {"object": "conversation"},
         "ListOpenAIChatCompletionResponse": {"object": "list"},
         "OpenAICompactedResponse": {"object": "response.compaction"},
@@ -524,7 +525,7 @@ def _clean_schema_descriptions(openapi_schema: dict[str, Any]) -> dict[str, Any]
 
 def _add_extra_body_params_extension(openapi_schema: dict[str, Any]) -> dict[str, Any]:
     """
-    Add x-llama-stack-extra-body-params extension to requestBody for endpoints with ExtraBodyField parameters.
+    Add x-ogx-extra-body-params extension to requestBody for endpoints with ExtraBodyField parameters.
     """
     if "paths" not in openapi_schema:
         return openapi_schema
@@ -608,8 +609,8 @@ def _add_extra_body_params_extension(openapi_schema: dict[str, Any]) -> dict[str
 
             if extra_params_schema:
                 # Add the extension to requestBody
-                if "x-llama-stack-extra-body-params" not in request_body:
-                    request_body["x-llama-stack-extra-body-params"] = extra_params_schema
+                if "x-ogx-extra-body-params" not in request_body:
+                    request_body["x-ogx-extra-body-params"] = extra_params_schema
 
     return openapi_schema
 

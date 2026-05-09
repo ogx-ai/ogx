@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@
 """
 Anthropic Messages API Coverage Analyzer
 
-Uses oasdiff to compare Llama Stack's OpenAPI spec against Anthropic's spec
+Uses oasdiff to compare OGX's OpenAPI spec against Anthropic's spec
 and generates a coverage report showing:
 - Which endpoints are implemented
 - Which properties are conformant vs have issues
@@ -138,10 +138,10 @@ def _count_endpoint_properties(spec: dict[str, Any], paths: list[str]) -> int:
 
 
 # Only track Anthropic Messages endpoints. Files and Models use the same path
-# as OpenAI but different schemas - Llama Stack serves OpenAI-shaped responses
+# as OpenAI but different schemas - OGX serves OpenAI-shaped responses
 # for both, so they are tracked by scripts/openai_coverage.py instead.
 # Anthropic's /v1/models returns a completely different shape (capabilities,
-# display_name, max_input_tokens) that Llama Stack does not implement.
+# display_name, max_input_tokens) that OGX does not implement.
 _CATEGORIES: dict[str, list[str]] = {
     "Messages": ["/v1/messages", "/v1/messages/count_tokens"],
     "Message Batches": [
@@ -470,8 +470,8 @@ def main():
     parser.add_argument(
         "--llama-spec",
         type=Path,
-        default=Path("docs/static/llama-stack-spec.yaml"),
-        help="Path to Llama Stack spec",
+        default=Path("docs/static/ogx-spec.yaml"),
+        help="Path to OGX spec",
     )
     parser.add_argument(
         "--output",

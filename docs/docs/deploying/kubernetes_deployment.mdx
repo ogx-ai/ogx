@@ -1,6 +1,6 @@
 ---
 title: Kubernetes Deployment Guide
-description: Deploy Llama Stack on Kubernetes clusters with vLLM inference service
+description: Deploy OGX on Kubernetes clusters with vLLM inference service
 sidebar_label: Kubernetes
 sidebar_position: 2
 ---
@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 # Kubernetes Deployment Guide
 
-Deploy Llama Stack and vLLM servers in a Kubernetes cluster instead of running them locally. This guide covers deployment using the Kubernetes operator to manage the Llama Stack server with Kind. The vLLM inference server is deployed manually.
+Deploy OGX and vLLM servers in a Kubernetes cluster instead of running them locally. This guide covers deployment using the Kubernetes operator to manage the OGX server with Kind. The vLLM inference server is deployed manually.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Deploy Llama Stack and vLLM servers in a Kubernetes cluster instead of running t
 Create a local Kubernetes cluster via Kind:
 
 ```bash
-kind create cluster --image kindest/node:v1.32.0 --name llama-stack-test
+kind create cluster --image kindest/node:v1.32.0 --name ogx-test
 ```
 
 Set your Hugging Face token:
@@ -112,35 +112,35 @@ EOF
 
 ### Step 3: Install Kubernetes Operator
 
-Install the Llama Stack Kubernetes operator to manage Llama Stack deployments:
+Install the OGX Kubernetes operator to manage OGX deployments:
 
 ```bash
 # Install from the latest main branch
-kubectl apply -f https://raw.githubusercontent.com/llamastack/llama-stack-k8s-operator/main/release/operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/ogx-ai/ogx-k8s-operator/main/release/operator.yaml
 
 # Or install a specific version (e.g., v0.4.0)
-# kubectl apply -f https://raw.githubusercontent.com/llamastack/llama-stack-k8s-operator/v0.4.0/release/operator.yaml
+# kubectl apply -f https://raw.githubusercontent.com/ogx-ai/ogx-k8s-operator/v0.4.0/release/operator.yaml
 ```
 
 Verify the operator is running:
 
 ```bash
-kubectl get pods -n llama-stack-k8s-operator-system
+kubectl get pods -n ogx-k8s-operator-system
 ```
 
-For more information about the operator, see the [llama-stack-k8s-operator repository](https://github.com/llamastack/llama-stack-k8s-operator).
+For more information about the operator, see the [ogx-k8s-operator repository](https://github.com/ogx-ai/ogx-k8s-operator).
 
-### Step 4: Deploy Llama Stack Server using Operator
+### Step 4: Deploy OGX Server using Operator
 
-Create a `LlamaStackDistribution` custom resource to deploy the Llama Stack server. The operator will automatically create the necessary Deployment, Service, and other resources.
-You can optionally override the default `config.yaml` using `spec.server.userConfig` with a ConfigMap (see [userConfig spec](https://github.com/llamastack/llama-stack-k8s-operator/blob/main/docs/api-overview.md#userconfigspec)).
+Create a `OGXDistribution` custom resource to deploy the OGX server. The operator will automatically create the necessary Deployment, Service, and other resources.
+You can optionally override the default `config.yaml` using `spec.server.userConfig` with a ConfigMap (see [userConfig spec](https://github.com/ogx-ai/ogx-k8s-operator/blob/main/docs/api-overview.md#userconfigspec)).
 
 ```yaml
 cat <<EOF | kubectl apply -f -
-apiVersion: llamastack.io/v1alpha1
-kind: LlamaStackDistribution
+apiVersion: ogx.io/v1alpha1
+kind: OGXDistribution
 metadata:
-  name: llamastack-vllm
+  name: ogx-vllm
 spec:
   replicas: 1
   server:
@@ -158,7 +158,7 @@ spec:
     # Optional: override config.yaml from a ConfigMap using userConfig
     userConfig:
       configMap:
-        name: llama-stack-config
+        name: ogx-config
     storage:
       size: "20Gi"
       mountPath: "/home/lls/.lls"
@@ -167,19 +167,19 @@ EOF
 
 **Configuration Options:**
 
-- `replicas`: Number of Llama Stack server instances to run
-- `server.distribution.name`: The distribution to use (e.g., `starter` for the starter distribution). See the [list of supported distributions](https://github.com/llamastack/llama-stack-k8s-operator/blob/main/distributions.json) in the operator repository.
+- `replicas`: Number of OGX server instances to run
+- `server.distribution.name`: The distribution to use (e.g., `starter` for the starter distribution). See the [list of supported distributions](https://github.com/ogx-ai/ogx-k8s-operator/blob/main/distributions.json) in the operator repository.
 - `server.distribution.image`: (Optional) Custom container image for non-supported distributions. Use this field when deploying a distribution that is not in the supported list. If specified, this takes precedence over `name`.
-- `server.containerSpec.port`: Port on which the Llama Stack server listens (default: 8321)
+- `server.containerSpec.port`: Port on which the OGX server listens (default: 8321)
 - `server.containerSpec.env`: Environment variables to configure providers:
-- `server.userConfig`: (Optional) Override the default `config.yaml` using a ConfigMap. See [userConfig spec](https://github.com/llamastack/llama-stack-k8s-operator/blob/main/docs/api-overview.md#userconfigspec).
+- `server.userConfig`: (Optional) Override the default `config.yaml` using a ConfigMap. See [userConfig spec](https://github.com/ogx-ai/ogx-k8s-operator/blob/main/docs/api-overview.md#userconfigspec).
 - `server.storage.size`: Size of the persistent volume for model and data storage
 - `server.storage.mountPath`: Where to mount the storage in the container
 
-**Note:** For a complete list of supported distributions, see [distributions.json](https://github.com/llamastack/llama-stack-k8s-operator/blob/main/distributions.json) in the operator repository. Pre-built container images are available on [Docker Hub](https://hub.docker.com/u/llamastack) (e.g., `llamastack/distribution-starter`, `llamastack/distribution-postgres-demo`, `llamastack/distribution-dell`). To use a custom or non-supported distribution, set the `server.distribution.image` field with your container image instead of `server.distribution.name`.
+**Note:** For a complete list of supported distributions, see [distributions.json](https://github.com/ogx-ai/ogx-k8s-operator/blob/main/distributions.json) in the operator repository. Pre-built container images are available on [Docker Hub](https://hub.docker.com/u/llamastack) (e.g., `llamastack/distribution-starter`, `llamastack/distribution-postgres-demo`). To use a custom or non-supported distribution, set the `server.distribution.image` field with your container image instead of `server.distribution.name`.
 
 The operator automatically creates:
-- A Deployment for the Llama Stack server
+- A Deployment for the OGX server
 - A Service to access the server
 - A PersistentVolumeClaim for storage
 - All necessary RBAC resources
@@ -188,39 +188,39 @@ The operator automatically creates:
 Check the status of your deployment:
 
 ```bash
-kubectl get llamastackdistribution
-kubectl describe llamastackdistribution llamastack-vllm
+kubectl get ogxdistribution
+kubectl describe ogxdistribution ogx-vllm
 ```
 
 ### Step 5: Test Deployment
 
-Wait for the Llama Stack server pod to be ready:
+Wait for the OGX server pod to be ready:
 
 ```bash
-# Check the status of the LlamaStackDistribution
-kubectl get llamastackdistribution llamastack-vllm
+# Check the status of the OGXDistribution
+kubectl get ogxdistribution ogx-vllm
 
 # Check the pods created by the operator
-kubectl get pods -l app.kubernetes.io/instance=llamastack-vllm
+kubectl get pods -l app.kubernetes.io/instance=ogx-vllm
 
 # Wait for the pod to be ready
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=llamastack-vllm --timeout=300s
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=ogx-vllm --timeout=300s
 ```
 
-Get the service name created by the operator (it typically follows the pattern `<llamastackdistribution-name>-service`):
+Get the service name created by the operator (it typically follows the pattern `<ogxdistribution-name>-service`):
 
 ```bash
 # List services to find the service name
-kubectl get services | grep llamastack
+kubectl get services | grep ogx
 
 # Port forward and test (replace SERVICE_NAME with the actual service name)
-kubectl port-forward service/llamastack-vllm-service 8321:8321
+kubectl port-forward service/ogx-vllm-service 8321:8321
 ```
 
 In another terminal, test the deployment:
 
 ```bash
-llama-stack-client --endpoint http://localhost:8321 inference chat-completion --message "hello, what model are you?"
+ogx-client --endpoint http://localhost:8321 inference chat-completion --message "hello, what model are you?"
 ```
 
 ## Troubleshooting
@@ -238,48 +238,48 @@ kubectl logs -l app.kubernetes.io/name=vllm
 kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- curl http://vllm-server:8000/v1/models
 ```
 
-### Llama Stack Server Issues
+### OGX Server Issues
 
-**Check LlamaStackDistribution status:**
+**Check OGXDistribution status:**
 ```bash
 # Get detailed status
-kubectl describe llamastackdistribution llamastack-vllm
+kubectl describe ogxdistribution ogx-vllm
 
 # Check for events
-kubectl get events --sort-by='.lastTimestamp' | grep llamastack-vllm
+kubectl get events --sort-by='.lastTimestamp' | grep ogx-vllm
 ```
 
 **Check operator-managed pods:**
 ```bash
 # List all pods managed by the operator
-kubectl get pods -l app.kubernetes.io/name=llama-stack
+kubectl get pods -l app.kubernetes.io/name=ogx
 
 # Check pod logs (replace POD_NAME with actual pod name)
-kubectl logs -l app.kubernetes.io/name=llama-stack
+kubectl logs -l app.kubernetes.io/name=ogx
 ```
 
 **Check operator status:**
 ```bash
 # Verify the operator is running
-kubectl get pods -n llama-stack-operator-system
+kubectl get pods -n ogx-operator-system
 
 # Check operator logs if issues persist
-kubectl logs -n llama-stack-operator-system -l control-plane=controller-manager
+kubectl logs -n ogx-operator-system -l control-plane=controller-manager
 ```
 
 **Verify service connectivity:**
 ```bash
 # Get the service endpoint
-kubectl get svc llamastack-vllm-service
+kubectl get svc ogx-vllm-service
 
 # Test connectivity from within the cluster
-kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- curl http://llamastack-vllm-service:8321/v1/health
+kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- curl http://ogx-vllm-service:8321/v1/health
 ```
 
 ## Related Resources
 
 - **[Deployment Overview](/docs/deploying/)** - Overview of deployment options
-- **[Distributions](/docs/distributions)** - Understanding Llama Stack distributions
+- **[Distributions](/docs/distributions)** - Understanding OGX distributions
 - **[Configuration](/docs/distributions/configuration)** - Detailed configuration options
-- **[LlamaStack Operator](https://github.com/llamastack/llama-stack-k8s-operator)** - Overview of llama-stack kubernetes operator
-- **[LlamaStackDistribution](https://github.com/llamastack/llama-stack-k8s-operator/blob/main/docs/api-overview.md)** - API Spec of the llama-stack operator Custom Resource.
+- **[OGX Operator](https://github.com/ogx-ai/ogx-k8s-operator)** - Overview of ogx kubernetes operator
+- **[OGXDistribution](https://github.com/ogx-ai/ogx-k8s-operator/blob/main/docs/api-overview.md)** - API Spec of the ogx operator Custom Resource.

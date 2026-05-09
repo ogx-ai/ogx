@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from llama_stack.core.request_headers import request_provider_data_context
-from llama_stack.providers.remote.safety.passthrough.config import PassthroughSafetyConfig
-from llama_stack.providers.remote.safety.passthrough.passthrough import PassthroughSafetyAdapter
+from ogx.core.request_headers import request_provider_data_context
+from ogx.providers.remote.safety.passthrough.config import PassthroughSafetyConfig
+from ogx.providers.remote.safety.passthrough.passthrough import PassthroughSafetyAdapter
 
 
 class FakePassthroughSafetyAdapter(PassthroughSafetyAdapter):
@@ -27,7 +27,7 @@ class FakePassthroughSafetyAdapter(PassthroughSafetyAdapter):
 def _stub_provider_spec(adapter: PassthroughSafetyAdapter) -> None:
     adapter.__provider_spec__ = MagicMock()
     adapter.__provider_spec__.provider_data_validator = (
-        "llama_stack.providers.remote.safety.passthrough.config.PassthroughProviderDataValidator"
+        "ogx.providers.remote.safety.passthrough.config.PassthroughProviderDataValidator"
     )
 
 
@@ -96,4 +96,4 @@ def adapter_with_forward_headers(
 
 
 def provider_data_ctx(data: dict) -> AbstractContextManager:
-    return request_provider_data_context({"x-llamastack-provider-data": json.dumps(data)})
+    return request_provider_data_context({"x-ogx-provider-data": json.dumps(data)})

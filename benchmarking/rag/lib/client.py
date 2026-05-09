@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,7 +14,7 @@ from openai import OpenAI
 load_dotenv()
 
 OPENAI_SAAS_URL = "https://api.openai.com/v1"
-LLAMA_STACK_URL = os.getenv("LLAMA_STACK_URL", "http://localhost:8321/v1")
+OGX_URL = os.getenv("OGX_URL", "http://localhost:8321/v1")
 
 
 def create_client(base_url: str | None = None, api_key: str | None = None) -> OpenAI:
@@ -34,4 +34,4 @@ def backend_label(base_url: str) -> str:
     """Human-readable label for a base_url."""
     if "openai.com" in base_url:
         return "openai"
-    return "llama-stack"
+    return "ogx"

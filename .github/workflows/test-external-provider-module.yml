@@ -19,22 +19,22 @@ jobs:
 
       - name: Install weather external API and kaze provider
         run: |
-          uv pip install tests/external/llama-stack-api-weather
-          uv pip install tests/external/llama-stack-provider-kaze
+          uv pip install tests/external/ogx-api-weather
+          uv pip install tests/external/ogx-provider-kaze
 
       - name: Configure external API and provider
         run: |
-          mkdir -p ~/.llama/apis.d ~/.llama/providers.d
-          cp tests/external/weather.yaml ~/.llama/apis.d/
-          cp tests/external/kaze.yaml ~/.llama/providers.d/
+          mkdir -p ~/.ogx/apis.d ~/.ogx/providers.d
+          cp tests/external/weather.yaml ~/.ogx/apis.d/
+          cp tests/external/kaze.yaml ~/.ogx/providers.d/
 
-      - name: Start Llama Stack server in background
+      - name: Start OGX server in background
         env:
-          LLAMA_STACK_LOG_FILE: "server.log"
+          OGX_LOG_FILE: "server.log"
         run: |
-          nohup uv run llama stack run tests/external/config.yaml > server.log 2>&1 &
+          nohup uv run ogx stack run tests/external/config.yaml > server.log 2>&1 &
 
-      - name: Wait for Llama Stack server to be ready
+      - name: Wait for OGX server to be ready
         run: |
           for _ in {1..30}; do
             if curl -s http://localhost:8321/v1/health | grep -q "OK"; then

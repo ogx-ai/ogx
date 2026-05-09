@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,9 +10,9 @@ from fastapi import HTTPException
 from openai import BadRequestError
 from pydantic import ValidationError
 
-from llama_stack.core.access_control.access_control import AccessDeniedError
-from llama_stack.core.datatypes import AuthenticationRequiredError
-from llama_stack.core.server.server import remove_disabled_providers, translate_exception
+from ogx.core.access_control.access_control import AccessDeniedError
+from ogx.core.datatypes import AuthenticationRequiredError
+from ogx.core.server.server import remove_disabled_providers, translate_exception
 
 
 class TestTranslateException:
@@ -29,7 +29,7 @@ class TestTranslateException:
 
     def test_translate_access_denied_error_with_context(self):
         """Test that AccessDeniedError with context includes detailed information."""
-        from llama_stack.core.datatypes import User
+        from ogx.core.datatypes import User
 
         # Create mock user and resource
         user = User("test-user", {"roles": ["user"], "teams": ["dev"]})

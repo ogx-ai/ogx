@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -23,7 +23,7 @@ echo "Running comprehensive GuideLL benchmark suite..."
 echo "Start time: $(date)"
 
 # Default deployment names
-STACK_DEPLOYMENT="llama-stack-benchmark-server"
+STACK_DEPLOYMENT="ogx-benchmark-server"
 VLLM_DEPLOYMENT="vllm-server"
 
 # Scaling function
@@ -49,7 +49,7 @@ scale_deployments() {
 
         if [[ "$workers" != "-" ]]; then
             echo "Updating $STACK_DEPLOYMENT to use $workers workers..."
-            kubectl set env deployment/$STACK_DEPLOYMENT LLAMA_STACK_WORKERS=$workers
+            kubectl set env deployment/$STACK_DEPLOYMENT OGX_WORKERS=$workers
             kubectl rollout status deployment $STACK_DEPLOYMENT --timeout=600s
         fi
     fi

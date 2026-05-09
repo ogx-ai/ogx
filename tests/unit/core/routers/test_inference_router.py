@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -20,14 +20,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.core.routers.inference import InferenceRouter
-from llama_stack_api import (
+from ogx.core.routers.inference import InferenceRouter
+from ogx_api import (
     ModelType,
     RerankData,
     RerankResponse,
     RoutingTable,
 )
-from llama_stack_api.inference import RerankRequest
+from ogx_api.inference import RerankRequest
 
 
 @pytest.fixture

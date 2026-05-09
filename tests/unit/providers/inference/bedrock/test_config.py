@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 import os
 from unittest.mock import patch
 
-from llama_stack.providers.utils.bedrock.config import BedrockBaseConfig
+from ogx.providers.utils.bedrock.config import BedrockBaseConfig
 
 
 class TestBedrockBaseConfig:

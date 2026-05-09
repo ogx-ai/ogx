@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
-from llama_stack.core.stack import run_config_from_dynamic_config_spec
-from llama_stack.log import get_logger
-from llama_stack.testing.api_recorder import patch_httpx_for_test_id
+from ogx.core.stack import run_config_from_dynamic_config_spec
+from ogx.log import get_logger
+from ogx.testing.api_recorder import patch_httpx_for_test_id
 
 from .suites import SETUP_DEFINITIONS, SUITE_DEFINITIONS
 
@@ -36,11 +36,11 @@ def pytest_runtest_makereport(item, call):
 def pytest_sessionstart(session):
     # stop macOS from complaining about duplicate OpenMP libraries
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-    if "LLAMA_STACK_TEST_INFERENCE_MODE" not in os.environ:
-        os.environ["LLAMA_STACK_TEST_INFERENCE_MODE"] = "replay"
+    if "OGX_TEST_INFERENCE_MODE" not in os.environ:
+        os.environ["OGX_TEST_INFERENCE_MODE"] = "replay"
 
-    if "LLAMA_STACK_LOGGING" not in os.environ:
-        os.environ["LLAMA_STACK_LOGGING"] = "all=warning"
+    if "OGX_LOGGING" not in os.environ:
+        os.environ["OGX_LOGGING"] = "all=warning"
 
     if "SQLITE_STORE_DIR" not in os.environ:
         os.environ["SQLITE_STORE_DIR"] = tempfile.mkdtemp()
@@ -51,10 +51,10 @@ def pytest_sessionstart(session):
     if stack_config and (
         stack_config.startswith("server:") or stack_config.startswith("docker:") or stack_config.startswith("http")
     ):
-        os.environ["LLAMA_STACK_TEST_STACK_CONFIG_TYPE"] = "server"
+        os.environ["OGX_TEST_STACK_CONFIG_TYPE"] = "server"
         logger.info(f"Test stack config type: server (stack_config={stack_config})")
     else:
-        os.environ["LLAMA_STACK_TEST_STACK_CONFIG_TYPE"] = "library_client"
+        os.environ["OGX_TEST_STACK_CONFIG_TYPE"] = "library_client"
         logger.info(f"Test stack config type: library_client (stack_config={stack_config})")
 
     patch_httpx_for_test_id()
@@ -73,7 +73,7 @@ def _track_test_context(request):
     This fixture runs for every test and stores the test's nodeid in a contextvar
     that the recording system can access to determine which subdirectory to use.
     """
-    from llama_stack.core.testing_context import reset_test_context, set_test_context
+    from ogx.core.testing_context import reset_test_context, set_test_context
 
     token = set_test_context(request.node.nodeid)
 
@@ -93,7 +93,7 @@ def pytest_runtest_teardown(item):
 
     logger.debug(f"Test '{item.nodeid}' outcome was '{outcome}' (xfail={was_xfail})")
     if outcome in ("passed", "failed") and not was_xfail:
-        interval_seconds = os.getenv("LLAMA_STACK_TEST_INTERVAL_SECONDS")
+        interval_seconds = os.getenv("OGX_TEST_INTERVAL_SECONDS")
         if interval_seconds:
             time.sleep(float(interval_seconds))
 
@@ -110,7 +110,7 @@ def pytest_configure(config):
         os.environ[key] = value
 
     inference_mode = config.getoption("--inference-mode")
-    os.environ["LLAMA_STACK_TEST_INFERENCE_MODE"] = inference_mode
+    os.environ["OGX_TEST_INFERENCE_MODE"] = inference_mode
 
     suite = config.getoption("--suite")
     if suite:
@@ -253,13 +253,13 @@ def pytest_generate_tests(metafunc):
     """
     # Handle vector_io_provider_id dynamically
     if "vector_io_provider_id" in metafunc.fixturenames:
-        config_str = metafunc.config.getoption("--stack-config", default=None) or os.environ.get("LLAMA_STACK_CONFIG")
+        config_str = metafunc.config.getoption("--stack-config", default=None) or os.environ.get("OGX_CONFIG")
         providers = None
         if config_str and "=" in config_str:
             run_config = run_config_from_dynamic_config_spec(config_str)
             providers = [p.provider_id for p in run_config.providers.get("vector_io", [])]
         if providers is None:
-            inference_mode = os.environ.get("LLAMA_STACK_TEST_INFERENCE_MODE")
+            inference_mode = os.environ.get("OGX_TEST_INFERENCE_MODE")
             providers = (
                 ["faiss", "sqlite-vec", "milvus", "chromadb", "pgvector", "weaviate", "qdrant"]
                 if inference_mode == "live"

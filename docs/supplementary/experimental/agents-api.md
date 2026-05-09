@@ -19,4 +19,4 @@ This API is actively being developed. We welcome feedback on:
 - Missing features or capabilities
 - Integration patterns
 
-**Provide Feedback**: [GitHub Issues](https://github.com/llamastack/llama-stack/issues)
+**Provide Feedback**: [GitHub Issues](https://github.com/ogx-ai/ogx/issues)

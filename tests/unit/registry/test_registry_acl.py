@@ -1,13 +1,13 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 
-from llama_stack.core.datatypes import ModelWithOwner, User
-from llama_stack.core.store.registry import CachedDiskDistributionRegistry
-from llama_stack_api import ModelType
+from ogx.core.datatypes import ModelWithOwner, User
+from ogx.core.store.registry import CachedDiskDistributionRegistry
+from ogx_api import ModelType
 
 
 async def test_registry_cache_with_acl(cached_disk_dist_registry):

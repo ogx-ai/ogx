@@ -1,6 +1,6 @@
 ---
 title: Record-Replay Testing System
-description: Understanding how Llama Stack captures and replays API interactions for testing
+description: Understanding how OGX captures and replays API interactions for testing
 sidebar_label: Record-Replay System
 sidebar_position: 4
 ---
@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 # Record-Replay System
 
-Understanding how Llama Stack captures and replays API interactions for testing.
+Understanding how OGX captures and replays API interactions for testing.
 
 ## Overview
 
@@ -68,7 +68,7 @@ recordings/
 Direct API calls with no recording or replay:
 
 ```python
-from llama_stack.testing.api_recorder import api_recording, APIRecordingMode
+from ogx.testing.api_recorder import api_recording, APIRecordingMode
 
 with api_recording(mode=APIRecordingMode.LIVE):
     response = await client.chat.completions.create(...)
@@ -175,8 +175,8 @@ This preserves type safety - when replayed, you get the same Pydantic objects wi
 Control recording behavior globally:
 
 ```bash
-export LLAMA_STACK_TEST_INFERENCE_MODE=replay   # this is the default
-export LLAMA_STACK_TEST_RECORDING_DIR=/path/to/recordings   # default is tests/integration/recordings
+export OGX_TEST_INFERENCE_MODE=replay   # this is the default
+export OGX_TEST_RECORDING_DIR=/path/to/recordings   # default is tests/integration/recordings
 pytest tests/integration/
 ```
 
@@ -211,13 +211,13 @@ cat recordings/responses/abc123.json | jq '.request'
 ```bash
 # Re-record with updated types
 rm recordings/responses/failing_hash.json
-LLAMA_STACK_TEST_INFERENCE_MODE=record pytest test_failing.py
+OGX_TEST_INFERENCE_MODE=record pytest test_failing.py
 ```
 
 **Missing recordings:** New test or changed parameters
 ```bash
 # Record the missing interaction
-LLAMA_STACK_TEST_INFERENCE_MODE=record pytest test_new.py
+OGX_TEST_INFERENCE_MODE=record pytest test_new.py
 ```
 
 ## Design Decisions

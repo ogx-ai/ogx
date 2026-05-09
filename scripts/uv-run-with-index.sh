@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -31,13 +31,13 @@ else
   TARGET_BRANCH=$(git rev-parse --abbrev-ref HEAD@{upstream} 2>/dev/null | sed 's|origin/||' || echo "")
 fi
 
-# Check if on a release branch or targeting one, or LLAMA_STACK_RELEASE_MODE is set
+# Check if on a release branch or targeting one, or OGX_RELEASE_MODE is set
 IS_RELEASE=false
 if [[ "$BRANCH" =~ ^release-[0-9]+\.[0-9]+\.x$ ]]; then
   IS_RELEASE=true
 elif [[ "$TARGET_BRANCH" =~ ^release-[0-9]+\.[0-9]+\.x$ ]]; then
   IS_RELEASE=true
-elif [[ "${LLAMA_STACK_RELEASE_MODE:-}" == "true" ]]; then
+elif [[ "${OGX_RELEASE_MODE:-}" == "true" ]]; then
   IS_RELEASE=true
 fi
 

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,7 +9,7 @@ Unit tests for OpenAI compatibility tool conversion.
 Tests convert_tooldef_to_openai_tool with new JSON Schema approach.
 """
 
-from llama_stack.providers.utils.inference.openai_compat import convert_tooldef_to_openai_tool
+from ogx.providers.utils.inference.openai_compat import convert_tooldef_to_openai_tool
 
 
 class TestSimpleSchemaConversion:

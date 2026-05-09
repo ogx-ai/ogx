@@ -1,0 +1,115 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_basic_conversation[openai_client-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Help me plan a Python web app."
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "I suggest FastAPI with SQLite."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Add authentication too."
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Use OAuth2 with JWT tokens."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+            }
+          ]
+        }
+      ],
+      "config": {}
+    },
+    "endpoint": "/generate_content",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": {
+      "sdk_http_response": {
+        "headers": {
+          "Content-Type": "application/json; charset=UTF-8",
+          "Vary": "Origin, X-Origin, Referer",
+          "Content-Encoding": "gzip",
+          "Date": "Thu, 09 Apr 2026 14:34:05 GMT",
+          "Server": "scaffolding on HTTPServer2",
+          "X-XSS-Protection": "0",
+          "X-Frame-Options": "SAMEORIGIN",
+          "X-Content-Type-Options": "nosniff",
+          "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "Okay, here's a handoff summary for the next LLM to continue planning the Python web app:\n\n**Project:** Python Web App (Basic Plan)\n\n**Current Progress and Key Decisions:**\n\n*   **Framework:** FastAPI (chosen for speed, ease of use, and automatic documentation).\n*   **Database:** SQLite (chosen for simplicity, good for smaller projects, no external server needed).\n*   **Authentication:** OAuth2 with JWT tokens (chosen for security and industry standard).\n\n**Important Context, Constraints, and User Preferences:**\n\n*   The user wants a basic plan, implying the focus should be on core functionality over advanced features.\n*   We need to consider ease of implementation and deployment.\n*   Security is important, hence OAuth2 with JWT.\n\n**What Remains to be Done (Next Steps):**\n\n1.  **Database Schema Design:** Define the tables and fields needed for the application. We need a starting point for the models that will define data structure and storage in the app.\n2.  **Authentication Flow Implementation:** Outline the key steps of the OAuth2 flow using FastAPI (e.g., token endpoint, user registration, login, resource access with JWT).\n3.  **Example API Endpoint:** Implement a basic API endpoint with authentication to demonstrate the setup is working. Example: `/items/` (create, read)\n4.  **Directory Structure Suggestion:** Propose a clear project directory structure for organization (e.g., `app/`, `database/`, `tests/`).\n\n**Critical Data, Examples, and References:**\n\n*   **FastAPI Documentation:** [https://fastapi.tiangolo.com/](https://fastapi.tiangolo.com/)\n*   **FastAPI Security (OAuth2):** [https://fastapi.tiangolo.com/tutorial/security/](https://fastapi.tiangolo.com/tutorial/security/)\n*   **SQLAlchemy (SQLite ORM - for database interaction):** [https://www.sqlalchemy.org/](https://www.sqlalchemy.org/) (Consider using an ORM for easier database interactions)\n*   **JWT Libraries (Python):** `python-jose`, `PyJWT` (these are commonly used libraries for JWT handling).\n\nThe next LLM should pick up from step 1 and use the provided references to generate code snippets and outlines. The goal is to provide a functional \"Hello, World\" type application with authentication and a simple API endpoint.\n"
+              }
+            ],
+            "role": "model"
+          },
+          "finish_reason": "STOP",
+          "avg_logprobs": -0.5255788751945641
+        }
+      ],
+      "create_time": "2026-04-09T14:34:00.894815Z",
+      "model_version": "gemini-2.0-flash",
+      "response_id": "2LjXad_ONriZmPUPlNrksQI",
+      "usage_metadata": {
+        "candidates_token_count": 522,
+        "candidates_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 522
+          }
+        ],
+        "prompt_token_count": 116,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 116
+          }
+        ],
+        "total_token_count": 638,
+        "traffic_type": "ON_DEMAND"
+      },
+      "automatic_function_calling_history": []
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

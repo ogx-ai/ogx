@@ -4,7 +4,7 @@ See @AGENTS.md for guidelines on working with this codebase.
 
 ### Users
 
-Backend engineers, application developers, and platform teams evaluating or adopting Llama Stack for production AI workloads. They arrive from GitHub, blog posts, or search. They already use OpenAI/Anthropic SDKs and want to know: can I point my existing code at this server and have it just work? They are practical, time-constrained, and skeptical of marketing fluff. They read docs in dark terminals, IDEs, and browser tabs at all hours.
+Backend engineers, application developers, and platform teams evaluating or adopting OGX for production AI workloads. They arrive from GitHub, blog posts, or search. They already use OpenAI/Anthropic SDKs and want to know: can I point my existing code at this server and have it just work? They are practical, time-constrained, and skeptical of marketing fluff. They read docs in dark terminals, IDEs, and browser tabs at all hours.
 
 ### Brand Personality
 

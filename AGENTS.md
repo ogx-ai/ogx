@@ -1,4 +1,4 @@
-# Agent Guidelines for Llama Stack
+# Agent Guidelines for OGX
 
 This file provides guidance for AI coding agents working on this codebase.
 It complements [CONTRIBUTING.md](CONTRIBUTING.md) with agent-specific instructions.
@@ -6,7 +6,7 @@ Human contributors should follow the conventions in CONTRIBUTING.md.
 
 ## Project Overview
 
-Llama Stack is an API server implementing the OpenAI Responses API, Chat Completions,
+OGX is an API server implementing the OpenAI Responses API, Chat Completions,
 Embeddings, and supporting APIs (files, vector stores, batches, eval, safety). It supports
 multiple inference backends (OpenAI, Azure, Bedrock, vLLM, Ollama, WatsonX, etc.) through
 a provider architecture.
@@ -14,7 +14,7 @@ a provider architecture.
 ## Repository Layout
 
 ```text
-src/llama_stack/              # Server implementation
+src/ogx/              # Server implementation
   core/                       # Request routing, server, storage
   providers/
     inline/                   # Built-in providers (responses, eval, vector_io, etc.)
@@ -22,7 +22,7 @@ src/llama_stack/              # Server implementation
     registry/                 # Provider registration specs
     utils/                    # Shared provider utilities (OpenAI mixin, MCP, etc.)
   distributions/              # Distribution configs (starter, ci-tests, etc.)
-src/llama_stack_api/          # API definitions, Pydantic models, FastAPI routes
+src/ogx_api/          # API definitions, Pydantic models, FastAPI routes
 tests/
   unit/                       # Unit tests
   integration/                # Integration tests with recording/replay system
@@ -47,11 +47,11 @@ tests/
 - Good variable naming and clear code organization matters more than comments.
 - Do NOT remove existing comments unless they are factually wrong.
 - Error messages must be prefixed with "Failed to ...".
-- Use structured logging via `from llama_stack.log import get_logger`. Always use
+- Use structured logging via `from ogx.log import get_logger`. Always use
   key-value style: `logger.info("Processing request", model=model_id, provider=provider)`
   instead of f-strings or %-style formatting. The pre-commit hook
   `Block f-string logging` enforces this.
-- The pre-commit hook `Ensure 'llama_stack.log' usage for logging` enforces that all
+- The pre-commit hook `Ensure 'ogx.log' usage for logging` enforces that all
   logging uses the project's logger, not the standard library directly.
 
 ## Git Conventions
@@ -108,7 +108,7 @@ maintainers can trigger the record workflow on GitHub via
 ## Provider Architecture
 
 Each provider implements a protocol (e.g., `Inference`, `Responses`, `VectorIO`) and is
-registered in `src/llama_stack/providers/registry/`. Provider specs include:
+registered in `src/ogx/providers/registry/`. Provider specs include:
 
 - `provider_type`: e.g., `remote::openai`, `inline::builtin`
 - `module`: Python module path
@@ -122,7 +122,7 @@ these generate the provider documentation automatically.
 
 ## Distribution Configs
 
-Distribution YAML files in `src/llama_stack/distributions/` are partially auto-generated.
+Distribution YAML files in `src/ogx/distributions/` are partially auto-generated.
 After changing provider configs, run:
 
 ```bash
@@ -136,7 +136,7 @@ Do not edit generated files in `docs/docs/providers/` manually.
 
 When modifying or extending APIs:
 
-1. Update models in `src/llama_stack_api/`
+1. Update models in `src/ogx_api/`
 2. Regenerate OpenAPI specs: `uv run ./scripts/run_openapi_generator.sh`
 3. Check for breaking changes — the pre-commit hook `Check API spec for breaking changes`
    enforces backward compatibility.
@@ -146,7 +146,7 @@ When modifying or extending APIs:
 
 ### Adding a new parameter to an existing API
 
-1. Add the field to the Pydantic model in `src/llama_stack_api/`
+1. Add the field to the Pydantic model in `src/ogx_api/`
 2. Thread it through the provider protocol and implementation
 3. Update affected distribution configs if needed
 4. Regenerate specs and docs
@@ -155,7 +155,7 @@ When modifying or extending APIs:
 ### Adding a deprecated alias for a renamed provider
 
 Use the existing `deprecation_warning` field on `InlineProviderSpec` or `RemoteProviderSpec`.
-Search for existing examples: `grep -r "deprecation_warning" src/llama_stack/providers/registry/`
+Search for existing examples: `grep -r "deprecation_warning" src/ogx/providers/registry/`
 
 ### Before adding any new pattern
 
@@ -173,16 +173,16 @@ When making code changes, check whether the following documentation needs updati
 - `ARCHITECTURE.md` — system overview, request flow, provider architecture, API layer,
   storage, configuration, and test recording system
 - Module-level `README.md` files in key directories:
-  - `src/llama_stack/README.md`, `src/llama_stack/core/README.md`
-  - `src/llama_stack/core/server/README.md`, `src/llama_stack/core/storage/README.md`
-  - `src/llama_stack/core/routing_tables/README.md`
-  - `src/llama_stack/providers/README.md`, `src/llama_stack/providers/inline/README.md`
-  - `src/llama_stack/providers/remote/README.md`, `src/llama_stack/providers/registry/README.md`
-  - `src/llama_stack/providers/utils/README.md`, `src/llama_stack/providers/utils/inference/README.md`
-  - `src/llama_stack/providers/inline/agents/README.md`
-  - `src/llama_stack/providers/inline/tool_runtime/README.md`
-  - `src/llama_stack/providers/remote/inference/README.md`
-  - `src/llama_stack/distributions/README.md`
+  - `src/ogx/README.md`, `src/ogx/core/README.md`
+  - `src/ogx/core/server/README.md`, `src/ogx/core/storage/README.md`
+  - `src/ogx/core/routing_tables/README.md`
+  - `src/ogx/providers/README.md`, `src/ogx/providers/inline/README.md`
+  - `src/ogx/providers/remote/README.md`, `src/ogx/providers/registry/README.md`
+  - `src/ogx/providers/utils/README.md`, `src/ogx/providers/utils/inference/README.md`
+  - `src/ogx/providers/inline/agents/README.md`
+  - `src/ogx/providers/inline/tool_runtime/README.md`
+  - `src/ogx/providers/remote/inference/README.md`
+  - `src/ogx/distributions/README.md`
   - `scripts/README.md`
 - `tests/README.md`, `tests/unit/README.md`, `tests/integration/README.md`
 

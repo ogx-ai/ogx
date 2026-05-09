@@ -14,6 +14,11 @@ providers:
     config:
       api_key: ${env.OPENAI_API_KEY:=}
       base_url: ${env.OPENAI_BASE_URL:=https://api.openai.com/v1}
+  - provider_id: vllm
+    provider_type: remote::openai
+    config:
+      api_key: ${env.VLLM_API_KEY:=EMPTY}
+      base_url: ${env.VLLM_BASE_URL:=http://10.0.0.99:8000/v1}
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config:
@@ -34,7 +39,7 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/rag-benchmarks/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/rag-benchmarks/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default
@@ -61,10 +66,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/rag-benchmarks}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/rag-benchmarks}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/rag-benchmarks}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/rag-benchmarks}/sql_store.db
   stores:
     metadata:
       namespace: registry

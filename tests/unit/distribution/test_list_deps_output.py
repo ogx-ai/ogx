@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@ import argparse
 from io import StringIO
 from unittest.mock import patch
 
-from llama_stack.cli.stack._list_deps import (
+from ogx.cli.stack._list_deps import (
     format_output_deps_only,
     run_stack_list_deps_command,
 )

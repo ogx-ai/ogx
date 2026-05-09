@@ -156,7 +156,7 @@ export const VALIDATIONS = [
   },
   {
     check: t => t.stream && t.background,
-    message: "ValueError: Llama Stack does not yet support 'stream' and 'background' together.",
+    message: "ValueError: OGX does not yet support 'stream' and 'background' together.",
     code: 400,
   },
 ];
@@ -180,7 +180,7 @@ const PROSE = {
 
   mcp: 'MCP (Model Context Protocol) tools are discovered lazily — the orchestrator calls list_mcp_tools() on the configured server endpoint when MCP tools first appear. Tool definitions are cached for the duration of the request via MCPSessionManager. When the model invokes an MCP tool, the executor reuses the existing session, avoiding redundant connection setup.',
 
-  function_tools: 'Function tools are client-side in the Responses flow. When the model emits a function tool call, Llama Stack returns it as a function_call output item and exits the inference loop. Your client executes the function and sends the next request with a function_call_output item to continue.',
+  function_tools: 'Function tools are client-side in the Responses flow. When the model emits a function tool call, OGX returns it as a function_call output item and exits the inference loop. Your client executes the function and sends the next request with a function_call_output item to continue.',
 
   guardrails: 'Safety guardrails validate both input and output. Before the inference loop begins, the combined input text is checked against configured guardrail policies. If a violation is detected, the response is refused immediately. After the model generates output, the response text is checked again — an output violation is converted into a refusal response with violation details.',
 };

@@ -8,8 +8,8 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/llama_stack/providers/inline/file_processor/**'
-      - 'src/llama_stack/providers/registry/file_processors.py'
+      - 'src/ogx/providers/inline/file_processor/**'
+      - 'src/ogx/providers/registry/file_processors.py'
       - 'tests/integration/file_processors/**'
       - '.github/workflows/file-processors-tests.yml'
   pull_request:
@@ -17,8 +17,8 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/llama_stack/providers/inline/file_processor/**'
-      - 'src/llama_stack/providers/registry/file_processors.py'
+      - 'src/ogx/providers/inline/file_processor/**'
+      - 'src/ogx/providers/registry/file_processors.py'
       - 'tests/integration/file_processors/**'
       - '.github/workflows/file-processors-tests.yml'
   merge_group:
@@ -50,11 +50,11 @@ jobs:
       - name: Install docling
         run: uv pip install docling
 
-      - name: Start Llama Stack server with docling
+      - name: Start OGX server with docling
         env:
-          LLAMA_STACK_DISABLE_VERSION_CHECK: "1"
+          OGX_DISABLE_VERSION_CHECK: "1"
         run: |
-          uv run --no-sync llama stack run \
+          uv run --no-sync ogx stack run \
             --providers "file_processors=inline::docling,files=inline::localfs" \
             --port 8321 &
           # Wait for server to be ready

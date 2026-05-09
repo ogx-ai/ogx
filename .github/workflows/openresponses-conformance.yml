@@ -1,15 +1,15 @@
 name: OpenResponses Conformance Tests
 
-run-name: Run OpenResponses conformance tests against llama-stack Responses API
+run-name: Run OpenResponses conformance tests against ogx Responses API
 
 # This job is OPTIONAL and informational — it tracks progress toward full
 # conformance with the OpenResponses spec (https://openresponses.org).
 # Failures are expected while gaps remain in the Responses API implementation.
-# See: https://github.com/llamastack/llama-stack/issues/4818
+# See: https://github.com/ogx-ai/ogx/issues/4818
 #
 # Inference calls are replayed from checked-in recordings under
 # tests/integration/openresponses/recordings/. To add or update recordings,
-# run the server locally with LLAMA_STACK_TEST_INFERENCE_MODE=record-if-missing
+# run the server locally with OGX_TEST_INFERENCE_MODE=record-if-missing
 # pointed at that directory, run the compliance tests, and commit the results.
 
 on:
@@ -18,8 +18,8 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/llama_stack/providers/inline/agents/**'
-      - 'src/llama_stack/apis/agents/**'
+      - 'src/ogx/providers/inline/agents/**'
+      - 'src/ogx/apis/agents/**'
       - 'tests/integration/openresponses/**'
       - '.github/workflows/openresponses-conformance.yml'
   pull_request:
@@ -27,8 +27,8 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/llama_stack/providers/inline/agents/**'
-      - 'src/llama_stack/apis/agents/**'
+      - 'src/ogx/providers/inline/agents/**'
+      - 'src/ogx/apis/agents/**'
       - 'tests/integration/openresponses/**'
       - '.github/workflows/openresponses-conformance.yml'
   merge_group:
@@ -53,9 +53,9 @@ jobs:
       # Dummy key satisfies config parsing; actual inference is replayed from recordings
       OPENAI_API_KEY: "dummy-key-for-replay-mode"
       INFERENCE_MODEL: "openai/gpt-4o-mini"
-      LLAMA_STACK_PORT: 8321
-      LLAMA_STACK_TEST_INFERENCE_MODE: "replay"
-      LLAMA_STACK_TEST_RECORDING_DIR: ${{ github.workspace }}/tests/integration/openresponses
+      OGX_PORT: 8321
+      OGX_TEST_INFERENCE_MODE: "replay"
+      OGX_TEST_RECORDING_DIR: ${{ github.workspace }}/tests/integration/openresponses
 
     steps:
       - name: Checkout repository
@@ -69,7 +69,7 @@ jobs:
           echo "recordings_count=$COUNT" >> "$GITHUB_OUTPUT"
           if [ "$COUNT" -eq 0 ]; then
             echo "::warning::No recordings found in tests/integration/openresponses/recordings/."
-            echo "::warning::Run the server locally with LLAMA_STACK_TEST_INFERENCE_MODE=record-if-missing"
+            echo "::warning::Run the server locally with OGX_TEST_INFERENCE_MODE=record-if-missing"
             echo "::warning::and commit the resulting recordings to enable conformance testing in CI."
           else
             echo "Found $COUNT recording(s)"
@@ -81,28 +81,28 @@ jobs:
           python-version: '3.12'
 
       - name: Install ci-tests distro provider dependencies
-        run: uv run llama stack list-deps ci-tests --format uv | sh
+        run: uv run ogx stack list-deps ci-tests --format uv | sh
 
-      - name: Start Llama Stack server
+      - name: Start OGX server
         run: |
-          mkdir -p /tmp/llama-stack-conformance
-          export LLAMA_STACK_LOG_WIDTH=200
-          nohup uv run llama stack run ci-tests --port "$LLAMA_STACK_PORT" \
-            > /tmp/llama-stack-conformance/server.log 2>&1 &
+          mkdir -p /tmp/ogx-conformance
+          export OGX_LOG_WIDTH=200
+          nohup uv run ogx stack run ci-tests --port "$OGX_PORT" \
+            > /tmp/ogx-conformance/server.log 2>&1 &
           echo "Server PID: $!"
 
-      - name: Wait for Llama Stack server to be ready
+      - name: Wait for OGX server to be ready
         run: |
-          echo "Waiting for Llama Stack server..."
+          echo "Waiting for OGX server..."
           for _ in {1..60}; do
-            if curl -s "http://localhost:$LLAMA_STACK_PORT/v1/health" | grep -q "OK"; then
-              echo "Llama Stack server is ready!"
+            if curl -s "http://localhost:$OGX_PORT/v1/health" | grep -q "OK"; then
+              echo "OGX server is ready!"
               exit 0
             fi
             sleep 2
           done
-          echo "Llama Stack server failed to start in 120 seconds"
-          cat /tmp/llama-stack-conformance/server.log
+          echo "OGX server failed to start in 120 seconds"
+          cat /tmp/ogx-conformance/server.log
           exit 1
 
       - name: Setup Bun
@@ -121,15 +121,15 @@ jobs:
         run: |
           cd /tmp/openresponses
           bun run bin/compliance-test.ts \
-            --base-url "http://localhost:$LLAMA_STACK_PORT/v1" \
-            --api-key "llama-stack" \
+            --base-url "http://localhost:$OGX_PORT/v1" \
+            --api-key "ogx" \
             --model "$INFERENCE_MODEL" \
             --json > /tmp/openresponses-results.json 2>/dev/null || true
 
           echo "=== OpenResponses Conformance Test Output ==="
           bun run bin/compliance-test.ts \
-            --base-url "http://localhost:$LLAMA_STACK_PORT/v1" \
-            --api-key "llama-stack" \
+            --base-url "http://localhost:$OGX_PORT/v1" \
+            --api-key "ogx" \
             --model "$INFERENCE_MODEL" \
             --verbose 2>&1 | tee /tmp/openresponses-output.txt || true
 
@@ -142,7 +142,7 @@ jobs:
             echo "> **Note:** These tests are **informational only** and track progress toward full"
             echo "> [OpenResponses](https://www.openresponses.org) API conformance."
             echo "> Failures are expected while gaps remain in the Responses API implementation."
-            echo "> See [#4818](https://github.com/llamastack/llama-stack/issues/4818)."
+            echo "> See [#4818](https://github.com/ogx-ai/ogx/issues/4818)."
             echo ""
             echo "**Model:** \`$INFERENCE_MODEL\`"
             echo "**Recordings:** ${{ steps.check-recordings.outputs.recordings_count }} file(s) in \`tests/integration/openresponses/recordings/\`"
@@ -226,5 +226,5 @@ jobs:
       - name: Print server log on failure
         if: failure()
         run: |
-          echo "=== Llama Stack server log (last 200 lines) ==="
-          tail -200 /tmp/llama-stack-conformance/server.log || true
+          echo "=== OGX server log (last 200 lines) ==="
+          tail -200 /tmp/ogx-conformance/server.log || true

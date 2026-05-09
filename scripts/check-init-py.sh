@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -16,7 +16,7 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
-PACKAGE_DIR="${1:-src/llama_stack}"
+PACKAGE_DIR="${1:-src/ogx}"
 
 if [ ! -d "$PACKAGE_DIR" ]; then
     echo "ERROR: Package directory '$PACKAGE_DIR' does not exist"

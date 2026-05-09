@@ -7,9 +7,9 @@ import type * as Plugin from "@docusaurus/types/src/plugin";
 import type * as OpenApiPlugin from "docusaurus-plugin-openapi-docs";
 
 const config: Config = {
-  title: 'Llama Stack',
+  title: 'OGX',
   tagline: 'The open-source framework for building generative AI applications',
-  url: 'https://llamastack.github.io',
+  url: 'https://ogx-ai.github.io',
   baseUrl: '/',
   onBrokenLinks: "warn",
   favicon: "img/favicon.ico",
@@ -39,7 +39,7 @@ const config: Config = {
       attributes: {
         rel: 'apple-touch-icon',
         sizes: '180x180',
-        href: '/img/llama-stack-logo.png',
+        href: '/img/ogx-logo.png',
       },
     },
     {
@@ -60,7 +60,7 @@ const config: Config = {
 
   // GitHub pages deployment config.
   organizationName: 'reluctantfuturist',
-  projectName: 'llama-stack',
+  projectName: 'ogx',
   trailingSlash: false,
 
   presets: [
@@ -71,7 +71,7 @@ const config: Config = {
           sidebarPath: require.resolve("./sidebars.ts"),
           // disableVersioning: true,
           docItemComponent: "@theme/ApiItem", // Derived from docusaurus-theme-openapi
-          editUrl: 'https://github.com/llamastack/llama-stack/edit/main/',
+          editUrl: 'https://github.com/ogx-ai/ogx/edit/main/',
           showLastUpdateTime: true,
           showLastUpdateAuthor: false,
           remarkPlugins: [
@@ -85,13 +85,14 @@ const config: Config = {
           blogSidebarCount: 'ALL',
           showReadingTime: true,
           postsPerPage: 10,
+          exclude: ['**/building-agentic-flows/**'],
           readingTime: ({content, frontMatter, defaultReadingTime}) =>
             defaultReadingTime({content, options: {wordsPerMinute: 300}}),
           feedOptions: {
             type: 'all',
-            title: 'Llama Stack Blog',
-            description: 'Blog posts about Llama Stack',
-            copyright: `Copyright © ${new Date().getFullYear()} Meta Platforms, Inc.`,
+            title: 'OGX Blog',
+            description: 'Blog posts about OGX',
+            copyright: `Copyright © ${new Date().getFullYear()} The OGX Contributors`,
             language: 'en',
           },
         },
@@ -103,10 +104,10 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/llama-stack.png',
+    image: 'img/ogx.png',
     navbar: {
       hideOnScroll: true,
-      title: 'Llama Stack',
+      title: 'OGX',
       items: [
         {
           type: 'docSidebar',
@@ -143,7 +144,7 @@ const config: Config = {
           position: 'left',
         },
         {
-          href: 'https://github.com/llamastack/llama-stack',
+          href: 'https://github.com/ogx-ai/ogx',
           label: 'GitHub',
           position: 'right',
         },
@@ -152,7 +153,7 @@ const config: Config = {
           position: 'right',
           dropdownActiveClassDisabled: true,
           dropdownItemsAfter: [
-            { to: '/versions.html', label: 'All versions' },
+            { to: '/versions', label: 'All versions' },
           ],
         },
       ],
@@ -207,11 +208,11 @@ const config: Config = {
           items: [
             {
               label: 'Discord',
-              href: 'https://discord.gg/llama-stack',
+              href: 'https://discord.gg/ZAFjsrcw',
             },
             {
               label: 'Issues',
-              href: 'https://github.com/llamastack/llama-stack/issues',
+              href: 'https://github.com/ogx-ai/ogx/issues',
             },
             {
               label: 'Contributing',
@@ -223,16 +224,20 @@ const config: Config = {
           title: 'Resources',
           items: [
             {
+              label: 'Brand',
+              to: '/brand',
+            },
+            {
               label: 'GitHub',
-              href: 'https://github.com/llamastack/llama-stack',
+              href: 'https://github.com/ogx-ai/ogx',
             },
             {
               label: 'PyPI',
-              href: 'https://pypi.org/project/llama-stack/',
+              href: 'https://pypi.org/project/ogx/',
             },
             {
               label: 'Releases',
-              href: 'https://github.com/llamastack/llama-stack/releases',
+              href: 'https://github.com/ogx-ai/ogx/releases',
             },
             {
               label: 'Docker Hub',
@@ -241,7 +246,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Meta Platforms, Inc.`,
+      copyright: `Copyright © ${new Date().getFullYear()} The OGX Contributors`,
     },
     colorMode: {
       defaultMode: 'dark',
@@ -308,27 +313,27 @@ const config: Config = {
         docsPluginId: "classic",
         config: {
           stable: {
-            specPath: "static/llama-stack-spec.yaml",
+            specPath: "static/ogx-spec.yaml",
             outputDir: "docs/api",
-            downloadUrl: "https://raw.githubusercontent.com/meta-llama/llama-stack/main/docs/static/llama-stack-spec.yaml",
+            downloadUrl: "https://raw.githubusercontent.com/ogx-ai/ogx/main/docs/static/ogx-spec.yaml",
             sidebarOptions: {
               groupPathsBy: "tag",
               categoryLinkSource: "tag",
             },
           } satisfies OpenApiPlugin.Options,
           experimental: {
-            specPath: "static/experimental-llama-stack-spec.yaml",
+            specPath: "static/experimental-ogx-spec.yaml",
             outputDir: "docs/api-experimental",
-            downloadUrl: "https://raw.githubusercontent.com/meta-llama/llama-stack/main/docs/static/experimental-llama-stack-spec.yaml",
+            downloadUrl: "https://raw.githubusercontent.com/ogx-ai/ogx/main/docs/static/experimental-ogx-spec.yaml",
             sidebarOptions: {
               groupPathsBy: "tag",
               categoryLinkSource: "tag",
             },
           } satisfies OpenApiPlugin.Options,
           deprecated: {
-            specPath: "static/deprecated-llama-stack-spec.yaml",
+            specPath: "static/deprecated-ogx-spec.yaml",
             outputDir: "docs/api-deprecated",
-            downloadUrl: "https://raw.githubusercontent.com/meta-llama/llama-stack/main/docs/static/deprecated-llama-stack-spec.yaml",
+            downloadUrl: "https://raw.githubusercontent.com/ogx-ai/ogx/main/docs/static/deprecated-ogx-spec.yaml",
             sidebarOptions: {
               groupPathsBy: "tag",
               categoryLinkSource: "tag",

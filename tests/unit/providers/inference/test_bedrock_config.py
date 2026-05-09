@@ -1,10 +1,10 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
+from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
 
 def test_bedrock_config_defaults_no_env(monkeypatch):

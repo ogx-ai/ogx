@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -328,12 +328,12 @@ LEGACY_TAGS = [
         "x-displayName": "File Processors",
     },
     {
-        "description": "This API is used to upload documents that can be used with other Llama Stack APIs.",
+        "description": "This API is used to upload documents that can be used with other OGX APIs.",
         "name": "Files",
         "x-displayName": "Files",
     },
     {
-        "description": "Llama Stack Inference API for generating completions, chat completions, and embeddings.\n"
+        "description": "OGX Inference API for generating completions, chat completions, and embeddings.\n"
         "\n"
         "This API provides the raw interface to the underlying models. Three kinds of models are supported:\n"
         '- LLM models: these models generate "raw" and "chat" (conversational) completions.\n'
@@ -343,7 +343,7 @@ LEGACY_TAGS = [
         "x-displayName": "Inference",
     },
     {
-        "description": "APIs for inspecting the Llama Stack service, including health status, available API routes with "
+        "description": "APIs for inspecting the OGX service, including health status, available API routes with "
         "methods and implementing providers.",
         "name": "Inspect",
         "x-displayName": "Inspect",

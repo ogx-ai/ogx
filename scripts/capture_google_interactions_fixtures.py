@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,7 +14,7 @@
 """Capture Google Interactions API responses as test fixtures.
 
 Calls the real Google Interactions API and saves the raw responses as JSON
-fixtures. These fixtures are used by unit tests to validate that Llama Stack's
+fixtures. These fixtures are used by unit tests to validate that OGX's
 Interactions API translation layer produces responses matching Google's format.
 
 Re-run this script periodically to catch API changes.

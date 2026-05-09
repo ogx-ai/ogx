@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -18,41 +18,41 @@ fi
 echo "Verifying config labels in: $IMAGE_NAME"
 echo
 
-# Extract llamastack labels
+# Extract ogx labels
 if ! docker inspect "$IMAGE_NAME" &>/dev/null; then
     echo "❌ Image not found: $IMAGE_NAME" >&2
     exit 1
 fi
 
-labels=$(docker inspect "$IMAGE_NAME" --format='{{ range $k, $v := .Config.Labels }}{{ $k }}={{ $v }}{{ "\n" }}{{ end }}' | grep '^com\.llamastack')
+labels=$(docker inspect "$IMAGE_NAME" --format='{{ range $k, $v := .Config.Labels }}{{ $k }}={{ $v }}{{ "\n" }}{{ end }}' | grep '^com\.ogx')
 
 if [ -z "$labels" ]; then
-    echo "❌ No llamastack labels found"
+    echo "❌ No ogx labels found"
     exit 1
 fi
 
 # Extract and validate required metadata labels
-distro_name=$(echo "$labels" | grep "^com.llamastack.distribution.name=" | cut -d= -f2-)
+distro_name=$(echo "$labels" | grep "^com.ogx.distribution.name=" | cut -d= -f2-)
 if [ -z "$distro_name" ]; then
-    echo "❌ Missing or empty label: com.llamastack.distribution.name"
+    echo "❌ Missing or empty label: com.ogx.distribution.name"
     exit 1
 fi
 
-version=$(echo "$labels" | grep "^com.llamastack.distribution.version=" | cut -d= -f2-)
+version=$(echo "$labels" | grep "^com.ogx.distribution.version=" | cut -d= -f2-)
 if [ -z "$version" ]; then
-    echo "❌ Missing or empty label: com.llamastack.distribution.version"
+    echo "❌ Missing or empty label: com.ogx.distribution.version"
     exit 1
 fi
 
-default_config=$(echo "$labels" | grep "^com.llamastack.distribution.default-config=" | cut -d= -f2-)
+default_config=$(echo "$labels" | grep "^com.ogx.distribution.default-config=" | cut -d= -f2-)
 if [ -z "$default_config" ]; then
-    echo "❌ Missing or empty label: com.llamastack.distribution.default-config"
+    echo "❌ Missing or empty label: com.ogx.distribution.default-config"
     exit 1
 fi
 
-config_list=$(echo "$labels" | grep "^com.llamastack.distribution.configs=" | cut -d= -f2-)
+config_list=$(echo "$labels" | grep "^com.ogx.distribution.configs=" | cut -d= -f2-)
 if [ -z "$config_list" ]; then
-    echo "❌ Missing or empty label: com.llamastack.distribution.configs"
+    echo "❌ Missing or empty label: com.ogx.distribution.configs"
     exit 1
 fi
 
@@ -76,7 +76,7 @@ IFS=',' read -ra CONFIGS <<< "$config_list"
 for config in "${CONFIGS[@]}"; do
     echo "🔍 Config '$config'"
 
-    label_key="com.llamastack.config.${config}"
+    label_key="com.ogx.config.${config}"
     encoded=$(docker inspect "$IMAGE_NAME" --format="{{ index .Config.Labels \"$label_key\" }}")
 
     if [ -z "$encoded" ]; then
@@ -111,7 +111,7 @@ for config in "${CONFIGS[@]}"; do
     fi
 
     # Compare with source file
-    source_file="src/llama_stack/distributions/${distro_name}/${config}"
+    source_file="src/ogx/distributions/${distro_name}/${config}"
     if [ ! -f "$source_file" ]; then
         echo "   ⚠️  Source file not found: $source_file (skipping comparison)"
         rm -f "$decoded_file"

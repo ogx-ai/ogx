@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-# Records OpenResponses conformance test interactions against a local llama-stack
+# Records OpenResponses conformance test interactions against a local ogx
 # server so that CI can replay them without a live API key.
 #
 # Run this script whenever you add new compliance tests or the openresponses
@@ -34,7 +34,7 @@ SERVER_PID=""
 cleanup() {
     if [[ -n "$SERVER_PID" ]]; then
         echo ""
-        echo "Stopping llama-stack server (PID $SERVER_PID)..."
+        echo "Stopping ogx server (PID $SERVER_PID)..."
         kill "$SERVER_PID" 2>/dev/null || true
     fi
 }
@@ -66,24 +66,24 @@ fi
 echo "=== Installing openresponses dependencies ==="
 (cd "$OPENRESPONSES_DIR" && bun install)
 
-# ── llama-stack provider dependencies ─────────────────────────────────────────
+# ── ogx provider dependencies ─────────────────────────────────────────
 echo "=== Installing ci-tests distro dependencies ==="
-llama stack list-deps ci-tests --format uv | sh
+ogx stack list-deps ci-tests --format uv | sh
 
 # ── Start server ───────────────────────────────────────────────────────────────
-echo "=== Starting llama-stack server (record-if-missing) ==="
+echo "=== Starting ogx server (record-if-missing) ==="
 mkdir -p "$(dirname "$LOG_FILE")"
 
-LLAMA_STACK_TEST_INFERENCE_MODE=record-if-missing \
-LLAMA_STACK_TEST_RECORDING_DIR="$RECORDING_DIR" \
-LLAMA_STACK_LOG_WIDTH=200 \
-nohup llama stack run ci-tests --port "$PORT" \
+OGX_TEST_INFERENCE_MODE=record-if-missing \
+OGX_TEST_RECORDING_DIR="$RECORDING_DIR" \
+OGX_LOG_WIDTH=200 \
+nohup ogx stack run ci-tests --port "$PORT" \
     > "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"
 
 # ── Wait for health ────────────────────────────────────────────────────────────
-echo "Waiting for llama-stack server to be ready..."
+echo "Waiting for ogx server to be ready..."
 for i in {1..60}; do
     if curl -sf "http://localhost:$PORT/v1/health" 2>/dev/null | grep -q "OK"; then
         echo "Server is ready!"
@@ -105,7 +105,7 @@ echo ""
     cd "$OPENRESPONSES_DIR"
     bun run bin/compliance-test.ts \
         --base-url "http://localhost:$PORT/v1" \
-        --api-key "llama-stack" \
+        --api-key "ogx" \
         --model "$INFERENCE_MODEL" \
         --verbose
 ) || true   # continue-on-error: failures here are expected while the implementation has gaps

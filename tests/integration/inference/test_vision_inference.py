@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -37,7 +37,7 @@ def test_image_chat_completion_non_streaming(client_with_models, vision_model_id
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": "https://raw.githubusercontent.com/meta-llama/llama-stack/main/tests/integration/inference/dog.png"
+                    "url": "https://raw.githubusercontent.com/ogx-ai/ogx/main/tests/integration/inference/dog.png"
                 },
             },
             {
@@ -164,7 +164,7 @@ def test_image_chat_completion_streaming(client_with_models, vision_model_id):
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": "https://raw.githubusercontent.com/meta-llama/llama-stack/main/tests/integration/inference/dog.png"
+                    "url": "https://raw.githubusercontent.com/ogx-ai/ogx/main/tests/integration/inference/dog.png"
                 },
             },
             {

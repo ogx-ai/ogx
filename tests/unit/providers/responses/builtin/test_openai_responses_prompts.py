@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 
 import pytest
 
-from llama_stack_api import (
+from ogx_api import (
     GetPromptRequest,
     InvalidParameterError,
     OpenAIChatCompletionContentPartImageParam,
@@ -16,10 +16,10 @@ from llama_stack_api import (
     OpenAISystemMessageParam,
     Prompt,
 )
-from llama_stack_api.inference import (
+from ogx_api.inference import (
     OpenAIUserMessageParam,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
     OpenAIResponseInputMessageContentFile,
     OpenAIResponseInputMessageContentImage,
     OpenAIResponseInputMessageContentText,

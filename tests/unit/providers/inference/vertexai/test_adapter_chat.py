@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.providers.remote.inference.vertexai.config import VertexAIConfig
-from llama_stack.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter, _build_http_options
-from llama_stack.providers.utils.inference.model_registry import NetworkConfig, ProxyConfig, TimeoutConfig, TLSConfig
-from llama_stack_api.inference.models import OpenAIChatCompletionRequestWithExtraBody
+from ogx.providers.remote.inference.vertexai.config import VertexAIConfig
+from ogx.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter, _build_http_options
+from ogx.providers.utils.inference.model_registry import NetworkConfig, ProxyConfig, TimeoutConfig, TLSConfig
+from ogx_api.inference.models import OpenAIChatCompletionRequestWithExtraBody
 
 from .conftest import _make_fake_streaming_chunk
 
@@ -29,7 +29,7 @@ class TestOpenAIChatCompletionImagePreDownload:
 
         localize_image_content_mock = AsyncMock(return_value=(b"fake image bytes", "jpeg"))
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.localize_image_content",
+            "ogx.providers.remote.inference.vertexai.vertexai.localize_image_content",
             localize_image_content_mock,
         )
 
@@ -61,7 +61,7 @@ class TestOpenAIChatCompletionImagePreDownload:
 
         localize_image_content_mock = AsyncMock()
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.localize_image_content",
+            "ogx.providers.remote.inference.vertexai.vertexai.localize_image_content",
             localize_image_content_mock,
         )
 
@@ -92,7 +92,7 @@ class TestOpenAIChatCompletionImagePreDownload:
 
         localize_image_content_mock = AsyncMock(return_value=None)
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.localize_image_content",
+            "ogx.providers.remote.inference.vertexai.vertexai.localize_image_content",
             localize_image_content_mock,
         )
 
@@ -341,7 +341,7 @@ class TestVertexAIClientWithNetworkConfig:
     def test_create_client_with_token_passes_http_options(self, monkeypatch):
         """Test that create client with token passes http options (lazy initialization)."""
         client_ctor = MagicMock(return_value=object())
-        monkeypatch.setattr("llama_stack.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
+        monkeypatch.setattr("ogx.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
 
         adapter = VertexAIInferenceAdapter(
             config=VertexAIConfig(project="p", location="l", network=NetworkConfig(headers={"X-Test": "1"}))
@@ -356,7 +356,7 @@ class TestVertexAIClientWithNetworkConfig:
     def test_create_adc_client_passes_http_options(self, monkeypatch):
         """Test that create adc client passes http options (lazy initialization)."""
         client_ctor = MagicMock(return_value=object())
-        monkeypatch.setattr("llama_stack.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
+        monkeypatch.setattr("ogx.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
 
         adapter = VertexAIInferenceAdapter(
             config=VertexAIConfig(project="p", location="l", network=NetworkConfig(headers={"X-Test": "1"}))
@@ -371,7 +371,7 @@ class TestVertexAIClientWithNetworkConfig:
     def test_create_client_no_network_config_no_http_options(self, monkeypatch):
         """Test that create client no network config no http options."""
         client_ctor = MagicMock(return_value=object())
-        monkeypatch.setattr("llama_stack.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
+        monkeypatch.setattr("ogx.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
 
         adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
         # _http_options is None by default (no network config)

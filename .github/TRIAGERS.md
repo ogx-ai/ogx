@@ -1,1 +1,1 @@
-# This file documents Triage members in the Llama Stack community
+# This file documents Triage members in the OGX community

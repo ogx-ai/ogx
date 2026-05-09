@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from llama_stack_api import ViolationLevel
+from ogx_api import ViolationLevel
 
 VISION_SHIELD_ENABLED_PROVIDERS = {"together"}
 
@@ -27,7 +27,7 @@ def data_url_from_image(file_path):
     return data_url
 
 
-def test_safety_with_image(llama_stack_client, model_providers):
+def test_safety_with_image(ogx_client, model_providers):
     vision_safety_enabled = len(VISION_SHIELD_ENABLED_PROVIDERS & model_providers) > 0
     if not vision_safety_enabled:
         pytest.skip(f"Testing vision shields is not supported for model_providers {model_providers}")
@@ -55,7 +55,7 @@ def test_safety_with_image(llama_stack_client, model_providers):
                 },
             ],
         }
-        response = llama_stack_client.safety.run_shield(
+        response = ogx_client.safety.run_shield(
             messages=[message],
             shield_id="meta-llama/Llama-Guard-3-11B-Vision",
         )

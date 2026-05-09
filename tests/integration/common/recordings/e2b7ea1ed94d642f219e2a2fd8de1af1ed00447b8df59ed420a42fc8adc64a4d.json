@@ -1,0 +1,229 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-mantle.us-east-2.api.aws/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 2 + 2? Think step by step."
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "**Step-by-step calculation of \\(2 + 2\\)**\n\n1. **Identify the numbers to add**  \n   The expression is \\(2 + 2\\). Here we have:\n   - First addend: 2  \n   - Second addend: 2  \n\n2. **Determine the operation**  \n   The plus sign (+) indicates addition \u2013 we\u2019re combining the values of the two addends.\n\n3. **Perform the addition**  \n   - Start with the first number: 2  \n   - Add the second number to it: \\(2 + 2\\)  \n   - Think in counting terms:  \n     - 2 (one group of two)  \n     - + 2 (another group of two)  \n     - Gives 4 total objects.\n\n4. **Result**  \n   The sum is **4**.\n\nSo, \\(2 + 2 = 4\\)."
+            }
+          ],
+          "reasoning": "The user asks: \"What is 2 + 2? Think step by step.\" It's a very simple arithmetic question. They want step by step: adding two numbers. Summation: 2 + 2 = 4. We should explain step by step. Provide reasoning like: Start with 2, add 2 to it, count 4. So answer: 4. Provide steps. Let's produce a concise step-by-step explanation."
+        },
+        {
+          "role": "user",
+          "content": "Now multiply that result by 3."
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "reasoning_effort": "medium"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.5.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e2b7ea1ed94d",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "XKAgmwrjKHoun0E36dE51PiGt1Fd7FpeeKN4PwP091HLVtopqAsnGWQ4sYo3GePrHCFOI"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e2b7ea1ed94d",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null,
+                "reasoning": "We need to multiply 4 by 3. The step-by-step: 4 * 3 = 12. Provide reasoning."
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "dP1DAFgGCIG5aPutG9WpKuiiBR12gnsqvu0lcpkx4NFUwdqHUXxqs8scXd924i9bkyBPzo9RSAHNtQEuEIw"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e2b7ea1ed94d",
+          "choices": [
+            {
+              "delta": {
+                "content": "**Step by step: Multiply 4 by 3**\n\n1. **Identify the numbers to multiply**  \n   - First factor: 4  \n   - Second factor: 3  \n\n2. **Understand the operation**  \n   The asterisk (*) or the word \u201cby\u201d indicates multiplication \u2013 combining",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "dcW5oV0Vm7nwtICDaHhcNMQGlZGDZvd3aVnYEDMeaeBhVshafm9NbeZxhY1Yt8Z5AhdBZfttebO1xQocwgw1nDqlwht"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e2b7ea1ed94d",
+          "choices": [
+            {
+              "delta": {
+                "content": " groups of the first factor a certain number of times.  \n\n3. **Compute the product**  \n   - 4 \u00d7 3 means three groups of four.  \n   - \\(4 + 4 + 4 = 12\\).  \n   - Alternatively, use the rule: \\(4 \\times 3 = 12\\).  \n\n4. **Result**  \n   The product of 4 and ",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "o0b08McftU2lLC8NM9McBY3ER4wLYmoPN5EWPx3bAARSx0S1IzEN7hkuJwplZyK39c7GEpfJFwXWgnwaqlAMsHxqiYhSzZvsPtynN7H9TqkQXIeI5IYQM"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e2b7ea1ed94d",
+          "choices": [
+            {
+              "delta": {
+                "content": "3 is **12**.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "DQOalmTBlDQyffPrJ3xwieHn1VZ7PzNC1oxKmjYgV4YNUE1N7YyeRo3TeH"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e2b7ea1ed94d",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "BnwpmmzCiXLp1qG1XgYGws7TEjJgwzlsTzLxKnfg2Du1na0AQefN9rnhuPC9iTbzO6EkV1yODmqESptrq61xjlBcKrtqRcRPAdKXWwTo1U1"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e2b7ea1ed94d",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 188,
+            "prompt_tokens": 282,
+            "total_tokens": 470,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 import pytest
 from pydantic import ValidationError
 
-from llama_stack.providers.remote.safety.passthrough.config import (
+from ogx.providers.remote.safety.passthrough.config import (
     PassthroughProviderDataValidator,
     PassthroughSafetyConfig,
 )

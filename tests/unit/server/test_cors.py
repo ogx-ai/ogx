@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,7 +6,7 @@
 
 import pytest
 
-from llama_stack.core.datatypes import CORSConfig, process_cors_config
+from ogx.core.datatypes import CORSConfig, process_cors_config
 
 
 def test_cors_config_defaults():

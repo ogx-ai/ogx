@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,18 +9,8 @@ import time
 import pytest
 
 from .fixtures.test_cases import basic_test_cases, image_test_cases, multi_turn_image_test_cases, multi_turn_test_cases
-from .helpers import assert_text_contains
+from .helpers import assert_text_contains, provider_from_model, skip_if_provider_is_vertexai
 from .streaming_assertions import StreamingValidator
-
-
-def provider_from_model(client_with_models, text_model_id):
-    models = {m.id: m for m in client_with_models.models.list()}
-    models.update(
-        {m.custom_metadata["provider_resource_id"]: m for m in client_with_models.models.list() if m.custom_metadata}
-    )
-    provider_id = models[text_model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_provider_isnt_vllm(client_with_models, text_model_id):
@@ -33,7 +23,7 @@ def skip_if_provider_isnt_vllm(client_with_models, text_model_id):
 
 def skip_if_chat_completions_logprobs_not_supported(client_with_models, text_model_id):
     provider_type = provider_from_model(client_with_models, text_model_id).provider_type
-    if provider_type in ("remote::ollama", "remote::watsonx"):
+    if provider_type in ("remote::ollama", "remote::watsonx", "remote::vertexai"):
         pytest.skip(f"Model {text_model_id} hosted by {provider_type} doesn't support /v1/chat/completions logprobs.")
 
 
@@ -206,7 +196,8 @@ def test_response_non_streaming_multi_turn(responses_client, text_model_id, case
 
 
 @pytest.mark.parametrize("case", image_test_cases)
-def test_response_non_streaming_image(responses_client, vision_model_id, case):
+def test_response_non_streaming_image(responses_client, client_with_models, vision_model_id, case):
+    skip_if_provider_is_vertexai(client_with_models, vision_model_id, "image handling differs from OpenAI format")
     response = responses_client.responses.create(
         model=vision_model_id,
         input=case.input,
@@ -216,7 +207,8 @@ def test_response_non_streaming_image(responses_client, vision_model_id, case):
 
 
 @pytest.mark.parametrize("case", multi_turn_image_test_cases)
-def test_response_non_streaming_multi_turn_image(responses_client, vision_model_id, case):
+def test_response_non_streaming_multi_turn_image(responses_client, client_with_models, vision_model_id, case):
+    skip_if_provider_is_vertexai(client_with_models, vision_model_id, "image handling differs from OpenAI format")
     previous_response_id = None
     for turn_input, turn_expected in case.turns:
         response = responses_client.responses.create(

@@ -1,6 +1,6 @@
 ---
-slug: observability-for-llama-stack
-title: "Llama Stack Observability: Metrics, Traces, and Dashboards with OpenTelemetry"
+slug: observability-for-ogx
+title: "OGX Observability: Metrics, Traces, and Dashboards with OpenTelemetry"
 authors: [gyliu513]
 tags: [observability, opentelemetry, metrics, tracing, monitoring]
 date: 2026-03-30
@@ -8,11 +8,11 @@ date: 2026-03-30
 
 Running an LLM application in production is nothing like running a traditional web service. Responses are non-deterministic. Latency swings wildly with model size and token count. And failures are often silent — a tool call that returns garbage still comes back as a 200 OK. You can stare at your HTTP dashboard all day and have no idea that half your users are getting bad answers.
 
-We recently shipped built-in observability for Llama Stack, powered by [OpenTelemetry](https://opentelemetry.io/). Three environment variables, zero code changes, and you get metrics and traces from every layer — HTTP requests, inference calls, tool invocations, vector store operations, all the way down.
+We recently shipped built-in observability for OGX, powered by [OpenTelemetry](https://opentelemetry.io/). Three environment variables, zero code changes, and you get metrics and traces from every layer — HTTP requests, inference calls, tool invocations, vector store operations, all the way down.
 
 This post explains the architecture behind it, walks through a hands-on tutorial, and shows what you can actually see once it's running.
 
-{/*truncate*/}
+<!--truncate-->
 
 ## Why Observability Matters for LLM Applications
 
@@ -28,7 +28,7 @@ If you've operated traditional services, you know the drill: uptime checks, erro
 
 **Provider comparison requires data.** When you run multiple inference backends (vLLM, Ollama, OpenAI), you need apples-to-apples latency and reliability numbers, not vibes.
 
-## How We Instrumented Llama Stack
+## How We Instrumented OGX
 
 We chose [OpenTelemetry](https://opentelemetry.io/) (OTel) — the CNCF's vendor-neutral standard for metrics, traces, and logs. The practical upside: you export to Prometheus, Grafana, Jaeger, Datadog, or any OTLP-compatible backend, and you can switch without touching application code.
 
@@ -36,7 +36,7 @@ The instrumentation has two layers that work together. Both feed into the OpenTe
 
 ### Auto instrumentation: the infrastructure view
 
-Launch Llama Stack with the `opentelemetry-instrument` CLI wrapper and you get — with zero code changes:
+Launch OGX with the `opentelemetry-instrument` CLI wrapper and you get — with zero code changes:
 
 - Inbound HTTP spans and metrics from FastAPI (every API request)
 - Outbound HTTP spans and metrics from httpx (calls to inference providers)
@@ -47,7 +47,7 @@ This covers the "infrastructure view": request flow, provider latency, GenAI cal
 
 ### Manual instrumentation: the application view
 
-Auto instrumentation doesn't know about Llama Stack's domain concepts. So we added manual instrumentation directly in the routers and middleware to capture:
+Auto instrumentation doesn't know about OGX's domain concepts. So we added manual instrumentation directly in the routers and middleware to capture:
 
 - **API request metrics** — total count, duration histogram, concurrent request gauge
 - **Inference metrics** — end-to-end duration, TTFT, tokens-per-second
@@ -59,12 +59,12 @@ The two layers are complementary. Auto instrumentation tells you what's happenin
 
 ## The OpenTelemetry Collector
 
-Between Llama Stack and your observability backends sits the [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/). It receives OTLP data, processes it, and fans out to one or more destinations.
+Between OGX and your observability backends sits the [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/). It receives OTLP data, processes it, and fans out to one or more destinations.
 
 ```mermaid
 graph LR
-    LSS["Llama Stack Server"] -->|"OTLP/HTTP push<br/>metrics + traces"| R
-    LSC["Llama Stack Client"] -->|"OTLP/HTTP push<br/>metrics + traces"| R
+    LSS["OGX Server"] -->|"OTLP/HTTP push<br/>metrics + traces"| R
+    LSC["OGX Client"] -->|"OTLP/HTTP push<br/>metrics + traces"| R
 
     subgraph "OpenTelemetry Collector"
         R["Receivers"] -->|"raw telemetry"| P["Processors"]
@@ -79,13 +79,13 @@ graph LR
 
 The pipeline has three stages:
 
-**Receivers** define how data enters. Llama Stack pushes to the OTLP receiver on port 4318 (HTTP) or 4317 (gRPC). You can run additional receivers in parallel — for example, a Prometheus scrape receiver for other services in your infrastructure.
+**Receivers** define how data enters. OGX pushes to the OTLP receiver on port 4318 (HTTP) or 4317 (gRPC). You can run additional receivers in parallel — for example, a Prometheus scrape receiver for other services in your infrastructure.
 
 **Processors** transform data in flight. The ones that matter for production: `batch` (groups telemetry for efficient network transfer), `memory_limiter` (drops data under memory pressure instead of OOM-ing), `attributes` (inject labels like `environment=production`), and `filter` (drop noise like health check spans). They run in the order you define them — a typical chain is `memory_limiter → batch → attributes`.
 
 **Exporters** send data to backends. `prometheusremotewrite` for Prometheus-compatible stores, `otlp` for Jaeger/Tempo/Datadog, `debug` for stdout during development. A single Collector can export metrics to Prometheus for dashboarding AND to Datadog for alerting simultaneously.
 
-The key benefit: Llama Stack only speaks OTLP. The Collector handles format conversion, retries, and routing. Swap backends without changing a line of application code.
+The key benefit: OGX only speaks OTLP. The Collector handles format conversion, retries, and routing. Swap backends without changing a line of application code.
 
 ## End-to-End Data Flow
 
@@ -94,7 +94,7 @@ Here's what happens when a request comes in:
 ```mermaid
 sequenceDiagram
     participant Client
-    participant LS as Llama Stack
+    participant LS as OGX
     participant SDK as OTel SDK (in-process)
     participant Collector as OTel Collector
     participant Prom as Prometheus
@@ -136,16 +136,16 @@ Let's set everything up. By the end you'll have distributed tracing in Jaeger, m
 You'll need:
 
 - **Docker** or **Podman** for running the observability stack
-- A working **Llama Stack** installation with `uv`
+- A working **OGX** installation with `uv`
 
 Clone the repo if you haven't:
 
 ```bash
-git clone https://github.com/llamastack/llama-stack.git
-cd llama-stack
+git clone https://github.com/ogx-ai/ogx.git
+cd ogx
 ```
 
-The telemetry configs live in [`scripts/telemetry/`](https://github.com/llamastack/llama-stack/tree/main/scripts/telemetry):
+The telemetry configs live in [`scripts/telemetry/`](https://github.com/ogx-ai/ogx/tree/main/scripts/telemetry):
 
 | File | What it does |
 |---|---|
@@ -154,7 +154,7 @@ The telemetry configs live in [`scripts/telemetry/`](https://github.com/llamasta
 | `prometheus.yml` | Prometheus scrape config |
 | `grafana-datasources.yaml` | Grafana datasource provisioning |
 | `grafana-dashboards.yaml` | Grafana dashboard provisioning |
-| `llama-stack-dashboard.json` | Pre-built Grafana dashboard |
+| `ogx-dashboard.json` | Pre-built Grafana dashboard |
 
 ### Step 1: Deploy the Observability Stack
 
@@ -186,9 +186,9 @@ Set three environment variables and wrap the launch command with `opentelemetry-
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-export OTEL_SERVICE_NAME=llama-stack-server
+export OTEL_SERVICE_NAME=ogx-server
 
-uv run opentelemetry-instrument llama stack run starter
+uv run opentelemetry-instrument ogx stack run starter
 ```
 
 That's it. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, both auto and manual instrumentation activate. When it's not set, metrics are recorded in memory but never exported — no overhead, no errors.
@@ -197,7 +197,7 @@ That's it. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, both auto and manual instr
 |----------|---------|---------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector endpoint | `http://localhost:4318` |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | Transport protocol | `http/protobuf` |
-| `OTEL_SERVICE_NAME` | Service name in telemetry | `llama-stack-server` |
+| `OTEL_SERVICE_NAME` | Service name in telemetry | `ogx-server` |
 | `OTEL_METRIC_EXPORT_INTERVAL` | Export interval (ms) | `60000` (default) |
 
 > **Tip**: If you see duplicate database traces, set `OTEL_PYTHON_DISABLED_INSTRUMENTATIONS="sqlite3,asyncpg"` to disable overlapping instrumentors.
@@ -209,7 +209,7 @@ To get end-to-end distributed tracing, launch your client the same way:
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-export OTEL_SERVICE_NAME=my-llama-stack-app
+export OTEL_SERVICE_NAME=my-ogx-app
 
 opentelemetry-instrument python my_app.py
 ```
@@ -251,9 +251,9 @@ Once traffic is flowing:
 
 #### Jaeger: Distributed Traces
 
-Select the `llama-stack-server` or `my-llama-stack-app` service to see request traces. Each trace shows the full request lifecycle — client HTTP call → FastAPI handler → inference provider call → database operations. You can pinpoint exactly where time is spent.
+Select the `ogx-server` or `my-ogx-app` service to see request traces. Each trace shows the full request lifecycle — client HTTP call → FastAPI handler → inference provider call → database operations. You can pinpoint exactly where time is spent.
 
-![Jaeger distributed traces for Llama Stack](./images/jaeger.png)
+![Jaeger distributed traces for OGX](./images/jaeger.png)
 
 #### Prometheus: Metrics Queries
 
@@ -261,21 +261,21 @@ Some useful PromQL to get you started:
 
 | What you want to know | PromQL |
 |---|---|
-| Input token usage by model | `sum by(gen_ai_request_model) (llama_stack_gen_ai_client_token_usage_sum{gen_ai_token_type="input"})` |
-| Output token usage by model | `sum by(gen_ai_request_model) (llama_stack_gen_ai_client_token_usage_sum{gen_ai_token_type="output"})` |
-| P95 HTTP server latency | `histogram_quantile(0.95, rate(llama_stack_http_server_duration_milliseconds_bucket[5m]))` |
-| P99 inference duration | `histogram_quantile(0.99, rate(llama_stack_inference_duration_seconds_bucket[5m]))` |
-| P95 TTFT by model | `histogram_quantile(0.95, rate(llama_stack_inference_time_to_first_token_seconds_bucket[5m]))` |
-| Median tokens/sec by provider | `histogram_quantile(0.5, rate(llama_stack_inference_tokens_per_second_bucket[5m]))` |
-| Tool invocation errors | `rate(llama_stack_tool_runtime_invocations_total{status="error"}[5m])` |
+| Input token usage by model | `sum by(gen_ai_request_model) (ogx_gen_ai_client_token_usage_sum{gen_ai_token_type="input"})` |
+| Output token usage by model | `sum by(gen_ai_request_model) (ogx_gen_ai_client_token_usage_sum{gen_ai_token_type="output"})` |
+| P95 HTTP server latency | `histogram_quantile(0.95, rate(ogx_http_server_duration_milliseconds_bucket[5m]))` |
+| P99 inference duration | `histogram_quantile(0.99, rate(ogx_inference_duration_seconds_bucket[5m]))` |
+| P95 TTFT by model | `histogram_quantile(0.95, rate(ogx_inference_time_to_first_token_seconds_bucket[5m]))` |
+| Median tokens/sec by provider | `histogram_quantile(0.5, rate(ogx_inference_tokens_per_second_bucket[5m]))` |
+| Tool invocation errors | `rate(ogx_tool_runtime_invocations_total{status="error"}[5m])` |
 
-![Prometheus metrics for Llama Stack](./images/prometheus.png)
+![Prometheus metrics for OGX](./images/prometheus.png)
 
 #### Grafana: Pre-built Dashboard
 
-A **Llama Stack** dashboard is automatically provisioned with panels for prompt tokens, completion tokens, P95/P99 HTTP duration, and request volume. It's a starting point — extend it with the PromQL queries above for inference-specific views.
+A **OGX** dashboard is automatically provisioned with panels for prompt tokens, completion tokens, P95/P99 HTTP duration, and request volume. It's a starting point — extend it with the PromQL queries above for inference-specific views.
 
-![Grafana pre-built dashboard for Llama Stack](./images/grafana.png)
+![Grafana pre-built dashboard for OGX](./images/grafana.png)
 
 ### Step 6: Set Up Alerts
 
@@ -296,4 +296,4 @@ docker network rm llama-telemetry
 
 ## What's Next
 
-The instrumentation is in place, and we're planning to expand it. If you have ideas for metrics that would help you operate Llama Stack in production or if you've built interesting dashboards on top of what's there, we'd love to hear about it. Open an issue or check the [contributing guide](https://github.com/llamastack/llama-stack/blob/main/CONTRIBUTING.md).
+The instrumentation is in place, and we're planning to expand it. If you have ideas for metrics that would help you operate OGX in production or if you've built interesting dashboards on top of what's there, we'd love to hear about it. Open an issue or check the [contributing guide](https://github.com/ogx-ai/ogx/blob/main/CONTRIBUTING.md).

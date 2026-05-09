@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -38,7 +38,7 @@ def generate_docs(coverage_path: Path, output_path: Path) -> None:
     lines = [
         "---",
         "title: Google Interactions API Conformance",
-        "description: Coverage status of Llama Stack against the Google Interactions API specification",
+        "description: Coverage status of OGX against the Google Interactions API specification",
         "sidebar_label: Interactions Conformance",
         "sidebar_position: 5",
         "---",
@@ -47,7 +47,7 @@ def generate_docs(coverage_path: Path, output_path: Path) -> None:
         "",
         f"Spec version: `{coverage.get('spec_version', 'unknown')}`",
         "",
-        "This page provides a detailed breakdown of Llama Stack's coverage of the",
+        "This page provides a detailed breakdown of OGX's coverage of the",
         "[Google Interactions API](https://ai.google.dev/gemini-api/docs/interactions) specification.",
         "The coverage score increases as missing features are implemented.",
         "",
@@ -116,13 +116,13 @@ def generate_docs(coverage_path: Path, output_path: Path) -> None:
             lines.append("</details>")
             lines.append("")
 
-        if section.get("extra_in_llama_stack"):
+        if section.get("extra_in_ogx"):
             lines.append("<details>")
-            lines.append(f"<summary>Extra in Llama Stack ({len(section['extra_in_llama_stack'])})</summary>")
+            lines.append(f"<summary>Extra in OGX ({len(section['extra_in_ogx'])})</summary>")
             lines.append("")
-            lines.append("These properties are in the Llama Stack implementation but not in the Google spec:")
+            lines.append("These properties are in the OGX implementation but not in the Google spec:")
             lines.append("")
-            for item in section["extra_in_llama_stack"]:
+            for item in section["extra_in_ogx"]:
                 lines.append(f"- `{item}`")
             lines.append("")
             lines.append("</details>")
@@ -135,7 +135,7 @@ def generate_docs(coverage_path: Path, output_path: Path) -> None:
             "To improve coverage scores:",
             "",
             "1. **Add Missing Properties**: Implement missing fields in request/response models"
-            " in `src/llama_stack_api/interactions/models.py`",
+            " in `src/ogx_api/interactions/models.py`",
             "2. **Add Content Types**: Support additional content types beyond text"
             " (images, audio, function calls, etc.)",
             "3. **Add Tool Support**: Implement tool declarations (Function, GoogleSearch, CodeExecution, etc.)",

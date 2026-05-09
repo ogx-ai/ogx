@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,14 +9,14 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI
 
-from llama_stack.core.access_control.datatypes import RouteAccessRule, RouteScope
-from llama_stack.core.datatypes import (
+from ogx.core.access_control.datatypes import RouteAccessRule, RouteScope
+from ogx.core.datatypes import (
     AuthenticationConfig,
     AuthProviderType,
     CustomAuthConfig,
     User,
 )
-from llama_stack.core.server.auth import (
+from ogx.core.server.auth import (
     AuthenticationMiddleware,
     RouteAuthorizationMiddleware,
 )

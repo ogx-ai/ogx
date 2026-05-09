@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,13 +11,17 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from llama_stack.providers.inline.interactions.config import InteractionsConfig
-from llama_stack.providers.inline.interactions.impl import BuiltinInteractionsImpl
-from llama_stack_api.interactions.models import (
+from ogx.providers.inline.interactions.config import InteractionsConfig
+from ogx.providers.inline.interactions.impl import BuiltinInteractionsImpl
+from ogx_api.interactions.models import (
     GoogleCreateInteractionRequest,
+    GoogleFunctionCallContent,
+    GoogleFunctionDeclaration,
+    GoogleFunctionResponseContent,
     GoogleGenerationConfig,
     GoogleInputTurn,
     GoogleTextContent,
+    GoogleTool,
 )
 
 
@@ -347,7 +351,7 @@ class TestPassthroughDetection:
 
     async def test_gemini_provider_detected(self):
         impl = self._make_impl_with_router(
-            provider_module="llama_stack.providers.remote.inference.gemini.gemini",
+            provider_module="ogx.providers.remote.inference.gemini.gemini",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         )
         result = await impl._get_passthrough_info("gemini/gemini-2.5-flash")
@@ -359,7 +363,7 @@ class TestPassthroughDetection:
 
     async def test_non_gemini_provider_returns_none(self):
         impl = self._make_impl_with_router(
-            provider_module="llama_stack.providers.remote.inference.openai",
+            provider_module="ogx.providers.remote.inference.openai",
             base_url="https://api.openai.com/v1",
         )
         result = await impl._get_passthrough_info("openai/gpt-4o")
@@ -368,7 +372,7 @@ class TestPassthroughDetection:
 
     async def test_no_auth_headers_returns_none(self):
         impl = self._make_impl_with_router(
-            provider_module="llama_stack.providers.remote.inference.gemini.gemini",
+            provider_module="ogx.providers.remote.inference.gemini.gemini",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             auth_headers={},
         )
@@ -385,7 +389,7 @@ class TestPassthroughDetection:
 
     async def test_openai_suffix_stripped(self):
         impl = self._make_impl_with_router(
-            provider_module="llama_stack.providers.remote.inference.gemini.gemini",
+            provider_module="ogx.providers.remote.inference.gemini.gemini",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai",
         )
         result = await impl._get_passthrough_info("gemini/gemini-2.5-flash")
@@ -396,7 +400,7 @@ class TestPassthroughDetection:
     async def test_network_config_propagated(self):
         network_config = MagicMock()
         impl = self._make_impl_with_router(
-            provider_module="llama_stack.providers.remote.inference.gemini.gemini",
+            provider_module="ogx.providers.remote.inference.gemini.gemini",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai",
             network_config=network_config,
         )
@@ -437,7 +441,7 @@ class TestCreateInteractionPassthrough:
 
     async def test_non_streaming_uses_native_passthrough(self):
         impl = self._make_impl_with_router(
-            provider_module="llama_stack.providers.remote.inference.gemini.gemini",
+            provider_module="ogx.providers.remote.inference.gemini.gemini",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai",
         )
         expected = MagicMock()
@@ -452,7 +456,7 @@ class TestCreateInteractionPassthrough:
 
     async def test_streaming_uses_native_passthrough(self):
         impl = self._make_impl_with_router(
-            provider_module="llama_stack.providers.remote.inference.gemini.gemini",
+            provider_module="ogx.providers.remote.inference.gemini.gemini",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai",
         )
         expected = MagicMock()
@@ -478,6 +482,7 @@ class TestPassthroughRequest:
         request = GoogleCreateInteractionRequest(model="gemini/gemini-2.5-flash", input="hello", stream=False)
 
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
             "id": "interaction-test",
@@ -490,11 +495,11 @@ class TestPassthroughRequest:
         mock_client.__aexit__.return_value = None
         mock_client.post = AsyncMock(return_value=mock_response)
         async_client_ctor = MagicMock(return_value=mock_client)
-        monkeypatch.setattr("llama_stack.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
+        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
 
         result = await impl._passthrough_request(passthrough, request)
 
-        assert result.model == "gemini-2.5-flash"
+        assert result.status_code == 200
         ctor_kwargs = async_client_ctor.call_args.kwargs
         assert ctor_kwargs["headers"]["x-goog-api-key"] == "test-key"
         assert ctor_kwargs["headers"]["content-type"] == "application/json"
@@ -517,11 +522,12 @@ class TestPassthroughRequest:
         built_kwargs = {"headers": {"x-custom-header": "enabled"}, "timeout": httpx.Timeout(42.0)}
         build_kwargs_mock = MagicMock(return_value=built_kwargs)
         monkeypatch.setattr(
-            "llama_stack.providers.inline.interactions.impl.build_network_client_kwargs",
+            "ogx.providers.inline.interactions.impl.build_network_client_kwargs",
             build_kwargs_mock,
         )
 
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
             "id": "interaction-test",
@@ -534,7 +540,7 @@ class TestPassthroughRequest:
         mock_client.__aexit__.return_value = None
         mock_client.post = AsyncMock(return_value=mock_response)
         async_client_ctor = MagicMock(return_value=mock_client)
-        monkeypatch.setattr("llama_stack.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
+        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
 
         await impl._passthrough_request(passthrough, request)
 
@@ -555,6 +561,7 @@ class TestPassthroughRequest:
         request = GoogleCreateInteractionRequest(model="gemini/gemini-2.5-flash", input="hello", stream=False)
 
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
             "id": "interaction-test",
@@ -570,82 +577,362 @@ class TestPassthroughRequest:
                     "text": "4",
                 },
             ],
-            "usage": {
-                "total_input_tokens": 10,
-                "total_output_tokens": 1,
-                "total_tokens": 11,
-            },
             "role": "model",
-            "object": "interaction",
+            "usage": {"total_input_tokens": 10, "total_output_tokens": 5, "total_tokens": 15},
         }
+        mock_response.status_code = 200
 
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client.post = AsyncMock(return_value=mock_response)
         async_client_ctor = MagicMock(return_value=mock_client)
-        monkeypatch.setattr("llama_stack.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
+        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
 
         result = await impl._passthrough_request(passthrough, request)
 
+        assert result.status_code == 200
+        body = result.body
+        import json as _json
+
+        data = _json.loads(body)
+        assert len(data["outputs"]) == 2
+        assert data["outputs"][0]["type"] == "thought"
+        assert data["outputs"][1]["type"] == "text"
+
+
+class TestToolCallingRequestTranslation:
+    def test_tools_converted_to_openai(self, impl):
+        request = GoogleCreateInteractionRequest(
+            model="m",
+            input="What's the weather?",
+            tools=[
+                GoogleTool(
+                    function_declarations=[
+                        GoogleFunctionDeclaration(
+                            name="get_weather",
+                            description="Get current weather",
+                            parameters={
+                                "type": "object",
+                                "properties": {"location": {"type": "string"}},
+                                "required": ["location"],
+                            },
+                        ),
+                    ]
+                )
+            ],
+        )
+        result = impl._google_to_openai(request)
+
+        assert result.tools is not None
+        assert len(result.tools) == 1
+        tool = _msg_to_dict(result.tools[0])
+        assert tool["type"] == "function"
+        assert tool["function"]["name"] == "get_weather"
+        assert tool["function"]["description"] == "Get current weather"
+        assert tool["function"]["parameters"]["required"] == ["location"]
+
+    def test_multiple_function_declarations(self, impl):
+        request = GoogleCreateInteractionRequest(
+            model="m",
+            input="Help me",
+            tools=[
+                GoogleTool(
+                    function_declarations=[
+                        GoogleFunctionDeclaration(name="fn_a", description="First"),
+                        GoogleFunctionDeclaration(name="fn_b", description="Second"),
+                    ]
+                )
+            ],
+        )
+        result = impl._google_to_openai(request)
+
+        assert result.tools is not None
+        assert len(result.tools) == 2
+
+    def test_function_response_input(self, impl):
+        request = GoogleCreateInteractionRequest(
+            model="m",
+            input=[
+                GoogleInputTurn(
+                    role="user",
+                    content=[GoogleTextContent(text="What's the weather?")],
+                ),
+                GoogleInputTurn(
+                    role="model",
+                    content=[
+                        GoogleFunctionCallContent(
+                            id="call_123",
+                            name="get_weather",
+                            args={"location": "NYC"},
+                        )
+                    ],
+                ),
+                GoogleInputTurn(
+                    role="user",
+                    content=[
+                        GoogleFunctionResponseContent(
+                            call_id="call_123",
+                            name="get_weather",
+                            response={"temperature": 72},
+                        )
+                    ],
+                ),
+            ],
+        )
+        result = impl._google_to_openai(request)
+
+        # user message, assistant with tool_calls, tool message
+        assert len(result.messages) == 3
+        m0 = _msg_to_dict(result.messages[0])
+        m1 = _msg_to_dict(result.messages[1])
+        m2 = _msg_to_dict(result.messages[2])
+
+        assert m0["role"] == "user"
+        assert m0["content"] == "What's the weather?"
+
+        assert m1["role"] == "assistant"
+        assert "tool_calls" in m1
+        assert m1["tool_calls"][0]["id"] == "call_123"
+        assert m1["tool_calls"][0]["function"]["name"] == "get_weather"
+
+        assert m2["role"] == "tool"
+        assert m2["tool_call_id"] == "call_123"
+        assert '"temperature": 72' in m2["content"]
+
+    def test_model_turn_with_text_and_function_call(self, impl):
+        request = GoogleCreateInteractionRequest(
+            model="m",
+            input=[
+                GoogleInputTurn(
+                    role="model",
+                    content=[
+                        GoogleTextContent(text="Let me check the weather."),
+                        GoogleFunctionCallContent(
+                            id="call_abc",
+                            name="get_weather",
+                            args={"location": "Paris"},
+                        ),
+                    ],
+                ),
+            ],
+        )
+        result = impl._google_to_openai(request)
+
+        assert len(result.messages) == 1
+        m = _msg_to_dict(result.messages[0])
+        assert m["role"] == "assistant"
+        assert m["content"] == "Let me check the weather."
+        assert len(m["tool_calls"]) == 1
+        assert m["tool_calls"][0]["function"]["name"] == "get_weather"
+
+    def test_no_tools_when_none(self, impl):
+        request = GoogleCreateInteractionRequest(model="m", input="Hello")
+        result = impl._google_to_openai(request)
+        assert result.tools is None
+
+
+class TestToolCallingResponseTranslation:
+    def test_function_call_output(self, impl):
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = None
+
+        tc = MagicMock()
+        tc.id = "call_xyz"
+        tc.function = MagicMock()
+        tc.function.name = "get_weather"
+        tc.function.arguments = '{"location": "NYC"}'
+        openai_resp.choices[0].message.tool_calls = [tc]
+        openai_resp.choices[0].finish_reason = "tool_calls"
+        openai_resp.usage = MagicMock()
+        openai_resp.usage.prompt_tokens = 20
+        openai_resp.usage.completion_tokens = 10
+
+        result = impl._openai_to_google(openai_resp, "m")
+
+        assert len(result.outputs) == 1
+        fc = result.outputs[0]
+        assert fc.type == "function_call"
+        assert fc.id == "call_xyz"
+        assert fc.name == "get_weather"
+        assert fc.args == {"location": "NYC"}
+
+    def test_text_and_function_call_output(self, impl):
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = "I'll check the weather."
+
+        tc = MagicMock()
+        tc.id = "call_abc"
+        tc.function = MagicMock()
+        tc.function.name = "get_weather"
+        tc.function.arguments = '{"location": "London"}'
+        openai_resp.choices[0].message.tool_calls = [tc]
+        openai_resp.choices[0].finish_reason = "tool_calls"
+        openai_resp.usage = MagicMock()
+        openai_resp.usage.prompt_tokens = 10
+        openai_resp.usage.completion_tokens = 15
+
+        result = impl._openai_to_google(openai_resp, "m")
+
         assert len(result.outputs) == 2
-        assert result.outputs[0].type == "thought"
-        assert getattr(result.outputs[0], "signature", None) == "sig-123"
-        assert result.outputs[1].type == "text"
-        assert getattr(result.outputs[1], "text", None) == "4"
+        assert result.outputs[0].type == "text"
+        assert result.outputs[0].text == "I'll check the weather."
+        assert result.outputs[1].type == "function_call"
+        assert result.outputs[1].name == "get_weather"
+
+    def test_invalid_function_arguments_json(self, impl):
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = None
+
+        tc = MagicMock()
+        tc.id = "call_bad"
+        tc.function = MagicMock()
+        tc.function.name = "fn"
+        tc.function.arguments = "not valid json"
+        openai_resp.choices[0].message.tool_calls = [tc]
+        openai_resp.choices[0].finish_reason = "tool_calls"
+        openai_resp.usage = None
+
+        result = impl._openai_to_google(openai_resp, "m")
+
+        assert result.outputs[0].args == {}
 
 
-class TestSSEParsing:
-    """Tests for the _parse_sse_event method used in passthrough streaming."""
+class TestToolCallingStreamingTranslation:
+    async def test_streaming_function_call(self, impl):
+        chunks = []
 
-    @pytest.fixture
-    def impl(self):
-        mock_inference = AsyncMock()
-        return BuiltinInteractionsImpl(config=InteractionsConfig(), inference_api=mock_inference)
+        # First chunk: tool_call start with name
+        chunk1 = MagicMock()
+        chunk1.choices = [MagicMock()]
+        chunk1.choices[0].delta = MagicMock()
+        chunk1.choices[0].delta.content = None
+        tc_delta1 = MagicMock()
+        tc_delta1.index = 0
+        tc_delta1.id = "call_stream1"
+        tc_delta1.function = MagicMock()
+        tc_delta1.function.name = "get_weather"
+        tc_delta1.function.arguments = ""
+        chunk1.choices[0].delta.tool_calls = [tc_delta1]
+        chunk1.choices[0].finish_reason = None
+        chunk1.usage = None
+        chunks.append(chunk1)
 
-    def test_parse_interaction_start(self, impl):
-        event = impl._parse_sse_event(
+        # Second chunk: arguments part 1
+        chunk2 = MagicMock()
+        chunk2.choices = [MagicMock()]
+        chunk2.choices[0].delta = MagicMock()
+        chunk2.choices[0].delta.content = None
+        tc_delta2 = MagicMock()
+        tc_delta2.index = 0
+        tc_delta2.id = None
+        tc_delta2.function = MagicMock()
+        tc_delta2.function.name = None
+        tc_delta2.function.arguments = '{"location":'
+        chunk2.choices[0].delta.tool_calls = [tc_delta2]
+        chunk2.choices[0].finish_reason = None
+        chunk2.usage = None
+        chunks.append(chunk2)
+
+        # Third chunk: arguments part 2
+        chunk3 = MagicMock()
+        chunk3.choices = [MagicMock()]
+        chunk3.choices[0].delta = MagicMock()
+        chunk3.choices[0].delta.content = None
+        tc_delta3 = MagicMock()
+        tc_delta3.index = 0
+        tc_delta3.id = None
+        tc_delta3.function = MagicMock()
+        tc_delta3.function.name = None
+        tc_delta3.function.arguments = ' "NYC"}'
+        chunk3.choices[0].delta.tool_calls = [tc_delta3]
+        chunk3.choices[0].finish_reason = "tool_calls"
+        chunk3.usage = None
+        chunks.append(chunk3)
+
+        async def mock_stream():
+            for c in chunks:
+                yield c
+
+        events = []
+        async for event in impl._stream_openai_to_google(mock_stream(), "m"):
+            events.append(event)
+
+        assert events[0].event_type == "interaction.start"
+        # content.start for function_call
+        assert events[1].event_type == "content.start"
+        assert events[1].content.type == "function_call"
+        assert events[1].content.id == "call_stream1"
+        assert events[1].content.name == "get_weather"
+        # content.delta with args
+        assert events[2].event_type == "content.delta"
+        assert events[2].delta.type == "function_call"
+        assert events[2].delta.args == '{"location":'
+        assert events[3].event_type == "content.delta"
+        assert events[3].delta.args == ' "NYC"}'
+        # content.stop
+        assert events[4].event_type == "content.stop"
+        # interaction.complete
+        assert events[5].event_type == "interaction.complete"
+
+    async def test_streaming_text_then_function_call(self, impl):
+        chunks = []
+
+        # Text chunk
+        chunk1 = MagicMock()
+        chunk1.choices = [MagicMock()]
+        chunk1.choices[0].delta = MagicMock()
+        chunk1.choices[0].delta.content = "Let me check."
+        chunk1.choices[0].delta.tool_calls = None
+        chunk1.choices[0].finish_reason = None
+        chunk1.usage = None
+        chunks.append(chunk1)
+
+        # Tool call chunk
+        chunk2 = MagicMock()
+        chunk2.choices = [MagicMock()]
+        chunk2.choices[0].delta = MagicMock()
+        chunk2.choices[0].delta.content = None
+        tc_delta = MagicMock()
+        tc_delta.index = 0
+        tc_delta.id = "call_mixed"
+        tc_delta.function = MagicMock()
+        tc_delta.function.name = "search"
+        tc_delta.function.arguments = '{"q": "test"}'
+        chunk2.choices[0].delta.tool_calls = [tc_delta]
+        chunk2.choices[0].finish_reason = "tool_calls"
+        chunk2.usage = None
+        chunks.append(chunk2)
+
+        async def mock_stream():
+            for c in chunks:
+                yield c
+
+        events = []
+        async for event in impl._stream_openai_to_google(mock_stream(), "m"):
+            events.append(event)
+
+        event_types = [e.event_type for e in events]
+        assert event_types == [
             "interaction.start",
-            {"interaction": {"id": "test-123", "status": "in_progress", "model": "gemini-2.5-flash"}},
-        )
-        assert event is not None
-        assert event.event_type == "interaction.start"
-        assert event.interaction.id == "test-123"
-
-    def test_parse_content_start(self, impl):
-        event = impl._parse_sse_event("content.start", {"index": 0, "content": {"type": "text"}})
-        assert event is not None
-        assert event.event_type == "content.start"
-        assert event.index == 0
-        assert event.content.type == "text"
-
-    def test_parse_content_delta(self, impl):
-        event = impl._parse_sse_event("content.delta", {"index": 0, "delta": {"type": "text", "text": "Hello"}})
-        assert event is not None
-        assert event.event_type == "content.delta"
-        assert event.delta.text == "Hello"
-
-    def test_parse_content_stop(self, impl):
-        event = impl._parse_sse_event("content.stop", {"index": 0})
-        assert event is not None
-        assert event.event_type == "content.stop"
-
-    def test_parse_interaction_complete(self, impl):
-        event = impl._parse_sse_event(
+            "content.start",  # text block
+            "content.delta",  # text delta
+            "content.stop",  # text block closed
+            "content.start",  # function_call block
+            "content.delta",  # args delta
+            "content.stop",  # function_call block closed
             "interaction.complete",
-            {
-                "interaction": {
-                    "id": "test-123",
-                    "status": "completed",
-                    "model": "gemini-2.5-flash",
-                    "usage": {"total_input_tokens": 10, "total_output_tokens": 5, "total_tokens": 15},
-                }
-            },
-        )
-        assert event is not None
-        assert event.event_type == "interaction.complete"
-        assert event.interaction.usage.total_input_tokens == 10
-
-    def test_parse_unknown_event_returns_none(self, impl):
-        event = impl._parse_sse_event("unknown.event", {"foo": "bar"})
-        assert event is None
+        ]
+        # Text block
+        assert events[1].content.type == "text"
+        assert events[2].delta.text == "Let me check."
+        # Function call block
+        assert events[4].content.type == "function_call"
+        assert events[4].content.name == "search"
+        assert events[5].delta.args == '{"q": "test"}'

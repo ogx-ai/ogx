@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,11 +15,11 @@ set -Eeuo pipefail
 PORT=8321
 OLLAMA_PORT=11434
 MODEL_ALIAS="llama3.2:3b"
-SERVER_IMAGE="docker.io/llamastack/distribution-starter:latest"
+SERVER_IMAGE="docker.io/ogx/distribution-starter:latest"
 WAIT_TIMEOUT=30
 TEMP_LOG=""
 WITH_TELEMETRY=true
-TELEMETRY_SERVICE_NAME="llama-stack"
+TELEMETRY_SERVICE_NAME="ogx"
 OTEL_EXPORTER_OTLP_ENDPOINT="http://otel-collector:4318"
 TEMP_TELEMETRY_DIR=""
 
@@ -30,7 +30,7 @@ materialize_telemetry_configs() {
   local prom_cfg="${dest}/prometheus.yml"
   local graf_cfg="${dest}/grafana-datasources.yaml"
   local graf_dash_cfg="${dest}/grafana-dashboards.yaml"
-  local dash_json="${dest}/llama-stack-dashboard.json"
+  local dash_json="${dest}/ogx-dashboard.json"
 
   for asset in "$otel_cfg" "$prom_cfg" "$graf_cfg" "$graf_dash_cfg" "$dash_json"; do
     if [ -e "$asset" ]; then
@@ -62,7 +62,7 @@ exporters:
   # Export metrics to Prometheus
   prometheus:
     endpoint: 0.0.0.0:9464
-    namespace: llama_stack
+    namespace: ogx
 
   # Debug exporter for troubleshooting
   debug:
@@ -119,7 +119,7 @@ EOF
 apiVersion: 1
 
 providers:
-  - name: 'Llama Stack'
+  - name: 'OGX'
     orgId: 1
     folder: ''
     type: file
@@ -172,7 +172,7 @@ EOF
       "targets": [
         {
           "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "expr": "llama_stack_completion_tokens_total",
+          "expr": "ogx_completion_tokens_total",
           "legendFormat": "{{model_id}} ({{provider_id}})",
           "refId": "A"
         }
@@ -196,8 +196,8 @@ EOF
         "tooltip": {"mode": "multi", "sort": "none"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "llama_stack_prompt_tokens_total", "legendFormat": "Prompt - {{model_id}}", "refId": "A"},
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "llama_stack_tokens_total", "legendFormat": "Total - {{model_id}}", "refId": "B"}
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "ogx_prompt_tokens_total", "legendFormat": "Prompt - {{model_id}}", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "ogx_tokens_total", "legendFormat": "Total - {{model_id}}", "refId": "B"}
       ],
       "title": "Prompt & Total Tokens",
       "type": "timeseries"
@@ -219,8 +219,8 @@ EOF
         "tooltip": {"mode": "multi", "sort": "none"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.95, rate(llama_stack_http_server_duration_milliseconds_bucket[5m]))", "legendFormat": "p95", "refId": "A"},
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.99, rate(llama_stack_http_server_duration_milliseconds_bucket[5m]))", "legendFormat": "p99", "refId": "B"}
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.95, rate(ogx_http_server_duration_milliseconds_bucket[5m]))", "legendFormat": "p95", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.99, rate(ogx_http_server_duration_milliseconds_bucket[5m]))", "legendFormat": "p99", "refId": "B"}
       ],
       "title": "HTTP Request Duration (p95, p99)",
       "type": "timeseries"
@@ -244,7 +244,7 @@ EOF
         "textMode": "auto"
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "sum(llama_stack_http_server_duration_milliseconds_count)", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "sum(ogx_http_server_duration_milliseconds_count)", "refId": "A"}
       ],
       "title": "Total Requests",
       "type": "stat"
@@ -268,7 +268,7 @@ EOF
         "textMode": "auto"
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "sum(llama_stack_http_server_active_requests)", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "sum(ogx_http_server_active_requests)", "refId": "A"}
       ],
       "title": "Active Requests",
       "type": "stat"
@@ -290,7 +290,7 @@ EOF
         "tooltip": {"mode": "multi", "sort": "none"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "rate(llama_stack_http_server_duration_milliseconds_count[5m])", "legendFormat": "{{http_target}} - {{http_status_code}}", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "rate(ogx_http_server_duration_milliseconds_count[5m])", "legendFormat": "{{http_target}} - {{http_status_code}}", "refId": "A"}
       ],
       "title": "Request Rate",
       "type": "timeseries"
@@ -312,8 +312,8 @@ EOF
         "tooltip": {"mode": "multi", "sort": "none"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "rate(llama_stack_http_server_request_size_bytes_sum[5m])", "legendFormat": "Request", "refId": "A"},
-        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "rate(llama_stack_http_server_response_size_bytes_sum[5m])", "legendFormat": "Response", "refId": "B"}
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "rate(ogx_http_server_request_size_bytes_sum[5m])", "legendFormat": "Request", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "$(DS_PROMETHEUS}"}, "expr": "rate(ogx_http_server_response_size_bytes_sum[5m])", "legendFormat": "Response", "refId": "B"}
       ],
       "title": "Request/Response Sizes",
       "type": "timeseries"
@@ -321,13 +321,13 @@ EOF
   ],
   "refresh": "5s",
   "schemaVersion": 38,
-  "tags": ["llama-stack"],
+  "tags": ["ogx"],
   "templating": {"list": []},
   "time": {"from": "now-15m", "to": "now"},
   "timepicker": {},
   "timezone": "browser",
-  "title": "Llama Stack Metrics",
-  "uid": "llama-stack-metrics",
+  "title": "OGX Metrics",
+  "uid": "ogx-metrics",
   "version": 0,
   "weekStart": ""
 }
@@ -350,7 +350,7 @@ trap cleanup EXIT ERR INT TERM
 log(){ printf "\e[1;32m%s\e[0m\n" "$*"; }
 die(){
   printf "\e[1;31m❌ %s\e[0m\n" "$*" >&2
-  printf "\e[1;31m🐛 Report an issue @ https://github.com/llamastack/llama-stack/issues if you think it's a bug\e[0m\n" >&2
+  printf "\e[1;31m🐛 Report an issue @ https://github.com/ogx-ai/ogx/issues if you think it's a bug\e[0m\n" >&2
   exit 1
 }
 
@@ -392,17 +392,17 @@ wait_for_service() {
 
 usage() {
     cat << EOF
-📚 Llama Stack Deployment Script
+📚 OGX Deployment Script
 
 Description:
-    This script sets up and deploys Llama Stack with Ollama integration in containers.
+    This script sets up and deploys OGX with Ollama integration in containers.
     It handles both Docker and Podman runtimes and includes automatic platform detection.
 
 Usage:
     $(basename "$0") [OPTIONS]
 
 Options:
-    -p, --port PORT            Server port for Llama Stack (default: ${PORT})
+    -p, --port PORT            Server port for OGX (default: ${PORT})
     -o, --ollama-port PORT     Ollama service port (default: ${OLLAMA_PORT})
     -m, --model MODEL          Model alias to use (default: ${MODEL_ALIAS})
     -i, --image IMAGE          Server image (default: ${SERVER_IMAGE})
@@ -411,15 +411,15 @@ Options:
     --no-telemetry, --without-telemetry
                               Skip provisioning the telemetry stack
     --telemetry-service NAME   Service name reported to telemetry (default: ${TELEMETRY_SERVICE_NAME})
-    --otel-endpoint URL        OTLP endpoint provided to Llama Stack (default: ${OTEL_EXPORTER_OTLP_ENDPOINT})
+    --otel-endpoint URL        OTLP endpoint provided to OGX (default: ${OTEL_EXPORTER_OTLP_ENDPOINT})
     -h, --help                 Show this help message
 
 For more information:
-    Documentation: https://llamastack.github.io/latest/
-    GitHub: https://github.com/llamastack/llama-stack
+    Documentation: https://ogx-ai.github.io/latest/
+    GitHub: https://github.com/ogx-ai/ogx
 
 Report issues:
-    https://github.com/llamastack/llama-stack/issues
+    https://github.com/ogx-ai/ogx/issues
 EOF
 }
 
@@ -510,7 +510,7 @@ if [ "$ENGINE" = "podman" ] && [ "$(uname -s)" = "Darwin" ]; then
 fi
 
 # Clean up any leftovers from earlier runs
-containers=(ollama-server llama-stack)
+containers=(ollama-server ogx)
 if [ "$WITH_TELEMETRY" = true ]; then
   containers+=(jaeger otel-collector prometheus grafana)
 fi
@@ -588,7 +588,7 @@ if [ "$WITH_TELEMETRY" = true ]; then
     -e GF_USERS_ALLOW_SIGN_UP=false \
     -v "${TELEMETRY_ASSETS_DIR}/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:Z" \
     -v "${TELEMETRY_ASSETS_DIR}/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:Z" \
-    -v "${TELEMETRY_ASSETS_DIR}/llama-stack-dashboard.json:/etc/grafana/provisioning/dashboards/llama-stack-dashboard.json:Z" \
+    -v "${TELEMETRY_ASSETS_DIR}/ogx-dashboard.json:/etc/grafana/provisioning/dashboards/ogx-dashboard.json:Z" \
     docker.io/grafana/grafana:11.0.0 > /dev/null 2>&1; then
     die "Grafana startup failed"
   fi
@@ -630,33 +630,33 @@ if [ "$WITH_TELEMETRY" = true ]; then
   )
 fi
 
-cmd=( run -d "${PLATFORM_OPTS[@]}" --name llama-stack \
+cmd=( run -d "${PLATFORM_OPTS[@]}" --name ogx \
       --network llama-net \
       -p "${PORT}:${PORT}" \
       "${server_env_opts[@]}" \
       -e OLLAMA_URL="http://ollama-server:${OLLAMA_PORT}/v1" \
       "${SERVER_IMAGE}" --port "${PORT}")
 
-log "🦙 Starting Llama Stack..."
+log "🦙 Starting OGX..."
 if ! execute_with_log $ENGINE "${cmd[@]}"; then
-  die "Llama Stack startup failed"
+  die "OGX startup failed"
 fi
 
-if ! wait_for_service "http://127.0.0.1:${PORT}/v1/health" "OK" "$WAIT_TIMEOUT" "Llama Stack API"; then
-  log "❌ Llama Stack did not become ready in ${WAIT_TIMEOUT}s; dumping container logs:"
-  $ENGINE logs --tail 200 llama-stack
-  die "Llama Stack startup failed"
+if ! wait_for_service "http://127.0.0.1:${PORT}/v1/health" "OK" "$WAIT_TIMEOUT" "OGX API"; then
+  log "❌ OGX did not become ready in ${WAIT_TIMEOUT}s; dumping container logs:"
+  $ENGINE logs --tail 200 ogx
+  die "OGX startup failed"
 fi
 
 ###############################################################################
 # Done
 ###############################################################################
 log ""
-log "🎉 Llama Stack is ready!"
+log "🎉 OGX is ready!"
 log "👉  API endpoint: http://localhost:${PORT}"
-log "📖 Documentation: https://llamastack.github.io/latest/references/api_reference/index.html"
-log "💻 To access the llama stack CLI, exec into the container:"
-log "   $ENGINE exec -ti llama-stack bash"
+log "📖 Documentation: https://ogx-ai.github.io/latest/references/api_reference/index.html"
+log "💻 To access the ogx CLI, exec into the container:"
+log "   $ENGINE exec -ti ogx bash"
 if [ "$WITH_TELEMETRY" = true ]; then
   log "📡 Telemetry dashboards:"
   log "   Jaeger UI:      http://localhost:16686"
@@ -664,5 +664,5 @@ if [ "$WITH_TELEMETRY" = true ]; then
   log "   Grafana UI:     http://localhost:3000 (admin/admin)"
   log "   OTEL Collector: http://localhost:4318"
 fi
-log "🐛 Report an issue @ https://github.com/llamastack/llama-stack/issues if you think it's a bug"
+log "🐛 Report an issue @ https://github.com/ogx-ai/ogx/issues if you think it's a bug"
 log ""

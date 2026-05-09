@@ -12,7 +12,7 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/llama_stack/providers/utils/sqlstore/**'
+      - 'src/ogx/providers/utils/sqlstore/**'
       - 'tests/integration/sqlstore/**'
       - 'uv.lock'
       - 'pyproject.toml'
@@ -39,9 +39,9 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: llamastack
-          POSTGRES_PASSWORD: llamastack
-          POSTGRES_DB: llamastack
+          POSTGRES_USER: ogx
+          POSTGRES_PASSWORD: ogx
+          POSTGRES_DB: ogx
         ports:
           - 5432:5432
         options: >-
@@ -64,9 +64,9 @@ jobs:
           ENABLE_POSTGRES_TESTS: "true"
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
-          POSTGRES_DB: llamastack
-          POSTGRES_USER: llamastack
-          POSTGRES_PASSWORD: llamastack
+          POSTGRES_DB: ogx
+          POSTGRES_USER: ogx
+          POSTGRES_PASSWORD: ogx
         run: |
           uv run pytest -sv tests/integration/providers/utils/sqlstore/
 

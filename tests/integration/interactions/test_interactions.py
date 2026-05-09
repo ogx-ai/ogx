@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@
 
 These tests verify the full request/response cycle through the server
 using the official Google GenAI SDK, proving that ADK/Gemini ecosystem
-clients can call Llama Stack natively.
+clients can call OGX natively.
 """
 
 import warnings
@@ -196,6 +196,192 @@ def test_interactions_streaming_event_order(genai_client, text_model_id):
     assert _first("ContentStop") < _first("InteractionCompleteEvent"), (
         "ContentStop should precede InteractionCompleteEvent"
     )
+
+
+def test_interactions_tool_calling_function_call_output(genai_client, text_model_id):
+    """Tool calling: model returns a function_call output when given tools."""
+    interaction = genai_client.interactions.create(
+        model=text_model_id,
+        input="What is the weather in Paris right now? Use the get_weather tool.",
+        tools=[
+            {
+                "function_declarations": [
+                    {
+                        "name": "get_weather",
+                        "description": "Get the current weather for a location.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {"type": "string", "description": "City name"},
+                            },
+                            "required": ["location"],
+                        },
+                    }
+                ]
+            }
+        ],
+    )
+
+    assert interaction.status in ("completed", "requires_action")
+    assert len(interaction.outputs) > 0
+
+    # Model should produce a function_call output
+    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    if not function_calls:
+        pytest.skip("Model answered directly without calling the tool")
+
+    fc = function_calls[0]
+    assert fc.name == "get_weather"
+    assert fc.id is not None
+    # SDK uses 'arguments' attribute for function call args
+    fc_args = getattr(fc, "arguments", None) or getattr(fc, "args", None) or {}
+    assert isinstance(fc_args, dict)
+
+
+@pytest.mark.xfail(
+    reason="Round-trip requires exact Interactions API wire format for multi-turn with function_call/result. "
+    "Passthrough parse→dump cycle transforms field names in ways Gemini rejects. "
+    "Will be fixed when previous_interaction_id is supported.",
+    strict=False,
+)
+def test_interactions_tool_calling_round_trip(genai_client, text_model_id):
+    """Tool calling round-trip: function_call → function_response → text answer."""
+    # Step 1: Get a function_call
+    interaction = genai_client.interactions.create(
+        model=text_model_id,
+        input="What is the weather in Tokyo? You must use the get_weather tool.",
+        tools=[
+            {
+                "function_declarations": [
+                    {
+                        "name": "get_weather",
+                        "description": "Get the current weather for a location.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {"type": "string", "description": "City name"},
+                            },
+                            "required": ["location"],
+                        },
+                    }
+                ]
+            }
+        ],
+    )
+
+    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    if not function_calls:
+        pytest.skip("Model answered directly without calling the tool")
+
+    fc = function_calls[0]
+    fc_args = getattr(fc, "arguments", None) or getattr(fc, "args", None) or {}
+
+    # Step 2: Send function_response and get a final text answer
+    interaction2 = genai_client.interactions.create(
+        model=text_model_id,
+        input=[
+            {"role": "user", "content": "What is the weather in Tokyo?"},
+            {
+                "role": "model",
+                "content": [
+                    {
+                        "type": "function_call",
+                        "id": fc.id,
+                        "name": fc.name,
+                        "arguments": fc_args,
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "function_result",
+                        "call_id": fc.id,
+                        "name": fc.name,
+                        "result": {"temperature_celsius": 22, "condition": "Cloudy"},
+                    }
+                ],
+            },
+        ],
+        tools=[
+            {
+                "function_declarations": [
+                    {
+                        "name": "get_weather",
+                        "description": "Get the current weather for a location.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {"type": "string", "description": "City name"},
+                            },
+                            "required": ["location"],
+                        },
+                    }
+                ]
+            }
+        ],
+    )
+
+    assert interaction2.status == "completed"
+    text_outputs = [o for o in interaction2.outputs if o.type == "text"]
+    assert len(text_outputs) > 0, "Expected a text response after providing function result"
+
+
+def test_interactions_tool_calling_multiple_tools(genai_client, text_model_id):
+    """Tool calling with multiple function declarations available."""
+    interaction = genai_client.interactions.create(
+        model=text_model_id,
+        input="What time is it in London? Use the get_time tool.",
+        tools=[
+            {
+                "function_declarations": [
+                    {
+                        "name": "get_weather",
+                        "description": "Get the current weather for a location.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {"type": "string"},
+                            },
+                            "required": ["location"],
+                        },
+                    },
+                    {
+                        "name": "get_time",
+                        "description": "Get the current time in a timezone.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "timezone": {"type": "string", "description": "IANA timezone"},
+                            },
+                            "required": ["timezone"],
+                        },
+                    },
+                ]
+            }
+        ],
+    )
+
+    assert interaction.status in ("completed", "requires_action")
+    assert len(interaction.outputs) > 0
+
+    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    if function_calls:
+        # If the model called a tool, it should have picked get_time
+        assert function_calls[0].name == "get_time"
+
+
+def test_interactions_no_tools_no_function_call(genai_client, text_model_id):
+    """Without tools, the model should never produce function_call outputs."""
+    interaction = genai_client.interactions.create(
+        model=text_model_id,
+        input="What is 2+2? Reply with just the number.",
+    )
+
+    assert interaction.status == "completed"
+    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    assert len(function_calls) == 0, "Should not produce function_call without tools"
 
 
 def test_interactions_error_missing_model(genai_client):

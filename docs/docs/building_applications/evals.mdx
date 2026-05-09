@@ -1,6 +1,6 @@
 ---
 title: Evaluations
-description: Evaluate LLM applications with Llama Stack's comprehensive evaluation framework
+description: Evaluate LLM applications with OGX's comprehensive evaluation framework
 sidebar_label: Evaluations
 sidebar_position: 7
 ---
@@ -8,20 +8,20 @@ sidebar_position: 7
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide walks you through the process of evaluating an LLM application built using Llama Stack.
+This guide walks you through the process of evaluating an LLM application built using OGX.
 
 :::tip[Interactive Examples]
-Check out our [Colab notebook](https://colab.research.google.com/drive/10CHyykee9j2OigaIcRv47BKG9mrNm0tJ?usp=sharing) for working examples with evaluations, or try the [Getting Started notebook](https://colab.research.google.com/github/meta-llama/llama-stack/blob/main/docs/getting_started.ipynb).
+Check out our [Colab notebook](https://colab.research.google.com/drive/10CHyykee9j2OigaIcRv47BKG9mrNm0tJ?usp=sharing) for working examples with evaluations, or try the [Getting Started notebook](https://colab.research.google.com/github/meta-llama/ogx/blob/main/docs/getting_started.ipynb).
 :::
 
 ## Application Evaluation Example
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/meta-llama/llama-stack/blob/main/docs/getting_started.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/meta-llama/ogx/blob/main/docs/getting_started.ipynb)
 
-Llama Stack offers a library of scoring functions and the `/scoring` API, allowing you to run evaluations on your pre-annotated AI application datasets.
+OGX offers a library of scoring functions and the `/scoring` API, allowing you to run evaluations on your pre-annotated AI application datasets.
 
 In this example, we will show you how to:
-1. **Build an Agent** with Llama Stack
+1. **Build an Agent** with OGX
 2. **Query the agent's sessions, turns, and steps** to analyze execution
 3. **Evaluate the results** using scoring functions
 
@@ -32,9 +32,9 @@ In this example, we will show you how to:
 First, let's create an agent that can search the web to answer questions:
 
 ```python
-from llama_stack_client import LlamaStackClient, Agent, AgentEventLogger
+from ogx_client import OgxClient, Agent, AgentEventLogger
 
-client = LlamaStackClient(base_url=f"http://{HOST}:{PORT}")
+client = OgxClient(base_url=f"http://{HOST}:{PORT}")
 
 agent = Agent(
     client,
@@ -111,7 +111,7 @@ print(
 
 ### 3. Evaluate Agent Responses
 
-Now we'll evaluate the agent's responses using Llama Stack's scoring API:
+Now we'll evaluate the agent's responses using OGX's scoring API:
 
 <Tabs>
 <TabItem value="data-preparation" label="Data Preparation">
@@ -149,7 +149,7 @@ scoring_params = {
     "basic::subset_of": None,  # Check if generated answer contains expected answer
 }
 
-# Run evaluation using Llama Stack's scoring API
+# Run evaluation using OGX's scoring API
 scoring_response = client.scoring.score(
     input_rows=eval_rows,
     scoring_functions=scoring_params
@@ -171,7 +171,7 @@ for i, result in enumerate(scoring_response.results):
 
 ## Available Scoring Functions
 
-Llama Stack provides several built-in scoring functions:
+OGX provides several built-in scoring functions:
 
 ### Basic Scoring Functions
 - **`basic::subset_of`**: Checks if the expected answer is contained in the generated response
@@ -251,5 +251,5 @@ results = client.scoring.score(
 
 - **[Agents](/docs/building_applications/agent)** - Building agents for evaluation
 - **[Tools Integration](/docs/building_applications/tools)** - Using tools in evaluated agents
-- **[Getting Started Notebook](https://colab.research.google.com/github/meta-llama/llama-stack/blob/main/docs/getting_started.ipynb)** - Interactive examples
+- **[Getting Started Notebook](https://colab.research.google.com/github/meta-llama/ogx/blob/main/docs/getting_started.ipynb)** - Interactive examples
 - **[Evaluation Examples](https://colab.research.google.com/drive/10CHyykee9j2OigaIcRv47BKG9mrNm0tJ?usp=sharing)** - Additional evaluation scenarios

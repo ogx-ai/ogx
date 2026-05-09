@@ -37,7 +37,7 @@ For running integration tests, you must provide a few things:
 - A stack config. This is a pointer to a stack. You have a few ways to point to a stack:
   - **`server:<config>`** - automatically start a server with the given config (e.g., `server:starter`). This provides one-step testing by auto-starting the server if the port is available, or reusing an existing server if already running.
   - **`server:<config>:<port>`** - same as above but with a custom port (e.g., `server:starter:8322`)
-  - a URL which points to a Llama Stack distribution server
+  - a URL which points to a OGX distribution server
   - a distribution name (e.g., `starter`) or a path to a `config.yaml` file
   - a comma-separated list of api=provider pairs, e.g. `inference=fireworks,safety=llama-guard,agents=builtin`. This is most useful for testing a single API surface.
 
@@ -58,7 +58,7 @@ You can run the integration tests in replay mode with:
 If you want to re-record tests locally, you can do so with:
 
 ```bash
-LLAMA_STACK_TEST_INFERENCE_MODE=record \
+OGX_TEST_INFERENCE_MODE=record \
   uv run --group test \
   pytest -sv tests/integration/ --stack-config=starter -k "<appropriate test name>"
 ```
@@ -99,8 +99,8 @@ This workflow:
 
 The test infrastructure lives in two places:
 
-- **Test fixtures and conftest**: `tests/integration/conftest.py` sets up the `llama_stack_client` fixture, which is either a real HTTP client (server mode) or an in-process library client.
-- **API Recorder**: `src/llama_stack/testing/api_recorder.py` implements the record/replay engine. It monkey-patches `OpenAI` client methods to intercept all API calls.
+- **Test fixtures and conftest**: `tests/integration/conftest.py` sets up the `ogx_client` fixture, which is either a real HTTP client (server mode) or an in-process library client.
+- **API Recorder**: `src/ogx/testing/api_recorder.py` implements the record/replay engine. It monkey-patches `OpenAI` client methods to intercept all API calls.
 - **Recording storage**: `tests/integration/recordings/` contains cached API responses organized by provider and test.
 - **Recording management scripts**: `scripts/cleanup_recordings.py`, `scripts/diagnose_recordings.py`, and `scripts/normalize_recordings.py` help manage recordings.
 
