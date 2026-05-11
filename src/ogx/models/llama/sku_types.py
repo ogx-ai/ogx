@@ -88,26 +88,6 @@ class CoreModelId(Enum):
     llama_guard_4_12b = "Llama-Guard-4-12B"
 
 
-def is_multimodal(model_id) -> bool:
-    """Check whether the given model supports multimodal (vision) input.
-
-    Args:
-        model_id: the CoreModelId to check.
-
-    Returns:
-        True if the model supports vision input, False otherwise.
-    """
-    if model_id in [
-        CoreModelId.llama3_2_11b_vision,
-        CoreModelId.llama3_2_90b_vision,
-        CoreModelId.llama3_2_11b_vision_instruct,
-        CoreModelId.llama3_2_90b_vision_instruct,
-    ]:
-        return True
-    else:
-        return False
-
-
 def model_family(model_id) -> ModelFamily:
     """Determine the model family for a given CoreModelId.
 
