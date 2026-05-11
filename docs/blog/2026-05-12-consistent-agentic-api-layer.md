@@ -18,7 +18,7 @@ OGX exists to break that coupling. It's a server that speaks every major agentic
 
 Enterprise AI adoption doesn't happen in a vacuum. Different teams pick different frameworks based on their use case, their experience, and their model preference. One team builds with Claude Code. Another ships with OpenAI's Responses API. A third experiments with Google's ADK. Each choice is reasonable in isolation.
 
-But at the platform level, this creates a mess. Every protocol means a different API contract. Every API contract means a different deployment path, a different set of credentials, a different operational surface. The platform team ends up managing N distinct integration points instead of one.
+But at the platform level, this creates a mess. Every protocol means a different API contract. Every API contract means a different deployment path, a different set of credentials, a different operational surface. The platform team ends up managing $N$ distinct integration points instead of one.
 
 Worse, the choice of SDK becomes coupled to the choice of model and infrastructure. Want to use the Anthropic SDK with an open-weight model running on-prem? Want to use the OpenAI SDK against a model served by vLLM? Want to switch providers without rewriting your application? In the current landscape, each of those requires work.
 
