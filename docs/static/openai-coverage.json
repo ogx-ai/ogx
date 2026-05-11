@@ -126,10 +126,10 @@
       ]
     },
     "conformance": {
-      "score": 92.2,
-      "issues": 173,
-      "missing_properties": 98,
-      "total_problems": 271,
+      "score": 91.9,
+      "issues": 179,
+      "missing_properties": 104,
+      "total_problems": 283,
       "total_properties": 3487
     }
   },
@@ -1193,8 +1193,8 @@
       ]
     },
     "Files": {
-      "score": 92.9,
-      "issues": 1,
+      "score": 76.2,
+      "issues": 8,
       "missing_properties": 2,
       "total_properties": 42,
       "endpoints": [
@@ -1204,9 +1204,24 @@
             {
               "method": "GET",
               "missing_properties": [],
-              "conformance_issues": [],
+              "conformance_issues": [
+                {
+                  "property": "GET.responses.200.content.application/json.properties.data.items.properties.expires_at",
+                  "details": [
+                    "Type removed: ['integer']",
+                    "Nullable added (OpenAI non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "GET.responses.200.content.application/json.properties.data.items.properties.purpose",
+                  "details": [
+                    "Enum values removed: ['assistants_output', 'batch_output', 'fine-tune', 'fine-tune-results', 'vision', 'user_data']"
+                  ]
+                }
+              ],
               "missing_count": 0,
-              "issues_count": 0
+              "issues_count": 2
             },
             {
               "method": "POST",
@@ -1221,10 +1236,30 @@
                     "Type removed: ['object']",
                     "Union variants added: 2"
                   ]
+                },
+                {
+                  "property": "POST.requestBody.content.multipart/form-data.properties.purpose",
+                  "details": [
+                    "Enum values removed: ['fine-tune', 'vision', 'user_data', 'evals']"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.expires_at",
+                  "details": [
+                    "Type removed: ['integer']",
+                    "Nullable added (OpenAI non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "POST.responses.200.content.application/json.properties.purpose",
+                  "details": [
+                    "Enum values removed: ['assistants_output', 'batch_output', 'fine-tune', 'fine-tune-results', 'vision', 'user_data']"
+                  ]
                 }
               ],
               "missing_count": 2,
-              "issues_count": 1
+              "issues_count": 4
             }
           ]
         },
@@ -1241,9 +1276,24 @@
             {
               "method": "GET",
               "missing_properties": [],
-              "conformance_issues": [],
+              "conformance_issues": [
+                {
+                  "property": "GET.responses.200.content.application/json.properties.expires_at",
+                  "details": [
+                    "Type removed: ['integer']",
+                    "Nullable added (OpenAI non-nullable)",
+                    "Union variants added: 2"
+                  ]
+                },
+                {
+                  "property": "GET.responses.200.content.application/json.properties.purpose",
+                  "details": [
+                    "Enum values removed: ['assistants_output', 'batch_output', 'fine-tune', 'fine-tune-results', 'vision', 'user_data']"
+                  ]
+                }
+              ],
               "missing_count": 0,
-              "issues_count": 0
+              "issues_count": 2
             }
           ]
         },
@@ -1262,9 +1312,9 @@
       ]
     },
     "Models": {
-      "score": 93.3,
-      "issues": 1,
-      "missing_properties": 0,
+      "score": 60.0,
+      "issues": 0,
+      "missing_properties": 6,
       "total_properties": 15,
       "endpoints": [
         {
@@ -1272,9 +1322,12 @@
           "operations": [
             {
               "method": "GET",
-              "missing_properties": [],
+              "missing_properties": [
+                "GET.responses.200.content.application/json.properties.data",
+                "GET.responses.200.content.application/json.properties.object"
+              ],
               "conformance_issues": [],
-              "missing_count": 0,
+              "missing_count": 2,
               "issues_count": 0
             }
           ]
@@ -1284,17 +1337,15 @@
           "operations": [
             {
               "method": "GET",
-              "missing_properties": [],
-              "conformance_issues": [
-                {
-                  "property": "GET.responses.200.content.application/json.properties.owned_by",
-                  "details": [
-                    "Default changed: None -> ogx"
-                  ]
-                }
+              "missing_properties": [
+                "GET.responses.200.content.application/json.properties.created",
+                "GET.responses.200.content.application/json.properties.id",
+                "GET.responses.200.content.application/json.properties.object",
+                "GET.responses.200.content.application/json.properties.owned_by"
               ],
-              "missing_count": 0,
-              "issues_count": 1
+              "conformance_issues": [],
+              "missing_count": 4,
+              "issues_count": 0
             }
           ]
         }
