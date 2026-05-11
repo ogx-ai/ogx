@@ -6,7 +6,7 @@
 
 import asyncio
 from importlib.metadata import version
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -32,6 +32,8 @@ from ogx_api import (
     RouteInfo,
     VersionInfo,
 )
+from ogx_api.tools.api import ToolGroups
+from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
 
 logger = get_logger(name=__name__, category="core")
 
@@ -220,3 +222,10 @@ class AdminImpl(Admin):
 
     async def version(self) -> VersionInfo:
         return VersionInfo(version=version("ogx"))
+
+    @property
+    def _tool_groups(self) -> ToolGroups:
+        return cast(ToolGroups, self.deps[Api.tool_groups.value])
+
+    async def list_tools(self, request: ListToolsRequest) -> ListToolDefsResponse:
+        return await self._tool_groups.list_tools(request)

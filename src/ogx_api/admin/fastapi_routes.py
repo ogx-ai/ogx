@@ -16,7 +16,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from ogx_api.router_utils import create_path_dependency, create_query_dependency, standard_responses
-from ogx_api.version import OGX_API_V1ALPHA
+from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
+from ogx_api.version import OGX_API_V1, OGX_API_V1ALPHA
 
 from .api import Admin
 from .models import (
@@ -32,6 +33,7 @@ from .models import (
 # Automatically generate dependency functions from Pydantic models
 get_inspect_provider_request = create_path_dependency(InspectProviderRequest)
 get_list_routes_request = create_query_dependency(ListRoutesRequest)
+get_list_tools_request = create_query_dependency(ListToolsRequest)
 
 
 def create_router(impl: Admin) -> APIRouter:
@@ -44,12 +46,15 @@ def create_router(impl: Admin) -> APIRouter:
         APIRouter configured for the Admin API
     """
     router = APIRouter(
-        prefix=f"/{OGX_API_V1ALPHA}",
-        tags=["Admin"],
         responses=standard_responses,
     )
 
-    @router.get(
+    v1alpha_router = APIRouter(
+        prefix=f"/{OGX_API_V1ALPHA}",
+        tags=["Admin"],
+    )
+
+    @v1alpha_router.get(
         "/admin/providers",
         response_model=ListProvidersResponse,
         summary="List all available providers",
@@ -61,7 +66,7 @@ def create_router(impl: Admin) -> APIRouter:
     async def list_providers() -> ListProvidersResponse:
         return await impl.list_providers()
 
-    @router.get(
+    @v1alpha_router.get(
         "/admin/providers/{provider_id}",
         response_model=ProviderInfo,
         summary="Get provider details",
@@ -76,7 +81,7 @@ def create_router(impl: Admin) -> APIRouter:
     ) -> ProviderInfo:
         return await impl.inspect_provider(request)
 
-    @router.get(
+    @v1alpha_router.get(
         "/admin/inspect/routes",
         response_model=ListRoutesResponse,
         summary="List all available API routes",
@@ -90,7 +95,7 @@ def create_router(impl: Admin) -> APIRouter:
     ) -> ListRoutesResponse:
         return await impl.list_routes(request)
 
-    @router.get(
+    @v1alpha_router.get(
         "/admin/health",
         response_model=HealthInfo,
         summary="Get service health status",
@@ -102,7 +107,7 @@ def create_router(impl: Admin) -> APIRouter:
     async def health() -> HealthInfo:
         return await impl.health()
 
-    @router.get(
+    @v1alpha_router.get(
         "/admin/version",
         response_model=VersionInfo,
         summary="Get service version",
@@ -113,5 +118,27 @@ def create_router(impl: Admin) -> APIRouter:
     )
     async def version() -> VersionInfo:
         return await impl.version()
+
+    v1_router = APIRouter(
+        prefix=f"/{OGX_API_V1}",
+        tags=["Tools"],
+    )
+
+    @v1_router.get(
+        "/admin/tools",
+        response_model=ListToolDefsResponse,
+        summary="List tools with optional tool group filter.",
+        description="List tools with optional tool group filter.",
+        responses={
+            200: {"description": "A ListToolDefsResponse."},
+        },
+    )
+    async def list_tools(
+        request: Annotated[ListToolsRequest, Depends(get_list_tools_request)],
+    ) -> ListToolDefsResponse:
+        return await impl.list_tools(request)
+
+    router.include_router(v1alpha_router)
+    router.include_router(v1_router)
 
     return router

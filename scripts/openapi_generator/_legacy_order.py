@@ -47,7 +47,7 @@ LEGACY_PATH_ORDER = [
     "/v1/tool-runtime/list-tools",
     "/v1/toolgroups",
     "/v1/toolgroups/{toolgroup_id}",
-    "/v1/tools",
+    "/v1/admin/tools",
     "/v1/tools/{tool_name}",
     "/v1/vector-io/insert",
     "/v1/vector-io/query",
