@@ -629,8 +629,8 @@ class UpstreamHeaderAuthProvider(AuthProvider):
                 header_key = header_name.lower().encode()
                 header_value = headers.get(header_key)
                 if header_value:
-                    decoded = header_value.decode()
                     try:
+                        decoded = header_value.decode()
                         parsed = json.loads(decoded)
                         if isinstance(parsed, list):
                             values = [str(item) for item in parsed]
@@ -638,8 +638,10 @@ class UpstreamHeaderAuthProvider(AuthProvider):
                             values = [parsed]
                         else:
                             values = [str(parsed)]
-                    except (json.JSONDecodeError, UnicodeDecodeError):
+                    except json.JSONDecodeError:
                         values = [decoded]
+                    except UnicodeDecodeError:
+                        values = [header_value.decode("utf-8", errors="replace")]
 
                     if attr_category in attributes:
                         attributes[attr_category].extend(values)

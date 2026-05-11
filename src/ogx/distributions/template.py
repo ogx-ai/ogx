@@ -272,9 +272,9 @@ class RunConfigSettings(BaseModel):
                 backend="sql_default",
                 table_name="prompts",
             ).model_dump(exclude_none=True),
-            "connectors": KVStoreReference(
-                backend="kv_default",
-                namespace="connectors",
+            "connectors": SqlStoreReference(
+                backend="sql_default",
+                table_name="connectors",
             ).model_dump(exclude_none=True),
         }
 

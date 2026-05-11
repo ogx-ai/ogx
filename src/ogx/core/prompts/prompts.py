@@ -209,25 +209,25 @@ class PromptServiceImpl(Prompts):
         if record is None:
             raise ValueError(f"Prompt {request.prompt_id} version {request.version} not found")
 
-        # Set new default first so a crash never leaves zero defaults
-        await self.sql_store.update(
-            table=TABLE_PROMPTS,
-            data={"is_default": True},
-            where={"prompt_id": request.prompt_id, "version": request.version},
-        )
-
-        # Clear old default(s) — fetch all versions and clear any that aren't the target
+        # Clear all defaults first, then set the target. This avoids the race where
+        # two concurrent calls interleave "set" and "clear" and remove each other's
+        # target, leaving zero defaults.
         all_versions = await self.sql_store.fetch_all(
             table=TABLE_PROMPTS,
             where={"prompt_id": request.prompt_id, "is_default": True},
         )
         for row in all_versions.data:
-            if row["version"] != request.version:
-                await self.sql_store.update(
-                    table=TABLE_PROMPTS,
-                    data={"is_default": False},
-                    where={"prompt_id": request.prompt_id, "version": row["version"]},
-                )
+            await self.sql_store.update(
+                table=TABLE_PROMPTS,
+                data={"is_default": False},
+                where={"prompt_id": request.prompt_id, "version": row["version"]},
+            )
+
+        await self.sql_store.update(
+            table=TABLE_PROMPTS,
+            data={"is_default": True},
+            where={"prompt_id": request.prompt_id, "version": request.version},
+        )
 
         return self._row_to_prompt(record, is_default=True)
 
