@@ -21,6 +21,10 @@ on:
       - 'tests/integration/**'
       - 'src/ogx/**'
       - '!src/ogx_ui/**'
+      # Exclude recordings to prevent a feedback loop with commit-recordings.yml:
+      # that workflow pushes recordings back to the PR branch, which would
+      # otherwise re-trigger this workflow via pull_request: synchronize.
+      - '!tests/integration/**/recordings/**'
   workflow_dispatch:
     inputs:
       pr_number:
@@ -253,13 +257,6 @@ jobs:
           setup: ${{ matrix.provider.setup }}
           suite: ${{ inputs.suite || matrix.provider.suite }}
           inference-mode: 'record-if-missing'
-
-      - name: Clear stale model list recordings
-        if: steps.should_run.outputs.run == 'true' && matrix.provider.setup == 'ollama-reasoning'
-        shell: bash
-        run: |
-          find tests/integration -path "*/recordings/models-*.json" -delete
-          echo "Cleared model list recordings so record-if-missing creates fresh ones"
 
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
