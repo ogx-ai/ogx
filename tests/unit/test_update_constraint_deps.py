@@ -1,23 +1,17 @@
-# Copyright (c) OGX Contributors
+# Copyright (c) The OGX Contributors.
+# All rights reserved.
+#
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
-
-import subprocess
-import textwrap
-
-import pytest
 
 # The script lives outside the Python package tree, so import its functions
 # by path manipulation.
 import importlib.util
 import pathlib
+import subprocess
+import textwrap
 
-_script_path = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / ".github"
-    / "scripts"
-    / "update_constraint_deps.py"
-)
+_script_path = pathlib.Path(__file__).resolve().parents[2] / ".github" / "scripts" / "update_constraint_deps.py"
 _spec = importlib.util.spec_from_file_location("update_constraint_deps", _script_path)
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
@@ -207,7 +201,16 @@ class TestMainCli:
         pyproject.write_text(SAMPLE_PYPROJECT)
 
         result = subprocess.run(
-            ["python3", str(_script_path), "--dependency-name", "aiohttp", "--dependency-version", "3.14.0", "--pyproject", str(pyproject)],
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "aiohttp",
+                "--dependency-version",
+                "3.14.0",
+                "--pyproject",
+                str(pyproject),
+            ],
             capture_output=True,
             text=True,
         )
@@ -223,7 +226,16 @@ class TestMainCli:
         pyproject.write_text(SAMPLE_PYPROJECT)
 
         result = subprocess.run(
-            ["python3", str(_script_path), "--dependency-name", "nonexistent", "--dependency-version", "1.0.0", "--pyproject", str(pyproject)],
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "nonexistent",
+                "--dependency-version",
+                "1.0.0",
+                "--pyproject",
+                str(pyproject),
+            ],
             capture_output=True,
             text=True,
         )
@@ -236,7 +248,16 @@ class TestMainCli:
         pyproject.write_text(SAMPLE_PYPROJECT)
 
         result = subprocess.run(
-            ["python3", str(_script_path), "--dependency-name", "pydantic", "--dependency-version", "2.12.5", "--pyproject", str(pyproject)],
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "pydantic",
+                "--dependency-version",
+                "2.12.5",
+                "--pyproject",
+                str(pyproject),
+            ],
             capture_output=True,
             text=True,
         )
@@ -251,7 +272,16 @@ class TestMainCli:
         pyproject.write_text(SAMPLE_PYPROJECT)
 
         result = subprocess.run(
-            ["python3", str(_script_path), "--dependency-name", "requests", "--dependency-version", "2.32.0", "--pyproject", str(pyproject)],
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "requests",
+                "--dependency-version",
+                "2.32.0",
+                "--pyproject",
+                str(pyproject),
+            ],
             capture_output=True,
             text=True,
         )
@@ -261,7 +291,16 @@ class TestMainCli:
 
     def test_missing_pyproject_returns_error(self, tmp_path):
         result = subprocess.run(
-            ["python3", str(_script_path), "--dependency-name", "aiohttp", "--dependency-version", "3.14.0", "--pyproject", str(tmp_path / "nope.toml")],
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "aiohttp",
+                "--dependency-version",
+                "3.14.0",
+                "--pyproject",
+                str(tmp_path / "nope.toml"),
+            ],
             capture_output=True,
             text=True,
         )
@@ -273,7 +312,16 @@ class TestMainCli:
         original = pyproject.read_text()
 
         result = subprocess.run(
-            ["python3", str(_script_path), "--dependency-name", "aiohttp", "--dependency-version", "3.13.2", "--pyproject", str(pyproject)],
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "aiohttp",
+                "--dependency-version",
+                "3.13.2",
+                "--pyproject",
+                str(pyproject),
+            ],
             capture_output=True,
             text=True,
         )
