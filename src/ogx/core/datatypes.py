@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
 from ogx.core.storage.datatypes import (
-    KVStoreReference,
     StorageBackendType,
     StorageConfig,
 )
@@ -680,68 +679,6 @@ class SafetyConfig(BaseModel):
     )
 
 
-class QuotaPeriod(StrEnum):
-    """Time period for request quota enforcement."""
-
-    DAY = "day"
-
-
-class QuotaConfig(BaseModel):
-    """Configuration for per-client request rate limiting."""
-
-    kvstore: KVStoreReference = Field(description="Config for KV store backend (SQLite only for now)")
-    anonymous_max_requests: int = Field(default=100, description="Max requests for unauthenticated clients per period")
-    authenticated_max_requests: int = Field(
-        default=1000, description="Max requests for authenticated clients per period"
-    )
-    period: QuotaPeriod = Field(default=QuotaPeriod.DAY, description="Quota period to set")
-
-
-class CORSConfig(BaseModel):
-    """Configuration for Cross-Origin Resource Sharing (CORS) headers."""
-
-    allow_origins: list[str] = Field(default_factory=list)
-    allow_origin_regex: str | None = Field(default=None)
-    allow_methods: list[str] = Field(default=["OPTIONS"])
-    allow_headers: list[str] = Field(default_factory=list)
-    allow_credentials: bool = Field(default=False)
-    expose_headers: list[str] = Field(default_factory=list)
-    max_age: int = Field(default=600, ge=0)
-
-    @model_validator(mode="after")
-    def validate_credentials_config(self) -> Self:
-        if self.allow_credentials and (self.allow_origins == ["*"] or "*" in self.allow_origins):
-            raise ValueError("Cannot use wildcard origins with credentials enabled")
-        return self
-
-
-def process_cors_config(cors_config: bool | CORSConfig | None) -> CORSConfig | None:
-    """Convert a CORS configuration value into a resolved CORSConfig object.
-
-    Args:
-        cors_config: A boolean (True for dev defaults, False/None to disable), or a CORSConfig instance.
-
-    Returns:
-        A CORSConfig instance or None if CORS is disabled.
-    """
-    if cors_config is False or cors_config is None:
-        return None
-
-    if cors_config is True:
-        # dev mode: allow localhost on any port
-        return CORSConfig(
-            allow_origins=[],
-            allow_origin_regex=r"https?://localhost:\d+",
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-        )
-
-    if isinstance(cors_config, CORSConfig):
-        return cors_config
-
-    raise ValueError(f"Expected bool or CORSConfig, got {type(cors_config).__name__}")
-
-
 class RegisteredResources(BaseModel):
     """Registry of resources available in the distribution."""
 
@@ -765,7 +702,7 @@ class RegisteredResources(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    """Configuration for the HTTP(S) server including TLS, authentication, and quotas."""
+    """Configuration for the HTTP server including TLS and authentication."""
 
     port: int = Field(
         default=8321,
@@ -792,16 +729,6 @@ class ServerConfig(BaseModel):
     host: str | None = Field(
         default=None,
         description="The host the server should listen on",
-    )
-    quota: QuotaConfig | None = Field(
-        default=None,
-        description="Per client quota request configuration",
-    )
-    cors: bool | CORSConfig | None = Field(
-        default=None,
-        description="CORS configuration for cross-origin requests. Can be:\n"
-        "- true: Enable localhost CORS for development\n"
-        "- {allow_origins: [...], allow_methods: [...], ...}: Full configuration",
     )
     workers: int = Field(
         default=1,
