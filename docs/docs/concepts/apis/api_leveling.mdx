@@ -73,7 +73,7 @@ When a `/v2` API is introduced, a clear and generous deprecation policy for the 
 
 ### Deprecated APIs
 
-Deprecated APIs are those that are no longer actively maintained or supported. Deprecated APIs are marked with the flag `deprecated = True` on the route's `webmethod(...)` decorator (and surfaced as `deprecated: true` in the generated OpenAPI spec).
+Deprecated APIs are those that are no longer actively maintained or supported. Deprecated routes are marked with `deprecated=True` on the FastAPI `@router.<method>(...)` decorator in `src/ogx_api/<api>/fastapi_routes.py`, which surfaces as `deprecated: true` in the generated OpenAPI spec.
 
 #### Deprecation timeline
 
@@ -245,7 +245,7 @@ If a PR has proper approvals, labels, and commit/title hygiene, the failing API 
 
 ### Migration of API routes under `/v1alpha`, `/v1beta`, and `/v1`
 
-Instead of placing every API under `/v1`, any API that is not fully stable or complete should go under `/v1alpha` or `/v1beta`. As of this writing, `inference/rerank`, `file-processors`, and `interactions` sit at `/v1alpha`; `connectors` sits at `/v1beta`. Any OpenAI-compatible API whose surface does not exactly match the upstream OpenAI API it mimics should also live below `/v1` until it does.
+Instead of placing every API under `/v1`, any API that is not fully stable or complete should go under `/v1alpha` or `/v1beta`. Any OpenAI-compatible API whose surface does not exactly match the upstream OpenAI API it mimics should also live below `/v1` until it does.
 
 This migration is crucial as we get OGX in the hands of users who intend to productize various APIs. A clear view of what is stable and what is actively being developed will enable users to pick and choose various APIs to build their products on.
 
