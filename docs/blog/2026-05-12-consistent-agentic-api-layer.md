@@ -101,6 +101,10 @@ OGX extends sovereignty to the API contract. Your application talks to OGX using
 - Use the Google SDK with Bedrock in AWS
 - Switch any of these without touching application code
 
+And once the platform owns the API contract, it can enforce policy at the protocol layer. Attribute-based access control determines which models, tools, or APIs a given team or user can reach — regardless of which SDK they're calling through. A data science team gets access to large reasoning models and file search. An internal chatbot gets a smaller model and no tool access. The controls live in the platform, not scattered across framework configs.
+
+This is something you can't do when each framework talks directly to its own provider. Centralized policy enforcement is a natural consequence of centralized API translation.
+
 The customer owns the API contract, not just the model weights. That's what sovereignty means at the platform level.
 
 ## Framework-agnostic by design
