@@ -1,0 +1,89 @@
+name: Dependabot constraint-dependencies
+
+run-name: Update constraint-dependencies for Dependabot PR
+
+on:
+  pull_request:
+    paths:
+      - 'uv.lock'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-constraints:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/uv/')
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Parse dependency info from Dependabot commit
+        id: parse
+        run: |
+          commit_msg=$(git log -1 --format="%B")
+
+          # Extract dependency-name and dependency-version from the structured
+          # updated-dependencies block in the Dependabot commit message
+          dep_name=$(echo "$commit_msg" | grep -oP '(?<=dependency-name: ).+' | head -1 | tr -d '[:space:]')
+          dep_version=$(echo "$commit_msg" | grep -oP '(?<=dependency-version: ).+' | head -1 | tr -d '[:space:]')
+
+          if [ -z "$dep_name" ] || [ -z "$dep_version" ]; then
+            echo "Could not parse dependency info from commit message"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "dep_name=$dep_name" >> "$GITHUB_OUTPUT"
+          echo "dep_version=$dep_version" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Parsed: $dep_name $dep_version"
+
+      - name: Update constraint-dependencies in pyproject.toml
+        if: steps.parse.outputs.skip != 'true'
+        id: update
+        run: |
+          output=$(python3 .github/scripts/update_constraint_deps.py \
+            --dependency-name "${{ steps.parse.outputs.dep_name }}" \
+            --dependency-version "${{ steps.parse.outputs.dep_version }}")
+
+          echo "$output"
+
+          if echo "$output" | grep -q "updated=true"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate uv.lock
+        if: steps.update.outputs.changed == 'true'
+        run: uv lock
+
+      - name: Commit and push changes
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          git add pyproject.toml uv.lock
+          git commit -s -m "fix(deps): update constraint-dependencies for ${{ steps.parse.outputs.dep_name }}"
+
+          git push origin "${{ github.head_ref }}"
+          echo "Pushed constraint update for ${{ steps.parse.outputs.dep_name }}"
