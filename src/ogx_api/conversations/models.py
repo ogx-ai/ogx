@@ -16,6 +16,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from ogx_api.openai_responses import (
+    OpenAIResponseCompaction,
     OpenAIResponseInputFunctionToolCallOutput,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMCPApprovalResponse,
@@ -47,10 +48,6 @@ class Conversation(BaseModel):
         default=None,
         description="Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard.",
     )
-    items: list[dict] | None = Field(
-        default=None,
-        description="Initial items to include in the conversation context. You may add up to 20 items at a time.",
-    )
 
 
 @json_schema_type
@@ -75,7 +72,8 @@ ConversationItem = Annotated[
     | OpenAIResponseMCPApprovalResponse
     | OpenAIResponseOutputMessageMCPCall
     | OpenAIResponseOutputMessageMCPListTools
-    | OpenAIResponseOutputMessageReasoningItem,
+    | OpenAIResponseOutputMessageReasoningItem
+    | OpenAIResponseCompaction,
     Field(discriminator="type"),
 ]
 register_schema(ConversationItem, name="ConversationItem")
@@ -92,7 +90,7 @@ class ConversationDeletedResource(BaseModel):
     """Response for deleted conversation."""
 
     id: str = Field(..., description="The deleted conversation identifier")
-    object: str = Field(default="conversation.deleted", description="Object type")
+    object: Literal["conversation.deleted"] = Field(default="conversation.deleted", description="Object type")
     deleted: bool = Field(default=True, description="Whether the object was deleted")
 
 
@@ -130,11 +128,11 @@ class ConversationItemInclude(StrEnum):
 class ConversationItemList(BaseModel):
     """List of conversation items with pagination."""
 
-    object: str = Field(default="list", description="Object type")
+    object: Literal["list"] = Field(default="list", description="The type of object returned, must be list.")
     data: list[ConversationItem] = Field(..., description="List of conversation items")
-    first_id: str | None = Field(default=None, description="The ID of the first item in the list")
-    last_id: str | None = Field(default=None, description="The ID of the last item in the list")
-    has_more: bool = Field(default=False, description="Whether there are more items available")
+    first_id: str | None = Field(..., description="The ID of the first item in the list.")
+    last_id: str | None = Field(..., description="The ID of the last item in the list.")
+    has_more: bool = Field(..., description="Whether there are more items available.")
 
 
 @json_schema_type
@@ -142,7 +140,7 @@ class ConversationItemDeletedResource(BaseModel):
     """Response for deleted conversation item."""
 
     id: str = Field(..., description="The deleted item identifier")
-    object: str = Field(default="conversation.item.deleted", description="Object type")
+    object: Literal["conversation.item.deleted"] = Field(default="conversation.item.deleted", description="Object type")
     deleted: bool = Field(default=True, description="Whether the object was deleted")
 
 

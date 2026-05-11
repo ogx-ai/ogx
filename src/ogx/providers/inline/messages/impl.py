@@ -88,7 +88,7 @@ class BuiltinMessagesImpl(Messages):
         self.inference_api = inference_api
 
     async def initialize(self) -> None:
-        self._client = httpx.AsyncClient()
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
 
     async def shutdown(self) -> None:
         await self._client.aclose()

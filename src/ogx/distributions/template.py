@@ -131,58 +131,6 @@ def get_model_registry(
     return models, ids_conflict
 
 
-def get_shield_registry(
-    available_safety_models: dict[str, list[ProviderModelEntry]],
-    ids_conflict_in_models: bool,
-) -> list[ShieldInput]:
-    """Build a shield registry from safety model entries, detecting ID conflicts.
-
-    Args:
-        available_safety_models: mapping of provider IDs to their safety model entries.
-        ids_conflict_in_models: whether model ID conflicts were detected in the model registry.
-
-    Returns:
-        A list of ShieldInput instances for registered shields.
-    """
-    shields = []
-
-    # check for conflicts in shield ids
-    all_ids = set()
-    ids_conflict = False
-
-    for _, entries in available_safety_models.items():
-        for entry in entries:
-            ids = [entry.provider_model_id] + entry.aliases
-            for model_id in ids:
-                if model_id in all_ids:
-                    ids_conflict = True
-                    rich.print(
-                        f"[yellow]Shield id {model_id} conflicts; all shield ids will be prefixed with provider id[/yellow]"
-                    )
-                    break
-            all_ids.update(ids)
-            if ids_conflict:
-                break
-        if ids_conflict:
-            break
-
-    for provider_id, entries in available_safety_models.items():
-        for entry in entries:
-            ids = [entry.provider_model_id] + entry.aliases
-            for model_id in ids:
-                identifier = f"{provider_id}/{model_id}" if ids_conflict and provider_id not in model_id else model_id
-                shields.append(
-                    ShieldInput(
-                        shield_id=identifier,
-                        provider_shield_id=f"{provider_id}/{entry.provider_model_id}"
-                        if ids_conflict_in_models
-                        else entry.provider_model_id,
-                    )
-                )
-
-    return shields
-
-
 class DefaultModel(BaseModel):
     """A model entry used for documentation generation in distribution templates."""
 
@@ -268,13 +216,13 @@ class RunConfigSettings(BaseModel):
                 backend="sql_default",
                 table_name="openai_conversations",
             ).model_dump(exclude_none=True),
-            "prompts": KVStoreReference(
-                backend="kv_default",
-                namespace="prompts",
+            "prompts": SqlStoreReference(
+                backend="sql_default",
+                table_name="prompts",
             ).model_dump(exclude_none=True),
-            "connectors": KVStoreReference(
-                backend="kv_default",
-                namespace="connectors",
+            "connectors": SqlStoreReference(
+                backend="sql_default",
+                table_name="connectors",
             ).model_dump(exclude_none=True),
         }
 

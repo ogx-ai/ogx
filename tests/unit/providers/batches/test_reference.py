@@ -32,8 +32,8 @@ The tests are categorized and outlined below, keep this updated:
   * test_list_batches_with_pagination (positive)
   * test_list_batches_invalid_after (negative)
 
-- Data persistence in the underlying key-value store:
-  * test_kvstore_persistence (positive)
+- Data persistence in the underlying SQL store:
+  * test_sqlstore_persistence (positive)
 
 - Batch processing concurrency control:
   * test_max_concurrent_batches (positive)
@@ -273,7 +273,7 @@ class TestReferenceBatchesImpl:
         provider.process_batches = False
         created_batch = await provider.create_batch(CreateBatchRequest(**sample_batch_data))
 
-        # directly update status in kvstore
+        # directly update status in SQL store
         await provider._update_batch(created_batch.id, status=status)
 
         with pytest.raises(ConflictError, match=f"Cannot cancel batch '{created_batch.id}' with status '{status}'"):
@@ -378,14 +378,14 @@ class TestReferenceBatchesImpl:
         # Should return all batches (no filtering when 'after' batch not found)
         assert len(response.data) == 1
 
-    async def test_kvstore_persistence(self, provider, sample_batch_data):
-        """Test that batches are properly persisted in kvstore."""
+    async def test_sqlstore_persistence(self, provider, sample_batch_data):
+        """Test that batches are properly persisted in SQL store."""
         batch = await provider.create_batch(CreateBatchRequest(**sample_batch_data))
 
-        stored_data = await provider.kvstore.get(f"batch:{batch.id}")
-        assert stored_data is not None
+        record = await provider.sql_store.fetch_one(table="batches", where={"id": batch.id})
+        assert record is not None
 
-        stored_batch_dict = json.loads(stored_data)
+        stored_batch_dict = record["batch_data"]
         assert stored_batch_dict["id"] == batch.id
         assert stored_batch_dict["input_file_id"] == sample_batch_data["input_file_id"]
 

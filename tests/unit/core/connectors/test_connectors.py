@@ -6,14 +6,26 @@
 
 """Unit tests for the Connectors API implementation."""
 
+import random
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from ogx.core.connectors.connectors import (
-    KEY_PREFIX,
+    ConnectorServiceConfig,
     ConnectorServiceImpl,
 )
+from ogx.core.storage.datatypes import (
+    InferenceStoreReference,
+    KVStoreReference,
+    ServerStoresConfig,
+    SqliteKVStoreConfig,
+    SqliteSqlStoreConfig,
+    SqlStoreReference,
+    StorageConfig,
+)
+from ogx.core.storage.kvstore import register_kvstore_backends
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
 from ogx_api import (
     Connector,
     ConnectorNotFoundError,
@@ -27,49 +39,43 @@ from ogx_api import (
 
 
 @pytest.fixture
-def mock_kvstore():
-    """Create a mock KVStore with in-memory storage."""
-    storage = {}
+async def connector_service(tmp_path_factory):
+    """Create a ConnectorServiceImpl with a real SQL store."""
+    unique_id = f"connector_store_{random.randint(1, 1000000)}"
+    temp_dir = tmp_path_factory.getbasetemp()
+    db_path = str(temp_dir / f"{unique_id}.db")
+    sql_db_path = str(temp_dir / f"{unique_id}_sql.db")
 
-    class MockKVStore:
-        async def set(self, key, value):
-            storage[key] = value
+    from ogx.core.datatypes import StackConfig
 
-        async def get(self, key):
-            return storage.get(key)
+    storage = StorageConfig(
+        backends={
+            "kv_test": SqliteKVStoreConfig(db_path=db_path),
+            "sql_test": SqliteSqlStoreConfig(db_path=sql_db_path),
+        },
+        stores=ServerStoresConfig(
+            metadata=KVStoreReference(backend="kv_test", namespace="registry"),
+            inference=InferenceStoreReference(backend="sql_test", table_name="inference"),
+            conversations=SqlStoreReference(backend="sql_test", table_name="conversations"),
+            prompts=SqlStoreReference(backend="sql_test", table_name="prompts"),
+            connectors=SqlStoreReference(backend="sql_test", table_name="connectors"),
+        ),
+    )
 
-        async def delete(self, key):
-            del storage[key]
+    register_kvstore_backends({"kv_test": storage.backends["kv_test"]})
+    register_sqlstore_backends({"sql_test": storage.backends["sql_test"]})
 
-        async def keys_in_range(self, start_key, end_key):
-            return [k for k in storage.keys() if start_key <= k < end_key]
+    mock_run_config = StackConfig(
+        distro_name="test-distribution",
+        apis=[],
+        providers={},
+        storage=storage,
+    )
+    config = ConnectorServiceConfig(config=mock_run_config)
+    service = ConnectorServiceImpl(config)
+    await service.initialize()
 
-        async def values_in_range(self, start_key, end_key):
-            return [v for k, v in storage.items() if start_key <= k < end_key]
-
-        async def close(self):
-            pass
-
-        @property
-        def _storage(self):
-            return storage
-
-    return MockKVStore()
-
-
-@pytest.fixture
-async def connector_service(mock_kvstore):
-    """Create a ConnectorServiceImpl with mocked dependencies."""
-    # Create a minimal mock config - we'll inject the kvstore directly
-    mock_config = MagicMock(spec=Connector)
-
-    with patch(
-        "ogx.core.connectors.connectors.kvstore_impl",
-        return_value=mock_kvstore,
-    ):
-        service = ConnectorServiceImpl(mock_config)
-        service.kvstore = mock_kvstore  # Inject directly
-        return service
+    yield service
 
 
 @pytest.fixture
@@ -108,7 +114,7 @@ def sample_connector():
 class TestRegisterConnector:
     """Tests for register_connector method."""
 
-    async def test_register_new_connector(self, connector_service, mock_kvstore):
+    async def test_register_new_connector(self, connector_service):
         """Test registering a new connector creates it in the store."""
         result = await connector_service.register_connector(
             connector_id="my-mcp",
@@ -122,13 +128,8 @@ class TestRegisterConnector:
         assert result.url == "http://localhost:8080/mcp"
         assert result.server_label == "My MCP"
 
-        # Verify stored in kvstore
-        stored = await mock_kvstore.get(f"{KEY_PREFIX}my-mcp")
-        assert stored is not None
-
-    async def test_register_connector_different_config_updates(self, connector_service, mock_kvstore):
+    async def test_register_connector_different_config_updates(self, connector_service):
         """Attempting to update an existing connector via config should update the existing connector regardless of the source."""
-        # Register the original connector
         _ = await connector_service.register_connector(
             connector_id="my-mcp",
             connector_type=ConnectorType.MCP,
@@ -136,7 +137,6 @@ class TestRegisterConnector:
             server_label="Original Label",
         )
 
-        # Attempt to update with a different URL
         _ = await connector_service.register_connector(
             connector_id="my-mcp",
             connector_type=ConnectorType.MCP,
@@ -144,10 +144,13 @@ class TestRegisterConnector:
             server_label="Original Label",
         )
 
-        # Existing connector should be returned and updated
-        stored = await mock_kvstore.get(f"{KEY_PREFIX}my-mcp")
-        persisted = Connector.model_validate_json(stored)
-        assert persisted.url == "http://different-host:9090/mcp"
+        row = await connector_service.sql_store.fetch_one(
+            table="connectors",
+            where={"id": "my-mcp"},
+        )
+        assert row is not None
+        connector = Connector.model_validate(row["connector_data"])
+        assert connector.url == "http://different-host:9090/mcp"
 
 
 # --- get_connector tests ---
@@ -165,14 +168,12 @@ class TestGetConnector:
 
     async def test_get_connector_returns_with_server_info(self, connector_service):
         """Test getting a connector fetches MCP server info."""
-        # Register a connector
         await connector_service.register_connector(
             connector_id="my-mcp",
             connector_type=ConnectorType.MCP,
             url="http://localhost:8080/mcp",
         )
 
-        # Mock the MCP server info response
         mock_server_info = MagicMock()
         mock_server_info.name = "Test MCP Server"
         mock_server_info.description = "A test server"
@@ -228,7 +229,6 @@ class TestListConnectors:
 
     async def test_list_connectors_returns_all(self, connector_service):
         """Test listing returns all registered connectors."""
-        # Register multiple connectors
         await connector_service.register_connector(
             connector_id="mcp-1",
             connector_type=ConnectorType.MCP,
@@ -255,7 +255,6 @@ class TestListConnectors:
 
     async def test_list_connectors_after_unregister(self, connector_service):
         """Test that unregistered connectors are not listed."""
-        # Register connectors
         await connector_service.register_connector(
             connector_id="keep-me",
             connector_type=ConnectorType.MCP,
@@ -267,7 +266,6 @@ class TestListConnectors:
             url="http://localhost:8082/mcp",
         )
 
-        # Unregister one
         await connector_service.unregister_connector("remove-me")
 
         result = await connector_service.list_connectors()
@@ -282,48 +280,31 @@ class TestListConnectors:
 class TestUnregisterConnector:
     """Tests for unregister_connector method."""
 
-    async def test_unregister_existing_connector(self, connector_service, mock_kvstore):
+    async def test_unregister_existing_connector(self, connector_service):
         """Test unregistering an existing connector removes it from store."""
-        # Register a connector
         await connector_service.register_connector(
             connector_id="to-remove",
             connector_type=ConnectorType.MCP,
             url="http://localhost:8080/mcp",
         )
 
-        # Verify it exists
-        assert await mock_kvstore.get(f"{KEY_PREFIX}to-remove") is not None
+        row = await connector_service.sql_store.fetch_one(
+            table="connectors",
+            where={"id": "to-remove"},
+        )
+        assert row is not None
 
-        # Unregister it
         await connector_service.unregister_connector("to-remove")
 
-        # Verify it's gone
-        assert await mock_kvstore.get(f"{KEY_PREFIX}to-remove") is None
+        row = await connector_service.sql_store.fetch_one(
+            table="connectors",
+            where={"id": "to-remove"},
+        )
+        assert row is None
 
     async def test_unregister_nonexistent_connector_does_not_raise(self, connector_service):
         """Test unregistering a non-existent connector doesn't raise an error."""
-        # Should not raise - graceful handling
         await connector_service.unregister_connector("does-not-exist")
-
-
-# --- Key prefix tests ---
-
-
-class TestKeyPrefix:
-    """Tests for connector key namespacing."""
-
-    async def test_connectors_use_namespaced_keys(self, connector_service, mock_kvstore):
-        """Test that connectors are stored with the correct key prefix."""
-        await connector_service.register_connector(
-            connector_id="test-connector",
-            connector_type=ConnectorType.MCP,
-            url="http://localhost:8080/mcp",
-        )
-
-        # Check the key was stored with prefix
-        keys = list(mock_kvstore._storage.keys())
-        assert len(keys) == 1
-        assert keys[0] == "connectors:v1:test-connector"
 
 
 # --- OpenAIResponseInputToolMCP validation tests ---
@@ -338,7 +319,6 @@ class TestMCPToolValidation:
             OpenAIResponseInputToolMCP(
                 type="mcp",
                 server_label="test",
-                # Neither server_url nor connector_id provided
             )
 
     def test_mcp_tool_accepts_server_url_only(self):
@@ -393,7 +373,6 @@ class TestConnectorIdResolution:
             connector_id="my-mcp-server",
         )
 
-        # Call the actual helper function
         resolved_tool = await resolve_mcp_connector_id(mcp_tool, mock_connectors_api)
 
         assert resolved_tool.server_url == "http://localhost:8080/mcp"
@@ -412,12 +391,9 @@ class TestConnectorIdResolution:
             connector_id="my-mcp-server",
         )
 
-        # Call the actual helper function
         resolved_tool = await resolve_mcp_connector_id(mcp_tool, mock_connectors_api)
 
-        # Should keep original URL
         assert resolved_tool.server_url == "http://original-server:8080/mcp"
-        # Should not call connectors API since server_url already exists
         mock_connectors_api.get_connector.assert_not_called()
 
     async def test_connector_id_resolution_propagates_not_found_error(self, mock_connectors_api):

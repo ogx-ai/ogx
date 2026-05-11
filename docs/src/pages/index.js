@@ -684,7 +684,7 @@ function Hero() {
             </h1>
             <p className={styles.subtitle}>
               Inference, vector stores, file storage, safety, tool calling,
-              and agentic orchestration in a single OpenAI-compatible server.
+              and agentic orchestration — as a server or a Python library.
               Pluggable providers, any language, deploy anywhere.
             </p>
             <InstallBlock />
@@ -714,10 +714,11 @@ function ApiSurface() {
     <Section className={styles.apiSection}>
       <div className="container">
         <div className={styles.apiHeader}>
-          <h2>Everything your AI app needs. One server.</h2>
+          <h2>Everything your AI app needs. One process.</h2>
           <p>
             More than inference routing. OGX composes inference, storage,
-            safety, and orchestration into a single process. Your agent can search
+            safety, and orchestration into a single process — whether you
+            run it as a server or import it as a library. Your agent can search
             a vector store, call a tool, check safety, and stream the response.
             No glue code. No sidecar services.
           </p>
@@ -748,34 +749,35 @@ function ApiSurface() {
   );
 }
 
-function ServerNotLibrary() {
+function ServerAndLibrary() {
   return (
     <Section className={styles.serverSection}>
       <div className="container">
         <div className={styles.serverLayout}>
           <div>
-            <h2>A server, not a library</h2>
+            <h2>Server or library. Your call.</h2>
             <p>
-              SDK abstractions couple your app to a specific language, release
-              cycle, and import path. OGX is an HTTP server. Your app
-              talks to a standard API.
+              Deploy OGX as an HTTP server for production — any language,
+              any client, standard API. Or import it directly as a Python
+              library for scripts, notebooks, and rapid prototyping with
+              zero network overhead.
             </p>
             <p>
-              Write in Python, Go, TypeScript, curl. Swap the server without
-              touching application code. That's the difference between library
-              abstraction and server abstraction.
+              Same capabilities either way. Start with the library, graduate
+              to the server when you need multi-language access or
+              independent scaling.
             </p>
           </div>
           <div className={styles.serverComparison}>
             <div className={styles.comparisonRow}>
-              <span className={styles.comparisonLabel}>SDK library</span>
-              <code className={styles.comparisonCode}>from sdk import ...</code>
-              <span className={styles.comparisonNote}>coupled</span>
-            </div>
-            <div className={styles.comparisonRow}>
-              <span className={styles.comparisonLabel}>OGX</span>
+              <span className={styles.comparisonLabel}>Server</span>
               <code className={styles.comparisonCode}>POST /v1/responses</code>
               <span className={styles.comparisonGood}>any language</span>
+            </div>
+            <div className={styles.comparisonRow}>
+              <span className={styles.comparisonLabel}>Library</span>
+              <code className={styles.comparisonCode}>client.responses.create(...)</code>
+              <span className={styles.comparisonGood}>zero overhead</span>
             </div>
           </div>
         </div>
@@ -812,10 +814,10 @@ function Architecture() {
       <div className="container">
         <h2>How it works</h2>
         <p className={styles.archDesc}>
-          Your application talks to one server. That server routes
-          to pluggable providers for inference, vector storage, files,
-          safety, and tools. The composition happens at the server level,
-          not in your application code.
+          Your application talks to one process — either an HTTP server
+          or an in-process library client. That process routes to pluggable
+          providers for inference, vector storage, files, safety, and tools.
+          The composition happens at the OGX level, not in your application code.
         </p>
         <div className={styles.archImg}>
           <img src="/img/architecture-animated.svg" alt="OGX Architecture" loading="lazy" />
@@ -858,13 +860,13 @@ function Bottom() {
 
 export default function Home() {
   return (
-    <Layout title="The Open-Source AI Application Server" description="Inference, vector stores, safety, tools, and agentic orchestration. One server, OpenAI + Anthropic + Google compatible, pluggable providers.">
+    <Layout title="The Open-Source AI Application Server & Library" description="Inference, vector stores, safety, tools, and agentic orchestration. Server or Python library, OpenAI + Anthropic + Google compatible, pluggable providers.">
       <main>
         <AnnouncementBanner />
         <Hero />
         <CliShowcase />
         <ApiSurface />
-        <ServerNotLibrary />
+        <ServerAndLibrary />
         <Providers />
         <Architecture />
         <Bottom />

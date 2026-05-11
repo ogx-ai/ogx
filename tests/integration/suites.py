@@ -105,12 +105,12 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     ),
     "ollama-reasoning": Setup(
         name="ollama",
-        description="Local Ollama provider with a reasoning-capable model (gpt-oss)",
+        description="Local Ollama provider with a reasoning-capable model (deepseek-r1)",
         env={
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
         },
         defaults={
-            "text_model": "ollama/gpt-oss:20b",
+            "text_model": "ollama/deepseek-r1:1.5b",
         },
     ),
     "bedrock": Setup(
@@ -316,7 +316,7 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
     "messages": Suite(
         name="messages",
         roots=["tests/integration/messages"],
-        default_setup="ollama-reasoning",
+        default_setup="ollama",
     ),
     # Exercises the /v1/messages translation path: Anthropic request format is
     # translated to OpenAI Chat Completions, dispatched to OpenAI, and the response

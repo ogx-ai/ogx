@@ -11,7 +11,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
@@ -317,14 +317,29 @@ class ServerStoresConfig(BaseModel):
         default=None,
         description="Responses store configuration (uses SQL backend)",
     )
-    prompts: KVStoreReference | None = Field(
-        default=KVStoreReference(backend="kv_default", namespace="prompts"),
-        description="Prompts store configuration (uses KV backend)",
+    prompts: SqlStoreReference | None = Field(
+        default=SqlStoreReference(backend="sql_default", table_name="prompts"),
+        description="Prompts store configuration (uses SQL backend)",
     )
-    connectors: KVStoreReference | None = Field(
-        default=KVStoreReference(backend="kv_default", namespace="connectors"),
-        description="Connectors store configuration (uses KV backend)",
+    connectors: SqlStoreReference | None = Field(
+        default=SqlStoreReference(backend="sql_default", table_name="connectors"),
+        description="Connectors store configuration (uses SQL backend)",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_kv_to_sql(cls, data: dict) -> dict:
+        """Auto-migrate prompts/connectors from legacy KVStoreReference to SqlStoreReference."""
+        if not isinstance(data, dict):
+            return data
+        for store_name in ("prompts", "connectors"):
+            ref = data.get(store_name)
+            if isinstance(ref, dict) and "namespace" in ref and "table_name" not in ref:
+                data[store_name] = {
+                    "backend": ref.get("backend", "sql_default").replace("kv_", "sql_"),
+                    "table_name": ref["namespace"],
+                }
+        return data
 
 
 def _default_backends() -> dict[str, StorageBackendConfig]:

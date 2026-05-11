@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
-import json
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.datatypes import StackConfig
-from ogx.core.storage.kvstore import KVStore, kvstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
+from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
 from ogx.log import get_logger
 from ogx.providers.utils.tools.mcp import get_mcp_server_info, list_mcp_tools
 from ogx_api import (
@@ -25,16 +27,21 @@ from ogx_api import (
     ListConnectorsResponse,
     ListConnectorToolsRequest,
     ListToolsResponse,
+    ServiceNotEnabledError,
     ToolDef,
 )
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 logger = get_logger(name=__name__, category="connectors")
+
+TABLE_CONNECTORS = "connectors"
 
 
 class ConnectorServiceConfig(BaseModel):
     """Configuration for the built-in connector service."""
 
     config: StackConfig = Field(..., description="Stack run configuration for resolving persistence")
+    policy: list[AccessRule] = []
 
 
 async def get_provider_impl(config: ConnectorServiceConfig) -> ConnectorServiceImpl:
@@ -43,28 +50,34 @@ async def get_provider_impl(config: ConnectorServiceConfig) -> ConnectorServiceI
     return impl
 
 
-KEY_PREFIX = "connectors:v1:"
-
-
 class ConnectorServiceImpl(Connectors):
-    """Built-in connector service implementation."""
+    """Built-in connector service implementation using AuthorizedSqlStore."""
 
     def __init__(self, config: ConnectorServiceConfig):
         self.config = config
-        self.kvstore: KVStore
+        self.policy = config.policy
 
-    def _get_key(self, connector_id: str) -> str:
-        """Get the KVStore key for a connector."""
-        return f"{KEY_PREFIX}{connector_id}"
+        connectors_ref = config.config.storage.stores.connectors
+        if not connectors_ref:
+            raise ServiceNotEnabledError("storage.stores.connectors")
+
+        base_sql_store = sqlstore_impl(connectors_ref)
+        self.sql_store = AuthorizedSqlStore(base_sql_store, self.policy)
 
     async def initialize(self) -> None:
         """Initialize the connector service."""
-
-        # Use connectors store reference from run config
-        connectors_ref = self.config.config.storage.stores.connectors
-        if not connectors_ref:
-            raise ValueError("storage.stores.connectors must be configured in config")
-        self.kvstore = await kvstore_impl(connectors_ref)
+        await self.sql_store.create_table(
+            TABLE_CONNECTORS,
+            {
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "connector_type": ColumnType.STRING,
+                "url": ColumnType.STRING,
+                "server_label": ColumnType.STRING,
+                "server_name": ColumnType.STRING,
+                "server_description": ColumnType.STRING,
+                "connector_data": ColumnType.JSON,
+            },
+        )
 
     async def register_connector(
         self,
@@ -86,29 +99,57 @@ class ConnectorServiceImpl(Connectors):
             server_description=server_description,
         )
 
-        key = self._get_key(connector_id)
-        existing_connector_json = await self.kvstore.get(key)
+        existing_row = await self.sql_store.fetch_one(
+            table=TABLE_CONNECTORS,
+            where={"id": connector_id},
+        )
 
-        if existing_connector_json:
-            existing_connector = Connector.model_validate_json(existing_connector_json)
-
+        if existing_row:
+            existing_connector = self._row_to_connector(existing_row)
             if connector == existing_connector:
                 logger.info(
-                    "Connector %s already exists; skipping registration",
-                    connector_id,
+                    "Connector already exists; skipping registration",
+                    connector_id=connector_id,
                 )
                 return existing_connector
 
-        await self.kvstore.set(key, json.dumps(connector.model_dump()))
+        connector_data = connector.model_dump()
+        row_data = {
+            "id": connector_id,
+            "connector_type": connector_type.value,
+            "url": url,
+            "server_label": server_label,
+            "server_name": server_name,
+            "server_description": server_description,
+            "connector_data": connector_data,
+        }
+
+        if existing_row:
+            await self.sql_store.update(
+                table=TABLE_CONNECTORS,
+                data=row_data,
+                where={"id": connector_id},
+            )
+        else:
+            await self.sql_store.insert(
+                table=TABLE_CONNECTORS,
+                data=row_data,
+            )
 
         return connector
 
     async def unregister_connector(self, connector_id: str) -> None:
         """Unregister a connector."""
-        key = self._get_key(connector_id)
-        if not await self.kvstore.get(key):
+        existing_row = await self.sql_store.fetch_one(
+            table=TABLE_CONNECTORS,
+            where={"id": connector_id},
+        )
+        if not existing_row:
             return
-        await self.kvstore.delete(key)
+        await self.sql_store.delete(
+            table=TABLE_CONNECTORS,
+            where={"id": connector_id},
+        )
 
     async def get_connector(
         self,
@@ -117,10 +158,14 @@ class ConnectorServiceImpl(Connectors):
     ) -> Connector:
         """Get a connector by its ID."""
 
-        connector_json = await self.kvstore.get(self._get_key(request.connector_id))
-        if not connector_json:
+        row = await self.sql_store.fetch_one(
+            table=TABLE_CONNECTORS,
+            where={"id": request.connector_id},
+        )
+        if not row:
             raise ConnectorNotFoundError(request.connector_id)
-        connector = Connector.model_validate_json(connector_json)
+
+        connector = self._row_to_connector(row)
 
         server_info = await get_mcp_server_info(connector.url, authorization=authorization)
         connector.server_name = server_info.name
@@ -130,8 +175,8 @@ class ConnectorServiceImpl(Connectors):
 
     async def list_connectors(self) -> ListConnectorsResponse:
         """List all connectors."""
-        values = await self.kvstore.values_in_range(start_key=KEY_PREFIX, end_key=KEY_PREFIX + "\uffff")
-        connectors = [Connector.model_validate_json(v) for v in values]
+        results = await self.sql_store.fetch_all(table=TABLE_CONNECTORS)
+        connectors = [self._row_to_connector(row) for row in results.data]
         return ListConnectorsResponse(data=connectors)
 
     async def get_connector_tool(self, request: GetConnectorToolRequest, authorization: str | None = None) -> ToolDef:
@@ -154,6 +199,19 @@ class ConnectorServiceImpl(Connectors):
         tools = await list_mcp_tools(endpoint=connector.url, authorization=authorization)
         return ListToolsResponse(data=tools.data)
 
+    def _row_to_connector(self, row: dict[str, Any]) -> Connector:
+        connector_data = row.get("connector_data", {})
+        if connector_data:
+            return Connector.model_validate(connector_data)
+        return Connector(
+            connector_id=row["id"],
+            connector_type=ConnectorType(row["connector_type"]),
+            url=row["url"],
+            server_label=row.get("server_label"),
+            server_name=row.get("server_name"),
+            server_description=row.get("server_description"),
+        )
+
     async def shutdown(self) -> None:
         """Shutdown the connector service."""
-        await self.kvstore.shutdown()
+        pass

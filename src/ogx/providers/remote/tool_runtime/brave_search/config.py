@@ -6,10 +6,12 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 
 
-class BraveSearchToolConfig(BaseModel):
+class BraveSearchToolConfig(BaseToolRuntimeConfig):
     """Configuration for the Brave Search tool runtime."""
 
     api_key: str | None = Field(
