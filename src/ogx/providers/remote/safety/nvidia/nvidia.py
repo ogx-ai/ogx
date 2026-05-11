@@ -58,7 +58,7 @@ class NVIDIASafetyAdapter(ShieldToModerationMixin, Safety, ShieldsProtocolPrivat
         if not shield:
             raise ValueError(f"Shield {request.shield_id} not found")
 
-        self.shield = NeMoGuardrails(self.config, shield.shield_id)
+        self.shield = NeMoGuardrails(self.config, shield.provider_resource_id)
         return await self.shield.run(request.messages)
 
 

@@ -26,7 +26,7 @@ from .models import (
     ListOpenAIFileResponse,
     OpenAIFileDeleteResponse,
     OpenAIFileObject,
-    OpenAIFilePurpose,
+    OpenAIFileUploadPurpose,
     RetrieveFileContentRequest,
     RetrieveFileRequest,
     UploadFileRequest,
@@ -117,8 +117,11 @@ def create_router(impl: Files, max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_S
     )
     async def upload_file(
         file: Annotated[UploadFile, File(description="The file to upload.")],
-        purpose: Annotated[OpenAIFilePurpose, Form(description="The intended purpose of the uploaded file.")],
-        expires_after: Annotated[ExpiresAfter | None, Form(description="Optional expiration settings.")] = None,
+        purpose: Annotated[OpenAIFileUploadPurpose, Form(description="The intended purpose of the uploaded file.")],
+        expires_after: Annotated[
+            ExpiresAfter | None,
+            Form(description="Optional expiration settings for the file."),
+        ] = None,
     ) -> OpenAIFileObject:
         content = await read_upload_with_size_limit(file, max_upload_size_bytes)
         safe_file = PreReadUploadFile(content, filename=file.filename, content_type=file.content_type)

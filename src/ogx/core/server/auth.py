@@ -8,7 +8,6 @@ import re
 from typing import Any
 
 import httpx
-from aiohttp import hdrs
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ogx.core.access_control.conditions import User as ProtocolUser
@@ -20,7 +19,7 @@ from ogx.core.server.auth_providers import create_auth_provider
 from ogx.core.server.routes import find_matching_route, initialize_route_impls
 from ogx.log import get_logger
 from ogx_api import Api
-from ogx_api.common.errors import OpenAIErrorResponse
+from ogx_api.common.errors import AuthServiceUnavailableError, OpenAIErrorResponse, TokenValidationError
 
 logger = get_logger(name=__name__, category="core::auth")
 
@@ -102,7 +101,7 @@ class AuthenticationMiddleware:
         if scope["type"] == "http":
             # Find the route and check if authentication is required
             path = scope.get("path", "")
-            method = scope.get("method", hdrs.METH_GET)
+            method = scope.get("method", "GET")
 
             if not hasattr(self, "route_impls"):
                 self.route_impls = initialize_route_impls(self.impls)
@@ -138,11 +137,17 @@ class AuthenticationMiddleware:
             # Validate token and get access attributes
             try:
                 validation_result = await self.auth_provider.validate_token(token, scope)
+            except AuthServiceUnavailableError as e:
+                logger.warning("Authentication service unavailable", error=str(e))
+                return await self._send_auth_error(send, str(e), status=503)
             except httpx.TimeoutException:
-                logger.exception("Authentication request timed out")
-                return await self._send_auth_error(send, "Authentication service timeout")
+                logger.warning("Authentication request timed out")
+                return await self._send_auth_error(send, "Authentication service timeout", status=503)
+            except TokenValidationError as e:
+                logger.warning("Token validation failed", error=str(e))
+                return await self._send_auth_error(send, str(e))
             except ValueError as e:
-                logger.exception("Error during authentication")
+                logger.warning("Authentication error", error=str(e))
                 return await self._send_auth_error(send, str(e))
             except Exception:
                 logger.exception("Error during authentication")

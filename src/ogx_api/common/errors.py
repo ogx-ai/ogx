@@ -155,13 +155,6 @@ class VectorStoreNotFoundError(ResourceNotFoundError):
         super().__init__(vector_store_name, resource_type="Vector Store", client_command="vector_dbs.list")
 
 
-class DatasetNotFoundError(ResourceNotFoundError):
-    """raised when OGX cannot find a referenced dataset"""
-
-    def __init__(self, dataset_name: str) -> None:
-        super().__init__(dataset_name, resource_type="Dataset", client_command="datasets.list")
-
-
 class ToolGroupNotFoundError(ResourceNotFoundError):
     """raised when OGX cannot find a referenced tool group"""
 
@@ -258,6 +251,15 @@ class TokenValidationError(OGXError):
     """raised when token validation fails during authentication"""
 
     status_code: httpx.codes = httpx.codes.UNAUTHORIZED
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class AuthServiceUnavailableError(OGXError):
+    """raised when the authentication infrastructure is unreachable"""
+
+    status_code: httpx.codes = httpx.codes.SERVICE_UNAVAILABLE
 
     def __init__(self, message: str) -> None:
         super().__init__(message)

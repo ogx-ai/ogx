@@ -16,6 +16,7 @@ from pydantic import TypeAdapter
 
 from ogx.log import get_logger
 from ogx.providers.utils.common.data_url import parse_data_url
+from ogx.providers.utils.common.url_validation import validate_url_not_private
 from ogx.providers.utils.inference.prompt_adapter import interleaved_content_as_str
 from ogx_api import (
     URL,
@@ -25,7 +26,7 @@ from ogx_api import (
     InterleavedContentItem,
     ListToolDefsResponse,
     OpenAIAttachFileRequest,
-    OpenAIFilePurpose,
+    OpenAIFileUploadPurpose,
     QueryChunksRequest,
     QueryChunksResponse,
     RAGDocument,
@@ -67,7 +68,8 @@ async def raw_data_from_doc(doc: RAGDocument) -> tuple[bytes, str]:
 
             return file_data, mime_type
         else:
-            async with httpx.AsyncClient() as client:
+            validate_url_not_private(uri)
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
                 r = await client.get(uri)
                 r.raise_for_status()
                 mime_type = r.headers.get("content-type", "application/octet-stream")
@@ -151,7 +153,7 @@ class FileSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime):
 
                 try:
                     created_file = await self.files_api.openai_upload_file(
-                        request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
+                        request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS),
                         file=upload_file,
                     )
                 except Exception as e:

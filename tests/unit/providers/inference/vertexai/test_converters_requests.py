@@ -607,6 +607,80 @@ class TestConvertOpenAIMessagesToGemini:
         fr = contents[0]["parts"][0]["function_response"]
         assert fr["name"] == "unknown"
 
+    _SEARCH_TOOL_CALL = {
+        "id": "call_1",
+        "type": "function",
+        "function": {"name": "search", "arguments": '{"q": "test"}'},
+    }
+
+    @pytest.mark.parametrize(
+        "message,expected_parts",
+        [
+            pytest.param(
+                {"role": "assistant", "reasoning_content": "I think the answer is 42", "content": "Hello"},
+                [{"thought": True, "text": "I think the answer is 42"}, {"text": "Hello"}],
+                id="reasoning_and_text",
+            ),
+            pytest.param(
+                {"role": "assistant", "reasoning_content": "My reasoning", "content": None},
+                [{"thought": True, "text": "My reasoning"}],
+                id="reasoning_only",
+            ),
+            pytest.param(
+                {"role": "assistant", "content": "Hello"},
+                [{"text": "Hello"}],
+                id="no_reasoning",
+            ),
+            pytest.param(
+                {"role": "assistant", "reasoning_content": None, "content": "Hello"},
+                [{"text": "Hello"}],
+                id="reasoning_none",
+            ),
+        ],
+    )
+    def test_assistant_reasoning_content(self, message, expected_parts):
+        """Test reasoning_content is emitted as thought parts before text parts."""
+        _, contents = convert_openai_messages_to_gemini([message])
+        assert contents[0]["role"] == "model"
+        assert contents[0]["parts"] == expected_parts
+
+    @pytest.mark.parametrize(
+        "reasoning_content",
+        [
+            pytest.param({"type": "thinking", "thinking": "deep thought"}, id="dict_object"),
+            pytest.param(["thinking", "items"], id="list_object"),
+            pytest.param(42, id="integer"),
+        ],
+    )
+    def test_assistant_reasoning_content_must_be_string(self, reasoning_content):
+        """Test that non-string reasoning_content raises TypeError."""
+        message = {"role": "assistant", "reasoning_content": reasoning_content, "content": "Hello"}
+        with pytest.raises(TypeError, match="reasoning_content must be a string"):
+            convert_openai_messages_to_gemini([message])
+
+    @pytest.mark.parametrize(
+        "message,expected_non_fc_parts",
+        [
+            pytest.param(
+                {"role": "assistant", "reasoning_content": "Need a tool", "content": None},
+                [{"thought": True, "text": "Need a tool"}],
+                id="reasoning_and_tool_calls",
+            ),
+            pytest.param(
+                {"role": "assistant", "reasoning_content": "Let me think", "content": "I will search"},
+                [{"thought": True, "text": "Let me think"}, {"text": "I will search"}],
+                id="reasoning_text_and_tool_calls",
+            ),
+        ],
+    )
+    def test_assistant_reasoning_content_with_tool_calls(self, message, expected_non_fc_parts):
+        """Test thought -> text -> function_call ordering when tool_calls are present."""
+        message["tool_calls"] = [self._SEARCH_TOOL_CALL]
+        _, contents = convert_openai_messages_to_gemini([message])
+        parts = contents[0]["parts"]
+        assert parts[: len(expected_non_fc_parts)] == expected_non_fc_parts
+        assert "function_call" in parts[-1]
+
 
 class TestConvertOpenAIToolsToGemini:
     def test_single_function_tool(self):

@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 import tiktoken
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
 
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
 from ogx.core.task import (
@@ -103,13 +103,6 @@ class _BackgroundWorkItem:
 
     request_context: RequestContext
     kwargs: dict = field(default_factory=dict)
-
-
-class OpenAIResponsePreviousResponseWithInputItems(BaseModel):
-    """Container for a previous response object paired with its input items."""
-
-    input_items: ListOpenAIResponseInputItem
-    response: OpenAIResponseObject
 
 
 class OpenAIResponsesImpl:

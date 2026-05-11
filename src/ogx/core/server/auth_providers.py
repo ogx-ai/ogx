@@ -4,6 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
+import re
 import ssl
 from abc import ABC, abstractmethod
 from typing import Any
@@ -11,6 +13,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 import jwt
+from jwt.exceptions import PyJWKClientConnectionError
 from pydantic import BaseModel, Field
 from starlette.types import Scope
 
@@ -24,7 +27,7 @@ from ogx.core.datatypes import (
     User,
 )
 from ogx.log import get_logger
-from ogx_api import TokenValidationError
+from ogx_api import AuthServiceUnavailableError, TokenValidationError
 
 logger = get_logger(name=__name__, category="core::auth")
 
@@ -99,8 +102,10 @@ def get_attributes_from_claims(claims: dict[str, Any], mapping: dict[str, str]) 
     for claim_key, attribute_key in mapping.items():
         # First try dot notation for nested traversal (e.g., "resource_access.ogx.roles")
         # Then fall back to literal key with dots (e.g., "my.dotted.key")
+        # Backslash-escaped dots (\.) are treated as literal dots in the key name,
+        # e.g., "kubernetes\.io.serviceaccount.name" traverses claims["kubernetes.io"]["serviceaccount"]["name"]
         claim: object = claims
-        keys = claim_key.split(".")
+        keys = [part.replace("\\.", ".") for part in re.split(r"(?<!\\)\.", claim_key)]
         for key in keys:
             if isinstance(claim, dict) and key in claim:
                 claim = claim[key]
@@ -201,6 +206,9 @@ class OAuth2TokenAuthProvider(AuthProvider):
                 issuer=self.config.issuer,
                 options={"verify_exp": True, "verify_aud": True, "verify_iss": True},
             )
+        except (PyJWKClientConnectionError, ConnectionError, TimeoutError, OSError) as exc:
+            logger.warning("Failed to reach JWKS endpoint", error=str(exc))
+            raise AuthServiceUnavailableError("Authentication service unavailable") from exc
         except Exception as exc:
             raise ValueError("Invalid JWT token") from exc
 
@@ -221,16 +229,19 @@ class OAuth2TokenAuthProvider(AuthProvider):
         if self.config.introspection is None:
             raise ValueError("Introspection is not configured")
 
-        # ssl_ctxt can be None, bool, str, or SSLContext - httpx accepts all
-        ssl_ctxt: ssl.SSLContext | bool = False  # Default to no verification if no cafile
-        if self.config.tls_cafile:
+        ssl_ctxt: ssl.SSLContext | bool
+        if not self.config.verify_tls:
+            logger.warning("TLS verification is disabled for token introspection")
+            ssl_ctxt = False
+        elif self.config.tls_cafile:
             ssl_ctxt = ssl.create_default_context(cafile=self.config.tls_cafile.as_posix())
+        else:
+            ssl_ctxt = True
 
         # Build post kwargs conditionally based on auth method
         post_kwargs: dict[str, Any] = {
             "url": self.config.introspection.url,
             "data": form,
-            "timeout": 10.0,
         }
 
         if self.config.introspection.send_secret_in_body:
@@ -244,7 +255,7 @@ class OAuth2TokenAuthProvider(AuthProvider):
             )
 
         try:
-            async with httpx.AsyncClient(verify=ssl_ctxt) as client:
+            async with httpx.AsyncClient(verify=ssl_ctxt, timeout=httpx.Timeout(10.0, connect=5.0)) as client:
                 response = await client.post(**post_kwargs)
                 if response.status_code != httpx.codes.OK:
                     logger.warning("Token introspection failed with status code", status_code=response.status_code)
@@ -259,11 +270,10 @@ class OAuth2TokenAuthProvider(AuthProvider):
                     principal=principal,
                     attributes=access_attributes,
                 )
-        except httpx.TimeoutException:
-            logger.exception("Token introspection request timed out")
-            raise
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+            logger.warning("Failed to reach token introspection endpoint", error=str(exc))
+            raise AuthServiceUnavailableError("Authentication service unavailable") from exc
         except ValueError:
-            # Re-raise ValueError exceptions to preserve their message
             raise
         except Exception as e:
             logger.exception("Error during token introspection")
@@ -289,7 +299,7 @@ class CustomAuthProvider(AuthProvider):
 
     def __init__(self, config: CustomAuthConfig) -> None:
         self.config = config
-        self._client: httpx.AsyncClient | None = None
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0))
 
     async def validate_token(self, token: str, scope: Scope | None = None) -> User:
         """Validate a token using the custom authentication endpoint."""
@@ -319,30 +329,27 @@ class CustomAuthProvider(AuthProvider):
 
         # Validate with authentication endpoint
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.config.endpoint,
-                    json=auth_request.model_dump(),
-                    timeout=10.0,  # Add a reasonable timeout
-                )
-                if response.status_code != httpx.codes.OK:
-                    logger.warning("Authentication failed with status code", status_code=response.status_code)
-                    raise ValueError(f"Authentication failed: {response.status_code}")
+            response = await self._client.post(
+                self.config.endpoint,
+                json=auth_request.model_dump(),
+            )
+            if response.status_code != httpx.codes.OK:
+                logger.warning("Authentication failed with status code", status_code=response.status_code)
+                raise ValueError(f"Authentication failed: {response.status_code}")
 
-                # Parse and validate the auth response
-                try:
-                    response_data = response.json()
-                    auth_response = AuthResponse(**response_data)
-                    return User(principal=auth_response.principal, attributes=auth_response.attributes)
-                except Exception as e:
-                    logger.exception("Error parsing authentication response")
-                    raise ValueError("Invalid authentication response format") from e
+            # Parse and validate the auth response
+            try:
+                response_data = response.json()
+                auth_response = AuthResponse(**response_data)
+                return User(principal=auth_response.principal, attributes=auth_response.attributes)
+            except Exception as e:
+                logger.exception("Error parsing authentication response")
+                raise ValueError("Invalid authentication response format") from e
 
-        except httpx.TimeoutException:
-            logger.exception("Authentication request timed out")
-            raise
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+            logger.warning("Failed to reach custom auth endpoint", error=str(exc))
+            raise AuthServiceUnavailableError("Authentication service unavailable") from exc
         except ValueError:
-            # Re-raise ValueError exceptions to preserve their message
             raise
         except Exception as e:
             logger.exception("Error during authentication")
@@ -350,9 +357,7 @@ class CustomAuthProvider(AuthProvider):
 
     async def close(self) -> None:
         """Close the HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
+        await self._client.aclose()
 
     def get_auth_error_message(self, scope: Scope | None = None) -> str:
         """Return custom auth provider-specific authentication error message."""
@@ -417,8 +422,8 @@ async def _get_github_user_info(access_token: str, github_api_base_url: str) -> 
         "User-Agent": "ogx",
     }
 
-    async with httpx.AsyncClient() as client:
-        user_response = await client.get(f"{github_api_base_url}/user", headers=headers, timeout=10.0)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+        user_response = await client.get(f"{github_api_base_url}/user", headers=headers)
         user_response.raise_for_status()
         user_data = user_response.json()
 
@@ -451,7 +456,6 @@ async def _fetch_github_organizations(
                 f"{github_api_base_url}/user/orgs",
                 headers=headers,
                 params={"per_page": per_page, "page": page},
-                timeout=10.0,
             )
             orgs_response.raise_for_status()
             orgs_payload = orgs_response.json()
@@ -511,7 +515,7 @@ class KubernetesAuthProvider(AuthProvider):
         verify = self._httpx_verify_value()
 
         try:
-            async with httpx.AsyncClient(verify=verify, timeout=10.0) as client:
+            async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(10.0, connect=5.0)) as client:
                 response = await client.post(
                     review_api_url,
                     json=review_request,
@@ -551,9 +555,11 @@ class KubernetesAuthProvider(AuthProvider):
                     attributes=user_attributes,
                 )
 
-        except httpx.TimeoutException:
-            logger.warning("Kubernetes SelfSubjectReview API request timed out")
-            raise ValueError("Token validation timeout") from None
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+            logger.warning("Failed to reach Kubernetes API server", error=str(exc))
+            raise AuthServiceUnavailableError("Authentication service unavailable") from exc
+        except TokenValidationError:
+            raise
         except Exception as e:
             logger.warning("Error during token validation", error=str(e))
             raise ValueError(f"Token validation error: {str(e)}") from e
@@ -598,8 +604,6 @@ class UpstreamHeaderAuthProvider(AuthProvider):
             attributes_key = self.config.attributes_header.lower().encode()
             attributes_value = headers.get(attributes_key)
             if attributes_value:
-                import json
-
                 try:
                     parsed = json.loads(attributes_value.decode())
                 except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -617,6 +621,32 @@ class UpstreamHeaderAuthProvider(AuthProvider):
                         attributes[k] = [v]
                     else:
                         attributes[k] = [str(v)]
+
+        if self.config.attribute_headers:
+            if attributes is None:
+                attributes = {}
+            for header_name, attr_category in self.config.attribute_headers.items():
+                header_key = header_name.lower().encode()
+                header_value = headers.get(header_key)
+                if header_value:
+                    try:
+                        decoded = header_value.decode()
+                        parsed = json.loads(decoded)
+                        if isinstance(parsed, list):
+                            values = [str(item) for item in parsed]
+                        elif isinstance(parsed, str):
+                            values = [parsed]
+                        else:
+                            values = [str(parsed)]
+                    except json.JSONDecodeError:
+                        values = [decoded]
+                    except UnicodeDecodeError:
+                        values = [header_value.decode("utf-8", errors="replace")]
+
+                    if attr_category in attributes:
+                        attributes[attr_category].extend(values)
+                    else:
+                        attributes[attr_category] = values
 
         return User(principal=principal, attributes=attributes)
 

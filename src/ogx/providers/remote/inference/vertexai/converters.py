@@ -253,6 +253,16 @@ def _convert_assistant_message(msg: dict[str, Any]) -> dict[str, Any] | None:
     """
     parts: list[dict[str, Any]] = []
 
+    # Preserve prior reasoning in multi-turn conversations with thinking-enabled
+    # Gemini models by emitting reasoning_content as a native thought part.
+    reasoning_content = msg.get("reasoning_content")
+    if reasoning_content:
+        if not isinstance(reasoning_content, str):
+            raise TypeError(
+                f"Failed to convert assistant message: reasoning_content must be a string, got {type(reasoning_content).__name__}"
+            )
+        parts.append({"thought": True, "text": reasoning_content})
+
     text = _extract_text_content(msg.get("content"))
     if text:
         parts.append({"text": text})

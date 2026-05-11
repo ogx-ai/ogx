@@ -16,7 +16,7 @@ from typing import Any
 from openai.types.batch import BatchError, Errors
 from pydantic import BaseModel
 
-from ogx.core.storage.kvstore import KVStore
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
 from ogx.log import get_logger
 from ogx_api import (
     Batches,
@@ -33,7 +33,7 @@ from ogx_api import (
     OpenAICompletionRequestWithExtraBody,
     OpenAIDeveloperMessageParam,
     OpenAIEmbeddingsRequestWithExtraBody,
-    OpenAIFilePurpose,
+    OpenAIFileUploadPurpose,
     OpenAIMessageParam,
     OpenAISystemMessageParam,
     OpenAIToolMessageParam,
@@ -50,10 +50,11 @@ from ogx_api.files.models import (
     RetrieveFileRequest,
     UploadFileRequest,
 )
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 from .config import ReferenceBatchesImplConfig
 
-BATCH_PREFIX = "batch:"
+TABLE_BATCHES = "batches"
 
 logger = get_logger(__name__)
 
@@ -126,10 +127,10 @@ class ReferenceBatchesImpl(Batches):
         inference_api: Inference,
         files_api: Files,
         models_api: Models,
-        kvstore: KVStore,
+        sql_store: AuthorizedSqlStore,
     ) -> None:
         self.config = config
-        self.kvstore = kvstore
+        self.sql_store = sql_store
         self.inference_api = inference_api
         self.files_api = files_api
         self.models_api = models_api
@@ -142,7 +143,15 @@ class ReferenceBatchesImpl(Batches):
 
     async def initialize(self) -> None:
         # TODO: start background processing of existing tasks
-        pass
+        await self.sql_store.create_table(
+            TABLE_BATCHES,
+            {
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "created_at": ColumnType.INTEGER,
+                "status": ColumnType.STRING,
+                "batch_data": ColumnType.JSON,
+            },
+        )
 
     async def shutdown(self) -> None:
         """Shutdown the batches provider."""
@@ -250,7 +259,15 @@ class ReferenceBatchesImpl(Batches):
             metadata=request.metadata,
         )
 
-        await self.kvstore.set(f"batch:{batch_id}", batch.to_json())
+        await self.sql_store.insert(
+            table=TABLE_BATCHES,
+            data={
+                "id": batch_id,
+                "created_at": current_time,
+                "status": "validating",
+                "batch_data": batch.model_dump(),
+            },
+        )
         logger.info("Created new batch", batch_id=batch_id)
 
         if self.process_batches:
@@ -286,14 +303,12 @@ class ReferenceBatchesImpl(Batches):
 
         With no notion of user, we return all batches.
         """
-        batch_values = await self.kvstore.values_in_range("batch:", "batch:\xff")
+        results = await self.sql_store.fetch_all(
+            table=TABLE_BATCHES,
+            order_by=[("created_at", "desc")],
+        )
 
-        batches = []
-        for batch_data in batch_values:
-            if batch_data:
-                batches.append(BatchObject.model_validate_json(batch_data))
-
-        batches.sort(key=lambda b: b.created_at, reverse=True)
+        batches = [BatchObject.model_validate(row["batch_data"]) for row in results.data]
 
         start_idx = 0
         if request.after:
@@ -317,14 +332,14 @@ class ReferenceBatchesImpl(Batches):
 
     async def retrieve_batch(self, request: RetrieveBatchRequest) -> BatchObject:
         """Retrieve information about a specific batch."""
-        batch_data = await self.kvstore.get(f"batch:{request.batch_id}")
-        if not batch_data:
+        record = await self.sql_store.fetch_one(table=TABLE_BATCHES, where={"id": request.batch_id})
+        if record is None:
             raise BatchNotFoundError(request.batch_id)
 
-        return BatchObject.model_validate_json(batch_data)
+        return BatchObject.model_validate(record["batch_data"])
 
     async def _update_batch(self, batch_id: str, **updates) -> None:
-        """Update batch fields in kvstore."""
+        """Update batch fields in SQL store."""
         async with self._update_batch_lock:
             try:
                 batch = await self.retrieve_batch(RetrieveBatchRequest(batch_id=batch_id))
@@ -344,7 +359,11 @@ class ReferenceBatchesImpl(Batches):
                 batch_dict = batch.model_dump()
                 batch_dict.update(updates)
 
-                await self.kvstore.set(f"batch:{batch_id}", json.dumps(batch_dict))
+                await self.sql_store.update(
+                    table=TABLE_BATCHES,
+                    data={"status": batch_dict.get("status", batch.status), "batch_data": batch_dict},
+                    where={"id": batch_id},
+                )
             except Exception as e:
                 logger.error("Failed to update batch", batch_id=batch_id, error=str(e))
 
@@ -703,7 +722,7 @@ class ReferenceBatchesImpl(Batches):
         with AsyncBytesIO("\n".join(output_lines).encode("utf-8")) as file_buffer:
             file_buffer.filename = f"{batch_id}_{file_type}.jsonl"
             uploaded_file = await self.files_api.openai_upload_file(
-                request=UploadFileRequest(purpose=OpenAIFilePurpose.BATCH),
+                request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.BATCH),
                 file=file_buffer,
             )
             return uploaded_file.id

@@ -17,6 +17,7 @@ from ogx.providers.utils.responses.responses_store import (
 )
 from ogx_api import (
     Order,
+    ResponseItemInclude,
 )
 from ogx_api.inference import (
     OpenAIAssistantMessageParam,
@@ -499,7 +500,7 @@ async def test_list_openai_response_input_items_delegation(openai_responses_impl
     response_id = "resp_123"
     after = "msg_after"
     before = "msg_before"
-    include = ["metadata"]
+    include = [ResponseItemInclude.file_search_call_results]
     limit = 5
     order = Order.asc
 

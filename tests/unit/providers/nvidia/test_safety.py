@@ -157,7 +157,7 @@ async def test_run_shield_allowed(nvidia_adapter, mock_guardrails_post):
     mock_guardrails_post.assert_called_once_with(
         path="/v1/guardrail/checks",
         data={
-            "model": shield_id,
+            "model": "test-model",  # provider_resource_id, not shield identifier
             "messages": [
                 {"role": "user", "content": "Hello, how are you?"},
                 {"role": "assistant", "content": "I'm doing well, thank you for asking!"},
@@ -212,7 +212,7 @@ async def test_run_shield_blocked(nvidia_adapter, mock_guardrails_post):
     mock_guardrails_post.assert_called_once_with(
         path="/v1/guardrail/checks",
         data={
-            "model": shield_id,
+            "model": "test-model",  # provider_resource_id, not shield identifier
             "messages": [
                 {"role": "user", "content": "Hello, how are you?"},
                 {"role": "assistant", "content": "I'm doing well, thank you for asking!"},
@@ -294,7 +294,7 @@ async def test_run_shield_http_error(nvidia_adapter, mock_guardrails_post):
     mock_guardrails_post.assert_called_once_with(
         path="/v1/guardrail/checks",
         data={
-            "model": shield_id,
+            "model": "test-model",  # provider_resource_id, not shield identifier
             "messages": [
                 {"role": "user", "content": "Hello, how are you?"},
                 {"role": "assistant", "content": "I'm doing well, thank you for asking!"},

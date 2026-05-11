@@ -14,16 +14,16 @@ Reference implementation of batches API with KVStore persistence.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `kvstore` | `KVStoreReference` | No |  | Configuration for the key-value store backend. |
-| `kvstore.namespace` | `str` | No |  | Key prefix for KVStore backends |
-| `kvstore.backend` | `str` | No |  | Name of backend from storage.backends |
+| `sqlstore` | `SqlStoreReference` | No |  | Configuration for the SQL store backend. |
+| `sqlstore.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `sqlstore.backend` | `str` | No |  | Name of backend from storage.backends |
 | `max_concurrent_batches` | `int` | No | 1 | Maximum number of concurrent batches to process simultaneously. |
 | `max_concurrent_requests_per_batch` | `int` | No | 10 | Maximum number of concurrent requests to process per batch. |
 
 ## Sample Configuration
 
 ```yaml
-kvstore:
-  namespace: batches
-  backend: kv_default
+sqlstore:
+  table_name: batches
+  backend: sql_default
 ```

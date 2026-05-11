@@ -447,10 +447,11 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
                 await conn.execute(add_column_sql)
         except Exception as e:
-            # If any error occurs during migration, log it but don't fail
-            # The table creation will handle adding the column
-            logger.error("Error adding column to table", column_name=column_name, table=table, error=str(e))
-            pass
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "duplicate column" in error_msg:
+                logger.debug("Column already exists, skipping", table=table, column=column_name)
+            else:
+                raise RuntimeError(f"Failed to add column {column_name} to {table}") from e
 
     def _get_dialect_insert(self, table: Table) -> Any:
         if self._is_sqlite_backend:
