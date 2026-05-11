@@ -52,7 +52,30 @@ class CompactionConfig(BaseModel):
     )
     tokenizer_encoding: str | None = Field(
         default=None,
-        description="Tiktoken encoding name for token counting (e.g. 'o200k_base', 'cl100k_base'). If not set, the encoding is resolved from the model name via tiktoken.encoding_for_model().",
+        description=(
+            "Default tiktoken encoding name for token counting (e.g. 'o200k_base', 'cl100k_base'). "
+            "Applied as a server-level default after any per-request override via extra_body. "
+            "If not set, encoding is resolved from the model name via tiktoken, then model-family "
+            "prefix mappings, then character-based estimation."
+        ),
+    )
+    model_tokenizer_mappings: dict[str, str] = Field(
+        default_factory=lambda: {
+            "llama": "cl100k_base",
+            "mistral": "cl100k_base",
+            "claude": "cl100k_base",
+            "gemma": "cl100k_base",
+            "qwen": "cl100k_base",
+            "phi": "cl100k_base",
+            "deepseek": "cl100k_base",
+        },
+        description=(
+            "Map model name prefixes to tiktoken encoding names. "
+            "Used as a heuristic fallback when tiktoken cannot resolve the model name directly. "
+            "Matching is case-insensitive on the model name after stripping any provider prefix "
+            "(e.g., 'ollama/llama3.2:3b' matches the 'llama' prefix). "
+            "Admins can extend this to support custom or fine-tuned models."
+        ),
     )
 
 
