@@ -1380,16 +1380,9 @@ class OpenAIResponsesImpl:
                     "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base').",
                 ) from None
 
-        # 2. Admin default (fail hard if invalid)
+        # 2. Admin default (validated at startup by CompactionConfig)
         if self.compaction_config.tokenizer_encoding:
-            try:
-                return tiktoken.get_encoding(self.compaction_config.tokenizer_encoding)
-            except ValueError:
-                raise InvalidParameterError(
-                    "compaction_config.tokenizer_encoding",
-                    self.compaction_config.tokenizer_encoding,
-                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base').",
-                ) from None
+            return tiktoken.get_encoding(self.compaction_config.tokenizer_encoding)
 
         # 3. tiktoken built-in (soft fail)
         model_name = model.split("/")[-1] if "/" in model else model
@@ -1421,54 +1414,38 @@ class OpenAIResponsesImpl:
             return self._count_with_encoding(encoding, input)
         return self._estimate_tokens_by_chars(input)
 
-    def _count_with_encoding(self, encoding: tiktoken.Encoding, input: str | list[OpenAIResponseInput]) -> int:
-        if isinstance(input, str):
-            return len(encoding.encode(input))
-
-        total_tokens = 0
-        for item in input:
+    @staticmethod
+    def _extract_text_segments(items: list[OpenAIResponseInput]) -> list[str]:
+        segments: list[str] = []
+        for item in items:
             if isinstance(item, OpenAIResponseMessage):
                 if isinstance(item.content, str):
-                    total_tokens += len(encoding.encode(item.content))
+                    segments.append(item.content)
                 elif isinstance(item.content, list):
                     for part in item.content:
                         if hasattr(part, "text"):
-                            total_tokens += len(encoding.encode(part.text))
+                            segments.append(part.text)
             elif isinstance(item, OpenAIResponseCompaction):
-                total_tokens += len(encoding.encode(item.encrypted_content))
+                segments.append(item.encrypted_content)
             elif hasattr(item, "arguments"):
                 args = getattr(item, "arguments", "")
                 if args:
-                    total_tokens += len(encoding.encode(args))
+                    segments.append(args)
             elif hasattr(item, "output"):
                 output = getattr(item, "output", "")
                 if isinstance(output, str):
-                    total_tokens += len(encoding.encode(output))
-        return total_tokens
+                    segments.append(output)
+        return segments
+
+    def _count_with_encoding(self, encoding: tiktoken.Encoding, input: str | list[OpenAIResponseInput]) -> int:
+        if isinstance(input, str):
+            return len(encoding.encode(input))
+        return sum(len(encoding.encode(s)) for s in self._extract_text_segments(input))
 
     def _estimate_tokens_by_chars(self, input: str | list[OpenAIResponseInput]) -> int:
         if isinstance(input, str):
             return max(1, len(input) // 4)
-
-        total_chars = 0
-        for item in input:
-            if isinstance(item, OpenAIResponseMessage):
-                if isinstance(item.content, str):
-                    total_chars += len(item.content)
-                elif isinstance(item.content, list):
-                    for part in item.content:
-                        if hasattr(part, "text"):
-                            total_chars += len(part.text)
-            elif isinstance(item, OpenAIResponseCompaction):
-                total_chars += len(item.encrypted_content)
-            elif hasattr(item, "arguments"):
-                args = getattr(item, "arguments", "")
-                if args:
-                    total_chars += len(args)
-            elif hasattr(item, "output"):
-                output = getattr(item, "output", "")
-                if isinstance(output, str):
-                    total_chars += len(output)
+        total_chars = sum(len(s) for s in self._extract_text_segments(input))
         return max(1, total_chars // 4)
 
     async def _maybe_auto_compact(

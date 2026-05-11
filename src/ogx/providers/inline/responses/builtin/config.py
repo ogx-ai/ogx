@@ -6,7 +6,8 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+import tiktoken
+from pydantic import BaseModel, Field, field_validator
 
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.storage.datatypes import KVStoreReference, ResponsesStoreReference
@@ -77,6 +78,32 @@ class CompactionConfig(BaseModel):
             "Admins can extend this to support custom or fine-tuned models."
         ),
     )
+
+    @field_validator("tokenizer_encoding")
+    @classmethod
+    def validate_tokenizer_encoding(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                tiktoken.get_encoding(v)
+            except ValueError:
+                raise ValueError(
+                    f"Failed to resolve tokenizer_encoding '{v}'. "
+                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base')."
+                ) from None
+        return v
+
+    @field_validator("model_tokenizer_mappings")
+    @classmethod
+    def validate_model_tokenizer_mappings(cls, v: dict[str, str]) -> dict[str, str]:
+        for prefix, enc_name in v.items():
+            try:
+                tiktoken.get_encoding(enc_name)
+            except ValueError:
+                raise ValueError(
+                    f"Failed to resolve model_tokenizer_mappings['{prefix}'] = '{enc_name}'. "
+                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base')."
+                ) from None
+        return v
 
 
 class ResponsesPersistenceConfig(BaseModel):

@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import pytest
+from pydantic import ValidationError
 
 from ogx.providers.inline.responses.builtin.config import CompactionConfig
 from ogx.providers.inline.responses.builtin.responses.openai_responses import OpenAIResponsesImpl
@@ -25,6 +26,18 @@ class TestCompactionConfigDefaults:
         config = CompactionConfig(model_tokenizer_mappings={"mymodel": "o200k_base"})
         assert config.model_tokenizer_mappings == {"mymodel": "o200k_base"}
         assert "llama" not in config.model_tokenizer_mappings
+
+    def test_valid_tokenizer_encoding_accepted(self):
+        config = CompactionConfig(tokenizer_encoding="cl100k_base")
+        assert config.tokenizer_encoding == "cl100k_base"
+
+    def test_invalid_tokenizer_encoding_rejected_at_config(self):
+        with pytest.raises(ValidationError, match="tokenizer_encoding"):
+            CompactionConfig(tokenizer_encoding="not_a_real_encoding")
+
+    def test_invalid_model_tokenizer_mapping_rejected_at_config(self):
+        with pytest.raises(ValidationError, match="model_tokenizer_mappings"):
+            CompactionConfig(model_tokenizer_mappings={"mymodel": "not_a_real_encoding"})
 
 
 class TestResolveEncoding:
@@ -59,11 +72,6 @@ class TestResolveEncoding:
         assert encoding is not None
         assert encoding.name == "o200k_base"
 
-    def test_step2_admin_invalid_raises(self):
-        impl = self._make_impl(tokenizer_encoding="not_a_real_encoding")
-        with pytest.raises(InvalidParameterError, match="compaction_config.tokenizer_encoding"):
-            impl._resolve_encoding("some-model")
-
     def test_step3_tiktoken_builtin_openai_model(self):
         impl = self._make_impl()
         encoding = impl._resolve_encoding("gpt-4o")
@@ -96,6 +104,31 @@ class TestResolveEncoding:
         impl = self._make_impl(model_tokenizer_mappings={})
         encoding = impl._resolve_encoding("totally-unknown-model-xyz")
         assert encoding is None
+
+
+class TestExtractTextSegments:
+    """Tests for _extract_text_segments() — shared helper for text extraction."""
+
+    def test_extracts_message_content(self):
+        items = [OpenAIResponseMessage(role="user", content="hello world")]
+        segments = OpenAIResponsesImpl._extract_text_segments(items)
+        assert segments == ["hello world"]
+
+    def test_extracts_compaction_content(self):
+        items = [OpenAIResponseCompaction(type="compaction", encrypted_content="summary")]
+        segments = OpenAIResponsesImpl._extract_text_segments(items)
+        assert segments == ["summary"]
+
+    def test_extracts_mixed_items(self):
+        items = [
+            OpenAIResponseMessage(role="user", content="hello"),
+            OpenAIResponseCompaction(type="compaction", encrypted_content="summary"),
+        ]
+        segments = OpenAIResponsesImpl._extract_text_segments(items)
+        assert segments == ["hello", "summary"]
+
+    def test_empty_list_returns_empty(self):
+        assert OpenAIResponsesImpl._extract_text_segments([]) == []
 
 
 class TestCountTokens:
