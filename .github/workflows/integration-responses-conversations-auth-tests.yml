@@ -1,6 +1,6 @@
-name: Integration Responses & Conversations Auth Tests
+name: Integration Responses, Conversations & Prompts Auth Tests
 
-run-name: Run responses and conversations auth tests with Kubernetes authentication
+run-name: Run responses, conversations, and prompts auth tests with Kubernetes authentication
 
 on:
   push:
@@ -164,8 +164,8 @@ jobs:
                 table_name: openai_conversations
                 backend: sql_default
               prompts:
-                namespace: prompts
-                backend: kv_default
+                table_name: prompts
+                backend: sql_default
           models:
           - model_id: openai/gpt-4o
             model_type: llm
@@ -218,6 +218,16 @@ jobs:
                   when:
                     - user is owner
                   description: Users can access their own responses
+                - permit:
+                    actions: [create]
+                    resource: sql_record::prompts::*
+                  description: Any authenticated user can create prompts
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::prompts::*
+                  when:
+                    - user is owner
+                  description: Users can only access their own prompts
           EOF
           yq eval '.server.auth.provider_config.type = "${{ matrix.auth-provider }}"' -i "$run_dir/config.yaml"
           yq eval '.server.auth.provider_config.tls_cafile = "${{ env.KUBERNETES_CA_CERT_PATH }}"' -i "$run_dir/config.yaml"
