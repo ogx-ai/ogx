@@ -3,7 +3,7 @@ slug: consistent-agentic-api-layer
 title: "Every Protocol. Every Framework. Zero Code Changes."
 authors: [leseb]
 tags: [agentic, multi-sdk, sovereignty, architecture]
-date: 2026-05-12
+date: 2026-05-11
 ---
 
 Agents shouldn't change a line of code to run on your infrastructure.
