@@ -5805,9 +5805,16 @@ components:
       type: string
       enum:
       - assistants
+      - assistants_output
       - batch
+      - batch_output
+      - evals
+      - fine-tune
+      - fine-tune-results
+      - vision
+      - user_data
       title: OpenAIFilePurpose
-      description: Valid purpose values for OpenAI Files API.
+      description: Valid purpose values on the OpenAI File response object.
     ListOpenAIFileResponse:
       properties:
         data:
@@ -5863,10 +5870,9 @@ components:
           title: Created At
           description: The Unix timestamp (in seconds) for when the file was created.
         expires_at:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          description: The Unix timestamp (in seconds) for when the file expires.
+          type: integer
+          title: Expires At
+          description: The Unix timestamp (in seconds) for when the file will expire.
         filename:
           type: string
           title: Filename
@@ -5895,7 +5901,6 @@ components:
       - filename
       - purpose
       - status
-      - status_details
       title: OpenAIFileObject
       description: OpenAI File object as defined in the OpenAI Files API.
     ExpiresAfter:
@@ -10409,14 +10414,14 @@ components:
           title: File
           description: The file to upload.
         purpose:
-          $ref: '#/components/schemas/OpenAIFilePurpose'
+          $ref: '#/components/schemas/OpenAIFileUploadPurpose'
           description: The intended purpose of the uploaded file.
         expires_after:
           anyOf:
           - $ref: '#/components/schemas/ExpiresAfter'
             title: ExpiresAfter
           - type: 'null'
-          description: Optional expiration settings.
+          description: Optional expiration settings for the file.
           title: ExpiresAfter
       type: object
       required:
@@ -11518,6 +11523,17 @@ components:
       - usage
       title: OpenAICompactedResponse
       description: Response from compacting a conversation.
+    OpenAIFileUploadPurpose:
+      type: string
+      enum:
+      - assistants
+      - batch
+      - fine-tune
+      - vision
+      - user_data
+      - evals
+      title: OpenAIFileUploadPurpose
+      description: Valid purpose values for the OpenAI Files upload endpoint.
     OpenAIResponseCompaction:
       properties:
         type:
@@ -14423,7 +14439,7 @@ components:
       description: Request model for uploading a file.
       properties:
         purpose:
-          $ref: '#/components/schemas/OpenAIFilePurpose'
+          $ref: '#/components/schemas/OpenAIFileUploadPurpose'
           description: The intended purpose of the uploaded file.
         expires_after:
           anyOf:

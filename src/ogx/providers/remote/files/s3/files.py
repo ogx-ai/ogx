@@ -34,6 +34,7 @@ from ogx_api import (
 from ogx_api.files.models import (
     DeleteFileRequest,
     ListFilesRequest,
+    OpenAIFileUploadPurpose,
     RetrieveFileContentRequest,
     RetrieveFileRequest,
     UploadFileRequest,
@@ -230,7 +231,7 @@ class S3FilesImpl(Files):
         # we'll hide this fact from users when returning the file object.
         expires_at = created_at + ExpiresAfter.MAX * 42
         # the default for BATCH files is 30 days, which happens to be the expiration max.
-        if purpose == OpenAIFilePurpose.BATCH:
+        if purpose == OpenAIFileUploadPurpose.BATCH:
             expires_at = created_at + ExpiresAfter.MAX
 
         if expires_after is not None:
