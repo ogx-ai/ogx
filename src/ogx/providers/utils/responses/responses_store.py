@@ -6,8 +6,7 @@
 
 from ogx.core.datatypes import AccessRule
 from ogx.core.storage.datatypes import ResponsesStoreReference, SqlStoreReference
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx.log import get_logger
 from ogx_api import (
     InvalidParameterError,
@@ -127,8 +126,7 @@ class ResponsesStore:
 
     async def initialize(self):
         """Create the necessary tables if they don't exist."""
-        base_store = sqlstore_impl(self.reference)
-        self.sql_store = AuthorizedSqlStore(base_store, self.policy)
+        self.sql_store = authorized_sqlstore(self.reference, self.policy)
 
         await self.sql_store.create_table(
             self.reference.table_name,

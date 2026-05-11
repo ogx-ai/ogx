@@ -308,6 +308,26 @@ repos:
             }
             exit 0
 
+      - id: enforce-authorized-sqlstore
+        name: Enforce AuthorizedSqlStore usage
+        entry: bash
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+        files: ^src/
+        args:
+          - -c
+          - |
+            grep -rn --include="*.py" -E 'sqlstore_impl' src/ \
+              | grep -v 'core/storage/sqlstore/' && {
+              echo;
+              echo "❌ Direct sqlstore_impl usage is not allowed outside core/storage/sqlstore/.";
+              echo "Use authorized_sqlstore() from ogx.core.storage.sqlstore.authorized_sqlstore instead.";
+              echo;
+              exit 1;
+            } || true
+
       - id: check-file-size
         name: Check Python file size limit
         entry: python scripts/check_file_size.py
