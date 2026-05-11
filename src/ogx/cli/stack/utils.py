@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import argparse
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -16,13 +15,6 @@ from ogx.core.utils.dynamic import instantiate_class_type
 from ogx_api import Api
 
 TEMPLATES_PATH = Path(__file__).parent.parent.parent / "distributions"
-
-
-class ImageType(Enum):
-    """Supported image types for building OGX distributions."""
-
-    CONTAINER = "container"
-    VENV = "venv"
 
 
 def print_subcommand_description(parser: argparse.ArgumentParser, subparsers: argparse._SubParsersAction[Any]) -> None:
