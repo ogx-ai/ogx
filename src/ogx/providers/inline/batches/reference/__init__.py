@@ -7,8 +7,7 @@
 from typing import Any
 
 from ogx.core.datatypes import AccessRule, Api
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx_api import Files, Inference, Models
 
 from .batches import ReferenceBatchesImpl
@@ -18,8 +17,7 @@ __all__ = ["ReferenceBatchesImpl", "ReferenceBatchesImplConfig"]
 
 
 async def get_provider_impl(config: ReferenceBatchesImplConfig, deps: dict[Api, Any], policy: list[AccessRule]):
-    base_sql_store = sqlstore_impl(config.sqlstore)
-    sql_store = AuthorizedSqlStore(base_sql_store, policy)
+    sql_store = authorized_sqlstore(config.sqlstore, policy)
     inference_api: Inference | None = deps.get(Api.inference)
     files_api: Files | None = deps.get(Api.files)
     models_api: Models | None = deps.get(Api.models)

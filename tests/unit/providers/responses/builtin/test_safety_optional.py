@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from ogx.core.datatypes import Api
-from ogx.core.storage.datatypes import KVStoreReference, ResponsesStoreReference
+from ogx.core.storage.datatypes import ResponsesStoreReference
 from ogx.providers.inline.responses.builtin import get_provider_impl
 from ogx.providers.inline.responses.builtin.config import (
     BuiltinResponsesImplConfig,
@@ -32,10 +32,6 @@ from ogx.providers.inline.responses.builtin.responses.utils import (
 def mock_persistence_config():
     """Create a mock persistence configuration."""
     return ResponsesPersistenceConfig(
-        agent_state=KVStoreReference(
-            backend="kv_default",
-            namespace="agents",
-        ),
         responses=ResponsesStoreReference(
             backend="sql_default",
             table_name="responses",

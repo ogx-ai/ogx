@@ -15,9 +15,6 @@ Meta's reference implementation of an agent system that can use tools, access ve
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `persistence` | `ResponsesPersistenceConfig` | No |  |  |
-| `persistence.agent_state` | `KVStoreReference` | No |  |  |
-| `persistence.agent_state.namespace` | `str` | No |  | Key prefix for KVStore backends |
-| `persistence.agent_state.backend` | `str` | No |  | Name of backend from storage.backends |
 | `persistence.responses` | `ResponsesStoreReference` | No |  |  |
 | `persistence.responses.table_name` | `str` | No | openai_responses | Name of the table to use for storing OpenAI responses |
 | `persistence.responses.backend` | `str` | No |  | Name of backend from storage.backends |
@@ -98,9 +95,6 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 
 ```yaml
 persistence:
-  agent_state:
-    namespace: agents
-    backend: kv_default
   responses:
     table_name: responses
     backend: sql_default

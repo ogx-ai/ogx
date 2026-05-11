@@ -18,8 +18,7 @@ if TYPE_CHECKING:
 from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import AccessRule
 from ogx.core.id_generation import generate_object_id
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, authorized_sqlstore
 from ogx.providers.utils.files.sanitize import sanitize_content_disposition_filename
 from ogx_api import (
     ExpiresAfter,
@@ -185,7 +184,7 @@ class S3FilesImpl(Files):
         self._client = _create_s3_client(self._config)
         await _create_bucket_if_not_exists(self._client, self._config)
 
-        self._sql_store = AuthorizedSqlStore(sqlstore_impl(self._config.metadata_store), self.policy)
+        self._sql_store = authorized_sqlstore(self._config.metadata_store, self.policy)
         await self._sql_store.create_table(
             "openai_files",
             {
