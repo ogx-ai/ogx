@@ -16,9 +16,11 @@ constraint-dependencies = [
     "h11>=0.16.0",
     "litellm<1.83.7",                   # >=1.83.7 pins pydantic==2.12.5 which breaks int coercion in openai model recordings
     "pydantic>=2.11.9,<2.12.0",        # 2.12 breaks int coercion in openai.types.model.Model during test replay
+    "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
     "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
+    "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
     "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
-    "python-multipart>=0.0.22",
+    "python-multipart>=0.0.27",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
     "python-socketio>=5.14.0",         # CVE-2025-61765: RCE via pickle deserialization
     "starlette>=0.49.1",
     "tornado>=6.5.5",
