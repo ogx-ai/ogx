@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import heapq
 import json
 import re
@@ -748,6 +749,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         self.config = config
         self.pool = None
         self._pool_initialized = False
+        self._pool_lock = asyncio.Lock()
         self.cache = {}
         self.vector_store_table = None
         self.metadata_collection_name = "openai_vector_stores_metadata"
@@ -768,53 +770,58 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
 
     async def _ensure_pool(self) -> asyncpg.Pool:
         """Create pool lazily on first use to bind to the current event loop."""
-        if self.pool is not None:
-            try:
-                # Verify pool is usable in current event loop
-                async with self.pool.acquire() as conn:
-                    await conn.fetchval("SELECT 1")
-                return self.pool
-            except Exception:
-                log.warning("Recreating connection pool — previous pool is not usable in current event loop")
+        async with self._pool_lock:
+            if self.pool is not None:
                 try:
-                    await self.pool.close()
+                    async with self.pool.acquire() as conn:
+                        await conn.fetchval("SELECT 1")
+                    return self.pool
                 except Exception:
-                    log.debug("Failed to close stale connection pool during recreation")
-                self.pool = None
-                self._pool_initialized = False
+                    log.warning("Recreating connection pool — previous pool is not usable in current event loop")
+                    try:
+                        await self.pool.close()
+                    except Exception:
+                        log.debug("Failed to close stale connection pool during recreation")
+                    self.pool = None
+                    self._pool_initialized = False
 
-        self.pool = await asyncpg.create_pool(
-            host=self.config.host,
-            port=self.config.port,
-            database=self.config.db,
-            user=self.config.user,
-            password=self.config.password,
-            min_size=self.config.pool_min_size,
-            max_size=self.config.pool_max_size,
-            statement_cache_size=self.config.statement_cache_size,
-            init=self._init_connection,
-            reset=self._reset_connection,
-        )
+            pool = await asyncpg.create_pool(
+                host=self.config.host,
+                port=self.config.port,
+                database=self.config.db,
+                user=self.config.user,
+                password=self.config.password,
+                min_size=self.config.pool_min_size,
+                max_size=self.config.pool_max_size,
+                statement_cache_size=self.config.statement_cache_size,
+                init=self._init_connection,
+                reset=self._reset_connection,
+            )
 
-        if not self._pool_initialized:
-            async with self.pool.acquire() as conn:
-                version = await check_extension_version(conn)
-                if version:
-                    log.info("Vector extension version", version=version)
-                else:
-                    await create_vector_extension(conn)
+            try:
+                if not self._pool_initialized:
+                    async with pool.acquire() as conn:
+                        version = await check_extension_version(conn)
+                        if version:
+                            log.info("Vector extension version", version=version)
+                        else:
+                            await create_vector_extension(conn)
 
-                await conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS metadata_store (
-                        key TEXT PRIMARY KEY,
-                        data JSONB
-                    )
-                    """
-                )
-            self._pool_initialized = True
+                        await conn.execute(
+                            """
+                            CREATE TABLE IF NOT EXISTS metadata_store (
+                                key TEXT PRIMARY KEY,
+                                data JSONB
+                            )
+                            """
+                        )
+                    self._pool_initialized = True
+            except Exception:
+                await pool.close()
+                raise
 
-        return self.pool
+            self.pool = pool
+            return self.pool
 
     async def initialize(self) -> None:
         safe_config = {**self.config.model_dump(exclude={"password"}), "password": "******"}
@@ -834,23 +841,27 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
             log.exception("Could not connect to PGVector database server")
             raise RuntimeError("Could not connect to PGVector database server") from e
 
-        # Load existing vector stores from KV store into cache
-        start_key = VECTOR_DBS_PREFIX
-        end_key = f"{VECTOR_DBS_PREFIX}\xff"
-        stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
-        for vector_store_data in stored_vector_stores:
-            vector_store = VectorStore.model_validate_json(vector_store_data)
-            pgvector_index = PGVectorIndex(
-                vector_store=vector_store,
-                dimension=vector_store.embedding_dimension,
-                pool=pool,
-                kvstore=self.kvstore,
-                distance_metric=self.config.distance_metric,
-                vector_index=self.config.vector_index,
-            )
-            await pgvector_index.initialize()
-            index = VectorStoreWithIndex(vector_store, index=pgvector_index, inference_api=self.inference_api)
-            self.cache[vector_store.identifier] = index
+        try:
+            # Load existing vector stores from KV store into cache
+            start_key = VECTOR_DBS_PREFIX
+            end_key = f"{VECTOR_DBS_PREFIX}\xff"
+            stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
+            for vector_store_data in stored_vector_stores:
+                vector_store = VectorStore.model_validate_json(vector_store_data)
+                pgvector_index = PGVectorIndex(
+                    vector_store=vector_store,
+                    dimension=vector_store.embedding_dimension,
+                    pool=pool,
+                    kvstore=self.kvstore,
+                    distance_metric=self.config.distance_metric,
+                    vector_index=self.config.vector_index,
+                )
+                await pgvector_index.initialize()
+                index = VectorStoreWithIndex(vector_store, index=pgvector_index, inference_api=self.inference_api)
+                self.cache[vector_store.identifier] = index
+        except Exception:
+            await self.shutdown()
+            raise
 
     async def shutdown(self) -> None:
         if self.pool is not None:
