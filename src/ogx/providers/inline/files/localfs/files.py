@@ -188,7 +188,7 @@ class LocalfsFilesImpl(Files):
         return OpenAIFileObject(
             id=file_id,
             filename=sanitized_name,
-            purpose=purpose,
+            purpose=OpenAIFilePurpose(purpose.value),
             bytes=file_size,
             created_at=created_at,
             expires_at=expires_at,

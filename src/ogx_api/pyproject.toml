@@ -4,6 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv]
 required-version = ">=0.7.0"
+constraint-dependencies = [
+    "protobuf>=6.33.5",                # CVE-2026-0994: JSON recursion depth bypass
+    "requests>=2.33.0",                # CVE-2026-25645: insecure temp file reuse in extract_zipped_paths()
+    "urllib3>=2.6.3",                   # CVE-2026-21441 + CVE-2025-66471 + CVE-2025-66418: decompression bomb, streaming, chain bypass
+]
 
 [project]
 name = "ogx-api"

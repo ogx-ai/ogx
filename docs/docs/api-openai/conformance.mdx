@@ -18,12 +18,12 @@ This documentation is auto-generated from the OpenAI API specification compariso
 
 | Metric | Value |
 |--------|-------|
-| **Overall Conformance Score** | 92.0% |
+| **Overall Conformance Score** | 92.2% |
 | **Endpoints Implemented** | 30/146 |
 | **Total Properties Checked** | 3487 |
-| **Schema/Type Issues** | 180 |
+| **Schema/Type Issues** | 173 |
 | **Missing Properties** | 98 |
-| **Total Issues to Fix** | 278 |
+| **Total Issues to Fix** | 271 |
 
 ## Integration Test Coverage
 
@@ -47,10 +47,10 @@ Categories are sorted by conformance score (lowest first, needing most attention
 | Moderations | 17.0% | 53 | 5 | 39 |
 | Batch | 39.9% | 168 | 60 | 41 |
 | Completions | 58.7% | 46 | 17 | 2 |
-| Files | 76.2% | 42 | 8 | 2 |
 | Embeddings | 78.6% | 14 | 3 | 0 |
 | Vector stores | 82.9% | 310 | 41 | 12 |
 | Responses | 88.9% | 225 | 25 | 0 |
+| Files | 92.9% | 42 | 1 | 2 |
 | Models | 93.3% | 15 | 1 | 0 |
 | Chat | 98.7% | 449 | 5 | 1 |
 | Conversations | 99.3% | 2165 | 15 | 1 |
@@ -500,60 +500,6 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 
 </details>
 
-### Files
-
-**Score:** 76.2% · **Issues:** 8 · **Missing:** 2
-
-#### `/files`
-
-**GET**
-
-<details>
-<summary>Schema Issues (2)</summary>
-
-| Property | Issues |
-|----------|--------|
-| `responses.200.content.application/json.properties.data.items.properties.expires_at` | Type removed: ['integer']; Nullable added (OpenAI non-nullable); Union variants added: 2 |
-| `responses.200.content.application/json.properties.data.items.properties.purpose` | Enum values removed: ['assistants_output', 'batch_output', 'fine-tune', 'fine-tune-results', 'vision', 'user_data'] |
-
-</details>
-
-**POST**
-
-<details>
-<summary>Missing Properties (2)</summary>
-
-- `requestBody.content.multipart/form-data.properties.expires_after.properties.anchor`
-- `requestBody.content.multipart/form-data.properties.expires_after.properties.seconds`
-
-</details>
-
-<details>
-<summary>Schema Issues (4)</summary>
-
-| Property | Issues |
-|----------|--------|
-| `requestBody.content.multipart/form-data.properties.expires_after` | Type removed: ['object']; Union variants added: 2 |
-| `requestBody.content.multipart/form-data.properties.purpose` | Enum values removed: ['fine-tune', 'vision', 'user_data', 'evals'] |
-| `responses.200.content.application/json.properties.expires_at` | Type removed: ['integer']; Nullable added (OpenAI non-nullable); Union variants added: 2 |
-| `responses.200.content.application/json.properties.purpose` | Enum values removed: ['assistants_output', 'batch_output', 'fine-tune', 'fine-tune-results', 'vision', 'user_data'] |
-
-</details>
-
-#### `/files/{file_id}`
-
-**GET**
-
-<details>
-<summary>Schema Issues (2)</summary>
-
-| Property | Issues |
-|----------|--------|
-| `responses.200.content.application/json.properties.expires_at` | Type removed: ['integer']; Nullable added (OpenAI non-nullable); Union variants added: 2 |
-| `responses.200.content.application/json.properties.purpose` | Enum values removed: ['assistants_output', 'batch_output', 'fine-tune', 'fine-tune-results', 'vision', 'user_data'] |
-
-</details>
-
 ### Embeddings
 
 **Score:** 78.6% · **Issues:** 3 · **Missing:** 0
@@ -834,6 +780,31 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 | `requestBody.content.application/json.properties.input` | Union variants added: 2; Union variants removed: 1 | Yes |
 | `requestBody.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 3 | Yes |
 | `responses.200.content.application/json.properties.output.items` | Union variants added: 4 | Yes |
+
+</details>
+
+### Files
+
+**Score:** 92.9% · **Issues:** 1 · **Missing:** 2
+
+#### `/files`
+
+**POST**
+
+<details>
+<summary>Missing Properties (2)</summary>
+
+- `requestBody.content.multipart/form-data.properties.expires_after.properties.anchor`
+- `requestBody.content.multipart/form-data.properties.expires_after.properties.seconds`
+
+</details>
+
+<details>
+<summary>Schema Issues (1)</summary>
+
+| Property | Issues |
+|----------|--------|
+| `requestBody.content.multipart/form-data.properties.expires_after` | Type removed: ['object']; Union variants added: 2 |
 
 </details>
 

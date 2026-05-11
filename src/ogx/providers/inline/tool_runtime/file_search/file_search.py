@@ -26,7 +26,7 @@ from ogx_api import (
     InterleavedContentItem,
     ListToolDefsResponse,
     OpenAIAttachFileRequest,
-    OpenAIFilePurpose,
+    OpenAIFileUploadPurpose,
     QueryChunksRequest,
     QueryChunksResponse,
     RAGDocument,
@@ -153,7 +153,7 @@ class FileSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime):
 
                 try:
                     created_file = await self.files_api.openai_upload_file(
-                        request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
+                        request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS),
                         file=upload_file,
                     )
                 except Exception as e:

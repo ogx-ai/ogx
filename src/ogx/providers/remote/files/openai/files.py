@@ -29,6 +29,7 @@ from ogx_api import (
     RetrieveFileRequest,
     UploadFileRequest,
 )
+from ogx_api.files.models import OpenAIFileUploadPurpose
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 from openai import OpenAI
 
@@ -152,7 +153,7 @@ class OpenAIFilesImpl(Files):
         created_at = self._now()
 
         expires_at = created_at + ExpiresAfter.MAX * 42
-        if purpose == OpenAIFilePurpose.BATCH:
+        if purpose == OpenAIFileUploadPurpose.BATCH:
             expires_at = created_at + ExpiresAfter.MAX
 
         if expires_after is not None:
