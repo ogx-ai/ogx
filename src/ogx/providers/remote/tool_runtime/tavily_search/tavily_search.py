@@ -78,7 +78,7 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.post(
                 "https://api.tavily.com/search",
                 json={"api_key": api_key, "query": kwargs["query"]},

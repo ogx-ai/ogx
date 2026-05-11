@@ -91,6 +91,7 @@ from .common.content_types import (
     _URLOrData,
 )
 from .common.errors import (
+    AuthServiceUnavailableError,
     BatchNotFoundError,
     ConflictError,
     ConnectorNotFoundError,
@@ -562,6 +563,7 @@ __all__ = [
     "Api",
     "ApiFilter",
     "ApprovalFilter",
+    "AuthServiceUnavailableError",
     "Batches",
     "BatchNotFoundError",
     "BatchObject",

@@ -6,10 +6,10 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 
 
-class BingSearchToolConfig(BaseModel):
+class BingSearchToolConfig(BaseToolRuntimeConfig):
     """Configuration for Bing Search Tool Runtime"""
 
     api_key: str | None = None

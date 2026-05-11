@@ -376,12 +376,12 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     nohup ogx stack run $stack_config >server.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
-    for i in {1..30}; do
+    for i in {1..60}; do
         if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
             echo "✅ OGX Server started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
+        if [[ $i -eq 60 ]]; then
             echo "❌ OGX Server failed to start"
             echo "Server logs:"
             cat server.log
@@ -544,12 +544,12 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
         --port $OGX_PORT
 
     echo "Waiting for Docker container to start..."
-    for i in {1..30}; do
+    for i in {1..60}; do
         if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
             echo "✅ Docker container started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
+        if [[ $i -eq 60 ]]; then
             echo "❌ Docker container failed to start"
             echo "Container logs:"
             docker logs "$container_name"

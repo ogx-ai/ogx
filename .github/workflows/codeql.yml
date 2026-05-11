@@ -4,9 +4,9 @@ on:
   pull_request:
     # PRs are checked for new issues
     branches: [ "main" ]
-    # Limit scans to changes in the .github directory, bash scripts are not scanned anyway
     paths:
       - '.github/**'
+      - 'src/**'
 
 jobs:
   analyze:
@@ -15,10 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # actions is the most specific language option for
-        # codeql does NOT support Bash
-        # In case javascript is used in workflows, that should be added or replace
-        language: [ 'actions' ]
+        language: [ 'actions', 'python' ]
 
     steps:
     - name: Checkout repository

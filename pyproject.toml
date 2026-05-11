@@ -8,7 +8,23 @@ fallback_version = "0.8.1.dev0"
 [tool.uv]
 required-version = ">=0.7.0"
 constraint-dependencies = [
-    "pyasn1>=0.6.3",  # CVE-2026-30922: DoS via unbounded recursion
+    "aiohttp>=3.13.4",                # CVE-2026-34514 + 9 more: CRLF injection, header leak, DoS
+    "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
+    "cryptography>=46.0.7",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
+    "fonttools>=4.60.2",
+    "gitpython>=3.1.47",               # Command injection via Git options bypass
+    "h11>=0.16.0",
+    "litellm<1.83.7",                   # >=1.83.7 pins pydantic==2.12.5 which breaks int coercion in openai model recordings
+    "pydantic>=2.11.9,<2.12.0",        # 2.12 breaks int coercion in openai.types.model.Model during test replay
+    "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
+    "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
+    "python-multipart>=0.0.22",
+    "python-socketio>=5.14.0",         # CVE-2025-61765: RCE via pickle deserialization
+    "starlette>=0.49.1",
+    "tornado>=6.5.5",
+    "urllib3>=2.6.3",
+    "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
+    "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
 
 [project]
@@ -31,15 +47,12 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",
-    "aiohttp>=3.13.3",
     "fastapi>=0.115.0,<1.0",                          # server
-    "fire",                                           # for MCP in LLS client
     "httpx",
     "jinja2>=3.1.6",
     "jsonschema",
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
     "openai>=2.30.0",
-    "prompt-toolkit",
     "python-dotenv",
     "pyjwt[crypto]>=2.12.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
     "pydantic>=2.11.9",
@@ -47,8 +60,6 @@ dependencies = [
     "structlog>=24.1.0",
     "termcolor",
     "tiktoken",
-    "h11>=0.16.0",
-    "python-multipart>=0.0.22",                       # For fastapi Form
     "uvicorn>=0.34.0",                                # server
     "opentelemetry-sdk>=1.30.0",                      # server
     "opentelemetry-exporter-otlp-proto-http>=1.30.0", # server
@@ -56,13 +67,6 @@ dependencies = [
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "starlette>=0.49.1",
-    "psycopg2-binary",
-    "tornado>=6.5.5",
-    "urllib3>=2.6.3",
-    "oracledb>=3.4.1",
-    "oci>=2.165.0",
-    "numpy>=2.3.2",
     "mcp>=1.23.0",                                    # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
 ]
@@ -88,9 +92,7 @@ starter = [
     "fastapi",
     "fire",
     "fireworks-ai<=0.17.16",
-    "fonttools>=4.60.2",
     "google-genai>=1.69.0",
-    "h11>=0.16.0",
     "httpx",
     "langdetect",
     "matplotlib",
@@ -106,7 +108,7 @@ starter = [
     "pymilvus[milvus-lite]>=2.4.10",
     "pymongo",
     "markitdown[all]",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "pythainlp",
     "qdrant-client",
     "redis",
@@ -146,7 +148,7 @@ dev = [
     "ollama",
     "ogx-client>=0.8.0",
     "chardet",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "together",
     "boto3",
     "anthropic",
@@ -160,7 +162,7 @@ type_checking = [
     "types-setuptools",
     "types-jsonschema",
     "markitdown[all]",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "pandas-stubs",
     "types-psutil",
     "types-tqdm",
@@ -200,7 +202,7 @@ unit = [
     "aiohttp",
     "psycopg2-binary>=2.9.0",
     "markitdown[all]",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "mcp>=1.23.0",
     "chardet",
     "sqlalchemy",
@@ -223,7 +225,7 @@ test = [
     "torchvision>=0.21.0",
     "chardet",
     "psycopg2-binary>=2.9.0",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "mcp>=1.23.0",
     "datasets>=4.0.0",
     "autoevals",
@@ -312,6 +314,7 @@ select = [
     "F",       # Pyflakes
     "N",       # Naming
     "W",       # Warnings
+    "S",       # flake8-bandit (security)
     "DTZ",     # datetime rules
     "I",       # isort (imports order)
     "RUF001",  # Checks for ambiguous Unicode characters in strings
@@ -336,6 +339,9 @@ ignore = [
 
     # These are the additional ones we started ignoring after moving to ruff. We should look into each one of them later.
     "C901", # Complexity of the function is too high
+
+    # Security rules: assert is used extensively as an internal invariant pattern
+    "S101", # Use of assert detected
 ]
 unfixable = [
     "PLE2515",
@@ -347,10 +353,10 @@ convention = "google"
 # Ignore the following errors for the following files
 # TODO: Fix in follow up PRs
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["DTZ", "D101"] # Ignore datetime and docstring rules for tests
-"benchmarking/**/*.py" = ["D101"] # Ignore docstring rules for benchmarking scripts
-"client-sdks/**/*.py" = ["D101"] # Ignore docstring rules for client SDKs
-"scripts/**/*.py" = ["D101"] # Ignore docstring rules for scripts
+"tests/**/*.py" = ["DTZ", "D101", "S104", "S105", "S106", "S108", "S110", "S310", "S311", "S603", "S607", "S608"] # Ignore datetime, docstring, and security false positives for tests
+"benchmarking/**/*.py" = ["D101", "S104", "S110", "S311"] # Ignore docstring and security rules for benchmarking scripts
+"client-sdks/**/*.py" = ["D101", "S110", "S112", "S113"] # Ignore docstring and security rules for client SDKs
+"scripts/**/*.py" = ["D101", "S110", "S112", "S603", "S607"] # Ignore docstring and security rules for scripts
 "src/ogx/providers/inline/scoring/basic/utils/ifeval_support.py" = [
     "RUF001",
 ]
@@ -370,6 +376,22 @@ convention = "google"
 "src/ogx/apis/**/__init__.py" = [
     "F403",
 ] # Using import * is acceptable (or at least tolerated) in an __init__.py of a package API
+# Security rule suppressions for known false positives
+"src/ogx/core/datatypes.py" = ["S105"] # Enum values like OAUTH2_TOKEN are not hardcoded secrets
+"src/ogx/distributions/**/*.py" = ["S106"] # Env var template defaults (e.g. ${env.PGVECTOR_PASSWORD:=})
+"src/ogx/providers/remote/**/config.py" = ["S107"] # Env var template defaults in provider configs
+"src/ogx/providers/remote/inference/oci/auth.py" = ["S106"] # pass_phrase="none" placeholder
+"src/ogx/cli/**/*.py" = ["S603", "S607"] # CLI tools legitimately invoke subprocesses
+"src/ogx/core/utils/exec.py" = ["S603"] # Command execution utility
+"src/ogx/core/storage/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
+"src/ogx/providers/**/vector_io/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
+"src/ogx/core/routers/safety.py" = ["S608"] # Error message formatting, not SQL
+"src/ogx/core/library_client.py" = ["S112"] # Intentional try-except-continue for type coercion
+"src/ogx/core/routers/tool_runtime.py" = ["S110"] # Intentional try-except-pass for optional metric context
+"src/ogx/core/routing_tables/models.py" = ["S112"] # Intentional try-except-continue for credential probing
+"src/ogx/providers/inline/messages/impl.py" = ["S110"] # Intentional try-except-pass for optional model lookup
+"src/ogx/providers/utils/memory/openai_vector_store_mixin.py" = ["S112", "S311"] # Intentional retry logic
+"src/ogx/testing/api_recorder.py" = ["S110", "S310"] # Test infrastructure
 
 [tool.mypy]
 mypy_path = ["src"]

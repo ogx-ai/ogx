@@ -1,23 +1,46 @@
 name: Setup Ollama
-description: Start Ollama
+description: Start Ollama and pull required models
 inputs:
   suite:
     description: 'Test suite to use: base, responses, vision, etc.'
     required: false
     default: ''
+  setup:
+    description: 'Setup name (ollama, ollama-vision, ollama-reasoning, etc.)'
+    required: false
+    default: 'ollama'
 runs:
   using: "composite"
   steps:
     - name: Start Ollama
       shell: bash
       run: |
-        if [ "${{ inputs.suite }}" == "vision" ]; then
-          image="ollama-with-vision-model"
-        else
-          image="ollama-with-models"
-        fi
-
-        echo "Starting Ollama with image: $image"
-        docker run -d --name ollama -p 11434:11434 docker.io/ogx/$image
+        echo "Starting Ollama server..."
+        docker run -d --name ollama -p 11434:11434 ollama/ollama
         echo "Verifying Ollama status..."
         timeout 30 bash -c 'while ! curl -s -L http://127.0.0.1:11434; do sleep 1 && echo "."; done'
+        echo "Ollama is ready"
+
+    - name: Pull models
+      shell: bash
+      env:
+        SETUP: ${{ inputs.setup }}
+        SUITE: ${{ inputs.suite }}
+      run: |
+        pull_model() {
+          echo "Pulling $1..."
+          docker exec ollama ollama pull "$1"
+        }
+
+        if [ "$SUITE" == "vision" ]; then
+          pull_model "llama3.2-vision:11b"
+          pull_model "nomic-embed-text:v1.5"
+        elif [ "$SETUP" == "ollama-reasoning" ]; then
+          pull_model "deepseek-r1:1.5b"
+        else
+          pull_model "llama3.2:3b-instruct-fp16"
+          pull_model "nomic-embed-text:v1.5"
+          pull_model "llama-guard3:1b"
+        fi
+
+        echo "All models pulled successfully"

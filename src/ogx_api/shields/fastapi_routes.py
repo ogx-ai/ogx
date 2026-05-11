@@ -54,6 +54,7 @@ def create_router(impl: Shields) -> APIRouter:
         responses={
             200: {"description": "A ListShieldsResponse."},
         },
+        deprecated=True,
     )
     async def list_shields() -> ListShieldsResponse:
         return await impl.list_shields()
@@ -66,6 +67,7 @@ def create_router(impl: Shields) -> APIRouter:
         responses={
             200: {"description": "A Shield."},
         },
+        deprecated=True,
     )
     async def get_shield(
         request: Annotated[GetShieldRequest, Depends(get_get_shield_request)],

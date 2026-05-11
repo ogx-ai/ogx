@@ -263,6 +263,15 @@ class TokenValidationError(OGXError):
         super().__init__(message)
 
 
+class AuthServiceUnavailableError(OGXError):
+    """raised when the authentication infrastructure is unreachable"""
+
+    status_code: httpx.codes = httpx.codes.SERVICE_UNAVAILABLE
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class InvalidParameterError(ValueError, OGXError):
     """Raised when a request parameter violates validation constraints.
 

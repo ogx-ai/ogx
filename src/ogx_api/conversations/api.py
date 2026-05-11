@@ -11,7 +11,6 @@ from .models import (
     Conversation,
     ConversationDeletedResource,
     ConversationItem,
-    ConversationItemDeletedResource,
     ConversationItemList,
     CreateConversationRequest,
     DeleteConversationRequest,
@@ -41,4 +40,4 @@ class Conversations(Protocol):
 
     async def list_items(self, request: ListItemsRequest) -> ConversationItemList: ...
 
-    async def openai_delete_conversation_item(self, request: DeleteItemRequest) -> ConversationItemDeletedResource: ...
+    async def openai_delete_conversation_item(self, request: DeleteItemRequest) -> Conversation: ...

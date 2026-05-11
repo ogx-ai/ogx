@@ -72,6 +72,15 @@ The leveling introduced in this document relates to the stability of the API and
 
 Providers can iterate as much as they want on functionality as long as they work within the bounds of an API. If they need to change the API, then the API should not be `/v1`, or those breaking changes can only happen on a y-stream release basis.
 
+### Public surfaces of the `ogx-api` package
+
+The [`ogx-api`](https://pypi.org/project/ogx-api/) Python package — consumed by external/out-of-tree providers and SDK code generation — exposes two distinct public surfaces, each with its own stability rules:
+
+- **`ogx_api.provider`** — the Provider SDK: `Api` enum, `ProviderSpec` family, protocol classes (`Inference`, `Responses`, `VectorIO`, …), schema utilities, `Resource` base classes, version constants, validators. Levelled as a single cohesive contract; currently `v1`-stable. Removals or signature changes require a major version bump of `ogx-api`.
+- **`ogx_api.types`** — API datatypes: request/response Pydantic models, content blocks, errors, value types. Each datatype's level is inherited from the highest-stability route that references it (a type used by any `/v1` route is `v1`-stable).
+
+Top-level imports (`from ogx_api import X`) remain supported for backwards compatibility and resolve to the same objects as the namespaced imports. New code should prefer the explicit namespace path to make the contract boundary obvious. Sub-module imports (`from ogx_api.responses import ...`) remain unsupported and are not covered by this policy.
+
 ### Approval and Announcement Process for Breaking Changes
 
 - **PR Labeling**: Any pull request that introduces a breaking API change must be clearly labeled with `breaking-change`.
