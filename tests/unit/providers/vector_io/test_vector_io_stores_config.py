@@ -475,7 +475,9 @@ async def test_adapter_initialize_cleans_up_pool_on_index_failure():
     adapter = _make_pgvector_adapter()
     pool, mock_conn = _make_mock_asyncpg_pool()
 
-    with patch("ogx.providers.remote.vector_io.pgvector.pgvector.kvstore_impl", new_callable=AsyncMock) as mock_kvstore_impl:
+    with patch(
+        "ogx.providers.remote.vector_io.pgvector.pgvector.kvstore_impl", new_callable=AsyncMock
+    ) as mock_kvstore_impl:
         mock_kvstore = AsyncMock()
         mock_kvstore.values_in_range = AsyncMock(
             return_value=['{"identifier":"vs1","embedding_model":"m","embedding_dimension":768,"provider_id":"p"}']

@@ -582,6 +582,8 @@ class PGVectorIndex(EmbeddingIndex):
             index_operator_class = self.get_pgvector_index_operator_class()
             index_name = _quote_ident(f"{self.table_name}_hnsw_idx")
 
+            # Create HNSW (Hierarchical Navigable Small Worlds) index on embedding column to allow efficient and performant vector search in pgvector
+            # HNSW finds the approximate nearest neighbors by only calculating distance metric for vectors it visits during graph traversal instead of processing all vectors
             await conn.execute(
                 f"""
                 CREATE INDEX IF NOT EXISTS {index_name}
@@ -623,6 +625,9 @@ class PGVectorIndex(EmbeddingIndex):
             index_operator_class = self.get_pgvector_index_operator_class()
             index_name = _quote_ident(f"{self.table_name}_ivfflat_idx")
 
+            # Create Inverted File with Flat Compression (IVFFlat) index on embedding column to allow efficient and performant vector search in pgvector
+            # IVFFlat index divides vectors into lists, and then searches a subset of those lists that are closest to the query vector
+            # Index should be created only after the table has some data (https://github.com/pgvector/pgvector?tab=readme-ov-file#ivfflat)
             await conn.execute(
                 f"""
                 CREATE INDEX IF NOT EXISTS {index_name}
