@@ -6,6 +6,8 @@
 
 from typing import Protocol, runtime_checkable
 
+from ogx_api.connectors.api import Connectors
+
 from .models import (
     HealthInfo,
     InspectProviderRequest,
@@ -18,7 +20,7 @@ from .models import (
 
 
 @runtime_checkable
-class Admin(Protocol):
+class Admin(Connectors, Protocol):
     """Admin
 
     Admin API for stack operations only available to administrative users.
