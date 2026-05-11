@@ -104,9 +104,11 @@ jobs:
           DEP_NAME=$(jq -r '.dep_name' constraint-update/change-info.json)
           DEP_VERSION=$(jq -r '.dep_version' constraint-update/change-info.json)
 
-          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
-          echo "dep_name=$DEP_NAME" >> "$GITHUB_OUTPUT"
-          echo "dep_version=$DEP_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "changed=$CHANGED"
+            echo "dep_name=$DEP_NAME"
+            echo "dep_version=$DEP_VERSION"
+          } >> "$GITHUB_OUTPUT"
 
           if [ "$CHANGED" != "true" ]; then
             echo "No constraint changes to commit"

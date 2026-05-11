@@ -61,9 +61,11 @@ jobs:
             exit 0
           fi
 
-          echo "dep_name=$dep_name" >> "$GITHUB_OUTPUT"
-          echo "dep_version=$dep_version" >> "$GITHUB_OUTPUT"
-          echo "skip=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "dep_name=$dep_name"
+            echo "dep_version=$dep_version"
+            echo "skip=false"
+          } >> "$GITHUB_OUTPUT"
           echo "Parsed: $dep_name $dep_version"
 
       - name: Update constraint-dependencies in pyproject.toml
