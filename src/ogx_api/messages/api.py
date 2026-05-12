@@ -13,10 +13,14 @@ from .models import (
     AnthropicCreateMessageRequest,
     AnthropicMessageResponse,
     AnthropicStreamEvent,
+    CancelMessageBatchRequest,
     CreateMessageBatchRequest,
+    ListMessageBatchesRequest,
     ListMessageBatchesResponse,
     MessageBatch,
     MessageBatchIndividualResponse,
+    RetrieveMessageBatchRequest,
+    RetrieveMessageBatchResultsRequest,
 )
 
 
@@ -41,22 +45,20 @@ class Messages(Protocol):
 
     async def retrieve_message_batch(
         self,
-        batch_id: str,
+        request: RetrieveMessageBatchRequest,
     ) -> MessageBatch: ...
 
     async def list_message_batches(
         self,
-        limit: int = 20,
-        before_id: str | None = None,
-        after_id: str | None = None,
+        request: ListMessageBatchesRequest,
     ) -> ListMessageBatchesResponse: ...
 
     async def cancel_message_batch(
         self,
-        batch_id: str,
+        request: CancelMessageBatchRequest,
     ) -> MessageBatch: ...
 
     async def retrieve_message_batch_results(
         self,
-        batch_id: str,
+        request: RetrieveMessageBatchResultsRequest,
     ) -> AsyncIterator[MessageBatchIndividualResponse]: ...

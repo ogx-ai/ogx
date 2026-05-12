@@ -33,9 +33,13 @@ from .models import (
     AnthropicCreateMessageRequest,
     AnthropicErrorResponse,
     AnthropicMessageResponse,
+    CancelMessageBatchRequest,
     CreateMessageBatchRequest,
+    ListMessageBatchesRequest,
     ListMessageBatchesResponse,
     MessageBatch,
+    RetrieveMessageBatchRequest,
+    RetrieveMessageBatchResultsRequest,
     _AnthropicErrorDetail,
 )
 
@@ -236,7 +240,9 @@ def create_router(impl: Messages) -> APIRouter:
         message_batch_id: str,
     ) -> Response:
         try:
-            result = await impl.retrieve_message_batch(message_batch_id)
+            result = await impl.retrieve_message_batch(
+                RetrieveMessageBatchRequest(batch_id=message_batch_id),
+            )
         except KeyError:
             return _anthropic_error_response(404, f"Message batch '{message_batch_id}' not found")
         except Exception:
@@ -262,9 +268,7 @@ def create_router(impl: Messages) -> APIRouter:
     ) -> Response:
         try:
             result = await impl.list_message_batches(
-                limit=limit,
-                before_id=before_id,
-                after_id=after_id,
+                ListMessageBatchesRequest(limit=limit, before_id=before_id, after_id=after_id),
             )
         except Exception:
             logger.exception("Failed to list message batches")
@@ -286,7 +290,9 @@ def create_router(impl: Messages) -> APIRouter:
         message_batch_id: str,
     ) -> Response:
         try:
-            result = await impl.cancel_message_batch(message_batch_id)
+            result = await impl.cancel_message_batch(
+                CancelMessageBatchRequest(batch_id=message_batch_id),
+            )
         except KeyError:
             return _anthropic_error_response(404, f"Message batch '{message_batch_id}' not found")
         except ValueError as e:
@@ -310,7 +316,9 @@ def create_router(impl: Messages) -> APIRouter:
         message_batch_id: str,
     ) -> Response:
         try:
-            result_iter = await impl.retrieve_message_batch_results(message_batch_id)
+            result_iter = await impl.retrieve_message_batch_results(
+                RetrieveMessageBatchResultsRequest(batch_id=message_batch_id),
+            )
         except KeyError:
             return _anthropic_error_response(404, f"Message batch '{message_batch_id}' not found")
         except ValueError as e:

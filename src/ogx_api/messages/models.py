@@ -332,9 +332,35 @@ class CreateMessageBatchRequest(BaseModel):
     requests: list[MessageBatchRequestParams] = Field(
         ...,
         min_length=1,
-        max_length=100000,
+        max_length=1000,
         description="List of requests for prompt completion.",
     )
+
+
+class ListMessageBatchesRequest(BaseModel):
+    """Query parameters for GET /v1/messages/batches."""
+
+    limit: int = Field(default=20, ge=1, le=1000, description="Maximum number of batches to return.")
+    before_id: str | None = Field(default=None, description="Return batches created before this batch ID.")
+    after_id: str | None = Field(default=None, description="Return batches created after this batch ID.")
+
+
+class RetrieveMessageBatchRequest(BaseModel):
+    """Path parameters for GET /v1/messages/batches/{message_batch_id}."""
+
+    batch_id: str = Field(..., description="ID of the Message Batch to retrieve.")
+
+
+class CancelMessageBatchRequest(BaseModel):
+    """Path parameters for POST /v1/messages/batches/{message_batch_id}/cancel."""
+
+    batch_id: str = Field(..., description="ID of the Message Batch to cancel.")
+
+
+class RetrieveMessageBatchResultsRequest(BaseModel):
+    """Path parameters for GET /v1/messages/batches/{message_batch_id}/results."""
+
+    batch_id: str = Field(..., description="ID of the Message Batch whose results to stream.")
 
 
 class MessageBatchRequestCounts(BaseModel):
