@@ -197,11 +197,6 @@ def client_with_models(
 
 
 @pytest.fixture(scope="session")
-def available_shields(ogx_client):
-    return [shield.identifier for shield in ogx_client.shields.list()]
-
-
-@pytest.fixture(scope="session")
 def model_providers(ogx_client):
     return {x.provider_id for x in ogx_client.providers.list() if x.api == "inference"}
 
@@ -213,7 +208,6 @@ def skip_if_no_model(request):
         "vision_model_id",
         "embedding_model_id",
         "judge_model_id",
-        "shield_id",
         "rerank_model_id",
     ]
     test_func = request.node.function

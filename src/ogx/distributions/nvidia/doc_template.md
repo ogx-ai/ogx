@@ -38,7 +38,7 @@ The NVIDIA NeMo microservices platform supports end-to-end microservice deployme
 
 ## Supported Services
 
-Each OGX API corresponds to a specific NeMo microservice. The core microservices (Customizer, Evaluator, Guardrails) are exposed by the same endpoint. The platform components (Data Store) are each exposed by separate endpoints.
+Each OGX API corresponds to a specific NeMo microservice. The core microservices (Customizer, Evaluator) are exposed by the same endpoint. The platform components (Data Store) are each exposed by separate endpoints.
 
 ### Inference: NVIDIA NIM
 
@@ -60,12 +60,6 @@ See the [NVIDIA Datasetio docs](https://github.com/ogx-ai/ogx/blob/main/ogx/prov
 The NeMo Evaluator microservice supports evaluation of LLMs. Launching an Evaluation job with NeMo Evaluator requires an Evaluation Config (an object that contains metadata needed by the job). A OGX Benchmark maps to an Evaluation Config, so registering a Benchmark creates an Evaluation Config in NeMo Evaluator. The `NVIDIA_EVALUATOR_URL` environment variable should point to your NeMo Microservices endpoint.
 
 See the [NVIDIA Eval docs](https://github.com/ogx-ai/ogx/blob/main/ogx/providers/remote/eval/nvidia/README.md) for supported features and example usage.
-
-### Safety API: NeMo Guardrails
-
-The NeMo Guardrails microservice sits between your application and the LLM, and adds checks and content moderation to a model. The `GUARDRAILS_SERVICE_URL` environment variable should point to your NeMo Microservices endpoint.
-
-See the [NVIDIA Safety docs](https://github.com/ogx-ai/ogx/blob/main/ogx/providers/remote/safety/nvidia/README.md) for supported features and example usage.
 
 ## Deploying models
 
@@ -174,4 +168,4 @@ ogx stack run ./config.yaml \
 
 ## Example Notebooks
 
-For examples of how to use the NVIDIA Distribution to run inference, evaluate, and run safety checks on your LLMs, you can reference the example notebooks in [docs/notebooks/nvidia](https://github.com/ogx-ai/ogx/tree/main/docs/notebooks/nvidia).
+For examples of how to use the NVIDIA Distribution to run inference and evaluation workloads, you can reference the example notebooks in [docs/notebooks/nvidia](https://github.com/ogx-ai/ogx/tree/main/docs/notebooks/nvidia).

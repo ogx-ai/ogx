@@ -183,7 +183,6 @@ class BedrockSigV4Auth(httpx.Auth):
 
     async def async_auth_flow(self, request: httpx.Request) -> AsyncGenerator[httpx.Request, httpx.Response]:
         # offload to a thread because credential resolution can do IMDS calls or file I/O;
-        # shield so a rolling-restart cancellation doesn't abort mid-sign and leave the
-        # connection in an inconsistent auth state
-        await asyncio.shield(asyncio.to_thread(self._sign_request, request))
+        # keep signing off the event loop to avoid blocking async request handling
+        await asyncio.to_thread(self._sign_request, request)
         yield request

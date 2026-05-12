@@ -18,22 +18,22 @@ This documentation is auto-generated from the OpenAI API specification compariso
 
 | Metric | Value |
 |--------|-------|
-| **Overall Conformance Score** | 92.2% |
-| **Endpoints Implemented** | 30/146 |
-| **Total Properties Checked** | 3487 |
-| **Schema/Type Issues** | 173 |
-| **Missing Properties** | 98 |
-| **Total Issues to Fix** | 271 |
+| **Overall Conformance Score** | 93.4% |
+| **Endpoints Implemented** | 29/146 |
+| **Total Properties Checked** | 3432 |
+| **Schema/Type Issues** | 168 |
+| **Missing Properties** | 59 |
+| **Total Issues to Fix** | 227 |
 
 ## Integration Test Coverage
 
-Overall Test Coverage Score: 43.8%
+Overall Test Coverage Score: 42.9%
 
 | Category | Covered | Total | Score |
 |----------|---------|-------|-------|
 | CRUD Operations | 5 | 7 | 71.4% |
 | Conversations | 5 | 9 | 55.6% |
-| Request Parameters | 21 | 25 | 84.0% |
+| Request Parameters | 20 | 25 | 80.0% |
 | Streaming Events | 16 | 53 | 30.2% |
 | Structured Output | 0 | 2 | 0.0% |
 | Tools | 2 | 16 | 12.5% |
@@ -44,12 +44,11 @@ Categories are sorted by conformance score (lowest first, needing most attention
 
 | Category | Score | Properties | Issues | Missing |
 |----------|-------|------------|--------|---------|
-| Moderations | 17.0% | 53 | 5 | 39 |
 | Batch | 39.9% | 168 | 60 | 41 |
 | Completions | 58.7% | 46 | 17 | 2 |
 | Embeddings | 78.6% | 14 | 3 | 0 |
 | Vector stores | 82.9% | 310 | 41 | 12 |
-| Responses | 88.9% | 225 | 25 | 0 |
+| Responses | 88.8% | 223 | 25 | 0 |
 | Files | 92.9% | 42 | 1 | 2 |
 | Models | 93.3% | 15 | 1 | 0 |
 | Chat | 98.7% | 449 | 5 | 1 |
@@ -101,6 +100,10 @@ The following OpenAI API endpoints are not yet implemented in OGX:
 - `/images/edits`
 - `/images/generations`
 - `/images/variations`
+
+### /moderations
+
+- `/moderations`
 
 ### /organization
 
@@ -217,72 +220,6 @@ The following OpenAI API endpoints are not yet implemented in OGX:
 ## Detailed Category Breakdown
 
 Below is a detailed breakdown of conformance issues and missing properties for each category.
-
-### Moderations
-
-**Score:** 17.0% · **Issues:** 5 · **Missing:** 39
-
-#### `/moderations`
-
-**POST**
-
-<details>
-<summary>Missing Properties (39)</summary>
-
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.harassment`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.harassment/threatening`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.hate`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.hate/threatening`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.illicit`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.illicit/violent`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.self-harm`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.self-harm/instructions`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.self-harm/intent`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.sexual`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.sexual/minors`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.violence`
-- `responses.200.content.application/json.properties.results.items.properties.categories.properties.violence/graphic`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.harassment`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.harassment/threatening`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.hate`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.hate/threatening`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.illicit`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.illicit/violent`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.self-harm`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.self-harm/instructions`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.self-harm/intent`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.sexual`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.sexual/minors`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.violence`
-- `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.violence/graphic`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.harassment`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.harassment/threatening`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.hate`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.hate/threatening`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.illicit`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.illicit/violent`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.self-harm`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.self-harm/instructions`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.self-harm/intent`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.sexual`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.sexual/minors`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.violence`
-- `responses.200.content.application/json.properties.results.items.properties.category_scores.properties.violence/graphic`
-
-</details>
-
-<details>
-<summary>Schema Issues (5)</summary>
-
-| Property | Issues |
-|----------|--------|
-| `requestBody.content.application/json.properties.input` | Union variants added: 2 |
-| `requestBody.content.application/json.properties.model` | Nullable added (OpenAI non-nullable); Default changed: omni-moderation-latest -&gt; None |
-| `responses.200.content.application/json.properties.results.items.properties.categories` | Type removed: ['object']; Union variants added: 2 |
-| `responses.200.content.application/json.properties.results.items.properties.category_applied_input_types` | Type removed: ['object']; Union variants added: 2 |
-| `responses.200.content.application/json.properties.results.items.properties.category_scores` | Type removed: ['object']; Union variants added: 2 |
-
-</details>
 
 ### Batch
 
@@ -732,7 +669,7 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 
 ### Responses
 
-**Score:** 88.9% · **Issues:** 25 · **Missing:** 0
+**Score:** 88.8% · **Issues:** 25 · **Missing:** 0
 
 #### `/responses`
 

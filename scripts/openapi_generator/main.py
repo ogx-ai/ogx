@@ -68,6 +68,9 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     # FastAPI sometimes infers parameters as query params even when they should be in the request body
     openapi_schema = schema_transforms._remove_query_params_from_body_endpoints(openapi_schema)
 
+    # Promote model fields marked with x-extra-body-field to x-ogx-extra-body-params
+    openapi_schema = schema_transforms._promote_model_extra_body_fields(openapi_schema)
+
     # Add x-ogx-extra-body-params extension for ExtraBodyField parameters
     openapi_schema = schema_transforms._add_extra_body_params_extension(openapi_schema)
 

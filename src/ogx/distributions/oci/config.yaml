@@ -4,7 +4,6 @@ apis:
 - files
 - inference
 - responses
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -24,11 +23,6 @@ providers:
       persistence:
         namespace: vector_io::faiss
         backend: kv_default
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -90,7 +84,6 @@ storage:
       backend: sql_default
 registered_resources:
   models: []
-  shields: []
   vector_dbs: []
 server:
   port: 8321

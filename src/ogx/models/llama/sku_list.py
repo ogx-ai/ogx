@@ -46,7 +46,7 @@ def all_registered_models() -> list[Model]:
         + llama3_2_family()
         + llama3_3_family()
         + llama4_family()
-        + safety_models()
+        + guard_models()
     )
 
 
@@ -822,19 +822,19 @@ def llama3_3_instruct_models() -> list[Model]:
 
 
 @lru_cache
-def safety_models() -> list[Model]:
-    """Return Llama Guard and other safety models."""
+def guard_models() -> list[Model]:
+    """Return Llama Guard models."""
     return [
         Model(
             core_model_id=CoreModelId.llama_guard_4_12b,
-            description="Llama Guard v4 12b system safety model",
+            description="Llama Guard v4 12b classification model",
             huggingface_repo="meta-llama/Llama-Guard-4-12B",
             arch_args={},
             pth_file_count=1,
         ),
         Model(
             core_model_id=CoreModelId.llama_guard_3_11b_vision,
-            description="Llama Guard v3 11b vision system safety model",
+            description="Llama Guard v3 11b vision classification model",
             huggingface_repo="meta-llama/Llama-Guard-3-11B-Vision",
             arch_args={
                 "dim": 4096,
@@ -856,7 +856,7 @@ def safety_models() -> list[Model]:
         Model(
             core_model_id=CoreModelId.llama_guard_3_1b,
             variant="int4",
-            description="Llama Guard v3 1b 'int4' quantized system safety model",
+            description="Llama Guard v3 1b 'int4' quantized classification model",
             huggingface_repo="meta-llama/Llama-Guard-3-1B-INT4",
             quantization_format=CheckpointQuantizationFormat.int4,
             arch_args={
@@ -874,7 +874,7 @@ def safety_models() -> list[Model]:
         ),
         Model(
             core_model_id=CoreModelId.llama_guard_3_1b,
-            description="Llama Guard v3 1b system safety model",
+            description="Llama Guard v3 1b classification model",
             huggingface_repo="meta-llama/Llama-Guard-3-1B",
             arch_args={
                 "dim": 2048,
@@ -892,7 +892,7 @@ def safety_models() -> list[Model]:
         ),
         Model(
             core_model_id=CoreModelId.llama_guard_3_8b,
-            description="Llama Guard v3 8b system safety model",
+            description="Llama Guard v3 8b classification model",
             huggingface_repo="meta-llama/Llama-Guard-3-8B",
             arch_args={
                 "dim": 4096,
@@ -911,7 +911,7 @@ def safety_models() -> list[Model]:
         Model(
             core_model_id=CoreModelId.llama_guard_3_8b,
             variant="int8",
-            description="Llama Guard v3 8b system safety model",
+            description="Llama Guard v3 8b classification model",
             huggingface_repo="meta-llama/Llama-Guard-3-8B-INT8",
             quantization_format=CheckpointQuantizationFormat.int8,
             arch_args={
@@ -930,7 +930,7 @@ def safety_models() -> list[Model]:
         ),
         Model(
             core_model_id=CoreModelId.llama_guard_2_8b,
-            description="Llama Guard v2 8b system safety model",
+            description="Llama Guard v2 8b classification model",
             huggingface_repo="meta-llama/Llama-Guard-2-8B",
             arch_args={
                 "dim": 4096,

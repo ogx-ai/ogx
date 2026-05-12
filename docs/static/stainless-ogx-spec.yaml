@@ -1257,51 +1257,6 @@ paths:
 
           model = client.models.retrieve("meta-llama/Llama-3.1-8B-Instruct")
           print(model)
-  /v1/moderations:
-    post:
-      responses:
-        '200':
-          description: The moderation results for the input.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ModerationObject'
-        '400':
-          description: Bad Request
-          $ref: '#/components/responses/BadRequest400'
-        '429':
-          description: Too Many Requests
-          $ref: '#/components/responses/TooManyRequests429'
-        '500':
-          description: Internal Server Error
-          $ref: '#/components/responses/InternalServerError500'
-        default:
-          description: Default Response
-          $ref: '#/components/responses/DefaultError'
-      tags:
-      - Safety
-      summary: Create Moderation
-      description: Classifies if text inputs are potentially harmful. OpenAI-compatible endpoint.
-      operationId: run_moderation_v1_moderations_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RunModerationRequest'
-        required: true
-      x-codeSamples:
-      - lang: Python
-        label: OpenAI
-        source: |-
-          from openai import OpenAI
-
-          client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
-
-          response = client.moderations.create(
-              model="meta-llama/Llama-Guard-3-8B",
-              input="Some text to classify",
-          )
-          print(response.results[0].flagged)
   /v1/prompts:
     get:
       responses:
@@ -1726,6 +1681,13 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateResponseRequest'
           application/x-www-form-urlencoded: {}
+        x-ogx-extra-body-params:
+          guardrails:
+            anyOf:
+            - type: boolean
+            - type: 'null'
+            title: Guardrails
+            description: Enable content moderation via the configured moderation_endpoint.
       x-codeSamples:
       - lang: Python
         label: OpenAI
@@ -1928,165 +1890,6 @@ paths:
           input_items = client.responses.input_items.list("resp_abc123")
           for item in input_items:
               print(item)
-  /v1/safety/run-shield:
-    post:
-      responses:
-        '200':
-          description: The shield response indicating any violations detected.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunShieldResponse'
-        '400':
-          description: Bad Request
-          $ref: '#/components/responses/BadRequest400'
-        '429':
-          description: Too Many Requests
-          $ref: '#/components/responses/TooManyRequests429'
-        '500':
-          description: Internal Server Error
-          $ref: '#/components/responses/InternalServerError500'
-        default:
-          description: Default Response
-          $ref: '#/components/responses/DefaultError'
-      tags:
-      - Safety
-      summary: Run Shield
-      description: Run a safety shield on messages to check for policy violations.
-      operationId: run_shield_v1_safety_run_shield_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RunShieldRequest'
-        required: true
-      deprecated: true
-  /v1/shields:
-    get:
-      responses:
-        '200':
-          description: A ListShieldsResponse.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListShieldsResponse'
-        '400':
-          description: Bad Request
-          $ref: '#/components/responses/BadRequest400'
-        '429':
-          description: Too Many Requests
-          $ref: '#/components/responses/TooManyRequests429'
-        '500':
-          description: Internal Server Error
-          $ref: '#/components/responses/InternalServerError500'
-        default:
-          description: Default Response
-          $ref: '#/components/responses/DefaultError'
-      tags:
-      - Shields
-      summary: List all shields.
-      description: List all shields.
-      operationId: list_shields_v1_shields_get
-      deprecated: true
-    post:
-      responses:
-        '200':
-          description: A Shield.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Shield'
-        '400':
-          description: Bad Request
-          $ref: '#/components/responses/BadRequest400'
-        '429':
-          description: Too Many Requests
-          $ref: '#/components/responses/TooManyRequests429'
-        '500':
-          description: Internal Server Error
-          $ref: '#/components/responses/InternalServerError500'
-        default:
-          description: Default Response
-          $ref: '#/components/responses/DefaultError'
-      tags:
-      - Shields
-      summary: Register a shield.
-      description: Register a shield.
-      operationId: register_shield_v1_shields_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterShieldRequest'
-        required: true
-      deprecated: true
-  /v1/shields/{identifier}:
-    get:
-      responses:
-        '200':
-          description: A Shield.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Shield'
-        '400':
-          $ref: '#/components/responses/BadRequest400'
-          description: Bad Request
-        '429':
-          $ref: '#/components/responses/TooManyRequests429'
-          description: Too Many Requests
-        '500':
-          $ref: '#/components/responses/InternalServerError500'
-          description: Internal Server Error
-        default:
-          $ref: '#/components/responses/DefaultError'
-          description: Default Response
-      tags:
-      - Shields
-      summary: Get a shield by its identifier.
-      description: Get a shield by its identifier.
-      operationId: get_shield_v1_shields__identifier__get
-      parameters:
-      - name: identifier
-        in: path
-        required: true
-        schema:
-          type: string
-          description: The identifier of the shield to get.
-          title: Identifier
-        description: The identifier of the shield to get.
-      deprecated: true
-    delete:
-      responses:
-        '400':
-          $ref: '#/components/responses/BadRequest400'
-          description: Bad Request
-        '429':
-          $ref: '#/components/responses/TooManyRequests429'
-          description: Too Many Requests
-        '500':
-          $ref: '#/components/responses/InternalServerError500'
-          description: Internal Server Error
-        default:
-          $ref: '#/components/responses/DefaultError'
-          description: Default Response
-        '204':
-          description: The shield was successfully unregistered.
-      tags:
-      - Shields
-      summary: Unregister a shield.
-      description: Unregister a shield.
-      operationId: unregister_shield_v1_shields__identifier__delete
-      parameters:
-      - name: identifier
-        in: path
-        required: true
-        schema:
-          type: string
-          description: The identifier of the shield to unregister.
-          title: Identifier
-        description: The identifier of the shield to unregister.
-      deprecated: true
   /v1/admin/tools:
     get:
       responses:
@@ -4860,12 +4663,6 @@ components:
           - type: string
           - type: 'null'
           description: The user to use.
-        safety_identifier:
-          anyOf:
-          - type: string
-            maxLength: 64
-          - type: 'null'
-          description: A stable identifier used for safety monitoring and abuse detection.
         service_tier:
           anyOf:
           - $ref: '#/components/schemas/ServiceTier'
@@ -6714,94 +6511,6 @@ components:
       - rerank
       title: ModelType
       description: Enumeration of supported model types in OGX.
-    RunModerationRequest:
-      properties:
-        input:
-          anyOf:
-          - type: string
-          - items:
-              type: string
-            type: array
-            title: list[string]
-          title: string | list[string]
-          description: Input (or inputs) to classify. Can be a single string or an array of strings.
-        model:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The content moderation model to use. If not specified, the default shield will be used.
-      type: object
-      required:
-      - input
-      title: RunModerationRequest
-      description: Request model for running content moderation.
-    ModerationObject:
-      properties:
-        id:
-          type: string
-          title: Id
-          description: The unique identifier for the moderation request
-        model:
-          type: string
-          title: Model
-          description: The model used to generate the moderation results
-        results:
-          items:
-            $ref: '#/components/schemas/ModerationObjectResults'
-          type: array
-          title: Results
-          description: A list of moderation result objects
-      type: object
-      required:
-      - id
-      - model
-      - results
-      title: ModerationObject
-      description: A moderation object containing the results of content classification.
-    ModerationObjectResults:
-      properties:
-        flagged:
-          type: boolean
-          title: Flagged
-          description: Whether any of the below categories are flagged
-        categories:
-          anyOf:
-          - additionalProperties:
-              type: boolean
-            type: object
-          - type: 'null'
-          description: A dictionary of the categories, and whether they are flagged or not
-        category_applied_input_types:
-          anyOf:
-          - additionalProperties:
-              items:
-                type: string
-              type: array
-            type: object
-          - type: 'null'
-          description: A dictionary of the categories along with the input type(s) that the score applies to
-        category_scores:
-          anyOf:
-          - additionalProperties:
-              type: number
-            type: object
-          - type: 'null'
-          description: A dictionary of the categories along with their scores as predicted by model
-        user_message:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: A message to convey to the user about the moderation result
-        metadata:
-          additionalProperties: true
-          type: object
-          title: Metadata
-          description: Additional metadata about the moderation
-      type: object
-      required:
-      - flagged
-      title: ModerationObjectResults
-      description: A moderation result object containing flagged status and category information.
     Prompt:
       properties:
         prompt:
@@ -7298,10 +7007,6 @@ components:
           anyOf:
           - type: integer
           - type: 'null'
-        safety_identifier:
-          anyOf:
-          - type: string
-          - type: 'null'
         service_tier:
           type: string
           title: Service Tier
@@ -7485,17 +7190,6 @@ components:
       - output_tokens_details
       title: OpenAIResponseUsage
       description: Usage information for OpenAI response.
-    ResponseGuardrailSpec:
-      properties:
-        type:
-          type: string
-          title: Type
-      additionalProperties: false
-      type: object
-      required:
-      - type
-      title: ResponseGuardrailSpec
-      description: Specification for a guardrail to apply during response generation.
     OpenAIResponseInputTool:
       discriminator:
         mapping:
@@ -7733,10 +7427,6 @@ components:
         max_output_tokens:
           anyOf:
           - type: integer
-          - type: 'null'
-        safety_identifier:
-          anyOf:
-          - type: string
           - type: 'null'
         service_tier:
           type: string
@@ -8990,84 +8680,6 @@ components:
       - data
       title: ListOpenAIResponseInputItem
       description: List container for OpenAI response input items.
-    RunShieldRequest:
-      properties:
-        shield_id:
-          type: string
-          minLength: 1
-          title: Shield Id
-          description: The identifier of the shield to run
-        messages:
-          items:
-            oneOf:
-            - $ref: '#/components/schemas/OpenAIUserMessageParam-Input'
-              title: OpenAIUserMessageParam-Input
-            - $ref: '#/components/schemas/OpenAISystemMessageParam'
-              title: OpenAISystemMessageParam
-            - $ref: '#/components/schemas/OpenAIAssistantMessageParam-Input'
-              title: OpenAIAssistantMessageParam-Input
-            - $ref: '#/components/schemas/OpenAIToolMessageParam'
-              title: OpenAIToolMessageParam
-            - $ref: '#/components/schemas/OpenAIDeveloperMessageParam'
-              title: OpenAIDeveloperMessageParam
-            discriminator:
-              propertyName: role
-              mapping:
-                assistant: '#/components/schemas/OpenAIAssistantMessageParam-Input'
-                developer: '#/components/schemas/OpenAIDeveloperMessageParam'
-                system: '#/components/schemas/OpenAISystemMessageParam'
-                tool: '#/components/schemas/OpenAIToolMessageParam'
-                user: '#/components/schemas/OpenAIUserMessageParam-Input'
-            title: OpenAIUserMessageParam-Input | ... (5 variants)
-          type: array
-          title: Messages
-          description: The messages to run the shield on
-      type: object
-      required:
-      - shield_id
-      - messages
-      title: RunShieldRequest
-      description: Request model for running a safety shield.
-    RunShieldResponse:
-      properties:
-        violation:
-          anyOf:
-          - $ref: '#/components/schemas/SafetyViolation'
-            title: SafetyViolation
-          - type: 'null'
-          description: Safety violation detected by the shield, if any
-          title: SafetyViolation
-      type: object
-      title: RunShieldResponse
-      description: Response from running a safety shield.
-    SafetyViolation:
-      properties:
-        violation_level:
-          $ref: '#/components/schemas/ViolationLevel'
-          description: Severity level of the violation
-        user_message:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Message to convey to the user about the violation
-        metadata:
-          additionalProperties: true
-          type: object
-          title: Metadata
-          description: Additional metadata including specific violation codes
-      type: object
-      required:
-      - violation_level
-      title: SafetyViolation
-      description: Details of a safety violation detected by content moderation.
-    ViolationLevel:
-      type: string
-      enum:
-      - info
-      - warn
-      - error
-      title: ViolationLevel
-      description: Severity level of a safety violation.
     ArrayType:
       description: Parameter type for array values.
       properties:
@@ -9158,50 +8770,6 @@ components:
           - union
       title: UnionType
       type: object
-    Shield:
-      properties:
-        identifier:
-          type: string
-          title: Identifier
-          description: Unique identifier for this resource in ogx
-        provider_resource_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Unique identifier for this resource in the provider
-        provider_id:
-          type: string
-          title: Provider Id
-          description: ID of the provider that owns this resource
-        type:
-          type: string
-          title: Type
-          enum:
-          - shield
-        params:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-      type: object
-      required:
-      - identifier
-      - provider_id
-      title: Shield
-      description: A safety shield resource that can be used to check content.
-    ListShieldsResponse:
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/Shield'
-          type: array
-          title: Data
-          description: List of shield objects
-      type: object
-      required:
-      - data
-      title: ListShieldsResponse
-      description: Response containing a list of all shields.
     ImageContentItem:
       description: A image content item
       properties:
@@ -10406,33 +9974,6 @@ components:
       - $ref: '#/components/schemas/CompletionInputType'
         title: CompletionInputType
       title: StringType | ... (9 variants)
-    RegisterShieldRequest:
-      properties:
-        shield_id:
-          type: string
-          title: Shield Id
-          description: The identifier of the shield to register.
-        provider_shield_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The identifier of the shield in the provider.
-        provider_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The identifier of the provider.
-        params:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: The parameters of the shield.
-      type: object
-      required:
-      - shield_id
-      title: RegisterShieldRequest
-      description: Request model for registering a shield.
     AllowedToolsFilter:
       properties:
         tool_names:
@@ -11579,17 +11120,6 @@ components:
           - type: 'null'
           description: Maximum number of inference iterations.
           default: 10
-        guardrails:
-          anyOf:
-          - items:
-              anyOf:
-              - type: string
-              - $ref: '#/components/schemas/ResponseGuardrailSpec'
-                title: ResponseGuardrailSpec
-              title: string | ResponseGuardrailSpec
-            type: array
-          - type: 'null'
-          description: List of guardrails to apply during response generation.
         max_tool_calls:
           anyOf:
           - type: integer
@@ -11609,12 +11139,6 @@ components:
           - type: 'null'
           description: Configuration for reasoning effort in responses.
           title: OpenAIResponseReasoning
-        safety_identifier:
-          anyOf:
-          - type: string
-            maxLength: 64
-          - type: 'null'
-          description: A stable identifier used for safety monitoring and abuse detection.
         service_tier:
           anyOf:
           - $ref: '#/components/schemas/ServiceTier'
@@ -14057,40 +13581,16 @@ components:
       - model_id
       title: UnregisterModelRequest
       type: object
-    GetShieldRequest:
-      description: Request model for getting a shield by identifier.
-      properties:
-        identifier:
-          description: The identifier of the shield to get.
-          title: Identifier
-          type: string
-      required:
-      - identifier
-      title: GetShieldRequest
-      type: object
-    UnregisterShieldRequest:
-      description: Request model for unregistering a shield.
-      properties:
-        identifier:
-          description: The identifier of the shield to unregister.
-          title: Identifier
-          type: string
-      required:
-      - identifier
-      title: UnregisterShieldRequest
-      type: object
     Api:
       description: Enumeration of all available APIs in the OGX system.
       enum:
       - providers
       - inference
-      - safety
       - responses
       - batches
       - vector_io
       - tool_runtime
       - models
-      - shields
       - vector_stores
       - tool_groups
       - files
@@ -15722,11 +15222,6 @@ tags:
 - description: Providers API for inspecting, listing, and modifying providers and their configurations.
   name: Providers
   x-displayName: Providers
-- description: OpenAI-compatible Moderations API.
-  name: Safety
-  x-displayName: Safety
-- description: ''
-  name: Shields
 - description: ''
   name: ToolGroups
 - description: ''
@@ -15757,8 +15252,6 @@ x-tagGroups:
   - Prompts
   - Providers
   - Responses
-  - Safety
-  - Shields
   - ToolGroups
   - ToolRuntime
   - Tools

@@ -18,8 +18,6 @@ from ogx.core.datatypes import (
     BuildProvider,
     ModelInput,
     Provider,
-    SafetyConfig,
-    ShieldInput,
     VectorStoresConfig,
 )
 from ogx.core.distribution import get_provider_registry
@@ -143,10 +141,8 @@ class RunConfigSettings(BaseModel):
 
     provider_overrides: dict[str, list[Provider]] = Field(default_factory=dict)
     default_models: list[ModelInput] | None = None
-    default_shields: list[ShieldInput] | None = None
     default_connectors: list[ConnectorInput] | None = None
     vector_stores_config: VectorStoresConfig | None = None
-    safety_config: SafetyConfig | None = None
     auth_config: dict[str, Any] | None = None
     storage_backends: dict[str, Any] | None = None
     storage_stores: dict[str, Any] | None = None
@@ -241,7 +237,6 @@ class RunConfigSettings(BaseModel):
             "storage": storage_config,
             "registered_resources": {
                 "models": [m.model_dump(exclude_none=True) for m in (self.default_models or [])],
-                "shields": [s.model_dump(exclude_none=True) for s in (self.default_shields or [])],
                 "vector_dbs": [],
             },
             "server": {
@@ -254,9 +249,6 @@ class RunConfigSettings(BaseModel):
 
         if self.vector_stores_config:
             config["vector_stores"] = self.vector_stores_config.model_dump(exclude_none=True)
-
-        if self.safety_config:
-            config["safety"] = self.safety_config.model_dump(exclude_none=True)
 
         if self.default_connectors is not None:
             config["connectors"] = [c.model_dump(exclude_none=True) for c in self.default_connectors]

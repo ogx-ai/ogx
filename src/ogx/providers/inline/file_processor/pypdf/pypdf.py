@@ -55,7 +55,7 @@ class PyPDFFileProcessor:
 
         start_time = time.time()
 
-        # Upload size limits are enforced by the router layer (upload_safety.py).
+        # Upload size limits are enforced by the router layer (upload_limits.py).
         # The provider trusts that `file` has already been bounded-read and
         # `file_id` references a file accepted by the Files API.
         if file:

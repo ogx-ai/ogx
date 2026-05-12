@@ -77,6 +77,13 @@ class BuiltinResponsesImplConfig(BaseModel):
         description="Configuration for conversation compaction behavior and prompt templates",
     )
 
+    moderation_endpoint: str | None = Field(
+        default=None,
+        description="URL of an OpenAI-compatible /v1/moderations endpoint for guardrails. "
+        'The endpoint must accept POST {"input": "text"} and return '
+        '{"results": [{"flagged": bool, "categories": {...}}]}.',
+    )
+
     @classmethod
     def sample_run_config(cls, __distro_dir__: str) -> dict[str, Any]:
         return {

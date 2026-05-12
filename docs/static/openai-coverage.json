@@ -4,7 +4,7 @@
   "llama_spec": "docs/static/ogx-spec.yaml",
   "summary": {
     "endpoints": {
-      "implemented": 30,
+      "implemented": 29,
       "total": 146,
       "missing": [
         "/assistants",
@@ -35,6 +35,7 @@
         "/images/edits",
         "/images/generations",
         "/images/variations",
+        "/moderations",
         "/organization/audit_logs",
         "/organization/certificates",
         "/organization/certificates/activate",
@@ -126,11 +127,11 @@
       ]
     },
     "conformance": {
-      "score": 92.2,
-      "issues": 173,
-      "missing_properties": 98,
-      "total_problems": 271,
-      "total_properties": 3487
+      "score": 93.4,
+      "issues": 168,
+      "missing_properties": 59,
+      "total_problems": 227,
+      "total_properties": 3432
     }
   },
   "categories": {
@@ -1300,106 +1301,11 @@
         }
       ]
     },
-    "Moderations": {
-      "score": 17.0,
-      "issues": 5,
-      "missing_properties": 39,
-      "total_properties": 53,
-      "endpoints": [
-        {
-          "path": "/moderations",
-          "operations": [
-            {
-              "method": "POST",
-              "missing_properties": [
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.harassment",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.harassment/threatening",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.hate",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.hate/threatening",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.illicit",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.illicit/violent",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.self-harm",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.self-harm/instructions",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.self-harm/intent",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.sexual",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.sexual/minors",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.violence",
-                "POST.responses.200.content.application/json.properties.results.items.properties.categories.properties.violence/graphic",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.harassment",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.harassment/threatening",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.hate",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.hate/threatening",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.illicit",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.illicit/violent",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.self-harm",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.self-harm/instructions",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.self-harm/intent",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.sexual",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.sexual/minors",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.violence",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types.properties.violence/graphic",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.harassment",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.harassment/threatening",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.hate",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.hate/threatening",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.illicit",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.illicit/violent",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.self-harm",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.self-harm/instructions",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.self-harm/intent",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.sexual",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.sexual/minors",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.violence",
-                "POST.responses.200.content.application/json.properties.results.items.properties.category_scores.properties.violence/graphic"
-              ],
-              "conformance_issues": [
-                {
-                  "property": "POST.requestBody.content.application/json.properties.input",
-                  "details": [
-                    "Union variants added: 2"
-                  ]
-                },
-                {
-                  "property": "POST.requestBody.content.application/json.properties.model",
-                  "details": [
-                    "Nullable added (OpenAI non-nullable)",
-                    "Default changed: omni-moderation-latest -> None"
-                  ]
-                },
-                {
-                  "property": "POST.responses.200.content.application/json.properties.results.items.properties.categories",
-                  "details": [
-                    "Type removed: ['object']",
-                    "Union variants added: 2"
-                  ]
-                },
-                {
-                  "property": "POST.responses.200.content.application/json.properties.results.items.properties.category_applied_input_types",
-                  "details": [
-                    "Type removed: ['object']",
-                    "Union variants added: 2"
-                  ]
-                },
-                {
-                  "property": "POST.responses.200.content.application/json.properties.results.items.properties.category_scores",
-                  "details": [
-                    "Type removed: ['object']",
-                    "Union variants added: 2"
-                  ]
-                }
-              ],
-              "missing_count": 39,
-              "issues_count": 5
-            }
-          ]
-        }
-      ]
-    },
     "Responses": {
-      "score": 88.9,
+      "score": 88.8,
       "issues": 25,
       "missing_properties": 0,
-      "total_properties": 225,
+      "total_properties": 223,
       "endpoints": [
         {
           "path": "/responses",

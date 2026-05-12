@@ -819,7 +819,6 @@ class OpenAIResponseObject(BaseModel):
     max_tool_calls: int | None = None
     reasoning: OpenAIResponseReasoning | None = None
     max_output_tokens: int | None = None
-    safety_identifier: str | None = None
     service_tier: str | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     metadata: dict[str, str] | None = None
     presence_penalty: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)

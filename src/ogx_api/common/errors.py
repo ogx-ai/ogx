@@ -287,9 +287,9 @@ class ServiceNotEnabledError(OGXError, ValueError):
     """Raised when a required OGX service is not configured or available.
 
     Maps to HTTP 503 Service Unavailable. Use this when a request depends on a service
-    (e.g., Safety API) that has not been enabled in the stack configuration.
+    that has not been enabled in the stack configuration.
 
-    :param service_name: The name of the service that is not enabled (e.g., "Safety API").
+    :param service_name: The name of the service that is not enabled.
     :param provider_specific_message: Optional additional context appended to the message,
         intended for operators or users to understand provider-specific setup steps.
         Separated from the base message by a blank line.

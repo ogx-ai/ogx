@@ -3,7 +3,6 @@ distro_name: open-benchmark
 apis:
 - inference
 - responses
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -65,11 +64,6 @@ providers:
       persistence:
         namespace: vector_io::pgvector
         backend: kv_default
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -148,8 +142,6 @@ registered_resources:
     provider_id: together
     provider_model_id: meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo
     model_type: llm
-  shields:
-  - shield_id: meta-llama/Llama-Guard-3-8B
   vector_dbs: []
 server:
   port: 8321

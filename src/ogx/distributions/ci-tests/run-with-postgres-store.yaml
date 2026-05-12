@@ -8,7 +8,6 @@ apis:
 - interactions
 - messages
 - responses
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -193,13 +192,6 @@ providers:
   file_processors:
   - provider_id: auto
     provider_type: inline::auto
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
-  - provider_id: code-scanner
-    provider_type: inline::code-scanner
   interactions:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -318,13 +310,6 @@ registered_resources:
     provider_id: ${env.AWS_DEFAULT_REGION:+bedrock}
     provider_model_id: openai.gpt-oss-20b-1:0
     model_type: llm
-  shields:
-  - shield_id: llama-guard
-    provider_id: ${env.SAFETY_MODEL:+llama-guard}
-    provider_shield_id: ${env.SAFETY_MODEL:=}
-  - shield_id: code-scanner
-    provider_id: ${env.CODE_SCANNER_MODEL:+code-scanner}
-    provider_shield_id: ${env.CODE_SCANNER_MODEL:=}
   vector_dbs: []
 server:
   port: 8321
@@ -396,8 +381,6 @@ vector_stores:
     default_timeout_seconds: 120
     default_max_concurrency: 3
     max_document_tokens: 100000
-safety:
-  default_shield_id: llama-guard
 connectors:
 - connector_type: mcp
   connector_id: test-mcp-connector

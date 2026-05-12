@@ -10,7 +10,7 @@ import pytest
 from fastapi import UploadFile
 
 from ogx_api.common.errors import FileTooLargeError
-from ogx_api.common.upload_safety import (
+from ogx_api.common.upload_limits import (
     PreReadUploadFile,
     read_upload_with_size_limit,
 )

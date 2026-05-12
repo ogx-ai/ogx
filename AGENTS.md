@@ -7,7 +7,7 @@ Human contributors should follow the conventions in CONTRIBUTING.md.
 ## Project Overview
 
 OGX is an API server implementing the OpenAI Responses API, Chat Completions,
-Embeddings, and supporting APIs (files, vector stores, batches, eval, safety). It supports
+Embeddings, and supporting APIs (files, vector stores, batches, eval, and responses guardrails). It supports
 multiple inference backends (OpenAI, Azure, Bedrock, vLLM, Ollama, WatsonX, etc.) through
 a provider architecture.
 

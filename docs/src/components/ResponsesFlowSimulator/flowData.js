@@ -15,7 +15,7 @@ export const ACTORS = {
   impl:          { id: 'impl',          label: 'Responses',     description: 'Core orchestration — request routing, state management, conversation sync' },
   bgworker:      { id: 'bgworker',      label: 'BGWorker',      description: 'Async worker pool (10 workers) for background response processing' },
   orchestrator:  { id: 'orchestrator',  label: 'Orchestrator',  description: 'Streaming response orchestrator — runs the inference loop and coordinates tool execution' },
-  safety:        { id: 'safety',        label: 'Safety',        description: 'Input/output guardrail validation via configured safety policies' },
+  moderation:    { id: 'moderation',    label: 'Moderation',    description: 'Input/output guardrail validation via configured moderation policies' },
   inference:     { id: 'inference',     label: 'Inference',     description: 'LLM provider (OpenAI, vLLM, Ollama, Bedrock, etc.)' },
   executor:      { id: 'executor',      label: 'Executor',      description: 'Tool execution dispatcher — routes tool calls to the right backend' },
   vectorio:      { id: 'vectorio',      label: 'VectorIO',      description: 'Semantic search over vector stores — returns ranked chunks with citations' },
@@ -27,7 +27,7 @@ export const ACTORS = {
 
 /** Fixed ordering so actors always appear in a consistent left-to-right sequence. */
 export const ACTOR_ORDER = [
-  'client', 'fastapi', 'impl', 'bgworker', 'orchestrator', 'safety',
+  'client', 'fastapi', 'impl', 'bgworker', 'orchestrator', 'moderation',
   'inference', 'executor', 'vectorio', 'mcp', 'toolruntime',
   'conversations', 'store',
 ];
@@ -68,9 +68,9 @@ export const FLOW_STEPS = [
   // --- Phase 4: Streaming event ---
   { from: 'orchestrator', to: 'client', label: 'SSE: response.created', when: t => t.stream && !t.background, style: 'event' },
 
-  // --- Phase 5: Safety — input ---
-  { from: 'orchestrator', to: 'safety', label: 'run_guardrails(input)', when: t => t.guardrails, style: 'request' },
-  { from: 'safety', to: 'orchestrator', label: 'pass / blocked',        when: t => t.guardrails, style: 'response' },
+  // --- Phase 5: Moderation guardrails — input ---
+  { from: 'orchestrator', to: 'moderation', label: 'run_guardrails(input)', when: t => t.guardrails, style: 'request' },
+  { from: 'moderation', to: 'orchestrator', label: 'pass / blocked',        when: t => t.guardrails, style: 'response' },
 
   // --- Phase 6: MCP tool discovery ---
   { from: 'orchestrator', to: 'mcp', label: 'list_mcp_tools(endpoint)', when: t => t.mcp, style: 'request' },
@@ -95,9 +95,9 @@ export const FLOW_STEPS = [
   // function tools
   { from: 'orchestrator', to: 'impl', label: 'emit function_call output (breaks loop)', when: t => t.function_tools, style: 'response', inLoop: true },
 
-  // --- Phase 8: Safety — output ---
-  { from: 'orchestrator', to: 'safety', label: 'run_guardrails(output)', when: t => t.guardrails, style: 'request' },
-  { from: 'safety', to: 'orchestrator', label: 'pass / blocked',         when: t => t.guardrails, style: 'response' },
+  // --- Phase 8: Moderation guardrails — output ---
+  { from: 'orchestrator', to: 'moderation', label: 'run_guardrails(output)', when: t => t.guardrails, style: 'request' },
+  { from: 'moderation', to: 'orchestrator', label: 'pass / blocked',         when: t => t.guardrails, style: 'response' },
 
   // --- Phase 9: Persistence ---
   { from: 'orchestrator', to: 'store', label: 'upsert_response_object()', when: () => true, style: 'request' },
@@ -182,7 +182,7 @@ const PROSE = {
 
   function_tools: 'Function tools are client-side in the Responses flow. When the model emits a function tool call, OGX returns it as a function_call output item and exits the inference loop. Your client executes the function and sends the next request with a function_call_output item to continue.',
 
-  guardrails: 'Safety guardrails validate both input and output. Before the inference loop begins, the combined input text is checked against configured guardrail policies. If a violation is detected, the response is refused immediately. After the model generates output, the response text is checked again — an output violation is converted into a refusal response with violation details.',
+  guardrails: 'Moderation guardrails validate both input and output. Before the inference loop begins, the combined input text is checked against configured guardrail policies. If a violation is detected, the response is refused immediately. After the model generates output, the response text is checked again — an output violation is converted into a refusal response with violation details.',
 };
 
 export function getProse(toggles) {

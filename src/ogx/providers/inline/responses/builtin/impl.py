@@ -32,7 +32,6 @@ from ogx_api import (
     Prompts,
     Responses,
     RetrieveResponseRequest,
-    Safety,
     ToolGroups,
     ToolRuntime,
     VectorIO,
@@ -69,7 +68,6 @@ class BuiltinResponsesImpl(Responses):
         config: BuiltinResponsesImplConfig,
         inference_api: Inference,
         vector_io_api: VectorIO,
-        safety_api: Safety | None,
         tool_runtime_api: ToolRuntime,
         tool_groups_api: ToolGroups,
         conversations_api: Conversations,
@@ -81,7 +79,6 @@ class BuiltinResponsesImpl(Responses):
         self.config = config
         self.inference_api = inference_api
         self.vector_io_api = vector_io_api
-        self.safety_api = safety_api
         self.tool_runtime_api = tool_runtime_api
         self.tool_groups_api = tool_groups_api
         self.conversations_api = conversations_api
@@ -102,7 +99,7 @@ class BuiltinResponsesImpl(Responses):
             tool_runtime_api=self.tool_runtime_api,
             responses_store=self.responses_store,
             vector_io_api=self.vector_io_api,
-            safety_api=self.safety_api,
+            moderation_endpoint=self.config.moderation_endpoint,
             conversations_api=self.conversations_api,
             prompts_api=self.prompts_api,
             files_api=self.files_api,
@@ -158,7 +155,6 @@ class BuiltinResponsesImpl(Responses):
             max_tool_calls=request.max_tool_calls,
             max_output_tokens=request.max_output_tokens,
             reasoning=request.reasoning,
-            safety_identifier=request.safety_identifier,
             service_tier=request.service_tier,
             metadata=request.metadata,
             background=request.background,
