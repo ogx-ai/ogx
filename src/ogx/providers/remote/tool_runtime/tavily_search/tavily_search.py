@@ -84,7 +84,8 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        assert self._client is not None, "Provider not initialized"
+        if self._client is None:
+            raise RuntimeError("Failed to invoke tool: provider not initialized")
         response = await self._client.post(
             "https://api.tavily.com/search",
             json={"api_key": api_key, "query": kwargs["query"]},

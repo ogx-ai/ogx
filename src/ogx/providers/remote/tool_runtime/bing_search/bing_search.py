@@ -95,7 +95,8 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
             "q": kwargs["query"],
         }
 
-        assert self._client is not None, "Provider not initialized"
+        if self._client is None:
+            raise RuntimeError("Failed to invoke tool: provider not initialized")
         response = await self._client.get(
             url=self.url,
             params=params,
