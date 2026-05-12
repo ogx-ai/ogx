@@ -1,0 +1,41 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=ollama/llama3.2:3b-instruct-fp16]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_create_and_retrieve[txt=ollama/llama3.2:3b-instruct-fp16]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "llama3.2:3b-instruct-fp16",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is 3+3? Reply with just the number."
+        }
+      ],
+      "max_tokens": 32,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_06c56614b611a29cc76f2ad7",
+      "type": "message",
+      "role": "assistant",
+      "model": "llama3.2:3b-instruct-fp16",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "The user asks: \"What is 3+3? Reply with just the number.\" They want the answer. That is 6. So"
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 32
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
