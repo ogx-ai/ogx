@@ -550,6 +550,7 @@ class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPr
         inference_api: Inference,
         files_api: Files | None = None,
         file_processor_api: FileProcessors | None = None,
+        policy: list | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -559,6 +560,7 @@ class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPr
         self.client: httpx.AsyncClient | None = None
         self.cache: dict[str, VectorStoreWithIndex] = {}
         self.vector_store_table = None
+        self._policy = policy or []
 
     async def initialize(self) -> None:
         """
@@ -569,6 +571,11 @@ class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPr
         """
         # Initialize KVStore for metadata persistence
         self.kvstore = await kvstore_impl(self.config.persistence)
+
+        if self.config.metadata_store:
+            from ogx.core.storage.sqlstore import authorized_sqlstore
+
+            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
 
         # Setup HTTP client with authentication
         auth: httpx.BasicAuth | httpx.DigestAuth | None = None
@@ -605,7 +612,7 @@ class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPr
         await self._load_vector_stores_from_kvstore()
 
         # Initialize OpenAI vector stores
-        self.openai_vector_stores = await self._load_openai_vector_stores()
+        await self.initialize_openai_vector_stores()
 
     async def _load_vector_stores_from_kvstore(self) -> None:
         """

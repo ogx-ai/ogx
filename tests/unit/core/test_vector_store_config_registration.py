@@ -107,6 +107,7 @@ class TestVectorStoreRegistration:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             vector_stores=VectorStoresConfig(
@@ -163,6 +164,7 @@ class TestVectorStoreRegistration:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             registered_resources=RegisteredResources(
@@ -234,6 +236,7 @@ class TestVectorStoreRegistration:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             registered_resources=RegisteredResources(
@@ -343,6 +346,7 @@ class TestOpenAIMetadataCreation:
                     inference=None,
                     conversations=None,
                     prompts=None,
+                    connectors=None,
                 ),
             ),
             vector_stores=VectorStoresConfig(

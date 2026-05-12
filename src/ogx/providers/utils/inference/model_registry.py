@@ -193,35 +193,6 @@ class ProviderModelEntry(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-def build_hf_repo_model_entry(
-    provider_model_id: str,
-    model_descriptor: str,
-    additional_aliases: list[str] | None = None,
-) -> ProviderModelEntry:
-    """Build a ProviderModelEntry for a HuggingFace model.
-
-    Args:
-        provider_model_id: the provider-specific model identifier
-        model_descriptor: the Llama model descriptor
-        additional_aliases: optional extra aliases for the model
-
-    Returns:
-        A ProviderModelEntry with the configured aliases and llama model mapping
-    """
-    aliases = [
-        # NOTE: avoid HF aliases because they _cannot_ be unique across providers
-        # get_huggingface_repo(model_descriptor),
-    ]
-    if additional_aliases:
-        aliases.extend(additional_aliases)
-    aliases = [alias for alias in aliases if alias is not None]
-    return ProviderModelEntry(
-        provider_model_id=provider_model_id,
-        aliases=aliases,
-        llama_model=model_descriptor,
-    )
-
-
 class ModelRegistryHelper(ModelsProtocolPrivate):
     """Manages model registration, alias resolution, and availability checks for a provider."""
 

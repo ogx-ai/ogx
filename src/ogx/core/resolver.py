@@ -9,7 +9,6 @@ import importlib.metadata
 import inspect
 from typing import Any
 
-from ogx.core.client import get_client_impl
 from ogx.core.datatypes import (
     AccessRule,
     AutoRoutedProviderSpec,
@@ -41,12 +40,8 @@ from ogx_api import (
     ModelsProtocolPrivate,
     Prompts,
     ProviderSpec,
-    RemoteProviderConfig,
     RemoteProviderSpec,
     Responses,
-    Safety,
-    Shields,
-    ShieldsProtocolPrivate,
     ToolGroups,
     ToolGroupsProtocolPrivate,
     ToolRuntime,
@@ -85,8 +80,6 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.vector_io: VectorIO,
         Api.vector_stores: VectorStore,
         Api.models: Models,
-        Api.safety: Safety,
-        Api.shields: Shields,
         Api.tool_groups: ToolGroups,
         Api.tool_runtime: ToolRuntime,
         Api.files: Files,
@@ -136,7 +129,6 @@ def additional_protocols_map() -> dict[Api, Any]:
     return {
         Api.inference: (ModelsProtocolPrivate, Models, Api.models),
         Api.tool_groups: (ToolGroupsProtocolPrivate, ToolGroups, Api.tool_groups),
-        Api.safety: (ShieldsProtocolPrivate, Shields, Api.shields),
     }
 
 
@@ -519,38 +511,3 @@ def check_protocol_compliance(obj: Any, protocol: Any) -> None:
         raise ValueError(
             f"Provider `{obj.__provider_id__} ({obj.__provider_spec__.api})` does not implement the following methods:\n{missing_methods}"
         )
-
-
-async def resolve_remote_stack_impls(
-    config: RemoteProviderConfig,
-    apis: list[str],
-) -> dict[Api, Any]:
-    """Resolve provider implementations for a remote stack by creating API clients.
-
-    Args:
-        config: Remote provider configuration containing the connection URL.
-        apis: List of API names to resolve.
-
-    Returns:
-        Dictionary mapping APIs to their remote client implementations.
-    """
-    protocols = api_protocol_map()
-    additional_protocols = additional_protocols_map()
-
-    impls = {}
-    for api_str in apis:
-        api = Api(api_str)
-        impls[api] = await get_client_impl(
-            protocols[api],
-            config,
-            {},
-        )
-        if api in additional_protocols:
-            _, additional_protocol, additional_api = additional_protocols[api]
-            impls[additional_api] = await get_client_impl(
-                additional_protocol,
-                config,
-                {},
-            )
-
-    return impls

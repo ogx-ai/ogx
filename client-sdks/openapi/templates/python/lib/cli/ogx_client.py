@@ -33,7 +33,6 @@ from .models import models
 from .post_training import post_training
 from .providers import providers
 from .scoring_functions import scoring_functions
-from .shields import shields
 from .toolgroups import toolgroups
 from .vector_stores import vector_stores
 
@@ -92,7 +91,6 @@ def ogx_client(ctx, endpoint: str, api_key: str, config: str | None):
 # Register all subcommands
 ogx_client.add_command(models, "models")
 ogx_client.add_command(vector_stores, "vector_stores")
-ogx_client.add_command(shields, "shields")
 ogx_client.add_command(eval_tasks, "eval_tasks")
 ogx_client.add_command(providers, "providers")
 ogx_client.add_command(datasets, "datasets")

@@ -20,7 +20,8 @@ from ogx.core.access_control.conditions import ProtectedResource
 from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 from ogx.core.datatypes import User
 from ogx.core.request_headers import get_authenticated_user
-from ogx.core.storage.datatypes import StorageBackendType
+from ogx.core.storage.datatypes import SqlStoreReference, StorageBackendType
+from ogx.core.storage.sqlstore.sqlstore import _sqlstore_impl
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
@@ -79,6 +80,14 @@ class SqlRecord(ProtectedResource):
         self.type = f"sql_record::{table_name}"
         self.identifier = record_id
         self.owner = owner
+
+
+def authorized_sqlstore(reference: SqlStoreReference, policy: list[AccessRule]) -> "AuthorizedSqlStore":
+    """Create an AuthorizedSqlStore from a store reference and access policy.
+
+    This is the only supported way to obtain a SQL store for API use.
+    """
+    return AuthorizedSqlStore(_sqlstore_impl(reference), policy)
 
 
 class AuthorizedSqlStore:

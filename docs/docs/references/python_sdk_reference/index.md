@@ -16,7 +16,6 @@ from ogx_client.types import (
     QueryConfig,
     QueryResult,
     ReturnType,
-    SafetyViolation,
     SamplingParams,
     ScoringResult,
     SystemMessage,
@@ -96,7 +95,6 @@ Types:
 from ogx_client.types import (
     InferenceStep,
     MemoryRetrievalStep,
-    ShieldCallStep,
     ToolExecutionStep,
     ToolResponse,
     AgentCreateResponse,
@@ -365,32 +363,6 @@ from ogx_client.types import ListRoutesResponse, RouteListResponse
 Methods:
 
 - <code title="get /v1/inspect/routes">client.routes.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/routes.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/route_list_response.py">RouteListResponse</a></code>
-
-## Safety
-
-Types:
-
-```python
-from ogx_client.types import RunShieldResponse
-```
-
-Methods:
-
-- <code title="post /v1/safety/run-shield">client.safety.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/safety.py">run_shield</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/safety_run_shield_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/run_shield_response.py">RunShieldResponse</a></code>
-
-## Shields
-
-Types:
-
-```python
-from ogx_client.types import ListShieldsResponse, Shield, ShieldListResponse
-```
-
-Methods:
-
-- <code title="get /v1/shields/{identifier}">client.shields.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/shields.py">retrieve</a>(identifier) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/shield.py">Optional[Shield]</a></code>
-- <code title="get /v1/shields">client.shields.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/shields.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/shield_list_response.py">ShieldListResponse</a></code>
-- <code title="post /v1/shields">client.shields.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/shields.py">register</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/shield_register_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/shield.py">Shield</a></code>
 
 ## SyntheticDataGeneration
 

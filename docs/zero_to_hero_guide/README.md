@@ -104,7 +104,7 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
    export OLLAMA_URL="http://localhost:11434"
    export OGX_PORT=8321
    export INFERENCE_MODEL="meta-llama/Llama-3.2-3B-Instruct"
-   export SAFETY_MODEL="meta-llama/Llama-Guard-3-1B"
+   export MODERATION_ENDPOINT="http://localhost:11434/v1/moderations"
    ```
 
 4. **Run the OGX**:
@@ -112,7 +112,7 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
 
    ```bash
    INFERENCE_MODEL=$INFERENCE_MODEL \
-   SAFETY_MODEL=$SAFETY_MODEL \
+   MODERATION_ENDPOINT=$MODERATION_ENDPOINT \
    OLLAMA_URL=$OLLAMA_URL \
    uv run --with ogx ogx stack run starter \
       --port $OGX_PORT
@@ -290,7 +290,6 @@ This command initializes the model to interact with your local OGX instance.
 - [Chat with Image - OGX Vision API](03_Image_Chat101.ipynb)
 - [Tool Calling: How to and Details](04_Tool_Calling101.ipynb)
 - [Memory API: Show Simple In-Memory Retrieval](05_Memory101.ipynb)
-- [Using Safety API in Conversation](06_Safety101.ipynb)
 - [Agents API: Explain Components](07_Agents101.ipynb)
 
 **Explore Client SDKs**: Utilize our client SDKs for various languages to integrate OGX into your applications:

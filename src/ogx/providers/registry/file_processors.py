@@ -22,14 +22,15 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::auto",
-            pip_packages=["pypdf>=6.7.2"],
+            pip_packages=["pypdf>=6.7.2", "markitdown[all]"],
             module="ogx.providers.inline.file_processor.auto",
             config_class="ogx.providers.inline.file_processor.auto.AutoFileProcessorConfig",
             api_dependencies=[Api.files],
             description=(
                 "Composite file processor that automatically dispatches to the appropriate backend "
-                "based on file MIME type. Routes PDF and text files to PyPDF. Unsupported formats "
-                "are rejected with a clear error listing the supported types."
+                "based on file MIME type. Routes PDF and text files to PyPDF, and office/structured "
+                "formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. "
+                "Unsupported formats are rejected with a clear error listing the supported types."
             ),
         ),
         InlineProviderSpec(
@@ -40,6 +41,50 @@ def available_providers() -> list[ProviderSpec]:
             config_class="ogx.providers.inline.file_processor.pypdf.PyPDFFileProcessorConfig",
             api_dependencies=[Api.files],
             description="PyPDF-based file processor for extracting text content from documents.",
+        ),
+        InlineProviderSpec(
+            api=Api.file_processors,
+            provider_type="inline::markitdown",
+            pip_packages=["markitdown[all]"],
+            module="ogx.providers.inline.file_processor.markitdown",
+            config_class="ogx.providers.inline.file_processor.markitdown.MarkItDownFileProcessorConfig",
+            api_dependencies=[Api.files],
+            description="""
+[MarkItDown](https://github.com/microsoft/markitdown) is a lightweight, multi-format file processor
+that converts documents to Markdown using Microsoft's MarkItDown library. It supports a wide range of
+document types without the heavy ML dependencies required by Docling.
+
+## Supported Formats
+
+- **Documents**: PDF, DOCX, PPTX, XLSX, RTF
+- **Web**: HTML
+- **Data**: CSV, JSON, XML
+- **Code**: Python, JavaScript, TypeScript, Go, Rust, Java, C/C++, and more
+- **Text**: TXT, Markdown, RST, LaTeX
+
+## Usage
+
+Start OGX with the MarkItDown file processor:
+
+```bash
+ogx stack run --providers "file_processors=inline::markitdown" --port 8321
+```
+
+Or add it to a custom `run.yaml`:
+
+```yaml
+file_processors:
+  - provider_id: markitdown
+    provider_type: inline::markitdown
+    config: {}
+```
+
+## When to Use
+
+Choose `inline::markitdown` when you need multi-format support with minimal dependencies.
+For structure-aware parsing with table, heading, and layout preservation, use `inline::docling`
+or `remote::docling-serve` instead.
+""",
         ),
         InlineProviderSpec(
             api=Api.file_processors,

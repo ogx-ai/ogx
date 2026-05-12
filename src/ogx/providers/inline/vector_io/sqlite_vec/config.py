@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ogx.core.storage.datatypes import KVStoreReference
+from ogx.core.storage.datatypes import KVStoreReference, SqlStoreReference
 
 
 class SQLiteVectorIOConfig(BaseModel):
@@ -16,6 +16,10 @@ class SQLiteVectorIOConfig(BaseModel):
 
     db_path: str = Field(description="Path to the SQLite database file")
     persistence: KVStoreReference = Field(description="Config for KV store backend (SQLite only for now)")
+    metadata_store: SqlStoreReference | None = Field(
+        default=None,
+        description="SQL store reference for tenant-isolated vector store metadata",
+    )
 
     @classmethod
     def sample_run_config(cls, __distro_dir__: str) -> dict[str, Any]:

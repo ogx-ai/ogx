@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from psycopg2 import sql
 from psycopg2.extensions import cursor
 from psycopg2.extras import Json, execute_values
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
 
 from ogx.core.storage.kvstore import kvstore_impl
 from ogx.log import get_logger
@@ -136,21 +136,6 @@ def remove_vector_store_metadata(conn: psycopg2.extensions.connection, vector_st
         raise RuntimeError(
             f"Error removing metadata from PGVector metadata_store for vector_store: {vector_store_id}"
         ) from e
-
-
-def load_models(cur, cls):
-    """Load and deserialize all models from the metadata_store table.
-
-    Args:
-        cur: database cursor
-        cls: Pydantic model class to deserialize into
-
-    Returns:
-        List of validated model instances
-    """
-    cur.execute("SELECT key, data FROM metadata_store")
-    rows = cur.fetchall()
-    return [TypeAdapter(cls).validate_python(row["data"]) for row in rows]
 
 
 class PGVectorIndex(EmbeddingIndex):
@@ -786,6 +771,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         inference_api: Inference,
         files_api: Files | None = None,
         file_processor_api: FileProcessors | None = None,
+        policy: list | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -795,12 +781,19 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         self.cache = {}
         self.vector_store_table = None
         self.metadata_collection_name = "openai_vector_stores_metadata"
+        self._policy = policy or []
 
     async def initialize(self) -> None:
         # Create a safe config representation with masked password for logging
         safe_config = {**self.config.model_dump(exclude={"password"}), "password": "******"}
         log.info(f"Initializing PGVector memory adapter with config: {safe_config}")
         self.kvstore = await kvstore_impl(self.config.persistence)
+
+        if self.config.metadata_store:
+            from ogx.core.storage.sqlstore import authorized_sqlstore
+
+            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+
         await self.initialize_openai_vector_stores()
 
         try:

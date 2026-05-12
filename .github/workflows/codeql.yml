@@ -4,9 +4,9 @@ on:
   pull_request:
     # PRs are checked for new issues
     branches: [ "main" ]
-    # Limit scans to changes in the .github directory, bash scripts are not scanned anyway
     paths:
       - '.github/**'
+      - 'src/**'
 
 jobs:
   analyze:
@@ -15,10 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # actions is the most specific language option for
-        # codeql does NOT support Bash
-        # In case javascript is used in workflows, that should be added or replace
-        language: [ 'actions' ]
+        language: [ 'actions', 'python' ]
 
     steps:
     - name: Checkout repository
@@ -26,7 +23,7 @@ jobs:
 
     # Initializes CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v3
+      uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v3
       with:
         languages: ${{ matrix.language }}
         # "security-extended" is recommended for higher severity coverage - not necessary can be removed to speed up
@@ -35,6 +32,6 @@ jobs:
     # Scans the code and uploads results to GitHub Security tab.
     # The "Fail on High" logic is handled by Branch Protection Rules in Settings
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@e46ed2cbd01164d986452f91f178727624ae40d7 # v3
+      uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v3
       with:
         category: "/language:${{ matrix.language }}"

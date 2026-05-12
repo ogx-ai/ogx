@@ -21,7 +21,6 @@ import yaml
 import zstandard
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import BadRequestError
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -30,7 +29,6 @@ from ogx.core.access_control.access_control import AccessDeniedError
 from ogx.core.datatypes import (
     AuthenticationRequiredError,
     StackConfig,
-    process_cors_config,
 )
 from ogx.core.distribution import builtin_automatically_routed_apis
 from ogx.core.exceptions import translate_exception
@@ -46,8 +44,6 @@ from ogx.core.server.fastapi_router_registry import (
 )
 from ogx.core.stack import (
     Stack,
-    cast_distro_name_to_string,
-    replace_env_vars,
 )
 from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.config_dirs import migrate_legacy_config_dir
@@ -58,7 +54,6 @@ from ogx_api.common.errors import OpenAIErrorResponse
 
 from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware
 from .metrics import RequestMetricsMiddleware, build_route_to_api_map
-from .quota import QuotaMiddleware
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 
@@ -253,8 +248,9 @@ def create_app() -> StackApp:
 
         logger = get_logger(name=__name__, category="core::server", config=logger_config)
 
-        config = replace_env_vars(config_contents)
-        config = StackConfig(**cast_distro_name_to_string(config))
+        from ogx.core.configure import parse_and_maybe_upgrade_config
+
+        config = parse_and_maybe_upgrade_config(config_contents)
 
     _log_run_config(run_config=config)
 
@@ -288,41 +284,6 @@ def create_app() -> StackApp:
         if config.server.auth.provider_config:
             logger.info("Enabling authentication", provider=config.server.auth.provider_config.type.value)
             app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth, impls=impls)
-    else:
-        if config.server.quota:
-            quota = config.server.quota
-            logger.warning(
-                "Configured authenticated_max_requests (%d) but no auth is enabled; "
-                "falling back to anonymous_max_requests (%d) for all the requests",
-                quota.authenticated_max_requests,
-                quota.anonymous_max_requests,
-            )
-
-    if config.server.quota:
-        logger.info("Enabling quota middleware for authenticated and anonymous clients")
-
-        quota = config.server.quota
-        anonymous_max_requests = quota.anonymous_max_requests
-        # if auth is disabled, use the anonymous max requests
-        authenticated_max_requests = quota.authenticated_max_requests if config.server.auth else anonymous_max_requests
-
-        kv_config = quota.kvstore
-        window_map = {"day": 86400}
-        window_seconds = window_map[quota.period.value]
-
-        app.add_middleware(
-            QuotaMiddleware,
-            kv_config=kv_config,
-            anonymous_max_requests=anonymous_max_requests,
-            authenticated_max_requests=authenticated_max_requests,
-            window_seconds=window_seconds,
-        )
-
-    if config.server.cors:
-        logger.info("Enabling CORS")
-        cors_config = process_cors_config(config.server.cors)
-        if cors_config:
-            app.add_middleware(CORSMiddleware, **cors_config.model_dump())
 
     # Load and register external API routers if configured
     external_apis = load_external_apis(config)
@@ -345,10 +306,9 @@ def create_app() -> StackApp:
     apis_to_serve.add("providers")
     apis_to_serve.add("prompts")
     apis_to_serve.add("conversations")
-    apis_to_serve.add("connectors")
 
     # Build route-to-API mapping and add request metrics middleware.
-    # Added last so it runs first (outermost), wrapping auth/quota/cors.
+    # Added last so it runs first (outermost), wrapping auth.
     route_to_api = build_route_to_api_map(_ROUTER_FACTORIES, impls)
     app.add_middleware(RequestMetricsMiddleware, route_to_api=route_to_api)
 

@@ -81,6 +81,7 @@ async def conversation_service():
                 metadata=None,
                 inference=None,
                 prompts=None,
+                connectors=None,
             ),
         )
         register_sqlstore_backends({"sql_sec": storage.backends["sql_sec"]})

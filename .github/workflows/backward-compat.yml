@@ -117,7 +117,7 @@ jobs:
           fi
 
           # Check PR title for '!:' marker (conventional commits)
-          if [[ "$PR_TITLE" =~ ^[a-z]+\!: ]]; then
+          if [[ "$PR_TITLE" =~ ^[a-z]+(\([a-z0-9_-]+\))?\!: ]]; then
             echo "✓ Breaking change acknowledged in PR title"
             echo "acknowledged=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -224,7 +224,7 @@ jobs:
           fi
 
           # Check PR title for '!:' marker (conventional commits)
-          if [[ "$PR_TITLE" =~ ^[a-z]+\!: ]]; then
+          if [[ "$PR_TITLE" =~ ^[a-z]+(\([a-z0-9_-]+\))?\!: ]]; then
             echo "✓ Breaking change acknowledged in PR title"
             echo "acknowledged=true" >> "$GITHUB_OUTPUT"
             exit 0

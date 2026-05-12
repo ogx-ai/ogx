@@ -8,7 +8,8 @@ import mimetypes
 
 from fastapi import HTTPException, UploadFile
 
-from ogx.log import get_logger
+from ogx.providers.inline.file_processor.markitdown.config import MarkItDownFileProcessorConfig
+from ogx.providers.inline.file_processor.markitdown.markitdown_processor import MarkItDownFileProcessor
 from ogx.providers.inline.file_processor.pypdf.config import PyPDFFileProcessorConfig
 from ogx.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
@@ -16,16 +17,49 @@ from ogx_api.files import RetrieveFileRequest
 
 from .config import AutoFileProcessorConfig
 
-log = get_logger(name=__name__, category="providers::file_processors")
+# MIME types routed to MarkItDown. Derived from markitdown's bundled converters:
+# DocxConverter, PptxConverter, XlsxConverter, XlsConverter, HtmlConverter,
+# EpubConverter, OutlookMsgConverter, IpynbConverter, RssConverter, ImageConverter,
+# AudioConverter, ZipConverter. CSV, JSON, XML, and text/* are handled by PyPDF.
+MARKITDOWN_MIME_TYPES = {
+    # Office documents
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+    "application/msword",  # .doc
+    "application/vnd.ms-powerpoint",  # .ppt
+    "application/vnd.ms-excel",  # .xls
+    "application/rtf",  # .rtf
+    # Structured formats
+    "application/epub+zip",  # .epub
+    "application/rss+xml",  # .rss
+    # Archives
+    "application/zip",  # .zip
+    # Images
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/bmp",
+    "image/tiff",
+    "image/webp",
+    # Audio
+    "audio/mpeg",  # .mp3
+    "audio/x-wav",  # .wav
+}
 
-SUPPORTED_TEXT_DESCRIPTION = "PDF and text files (txt, csv, md, etc.)"
+SUPPORTED_DESCRIPTION = (
+    "PDF, text (txt, csv, md, json, xml, html, code), "
+    "office (DOCX, PPTX, XLSX, XLS, DOC, PPT, RTF), "
+    "EPUB, RSS, ZIP, images, and audio"
+)
 
 
 class AutoFileProcessor:
     """Composite file processor that dispatches to backends based on MIME type.
 
-    Routes PDF and text files to the built-in PyPDF processor. Unsupported
-    formats are rejected with a 422 error listing the supported types.
+    Routes PDF and text files to PyPDF. Office documents, images, audio, and
+    other rich formats are routed to MarkItDown. Unsupported formats are
+    rejected with a 422 error listing the supported types.
     """
 
     def __init__(self, config: AutoFileProcessorConfig, files_api) -> None:
@@ -39,6 +73,12 @@ class AutoFileProcessor:
             clean_text=config.clean_text,
         )
         self.pypdf = PyPDFFileProcessor(pypdf_config, files_api)
+
+        markitdown_config = MarkItDownFileProcessorConfig(
+            default_chunk_size_tokens=config.default_chunk_size_tokens,
+            default_chunk_overlap_tokens=config.default_chunk_overlap_tokens,
+        )
+        self.markitdown = MarkItDownFileProcessor(markitdown_config, files_api)
 
     async def process_file(
         self,
@@ -57,11 +97,12 @@ class AutoFileProcessor:
                 chunking_strategy=request.chunking_strategy,
             )
 
+        if mime_type in MARKITDOWN_MIME_TYPES:
+            return await self.markitdown.process_file(request=request, file=file)
+
         raise HTTPException(
             status_code=422,
-            detail=(
-                f"File type '{mime_type or 'unknown'}' is not supported. Supported types: {SUPPORTED_TEXT_DESCRIPTION}."
-            ),
+            detail=f"File type '{mime_type or 'unknown'}' is not supported. Supported types: {SUPPORTED_DESCRIPTION}.",
         )
 
     async def _resolve_filename(self, request: ProcessFileRequest, file: UploadFile | None) -> str:

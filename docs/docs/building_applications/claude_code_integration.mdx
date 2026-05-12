@@ -79,18 +79,29 @@ Claude Code → Llama Stack /v1/messages → Provider
 
 ### Specifying Models
 
-Always use the `--model` flag to specify which Llama Stack model to use:
+You can use `--model` to specify which OGX model to use directly:
 
 ```bash
-# Use any provider model registered in Llama Stack
-claude --model "openai/gpt-4o-mini" "Hello world"
+claude --model "ollama/llama3.2:3b" "Hello world"
 claude --model "vllm/Qwen/Qwen3-8B" "Write code"
-claude --model "ollama/llama3.3:70b" "Explain algorithms"
 ```
 
-### Automatic Model Aliasing
+:::note
+Some providers may return errors when Claude Code requests a `max_tokens` value higher than the model supports (e.g., OpenAI models). In that case, use the environment variable approach below, which lets OGX handle the mapping automatically.
+:::
 
-The starter distribution automatically registers Claude model name aliases across all providers. This handles Claude Code's internal requests seamlessly:
+### Model Aliasing via Environment Variables (Recommended)
+
+The recommended approach is to let OGX map Claude's internal model names to your backend models. Claude Code internally uses Claude model names (e.g., `claude-sonnet-4-5`, `claude-haiku-4-5-20251001`) for different tiers of work. You control which backend model each tier maps to with environment variables:
+
+```bash
+# Map Claude model tiers to your backend models
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="openai/gpt-4o-mini"   # Fast/cheap tier
+export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"       # Balanced tier
+export ANTHROPIC_DEFAULT_OPUS_MODEL="openai/o1"              # Most capable tier
+```
+
+When Claude Code sends a request for `claude-haiku-4-5-20251001`, OGX routes it to the model specified by `ANTHROPIC_DEFAULT_HAIKU_MODEL`. The starter distribution automatically registers these aliases across all providers:
 
 ```yaml
 # Pre-configured in starter config.yaml
@@ -101,8 +112,6 @@ registered_resources:
     provider_model_id: "auto"  # Auto-maps to appropriate model
     model_type: llm
 ```
-
-When Claude Code sends internal requests using Claude model names, these aliases automatically route to your specified model. You never need to reference the Claude model names directly—just use `--model` with your actual Llama Stack models.
 
 ## Supported Features
 
@@ -185,9 +194,9 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"
 # Most capable → OpenAI o1
 export ANTHROPIC_DEFAULT_OPUS_MODEL="openai/o1"
 
-# Claude Code will route based on which model name it sends
+# Claude Code routes based on which model name it sends internally
 claude "Quick task"  # Uses haiku → vLLM
-claude --model claude-sonnet-4-5 "Complex task"  # Uses sonnet → OpenAI GPT-4o
+claude "Complex task"  # Uses sonnet → OpenAI GPT-4o
 ```
 
 ## Troubleshooting
@@ -196,12 +205,15 @@ claude --model claude-sonnet-4-5 "Complex task"  # Uses sonnet → OpenAI GPT-4o
 
 **Symptom**: `404 Model 'claude-haiku-4-5-20251001' not found`
 
-**Solution**: Set the appropriate environment variable:
+**Solution**: Either pass the model directly or set the appropriate environment variable:
 
 ```bash
+# Option 1: Direct model specification
+claude --model "your-provider/your-model" "your prompt"
+
+# Option 2: Environment variable mapping (recommended)
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="your-provider/your-model"
-# Or explicitly pass --model to claude command
-claude --model "openai/gpt-4o-mini" "your prompt"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="your-provider/your-model"
 ```
 
 ### "API key not valid" errors when using local providers
@@ -212,6 +224,29 @@ claude --model "openai/gpt-4o-mini" "your prompt"
 
 ```bash
 export ANTHROPIC_API_KEY="fake"
+```
+
+### `max_tokens` errors with OpenAI models
+
+**Symptom**: `BadRequestError: max_tokens is too large: 32000. This model supports at most 16384 completion tokens`
+
+**Explanation**: Claude Code requests a `max_tokens` value based on Claude model limits, which may exceed what the backend model supports. This is common with OpenAI models.
+
+**Workaround**: Use a model that supports a higher token limit, or use the environment variable approach which allows OGX to handle the mapping. This is a known limitation when using `--model` with providers that enforce strict token limits.
+
+### Claude Code ignores `ANTHROPIC_BASE_URL`
+
+**Symptom**: Claude Code connects directly to Anthropic (or Vertex AI / Bedrock) instead of your OGX server.
+
+**Explanation**: If `CLAUDE_CODE_USE_VERTEX=1`, `CLAUDE_CODE_USE_BEDROCK=1`, or related Vertex/Bedrock environment variables are set, Claude Code bypasses `ANTHROPIC_BASE_URL` entirely.
+
+**Solution**: Unset these variables before starting Claude Code:
+
+```bash
+unset CLAUDE_CODE_USE_VERTEX
+unset ANTHROPIC_VERTEX_PROJECT_ID
+unset CLAUDE_CODE_USE_BEDROCK
+unset ANTHROPIC_BEDROCK_SESSION_TOKEN
 ```
 
 ### Slow responses with cloud providers

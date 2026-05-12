@@ -5,11 +5,15 @@
 # the root directory of this source tree.
 
 import asyncio
+import atexit
+import concurrent.futures
 import inspect
 import json
 import logging  # allow-direct-logging
 import os
+import queue
 import sys
+import threading
 import typing
 from collections.abc import AsyncGenerator, Generator
 from enum import Enum
@@ -53,6 +57,12 @@ from ogx.log import get_logger, setup_logging
 logger = get_logger(name=__name__, category="core")
 
 T = TypeVar("T")
+
+_INIT_TIMEOUT: float = 60.0
+_SHUTDOWN_TIMEOUT: float = 10.0
+_CLEANUP_TIMEOUT: float = 5.0
+_HANG_GUARD_TIMEOUT: float = 600.0
+_STREAM_HEARTBEAT_INTERVAL: float = 1.0
 
 
 def convert_pydantic_to_json_value(value: Any) -> Any:
@@ -156,7 +166,11 @@ class LibraryClientHttpxResponse:
 
 
 class OGXAsLibraryClient(OgxClient):
-    """Synchronous client that runs a OGX distribution in-process as a library."""
+    """Synchronous client that runs a OGX distribution in-process as a library.
+
+    This is a sync-on-async implementation wrapping `AsyncOGXAsLibraryClient` class,
+    starting a daemon loop thread, which will be shut down when the main thread exits.
+    """
 
     def __init__(
         self,
@@ -170,24 +184,39 @@ class OGXAsLibraryClient(OgxClient):
             config_path_or_distro_name, custom_provider_registry, provider_data, skip_logger_removal
         )
         self.provider_data = provider_data
+        self._shutdown_lock: threading.Lock = threading.Lock()
+        self._shutdown = False
 
+        # stick with one loop and run it in a dedicated daemon thread
         self.loop = asyncio.new_event_loop()
+        self.loop_thread = threading.Thread(
+            target=self._run_event_loop, daemon=True, name="ogx-lib-sync-client-event-loop"
+        )
+        self.loop_thread.start()
 
-        # use a new event loop to avoid interfering with the main event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(self.async_client.initialize())
+            future = asyncio.run_coroutine_threadsafe(self.async_client.initialize(), self.loop)
+            future.result(timeout=_INIT_TIMEOUT)  # Block until initialization completes + timeout if hangs
+        except Exception:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.loop_thread.join(timeout=_CLEANUP_TIMEOUT)
+            raise
+
+        atexit.register(self.shutdown)  # Safety net: if the user forgets to shutdown properly
+
+    def _run_event_loop(self) -> None:
+        """Runs forever in the background thread."""
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_forever()
         finally:
-            asyncio.set_event_loop(None)
+            self.loop.close()  # Close the loop when the thread is instructed to stop
 
     def initialize(self) -> None:
-        """
-        Deprecated method for backward compatibility.
-        """
+        """Deprecated method for backward compatibility."""
         pass
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float = _SHUTDOWN_TIMEOUT) -> None:
         """Shutdown the client and release all resources.
 
         This method should be called when you're done using the client to properly
@@ -197,18 +226,40 @@ class OGXAsLibraryClient(OgxClient):
 
         This method is idempotent and can be called multiple times safely.
 
+        Args:
+            timeout: Maximum seconds to wait for graceful shutdown before forcing close.
+
+        **IMPORTANT!** `shutdown()` is not safe to call concurrently with requests!
+        Use the client as a context manager to assure proper shutdown.
+
         Example:
-            client = OGXAsLibraryClient("starter")
-            # ... use the client ...
-            client.shutdown()
+            with OGXAsLibraryClient("starter") as client:
+                # ... use the client ...
         """
-        loop = self.loop
-        asyncio.set_event_loop(loop)
+        # Guard against calling shutdown before init finishes, or multiple times
+        with self._shutdown_lock:
+            if self._shutdown:
+                return
+            self._shutdown = True
+        if not self.loop.is_running():
+            return
+
+        future = asyncio.run_coroutine_threadsafe(self.async_client.shutdown(), self.loop)
         try:
-            loop.run_until_complete(self.async_client.shutdown())
-        finally:
-            loop.close()
-            asyncio.set_event_loop(None)
+            future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            logger.warning("Async client shutdown timed out", timeout=timeout)
+            future.cancel()
+        except Exception as e:
+            logger.warning("Unexpected error during async client shutdown", exception=e)
+
+        # Safely instruct the background loop to stop
+        self.loop.call_soon_threadsafe(self.loop.stop)
+
+        # Wait for the thread to actually exit
+        self.loop_thread.join(timeout=timeout)
+        if self.loop_thread.is_alive():
+            logger.error("Background event loop thread failed to join (zombie thread)")
 
     def __enter__(self) -> "OGXAsLibraryClient":
         """Enter the context manager.
@@ -227,33 +278,77 @@ class OGXAsLibraryClient(OgxClient):
         self.shutdown()
 
     def request(self, *args: Any, **kwargs: Any) -> Any:
-        loop = self.loop
-        asyncio.set_event_loop(loop)
-
+        # Route streaming vs non-streaming
         if kwargs.get("stream"):
+            return self._stream_request(*args, **kwargs)
 
-            def sync_generator() -> Generator[Any, None, None]:
-                try:
-                    async_stream = loop.run_until_complete(self.async_client.request(*args, **kwargs))
-                    while True:
-                        chunk = loop.run_until_complete(async_stream.__anext__())
-                        yield chunk
-                except StopAsyncIteration:
-                    pass
-                finally:
-                    pending = asyncio.all_tasks(loop)
-                    if pending:
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        coro = self.async_client.request(*args, **kwargs)
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        # the giant timeout here is to prevent it from hanging forever:
+        return future.result(timeout=_HANG_GUARD_TIMEOUT)
 
-            return sync_generator()
-        else:
+    def _stream_request(self, *args: Any, **kwargs: Any) -> Generator[Any, None, None]:
+        """Thread-safe synchronous generator wrapper around an async generator."""
+        # 32 chunks of buffering. LLM token rate makes OOM from unbounded queue unlikely
+        # but a bound prevents runaway memory if the consumer stalls.
+        q: queue.Queue = queue.Queue(maxsize=32)
+
+        async def _consume() -> None:
+            async_gen = None
             try:
-                result = loop.run_until_complete(self.async_client.request(*args, **kwargs))
+                async_gen = await self.async_client.request(*args, **kwargs)
+                async for chunk in async_gen:
+                    while True:
+                        try:
+                            q.put_nowait(("chunk", chunk))
+                            break
+                        except queue.Full:
+                            await asyncio.sleep(0.01)
+
+                while True:
+                    try:
+                        q.put_nowait(("done", None))
+                        break
+                    except queue.Full:
+                        await asyncio.sleep(0.01)
+
+            except asyncio.CancelledError:
+                pass
+            except Exception as err:
+                while True:
+                    try:
+                        q.put_nowait(("error", err))
+                        break
+                    except queue.Full:
+                        await asyncio.sleep(0.01)
             finally:
-                pending = asyncio.all_tasks(loop)
-                if pending:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            return result
+                if async_gen is not None:
+                    await async_gen.aclose()
+
+        future = asyncio.run_coroutine_threadsafe(_consume(), self.loop)
+
+        try:
+            while True:
+                try:
+                    # Timeout prevents the sync thread from hanging forever if the loop dies or shutdown is called.
+                    msg_type, payload = q.get(timeout=1.0)
+                except queue.Empty as err:
+                    with self._shutdown_lock:
+                        if self._shutdown:
+                            raise RuntimeError("Client was shut down during streaming") from err
+
+                    if not self.loop.is_running():
+                        raise RuntimeError("Event loop crashed during streaming") from err
+                    continue
+
+                if msg_type == "chunk":
+                    yield payload
+                elif msg_type == "error":
+                    raise payload
+                elif msg_type == "done":
+                    break
+        finally:
+            future.cancel()
 
 
 class AsyncOGXAsLibraryClient(AsyncOgxClient):

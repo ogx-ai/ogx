@@ -76,7 +76,7 @@ async def test_routes_markdown_to_pypdf(auto_processor):
     assert len(result.chunks) >= 1
 
 
-async def test_rejects_docx_with_422(auto_processor):
+async def test_routes_docx_to_markitdown(auto_processor):
     docx_bytes = b"PK\x03\x04fake_docx_content"
     file = UploadFile(filename="test.docx", file=io.BytesIO(docx_bytes))
     request = ProcessFileRequest()
@@ -85,10 +85,10 @@ async def test_rejects_docx_with_422(auto_processor):
         await auto_processor.process_file(request, file=file)
 
     assert exc_info.value.status_code == 422
-    assert "not supported" in exc_info.value.detail.lower()
+    assert "Failed to process file" in exc_info.value.detail
 
 
-async def test_rejects_pptx_with_422(auto_processor):
+async def test_routes_pptx_to_markitdown(auto_processor):
     pptx_bytes = b"PK\x03\x04fake_pptx_content"
     file = UploadFile(filename="presentation.pptx", file=io.BytesIO(pptx_bytes))
     request = ProcessFileRequest()
@@ -97,43 +97,30 @@ async def test_rejects_pptx_with_422(auto_processor):
         await auto_processor.process_file(request, file=file)
 
     assert exc_info.value.status_code == 422
-    assert "not supported" in exc_info.value.detail.lower()
+    assert "Failed to process file" in exc_info.value.detail
 
 
-async def test_rejects_xlsx_with_422(auto_processor):
+async def test_routes_xlsx_to_markitdown(auto_processor):
     xlsx_bytes = b"PK\x03\x04fake_xlsx_content"
     file = UploadFile(filename="data.xlsx", file=io.BytesIO(xlsx_bytes))
+    request = ProcessFileRequest()
+
+    result = await auto_processor.process_file(request, file=file)
+    assert result is not None
+    assert result.metadata["processor"] == "markitdown"
+
+
+async def test_rejects_unsupported_format_with_422(auto_processor):
+    file = UploadFile(filename="test.xyz", file=io.BytesIO(b"some data"))
     request = ProcessFileRequest()
 
     with pytest.raises(HTTPException) as exc_info:
         await auto_processor.process_file(request, file=file)
 
     assert exc_info.value.status_code == 422
-    assert "not supported" in exc_info.value.detail.lower()
-
-
-async def test_error_message_lists_supported_types(auto_processor):
-    docx_bytes = b"PK\x03\x04fake_docx_content"
-    file = UploadFile(filename="test.docx", file=io.BytesIO(docx_bytes))
-    request = ProcessFileRequest()
-
-    with pytest.raises(HTTPException) as exc_info:
-        await auto_processor.process_file(request, file=file)
-
-    detail = exc_info.value.detail
-    assert "pdf" in detail.lower()
-    assert "text" in detail.lower()
-
-
-async def test_error_message_includes_mime_type(auto_processor):
-    docx_bytes = b"PK\x03\x04fake_docx_content"
-    file = UploadFile(filename="test.docx", file=io.BytesIO(docx_bytes))
-    request = ProcessFileRequest()
-
-    with pytest.raises(HTTPException) as exc_info:
-        await auto_processor.process_file(request, file=file)
-
-    assert "application/vnd.openxmlformats" in exc_info.value.detail
+    detail = exc_info.value.detail.lower()
+    assert "not supported" in detail
+    assert "pdf" in detail
 
 
 async def test_routes_file_id_using_resolved_filename(auto_processor_with_files_api):

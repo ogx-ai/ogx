@@ -28,7 +28,7 @@ Here are the most important options:
   - **`server:<config>:<port>`** - same as above but with a custom port (e.g., `server:starter:8322`)
   - a URL which points to a OGX distribution server
   - a distribution name (e.g., `starter`) or a path to a `config.yaml` file
-  - a comma-separated list of api=provider pairs, e.g. `inference=ollama,safety=llama-guard,agents=builtin`. This is most useful for testing a single API surface.
+  - a comma-separated list of api=provider pairs, e.g. `inference=ollama,responses=builtin`. This is most useful for testing a single API surface.
 - `--env`: set environment variables, e.g. --env KEY=value. this is a utility option to set environment variables required by various providers.
 
 Model parameters can be influenced by the following options:
@@ -36,7 +36,6 @@ Model parameters can be influenced by the following options:
 - `--text-model`: comma-separated list of text models.
 - `--vision-model`: comma-separated list of vision models.
 - `--embedding-model`: comma-separated list of embedding models.
-- `--safety-shield`: comma-separated list of safety shields.
 - `--judge-model`: comma-separated list of judge models.
 - `--embedding-dimension`: output dimensionality of the embedding model to use for testing. Default: 768
 
@@ -109,11 +108,11 @@ You can do this by simply using `--stack-config=starter` instead of `--stack-con
 
 ### Using ad-hoc distributions
 
-Sometimes, you may want to make up a distribution on the fly. This is useful for testing a single provider or a single API or a small combination of providers. You can do so by specifying a comma-separated list of api=provider pairs to the `--stack-config` option, e.g. `inference=remote::ollama,safety=inline::llama-guard,agents=inline::builtin`.
+Sometimes, you may want to make up a distribution on the fly. This is useful for testing a single provider or a single API or a small combination of providers. You can do so by specifying a comma-separated list of api=provider pairs to the `--stack-config` option, e.g. `inference=remote::ollama,responses=inline::builtin`.
 
 ```bash
 pytest -s -v tests/integration/inference/ \
-   --stack-config=inference=remote::ollama,safety=inline::llama-guard,agents=inline::builtin \
+   --stack-config=inference=remote::ollama,responses=inline::builtin \
    --text-model=$TEXT_MODELS \
    --vision-model=$VISION_MODELS \
    --embedding-model=$EMBEDDING_MODELS
@@ -338,7 +337,6 @@ integration/
   providers/           # Provider-specific tests
   recordings/          # Cached API responses for replay mode
   responses/           # OpenAI Responses API tests
-  safety/              # Safety API tests
   scoring/             # Scoring tests
   telemetry/           # Telemetry tests
   test_cases/          # Shared test case definitions

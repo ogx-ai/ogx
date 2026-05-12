@@ -6,10 +6,10 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 
 
-class WolframAlphaToolConfig(BaseModel):
+class WolframAlphaToolConfig(BaseToolRuntimeConfig):
     """Configuration for WolframAlpha Tool Runtime"""
 
     api_key: str | None = None

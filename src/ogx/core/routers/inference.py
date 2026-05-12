@@ -26,10 +26,12 @@ from ogx.telemetry.inference_metrics import (
     inference_tokens_per_second,
 )
 from ogx_api import (
+    ChatCompletionMessageList,
     GetChatCompletionRequest,
     HealthResponse,
     HealthStatus,
     Inference,
+    ListChatCompletionMessagesRequest,
     ListChatCompletionsRequest,
     ListOpenAIChatCompletionResponse,
     ModelNotFoundError,
@@ -53,6 +55,7 @@ from ogx_api import (
     OpenAIMessageParam,
     OpenAITokenLogProb,
     OpenAITopLogProb,
+    Order,
     RegisterModelRequest,
     RerankResponse,
     RoutingTable,
@@ -322,6 +325,19 @@ class InferenceRouter(Inference):
         if self.store:
             return await self.store.get_chat_completion(request.completion_id)
         raise NotImplementedError("Get chat completion is not supported: inference store is not configured.")
+
+    async def list_chat_completion_messages(
+        self,
+        request: ListChatCompletionMessagesRequest,
+    ) -> ChatCompletionMessageList:
+        if self.store:
+            return await self.store.list_chat_completion_messages(
+                completion_id=request.completion_id,
+                after=request.after,
+                limit=request.limit or 20,
+                order=(request.order or Order.asc).value,
+            )
+        raise NotImplementedError("List chat completion messages is not supported: inference store is not configured.")
 
     async def _nonstream_openai_chat_completion(
         self, provider: Inference, params: OpenAIChatCompletionRequestWithExtraBody
