@@ -949,7 +949,10 @@ class OpenAICompletionRequestWithExtraBody(BaseModel, extra="allow"):
     )
     logit_bias: dict[str, float] | None = Field(default=None, description="The logit bias to use.")
     logprobs: int | None = Field(
-        default=None, ge=0, le=5, strict=True,
+        default=None,
+        ge=0,
+        le=5,
+        strict=True,
         description="Include the log probabilities on the logprobs most likely output tokens.",
     )
     max_tokens: int | None = Field(default=None, ge=1, description="The maximum number of tokens to generate.")
