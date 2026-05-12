@@ -1076,7 +1076,9 @@ class OpenAIResponsesImpl:
 
         # Auto-compact if context_management is configured (runs on resolved history, not just new input)
         if context_management:
-            compacted_input = await self._maybe_auto_compact(all_input, model, context_management, previous_usage)
+            compacted_input = await self._maybe_auto_compact(
+                all_input, model, context_management, previous_usage, extra_body=extra_body
+            )
             if compacted_input is not all_input:
                 all_input = compacted_input
                 messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
@@ -1205,6 +1207,7 @@ class OpenAIResponsesImpl:
         instructions: str | None = None,
         previous_response_id: str | None = None,
         prompt_cache_key: str | None = None,
+        extra_body: dict | None = None,
     ) -> OpenAICompactedResponse:
         # Resolve input from previous_response_id or direct input
         resolved_messages = None
@@ -1351,46 +1354,86 @@ class OpenAIResponsesImpl:
             usage=usage_data,
         )
 
-    def _count_tokens(self, input: str | list[OpenAIResponseInput], model: str = "") -> int:
-        """Estimate token count using tiktoken. Used as fallback when provider usage is unavailable."""
-        # Use explicitly configured encoding, or resolve from model name
-        if self.compaction_config.tokenizer_encoding:
-            encoding = tiktoken.get_encoding(self.compaction_config.tokenizer_encoding)
-        else:
-            # Strip provider prefix (e.g. "openai/gpt-4o" -> "gpt-4o") for tiktoken lookup
-            model_name = model.split("/")[-1] if "/" in model else model
+    def _resolve_encoding(self, model: str, extra_body: dict | None = None) -> tiktoken.Encoding | None:
+        """Resolve tiktoken encoding via a 5-step chain. Returns None for character fallback."""
+        # 1. Per-request override (fail hard if invalid)
+        if extra_body and (enc_name := extra_body.get("tokenizer_encoding")):
             try:
-                encoding = tiktoken.encoding_for_model(model_name)
-            except KeyError as e:
-                raise ValueError(
-                    f"Failed to resolve tiktoken encoding for model '{model}'. "
-                    "Set 'tokenizer_encoding' in compaction_config (e.g. 'o200k_base') "
-                    "or use an OpenAI model name that tiktoken recognizes."
-                ) from e
+                return tiktoken.get_encoding(enc_name)
+            except ValueError:
+                raise InvalidParameterError(
+                    "tokenizer_encoding",
+                    enc_name,
+                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base').",
+                ) from None
 
-        if isinstance(input, str):
-            return len(encoding.encode(input))
+        # 2. Admin default (validated at startup by CompactionConfig)
+        if self.compaction_config.tokenizer_encoding:
+            return tiktoken.get_encoding(self.compaction_config.tokenizer_encoding)
 
-        total_tokens = 0
-        for item in input:
+        # 3. tiktoken built-in (soft fail)
+        model_name = model.split("/")[-1] if "/" in model else model
+        try:
+            return tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            pass
+
+        # 4. Model-family mapping (soft fail)
+        base = model_name.lower()
+        for prefix, enc_name in self.compaction_config.model_tokenizer_mappings.items():
+            if base.startswith(prefix.lower()):
+                try:
+                    return tiktoken.get_encoding(enc_name)
+                except ValueError:
+                    logger.warning("Invalid encoding in model_tokenizer_mappings", prefix=prefix, encoding=enc_name)
+                    break
+
+        # 5. Character fallback
+        logger.warning("Could not resolve tokenizer encoding, using character-based estimate", model=model)
+        return None
+
+    def _count_tokens(
+        self, input: str | list[OpenAIResponseInput], model: str = "", extra_body: dict | None = None
+    ) -> int:
+        """Estimate token count. Uses tiktoken when possible, character-based estimate as fallback."""
+        encoding = self._resolve_encoding(model, extra_body)
+        if encoding is not None:
+            return self._count_with_encoding(encoding, input)
+        return self._estimate_tokens_by_chars(input)
+
+    @staticmethod
+    def _extract_text_segments(items: list[OpenAIResponseInput]) -> list[str]:
+        segments: list[str] = []
+        for item in items:
             if isinstance(item, OpenAIResponseMessage):
                 if isinstance(item.content, str):
-                    total_tokens += len(encoding.encode(item.content))
+                    segments.append(item.content)
                 elif isinstance(item.content, list):
                     for part in item.content:
                         if hasattr(part, "text"):
-                            total_tokens += len(encoding.encode(part.text))
+                            segments.append(part.text)
             elif isinstance(item, OpenAIResponseCompaction):
-                total_tokens += len(encoding.encode(item.encrypted_content))
+                segments.append(item.encrypted_content)
             elif hasattr(item, "arguments"):
                 args = getattr(item, "arguments", "")
                 if args:
-                    total_tokens += len(encoding.encode(args))
+                    segments.append(args)
             elif hasattr(item, "output"):
                 output = getattr(item, "output", "")
                 if isinstance(output, str):
-                    total_tokens += len(encoding.encode(output))
-        return total_tokens
+                    segments.append(output)
+        return segments
+
+    def _count_with_encoding(self, encoding: tiktoken.Encoding, input: str | list[OpenAIResponseInput]) -> int:
+        if isinstance(input, str):
+            return len(encoding.encode(input))
+        return sum(len(encoding.encode(s)) for s in self._extract_text_segments(input))
+
+    def _estimate_tokens_by_chars(self, input: str | list[OpenAIResponseInput]) -> int:
+        if isinstance(input, str):
+            return max(1, len(input) // 4)
+        total_chars = sum(len(s) for s in self._extract_text_segments(input))
+        return max(1, total_chars // 4)
 
     async def _maybe_auto_compact(
         self,
@@ -1398,6 +1441,7 @@ class OpenAIResponsesImpl:
         model: str,
         context_management: list,
         previous_usage: OpenAIResponseUsage | None = None,
+        extra_body: dict | None = None,
     ) -> str | list[OpenAIResponseInput]:
         """Auto-compact input if token count exceeds compact_threshold."""
         for entry in context_management:
@@ -1417,7 +1461,7 @@ class OpenAIResponsesImpl:
             if previous_usage and previous_usage.total_tokens:
                 token_count = previous_usage.total_tokens
             else:
-                token_count = self._count_tokens(input, model=model)
+                token_count = self._count_tokens(input, model=model, extra_body=extra_body)
             if token_count > threshold:
                 logger.debug("Auto-compacting", token_count=token_count, threshold=threshold)
                 compacted = await self.compact_openai_response(model=model, input=input)

@@ -103,9 +103,7 @@ class VectorIORouter(VectorIO):
                 return "unknown"
             return obj.provider_id
         except Exception:
-            logger.warning(
-                "Could not resolve provider for vector store", vector_store_id=vector_store_id, exc_info=True
-            )
+            logger.exception("Could not resolve provider for vector store", vector_store_id=vector_store_id)
             return "unknown"
 
     async def _rewrite_query_for_search(self, query: str) -> str:
