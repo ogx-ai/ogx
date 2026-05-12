@@ -45,7 +45,7 @@ def get_pip_packages(store_config: dict | SqlStoreConfig) -> list[str]:
         return store_config.pip_packages()
 
 
-def sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
+def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
     """Get or create a SqlStore instance for the given store reference.
 
     Args:

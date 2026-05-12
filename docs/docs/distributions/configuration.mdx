@@ -256,7 +256,6 @@ server:
   port: 8321  # Port to listen on (default: 8321)
   tls_certfile: "/path/to/cert.pem"  # Optional: Path to TLS certificate for HTTPS
   tls_keyfile: "/path/to/key.pem"    # Optional: Path to TLS key for HTTPS
-  cors: true  # Optional: Enable CORS (dev mode) or full config object
   registry_refresh_interval_seconds: 300  # Optional: Interval between registry refreshes (default: 300)
 ```
 
@@ -270,29 +269,6 @@ server:
 ```
 
 The value must be a positive integer representing seconds.
-
-### CORS Configuration
-
-CORS (Cross-Origin Resource Sharing) can be configured in two ways:
-
-**Local development** (allows localhost origins only):
-```yaml
-server:
-  cors: true
-```
-
-**Explicit configuration** (custom origins and settings):
-```yaml
-server:
-  cors:
-    allow_origins: ["https://myapp.com", "https://app.example.com"]
-    allow_methods: ["GET", "POST", "PUT", "DELETE"]
-    allow_headers: ["Content-Type", "Authorization"]
-    allow_credentials: true
-    max_age: 3600
-```
-
-When `cors: true`, the server enables secure localhost-only access for local development. For production, specify exact origins to maintain security.
 
 ### Authentication Configuration
 
@@ -1013,128 +989,6 @@ For a request to succeed:
 1. User must pass route authorization (can access `/v1/chat/completions`)
 2. User must pass resource authorization (can read `model::llama-3-2-3b`)
 3. Both checks must pass
-
-### Quota Configuration
-
-The `quota` section allows you to enable server-side request throttling for both
-authenticated and anonymous clients. This is useful for preventing abuse, enforcing
-fairness across tenants, and controlling infrastructure costs without requiring
-client-side rate limiting or external proxies.
-
-Quotas are disabled by default. When enabled, each client is tracked using either:
-
-* Their authenticated `client_id` (derived from the Bearer token), or
-* Their IP address (fallback for anonymous requests)
-
-Quota state is stored in a SQLite-backed key-value store, and rate limits are applied
-within a configurable time window (currently only `day` is supported).
-
-#### Example
-
-```yaml
-server:
-  quota:
-    kvstore:
-      type: sqlite
-      db_path: ./quotas.db
-    anonymous_max_requests: 100
-    authenticated_max_requests: 1000
-    period: day
-```
-
-#### Configuration Options
-
-| Field                        | Description                                                                |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `kvstore`                    | Required. Backend storage config for tracking request counts.              |
-| `kvstore.type`               | Must be `"sqlite"` for now. Other backends may be supported in the future. |
-| `kvstore.db_path`            | File path to the SQLite database.                                          |
-| `anonymous_max_requests`     | Max requests per period for unauthenticated clients.                       |
-| `authenticated_max_requests` | Max requests per period for authenticated clients.                         |
-| `period`                     | Time window for quota enforcement. Only `"day"` is supported.              |
-
-> Note: if `authenticated_max_requests` is set but no authentication provider is
-configured, the server will fall back to applying `anonymous_max_requests` to all
-clients.
-
-#### Example with Authentication Enabled
-
-```yaml
-server:
-  port: 8321
-  auth:
-    provider_config:
-      type: custom
-      endpoint: https://auth.example.com/validate
-  quota:
-    kvstore:
-      type: sqlite
-      db_path: ./quotas.db
-    anonymous_max_requests: 100
-    authenticated_max_requests: 1000
-    period: day
-```
-
-If a client exceeds their limit, the server responds with:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Content-Type: application/json
-
-{
-  "error": {
-    "message": "Quota exceeded"
-  }
-}
-```
-
-### CORS Configuration
-
-Configure CORS to allow web browsers to make requests from different domains. Disabled by default.
-
-#### Quick Setup
-
-For development, use the simple boolean flag:
-
-```yaml
-server:
-  cors: true  # Auto-enables localhost with any port
-```
-
-This automatically allows `http://localhost:*` and `https://localhost:*` with secure defaults.
-
-#### Custom Configuration
-
-For specific origins and full control:
-
-```yaml
-server:
-  cors:
-    allow_origins: ["https://myapp.com", "https://staging.myapp.com"]
-    allow_credentials: true
-    allow_methods: ["GET", "POST", "PUT", "DELETE"]
-    allow_headers: ["Content-Type", "Authorization"]
-    allow_origin_regex: "https://.*\\.example\\.com"  # Optional regex pattern
-    expose_headers: ["X-Total-Count"]
-    max_age: 86400
-```
-
-#### Configuration Options
-
-| Field                | Description                                    | Default |
-| -------------------- | ---------------------------------------------- | ------- |
-| `allow_origins`      | List of allowed origins. Use `["*"]` for any. | `["*"]` |
-| `allow_origin_regex` | Regex pattern for allowed origins (optional). | `None`  |
-| `allow_methods`      | Allowed HTTP methods.                          | `["*"]` |
-| `allow_headers`      | Allowed headers.                               | `["*"]` |
-| `allow_credentials`  | Allow credentials (cookies, auth headers).    | `false` |
-| `expose_headers`     | Headers exposed to browser.                   | `[]`    |
-| `max_age`            | Preflight cache time (seconds).               | `600`   |
-
-**Security Notes**:
-- `allow_credentials: true` requires explicit origins (no wildcards)
-- `cors: true` enables localhost access only (secure for development)
-- For public APIs, always specify exact allowed origins
 
 ### TLS Context Caching
 

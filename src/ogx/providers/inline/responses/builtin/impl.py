@@ -9,7 +9,6 @@ from collections.abc import AsyncIterator
 from opentelemetry import metrics
 
 from ogx.core.datatypes import AccessRule
-from ogx.core.storage.kvstore import InmemoryKVStoreImpl, kvstore_impl
 from ogx.log import get_logger
 from ogx.providers.utils.responses.responses_store import ResponsesStore
 from ogx.telemetry.constants import RESPONSES_PARAMETER_USAGE_TOTAL
@@ -88,13 +87,11 @@ class BuiltinResponsesImpl(Responses):
         self.conversations_api = conversations_api
         self.prompts_api = prompts_api
         self.files_api = files_api
-        self.in_memory_store = InmemoryKVStoreImpl()
         self.openai_responses_impl: OpenAIResponsesImpl | None = None
         self.policy = policy
         self.connectors_api = connectors_api
 
     async def initialize(self) -> None:
-        self.persistence_store = await kvstore_impl(self.config.persistence.agent_state)
         self.responses_store = ResponsesStore(self.config.persistence.responses, self.policy)
         await self.responses_store.initialize()
         if not self.responses_store.sql_store:

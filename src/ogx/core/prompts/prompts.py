@@ -11,8 +11,7 @@ from pydantic import BaseModel
 
 from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.datatypes import StackConfig
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx_api import (
     Api,
     CreatePromptRequest,
@@ -62,8 +61,7 @@ class PromptServiceImpl(Prompts):
         if not prompts_ref:
             raise ServiceNotEnabledError("storage.stores.prompts")
 
-        base_sql_store = sqlstore_impl(prompts_ref)
-        self.sql_store = AuthorizedSqlStore(base_sql_store, self.policy)
+        self.sql_store = authorized_sqlstore(prompts_ref, self.policy)
 
     async def initialize(self) -> None:
         await self.sql_store.create_table(

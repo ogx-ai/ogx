@@ -12,8 +12,7 @@ from pydantic import BaseModel, Field
 
 from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.datatypes import StackConfig
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx.log import get_logger
 from ogx.providers.utils.tools.mcp import get_mcp_server_info, list_mcp_tools
 from ogx_api import (
@@ -61,8 +60,7 @@ class ConnectorServiceImpl(Connectors):
         if not connectors_ref:
             raise ServiceNotEnabledError("storage.stores.connectors")
 
-        base_sql_store = sqlstore_impl(connectors_ref)
-        self.sql_store = AuthorizedSqlStore(base_sql_store, self.policy)
+        self.sql_store = authorized_sqlstore(connectors_ref, self.policy)
 
     async def initialize(self) -> None:
         """Initialize the connector service."""
