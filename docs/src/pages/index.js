@@ -155,7 +155,7 @@ const API_SURFACE = [
   ]},
   { category: 'Moderation & Tools', endpoints: [
     { label: 'Moderations', path: '/v1/moderations' },
-    { label: 'Tools', path: '/v1/tools' },
+    { label: 'Tools', path: '/v1/admin/tools' },
     { label: 'Connectors', path: '/v1/connectors' },
   ]},
 ];
