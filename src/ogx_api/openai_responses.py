@@ -15,8 +15,11 @@ from ogx_api.inference import OpenAITokenLogProb
 from ogx_api.schema_utils import json_schema_type, register_schema, remove_null_from_anyof
 from ogx_api.vector_io import SearchRankingOptions as FileSearchRankingOptions
 
-# NOTE(ashwin): this file is literally a copy of the OpenAI responses API schema. We should probably
-# take their YAML and generate this file automatically. Their YAML is available.
+# This file defines Pydantic models for the OpenAI Responses API schema. It started as a direct
+# copy of the upstream schema but now includes OGX-specific extensions (MCP tool types, compaction,
+# custom validators). Intentional divergences from the vendored spec are tracked in
+# scripts/check_openai_responses_drift.py. Run that script after updating the vendored spec
+# (docs/static/openai-spec-*.yml) to detect unintentional drift.
 
 
 @json_schema_type
