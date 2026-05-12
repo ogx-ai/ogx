@@ -881,7 +881,6 @@ __all__ = [
     "ResponseFormatType",
     "ResponseItemInclude",
     "ResponseTruncation",
-    "ResponseNotFoundError",
     "ResponseStreamOptions",
     "RetrieveFileContentRequest",
     "RetrieveFileRequest",
