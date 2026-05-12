@@ -669,6 +669,49 @@ function AnnouncementBanner() {
   );
 }
 
+function V1AnnouncementBanner() {
+  const [visible, setVisible] = useState(true);
+  const [dismissing, setDismissing] = useState(false);
+
+  if (!visible) return null;
+
+  const handleDismiss = () => {
+    setDismissing(true);
+    setTimeout(() => setVisible(false), 350);
+  };
+
+  return (
+    <div className={clsx(styles.announcementBar, styles.announcementBarV1, dismissing && styles.announcementDismissing)}>
+      <div className="container">
+        <div className={styles.announcementInner}>
+          <span className={styles.announcementPulse} aria-hidden="true" />
+          <span className={styles.announcementLabel}>New</span>
+          <span className={styles.announcementSep} aria-hidden="true" />
+          <span className={styles.announcementText}>
+            v1 is here. <span className={styles.announcementHighlight}>No caveats. No beta. Ship it.</span>
+          </span>
+          <a
+            className={styles.announcementLink}
+            href="https://ogx-ai.github.io/blog/ogx-v1"
+          >
+            Read the announcement <span className={styles.announcementArrow}>&rarr;</span>
+          </a>
+          <button
+            type="button"
+            className={styles.announcementDismiss}
+            onClick={handleDismiss}
+            aria-label="Dismiss announcement"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
   useConstellation('hero-constellation');
 
@@ -863,6 +906,7 @@ export default function Home() {
     <Layout title="The Open-Source AI Application Server & Library" description="Inference, vector stores, moderation, tools, and agentic orchestration. Server or Python library, OpenAI + Anthropic + Google compatible, pluggable providers.">
       <main>
         <AnnouncementBanner />
+        <V1AnnouncementBanner />
         <Hero />
         <CliShowcase />
         <ApiSurface />
