@@ -13,7 +13,6 @@ utils/
   files/               # File handling utilities
   memory/              # Memory/vector store utilities
   responses/           # Responses API store
-  safety.py            # Safety utilities
   scoring/             # Scoring utilities
   tools/               # Tool utilities (MCP client, TTL cache)
   vector_io/           # Vector I/O utilities

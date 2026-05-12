@@ -19,13 +19,13 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 114 | 114 | 0 | 86% |
-| bedrock | 27 | 27 | 0 | 20% |
+| azure | 111 | 111 | 0 | 85% |
+| bedrock | 27 | 27 | 0 | 21% |
 | ollama | 2 | 2 | 0 | 2% |
-| openai | 133 | 133 | 0 | 100% |
-| vertexai | 73 | 73 | 0 | 55% |
+| openai | 130 | 130 | 0 | 100% |
+| vertexai | 70 | 70 | 0 | 54% |
 | vllm | 3 | 3 | 0 | 2% |
-| watsonx | 56 | 56 | 0 | 42% |
+| watsonx | 53 | 53 | 0 | 41% |
 
 ## Provider Details
 
@@ -127,9 +127,6 @@ Models, endpoints, and versions used during test recordings.
 | with prompt cache key | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with prompt cache key and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with prompt cache key streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
-| with safety identifier | ✅ | — | — | ✅ | ✅ | — | ✅ |
-| with safety identifier and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
-| with safety identifier streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with service tier | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
 | with service tier and previous response | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
 | with service tier auto | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |

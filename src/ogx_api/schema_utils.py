@@ -25,19 +25,19 @@ class ExtraBodyField[T]:
             self,
             input: str,
             model: str,
-            shields: Annotated[
-                list[str] | None, ExtraBodyField("List of shields to apply")
+            labels: Annotated[
+                list[str] | None, ExtraBodyField("List of labels to apply")
             ] = None,
         ) -> ResponseObject:
-            # shields is available here with proper typing
-            if shields:
-                print(f"Using shields: {shields}")
+            # labels is available here with proper typing
+            if labels:
+                print(f"Using labels: {labels}")
         ```
 
         Client usage:
         ```python
         client.responses.create(
-            input="hello", model="llama-3", extra_body={"shields": ["shield-1"]}
+            input="hello", model="llama-3", extra_body={"labels": ["topic-a"]}
         )
         ```
     """

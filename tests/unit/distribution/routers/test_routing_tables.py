@@ -12,22 +12,17 @@ import pytest
 
 from ogx.core.datatypes import RegistryEntrySource
 from ogx.core.routing_tables.models import ModelsRoutingTable
-from ogx.core.routing_tables.shields import ShieldsRoutingTable
 from ogx.core.routing_tables.toolgroups import ToolGroupsRoutingTable
 from ogx_api import (
     URL,
     Api,
-    GetShieldRequest,
     ListToolDefsResponse,
     ListToolsRequest,
     Model,
     ModelNotFoundError,
     ModelType,
-    RegisterShieldRequest,
-    Shield,
     ToolDef,
     ToolGroup,
-    UnregisterShieldRequest,
 )
 
 
@@ -75,17 +70,6 @@ class InferenceImpl(Impl):
 
     async def shutdown(self):
         pass
-
-
-class SafetyImpl(Impl):
-    def __init__(self):
-        super().__init__(Api.safety)
-
-    async def register_shield(self, shield: Shield):
-        return shield
-
-    async def unregister_shield(self, shield_id: str):
-        return shield_id
 
 
 class ToolGroupsImpl(Impl):
@@ -166,51 +150,6 @@ async def test_models_routing_table(cached_disk_dist_registry):
     # Test openai list models
     openai_models = await table.openai_list_models()
     assert len(openai_models.data) == 0
-
-
-async def test_shields_routing_table(cached_disk_dist_registry):
-    table = ShieldsRoutingTable({"test_provider": SafetyImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register multiple shields and verify listing
-    await table.register_shield(RegisterShieldRequest(shield_id="test-shield", provider_id="test_provider"))
-    await table.register_shield(RegisterShieldRequest(shield_id="test-shield-2", provider_id="test_provider"))
-    shields = await table.list_shields()
-    assert len(shields.data) == 2
-
-    shield_ids = {s.identifier for s in shields.data}
-    assert "test-shield" in shield_ids
-    assert "test-shield-2" in shield_ids
-
-    # Test get specific shield
-    test_shield = await table.get_shield(GetShieldRequest(identifier="test-shield"))
-    assert test_shield is not None
-    assert test_shield.identifier == "test-shield"
-    assert test_shield.provider_id == "test_provider"
-    assert test_shield.provider_resource_id == "test-shield"
-    assert test_shield.params == {}
-
-    # Test get non-existent shield - should raise ValueError with specific message
-    with pytest.raises(ValueError, match="Shield 'non-existent' not found"):
-        await table.get_shield(GetShieldRequest(identifier="non-existent"))
-
-    # Test unregistering shields
-    await table.unregister_shield(UnregisterShieldRequest(identifier="test-shield"))
-    shields = await table.list_shields()
-
-    assert len(shields.data) == 1
-    shield_ids = {s.identifier for s in shields.data}
-    assert "test-shield" not in shield_ids
-    assert "test-shield-2" in shield_ids
-
-    # Unregister the remaining shield
-    await table.unregister_shield(UnregisterShieldRequest(identifier="test-shield-2"))
-    shields = await table.list_shields()
-    assert len(shields.data) == 0
-
-    # Test unregistering non-existent shield - should raise ValueError with specific message
-    with pytest.raises(ValueError, match="Shield 'non-existent' not found"):
-        await table.unregister_shield(UnregisterShieldRequest(identifier="non-existent"))
 
 
 async def test_double_registration_models_positive(cached_disk_dist_registry):

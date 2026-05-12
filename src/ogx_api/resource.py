@@ -13,7 +13,6 @@ class ResourceType(StrEnum):
     """Enumeration of all resource types managed by OGX."""
 
     model = "model"
-    shield = "shield"
     vector_store = "vector_store"
     tool = "tool"
     tool_group = "tool_group"
@@ -32,4 +31,4 @@ class Resource(BaseModel):
 
     provider_id: str = Field(description="ID of the provider that owns this resource")
 
-    type: ResourceType = Field(description="Type of resource (e.g. 'model', 'shield', 'vector_store', etc.)")
+    type: ResourceType = Field(description="Type of resource (e.g. 'model', 'vector_store', 'tool_group', etc.)")

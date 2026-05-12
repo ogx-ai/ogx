@@ -166,7 +166,6 @@ class TestDroppedParameterWarnings:
             pytest.param("logit_bias", {"50256": -100.0}, logging.WARNING, "logit_bias", id="logit_bias"),
             pytest.param("prompt_cache_key", "mykey", logging.WARNING, "prompt_cache_key", id="prompt_cache_key"),
             pytest.param("user", "test-user", logging.DEBUG, "user", id="user"),
-            pytest.param("safety_identifier", "test-id", logging.DEBUG, "safety_identifier", id="safety_identifier"),
         ],
     )
     async def test_unsupported_param_logged(

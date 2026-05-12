@@ -11,7 +11,7 @@ import TabItem from '@theme/TabItem';
 This guide will walk you through the process of adding a new API provider to OGX.
 
 
-- Begin by reviewing the [core concepts](../concepts/) of OGX and choose the API your provider belongs to (Inference, Safety, VectorIO, etc.)
+- Begin by reviewing the [core concepts](../concepts/) of OGX and choose the API your provider belongs to (Inference, Responses, VectorIO, etc.)
 - Determine the provider type ([Remote](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/remote) or [Inline](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/inline)). Remote providers make requests to external services, while inline providers execute implementation locally.
 - Add your provider to the appropriate [Registry](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/registry/). Specify pip dependencies necessary.
 - Update any distribution [Templates](https://github.com/ogx-ai/ogx/tree/main/ogx/distributions/) `config.yaml` files if they should include your provider by default. Run [./scripts/distro_codegen.py](https://github.com/ogx-ai/ogx/blob/main/scripts/distro_codegen.py) if necessary. Note that `distro_codegen.py` will fail if the new provider causes any distribution template to attempt to import provider-specific dependencies. This usually means the distribution's `get_distribution_template()` code path should only import any necessary Config or model alias definitions from each provider and not the provider's actual implementation.

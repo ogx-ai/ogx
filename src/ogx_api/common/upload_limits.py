@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Upload safety utilities for enforcing file size limits.
+"""Upload limit utilities for enforcing file size limits.
 
 Provides a bounded-read helper that reads UploadFile objects in chunks,
 aborting early when the configured maximum size is exceeded. This avoids

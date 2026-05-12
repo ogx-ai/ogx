@@ -33,7 +33,7 @@ class ModelFamily(Enum):
     llama3_2 = "llama3_2"
     llama3_3 = "llama3_3"
     llama4 = "llama4"
-    safety = "safety"
+    moderation = "moderation"
 
 
 class CoreModelId(Enum):
@@ -80,7 +80,7 @@ class CoreModelId(Enum):
     llama4_maverick_17b_128e = "Llama-4-Maverick-17B-128E"
     llama4_maverick_17b_128e_instruct = "Llama-4-Maverick-17B-128E-Instruct"
 
-    # Safety models
+    # Guard models
     llama_guard_3_8b = "Llama-Guard-3-8B"
     llama_guard_2_8b = "Llama-Guard-2-8B"
     llama_guard_3_11b_vision = "Llama-Guard-3-11B-Vision"
@@ -151,7 +151,7 @@ def model_family(model_id) -> ModelFamily:
         CoreModelId.llama_guard_3_1b,
         CoreModelId.llama_guard_4_12b,
     ]:
-        return ModelFamily.safety
+        return ModelFamily.moderation
     else:
         raise ValueError(f"Unknown model family for {model_id}")
 
@@ -194,7 +194,7 @@ class Model(BaseModel):
             ModelFamily.llama3_2,
             ModelFamily.llama3_3,
             ModelFamily.llama4,
-            ModelFamily.safety,
+            ModelFamily.moderation,
         ]
 
     @property

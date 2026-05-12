@@ -38,8 +38,8 @@ spec:
           value: http://vllm-server.default.svc.cluster.local:8000/v1
         - name: VLLM_MAX_TOKENS
           value: "3072"
-        - name: VLLM_SAFETY_URL
-          value: http://vllm-server-safety.default.svc.cluster.local:8001/v1
+        - name: MODERATION_ENDPOINT
+          value: http://vllm-server-moderation.default.svc.cluster.local:8001/v1/moderations
         - name: VLLM_TLS_VERIFY
           value: "false"
         - name: POSTGRES_HOST
@@ -48,8 +48,6 @@ spec:
           value: "5432"
         - name: INFERENCE_MODEL
           value: "${INFERENCE_MODEL}"
-        - name: SAFETY_MODEL
-          value: "${SAFETY_MODEL}"
         - name: TAVILY_SEARCH_API_KEY
           value: "${TAVILY_SEARCH_API_KEY}"
         command: ["llama", "stack", "run", "/etc/config/stack_run_config.yaml", "--port", "8321"]

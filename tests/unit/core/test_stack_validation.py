@@ -14,12 +14,11 @@ from ogx.core.datatypes import (
     QualifiedModel,
     RerankerModel,
     RewriteQueryParams,
-    SafetyConfig,
     ServerConfig,
     StackConfig,
     VectorStoresConfig,
 )
-from ogx.core.stack import register_connectors, validate_safety_config, validate_vector_stores_config
+from ogx.core.stack import register_connectors, validate_vector_stores_config
 from ogx.core.storage.datatypes import ServerStoresConfig, StorageConfig
 from ogx_api import (
     Api,
@@ -28,10 +27,8 @@ from ogx_api import (
     ConnectorType,
     ListConnectorsResponse,
     ListModelsResponse,
-    ListShieldsResponse,
     Model,
     ModelType,
-    Shield,
 )
 
 
@@ -125,40 +122,6 @@ class TestVectorStoresValidation:
             RewriteQueryParams(
                 prompt="This prompt has no placeholder",
             )
-
-
-class TestSafetyConfigValidation:
-    async def test_validate_success(self):
-        safety_config = SafetyConfig(default_shield_id="shield-1")
-
-        shield = Shield(
-            identifier="shield-1",
-            provider_id="provider-x",
-            provider_resource_id="model-x",
-            params={},
-        )
-
-        shields_impl = AsyncMock()
-        shields_impl.list_shields.return_value = ListShieldsResponse(data=[shield])
-
-        await validate_safety_config(safety_config, {Api.shields: shields_impl, Api.safety: AsyncMock()})
-
-    async def test_validate_wrong_shield_id(self):
-        safety_config = SafetyConfig(default_shield_id="wrong-shield-id")
-
-        shields_impl = AsyncMock()
-        shields_impl.list_shields.return_value = ListShieldsResponse(
-            data=[
-                Shield(
-                    identifier="shield-1",
-                    provider_resource_id="model-x",
-                    provider_id="provider-x",
-                    params={},
-                )
-            ]
-        )
-        with pytest.raises(ValueError, match="wrong-shield-id"):
-            await validate_safety_config(safety_config, {Api.shields: shields_impl, Api.safety: AsyncMock()})
 
 
 class TestRegisterConnectors:

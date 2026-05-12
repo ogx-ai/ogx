@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
 from ogx.core.storage.datatypes import (
+    KVStoreReference,
     StorageBackendType,
     StorageConfig,
 )
@@ -26,9 +27,6 @@ from ogx_api import (
     ModelInput,
     ProviderSpec,
     Resource,
-    Safety,
-    Shield,
-    ShieldInput,
     ToolGroup,
     ToolGroupInput,
     ToolRuntime,
@@ -77,12 +75,6 @@ class ModelWithOwner(Model, ResourceWithOwner):
     pass
 
 
-class ShieldWithOwner(Shield, ResourceWithOwner):
-    """A Shield resource extended with ownership information for access control."""
-
-    pass
-
-
 class VectorStoreWithOwner(VectorStore, ResourceWithOwner):
     """A VectorStore resource extended with ownership information for access control."""
 
@@ -95,19 +87,19 @@ class ToolGroupWithOwner(ToolGroup, ResourceWithOwner):
     pass
 
 
-RoutableObject = Model | Shield | VectorStore | ToolGroup
+RoutableObject = Model | VectorStore | ToolGroup
 
 RoutableObjectWithProvider = Annotated[
-    ModelWithOwner | ShieldWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
+    ModelWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | Safety | VectorIO | ToolRuntime
+RoutedProtocol = Inference | VectorIO | ToolRuntime
 
 
-# Example: /inference, /safety
+# Example: /inference, /vector_io
 class AutoRoutedProviderSpec(ProviderSpec):
-    """Provider spec for automatically routed APIs like inference and safety that delegate to a routing table."""
+    """Provider spec for automatically routed APIs like inference and vector_io that delegate to a routing table."""
 
     provider_type: str = "router"
     config_class: str = ""
@@ -120,9 +112,9 @@ class AutoRoutedProviderSpec(ProviderSpec):
     )
 
 
-# Example: /models, /shields
+# Example: /models, /vector_stores
 class RoutingTableProviderSpec(ProviderSpec):
-    """Provider spec for routing table APIs like models and shields that manage resource registries."""
+    """Provider spec for routing table APIs like models and vector_stores that manage resource registries."""
 
     provider_type: str = "routing_table"
     config_class: str = ""
@@ -670,20 +662,72 @@ class VectorStoresConfig(BaseModel):
     )
 
 
-class SafetyConfig(BaseModel):
-    """Configuration for default moderations model."""
+class QuotaPeriod(StrEnum):
+    """Time period for request quota enforcement."""
 
-    default_shield_id: str | None = Field(
-        default=None,
-        description="ID of the shield to use for when `model` is not specified in the `moderations` API request.",
+    DAY = "day"
+
+
+class QuotaConfig(BaseModel):
+    """Configuration for per-client request rate limiting."""
+
+    kvstore: KVStoreReference = Field(description="Config for KV store backend (SQLite only for now)")
+    anonymous_max_requests: int = Field(default=100, description="Max requests for unauthenticated clients per period")
+    authenticated_max_requests: int = Field(
+        default=1000, description="Max requests for authenticated clients per period"
     )
+    period: QuotaPeriod = Field(default=QuotaPeriod.DAY, description="Quota period to set")
+
+
+class CORSConfig(BaseModel):
+    """Configuration for Cross-Origin Resource Sharing (CORS) headers."""
+
+    allow_origins: list[str] = Field(default_factory=list)
+    allow_origin_regex: str | None = Field(default=None)
+    allow_methods: list[str] = Field(default=["OPTIONS"])
+    allow_headers: list[str] = Field(default_factory=list)
+    allow_credentials: bool = Field(default=False)
+    expose_headers: list[str] = Field(default_factory=list)
+    max_age: int = Field(default=600, ge=0)
+
+    @model_validator(mode="after")
+    def validate_credentials_config(self) -> Self:
+        if self.allow_credentials and (self.allow_origins == ["*"] or "*" in self.allow_origins):
+            raise ValueError("Cannot use wildcard origins with credentials enabled")
+        return self
+
+
+def process_cors_config(cors_config: bool | CORSConfig | None) -> CORSConfig | None:
+    """Convert a CORS configuration value into a resolved CORSConfig object.
+
+    Args:
+        cors_config: A boolean (True for dev defaults, False/None to disable), or a CORSConfig instance.
+
+    Returns:
+        A CORSConfig instance or None if CORS is disabled.
+    """
+    if cors_config is False or cors_config is None:
+        return None
+
+    if cors_config is True:
+        # dev mode: allow localhost on any port
+        return CORSConfig(
+            allow_origins=[],
+            allow_origin_regex=r"https?://localhost:\d+",
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        )
+
+    if isinstance(cors_config, CORSConfig):
+        return cors_config
+
+    raise ValueError(f"Expected bool or CORSConfig, got {type(cors_config).__name__}")
 
 
 class RegisteredResources(BaseModel):
     """Registry of resources available in the distribution."""
 
     models: list[ModelInput] = Field(default_factory=list)
-    shields: list[ShieldInput] = Field(default_factory=list)
     vector_stores: list[VectorStoreInput] = Field(default_factory=list)
     tool_groups: list[ToolGroupInput] = Field(default_factory=list, deprecated=True)
 
@@ -808,11 +852,6 @@ can be instantiated multiple times (with different configs) if necessary.
     vector_stores: VectorStoresConfig | None = Field(
         default=None,
         description="Configuration for vector stores, including default embedding model",
-    )
-
-    safety: SafetyConfig | None = Field(
-        default=None,
-        description="Configuration for default moderations model",
     )
 
     connectors: list[ConnectorInput] = Field(

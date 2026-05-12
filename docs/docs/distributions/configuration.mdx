@@ -22,7 +22,6 @@ apis:
 - responses
 - inference
 - vector_io
-- safety
 providers:
   inference:
   - provider_id: ollama
@@ -37,14 +36,11 @@ providers:
         type: sqlite
         namespace: null
         db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ollama}/faiss_store.db
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config: {}
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
+      moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
       persistence:
         agent_state:
           backend: kv_default
@@ -80,7 +76,6 @@ models:
   model_id: ${env.INFERENCE_MODEL}
   provider_id: ollama
   provider_model_id: null
-shields: []
 server:
   port: 8321
   auth:
@@ -98,7 +93,6 @@ apis:
 - responses
 - inference
 - vector_io
-- safety
 ```
 
 ## Providers
@@ -515,7 +509,7 @@ resources of a type, e.g. model::*, or a regex pattern with the
 "regex:" prefix, e.g. regex:model::(llama|mistral)-3\\.\\d+-.*. If the
 principal or resource are not specified, they will match all requests.
 
-The valid resource types are model, shield, vector_db, dataset,
+The valid resource types are model, vector_db, dataset,
 scoring_function, benchmark, tool, tool_group and session. In
 addition, stored data such as conversations, conversation items,
 responses, and files use the `sql_record::<table_name>` resource
@@ -649,7 +643,7 @@ Regex patterns can be used to match resources based on naming conventions. For e
 
 In a multi-tenant deployment, you typically want to ensure that each
 user's conversations, responses, and files are isolated from other
-users. Unlike registry resources (models, shields, etc.) which are
+users. Unlike registry resources (models, vector stores, etc.) which are
 identified by types like `model::my-model`, stored data uses the
 `sql_record::<table_name>::<record_id>` resource type pattern. Each
 record is automatically stamped with the authenticated user's identity
@@ -1020,72 +1014,19 @@ To apply TLS bundle updates:
 2. Restart the OGX server to reload all SSL contexts
 3. Verify outbound connections to external services work correctly
 
-## Extending to handle Safety
+## Configuring Responses Guardrails
 
-Configuring Safety can be a little involved so it is instructive to go through an example.
+Safety and Shields APIs were removed. Responses guardrails now call an external OpenAI-compatible moderation endpoint directly.
 
-The Safety API works with the associated Resource called a `Shield`. Providers can support various kinds of Shields. Good examples include the [Llama Guard](https://ai.meta.com/research/publications/llama-guard-llm-based-input-output-safeguard-for-human-ai-conversations/) system-safety models, or [Bedrock Guardrails](https://aws.amazon.com/bedrock/guardrails/).
-
-To configure a Bedrock Shield, you would need to add:
-- A Safety API provider instance with type `remote::bedrock`
-- A Shield resource served by this provider.
+To enable guardrails, configure `moderation_endpoint` on the builtin responses provider:
 
 ```yaml
-...
 providers:
-  safety:
-  - provider_id: bedrock
-    provider_type: remote::bedrock
+  responses:
+  - provider_id: builtin
+    provider_type: inline::builtin
     config:
-      aws_access_key_id: ${env.AWS_ACCESS_KEY_ID}
-      aws_secret_access_key: ${env.AWS_SECRET_ACCESS_KEY}
-...
-shields:
-- provider_id: bedrock
-  params:
-    guardrailVersion: ${env.GUARDRAIL_VERSION}
-  provider_shield_id: ${env.GUARDRAIL_ID}
-...
+      moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
 ```
 
-The situation is more involved if the Shield needs _Inference_ of an associated model. This is the case with Llama Guard. In that case, you would need to add:
-- A Safety API provider instance with type `inline::llama-guard`
-- An Inference API provider instance for serving the model.
-- A Model resource associated with this provider.
-- A Shield resource served by the Safety provider.
-
-The yaml configuration for this setup, assuming you were using vLLM as your inference server, would look like:
-```yaml
-...
-providers:
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config: {}
-  inference:
-  # this vLLM server serves the "normal" inference model (e.g., llama3.2:3b)
-  - provider_id: vllm-0
-    provider_type: remote::vllm
-    config:
-      url: ${env.VLLM_URL:=http://localhost:8000}
-  # this vLLM server serves the llama-guard model (e.g., llama-guard:3b)
-  - provider_id: vllm-1
-    provider_type: remote::vllm
-    config:
-      url: ${env.SAFETY_VLLM_URL:=http://localhost:8001}
-...
-models:
-- metadata: {}
-  model_id: ${env.INFERENCE_MODEL}
-  provider_id: vllm-0
-  provider_model_id: null
-- metadata: {}
-  model_id: ${env.SAFETY_MODEL}
-  provider_id: vllm-1
-  provider_model_id: null
-shields:
-- provider_id: llama-guard
-  shield_id: ${env.SAFETY_MODEL}   # Llama Guard shields are identified by the corresponding LlamaGuard model
-  provider_shield_id: null
-...
-```
+With this configured, guardrail IDs passed in Responses requests are forwarded as the `model` in moderation requests to that endpoint.

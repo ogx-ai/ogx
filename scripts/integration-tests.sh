@@ -503,7 +503,6 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     [ -n "${GROQ_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GROQ_API_KEY=$GROQ_API_KEY"
     [ -n "${GEMINI_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GEMINI_API_KEY=$GEMINI_API_KEY"
     [ -n "${OLLAMA_URL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OLLAMA_URL=$OLLAMA_URL"
-    [ -n "${SAFETY_MODEL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e SAFETY_MODEL=$SAFETY_MODEL"
     [ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK"
     [ -n "${AWS_DEFAULT_REGION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
     [ -n "${VERTEX_AI_PROJECT:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_PROJECT=$VERTEX_AI_PROJECT"
@@ -567,7 +566,7 @@ fi
 
 # Run tests
 echo "=== Running Integration Tests ==="
-EXCLUDE_TESTS="builtin_tool or safety_with_image or code_interpreter or test_rag"
+EXCLUDE_TESTS="builtin_tool or code_interpreter or test_rag"
 
 PYTEST_PATTERN="not( $EXCLUDE_TESTS )"
 if [[ -n "$TEST_PATTERN" ]]; then

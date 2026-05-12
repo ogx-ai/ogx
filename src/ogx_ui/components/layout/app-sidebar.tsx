@@ -13,8 +13,6 @@ import {
   Box,
   Plug,
   Wrench,
-  Shield,
-  ShieldCheck,
   Layers,
   MessageSquare,
 } from "lucide-react";
@@ -39,11 +37,6 @@ const createItems = [
     title: "Chat Playground",
     url: "/chat-playground",
     icon: MessageCircle,
-  },
-  {
-    title: "Safety",
-    url: "/safety",
-    icon: ShieldCheck,
   },
 ];
 
@@ -109,7 +102,7 @@ const adminItems = [
   {
     title: "System",
     url: "/admin",
-    icon: Shield,
+    icon: Settings2,
   },
 ];
 

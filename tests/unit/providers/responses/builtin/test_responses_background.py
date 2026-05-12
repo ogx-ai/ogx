@@ -168,7 +168,7 @@ def _make_responses_impl():
         tool_runtime_api=AsyncMock(),
         responses_store=AsyncMock(),
         vector_io_api=AsyncMock(),
-        safety_api=None,
+        moderation_endpoint=None,
         conversations_api=AsyncMock(),
         prompts_api=AsyncMock(),
         files_api=AsyncMock(),

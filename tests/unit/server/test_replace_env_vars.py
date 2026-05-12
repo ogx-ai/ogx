@@ -150,41 +150,21 @@ def test_resource_with_empty_model_id_skipped(setup_env_vars):
     assert result["models"][0]["model_id"] == "always-present"
 
 
-def test_resource_with_empty_shield_id_skipped(setup_env_vars):
-    """Test that resources with empty shield_id from conditional env vars are skipped."""
-    data = {
-        "shields": [
-            {"shield_id": "${env.SHIELD_ID:+my-shield}", "provider_id": "test-provider"},
-            {"shield_id": "always-present", "provider_id": "another-provider"},
-        ]
-    }
-    # SHIELD_ID is not set, so first shield should be skipped
-    result = replace_env_vars(data)
-    assert len(result["shields"]) == 1
-    assert result["shields"][0]["shield_id"] == "always-present"
-
-
 def test_multiple_resources_with_conditional_ids(setup_env_vars):
     """Test that multiple resource types with conditional IDs are handled correctly."""
-    os.environ["INCLUDE_SHIELD"] = "yes"
+    os.environ["INCLUDE_MODEL"] = "yes"
     try:
         data = {
-            "shields": [
-                {"shield_id": "${env.INCLUDE_SHIELD:+included-shield}", "provider_id": "p1"},
-                {"shield_id": "${env.EXCLUDE_SHIELD:+excluded-shield}", "provider_id": "p2"},
-            ],
             "models": [
-                {"model_id": "${env.EXCLUDE_MODEL:+excluded-model}", "provider_id": "p1"},
+                {"model_id": "${env.INCLUDE_MODEL:+included-model}", "provider_id": "p1"},
+                {"model_id": "${env.EXCLUDE_MODEL:+excluded-model}", "provider_id": "p2"},
             ],
         }
         result = replace_env_vars(data)
-        # Only the shield with INCLUDE_SHIELD set should remain
-        assert len(result["shields"]) == 1
-        assert result["shields"][0]["shield_id"] == "included-shield"
-        # Model with unset env var should be skipped
-        assert len(result["models"]) == 0
+        assert len(result["models"]) == 1
+        assert result["models"][0]["model_id"] == "included-model"
     finally:
-        del os.environ["INCLUDE_SHIELD"]
+        del os.environ["INCLUDE_MODEL"]
 
 
 def test_auth_provider_disabled_when_type_not_set(setup_env_vars):
