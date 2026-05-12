@@ -164,25 +164,25 @@ class TestOpenAICompletion:
         params = OpenAICompletionRequestWithExtraBody(
             model="google/gemini-2.5-flash",
             prompt="hi",
-            logprobs=True,
+            logprobs=5,
         )
         await adapter.openai_completion(params)
         call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
         config = call_kwargs["config"]
         assert config.response_logprobs is True
 
-    async def test_logprobs_false_sets_response_logprobs_none(self, make_completion_adapter):
-        """Test that logprobs false sets response logprobs none."""
+    async def test_logprobs_zero_sets_response_logprobs_false(self, make_completion_adapter):
+        """Test that logprobs zero sets response logprobs false."""
         adapter, fake_client = make_completion_adapter()
         params = OpenAICompletionRequestWithExtraBody(
             model="google/gemini-2.5-flash",
             prompt="hi",
-            logprobs=False,
+            logprobs=0,
         )
         await adapter.openai_completion(params)
         call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
         config = call_kwargs["config"]
-        assert getattr(config, "response_logprobs", None) is None
+        assert config.response_logprobs is False
 
     async def test_stream_raises_not_implemented_removed(self, monkeypatch):
         """Test that stream raises not implemented removed."""

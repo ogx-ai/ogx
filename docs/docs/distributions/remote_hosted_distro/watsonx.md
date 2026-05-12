@@ -12,7 +12,6 @@ The `ogx/distribution-watsonx` distribution consists of the following provider c
 | datasetio | `remote::huggingface`, `inline::localfs` |
 | eval | `inline::builtin` |
 | inference | `remote::watsonx`, `inline::sentence-transformers` |
-| safety | `inline::llama-guard` |
 | scoring | `inline::basic`, `inline::llm-as-judge`, `inline::braintrust` |
 | tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol` |
 | vector_io | `inline::faiss` |
@@ -37,7 +36,6 @@ The following models are available by default:
 - `meta-llama/llama-3-2-1b-instruct (aliases: meta-llama/Llama-3.2-1B-Instruct)`
 - `meta-llama/llama-3-2-3b-instruct (aliases: meta-llama/Llama-3.2-3B-Instruct)`
 - `meta-llama/llama-3-2-90b-vision-instruct (aliases: meta-llama/Llama-3.2-90B-Vision-Instruct)`
-- `meta-llama/llama-guard-3-11b-vision (aliases: meta-llama/Llama-Guard-3-11B-Vision)`
 
 ## Prerequisite: API Keys
 

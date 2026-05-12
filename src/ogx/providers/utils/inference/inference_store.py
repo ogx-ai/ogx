@@ -10,8 +10,8 @@ from sqlalchemy.exc import IntegrityError
 
 from ogx.core.datatypes import AccessRule
 from ogx.core.storage.datatypes import InferenceStoreReference, StorageBackendType
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import _SQLSTORE_BACKENDS, sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
+from ogx.core.storage.sqlstore.sqlstore import _SQLSTORE_BACKENDS
 from ogx.core.task import (
     RequestContext,
     activate_request_context,
@@ -114,8 +114,7 @@ class InferenceStore:
 
     async def initialize(self):
         """Create the necessary tables if they don't exist."""
-        base_store = sqlstore_impl(self.reference)
-        self.sql_store = AuthorizedSqlStore(base_store, self.policy)
+        self.sql_store = authorized_sqlstore(self.reference, self.policy)
 
         # Disable write queue for SQLite since WAL mode handles concurrency
         # Keep it enabled for other backends (like Postgres) for performance

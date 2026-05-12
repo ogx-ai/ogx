@@ -17,7 +17,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import ValidationError
 
-from ogx_api.common.upload_safety import (
+from ogx_api.common.upload_limits import (
     DEFAULT_MAX_UPLOAD_SIZE_BYTES,
     PreReadUploadFile,
     read_upload_with_size_limit,

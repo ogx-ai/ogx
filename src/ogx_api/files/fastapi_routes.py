@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, UploadFile
 from fastapi.param_functions import File, Form
 from fastapi.responses import Response
 
-from ogx_api.common.upload_safety import (
+from ogx_api.common.upload_limits import (
     DEFAULT_MAX_UPLOAD_SIZE_BYTES,
     PreReadUploadFile,
     read_upload_with_size_limit,

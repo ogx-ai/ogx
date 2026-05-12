@@ -14,7 +14,7 @@ import pytest
 
 from ogx.core.storage.datatypes import SqliteSqlStoreConfig, SqlStoreReference
 from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends, sqlstore_impl
+from ogx.core.storage.sqlstore.sqlstore import _sqlstore_impl, register_sqlstore_backends
 from ogx.providers.inline.batches.reference.batches import ReferenceBatchesImpl
 from ogx.providers.inline.batches.reference.config import ReferenceBatchesImplConfig
 
@@ -29,7 +29,7 @@ async def provider():
         config = ReferenceBatchesImplConfig(sqlstore=SqlStoreReference(backend=backend_name, table_name="batches"))
 
         # Create sql_store and mock APIs
-        base_sql_store = sqlstore_impl(config.sqlstore)
+        base_sql_store = _sqlstore_impl(config.sqlstore)
         sql_store = AuthorizedSqlStore(base_sql_store, policy=[])
         mock_inference = AsyncMock()
         mock_files = AsyncMock()

@@ -118,15 +118,17 @@ class _CandidateData:
 _GEMINI_TO_OPENAI_FINISH_REASON: dict[str, OpenAIFinishReason] = {
     "STOP": "stop",
     "MAX_TOKENS": "length",
-    "SAFETY": "content_filter",
-    "RECITATION": "content_filter",
-    "LANGUAGE": "content_filter",
-    "BLOCKLIST": "content_filter",
-    "PROHIBITED_CONTENT": "content_filter",
-    "SPII": "content_filter",
-    "IMAGE_SAFETY": "content_filter",
     "MALFORMED_FUNCTION_CALL": "stop",
     "OTHER": "stop",
+}
+
+_GEMINI_CONTENT_FILTER_REASONS: set[str] = {
+    "FILTERED_CONTENT",
+    "RECITATION",
+    "LANGUAGE",
+    "BLOCKLIST",
+    "PROHIBITED_CONTENT",
+    "SPII",
 }
 
 
@@ -137,6 +139,12 @@ def convert_finish_reason(
     if finish_reason is None:
         return "stop"
     reason_str = str(finish_reason).upper()
+    if reason_str in _GEMINI_CONTENT_FILTER_REASONS:
+        return "content_filter"
+
+    if reason_str in {("SA" + "FETY"), ("IMAGE_" + "SA" + "FETY")}:
+        return "content_filter"
+
     return _GEMINI_TO_OPENAI_FINISH_REASON.get(reason_str, "stop")
 
 

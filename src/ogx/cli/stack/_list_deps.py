@@ -111,7 +111,7 @@ def run_stack_list_deps_command(args: argparse.Namespace) -> None:
         except ValueError as e:
             cprint(str(e), color="red", file=sys.stderr)
             sys.exit(1)
-        # Expand dependent providers (e.g. agents depends on inference, safety, etc.)
+        # Expand dependent providers (e.g. agents depends on inference and related APIs)
         provider_registry = get_provider_registry()
         requested_provider_types = list(
             {provider.provider_type for providers in config.providers.values() for provider in providers}

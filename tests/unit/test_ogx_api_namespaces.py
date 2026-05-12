@@ -32,7 +32,7 @@ def test_provider_and_types_are_disjoint() -> None:
     canonically in `types` and re-exported from `provider` for convenience —
     these are the only allowed overlaps.
     """
-    allowed_overlap = {"Model", "Shield", "ToolGroup", "VectorStore"}
+    allowed_overlap = {"Model", "ToolGroup", "VectorStore"}
     overlap = (set(provider.__all__) & set(types.__all__)) - allowed_overlap
     assert not overlap, f"Symbols in both namespaces: {sorted(overlap)}"
 
@@ -61,7 +61,6 @@ def test_provider_surface_contains_core_symbols() -> None:
         "Inference",
         "Responses",
         "VectorIO",
-        "Safety",
         "Resource",
         "ResourceType",
         "OGX_API_V1",
@@ -81,7 +80,6 @@ def test_types_surface_contains_core_symbols() -> None:
         "ListModelsResponse",
         "Filter",
         "Model",
-        "Shield",
         "VectorStore",
     }
     missing = required - set(types.__all__)

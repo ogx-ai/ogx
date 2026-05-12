@@ -106,7 +106,7 @@ adapter_type: test_provider
 config_class: test_provider.config.TestProviderConfig
 module: test_provider
 api_dependencies:
-  - safety
+  - inference
 """
 
 
@@ -119,7 +119,7 @@ config_class: test_provider.config.TestProviderConfig
 pip_packages:
   - test-package
 api_dependencies:
-  - safety
+  - inference
 optional_api_dependencies:
   - vector_io
 provider_data_validator: test_provider.validator.TestValidator
@@ -220,7 +220,7 @@ class TestProviderRegistry:
         assert provider.adapter_type == "test_provider"
         assert provider.module == "test_provider"
         assert provider.config_class == "test_provider.config.TestProviderConfig"
-        assert Api.safety in provider.api_dependencies
+        assert Api.inference in provider.api_dependencies
 
     def test_external_inline_providers(self, api_directories, mock_providers, base_config, inline_provider_spec_yaml):
         """Test loading external inline providers from YAML files."""
@@ -238,7 +238,7 @@ class TestProviderRegistry:
         assert provider.module == "test_provider"
         assert provider.config_class == "test_provider.config.TestProviderConfig"
         assert provider.pip_packages == ["test-package"]
-        assert Api.safety in provider.api_dependencies
+        assert Api.inference in provider.api_dependencies
         assert Api.vector_io in provider.optional_api_dependencies
         assert provider.provider_data_validator == "test_provider.validator.TestValidator"
         assert provider.container_image == "test-image:latest"
@@ -284,7 +284,7 @@ class TestProviderRegistry:
 adapter_type: test_provider
   # Missing required fields
 api_dependencies:
-  - safety
+  - inference
 """
         with open(remote_dir / "malformed.yaml", "w") as f:
             f.write(malformed_spec)
@@ -829,18 +829,10 @@ class TestGetExternalProvidersFromModule:
             config_class="inf.Config",
             module="inf_test",
         )
-        safety_spec = ProviderSpec(
-            api=Api.safety,
-            provider_type="safe_test",
-            config_class="safe.Config",
-            module="safe_test",
-        )
 
         def import_side_effect(name):
             if name == "inf_test.provider":
                 return SimpleNamespace(get_provider_spec=lambda: inference_spec)
-            elif name == "safe_test.provider":
-                return SimpleNamespace(get_provider_spec=lambda: safety_spec)
             raise ModuleNotFoundError(name)
 
         with patch("importlib.import_module", side_effect=import_side_effect):
@@ -855,18 +847,9 @@ class TestGetExternalProvidersFromModule:
                             module="inf_test",
                         )
                     ],
-                    "safety": [
-                        Provider(
-                            provider_id="safe",
-                            provider_type="safe_test",
-                            config={},
-                            module="safe_test",
-                        )
-                    ],
                 },
             )
-            registry = {Api.inference: {}, Api.safety: {}}
+            registry = {Api.inference: {}}
             result = get_external_providers_from_module(registry, config, listing=False)
 
             assert "inf_test" in result[Api.inference]
-            assert "safe_test" in result[Api.safety]

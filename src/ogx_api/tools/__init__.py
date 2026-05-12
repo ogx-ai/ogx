@@ -8,11 +8,7 @@
 
 This module contains the ToolGroups and ToolRuntime protocol definitions.
 Pydantic models are defined in ogx_api.tools.models.
-The FastAPI router is defined in ogx_api.tools.fastapi_routes.
 """
-
-# Import fastapi_routes for router factory access
-from . import fastapi_routes
 
 # Import protocols for re-export
 from .api import ToolGroups, ToolRuntime
@@ -42,5 +38,4 @@ __all__ = [
     "ToolInvocationResult",
     "ToolRuntime",
     "ToolStore",
-    "fastapi_routes",
 ]

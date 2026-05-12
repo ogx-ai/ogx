@@ -15,9 +15,6 @@ Meta's reference implementation of an agent system that can use tools, access ve
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `persistence` | `ResponsesPersistenceConfig` | No |  |  |
-| `persistence.agent_state` | `KVStoreReference` | No |  |  |
-| `persistence.agent_state.namespace` | `str` | No |  | Key prefix for KVStore backends |
-| `persistence.agent_state.backend` | `str` | No |  | Name of backend from storage.backends |
 | `persistence.responses` | `ResponsesStoreReference` | No |  |  |
 | `persistence.responses.table_name` | `str` | No | openai_responses | Name of the table to use for storing OpenAI responses |
 | `persistence.responses.backend` | `str` | No |  | Name of backend from storage.backends |
@@ -94,14 +91,12 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 | `compaction_config.default_compact_threshold` | `int \| None` | No |  | Default token threshold for auto-compaction via context_management. If set, conversations exceeding this token count will be automatically compacted. |
 | `compaction_config.tokenizer_encoding` | `str \| None` | No |  | Default tiktoken encoding name for token counting (e.g. 'o200k_base', 'cl100k_base'). Applied as a server-level default after any per-request override via extra_body. If not set, encoding is resolved from the model name via tiktoken, then model-family prefix mappings, then character-based estimation. |
 | `compaction_config.model_tokenizer_mappings` | `dict[str, str]` | No | &#123;'llama': 'cl100k_base', 'mistral': 'cl100k_base', 'claude': 'cl100k_base', 'gemma': 'cl100k_base', 'qwen': 'cl100k_base', 'phi': 'cl100k_base', 'deepseek': 'cl100k_base'&#125; | Map model name prefixes to tiktoken encoding names. Used as a heuristic fallback when tiktoken cannot resolve the model name directly. Matching is case-insensitive on the model name after stripping any provider prefix (e.g., 'ollama/llama3.2:3b' matches the 'llama' prefix). Admins can extend this to support custom or fine-tuned models. |
+| `moderation_endpoint` | `str \| None` | No |  | URL of an OpenAI-compatible /v1/moderations endpoint for guardrails. The endpoint must accept POST &#123;"input": "text"&#125; and return &#123;"results": [&#123;"flagged": bool, "categories": &#123;...&#125;&#125;]&#125;. |
 
 ## Sample Configuration
 
 ```yaml
 persistence:
-  agent_state:
-    namespace: agents
-    backend: kv_default
   responses:
     table_name: responses
     backend: sql_default

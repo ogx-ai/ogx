@@ -11,7 +11,11 @@ These tests ensure that the library client is automatically initialized
 and ready to use immediately after construction.
 """
 
+import threading
+import time
+
 import pytest
+from ogx_client import NOT_GIVEN, Omit
 
 from ogx.core.library_client import (
     AsyncOGXAsLibraryClient,
@@ -523,3 +527,98 @@ class TestOGXAsLibraryClientContextManager:
         client = OGXAsLibraryClient("ci-tests")
         assert hasattr(client, "__enter__")
         assert hasattr(client, "__exit__")
+
+
+class TestOGXAsLibraryClientSyncOnAsync:
+    def test_sync_client_concurrent_requests(self, monkeypatch):
+        """Test that multiple threads can make requests concurrently without
+        RuntimeError: This event loop is already running.
+        """
+        mock_impls = {}
+        mock_route_impls = RouteImpls({})
+
+        class MockStack:
+            def __init__(self, config, custom_provider_registry=None):
+                self.impls = mock_impls
+
+            async def initialize(self):
+                pass
+
+            async def shutdown(self):
+                pass
+
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", lambda impls: mock_route_impls)
+
+        errors = []
+
+        # Mock request to return something
+        async def mock_request(*args, **kwargs):
+            return "ok"
+
+        with OGXAsLibraryClient("ci-tests") as client:
+            client.async_client.request = mock_request
+
+            def make_request():
+                try:
+                    client.request(...)
+                except Exception as e:
+                    errors.append(e)
+
+            threads = [threading.Thread(target=make_request) for _ in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert not errors, f"Concurrent requests failed: {errors}"
+
+    def test_sync_client_cleanup_on_init_failure(self, monkeypatch):
+        """Test that background thread is cleaned up if initialization fails."""
+        threads_before = set(threading.enumerate())
+
+        class MockStack:
+            def __init__(self, config, custom_provider_registry=None):
+                self.impls = {}
+
+            async def initialize(self):
+                raise RuntimeError("Init failed intentionally!")
+
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", lambda impls: None)
+
+        with pytest.raises(RuntimeError, match="Init failed"):
+            OGXAsLibraryClient("ci-tests")
+
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            new_threads = set(threading.enumerate()) - threads_before
+            if not any("ogx-lib-sync-client-event-loop" in t.name for t in new_threads):
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("Background event loop thread was not cleaned up after init failure")
+
+
+class TestAsyncOGXAsLibraryClientHeaderSanitization:
+    def test_sanitize_headers_filters_omit_and_not_given(self):
+        headers = {
+            "Authorization": Omit(),
+            "X-Not-Given": NOT_GIVEN,
+            "X-Trace-Id": "trace-123",
+        }
+
+        assert AsyncOGXAsLibraryClient._sanitize_headers(headers) == {"X-Trace-Id": "trace-123"}
+
+    def test_sanitize_headers_normalizes_supported_types(self):
+        headers = {
+            b"X-Bytes-Key": b"bytes-value",
+            "X-Int": 7,
+            "X-Bool": False,
+        }
+
+        assert AsyncOGXAsLibraryClient._sanitize_headers(headers) == {
+            "X-Bytes-Key": "bytes-value",
+            "X-Int": "7",
+            "X-Bool": "False",
+        }
