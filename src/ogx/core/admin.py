@@ -42,6 +42,8 @@ from ogx_api.connectors.models import (
     ListToolsResponse,
 )
 from ogx_api.tools import ToolDef
+from ogx_api.tools.api import ToolGroups
+from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
 
 logger = get_logger(name=__name__, category="core")
 
@@ -249,3 +251,10 @@ class AdminImpl(Admin):
 
     async def get_connector_tool(self, request: GetConnectorToolRequest, authorization: str | None = None) -> ToolDef:
         return await self._connectors.get_connector_tool(request, authorization=authorization)
+
+    @property
+    def _tool_groups(self) -> ToolGroups:
+        return cast(ToolGroups, self.deps[Api.tool_groups.value])
+
+    async def list_tools(self, request: ListToolsRequest) -> ListToolDefsResponse:
+        return await self._tool_groups.list_tools(request)
