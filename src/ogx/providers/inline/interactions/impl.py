@@ -27,10 +27,12 @@ from fastapi.responses import JSONResponse
 from ogx.core.access_control.access_control import is_action_allowed
 from ogx.core.access_control.conditions import User as AccessControlUser
 from ogx.core.access_control.datatypes import Action
+from ogx.core.datatypes import AccessRule
 from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.utils.inference.http_client import build_network_client_kwargs
 from ogx.providers.utils.inference.model_registry import NetworkConfig
+from ogx.providers.utils.interactions.interactions_store import InteractionsStore
 from ogx_api import (
     Inference,
     OpenAIChatCompletion,
@@ -73,6 +75,10 @@ logger = get_logger(name=__name__, category="interactions")
 
 def _now_iso() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S+00:00")
+
+
+def _now_epoch() -> int:
+    return int(datetime.now(UTC).timestamp())
 
 
 class _RawSSEStream(AsyncIterator[str]):
@@ -124,15 +130,17 @@ class _FallbackModelResource:
 class BuiltinInteractionsImpl(Interactions):
     """Google Interactions API adapter that translates to the inference API."""
 
-    def __init__(self, config: InteractionsConfig, inference_api: Inference):
+    def __init__(self, config: InteractionsConfig, inference_api: Inference, policy: list[AccessRule]):
         self.config = config
         self.inference_api = inference_api
+        self.policy = policy
 
     async def initialize(self) -> None:
-        pass
+        self.store = InteractionsStore(self.config.store, self.policy)
+        await self.store.initialize()
 
     async def shutdown(self) -> None:
-        pass
+        await self.store.shutdown()
 
     async def create_interaction(
         self,
@@ -142,14 +150,31 @@ class BuiltinInteractionsImpl(Interactions):
         if passthrough:
             return await self._passthrough_request(passthrough, request)
 
-        openai_params = self._google_to_openai(request)
+        messages = await self._build_messages(request)
+        openai_params = self._google_to_openai(request, messages)
 
         result = await self.inference_api.openai_chat_completion(openai_params)
 
         if isinstance(result, AsyncIterator):
-            return self._stream_openai_to_google(result, request.model)
+            return self._stream_openai_to_google(result, request.model, messages)
 
-        return self._openai_to_google(result, request.model)
+        return await self._openai_to_google(result, request.model, messages)
+
+    async def _build_messages(self, request: GoogleCreateInteractionRequest) -> list[dict[str, Any]]:
+        """Build the full message list, incorporating previous interaction context if chaining."""
+        if request.previous_interaction_id:
+            stored = await self.store.get_interaction(request.previous_interaction_id)
+            if not stored:
+                raise ValueError(
+                    f"Interaction '{request.previous_interaction_id}' not found. "
+                    "Cannot chain from a non-existent interaction."
+                )
+            messages: list[dict[str, Any]] = list(stored["messages"])
+            messages.append({"role": "assistant", "content": stored["output_text"]})
+            messages.extend(self._convert_input_to_openai(None, request.input))
+            return messages
+
+        return self._convert_input_to_openai(request.system_instruction, request.input)
 
     # -- Native passthrough for providers with /interactions support --
 
@@ -335,8 +360,11 @@ class BuiltinInteractionsImpl(Interactions):
 
     # -- Request translation --
 
-    def _google_to_openai(self, request: GoogleCreateInteractionRequest) -> OpenAIChatCompletionRequestWithExtraBody:
-        messages = self._convert_input_to_openai(request.system_instruction, request.input)
+    def _google_to_openai(
+        self,
+        request: GoogleCreateInteractionRequest,
+        messages: list[dict[str, Any]],
+    ) -> OpenAIChatCompletionRequestWithExtraBody:
         gen_config = request.generation_config or GoogleGenerationConfig()
 
         extra_body: dict[str, Any] = {}
@@ -473,7 +501,12 @@ class BuiltinInteractionsImpl(Interactions):
 
     # -- Response translation --
 
-    def _openai_to_google(self, response: OpenAIChatCompletion, request_model: str) -> GoogleInteractionResponse:
+    async def _openai_to_google(
+        self,
+        response: OpenAIChatCompletion,
+        request_model: str,
+        messages: list[dict[str, Any]],
+    ) -> GoogleInteractionResponse:
         outputs: list[GoogleOutputItem] = []
 
         if response.choices:
@@ -510,8 +543,23 @@ class BuiltinInteractionsImpl(Interactions):
             )
 
         now = _now_iso()
+        interaction_id = f"interaction-{uuid.uuid4().hex[:24]}"
+        output_text = ""
+        for o in outputs:
+            if isinstance(o, GoogleTextOutput):
+                output_text = o.text
+                break
+
+        await self.store.store_interaction(
+            interaction_id=interaction_id,
+            created_at=_now_epoch(),
+            model=request_model,
+            messages=messages,
+            output_text=output_text,
+        )
+
         return GoogleInteractionResponse(
-            id=f"interaction-{uuid.uuid4().hex[:24]}",
+            id=interaction_id,
             created=now,
             updated=now,
             model=request_model,
@@ -525,6 +573,7 @@ class BuiltinInteractionsImpl(Interactions):
         self,
         openai_stream: AsyncIterator[OpenAIChatCompletionChunk],
         request_model: str,
+        messages: list[dict[str, Any]],
     ) -> AsyncIterator[GoogleStreamEvent]:
         """Translate OpenAI streaming chunks to Google streaming events."""
 
@@ -540,6 +589,7 @@ class BuiltinInteractionsImpl(Interactions):
 
         content_block_index = 0
         text_block_started = False
+        collected_text: list[str] = []
         tool_call_blocks: dict[int, bool] = {}  # tc_index -> started
         tool_call_index_to_block_index: dict[int, int] = {}
         output_tokens = 0
@@ -561,6 +611,7 @@ class BuiltinInteractionsImpl(Interactions):
                     yield ContentStartEvent(index=content_block_index, content=_ContentRef())
                     text_block_started = True
 
+                collected_text.append(delta.content)
                 yield ContentDeltaEvent(
                     index=content_block_index,
                     delta=_TextDelta(text=delta.content),
@@ -607,6 +658,15 @@ class BuiltinInteractionsImpl(Interactions):
 
         for _tc_idx, block_idx in tool_call_index_to_block_index.items():
             yield ContentStopEvent(index=block_idx)
+
+        # Store the interaction for conversation chaining
+        await self.store.store_interaction(
+            interaction_id=interaction_id,
+            created_at=_now_epoch(),
+            model=request_model,
+            messages=messages,
+            output_text="".join(collected_text),
+        )
 
         # Final event
         now = _now_iso()

@@ -10,8 +10,18 @@ title: inline::builtin
 
 Serves the Google Interactions API (POST /v1alpha/interactions) so that Google GenAI SDK and ADK clients can call OGX without code changes. Requests are translated to OpenAI Chat Completions and routed to whichever inference provider is configured (vLLM, Ollama, OpenAI, Bedrock, etc.). When the provider is Gemini, non-streaming requests are forwarded directly to the native /v1beta/interactions endpoint, avoiding double translation.
 
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `store` | `SqlStoreReference` | No | table_name='interactions' backend='sql_default' | SQL store for persisting interaction state (conversation chaining). |
+| `store.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `store.backend` | `str` | No |  | Name of backend from storage.backends |
+
 ## Sample Configuration
 
 ```yaml
-{}
+store:
+  table_name: interactions
+  backend: sql_default
 ```
