@@ -7,11 +7,13 @@
 """Unit tests for PostgresKVStoreImpl.
 
 Since unit tests cannot depend on a running Postgres server, these tests
-use mocked asyncpg to verify SQL query correctness, namespace prefixing,
+use a mocked asyncpg pool to verify SQL query correctness, namespace prefixing,
 expiration filtering, and error handling.
 """
 
-from unittest.mock import AsyncMock, patch
+import asyncio
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -30,15 +32,24 @@ def _make_config(namespace: str | None = None, table_name: str = "test_kvstore")
     )
 
 
-def _make_store_with_mock_conn(config: PostgresKVStoreConfig):
-    """Create a PostgresKVStoreImpl with a mocked _connect() that returns a mock connection."""
+def _make_store_with_mock_pool(config: PostgresKVStoreConfig):
+    """Create a PostgresKVStoreImpl with a mocked pool via _acquire()."""
     from ogx.core.storage.kvstore.postgres.postgres import PostgresKVStoreImpl
 
     store = PostgresKVStoreImpl(config)
     store._table_created = True
     mock_conn = AsyncMock()
-    mock_conn.close = AsyncMock()
-    store._connect = AsyncMock(return_value=mock_conn)
+
+    @asynccontextmanager
+    async def _acquire_conn():
+        yield mock_conn
+
+    mock_pool = MagicMock()
+    mock_pool.acquire = _acquire_conn
+    mock_pool.close = AsyncMock()
+    mock_pool.expire_connections = AsyncMock()
+    store._pool = mock_pool
+    store._loop = asyncio.get_event_loop()
     return store, mock_conn
 
 
@@ -46,7 +57,7 @@ def _make_store_with_mock_conn(config: PostgresKVStoreConfig):
 
 
 async def test_set_applies_namespace():
-    store, conn = _make_store_with_mock_conn(_make_config(namespace="quota"))
+    store, conn = _make_store_with_mock_pool(_make_config(namespace="quota"))
     await store.set("user:123", "5", expiration=None)
 
     conn.execute.assert_called_once()
@@ -55,7 +66,7 @@ async def test_set_applies_namespace():
 
 
 async def test_get_applies_namespace():
-    store, conn = _make_store_with_mock_conn(_make_config(namespace="quota"))
+    store, conn = _make_store_with_mock_pool(_make_config(namespace="quota"))
     conn.fetchrow.return_value = None
 
     await store.get("user:123")
@@ -65,7 +76,7 @@ async def test_get_applies_namespace():
 
 
 async def test_delete_applies_namespace():
-    store, conn = _make_store_with_mock_conn(_make_config(namespace="myns"))
+    store, conn = _make_store_with_mock_pool(_make_config(namespace="myns"))
 
     await store.delete("k1")
 
@@ -74,7 +85,7 @@ async def test_delete_applies_namespace():
 
 
 async def test_no_namespace_passes_key_through():
-    store, conn = _make_store_with_mock_conn(_make_config(namespace=None))
+    store, conn = _make_store_with_mock_pool(_make_config(namespace=None))
     conn.fetchrow.return_value = None
 
     await store.get("raw_key")
@@ -88,7 +99,7 @@ async def test_no_namespace_passes_key_through():
 
 async def test_get_filters_expired_keys():
     """get() SQL includes expiration > NOW() filter."""
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetchrow.return_value = None
 
     await store.get("k1")
@@ -99,7 +110,7 @@ async def test_get_filters_expired_keys():
 
 async def test_set_uses_upsert():
     """set() SQL uses INSERT ... ON CONFLICT DO UPDATE."""
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     await store.set("k1", "v1")
 
     sql = conn.execute.call_args[0][0]
@@ -109,7 +120,7 @@ async def test_set_uses_upsert():
 
 async def test_values_in_range_uses_half_open_interval():
     """values_in_range SQL uses >= start AND < end."""
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetch.return_value = []
 
     await store.values_in_range("a", "c")
@@ -120,7 +131,7 @@ async def test_values_in_range_uses_half_open_interval():
 
 
 async def test_values_in_range_filters_expired():
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetch.return_value = []
 
     await store.values_in_range("a", "z")
@@ -131,7 +142,7 @@ async def test_values_in_range_filters_expired():
 
 async def test_keys_in_range_uses_half_open_interval():
     """keys_in_range SQL uses >= start AND < end."""
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetch.return_value = []
 
     await store.keys_in_range("a", "c")
@@ -142,7 +153,7 @@ async def test_keys_in_range_uses_half_open_interval():
 
 async def test_keys_in_range_filters_expired():
     """keys_in_range must also filter expired keys (bug fix verification)."""
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetch.return_value = []
 
     await store.keys_in_range("a", "z")
@@ -152,7 +163,7 @@ async def test_keys_in_range_filters_expired():
 
 
 async def test_range_queries_apply_namespace():
-    store, conn = _make_store_with_mock_conn(_make_config(namespace="ns"))
+    store, conn = _make_store_with_mock_pool(_make_config(namespace="ns"))
     conn.fetch.return_value = []
 
     await store.values_in_range("a", "z")
@@ -164,7 +175,7 @@ async def test_range_queries_apply_namespace():
 
 async def test_keys_in_range_strips_namespace_from_results():
     """keys_in_range returns un-namespaced keys so callers can pass them to get()."""
-    store, conn = _make_store_with_mock_conn(_make_config(namespace="ns"))
+    store, conn = _make_store_with_mock_pool(_make_config(namespace="ns"))
     conn.fetch.return_value = [{"key": "ns:key1"}, {"key": "ns:key2"}]
 
     keys = await store.keys_in_range("a", "z")
@@ -173,7 +184,7 @@ async def test_keys_in_range_strips_namespace_from_results():
 
 
 async def test_values_in_range_returns_values():
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetch.return_value = [{"value": "v1"}, {"value": "v2"}]
 
     values = await store.values_in_range("a", "z")
@@ -182,7 +193,7 @@ async def test_values_in_range_returns_values():
 
 
 async def test_get_returns_value_when_found():
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetchrow.return_value = {"value": "hello"}
 
     result = await store.get("k1")
@@ -191,7 +202,7 @@ async def test_get_returns_value_when_found():
 
 
 async def test_get_returns_none_when_not_found():
-    store, conn = _make_store_with_mock_conn(_make_config())
+    store, conn = _make_store_with_mock_pool(_make_config())
     conn.fetchrow.return_value = None
 
     result = await store.get("missing")
@@ -203,14 +214,14 @@ async def test_get_returns_none_when_not_found():
 
 
 async def test_connect_wraps_connection_error():
-    """_connect() wraps connection errors in RuntimeError."""
+    """_acquire() wraps connection errors in RuntimeError."""
     from ogx.core.storage.kvstore.postgres.postgres import PostgresKVStoreImpl
 
     config = _make_config()
     store = PostgresKVStoreImpl(config)
 
     with patch("ogx.core.storage.kvstore.postgres.postgres.asyncpg") as mock_asyncpg:
-        mock_asyncpg.connect = AsyncMock(side_effect=Exception("connection refused"))
+        mock_asyncpg.create_pool = AsyncMock(side_effect=Exception("connection refused"))
         with pytest.raises(RuntimeError, match="Could not connect"):
             await store.get("k1")
 
@@ -218,14 +229,15 @@ async def test_connect_wraps_connection_error():
 # -- Connection lifecycle ------------------------------------------------------
 
 
-async def test_each_operation_closes_connection():
-    """Each operation opens and closes its own connection."""
-    store, conn = _make_store_with_mock_conn(_make_config())
-    conn.fetchrow.return_value = None
+async def test_shutdown_closes_pool():
+    """shutdown() closes the pool."""
+    store, _ = _make_store_with_mock_pool(_make_config())
+    pool = store._pool
 
-    await store.get("k1")
+    await store.shutdown()
 
-    conn.close.assert_called_once()
+    pool.close.assert_called_once()
+    assert store._pool is None
 
 
 # -- Config validation ---------------------------------------------------------
