@@ -236,6 +236,7 @@ class StreamingResponseOrchestrator:
         connectors_api: Connectors | None = None,
         prompt: OpenAIResponsePrompt | None = None,
         prompt_cache_key: str | None = None,
+        previous_response_id: str | None = None,
         parallel_tool_calls: bool | None = None,
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
@@ -263,6 +264,7 @@ class StreamingResponseOrchestrator:
         self.guardrail_ids = guardrail_ids or []
         self.prompt = prompt
         self.prompt_cache_key = prompt_cache_key
+        self.previous_response_id = previous_response_id
         # System message that is inserted into the model's context
         self.instructions = instructions
         # Whether to allow more than one function tool call generated per turn.
@@ -335,6 +337,7 @@ class StreamingResponseOrchestrator:
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
+            previous_response_id=self.previous_response_id,
         )
 
         self.sequence_number += 1
@@ -392,6 +395,7 @@ class StreamingResponseOrchestrator:
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
+            previous_response_id=self.previous_response_id,
         )
 
     async def create_response(self) -> AsyncIterator[OpenAIResponseObjectStream]:
