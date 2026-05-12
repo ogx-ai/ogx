@@ -114,7 +114,7 @@ class InferenceStore:
 
     async def initialize(self):
         """Create the necessary tables if they don't exist."""
-        self.sql_store = authorized_sqlstore(self.reference, self.policy)
+        self.sql_store = await authorized_sqlstore(self.reference, self.policy)
 
         # Disable write queue for SQLite since WAL mode handles concurrency
         # Keep it enabled for other backends (like Postgres) for performance

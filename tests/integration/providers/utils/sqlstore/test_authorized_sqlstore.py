@@ -63,7 +63,7 @@ def authorized_store(backend_config):
     config = config_func()
     backend_name = f"sql_{type(config).__name__.lower()}"
     register_sqlstore_backends({backend_name: config})
-    base_sqlstore = _sqlstore_impl(SqlStoreReference(backend=backend_name, table_name="authorized_store"))
+    base_sqlstore = await _sqlstore_impl(SqlStoreReference(backend=backend_name, table_name="authorized_store"))
     authorized_store = AuthorizedSqlStore(base_sqlstore, default_policy())
 
     yield authorized_store

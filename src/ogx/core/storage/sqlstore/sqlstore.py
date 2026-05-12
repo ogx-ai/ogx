@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from threading import Lock
+import asyncio
 from typing import Annotated, cast
 
 from pydantic import Field
@@ -22,7 +22,7 @@ sql_store_pip_packages = ["sqlalchemy[asyncio]", "aiosqlite", "asyncpg"]
 
 _SQLSTORE_BACKENDS: dict[str, StorageBackendConfig] = {}
 _SQLSTORE_INSTANCES: dict[str, SqlStore] = {}
-_SQLSTORE_LOCKS: dict[str, Lock] = {}
+_SQLSTORE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 SqlStoreConfig = Annotated[
@@ -45,7 +45,7 @@ def get_pip_packages(store_config: dict | SqlStoreConfig) -> list[str]:
         return store_config.pip_packages()
 
 
-def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
+async def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
     """Get or create a SqlStore instance for the given store reference.
 
     Args:
@@ -69,8 +69,8 @@ def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
     if existing:
         return existing
 
-    lock = _SQLSTORE_LOCKS.setdefault(backend_name, Lock())
-    with lock:
+    lock = _SQLSTORE_LOCKS.setdefault(backend_name, asyncio.Lock())
+    async with lock:
         existing = _SQLSTORE_INSTANCES.get(backend_name)
         if existing:
             return existing
