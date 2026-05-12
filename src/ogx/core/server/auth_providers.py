@@ -246,12 +246,12 @@ class OAuth2TokenAuthProvider(AuthProvider):
 
         if self.config.introspection.send_secret_in_body:
             form["client_id"] = self.config.introspection.client_id
-            form["client_secret"] = self.config.introspection.client_secret
+            form["client_secret"] = self.config.introspection.client_secret.get_secret_value()
         else:
             # httpx auth parameter expects tuple[str | bytes, str | bytes]
             post_kwargs["auth"] = (
                 self.config.introspection.client_id,
-                self.config.introspection.client_secret,
+                self.config.introspection.client_secret.get_secret_value(),
             )
 
         try:

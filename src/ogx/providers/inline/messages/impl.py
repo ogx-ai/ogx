@@ -155,7 +155,7 @@ class BuiltinMessagesImpl(Messages):
                     base_url = base_url[:-3]
                 logger.info("Using native /v1/messages passthrough", model=model, base_url=base_url)
                 return base_url
-        except Exception:
+        except (KeyError, ValueError, AttributeError):
             logger.debug("Failed to resolve passthrough, falling back to translation", model=model)
 
         return None
@@ -175,8 +175,8 @@ class BuiltinMessagesImpl(Messages):
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
-            except Exception:
-                pass
+            except (KeyError, ValueError, AttributeError):
+                logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
         body = request.model_dump(exclude_none=True)
         body["model"] = provider_model
@@ -268,8 +268,8 @@ class BuiltinMessagesImpl(Messages):
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
-            except Exception:
-                pass
+            except (KeyError, ValueError, AttributeError):
+                logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
         body = request.model_dump(exclude_none=True)
         body["model"] = provider_model
