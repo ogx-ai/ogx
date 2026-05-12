@@ -937,14 +937,6 @@ class ChatCompletionMessageList(BaseModel):
 class OpenAICompletionRequestWithExtraBody(BaseModel, extra="allow"):
     """Request parameters for OpenAI-compatible completion endpoint."""
 
-    @field_validator("logprobs", mode="before")
-    @classmethod
-    def reject_boolean_logprobs(cls, value: Any) -> Any:
-        if isinstance(value, bool):
-            msg = "logprobs must be an integer between 0 and 5"
-            raise ValueError(msg)
-        return value
-
     # Standard OpenAI completion parameters
     model: str = Field(..., description="The identifier of the model to use.")
     prompt: str | list[str] | list[int] | list[list[int]] = Field(
@@ -957,7 +949,8 @@ class OpenAICompletionRequestWithExtraBody(BaseModel, extra="allow"):
     )
     logit_bias: dict[str, float] | None = Field(default=None, description="The logit bias to use.")
     logprobs: int | None = Field(
-        default=None, ge=0, le=5, description="Include the log probabilities on the logprobs most likely output tokens."
+        default=None, ge=0, le=5, strict=True,
+        description="Include the log probabilities on the logprobs most likely output tokens.",
     )
     max_tokens: int | None = Field(default=None, ge=1, description="The maximum number of tokens to generate.")
     n: int | None = Field(default=None, ge=1, description="The number of completions to generate.")
