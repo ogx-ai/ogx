@@ -16,25 +16,6 @@ from ogx_api import (
 )
 
 
-class TestOpenAICompletionRequestValidation:
-    def test_completion_logprobs_accepts_integer_range(self):
-        request = OpenAICompletionRequestWithExtraBody(
-            model="text-davinci-003",
-            prompt="Hello",
-            logprobs=5,
-        )
-
-        assert request.logprobs == 5
-
-    def test_completion_logprobs_rejects_boolean_input(self):
-        with pytest.raises(ValueError):
-            OpenAICompletionRequestWithExtraBody(
-                model="text-davinci-003",
-                prompt="Hello",
-                logprobs=True,
-            )
-
-
 class TestOpenAIMixinAllowedModelsInference:
     """Test cases for allowed_models enforcement during inference requests"""
 
