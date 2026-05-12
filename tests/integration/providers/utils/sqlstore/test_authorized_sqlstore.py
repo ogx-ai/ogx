@@ -56,7 +56,7 @@ BACKEND_CONFIGS = [
 
 
 @pytest.fixture
-def authorized_store(backend_config):
+async def authorized_store(backend_config):
     """Set up authorized store with proper cleanup."""
     config_func = backend_config
 
