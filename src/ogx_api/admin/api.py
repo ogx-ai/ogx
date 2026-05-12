@@ -6,6 +6,7 @@
 
 from typing import Protocol, runtime_checkable
 
+from ogx_api.connectors.api import Connectors
 from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
 
 from .models import (
@@ -20,7 +21,7 @@ from .models import (
 
 
 @runtime_checkable
-class Admin(Protocol):
+class Admin(Connectors, Protocol):
     """Admin
 
     Admin API for stack operations only available to administrative users.

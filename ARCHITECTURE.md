@@ -21,7 +21,6 @@ Client (ogx-client SDK or raw HTTP)
 FastAPI Server  (src/ogx/core/server/server.py)
   |
   |-- AuthenticationMiddleware  (token validation, user extraction)
-  |-- QuotaMiddleware           (rate limiting per client)
   |
   v
 Route Dispatch

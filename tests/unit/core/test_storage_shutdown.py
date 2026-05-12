@@ -23,9 +23,9 @@ from ogx.core.storage.kvstore.kvstore import (
 from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
 from ogx.core.storage.sqlstore.sqlstore import (
+    _sqlstore_impl,
     register_sqlstore_backends,
     shutdown_sqlstore_backends,
-    sqlstore_impl,
 )
 
 
@@ -148,8 +148,8 @@ class TestSqlStoreShutdown:
                 }
             )
 
-            # Create instance by calling sqlstore_impl
-            store = sqlstore_impl(SqlStoreReference(backend="sql_test", table_name="test"))
+            # Create instance by calling _sqlstore_impl
+            store = _sqlstore_impl(SqlStoreReference(backend="sql_test", table_name="test"))
 
             # Verify store is working
             from ogx_api.internal.sqlstore import ColumnType

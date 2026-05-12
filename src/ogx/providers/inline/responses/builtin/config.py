@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ogx.core.datatypes import VectorStoresConfig
-from ogx.core.storage.datatypes import KVStoreReference, ResponsesStoreReference
+from ogx.core.storage.datatypes import ResponsesStoreReference
 
 DEFAULT_SUMMARIZATION_PROMPT = (
     "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary "
@@ -59,7 +59,6 @@ class CompactionConfig(BaseModel):
 class ResponsesPersistenceConfig(BaseModel):
     """Nested persistence configuration for the responses provider."""
 
-    agent_state: KVStoreReference
     responses: ResponsesStoreReference
 
 
@@ -82,10 +81,6 @@ class BuiltinResponsesImplConfig(BaseModel):
     def sample_run_config(cls, __distro_dir__: str) -> dict[str, Any]:
         return {
             "persistence": {
-                "agent_state": KVStoreReference(
-                    backend="kv_default",
-                    namespace="agents",
-                ).model_dump(exclude_none=True),
                 "responses": ResponsesStoreReference(
                     backend="sql_default",
                     table_name="responses",
