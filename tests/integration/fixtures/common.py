@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import inspect
+import json
 import os
 import shlex
 import signal
@@ -149,6 +150,13 @@ def get_provider_data():
     return provider_data
 
 
+def get_provider_data_headers() -> dict[str, str]:
+    provider_data = get_provider_data()
+    if not provider_data:
+        return {}
+    return {"X-OGX-Provider-Data": json.dumps(provider_data)}
+
+
 @pytest.fixture(scope="session")
 def inference_provider_type(ogx_client):
     providers = ogx_client.providers.list()
@@ -189,11 +197,6 @@ def client_with_models(
 
 
 @pytest.fixture(scope="session")
-def available_shields(ogx_client):
-    return [shield.identifier for shield in ogx_client.shields.list()]
-
-
-@pytest.fixture(scope="session")
 def model_providers(ogx_client):
     return {x.provider_id for x in ogx_client.providers.list() if x.api == "inference"}
 
@@ -205,7 +208,6 @@ def skip_if_no_model(request):
         "vision_model_id",
         "embedding_model_id",
         "judge_model_id",
-        "shield_id",
         "rerank_model_id",
     ]
     test_func = request.node.function
@@ -309,7 +311,7 @@ def instantiate_ogx_client(session):
 
         return OgxClient(
             base_url=base_url,
-            provider_data=get_provider_data(),
+            default_headers=get_provider_data_headers(),
             timeout=int(os.environ.get("OGX_CLIENT_TIMEOUT", "30")),
         )
 
@@ -319,7 +321,7 @@ def instantiate_ogx_client(session):
         if parsed_url.scheme and parsed_url.netloc:
             return OgxClient(
                 base_url=config,
-                provider_data=get_provider_data(),
+                default_headers=get_provider_data_headers(),
             )
     except Exception:
         # If URL parsing fails, treat as non-URL config

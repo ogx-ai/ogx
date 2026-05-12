@@ -26,8 +26,57 @@ from ogx.core.build import get_provider_dependencies
 from ogx.core.stack import run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.log import get_logger
+from ogx_api.models.models import ModelInput
 
 logger = get_logger(name=__name__, category="cli")
+
+# Model IDs that Claude Code looks for.
+_CLAUDE_CODE_ALIASES: list[str] = [
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+    "claude-opus-4-7",
+]
+
+# Inference provider IDs checked in priority order when building Claude Code aliases.
+# Anthropic is preferred because the alias model IDs are native Anthropic identifiers;
+# the others use provider_model_id="auto" to pick whatever model is available.
+_CLAUDE_CODE_PROVIDER_PRIORITY: list[str] = ["anthropic", "ollama", "vllm", "openai"]
+
+
+def _build_claude_code_aliases(providers_spec: str) -> list[ModelInput]:
+    """Return ModelInput entries for Claude Code compatibility.
+
+    Picks the highest-priority active inference provider from
+    _CLAUDE_CODE_PROVIDER_PRIORITY and registers each alias in
+    _CLAUDE_CODE_ALIASES against it. Anthropic providers receive a direct
+    provider_model_id match; all others use "auto" to pick the first
+    available LLM. Returns an empty list when no priority provider is active.
+    """
+    active_inference = {
+        p.split("::", 1)[-1]
+        for p in providers_spec.split(",")
+        if p.startswith("inference=")
+        for p in [p.split("=", 1)[1]]
+    }
+
+    chosen: str | None = None
+    for candidate in _CLAUDE_CODE_PROVIDER_PRIORITY:
+        if candidate in active_inference:
+            chosen = candidate
+            break
+
+    if chosen is None:
+        return []
+
+    return [
+        ModelInput(
+            model_id=alias,
+            provider_id=chosen,
+            provider_model_id=alias if chosen == "anthropic" else "auto",
+            metadata={"_unprefixed_alias": True},
+        )
+        for alias in _CLAUDE_CODE_ALIASES
+    ]
 
 
 class _ProbeStatus(enum.Enum):
@@ -99,6 +148,11 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
     if not args.skip_install_deps:
         normal_deps, special_deps, _ = get_provider_dependencies(run_config)
         _install_provider_deps(normal_deps, special_deps)
+
+    claude_aliases = _build_claude_code_aliases(providers_spec)
+    if claude_aliases:
+        run_config.registered_resources.models.extend(claude_aliases)
+        cprint(f"  ✓ Claude Code aliases → {claude_aliases[0].provider_id}", color="green")
 
     config_dict = run_config.model_dump(mode="json")
 
@@ -252,14 +306,16 @@ def _autodetect_providers() -> str:
         "files=inline::localfs",
         "vector_io=inline::faiss",
         "tool_runtime=inline::file-search",
-        "file_processors=inline::pypdf",
+        "file_processors=inline::auto",
         "responses=inline::builtin",
+        "messages=inline::builtin",
     ]
     cprint("  ✓ inline::localfs (built-in)", color="green")
     cprint("  ✓ inline::faiss (built-in)", color="green")
     cprint("  ✓ inline::file-search (built-in)", color="green")
-    cprint("  ✓ inline::pypdf (built-in)", color="green")
+    cprint("  ✓ inline::auto (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
+    cprint("  ✓ inline::builtin messages (built-in)", color="green")
 
     if passed:
         cprint(f"\nDetected {len(passed)} inference provider(s). Starting stack...", color="cyan")

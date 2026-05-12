@@ -17,8 +17,7 @@ import yaml
 from termcolor import cprint
 
 from ogx.cli.subcommand import Subcommand
-from ogx.core.datatypes import StackConfig
-from ogx.core.stack import cast_distro_name_to_string, replace_env_vars, run_config_from_dynamic_config_spec
+from ogx.core.stack import run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR, UI_LOGS_DIR
 from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import get_logger
@@ -114,10 +113,12 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
     if not config_file:
         parser.error("Config file is required")
 
+    from ogx.core.configure import parse_and_maybe_upgrade_config
+
     config_file = resolve_config_or_distro(str(config_file))
     with open(config_file) as fp:
         config_contents = yaml.safe_load(fp)
-        config = StackConfig(**cast_distro_name_to_string(replace_env_vars(config_contents)))
+        config = parse_and_maybe_upgrade_config(config_contents)
 
     port = args.port or config.server.port
     workers = config.server.workers

@@ -10,13 +10,13 @@ import TabItem from '@theme/TabItem';
 
 # Agent Execution Loop
 
-Agents are the heart of OGX applications. They combine inference, memory, safety, and tool usage into coherent workflows. At its core, an agent follows a sophisticated execution loop that enables multi-step reasoning, tool usage, and safety checks.
+Agents are the heart of OGX applications. They combine inference, memory, guardrails, and tool usage into coherent workflows. At its core, an agent follows a sophisticated execution loop that enables multi-step reasoning, tool usage, and guardrail checks.
 
 ## Steps in the Agent Workflow
 
 Each agent turn follows these key steps:
 
-1. **Initial Safety Check**: The user's input is first screened through configured safety shields
+1. **Initial Guardrails Check**: The user's input is first screened through configured guardrails
 
 2. **Context Retrieval**:
    - If RAG is enabled, the agent can choose to query relevant documents from memory banks. You can use the `instructions` field to steer the agent.
@@ -27,7 +27,7 @@ Each agent turn follows these key steps:
    - The LLM receives a user prompt (with previous tool outputs)
    - The LLM generates a response, potentially with [tool calls](/docs/building_applications/tools)
    - If tool calls are present:
-     - Tool inputs are safety-checked
+     - Tool inputs are guardrail-checked
      - Tools are executed (e.g., web search, code execution)
      - Tool responses are fed back to the LLM for synthesis
    - The loop continues until:
@@ -35,7 +35,7 @@ Each agent turn follows these key steps:
      - Maximum iterations are reached
      - Token limit is exceeded
 
-4. **Final Safety Check**: The agent's final response is screened through safety shields
+4. **Final Guardrails Check**: The agent's final response is screened through guardrails
 
 ## Execution Flow Diagram
 
@@ -46,12 +46,12 @@ sequenceDiagram
     participant M as Memory Bank
     participant L as LLM
     participant T as Tools
-    participant S as Safety Shield
+    participant S as Guardrails
 
     Note over U,S: Agent Turn Start
     U->>S: 1. Submit Prompt
     activate S
-    S->>E: Input Safety Check
+    S->>E: Input Guardrails Check
     deactivate S
 
     loop Inference Loop
@@ -74,7 +74,7 @@ sequenceDiagram
         end
     end
 
-    E->>S: Output Safety Check
+    E->>S: Output Guardrails Check
     S->>U: 5. Final Response
 ```
 
@@ -106,9 +106,7 @@ agent = Agent(
         },
         "builtin::code_interpreter",
     ],
-    # Configure safety (optional)
-    input_shields=["llama_guard"],
-    output_shields=["llama_guard"],
+    # Configure guardrails at the responses provider level (optional)
     # Control the inference loop
     max_infer_iters=5,
     sampling_params={
@@ -169,9 +167,9 @@ pprint(f"Steps: {response.steps}")
 - **max_tokens**: Token limit for responses
 - **temperature**: Controls response randomness
 
-### Safety Configuration
-- **input_shields**: Safety checks for user input
-- **output_shields**: Safety checks for agent responses
+### Guardrails Configuration
+- Configure `moderation_endpoint` on the builtin responses provider.
+- Send `guardrails=true` on requests that should be moderated.
 
 ### Tool Integration
 - **tools**: List of available tools for the agent
@@ -181,5 +179,5 @@ pprint(f"Steps: {response.steps}")
 
 - **[Agents](/docs/building_applications/agent)** - Understanding agent fundamentals
 - **[Tools Integration](/docs/building_applications/tools)** - Adding capabilities to agents
-- **[Safety Guardrails](/docs/building_applications/safety)** - Implementing safety measures
+- **[Responses vs Agents](/docs/building_applications/responses_vs_agents)** - Choosing the right API surface
 - **[RAG (Retrieval Augmented Generation)](/docs/building_applications/rag)** - Building knowledge-enhanced workflows

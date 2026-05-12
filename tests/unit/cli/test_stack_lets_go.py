@@ -14,7 +14,14 @@ import httpx
 import pytest
 
 from ogx.cli.letsgo import LetsGo
-from ogx.cli.stack.lets_go import StackLetsGo, _probe_endpoint, _ProbeStatus
+from ogx.cli.stack.lets_go import (
+    _CLAUDE_CODE_ALIASES,
+    _CLAUDE_CODE_PROVIDER_PRIORITY,
+    StackLetsGo,
+    _build_claude_code_aliases,
+    _probe_endpoint,
+    _ProbeStatus,
+)
 
 
 @pytest.fixture
@@ -223,7 +230,7 @@ class TestAutodetect:
         assert "inference=remote::anthropic" in parts
         assert "files=inline::localfs" in parts
         assert "responses=inline::builtin" in parts
-        assert len(parts) == 13  # 8 probed + 5 inline
+        assert len(parts) == 14  # 8 probed + 6 inline
 
     @patch("ogx.cli.stack.lets_go._probe_endpoint")
     def test_autodetect_only_ollama(self, mock_probe: MagicMock):
@@ -246,7 +253,7 @@ class TestAutodetect:
         assert "inference=remote::ollama" in parts
         assert "files=inline::localfs" in parts
         assert "responses=inline::builtin" in parts
-        assert len(parts) == 6  # 1 inference + 5 inline
+        assert len(parts) == 7  # 1 inference + 6 inline
 
     @patch("ogx.cli.stack.lets_go._probe_endpoint")
     def test_autodetect_uses_env_var_base_url(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
@@ -458,3 +465,69 @@ class TestDeprecation:
 
         future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
         assert len(future_warnings) == 0
+
+
+class TestClaudeCodeAliases:
+    def test_anthropic_chosen_over_others(self):
+        spec = "inference=remote::anthropic,inference=remote::ollama,files=inline::localfs"
+        aliases = _build_claude_code_aliases(spec)
+        assert len(aliases) == len(_CLAUDE_CODE_ALIASES)
+        assert all(a.provider_id == "anthropic" for a in aliases)
+
+    def test_anthropic_uses_direct_model_id(self):
+        spec = "inference=remote::anthropic"
+        aliases = _build_claude_code_aliases(spec)
+        for alias in aliases:
+            assert alias.provider_model_id == alias.model_id
+
+    def test_ollama_fallback_uses_auto(self):
+        spec = "inference=remote::ollama,files=inline::localfs"
+        aliases = _build_claude_code_aliases(spec)
+        assert all(a.provider_id == "ollama" for a in aliases)
+        assert all(a.provider_model_id == "auto" for a in aliases)
+
+    def test_vllm_fallback_uses_auto(self):
+        spec = "inference=remote::vllm"
+        aliases = _build_claude_code_aliases(spec)
+        assert all(a.provider_id == "vllm" for a in aliases)
+        assert all(a.provider_model_id == "auto" for a in aliases)
+
+    def test_openai_fallback_uses_auto(self):
+        spec = "inference=remote::openai"
+        aliases = _build_claude_code_aliases(spec)
+        assert all(a.provider_id == "openai" for a in aliases)
+        assert all(a.provider_model_id == "auto" for a in aliases)
+
+    def test_priority_order_ollama_before_openai(self):
+        spec = "inference=remote::openai,inference=remote::ollama"
+        aliases = _build_claude_code_aliases(spec)
+        assert all(a.provider_id == "ollama" for a in aliases)
+
+    def test_unknown_provider_returns_empty(self):
+        spec = "inference=remote::llama-openai-compat"
+        aliases = _build_claude_code_aliases(spec)
+        assert aliases == []
+
+    def test_no_inference_returns_empty(self):
+        spec = "files=inline::localfs,vector_io=inline::faiss"
+        aliases = _build_claude_code_aliases(spec)
+        assert aliases == []
+
+    def test_all_aliases_present(self):
+        spec = "inference=remote::anthropic"
+        aliases = _build_claude_code_aliases(spec)
+        alias_model_ids = [a.model_id for a in aliases]
+        for expected in _CLAUDE_CODE_ALIASES:
+            assert expected in alias_model_ids
+
+    def test_aliases_have_unprefixed_metadata(self):
+        spec = "inference=remote::anthropic"
+        aliases = _build_claude_code_aliases(spec)
+        for alias in aliases:
+            assert alias.metadata is not None
+            assert alias.metadata.get("_unprefixed_alias") is True
+
+    def test_priority_list_covers_expected_providers(self):
+        assert "anthropic" in _CLAUDE_CODE_PROVIDER_PRIORITY
+        assert "ollama" in _CLAUDE_CODE_PROVIDER_PRIORITY
+        assert _CLAUDE_CODE_PROVIDER_PRIORITY.index("anthropic") < _CLAUDE_CODE_PROVIDER_PRIORITY.index("ollama")

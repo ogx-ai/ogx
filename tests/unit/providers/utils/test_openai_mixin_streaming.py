@@ -8,7 +8,7 @@
 Regression tests for issue #3185: AsyncStream passed where AsyncIterator expected.
 
 The bug: OpenAI SDK's AsyncStream has close(), not aclose(), but Python's
-AsyncIterator protocol requires aclose(). The fix ensures _maybe_overwrite_id()
+AsyncIterator protocol requires aclose(). The fix ensures _postprocess_chunk()
 always wraps streaming responses in an async generator.
 """
 
@@ -72,7 +72,7 @@ class TestIssue3185Regression:
 
         assert not hasattr(mock_stream, "aclose")
 
-        result = await mixin._maybe_overwrite_id(mock_stream, stream=True)
+        result = await mixin._postprocess_chunk(mock_stream, stream=True)
 
         assert hasattr(result, "aclose"), "Result MUST have aclose() for AsyncIterator"
         assert inspect.isasyncgen(result)
@@ -82,7 +82,7 @@ class TestIssue3185Regression:
         chunks = [MockChunk("1", "a"), MockChunk("2", "b")]
         mock_stream = MockAsyncStream(chunks)
 
-        result = await mixin._maybe_overwrite_id(mock_stream, stream=True)
+        result = await mixin._postprocess_chunk(mock_stream, stream=True)
 
         received = [c async for c in result]
         assert len(received) == 2
@@ -93,7 +93,7 @@ class TestIssue3185Regression:
         mock_response = MagicMock()
         mock_response.id = "test-id"
 
-        result = await mixin._maybe_overwrite_id(mock_response, stream=False)
+        result = await mixin._postprocess_chunk(mock_response, stream=False)
 
         assert result is mock_response
         assert not inspect.isasyncgen(result)
@@ -106,7 +106,7 @@ class TestIdOverwriting:
         mixin.overwrite_completion_id = True
 
         chunks = [MockChunk("orig-1"), MockChunk("orig-2")]
-        result = await mixin._maybe_overwrite_id(MockAsyncStream(chunks), stream=True)
+        result = await mixin._postprocess_chunk(MockAsyncStream(chunks), stream=True)
 
         received = [c async for c in result]
         assert all(c.id.startswith("cltsd-") for c in received)
@@ -118,7 +118,7 @@ class TestIdOverwriting:
         mixin.overwrite_completion_id = False
 
         chunks = [MockChunk("orig-1"), MockChunk("orig-2")]
-        result = await mixin._maybe_overwrite_id(MockAsyncStream(chunks), stream=True)
+        result = await mixin._postprocess_chunk(MockAsyncStream(chunks), stream=True)
 
         received = [c async for c in result]
         assert received[0].id == "orig-1"

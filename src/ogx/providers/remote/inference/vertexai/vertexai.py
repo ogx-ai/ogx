@@ -132,7 +132,7 @@ class GeminiCompletionSamplingParams(BaseModel):
             candidate_count=params.n,
             max_output_tokens=params.max_tokens,
             stop_sequences=stop_sequences,
-            response_logprobs=params.logprobs or None,
+            response_logprobs=params.logprobs is not None and params.logprobs > 0,
         )
 
 
@@ -713,8 +713,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             logger.warning("VertexAI does not support prompt_cache_key; this parameter will be ignored.")
         if params.user is not None:
             logger.debug("VertexAI chat completion ignores the 'user' parameter (it is used in embeddings requests).")
-        if params.safety_identifier is not None:
-            logger.debug("VertexAI does not support safety_identifier; this parameter will be ignored.")
 
     def _resolve_deprecated_tools(
         self,

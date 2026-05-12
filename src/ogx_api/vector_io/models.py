@@ -81,7 +81,7 @@ class Chunk(BaseModel):
                 raise TypeError(f"metadata['document_id'] must be a string, got {type(doc_id).__name__}: {doc_id!r}")
             return doc_id
 
-        # Fall back to chunk_metadata if available (Pydantic ensures type safety)
+        # Fall back to chunk_metadata if available (Pydantic enforces type consistency)
         if self.chunk_metadata is not None:
             return self.chunk_metadata.document_id
 

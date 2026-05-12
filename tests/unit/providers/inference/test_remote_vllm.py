@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import pytest
 from pydantic import SecretStr
 
+from ogx.core.datatypes import User
 from ogx.core.routers.inference import InferenceRouter
 from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
@@ -494,3 +495,113 @@ class TestRerankTLSAndAuth:
             call_args = mock_client_instance.post.call_args
             headers = call_args.kwargs.get("headers", {})
             assert headers.get("Authorization") == "Bearer provider-data-token"
+
+
+class TestFairnessHeaderPropagation:
+    """Tests for llm-d fairness header injection via _get_extra_request_headers."""
+
+    async def test_no_fairness_header_when_not_configured(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://vllm.example.com/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        assert adapter._get_extra_request_headers() is None
+
+    async def test_no_fairness_header_when_no_user(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=None,
+        ):
+            assert adapter._get_extra_request_headers() is None
+
+    async def test_no_fairness_header_when_attribute_missing(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        user = User(principal="alice", attributes={"teams": ["team-a"]})
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=user,
+        ):
+            assert adapter._get_extra_request_headers() is None
+
+    async def test_fairness_header_injected_from_user_attribute(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        user = User(
+            principal="alice",
+            attributes={"namespaces": ["premium-sub"], "teams": ["team-a"]},
+        )
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=user,
+        ):
+            headers = adapter._get_extra_request_headers()
+            assert headers == {"x-gateway-inference-fairness-id": "premium-sub"}
+
+    async def test_fairness_header_uses_first_value(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        user = User(
+            principal="alice",
+            attributes={"namespaces": ["primary-sub", "secondary-sub"]},
+        )
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=user,
+        ):
+            headers = adapter._get_extra_request_headers()
+            assert headers["x-gateway-inference-fairness-id"] == "primary-sub"
+
+    async def test_fairness_header_forwarded_to_chat_completion(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://vllm.example.com/v1", fairness_header_attribute="ns")
+        adapter = VLLMInferenceAdapter(config=config)
+        adapter.model_store = AsyncMock()
+        await adapter.initialize()
+
+        user = User(principal="alice", attributes={"ns": ["tenant-1"]})
+
+        with (
+            patch(
+                "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+                return_value=user,
+            ),
+            patch.object(VLLMInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop,
+        ):
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(
+                return_value=OpenAIChatCompletion(
+                    id="chatcmpl-test",
+                    created=1,
+                    model="mock-model",
+                    choices=[
+                        OpenAIChoice(
+                            message=OpenAIChatCompletionResponseMessage(content="ok"),
+                            finish_reason="stop",
+                            index=0,
+                        )
+                    ],
+                )
+            )
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model="mock-model",
+                messages=[{"role": "user", "content": "test"}],
+                stream=False,
+            )
+            await adapter.openai_chat_completion(params)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["extra_headers"] == {"x-gateway-inference-fairness-id": "tenant-1"}

@@ -109,10 +109,19 @@ def serialize_vector(vector: list[float]) -> bytes:
 
 def _create_sqlite_connection(db_path: str):
     """Create a SQLite connection with sqlite_vec extension loaded."""
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, timeout=5.0)
     connection.enable_load_extension(True)
     _get_sqlite_vec().load(connection)
     connection.enable_load_extension(False)
+
+    # Enable WAL mode for better concurrency with multiple workers,
+    # matching the pragmas used by the SQL store backend.
+    cur = connection.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA busy_timeout=5000")
+    cur.execute("PRAGMA synchronous=NORMAL")
+    cur.close()
+
     return connection
 
 

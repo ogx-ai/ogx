@@ -15,9 +15,6 @@ Meta's reference implementation of an agent system that can use tools, access ve
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `persistence` | `ResponsesPersistenceConfig` | No |  |  |
-| `persistence.agent_state` | `KVStoreReference` | No |  |  |
-| `persistence.agent_state.namespace` | `str` | No |  | Key prefix for KVStore backends |
-| `persistence.agent_state.backend` | `str` | No |  | Name of backend from storage.backends |
 | `persistence.responses` | `ResponsesStoreReference` | No |  |  |
 | `persistence.responses.table_name` | `str` | No | openai_responses | Name of the table to use for storing OpenAI responses |
 | `persistence.responses.backend` | `str` | No |  | Name of backend from storage.backends |
@@ -93,14 +90,12 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 | `compaction_config.summarization_model` | `str \| None` | No |  | Model to use for generating compaction summaries. If not set, uses the same model as the conversation. |
 | `compaction_config.default_compact_threshold` | `int \| None` | No |  | Default token threshold for auto-compaction via context_management. If set, conversations exceeding this token count will be automatically compacted. |
 | `compaction_config.tokenizer_encoding` | `str \| None` | No |  | Tiktoken encoding name for token counting (e.g. 'o200k_base', 'cl100k_base'). If not set, the encoding is resolved from the model name via tiktoken.encoding_for_model(). |
+| `moderation_endpoint` | `str \| None` | No |  | URL of an OpenAI-compatible /v1/moderations endpoint for guardrails. The endpoint must accept POST &#123;"input": "text"&#125; and return &#123;"results": [&#123;"flagged": bool, "categories": &#123;...&#125;&#125;]&#125;. |
 
 ## Sample Configuration
 
 ```yaml
 persistence:
-  agent_state:
-    namespace: agents
-    backend: kv_default
   responses:
     table_name: responses
     backend: sql_default

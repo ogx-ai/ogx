@@ -906,6 +906,208 @@
   color: oklch(0.85 0.01 240) !important;
 }
 
+/* ========== CLI SHOWCASE ========== */
+.cliSection {
+  padding: 4.5rem 0;
+  border-top: 1px solid oklch(0.9 0.005 240);
+}
+
+[data-theme='dark'] .cliSection {
+  border-top-color: oklch(0.2 0.01 240);
+}
+
+.cliHeader {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto 1.5rem;
+}
+
+.cliHeader h2 {
+  font-family: 'Archivo', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.5rem;
+}
+
+.cliHeader p {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: oklch(0.45 0.01 240);
+}
+
+[data-theme='dark'] .cliHeader p {
+  color: oklch(0.6 0.01 240);
+}
+
+.cliTerminals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.cliTerminal {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #f5f5f7;
+}
+
+[data-theme='dark'] .cliTerminal {
+  background: oklch(0.1 0.015 250);
+  border-color: oklch(0.2 0.01 250);
+}
+
+.cliTerminalBar {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: oklch(0.5 0.01 240);
+}
+
+[data-theme='dark'] .cliTerminalBar {
+  border-bottom-color: oklch(0.2 0.01 250);
+  color: oklch(0.5 0.01 250);
+}
+
+.cliTerminalFlow {
+  color: oklch(0.4 0.06 190);
+}
+
+[data-theme='dark'] .cliTerminalFlow {
+  color: oklch(0.65 0.06 190);
+}
+
+.cliTerminalBody {
+  padding: 1rem 1.25rem;
+  min-height: 340px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+
+.cliLine {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.cliLineCommand {
+  color: oklch(0.35 0.01 240);
+}
+
+[data-theme='dark'] .cliLineCommand {
+  color: oklch(0.75 0.01 250);
+}
+
+.cliLinePrompt {
+  color: oklch(0.4 0.06 190);
+  font-weight: 600;
+}
+
+[data-theme='dark'] .cliLinePrompt {
+  color: oklch(0.65 0.08 190);
+}
+
+.cliLineStatus {
+  color: oklch(0.5 0.01 240);
+}
+
+[data-theme='dark'] .cliLineStatus {
+  color: oklch(0.55 0.01 250);
+}
+
+.cliLineResult {
+  color: oklch(0.35 0.1 165);
+  font-weight: 600;
+}
+
+[data-theme='dark'] .cliLineResult {
+  color: oklch(0.7 0.1 165);
+}
+
+.cliLineResultCont {
+  color: oklch(0.4 0.01 240);
+}
+
+[data-theme='dark'] .cliLineResultCont {
+  color: oklch(0.65 0.01 250);
+}
+
+.cliLineBrand,
+.cliLineBrandDim {
+  line-height: 1;
+  word-break: normal;
+  white-space: pre;
+  letter-spacing: -0.02em;
+}
+
+.cliLineBrand {
+  color: oklch(0.3 0.02 240);
+  font-weight: 700;
+}
+
+[data-theme='dark'] .cliLineBrand {
+  color: oklch(0.88 0.02 240);
+}
+
+.cliLineBrandDim {
+  color: oklch(0.55 0.01 240);
+}
+
+[data-theme='dark'] .cliLineBrandDim {
+  color: oklch(0.45 0.01 250);
+}
+
+.cliLineBrandBox {
+  border: 1px solid oklch(0.7 0.01 240);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.15rem 0;
+  color: oklch(0.3 0.02 240);
+  font-weight: 700;
+  line-height: 1.4;
+  width: fit-content;
+}
+
+[data-theme='dark'] .cliLineBrandBox {
+  border-color: oklch(0.35 0.01 250);
+  color: oklch(0.88 0.02 240);
+}
+
+.cliLineBlank {
+  height: 0.5em;
+}
+
+.cliCursor {
+  display: inline-block;
+  width: 7px;
+  height: 1.1em;
+  background: oklch(0.4 0.06 190);
+  vertical-align: text-bottom;
+  animation: cliBlink 1s step-end infinite;
+}
+
+[data-theme='dark'] .cliCursor {
+  background: oklch(0.65 0.08 190);
+}
+
+@keyframes cliBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cliTerminalFadeIn {
+  animation: cliTerminalAppear 0.2s ease-out;
+}
+
+@keyframes cliTerminalAppear {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ========== SCROLL REVEAL ========== */
 .reveal {
   opacity: 0;
@@ -955,6 +1157,14 @@
   .announcementPulse {
     animation: none;
   }
+
+  .cliCursor {
+    animation: none;
+  }
+
+  .cliTerminalFadeIn {
+    animation: none;
+  }
 }
 
 /* ========== RESPONSIVE ========== */
@@ -987,6 +1197,10 @@
   .serverLayout {
     grid-template-columns: 1fr;
     gap: 2rem;
+  }
+
+  .cliTerminals {
+    grid-template-columns: 1fr;
   }
 
   .bottomLayout {
@@ -1166,5 +1380,19 @@
   .providerDesc,
   .archDesc {
     font-size: 0.9rem;
+  }
+
+  .cliHeader h2 {
+    font-size: 1.4rem;
+  }
+
+  .cliHeader p {
+    font-size: 0.9rem;
+  }
+
+  .cliTerminalBody {
+    padding: 0.75rem 1rem;
+    min-height: 240px;
+    font-size: 0.7rem;
   }
 }

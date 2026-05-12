@@ -13,7 +13,6 @@ from pydantic import BaseModel, Field
 
 from ogx_api.models import Model
 from ogx_api.schema_utils import json_schema_type
-from ogx_api.shields import Shield
 from ogx_api.tools import ToolGroup
 from ogx_api.vector_stores import VectorStore
 
@@ -93,14 +92,11 @@ class Api(Enum, metaclass=DynamicApiMeta):
     """Enumeration of all available APIs in the OGX system.
     :cvar providers: Provider management and configuration
     :cvar inference: Text generation, chat completions, and embeddings
-    :cvar safety: Content moderation and safety shields
     :cvar responses: Response orchestration and execution
     :cvar batches: Batch processing for asynchronous API requests
     :cvar vector_io: Vector database operations and queries
     :cvar tool_runtime: Tool execution and management
-    :cvar telemetry: Observability and system monitoring
     :cvar models: Model metadata and management
-    :cvar shields: Safety shield implementations
     :cvar tool_groups: Tool group organization
     :cvar files: File storage and management
     :cvar file_processors: File parsing and processing operations
@@ -113,14 +109,12 @@ class Api(Enum, metaclass=DynamicApiMeta):
 
     providers = "providers"
     inference = "inference"
-    safety = "safety"
     responses = "responses"
     batches = "batches"
     vector_io = "vector_io"
     tool_runtime = "tool_runtime"
 
     models = "models"
-    shields = "shields"
     vector_stores = "vector_stores"  # only used for routing table
     tool_groups = "tool_groups"
     files = "files"
@@ -206,14 +200,6 @@ class ModelsProtocolPrivate(Protocol):
     async def list_models(self) -> list[Model] | None: ...
 
     async def should_refresh_models(self) -> bool: ...
-
-
-class ShieldsProtocolPrivate(Protocol):
-    """Protocol for provider-side shield registration and unregistration."""
-
-    async def register_shield(self, shield: Shield) -> None: ...
-
-    async def unregister_shield(self, identifier: str) -> None: ...
 
 
 class VectorStoresProtocolPrivate(Protocol):

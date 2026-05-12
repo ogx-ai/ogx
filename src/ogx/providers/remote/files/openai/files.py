@@ -11,8 +11,7 @@ from fastapi import Response, UploadFile
 
 from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import AccessRule
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, authorized_sqlstore
 from ogx.providers.utils.files.sanitize import sanitize_content_disposition_filename
 from ogx_api import (
     DeleteFileRequest,
@@ -29,6 +28,7 @@ from ogx_api import (
     RetrieveFileRequest,
     UploadFileRequest,
 )
+from ogx_api.files.models import OpenAIFileUploadPurpose
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 from openai import OpenAI
 
@@ -111,7 +111,7 @@ class OpenAIFilesImpl(Files):
     async def initialize(self) -> None:
         self._client = OpenAI(api_key=self._config.api_key)
 
-        self._sql_store = AuthorizedSqlStore(sqlstore_impl(self._config.metadata_store), self.policy)
+        self._sql_store = authorized_sqlstore(self._config.metadata_store, self.policy)
         await self._sql_store.create_table(
             "openai_files",
             {
@@ -152,7 +152,7 @@ class OpenAIFilesImpl(Files):
         created_at = self._now()
 
         expires_at = created_at + ExpiresAfter.MAX * 42
-        if purpose == OpenAIFilePurpose.BATCH:
+        if purpose == OpenAIFileUploadPurpose.BATCH:
             expires_at = created_at + ExpiresAfter.MAX
 
         if expires_after is not None:

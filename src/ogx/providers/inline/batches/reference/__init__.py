@@ -7,7 +7,7 @@
 from typing import Any
 
 from ogx.core.datatypes import AccessRule, Api
-from ogx.core.storage.kvstore import kvstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx_api import Files, Inference, Models
 
 from .batches import ReferenceBatchesImpl
@@ -17,7 +17,7 @@ __all__ = ["ReferenceBatchesImpl", "ReferenceBatchesImplConfig"]
 
 
 async def get_provider_impl(config: ReferenceBatchesImplConfig, deps: dict[Api, Any], policy: list[AccessRule]):
-    kvstore = await kvstore_impl(config.kvstore)
+    sql_store = authorized_sqlstore(config.sqlstore, policy)
     inference_api: Inference | None = deps.get(Api.inference)
     files_api: Files | None = deps.get(Api.files)
     models_api: Models | None = deps.get(Api.models)
@@ -29,6 +29,6 @@ async def get_provider_impl(config: ReferenceBatchesImplConfig, deps: dict[Api, 
     if models_api is None:
         raise ValueError("Models API is required but not provided in dependencies")
 
-    impl = ReferenceBatchesImpl(config, inference_api, files_api, models_api, kvstore)
+    impl = ReferenceBatchesImpl(config, inference_api, files_api, models_api, sql_store)
     await impl.initialize()
     return impl

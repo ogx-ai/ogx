@@ -56,10 +56,6 @@ def builtin_automatically_routed_apis() -> list[AutoRoutedApiInfo]:
             router_api=Api.inference,
         ),
         AutoRoutedApiInfo(
-            routing_table_api=Api.shields,
-            router_api=Api.safety,
-        ),
-        AutoRoutedApiInfo(
             routing_table_api=Api.tool_groups,
             router_api=Api.tool_runtime,
         ),
@@ -105,16 +101,12 @@ def get_provider_registry(
           vllm.yaml
         vector_io/
           qdrant.yaml
-        safety/
-          llama-guard.yaml
       inline/
         inference/
           custom_ollama.yaml
           vllm.yaml
         vector_io/
           qdrant.yaml
-        safety/
-          llama-guard.yaml
 
     This method is overloaded in that it can be called from a variety of places: during list-deps, during run, during stack construction.
     So when listing external providers from a module, there are scenarios where the pip package required to import the module might not be available yet.

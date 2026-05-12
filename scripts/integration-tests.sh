@@ -376,12 +376,12 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     nohup ogx stack run $stack_config >server.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
-    for i in {1..30}; do
+    for i in {1..60}; do
         if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
             echo "✅ OGX Server started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
+        if [[ $i -eq 60 ]]; then
             echo "❌ OGX Server failed to start"
             echo "Server logs:"
             cat server.log
@@ -503,7 +503,6 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     [ -n "${GROQ_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GROQ_API_KEY=$GROQ_API_KEY"
     [ -n "${GEMINI_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GEMINI_API_KEY=$GEMINI_API_KEY"
     [ -n "${OLLAMA_URL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OLLAMA_URL=$OLLAMA_URL"
-    [ -n "${SAFETY_MODEL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e SAFETY_MODEL=$SAFETY_MODEL"
     [ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK"
     [ -n "${AWS_DEFAULT_REGION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
     [ -n "${VERTEX_AI_PROJECT:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_PROJECT=$VERTEX_AI_PROJECT"
@@ -544,12 +543,12 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
         --port $OGX_PORT
 
     echo "Waiting for Docker container to start..."
-    for i in {1..30}; do
+    for i in {1..60}; do
         if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
             echo "✅ Docker container started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
+        if [[ $i -eq 60 ]]; then
             echo "❌ Docker container failed to start"
             echo "Container logs:"
             docker logs "$container_name"
@@ -567,7 +566,7 @@ fi
 
 # Run tests
 echo "=== Running Integration Tests ==="
-EXCLUDE_TESTS="builtin_tool or safety_with_image or code_interpreter or test_rag"
+EXCLUDE_TESTS="builtin_tool or code_interpreter or test_rag"
 
 PYTEST_PATTERN="not( $EXCLUDE_TESTS )"
 if [[ -n "$TEST_PATTERN" ]]; then
