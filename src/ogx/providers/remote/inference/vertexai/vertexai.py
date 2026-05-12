@@ -132,7 +132,7 @@ class GeminiCompletionSamplingParams(BaseModel):
             candidate_count=params.n,
             max_output_tokens=params.max_tokens,
             stop_sequences=stop_sequences,
-            response_logprobs=params.logprobs or None,
+            response_logprobs=params.logprobs is not None and params.logprobs > 0,
         )
 
 

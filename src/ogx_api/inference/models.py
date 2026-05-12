@@ -948,7 +948,13 @@ class OpenAICompletionRequestWithExtraBody(BaseModel, extra="allow"):
         default=None, ge=-2.0, le=2.0, description="The penalty for repeated tokens."
     )
     logit_bias: dict[str, float] | None = Field(default=None, description="The logit bias to use.")
-    logprobs: bool | None = Field(default=None, description="The log probabilities to use.")
+    logprobs: int | None = Field(
+        default=None,
+        ge=0,
+        le=5,
+        strict=True,
+        description="Include the log probabilities on the logprobs most likely output tokens.",
+    )
     max_tokens: int | None = Field(default=None, ge=1, description="The maximum number of tokens to generate.")
     n: int | None = Field(default=None, ge=1, description="The number of completions to generate.")
     presence_penalty: float | None = Field(

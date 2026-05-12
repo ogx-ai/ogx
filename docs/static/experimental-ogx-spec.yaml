@@ -1752,9 +1752,11 @@ components:
           description: The logit bias to use.
         logprobs:
           anyOf:
-          - type: boolean
+          - type: integer
+            maximum: 5.0
+            minimum: 0.0
           - type: 'null'
-          description: The log probabilities to use.
+          description: Include the log probabilities on the logprobs most likely output tokens.
         max_tokens:
           anyOf:
           - type: integer
