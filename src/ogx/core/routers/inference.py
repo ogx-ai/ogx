@@ -17,6 +17,7 @@ from pydantic import TypeAdapter
 from ogx.core.access_control.access_control import is_action_allowed
 from ogx.core.datatypes import ModelWithOwner
 from ogx.core.request_headers import get_authenticated_user
+from ogx.core.task import create_detached_background_task
 from ogx.log import get_logger
 from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.telemetry.inference_metrics import (
@@ -268,7 +269,7 @@ class InferenceRouter(Inference):
 
         # Store the response with the ID that will be returned to the client
         if self.store:
-            asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            create_detached_background_task(self.store.store_chat_completion(response, params.messages))
 
         return response
 
@@ -555,4 +556,4 @@ class InferenceRouter(Inference):
                     object="chat.completion",
                 )
                 logger.debug("InferenceRouter.completion_response", final_response=final_response)
-                asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                create_detached_background_task(self.store.store_chat_completion(final_response, messages))
