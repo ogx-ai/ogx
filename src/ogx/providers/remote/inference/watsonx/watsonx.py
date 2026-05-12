@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import time
 from collections.abc import AsyncIterator, Iterable
 from typing import Any
@@ -45,6 +46,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
     def __init__(self, config: WatsonXConfig):
         super().__init__(config=config)
         self._iam_token_cache: dict[str, tuple[str, float]] = {}
+        self._iam_token_lock = asyncio.Lock()
         self._model_specs_cache: list[dict[str, Any]] | None = None
 
     def get_base_url(self) -> str:
@@ -74,23 +76,30 @@ class WatsonXInferenceAdapter(OpenAIMixin):
             if time.time() < expiry - 60:
                 return token
 
-        try:
-            async with httpx.AsyncClient() as http_client:
-                resp = await http_client.post(
-                    "https://iam.cloud.ibm.com/identity/token",
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                    content=f"grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey={api_key}",
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                token = data["access_token"]
-                expiry = data.get("expiration", time.time() + 3600)
-                self._iam_token_cache[api_key] = (token, expiry)
-                return token
-        except Exception as e:
-            logger.warning("IAM token exchange failed, using API key directly", error=str(e))
-            return api_key
+        async with self._iam_token_lock:
+            cached = self._iam_token_cache.get(api_key)
+            if cached:
+                token, expiry = cached
+                if time.time() < expiry - 60:
+                    return token
+
+            try:
+                async with httpx.AsyncClient() as http_client:
+                    resp = await http_client.post(
+                        "https://iam.cloud.ibm.com/identity/token",
+                        headers={"Content-Type": "application/x-www-form-urlencoded"},
+                        content=f"grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey={api_key}",
+                        timeout=30,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    token = data["access_token"]
+                    expiry = data.get("expiration", time.time() + 3600)
+                    self._iam_token_cache[api_key] = (token, expiry)
+                    return token
+            except Exception as e:
+                logger.warning("IAM token exchange failed, using API key directly", error=str(e))
+                return api_key
 
     def _get_api_key_or_raise(self) -> str:
         api_key = self._get_api_key_from_config_or_provider_data()
