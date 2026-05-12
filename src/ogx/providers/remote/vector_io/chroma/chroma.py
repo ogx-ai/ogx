@@ -267,7 +267,7 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         if self.config.metadata_store:
             from ogx.core.storage.sqlstore import authorized_sqlstore
 
-            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         if isinstance(self.config, RemoteChromaVectorIOConfig):
             log.info(f"Connecting to Chroma server at: {self.config.url}")

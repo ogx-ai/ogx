@@ -17,7 +17,7 @@ __all__ = ["ReferenceBatchesImpl", "ReferenceBatchesImplConfig"]
 
 
 async def get_provider_impl(config: ReferenceBatchesImplConfig, deps: dict[Api, Any], policy: list[AccessRule]):
-    sql_store = authorized_sqlstore(config.sqlstore, policy)
+    sql_store = await authorized_sqlstore(config.sqlstore, policy)
     inference_api: Inference | None = deps.get(Api.inference)
     files_api: Files | None = deps.get(Api.files)
     models_api: Models | None = deps.get(Api.models)

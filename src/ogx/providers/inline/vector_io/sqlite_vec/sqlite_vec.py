@@ -557,7 +557,7 @@ class SQLiteVecVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPro
         self.kvstore = await kvstore_impl(self.config.persistence)
 
         if self.config.metadata_store:
-            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         start_key = VECTOR_DBS_PREFIX
         end_key = f"{VECTOR_DBS_PREFIX}\xff"
