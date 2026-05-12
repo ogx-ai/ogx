@@ -15,6 +15,7 @@ import threading
 import time
 
 import pytest
+from ogx_client import NOT_GIVEN, Omit
 
 from ogx.core.library_client import (
     AsyncOGXAsLibraryClient,
@@ -597,3 +598,27 @@ class TestOGXAsLibraryClientSyncOnAsync:
             time.sleep(0.01)
         else:
             pytest.fail("Background event loop thread was not cleaned up after init failure")
+
+
+class TestAsyncOGXAsLibraryClientHeaderSanitization:
+    def test_sanitize_headers_filters_omit_and_not_given(self):
+        headers = {
+            "Authorization": Omit(),
+            "X-Not-Given": NOT_GIVEN,
+            "X-Trace-Id": "trace-123",
+        }
+
+        assert AsyncOGXAsLibraryClient._sanitize_headers(headers) == {"X-Trace-Id": "trace-123"}
+
+    def test_sanitize_headers_normalizes_supported_types(self):
+        headers = {
+            b"X-Bytes-Key": b"bytes-value",
+            "X-Int": 7,
+            "X-Bool": False,
+        }
+
+        assert AsyncOGXAsLibraryClient._sanitize_headers(headers) == {
+            "X-Bytes-Key": "bytes-value",
+            "X-Int": "7",
+            "X-Bool": "False",
+        }

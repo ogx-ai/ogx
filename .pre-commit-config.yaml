@@ -140,6 +140,15 @@ repos:
         pass_filenames: false
         require_serial: true
         files: ^docs/static/(ogx-spec\.yaml|openai-spec.*\.yml|openresponses-spec\.json|openai-coverage\.json)$|^docs/docs/api-openai/conformance\.mdx$|^scripts/(openai_coverage|generate_openai_coverage_docs)\.py$
+      - id: openai-responses-drift
+        name: OpenAI Responses Schema Drift
+        additional_dependencies:
+          - *uv-dependency
+        entry: ./scripts/uv-run-with-index.sh run python scripts/check_openai_responses_drift.py --update
+        language: python
+        pass_filenames: false
+        require_serial: true
+        files: ^docs/static/openai-spec.*\.yml$|^src/ogx_api/openai_responses\.py$|^scripts/check_openai_responses_drift\.py$|^docs/static/openai-responses-drift\.json$
       - id: anthropic-coverage
         name: Anthropic Messages API Coverage
         additional_dependencies:
