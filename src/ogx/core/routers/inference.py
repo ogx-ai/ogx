@@ -65,6 +65,11 @@ from ogx_api.inference.models import RerankRequest
 logger = get_logger(name=__name__, category="core::routers")
 
 
+def _log_background_task_error(task: asyncio.Task) -> None:
+    if not task.cancelled() and (exc := task.exception()):
+        logger.error("Failed to store chat completion in background", error=str(exc))
+
+
 class InferenceRouter(Inference):
     """Routes to an provider based on the model"""
 
@@ -268,7 +273,8 @@ class InferenceRouter(Inference):
 
         # Store the response with the ID that will be returned to the client
         if self.store:
-            asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            task = asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            task.add_done_callback(_log_background_task_error)
 
         return response
 
@@ -555,4 +561,5 @@ class InferenceRouter(Inference):
                     object="chat.completion",
                 )
                 logger.debug("InferenceRouter.completion_response", final_response=final_response)
-                asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                task = asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                task.add_done_callback(_log_background_task_error)
