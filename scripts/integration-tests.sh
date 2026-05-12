@@ -373,7 +373,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup ogx stack run $stack_config >server.log 2>&1 &
+    nohup ogx stack run $stack_config >server-main.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
     for i in {1..60}; do
@@ -384,7 +384,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
         if [[ $i -eq 60 ]]; then
             echo "❌ OGX Server failed to start"
             echo "Server logs:"
-            cat server.log
+            cat server-main.log
             exit 1
         fi
         sleep 1
@@ -395,7 +395,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     else
         echo "❌ OGX Server is not accessible on IPv6 loopback"
         echo "Server logs:"
-        cat server.log
+        cat server-main.log
         exit 1
     fi
     echo ""
@@ -649,8 +649,8 @@ else
     echo "❌ Tests failed"
     echo ""
     # Output server or container logs based on stack config
-    if [[ "$STACK_CONFIG" == *"server:"* && -f "server.log" ]]; then
-        echo "--- Server side failures can be located inside server.log (available from artifacts on CI) ---"
+    if [[ "$STACK_CONFIG" == *"server:"* && -f "server-main.log" ]]; then
+        echo "--- Server side failures can be located inside server-main.log (available from artifacts on CI) ---"
     elif [[ "$STACK_CONFIG" == *"docker:"* ]]; then
         docker_log_file="docker-${DISTRO}-${INFERENCE_MODE}.log"
         if [[ -f "$docker_log_file" ]]; then
