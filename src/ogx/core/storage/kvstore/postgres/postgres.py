@@ -4,7 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
+from collections.abc import Callable, Coroutine
 from datetime import datetime
+from typing import TypeVar
 
 import asyncpg  # type: ignore[import-untyped]
 
@@ -15,12 +18,16 @@ from ..config import PostgresKVStoreConfig
 
 log = get_logger(name=__name__, category="providers::utils")
 
+T = TypeVar("T")
+
 
 class PostgresKVStoreImpl(KVStore):
     """PostgreSQL-backed key-value store implementation."""
 
     def __init__(self, config: PostgresKVStoreConfig):
         self.config = config
+        self._pool: asyncpg.Pool | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._table_created = False
 
     async def initialize(self) -> None:
@@ -35,22 +42,34 @@ class PostgresKVStoreImpl(KVStore):
             return self.config.ssl_mode
         return None
 
-    async def _connect(self) -> asyncpg.Connection:
-        try:
-            conn = await asyncpg.connect(
-                host=self.config.host,
-                port=int(self.config.port),
-                database=self.config.db,
-                user=self.config.user,
-                password=self.config.password,
-                ssl=self._build_ssl(),
-            )
-        except Exception as e:
-            log.exception("Could not connect to PostgreSQL database server")
-            raise RuntimeError("Could not connect to PostgreSQL database server") from e
+    async def _acquire(self) -> asyncpg.Pool:
+        loop = asyncio.get_running_loop()
+        if self._pool is not None and self._loop is not loop:
+            # Pool was created in a different event loop (e.g., during init in a
+            # temporary asyncio.run() loop). Discard it -- the old connections are
+            # already dead since that loop is closed.
+            self._pool = None
+            self._table_created = False
+
+        if self._pool is None:
+            try:
+                self._pool = await asyncpg.create_pool(
+                    host=self.config.host,
+                    port=int(self.config.port),
+                    database=self.config.db,
+                    user=self.config.user,
+                    password=self.config.password,
+                    ssl=self._build_ssl(),
+                    min_size=self.config.pool_size,
+                    max_size=self.config.pool_size + self.config.max_overflow,
+                )
+                self._loop = loop
+            except Exception as e:
+                log.exception("Could not connect to PostgreSQL database server")
+                raise RuntimeError("Could not connect to PostgreSQL database server") from e
 
         if not self._table_created:
-            try:
+            async with self._pool.acquire() as conn:
                 await conn.execute(
                     f"""
                     CREATE TABLE IF NOT EXISTS {self.config.table_name} (
@@ -61,10 +80,25 @@ class PostgresKVStoreImpl(KVStore):
                     """
                 )
                 self._table_created = True
-            except Exception:
-                await conn.close()
-                raise
-        return conn
+
+        return self._pool
+
+    async def _execute_with_retry(self, fn: Callable[[asyncpg.Connection], Coroutine[None, None, T]]) -> T:
+        """Execute fn with a pooled connection, retrying once on connection error."""
+        pool = await self._acquire()
+        try:
+            async with pool.acquire() as conn:
+                return await fn(conn)
+        except (
+            asyncpg.exceptions.ConnectionDoesNotExistError,
+            asyncpg.exceptions.InterfaceError,
+            OSError,
+            RuntimeError,
+        ):
+            log.warning("PostgreSQL connection lost, expiring pool connections")
+            await pool.expire_connections()
+            async with pool.acquire() as conn:
+                return await fn(conn)
 
     def _namespaced_key(self, key: str) -> str:
         if not self.config.namespace:
@@ -78,8 +112,8 @@ class PostgresKVStoreImpl(KVStore):
 
     async def set(self, key: str, value: str, expiration: datetime | None = None) -> None:
         key = self._namespaced_key(key)
-        conn = await self._connect()
-        try:
+
+        async def _do(conn: asyncpg.Connection) -> None:
             await conn.execute(
                 f"""
                 INSERT INTO {self.config.table_name} (key, value, expiration)
@@ -91,13 +125,13 @@ class PostgresKVStoreImpl(KVStore):
                 value,
                 expiration,
             )
-        finally:
-            await conn.close()
+
+        await self._execute_with_retry(_do)
 
     async def get(self, key: str) -> str | None:
         key = self._namespaced_key(key)
-        conn = await self._connect()
-        try:
+
+        async def _do(conn: asyncpg.Connection) -> str | None:
             row = await conn.fetchrow(
                 f"""
                 SELECT value FROM {self.config.table_name}
@@ -107,26 +141,25 @@ class PostgresKVStoreImpl(KVStore):
                 key,
             )
             return row["value"] if row else None
-        finally:
-            await conn.close()
+
+        return await self._execute_with_retry(_do)
 
     async def delete(self, key: str) -> None:
         key = self._namespaced_key(key)
-        conn = await self._connect()
-        try:
+
+        async def _do(conn: asyncpg.Connection) -> None:
             await conn.execute(
                 f"DELETE FROM {self.config.table_name} WHERE key = $1",
                 key,
             )
-        finally:
-            await conn.close()
+
+        await self._execute_with_retry(_do)
 
     async def values_in_range(self, start_key: str, end_key: str) -> list[str]:
         start_key = self._namespaced_key(start_key)
         end_key = self._namespaced_key(end_key)
 
-        conn = await self._connect()
-        try:
+        async def _do(conn: asyncpg.Connection) -> list[str]:
             rows = await conn.fetch(
                 f"""
                 SELECT value FROM {self.config.table_name}
@@ -138,15 +171,14 @@ class PostgresKVStoreImpl(KVStore):
                 end_key,
             )
             return [row["value"] for row in rows]
-        finally:
-            await conn.close()
+
+        return await self._execute_with_retry(_do)
 
     async def keys_in_range(self, start_key: str, end_key: str) -> list[str]:
         start_key = self._namespaced_key(start_key)
         end_key = self._namespaced_key(end_key)
 
-        conn = await self._connect()
-        try:
+        async def _do(conn: asyncpg.Connection) -> list[str]:
             rows = await conn.fetch(
                 f"""
                 SELECT key FROM {self.config.table_name}
@@ -158,8 +190,10 @@ class PostgresKVStoreImpl(KVStore):
                 end_key,
             )
             return [self._strip_namespace(row["key"]) for row in rows]
-        finally:
-            await conn.close()
+
+        return await self._execute_with_retry(_do)
 
     async def shutdown(self) -> None:
-        pass
+        if self._pool:
+            await self._pool.close()
+            self._pool = None

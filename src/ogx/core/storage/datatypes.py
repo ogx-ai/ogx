@@ -92,6 +92,8 @@ class PostgresKVStoreConfig(CommonConfig):
     ssl_mode: str | None = None
     ca_cert_path: str | None = None
     table_name: str = "ogx_kvstore"
+    pool_size: int = Field(default=5, ge=1, description="Number of persistent connections in the pool")
+    max_overflow: int = Field(default=10, ge=0, description="Max additional connections beyond pool_size")
 
     @classmethod
     def sample_run_config(cls, table_name: str = "ogx_kvstore", **kwargs: object) -> dict[str, str]:
