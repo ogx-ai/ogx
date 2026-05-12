@@ -15,7 +15,7 @@ providers/
 
 ## Provider Types
 
-- **Inline providers** (`inline/`) run computations in-process. Examples: `meta-reference` inference, `sqlite-vec` vector storage, `llama-guard` safety.
+- **Inline providers** (`inline/`) run computations in-process. Examples: `meta-reference` inference, `sqlite-vec` vector storage.
 - **Remote providers** (`remote/`) adapt external services to the OGX API. Examples: `ollama`, `openai`, `fireworks`, `vllm`, `anthropic`.
 
 ## How Providers Are Registered

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import cast
 
 from ogx.core.storage.datatypes import (
@@ -37,32 +37,72 @@ def kvstore_dependencies() -> list[str]:
     This function returns the union of all dependencies for cases where the specific
     kvstore type is not known at declaration time (e.g., provider registries).
     """
-    return ["aiosqlite", "psycopg2-binary", "redis", "pymongo"]
+    return ["aiosqlite", "asyncpg", "redis", "pymongo"]
 
 
 class InmemoryKVStoreImpl(KVStore):
     """In-memory key-value store implementation for testing and ephemeral usage."""
 
-    def __init__(self) -> None:
-        self._store: dict[str, str] = {}
+    def __init__(self, namespace: str | None = None) -> None:
+        self._store: dict[str, tuple[str, datetime | None]] = {}
+        self._namespace = namespace
+
+    def _namespaced_key(self, key: str) -> str:
+        if not self._namespace:
+            return key
+        return f"{self._namespace}:{key}"
+
+    def _strip_namespace(self, key: str) -> str:
+        if self._namespace and key.startswith(f"{self._namespace}:"):
+            return key[len(self._namespace) + 1 :]
+        return key
+
+    def _is_expired(self, expiration: datetime | None) -> bool:
+        if expiration is None:
+            return False
+        return datetime.now(tz=UTC) >= expiration
 
     async def initialize(self) -> None:
         pass
 
     async def get(self, key: str) -> str | None:
-        return self._store.get(key)
+        key = self._namespaced_key(key)
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        value, expiration = entry
+        if self._is_expired(expiration):
+            return None
+        return value
 
     async def set(self, key: str, value: str, expiration: datetime | None = None) -> None:
-        self._store[key] = value
+        key = self._namespaced_key(key)
+        self._store[key] = (value, expiration)
 
     async def values_in_range(self, start_key: str, end_key: str) -> list[str]:
-        return [self._store[key] for key in self._store.keys() if key >= start_key and key < end_key]
+        start_key = self._namespaced_key(start_key)
+        end_key = self._namespaced_key(end_key)
+        result = []
+        for key in sorted(self._store.keys()):
+            if key >= start_key and key < end_key:
+                value, expiration = self._store[key]
+                if not self._is_expired(expiration):
+                    result.append(value)
+        return result
 
     async def keys_in_range(self, start_key: str, end_key: str) -> list[str]:
-        """Get all keys in the given range."""
-        return [key for key in self._store.keys() if key >= start_key and key < end_key]
+        start_key = self._namespaced_key(start_key)
+        end_key = self._namespaced_key(end_key)
+        result = []
+        for key in sorted(self._store.keys()):
+            if key >= start_key and key < end_key:
+                _, expiration = self._store[key]
+                if not self._is_expired(expiration):
+                    result.append(self._strip_namespace(key))
+        return result
 
     async def delete(self, key: str) -> None:
+        key = self._namespaced_key(key)
         self._store.pop(key, None)
 
     async def shutdown(self) -> None:

@@ -29,8 +29,6 @@ def sample_route_to_api():
         "POST:/v1/models": RouteInfo("models", "register_model"),
         "GET:/v1/models/{model_id}": RouteInfo("models", "get_model"),
         "DELETE:/v1/models/{model_id}": RouteInfo("models", "unregister_model"),
-        "GET:/v1/shields": RouteInfo("shields", "list_shields"),
-        "GET:/v1/shields/{identifier:path}": RouteInfo("shields", "get_shield"),
         "GET:/v1/vector-stores": RouteInfo("vector_io", "list_vector_stores"),
         "GET:/v1/agents": RouteInfo("agents", "list_agents"),
         "POST:/v1/agents/{agent_id}/sessions/{session_id}/turns": RouteInfo("agents", "create_agent_turn"),
@@ -88,14 +86,9 @@ class TestResolveRoute:
         middleware = RequestMetricsMiddleware.__new__(RequestMetricsMiddleware)
         middleware._patterns = patterns
 
-        route = middleware._resolve_route("GET", "/v1/shields/my-shield")
-        assert route.api == "shields"
-        assert route.method == "get_shield"
-
-        # :path param should match slashes
-        route = middleware._resolve_route("GET", "/v1/shields/namespace/my-shield")
-        assert route.api == "shields"
-        assert route.method == "get_shield"
+        route = middleware._resolve_route("GET", "/v1/models/my-model")
+        assert route.api == "models"
+        assert route.method == "get_model"
 
     def test_nested_parameterized_path(self, sample_route_to_api):
         patterns = _compile_route_patterns(sample_route_to_api)

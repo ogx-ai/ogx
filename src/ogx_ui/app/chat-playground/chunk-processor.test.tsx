@@ -481,7 +481,7 @@ describe("Chunk Processor", () => {
       const chunk =
         '{"type": "function", "name": "file_search", "parameters": {"query": "test"}} Based on the search results, here is your answer.';
       const result = processChunk(chunk);
-      // This is detected as a tool call and skipped entirely - the implementation prioritizes safety
+      // This is detected as a tool call and skipped entirely - the implementation prioritizes correctness
       expect(result.isToolCall).toBe(true);
       expect(result.text).toBe(null);
     });

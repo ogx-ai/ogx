@@ -15,7 +15,6 @@ from .lets_go import StackLetsGo
 from .list_apis import StackListApis
 from .list_deps import StackListDeps
 from .list_providers import StackListProviders
-from .remove import StackRemove
 from .run import StackRun
 
 
@@ -47,6 +46,5 @@ class StackParser(Subcommand):
         StackListProviders.create(subparsers)
         StackRun.create(subparsers)
         StackLetsGo.create(subparsers)
-        StackRemove.create(subparsers)
         StackListBuilds.create(subparsers)
         print_subcommand_description(self.parser, subparsers)

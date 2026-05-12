@@ -22,7 +22,6 @@ apis:
 - responses
 - inference
 - vector_io
-- safety
 providers:
   inference:
   - provider_id: ollama
@@ -37,14 +36,11 @@ providers:
         type: sqlite
         namespace: null
         db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ollama}/faiss_store.db
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config: {}
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
+      moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
       persistence:
         agent_state:
           backend: kv_default
@@ -80,7 +76,6 @@ models:
   model_id: ${env.INFERENCE_MODEL}
   provider_id: ollama
   provider_model_id: null
-shields: []
 server:
   port: 8321
   auth:
@@ -98,7 +93,6 @@ apis:
 - responses
 - inference
 - vector_io
-- safety
 ```
 
 ## Providers
@@ -256,7 +250,6 @@ server:
   port: 8321  # Port to listen on (default: 8321)
   tls_certfile: "/path/to/cert.pem"  # Optional: Path to TLS certificate for HTTPS
   tls_keyfile: "/path/to/key.pem"    # Optional: Path to TLS key for HTTPS
-  cors: true  # Optional: Enable CORS (dev mode) or full config object
   registry_refresh_interval_seconds: 300  # Optional: Interval between registry refreshes (default: 300)
 ```
 
@@ -270,29 +263,6 @@ server:
 ```
 
 The value must be a positive integer representing seconds.
-
-### CORS Configuration
-
-CORS (Cross-Origin Resource Sharing) can be configured in two ways:
-
-**Local development** (allows localhost origins only):
-```yaml
-server:
-  cors: true
-```
-
-**Explicit configuration** (custom origins and settings):
-```yaml
-server:
-  cors:
-    allow_origins: ["https://myapp.com", "https://app.example.com"]
-    allow_methods: ["GET", "POST", "PUT", "DELETE"]
-    allow_headers: ["Content-Type", "Authorization"]
-    allow_credentials: true
-    max_age: 3600
-```
-
-When `cors: true`, the server enables secure localhost-only access for local development. For production, specify exact origins to maintain security.
 
 ### Authentication Configuration
 
@@ -539,7 +509,7 @@ resources of a type, e.g. model::*, or a regex pattern with the
 "regex:" prefix, e.g. regex:model::(llama|mistral)-3\\.\\d+-.*. If the
 principal or resource are not specified, they will match all requests.
 
-The valid resource types are model, shield, vector_db, dataset,
+The valid resource types are model, vector_db, dataset,
 scoring_function, benchmark, tool, tool_group and session. In
 addition, stored data such as conversations, conversation items,
 responses, and files use the `sql_record::<table_name>` resource
@@ -673,7 +643,7 @@ Regex patterns can be used to match resources based on naming conventions. For e
 
 In a multi-tenant deployment, you typically want to ensure that each
 user's conversations, responses, and files are isolated from other
-users. Unlike registry resources (models, shields, etc.) which are
+users. Unlike registry resources (models, vector stores, etc.) which are
 identified by types like `model::my-model`, stored data uses the
 `sql_record::<table_name>::<record_id>` resource type pattern. Each
 record is automatically stamped with the authenticated user's identity
@@ -1014,128 +984,6 @@ For a request to succeed:
 2. User must pass resource authorization (can read `model::llama-3-2-3b`)
 3. Both checks must pass
 
-### Quota Configuration
-
-The `quota` section allows you to enable server-side request throttling for both
-authenticated and anonymous clients. This is useful for preventing abuse, enforcing
-fairness across tenants, and controlling infrastructure costs without requiring
-client-side rate limiting or external proxies.
-
-Quotas are disabled by default. When enabled, each client is tracked using either:
-
-* Their authenticated `client_id` (derived from the Bearer token), or
-* Their IP address (fallback for anonymous requests)
-
-Quota state is stored in a SQLite-backed key-value store, and rate limits are applied
-within a configurable time window (currently only `day` is supported).
-
-#### Example
-
-```yaml
-server:
-  quota:
-    kvstore:
-      type: sqlite
-      db_path: ./quotas.db
-    anonymous_max_requests: 100
-    authenticated_max_requests: 1000
-    period: day
-```
-
-#### Configuration Options
-
-| Field                        | Description                                                                |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `kvstore`                    | Required. Backend storage config for tracking request counts.              |
-| `kvstore.type`               | Must be `"sqlite"` for now. Other backends may be supported in the future. |
-| `kvstore.db_path`            | File path to the SQLite database.                                          |
-| `anonymous_max_requests`     | Max requests per period for unauthenticated clients.                       |
-| `authenticated_max_requests` | Max requests per period for authenticated clients.                         |
-| `period`                     | Time window for quota enforcement. Only `"day"` is supported.              |
-
-> Note: if `authenticated_max_requests` is set but no authentication provider is
-configured, the server will fall back to applying `anonymous_max_requests` to all
-clients.
-
-#### Example with Authentication Enabled
-
-```yaml
-server:
-  port: 8321
-  auth:
-    provider_config:
-      type: custom
-      endpoint: https://auth.example.com/validate
-  quota:
-    kvstore:
-      type: sqlite
-      db_path: ./quotas.db
-    anonymous_max_requests: 100
-    authenticated_max_requests: 1000
-    period: day
-```
-
-If a client exceeds their limit, the server responds with:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Content-Type: application/json
-
-{
-  "error": {
-    "message": "Quota exceeded"
-  }
-}
-```
-
-### CORS Configuration
-
-Configure CORS to allow web browsers to make requests from different domains. Disabled by default.
-
-#### Quick Setup
-
-For development, use the simple boolean flag:
-
-```yaml
-server:
-  cors: true  # Auto-enables localhost with any port
-```
-
-This automatically allows `http://localhost:*` and `https://localhost:*` with secure defaults.
-
-#### Custom Configuration
-
-For specific origins and full control:
-
-```yaml
-server:
-  cors:
-    allow_origins: ["https://myapp.com", "https://staging.myapp.com"]
-    allow_credentials: true
-    allow_methods: ["GET", "POST", "PUT", "DELETE"]
-    allow_headers: ["Content-Type", "Authorization"]
-    allow_origin_regex: "https://.*\\.example\\.com"  # Optional regex pattern
-    expose_headers: ["X-Total-Count"]
-    max_age: 86400
-```
-
-#### Configuration Options
-
-| Field                | Description                                    | Default |
-| -------------------- | ---------------------------------------------- | ------- |
-| `allow_origins`      | List of allowed origins. Use `["*"]` for any. | `["*"]` |
-| `allow_origin_regex` | Regex pattern for allowed origins (optional). | `None`  |
-| `allow_methods`      | Allowed HTTP methods.                          | `["*"]` |
-| `allow_headers`      | Allowed headers.                               | `["*"]` |
-| `allow_credentials`  | Allow credentials (cookies, auth headers).    | `false` |
-| `expose_headers`     | Headers exposed to browser.                   | `[]`    |
-| `max_age`            | Preflight cache time (seconds).               | `600`   |
-
-**Security Notes**:
-- `allow_credentials: true` requires explicit origins (no wildcards)
-- `cors: true` enables localhost access only (secure for development)
-- For public APIs, always specify exact allowed origins
-
 ### TLS Context Caching
 
 When OGX makes outbound HTTPS connections to external services (such as remote inference providers, authentication endpoints, or other APIs), it optimizes performance by creating and reusing SSL contexts. An SSL context (`ssl.SSLContext`) is created once during provider initialization and shared across all subsequent connections to that endpoint.
@@ -1166,72 +1014,19 @@ To apply TLS bundle updates:
 2. Restart the OGX server to reload all SSL contexts
 3. Verify outbound connections to external services work correctly
 
-## Extending to handle Safety
+## Configuring Responses Guardrails
 
-Configuring Safety can be a little involved so it is instructive to go through an example.
+Safety and Shields APIs were removed. Responses guardrails now call an external OpenAI-compatible moderation endpoint directly.
 
-The Safety API works with the associated Resource called a `Shield`. Providers can support various kinds of Shields. Good examples include the [Llama Guard](https://ai.meta.com/research/publications/llama-guard-llm-based-input-output-safeguard-for-human-ai-conversations/) system-safety models, or [Bedrock Guardrails](https://aws.amazon.com/bedrock/guardrails/).
-
-To configure a Bedrock Shield, you would need to add:
-- A Safety API provider instance with type `remote::bedrock`
-- A Shield resource served by this provider.
+To enable guardrails, configure `moderation_endpoint` on the builtin responses provider:
 
 ```yaml
-...
 providers:
-  safety:
-  - provider_id: bedrock
-    provider_type: remote::bedrock
+  responses:
+  - provider_id: builtin
+    provider_type: inline::builtin
     config:
-      aws_access_key_id: ${env.AWS_ACCESS_KEY_ID}
-      aws_secret_access_key: ${env.AWS_SECRET_ACCESS_KEY}
-...
-shields:
-- provider_id: bedrock
-  params:
-    guardrailVersion: ${env.GUARDRAIL_VERSION}
-  provider_shield_id: ${env.GUARDRAIL_ID}
-...
+      moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
 ```
 
-The situation is more involved if the Shield needs _Inference_ of an associated model. This is the case with Llama Guard. In that case, you would need to add:
-- A Safety API provider instance with type `inline::llama-guard`
-- An Inference API provider instance for serving the model.
-- A Model resource associated with this provider.
-- A Shield resource served by the Safety provider.
-
-The yaml configuration for this setup, assuming you were using vLLM as your inference server, would look like:
-```yaml
-...
-providers:
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config: {}
-  inference:
-  # this vLLM server serves the "normal" inference model (e.g., llama3.2:3b)
-  - provider_id: vllm-0
-    provider_type: remote::vllm
-    config:
-      url: ${env.VLLM_URL:=http://localhost:8000}
-  # this vLLM server serves the llama-guard model (e.g., llama-guard:3b)
-  - provider_id: vllm-1
-    provider_type: remote::vllm
-    config:
-      url: ${env.SAFETY_VLLM_URL:=http://localhost:8001}
-...
-models:
-- metadata: {}
-  model_id: ${env.INFERENCE_MODEL}
-  provider_id: vllm-0
-  provider_model_id: null
-- metadata: {}
-  model_id: ${env.SAFETY_MODEL}
-  provider_id: vllm-1
-  provider_model_id: null
-shields:
-- provider_id: llama-guard
-  shield_id: ${env.SAFETY_MODEL}   # Llama Guard shields are identified by the corresponding LlamaGuard model
-  provider_shield_id: null
-...
-```
+With this configured, guardrail IDs passed in Responses requests are forwarded as the `model` in moderation requests to that endpoint.

@@ -15,7 +15,6 @@ export POSTGRES_DB=ogx
 export POSTGRES_PASSWORD=ogx
 
 export INFERENCE_MODEL=meta-llama/Llama-3.2-3B-Instruct
-export SAFETY_MODEL=meta-llama/Llama-Guard-3-1B
 
 export BENCHMARK_INFERENCE_MODEL=$INFERENCE_MODEL
 export OGX_WORKERS=4

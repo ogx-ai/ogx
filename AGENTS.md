@@ -7,7 +7,7 @@ Human contributors should follow the conventions in CONTRIBUTING.md.
 ## Project Overview
 
 OGX is an API server implementing the OpenAI Responses API, Chat Completions,
-Embeddings, and supporting APIs (files, vector stores, batches, eval, safety). It supports
+Embeddings, and supporting APIs (files, vector stores, batches, eval, and responses guardrails). It supports
 multiple inference backends (OpenAI, Azure, Bedrock, vLLM, Ollama, WatsonX, etc.) through
 a provider architecture.
 
@@ -141,6 +141,14 @@ When modifying or extending APIs:
 3. Check for breaking changes — the pre-commit hook `Check API spec for breaking changes`
    enforces backward compatibility.
 4. Include a test plan with a testing script and execution output in your PR description.
+
+The full stability contract — HTTP API levels (`/v1alpha`, `/v1beta`, `/v1`),
+the two `ogx-api` package surfaces (`ogx_api.types`, `ogx_api.provider`),
+config schema rules, and the data storage compatibility guarantees across
+Z/Y/X-stream upgrades — is documented in
+[`docs/docs/concepts/apis/api_leveling.mdx`](docs/docs/concepts/apis/api_leveling.mdx).
+Read it before adding a new API, graduating an API between levels, removing
+or renaming a field on a `v1` datatype, or changing on-disk storage schemas.
 
 ## Common Patterns
 

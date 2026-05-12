@@ -47,18 +47,6 @@ class ResponseTruncation(StrEnum):
     disabled = "disabled"  # Disable truncation; context over limit results in 400 error
 
 
-class ResponseGuardrailSpec(BaseModel):
-    """Specification for a guardrail to apply during response generation."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: str
-    # TODO: more fields to be added for guardrail configuration
-
-
-ResponseGuardrail = str | ResponseGuardrailSpec
-
-
 class ResponseStreamOptions(BaseModel):
     """Options that control streamed response behavior."""
 
@@ -167,9 +155,10 @@ class CreateResponseRequest(BaseModel):
         ge=1,
         description="Maximum number of inference iterations.",
     )
-    guardrails: list[ResponseGuardrail] | None = Field(
+    guardrails: bool | None = Field(
         default=None,
-        description="List of guardrails to apply during response generation.",
+        description="Enable content moderation via the configured moderation_endpoint.",
+        json_schema_extra={"x-extra-body-field": True},
     )
     max_tool_calls: int | None = Field(
         default=None,
@@ -184,11 +173,6 @@ class CreateResponseRequest(BaseModel):
     reasoning: OpenAIResponseReasoning | None = Field(
         default=None,
         description="Configuration for reasoning effort in responses.",
-    )
-    safety_identifier: str | None = Field(
-        default=None,
-        max_length=64,
-        description="A stable identifier used for safety monitoring and abuse detection.",
     )
     service_tier: ServiceTier | None = Field(
         default=None,

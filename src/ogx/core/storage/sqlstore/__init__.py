@@ -14,4 +14,5 @@ from ogx_api.internal.sqlstore import (
     SqlStore as SqlStore,
 )
 
+from .authorized_sqlstore import authorized_sqlstore as authorized_sqlstore
 from .sqlstore import *  # noqa: F401,F403

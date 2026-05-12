@@ -11,7 +11,7 @@ export POSTGRES_DB=ogx
 export POSTGRES_PASSWORD=ogx
 
 export INFERENCE_MODEL=meta-llama/Llama-3.2-3B-Instruct
-export SAFETY_MODEL=meta-llama/Llama-Guard-3-1B
+export MODERATION_MODEL=meta-llama/Llama-Guard-3-1B
 
 # HF_TOKEN should be set by the user; base64 encode it for the secret
 if [ -n "${HF_TOKEN:-}" ]; then
@@ -36,9 +36,6 @@ if [ -z "${OGX_UI_URL:-}" ]; then
   exit 1
 fi
 
-
-
-
 set -euo pipefail
 set -x
 
@@ -48,7 +45,7 @@ if [ -n "${HF_TOKEN:-}" ]; then
 fi
 
 envsubst < ./vllm-k8s.yaml.template | kubectl apply -f -
-envsubst < ./vllm-safety-k8s.yaml.template | kubectl apply -f -
+envsubst < ./vllm-moderation-k8s.yaml.template | kubectl apply -f -
 envsubst < ./postgres-k8s.yaml.template | kubectl apply -f -
 envsubst < ./chroma-k8s.yaml.template | kubectl apply -f -
 

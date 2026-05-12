@@ -1,0 +1,438 @@
+{
+  "spec_file": "openai-spec-2.3.0.yml",
+  "summary": {
+    "mapped_schemas": 60,
+    "skipped_schemas": 57,
+    "response_schemas_in_spec": 116,
+    "total_issues": 22,
+    "missing_fields": 22,
+    "extra_fields": 0,
+    "unmapped_schemas": 0,
+    "stale_mappings": 0,
+    "streaming_event_gaps": 0
+  },
+  "unmapped_schemas": [],
+  "missing_fields": [
+    {
+      "spec_schema": "FunctionTool",
+      "field": "defer_loading",
+      "pydantic_model": "OpenAIResponseInputToolFunction"
+    },
+    {
+      "spec_schema": "MCPListTools",
+      "field": "error",
+      "pydantic_model": "OpenAIResponseOutputMessageMCPListTools"
+    },
+    {
+      "spec_schema": "MCPListToolsTool",
+      "field": "annotations",
+      "pydantic_model": "MCPListToolsTool"
+    },
+    {
+      "spec_schema": "MCPTool",
+      "field": "defer_loading",
+      "pydantic_model": "OpenAIResponseInputToolMCP"
+    },
+    {
+      "spec_schema": "MCPTool",
+      "field": "server_description",
+      "pydantic_model": "OpenAIResponseInputToolMCP"
+    },
+    {
+      "spec_schema": "MCPToolCall",
+      "field": "approval_request_id",
+      "pydantic_model": "OpenAIResponseOutputMessageMCPCall"
+    },
+    {
+      "spec_schema": "MCPToolCall",
+      "field": "status",
+      "pydantic_model": "OpenAIResponseOutputMessageMCPCall"
+    },
+    {
+      "spec_schema": "ReasoningItem",
+      "field": "encrypted_content",
+      "pydantic_model": "OpenAIResponseOutputMessageReasoningItem"
+    },
+    {
+      "spec_schema": "ResponseFunctionCallArgumentsDoneEvent",
+      "field": "name",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseFunctionCallArgumentsDone"
+    },
+    {
+      "spec_schema": "ResponseMCPCallCompletedEvent",
+      "field": "item_id",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpCallCompleted"
+    },
+    {
+      "spec_schema": "ResponseMCPCallCompletedEvent",
+      "field": "output_index",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpCallCompleted"
+    },
+    {
+      "spec_schema": "ResponseMCPCallFailedEvent",
+      "field": "item_id",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpCallFailed"
+    },
+    {
+      "spec_schema": "ResponseMCPCallFailedEvent",
+      "field": "output_index",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpCallFailed"
+    },
+    {
+      "spec_schema": "ResponseMCPListToolsCompletedEvent",
+      "field": "item_id",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpListToolsCompleted"
+    },
+    {
+      "spec_schema": "ResponseMCPListToolsCompletedEvent",
+      "field": "output_index",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpListToolsCompleted"
+    },
+    {
+      "spec_schema": "ResponseMCPListToolsFailedEvent",
+      "field": "item_id",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpListToolsFailed"
+    },
+    {
+      "spec_schema": "ResponseMCPListToolsFailedEvent",
+      "field": "output_index",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpListToolsFailed"
+    },
+    {
+      "spec_schema": "ResponseMCPListToolsInProgressEvent",
+      "field": "item_id",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpListToolsInProgress"
+    },
+    {
+      "spec_schema": "ResponseMCPListToolsInProgressEvent",
+      "field": "output_index",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseMcpListToolsInProgress"
+    },
+    {
+      "spec_schema": "ResponseTextDoneEvent",
+      "field": "logprobs",
+      "pydantic_model": "OpenAIResponseObjectStreamResponseOutputTextDone"
+    },
+    {
+      "spec_schema": "WebSearchTool",
+      "field": "filters",
+      "pydantic_model": "OpenAIResponseInputToolWebSearch"
+    },
+    {
+      "spec_schema": "WebSearchTool",
+      "field": "user_location",
+      "pydantic_model": "OpenAIResponseInputToolWebSearch"
+    }
+  ],
+  "extra_fields": [],
+  "stale_mappings": [],
+  "streaming_event_gaps": [],
+  "intentionally_skipped": [
+    {
+      "spec_schema": "ApplyPatchToolCall",
+      "reason": "Apply patch tool, not supported"
+    },
+    {
+      "spec_schema": "ApplyPatchToolCallOutput",
+      "reason": "Apply patch tool output, not supported"
+    },
+    {
+      "spec_schema": "CodeInterpreterToolCall",
+      "reason": "Code interpreter tool, not supported"
+    },
+    {
+      "spec_schema": "CompactResponseMethodPublicBody",
+      "reason": "Request body schema, not a response model"
+    },
+    {
+      "spec_schema": "CompactionBody",
+      "reason": "Handled as OpenAIResponseCompaction with different field names"
+    },
+    {
+      "spec_schema": "ComputerToolCall",
+      "reason": "Desktop automation tool, not supported"
+    },
+    {
+      "spec_schema": "ComputerToolCallOutput",
+      "reason": "Desktop automation tool output, not supported"
+    },
+    {
+      "spec_schema": "ComputerToolCallOutputResource",
+      "reason": "Desktop automation tool output resource, not supported"
+    },
+    {
+      "spec_schema": "CustomToolCall",
+      "reason": "Custom tool call, not supported"
+    },
+    {
+      "spec_schema": "CustomToolCallOutputResource",
+      "reason": "Custom tool call output resource, not supported"
+    },
+    {
+      "spec_schema": "FunctionShellCall",
+      "reason": "Function shell call, not supported"
+    },
+    {
+      "spec_schema": "FunctionShellCallOutput",
+      "reason": "Function shell call output, not supported"
+    },
+    {
+      "spec_schema": "ImageGenToolCall",
+      "reason": "Image generation tool, not supported"
+    },
+    {
+      "spec_schema": "LocalShellToolCall",
+      "reason": "Local shell tool, not supported"
+    },
+    {
+      "spec_schema": "LocalShellToolCallOutput",
+      "reason": "Local shell tool output, not supported"
+    },
+    {
+      "spec_schema": "MCPApprovalResponseResource",
+      "reason": "Output variant of MCPApprovalResponse, mapped differently"
+    },
+    {
+      "spec_schema": "MCPToolCallStatus",
+      "reason": "Enum, inlined"
+    },
+    {
+      "spec_schema": "MCPToolFilter",
+      "reason": "MCP tool filter, handled as AllowedToolsFilter"
+    },
+    {
+      "spec_schema": "Response",
+      "reason": "Assembled from allOf, checked as OpenAIResponseObject"
+    },
+    {
+      "spec_schema": "ResponseAudioDeltaEvent",
+      "reason": "Audio streaming not supported"
+    },
+    {
+      "spec_schema": "ResponseAudioDoneEvent",
+      "reason": "Audio streaming not supported"
+    },
+    {
+      "spec_schema": "ResponseAudioTranscriptDeltaEvent",
+      "reason": "Audio streaming not supported"
+    },
+    {
+      "spec_schema": "ResponseAudioTranscriptDoneEvent",
+      "reason": "Audio streaming not supported"
+    },
+    {
+      "spec_schema": "ResponseCodeInterpreterCallCodeDeltaEvent",
+      "reason": "Code interpreter not supported"
+    },
+    {
+      "spec_schema": "ResponseCodeInterpreterCallCodeDoneEvent",
+      "reason": "Code interpreter not supported"
+    },
+    {
+      "spec_schema": "ResponseCodeInterpreterCallCompletedEvent",
+      "reason": "Code interpreter not supported"
+    },
+    {
+      "spec_schema": "ResponseCodeInterpreterCallInProgressEvent",
+      "reason": "Code interpreter not supported"
+    },
+    {
+      "spec_schema": "ResponseCodeInterpreterCallInterpretingEvent",
+      "reason": "Code interpreter not supported"
+    },
+    {
+      "spec_schema": "ResponseCustomToolCallInputDeltaEvent",
+      "reason": "Custom tool call not supported"
+    },
+    {
+      "spec_schema": "ResponseCustomToolCallInputDoneEvent",
+      "reason": "Custom tool call not supported"
+    },
+    {
+      "spec_schema": "ResponseErrorCode",
+      "reason": "Enum type, inlined into ResponseError.code"
+    },
+    {
+      "spec_schema": "ResponseFormatJsonObject",
+      "reason": "Response format types, handled in inference models"
+    },
+    {
+      "spec_schema": "ResponseFormatJsonSchema",
+      "reason": "Response format types, handled in inference models"
+    },
+    {
+      "spec_schema": "ResponseFormatJsonSchemaSchema",
+      "reason": "Response format types, handled in inference models"
+    },
+    {
+      "spec_schema": "ResponseFormatText",
+      "reason": "Response format types, handled in inference models"
+    },
+    {
+      "spec_schema": "ResponseFormatTextGrammar",
+      "reason": "Response format types, handled in inference models"
+    },
+    {
+      "spec_schema": "ResponseFormatTextPython",
+      "reason": "Response format types, handled in inference models"
+    },
+    {
+      "spec_schema": "ResponseImageGenCallCompletedEvent",
+      "reason": "Image generation not supported"
+    },
+    {
+      "spec_schema": "ResponseImageGenCallGeneratingEvent",
+      "reason": "Image generation not supported"
+    },
+    {
+      "spec_schema": "ResponseImageGenCallInProgressEvent",
+      "reason": "Image generation not supported"
+    },
+    {
+      "spec_schema": "ResponseImageGenCallPartialImageEvent",
+      "reason": "Image generation not supported"
+    },
+    {
+      "spec_schema": "ResponseItemList",
+      "reason": "Pagination wrapper, handled as ListOpenAIResponseInputItem"
+    },
+    {
+      "spec_schema": "ResponseLogProb",
+      "reason": "Log probability type, imported from ogx_api.inference"
+    },
+    {
+      "spec_schema": "ResponseModalities",
+      "reason": "Enum, inlined into request handling"
+    },
+    {
+      "spec_schema": "ResponseOutputText",
+      "reason": "Output text helper, handled as OpenAIResponseOutputMessageContentOutputText"
+    },
+    {
+      "spec_schema": "ResponsePromptVariables",
+      "reason": "Prompt variable mapping, handled inline"
+    },
+    {
+      "spec_schema": "ResponseProperties",
+      "reason": "Partial schema merged into Response via allOf"
+    },
+    {
+      "spec_schema": "ResponseQueuedEvent",
+      "reason": "Background/queued responses not supported"
+    },
+    {
+      "spec_schema": "ResponseStreamEvent",
+      "reason": "Union type, checked separately via streaming event coverage"
+    },
+    {
+      "spec_schema": "ResponseStreamOptions",
+      "reason": "Chat completions stream options, not Responses API"
+    },
+    {
+      "spec_schema": "ResponseTextParam",
+      "reason": "Maps to OpenAIResponseText but via TypedDict"
+    },
+    {
+      "spec_schema": "ResponsesClientEvent",
+      "reason": "WebSocket client event wrapper, not implemented"
+    },
+    {
+      "spec_schema": "ResponsesClientEventResponseCreate",
+      "reason": "WebSocket client event, not implemented"
+    },
+    {
+      "spec_schema": "ResponsesServerEvent",
+      "reason": "WebSocket server event wrapper, not implemented"
+    },
+    {
+      "spec_schema": "ToolSearchCall",
+      "reason": "Tool search call, not supported"
+    },
+    {
+      "spec_schema": "ToolSearchOutput",
+      "reason": "Tool search output, not supported"
+    }
+  ],
+  "intentional_field_divergences": [
+    {
+      "spec_schema": "FunctionToolCall",
+      "field": "namespace",
+      "reason": "OGX does not support function namespaces"
+    },
+    {
+      "spec_schema": "InputFileContent",
+      "field": "file_data",
+      "reason": "OGX adds file_data field for inline file content"
+    },
+    {
+      "spec_schema": "InputFileContent",
+      "field": "file_url",
+      "reason": "OGX adds file_url field for URL-based file content"
+    },
+    {
+      "spec_schema": "InputMessage",
+      "field": "id",
+      "reason": "OGX merges InputMessage and InputMessageResource into one model"
+    },
+    {
+      "spec_schema": "MCPApprovalResponse",
+      "field": "request_id",
+      "reason": "OGX uses approval_request_id instead"
+    },
+    {
+      "spec_schema": "MCPTool",
+      "field": "authorization",
+      "reason": "OGX handles authorization on input tool only"
+    },
+    {
+      "spec_schema": "MCPTool",
+      "field": "connector_id",
+      "reason": "OGX handles connector_id on input tool only"
+    },
+    {
+      "spec_schema": "MCPTool",
+      "field": "headers",
+      "reason": "OGX handles headers on input tool"
+    },
+    {
+      "spec_schema": "MCPTool",
+      "field": "require_approval",
+      "reason": "OGX handles require_approval on input tool"
+    },
+    {
+      "spec_schema": "MCPTool",
+      "field": "server_url",
+      "reason": "OGX uses server_url on input tool, not output tool"
+    },
+    {
+      "spec_schema": "OutputMessage",
+      "field": "phase",
+      "reason": "OGX does not support message phases"
+    },
+    {
+      "spec_schema": "ResponseContentPartAddedEvent",
+      "field": "response_id",
+      "reason": "OGX adds response_id for event correlation"
+    },
+    {
+      "spec_schema": "ResponseContentPartDoneEvent",
+      "field": "response_id",
+      "reason": "OGX adds response_id for event correlation"
+    },
+    {
+      "spec_schema": "ResponseOutputItemAddedEvent",
+      "field": "response_id",
+      "reason": "OGX adds response_id for event correlation"
+    },
+    {
+      "spec_schema": "ResponseOutputItemDoneEvent",
+      "field": "response_id",
+      "reason": "OGX adds response_id for event correlation"
+    },
+    {
+      "spec_schema": "WebSearchToolCall",
+      "field": "action",
+      "reason": "OGX does not surface search action details"
+    }
+  ]
+}

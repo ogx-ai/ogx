@@ -30,7 +30,7 @@ The Responses API supports the following tool types:
 - `tool_choice` parameter
 - `max_tool_calls` parameter
 - Built-in tools (code interpreter, containers API)
-- Safety & guardrails
+- Moderation & guardrails
 - `reasoning` capabilities
 - `service_tier`
 - `logprobs`

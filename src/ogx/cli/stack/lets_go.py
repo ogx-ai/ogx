@@ -206,11 +206,20 @@ def _autodetect_providers() -> str:
     when the key environment variable is not set.
     """
     candidates = [
-        # provider_type, env_for_base_url, default_base_url, probe_path, requires_api_key, api_key_env, extra_headers
-        ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", "models", False, None, {}),
-        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", "health", False, None, {}),
-        ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", "models", False, None, {}),
-        ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "models", True, "OPENAI_API_KEY", {}),
+        # provider_type, env_for_base_url, default_base_url, probe_path, requires_api_key, api_key_env, extra_headers, api_key_header
+        ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", "models", False, None, {}, None),
+        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", "health", False, None, {}, None),
+        (
+            "remote::llama-cpp-server",
+            "LLAMA_CPP_SERVER_URL",
+            "http://localhost:8080/v1",
+            "models",
+            False,
+            None,
+            {},
+            None,
+        ),
+        ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "models", True, "OPENAI_API_KEY", {}, None),
         (
             "remote::llama-openai-compat",
             "LLAMA_API_BASE_URL",
@@ -219,6 +228,7 @@ def _autodetect_providers() -> str:
             True,
             "LLAMA_API_KEY",
             {},
+            None,
         ),
         (
             "remote::anthropic",
@@ -228,12 +238,42 @@ def _autodetect_providers() -> str:
             True,
             "ANTHROPIC_API_KEY",
             {"anthropic-version": "2023-06-01"},
+            "x-api-key",
+        ),
+        (
+            "remote::gemini",
+            None,
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+            "models",
+            True,
+            "GEMINI_API_KEY",
+            {},
+            None,
+        ),
+        (
+            "remote::azure",
+            "AZURE_API_BASE",
+            "",
+            "openai/models?api-version=2024-12-01-preview",
+            True,
+            "AZURE_API_KEY",
+            {},
+            "api-key",
         ),
     ]
 
     passed: list[str] = []
     cprint("Scanning for available providers...", color="cyan")
-    for provider_type, base_env, default_base, probe_path, requires_key, key_env, extra_headers in candidates:
+    for (
+        provider_type,
+        base_env,
+        default_base,
+        probe_path,
+        requires_key,
+        key_env,
+        extra_headers,
+        api_key_header,
+    ) in candidates:
         env_val: str | None = os.getenv(base_env) if base_env else None
         if env_val:
             base = env_val
@@ -242,7 +282,7 @@ def _autodetect_providers() -> str:
             base = default_base
             base_source = "default"
 
-        status = _probe_endpoint(base, probe_path, requires_key, key_env, extra_headers)
+        status = _probe_endpoint(base, probe_path, requires_key, key_env, extra_headers, api_key_header)
 
         # Build annotation parts
         parts = [f"{base}, {base_source}"]
@@ -290,6 +330,7 @@ def _probe_endpoint(
     requires_key: bool,
     key_env: str | None,
     extra_headers: dict[str, str] | None = None,
+    api_key_header: str | None = None,
 ) -> _ProbeStatus:
     """Perform a lightweight HTTP probe for a provider."""
     if not base_url:
@@ -302,8 +343,10 @@ def _probe_endpoint(
         if not key_env or not os.getenv(key_env):
             return _ProbeStatus.NO_KEY
         key: str = os.getenv(key_env, "")
-        headers["Authorization"] = f"Bearer {key}"
-        headers["x-api-key"] = key
+        if api_key_header:
+            headers[api_key_header] = key
+        else:
+            headers["Authorization"] = f"Bearer {key}"
 
     try:
         resp = cast(httpx.Response, httpx.get(url, headers=headers, timeout=2.0))
