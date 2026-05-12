@@ -121,6 +121,10 @@ jobs:
                 provider_type: remote::openai
                 config:
                   api_key: \${env.OPENAI_API_KEY}
+              - provider_id: sentence-transformers
+                provider_type: inline::sentence-transformers
+                config:
+                  trust_remote_code: true
             vector_io:
               - provider_id: faiss
                 provider_type: inline::faiss
@@ -137,9 +141,6 @@ jobs:
                 provider_type: inline::builtin
                 config:
                   persistence:
-                    agent_state:
-                      namespace: responses
-                      backend: kv_default
                     responses:
                       table_name: responses
                       backend: sql_default
@@ -170,6 +171,9 @@ jobs:
           - model_id: openai/gpt-4o
             model_type: llm
             provider_id: openai
+          - model_id: sentence-transformers/nomic-ai/nomic-embed-text-v1.5
+            model_type: embedding
+            provider_id: sentence-transformers
           server:
             port: 8321
             auth:
@@ -178,6 +182,16 @@ jobs:
                     actions: [read]
                     resource: model::*
                   description: Any authenticated user can use configured models (inference, responses)
+                - permit:
+                    actions: [create]
+                    resource: vector_store::*
+                  description: Any authenticated user can create vector stores (routing table)
+                - permit:
+                    actions: [read, update, delete]
+                    resource: vector_store::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector stores (routing table)
                 - permit:
                     actions: [create]
                     resource: sql_record::openai_files::*
@@ -228,6 +242,46 @@ jobs:
                   when:
                     - user is owner
                   description: Users can only access their own prompts
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_stores::*
+                  description: Any authenticated user can create vector stores
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_stores::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector stores
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_store_files::*
+                  description: Any authenticated user can create vector store files
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_store_files::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector store files
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_store_file_contents::*
+                  description: Any authenticated user can create vector store file contents
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_store_file_contents::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector store file contents
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_store_file_batches::*
+                  description: Any authenticated user can create vector store file batches
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_store_file_batches::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector store file batches
           EOF
           yq eval '.server.auth.provider_config.type = "${{ matrix.auth-provider }}"' -i "$run_dir/config.yaml"
           yq eval '.server.auth.provider_config.tls_cafile = "${{ env.KUBERNETES_CA_CERT_PATH }}"' -i "$run_dir/config.yaml"

@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ogx.core.storage.datatypes import KVStoreReference
+from ogx.core.storage.datatypes import KVStoreReference, SqlStoreReference
 from ogx_api import json_schema_type
 
 
@@ -19,6 +19,10 @@ class MilvusVectorIOConfig(BaseModel):
     db_path: str
     persistence: KVStoreReference = Field(description="Config for KV store backend (SQLite only for now)")
     consistency_level: str = Field(description="The consistency level of the Milvus server", default="Strong")
+    metadata_store: SqlStoreReference | None = Field(
+        default=None,
+        description="SQL store reference for tenant-isolated vector store metadata",
+    )
 
     @classmethod
     def sample_run_config(cls, __distro_dir__: str, **kwargs: Any) -> dict[str, Any]:

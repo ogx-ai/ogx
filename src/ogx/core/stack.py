@@ -743,6 +743,13 @@ class Stack:
         internal_impls = {}
         add_internal_implementations(internal_impls, self.run_config, policy)
 
+        # Register internal SQL tables before resolve_impls — provider initialize()
+        # hooks may issue queries that bind the shared engine, after which tables
+        # registered later are never created.
+        for api in (Api.prompts, Api.conversations, Api.connectors):
+            if api in internal_impls:
+                await internal_impls[api].initialize()
+
         impls = await resolve_impls(
             self.run_config,
             self.provider_registry or get_provider_registry(self.run_config),
@@ -750,13 +757,6 @@ class Stack:
             policy,
             internal_impls,
         )
-
-        if Api.prompts in impls:
-            await impls[Api.prompts].initialize()
-        if Api.conversations in impls:
-            await impls[Api.conversations].initialize()
-        if Api.connectors in impls:
-            await impls[Api.connectors].initialize()
 
         await register_resources(self.run_config, impls)
         await auto_register_tool_groups(self.run_config, impls)
@@ -950,6 +950,7 @@ def run_config_from_dynamic_config_spec(
                 conversations=SqlStoreReference(backend="sql_default", table_name="openai_conversations"),
                 prompts=SqlStoreReference(backend="sql_default", table_name="prompts"),
                 connectors=SqlStoreReference(backend="sql_default", table_name="connectors"),
+                vector_stores=SqlStoreReference(backend="sql_default", table_name="vector_store_metadata"),
             ),
         ),
     )

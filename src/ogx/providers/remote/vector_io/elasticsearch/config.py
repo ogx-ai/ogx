@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ogx.core.storage.datatypes import KVStoreReference
+from ogx.core.storage.datatypes import KVStoreReference, SqlStoreReference
 from ogx_api import json_schema_type
 
 
@@ -20,6 +20,10 @@ class ElasticsearchVectorIOConfig(BaseModel):
     elasticsearch_url: str | None = Field(description="The URL of the Elasticsearch instance", default="localhost:9200")
     persistence: KVStoreReference | None = Field(
         description="Config for KV store backend (SQLite only for now)", default=None
+    )
+    metadata_store: SqlStoreReference | None = Field(
+        default=None,
+        description="SQL store reference for tenant-isolated vector store metadata",
     )
 
     @classmethod

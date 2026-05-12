@@ -771,6 +771,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         inference_api: Inference,
         files_api: Files | None = None,
         file_processor_api: FileProcessors | None = None,
+        policy: list | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -780,12 +781,19 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         self.cache = {}
         self.vector_store_table = None
         self.metadata_collection_name = "openai_vector_stores_metadata"
+        self._policy = policy or []
 
     async def initialize(self) -> None:
         # Create a safe config representation with masked password for logging
         safe_config = {**self.config.model_dump(exclude={"password"}), "password": "******"}
         log.info(f"Initializing PGVector memory adapter with config: {safe_config}")
         self.kvstore = await kvstore_impl(self.config.persistence)
+
+        if self.config.metadata_store:
+            from ogx.core.storage.sqlstore import authorized_sqlstore
+
+            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+
         await self.initialize_openai_vector_stores()
 
         try:

@@ -325,6 +325,10 @@ class ServerStoresConfig(BaseModel):
         default=SqlStoreReference(backend="sql_default", table_name="connectors"),
         description="Connectors store configuration (uses SQL backend)",
     )
+    vector_stores: SqlStoreReference | None = Field(
+        default=None,
+        description="Vector store metadata configuration (uses SQL backend)",
+    )
 
     @model_validator(mode="before")
     @classmethod
