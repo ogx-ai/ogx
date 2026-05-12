@@ -17,7 +17,6 @@ from pydantic import TypeAdapter
 from ogx.core.access_control.access_control import is_action_allowed
 from ogx.core.datatypes import ModelWithOwner
 from ogx.core.request_headers import get_authenticated_user
-from ogx.core.task import create_detached_background_task
 from ogx.log import get_logger
 from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.telemetry.inference_metrics import (
@@ -64,6 +63,11 @@ from ogx_api import (
 from ogx_api.inference.models import RerankRequest
 
 logger = get_logger(name=__name__, category="core::routers")
+
+
+def _log_background_task_error(task: asyncio.Task) -> None:
+    if not task.cancelled() and (exc := task.exception()):
+        logger.error("Failed to store chat completion in background", error=str(exc))
 
 
 class InferenceRouter(Inference):
@@ -269,7 +273,8 @@ class InferenceRouter(Inference):
 
         # Store the response with the ID that will be returned to the client
         if self.store:
-            create_detached_background_task(self.store.store_chat_completion(response, params.messages))
+            task = asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            task.add_done_callback(_log_background_task_error)
 
         return response
 
@@ -556,4 +561,5 @@ class InferenceRouter(Inference):
                     object="chat.completion",
                 )
                 logger.debug("InferenceRouter.completion_response", final_response=final_response)
-                create_detached_background_task(self.store.store_chat_completion(final_response, messages))
+                task = asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                task.add_done_callback(_log_background_task_error)
