@@ -377,14 +377,16 @@ class VectorIORouter(VectorIO):
         # Route to default provider for now - could aggregate from all providers in the future
         # call retrieve on each vector dbs to get list of vector stores
         vector_stores = await self.routing_table.get_all_with_type("vector_store")
-        all_stores = []
-        for vector_store in vector_stores:
+
+        async def _retrieve_safe(identifier: str) -> VectorStoreObject | None:
             try:
-                vector_store_obj = await self.routing_table.openai_retrieve_vector_store(vector_store.identifier)
-                all_stores.append(vector_store_obj)
+                return await self.routing_table.openai_retrieve_vector_store(identifier)
             except Exception as e:
-                logger.error("Error retrieving vector store", identifier=vector_store.identifier, error=str(e))
-                continue
+                logger.error("Error retrieving vector store", identifier=identifier, error=str(e))
+                return None
+
+        results = await asyncio.gather(*[_retrieve_safe(vs.identifier) for vs in vector_stores])
+        all_stores = [r for r in results if r is not None]
 
         # Sort by created_at
         reverse_order = order == "desc"
@@ -667,27 +669,27 @@ class VectorIORouter(VectorIO):
             raise
 
     async def health(self) -> dict[str, HealthResponse]:
-        health_statuses = {}
-        timeout = 1  # increasing the timeout to 1 second for health checks
-        for provider_id, impl in self.routing_table.impls_by_provider_id.items():
+        timeout = 1
+        impls_snapshot = dict(self.routing_table.impls_by_provider_id)
+
+        async def _check_one(provider_id: str, impl: object) -> tuple[str, HealthResponse]:
             try:
-                # check if the provider has a health method
                 if not hasattr(impl, "health"):
-                    continue
-                health = await asyncio.wait_for(impl.health(), timeout=timeout)
-                health_statuses[provider_id] = health
+                    return provider_id, HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
+                result = await asyncio.wait_for(impl.health(), timeout=timeout)
+                return provider_id, result
             except TimeoutError:
-                health_statuses[provider_id] = HealthResponse(
+                return provider_id, HealthResponse(
                     status=HealthStatus.ERROR,
                     message=f"Health check timed out after {timeout} seconds",
                 )
             except NotImplementedError:
-                health_statuses[provider_id] = HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
+                return provider_id, HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
             except Exception as e:
-                health_statuses[provider_id] = HealthResponse(
-                    status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}"
-                )
-        return health_statuses
+                return provider_id, HealthResponse(status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}")
+
+        results = await asyncio.gather(*[_check_one(pid, impl) for pid, impl in impls_snapshot.items()])
+        return dict(results)
 
     async def openai_create_vector_store_file_batch(
         self,
