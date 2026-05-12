@@ -67,7 +67,8 @@ def google_genai_client(models_base_url):
             base_url=models_base_url,
             api_version="v1",
             headers=_sdk_provider_data_headers(),
-            timeout=30.0,
+            # google-genai HttpOptions timeout is in milliseconds.
+            timeout=30_000,
         ),
     )
     yield client
