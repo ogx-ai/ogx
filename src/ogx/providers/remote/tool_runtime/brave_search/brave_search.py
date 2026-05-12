@@ -100,8 +100,10 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
             payload["country"] = user_location["country"]
 
         search_context_size = kwargs.get("search_context_size")
+        result_limit = self.config.max_results
         if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
-            payload["count"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
+            result_limit = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
+            payload["count"] = result_limit
 
         async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.get(
@@ -111,18 +113,18 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
             )
             response.raise_for_status()
         response_json = response.json()
-        results = self._clean_brave_response(response_json)
+        results = self._clean_brave_response(response_json, result_limit)
         content_items = "\n".join([str(result) for result in results])
-        sources = self._extract_sources(response_json)
+        sources = self._extract_sources(response_json, result_limit)
         return ToolInvocationResult(
             content=content_items,
             metadata={"query": kwargs["query"], "sources": sources},
         )
 
-    def _extract_sources(self, search_response: dict) -> list[dict[str, str]]:
+    def _extract_sources(self, search_response: dict[str, Any], max_results: int) -> list[dict[str, str]]:
         sources = []
         if "mixed" in search_response:
-            for m in search_response["mixed"]["main"][: self.config.max_results]:
+            for m in search_response["mixed"]["main"][:max_results]:
                 r_type = m["type"]
                 if r_type in search_response:
                     results = search_response[r_type].get("results", [])
@@ -137,11 +139,11 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
                         sources.append({"url": item["url"]})
         return sources
 
-    def _clean_brave_response(self, search_response):
+    def _clean_brave_response(self, search_response: dict[str, Any], max_results: int) -> list[str]:
         clean_response = []
         if "mixed" in search_response:
             mixed_results = search_response["mixed"]
-            for m in mixed_results["main"][: self.config.max_results]:
+            for m in mixed_results["main"][:max_results]:
                 r_type = m["type"]
                 results = search_response[r_type]["results"]
                 cleaned = self._clean_result_by_type(r_type, results, m.get("index"))

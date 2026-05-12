@@ -100,6 +100,81 @@ async def test_invoke_with_search_context_size(brave_search, mock_brave_response
         assert call_kwargs.kwargs["params"]["count"] == 10
 
 
+async def test_invoke_with_search_context_size_updates_result_limit(brave_search):
+    multi_result_response = httpx.Response(
+        200,
+        json={
+            "mixed": {
+                "main": [
+                    {"type": "web", "index": 0},
+                    {"type": "web", "index": 1},
+                    {"type": "web", "index": 2},
+                    {"type": "web", "index": 3},
+                    {"type": "web", "index": 4},
+                ]
+            },
+            "web": {
+                "results": [
+                    {
+                        "type": "web",
+                        "title": "Result 0",
+                        "url": "https://example0.com",
+                        "description": "A test result",
+                        "date": "2025-01-01",
+                        "extra_snippets": ["snippet0"],
+                    },
+                    {
+                        "type": "web",
+                        "title": "Result 1",
+                        "url": "https://example1.com",
+                        "description": "A test result",
+                        "date": "2025-01-01",
+                        "extra_snippets": ["snippet1"],
+                    },
+                    {
+                        "type": "web",
+                        "title": "Result 2",
+                        "url": "https://example2.com",
+                        "description": "A test result",
+                        "date": "2025-01-01",
+                        "extra_snippets": ["snippet2"],
+                    },
+                    {
+                        "type": "web",
+                        "title": "Result 3",
+                        "url": "https://example3.com",
+                        "description": "A test result",
+                        "date": "2025-01-01",
+                        "extra_snippets": ["snippet3"],
+                    },
+                    {
+                        "type": "web",
+                        "title": "Result 4",
+                        "url": "https://example4.com",
+                        "description": "A test result",
+                        "date": "2025-01-01",
+                        "extra_snippets": ["snippet4"],
+                    },
+                ]
+            },
+        },
+        request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+    )
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=multi_result_response) as mock_get:
+        result = await brave_search.invoke_tool(
+            "web_search",
+            {
+                "query": "test query",
+                "search_context_size": "medium",
+            },
+        )
+        call_kwargs = mock_get.call_args
+        assert call_kwargs.kwargs["params"]["count"] == 5
+        assert result.metadata is not None
+        assert len(result.metadata["sources"]) == 5
+        assert "https://example4.com" in result.content
+
+
 async def test_invoke_without_extra_params(brave_search, mock_brave_response):
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_brave_response) as mock_get:
         await brave_search.invoke_tool(
