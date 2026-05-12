@@ -669,7 +669,7 @@ class VectorIORouter(VectorIO):
     async def health(self) -> dict[str, HealthResponse]:
         health_statuses = {}
         timeout = 1  # increasing the timeout to 1 second for health checks
-        for provider_id, impl in self.routing_table.impls_by_provider_id.items():
+        for provider_id, impl in dict(self.routing_table.impls_by_provider_id).items():
             try:
                 # check if the provider has a health method
                 if not hasattr(impl, "health"):
