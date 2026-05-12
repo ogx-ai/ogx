@@ -215,6 +215,45 @@ async def test_openai_list_models_has_object_field(cached_disk_dist_registry):
     assert len(openai_models.data) == 1
 
 
+async def test_anthropic_list_models_supports_pagination(cached_disk_dist_registry):
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
+    await table.initialize()
+
+    await table.register_model(model_id="test-model-a", provider_id="test_provider")
+    await table.register_model(model_id="test-model-b", provider_id="test_provider")
+    await table.register_model(model_id="test-model-c", provider_id="test_provider")
+
+    first_page = await table.anthropic_list_models(limit=2)
+    first_page_ids = [model.id for model in first_page.data]
+    assert first_page_ids == ["test_provider/test-model-a", "test_provider/test-model-b"]
+    assert first_page.has_more
+    assert first_page.first_id == "test_provider/test-model-a"
+    assert first_page.last_id == "test_provider/test-model-b"
+
+    second_page = await table.anthropic_list_models(after_id=first_page.last_id, limit=2)
+    second_page_ids = [model.id for model in second_page.data]
+    assert second_page_ids == ["test_provider/test-model-c"]
+    assert not second_page.has_more
+    assert second_page.first_id == "test_provider/test-model-c"
+    assert second_page.last_id == "test_provider/test-model-c"
+
+
+async def test_anthropic_list_models_rejects_invalid_pagination_inputs(cached_disk_dist_registry):
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
+    await table.initialize()
+
+    await table.register_model(model_id="test-model", provider_id="test_provider")
+
+    with pytest.raises(ValueError, match="Failed to list models: before_id and after_id are mutually exclusive."):
+        await table.anthropic_list_models(before_id="test_provider/test-model", after_id="test_provider/test-model")
+
+    with pytest.raises(ValueError, match="Failed to list models: before_id was not found."):
+        await table.anthropic_list_models(before_id="test_provider/unknown-model")
+
+    with pytest.raises(ValueError, match="Failed to list models: limit must be at least 1."):
+        await table.anthropic_list_models(limit=0)
+
+
 async def test_model_has_openai_compatible_fields(cached_disk_dist_registry):
     """Test that Model includes OpenAI-compatible fields (id, object, created, owned_by)."""
     table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})

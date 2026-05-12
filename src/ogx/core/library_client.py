@@ -15,7 +15,7 @@ import queue
 import sys
 import threading
 import typing
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Mapping
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
@@ -495,26 +495,61 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             raise ValueError("Client not initialized. Please call initialize() first.")
 
         # Create headers with provider data if available
-        headers = options.headers or {}
+        request_headers = self._sanitize_headers(options.headers)
         if self.provider_data:
             keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
-            if all(key not in headers for key in keys):
-                headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
+            if all(key not in request_headers for key in keys):
+                request_headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
 
         # Use context manager for provider data
-        with request_provider_data_context(headers):
+        with request_provider_data_context(request_headers):
             if stream:
                 response = await self._call_streaming(
                     cast_to=cast_to,
                     options=options,
+                    request_headers=request_headers,
                     stream_cls=stream_cls,
                 )
             else:
                 response = await self._call_non_streaming(
                     cast_to=cast_to,
                     options=options,
+                    request_headers=request_headers,
                 )
             return response
+
+    @staticmethod
+    def _coerce_header_component(value: Any) -> str | None:
+        if value is None or value is NOT_GIVEN:
+            return None
+        if value.__class__.__name__ == "Omit":
+            return None
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                return value.decode("latin-1")
+        if isinstance(value, str):
+            return value
+        if isinstance(value, int | float | bool):
+            return str(value)
+        return None
+
+    @classmethod
+    def _sanitize_headers(cls, headers: Any) -> dict[str, str]:
+        if headers is None or headers is NOT_GIVEN or headers.__class__.__name__ == "Omit":
+            return {}
+        if not isinstance(headers, Mapping):
+            return {}
+
+        sanitized_headers: dict[str, str] = {}
+        for key, value in headers.items():
+            normalized_key = cls._coerce_header_component(key)
+            normalized_value = cls._coerce_header_component(value)
+            if normalized_key is None or normalized_value is None:
+                continue
+            sanitized_headers[normalized_key] = normalized_value
+        return sanitized_headers
 
     def _handle_file_uploads(self, options: Any, body: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
         """Handle file uploads from OpenAI client and add them to the request body."""
@@ -546,6 +581,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         *,
         cast_to: Any,
         options: Any,
+        request_headers: dict[str, str],
     ) -> Any:
         assert self.route_impls is not None  # Should be guaranteed by request() method, assertion for mypy
         path = options.url
@@ -597,7 +633,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
                 method=options.method,
                 url=options.url,
                 params=options.params,
-                headers=options.headers or {},
+                headers=request_headers,
                 json=convert_pydantic_to_json_value(filtered_body),
             ),
         )
@@ -616,6 +652,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         *,
         cast_to: Any,
         options: Any,
+        request_headers: dict[str, str],
         stream_cls: Any,
     ) -> Any:
         assert self.route_impls is not None  # Should be guaranteed by request() method, assertion for mypy
@@ -668,7 +705,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
                 method=options.method,
                 url=options.url,
                 params=options.params,
-                headers=options.headers or {},
+                headers=request_headers,
                 json=convert_pydantic_to_json_value(body),
             ),
         )
