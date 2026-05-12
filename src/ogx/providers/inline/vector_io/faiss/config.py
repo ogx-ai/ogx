@@ -6,9 +6,9 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from ogx.core.storage.datatypes import KVStoreReference
+from ogx.core.storage.datatypes import KVStoreReference, SqlStoreReference
 from ogx_api import json_schema_type
 
 
@@ -17,6 +17,10 @@ class FaissVectorIOConfig(BaseModel):
     """Configuration for the inline FAISS vector I/O provider."""
 
     persistence: KVStoreReference
+    metadata_store: SqlStoreReference | None = Field(
+        default=None,
+        description="SQL store reference for tenant-isolated vector store metadata",
+    )
 
     @classmethod
     def sample_run_config(cls, __distro_dir__: str, **kwargs: Any) -> dict[str, Any]:

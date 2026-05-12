@@ -132,6 +132,7 @@ IMPLEMENTED_REQUEST_PROPS = {
     "system_instruction",
     "generation_config",
     "tools",
+    "previous_interaction_id",
     "stream",
     "response_modalities",
 }

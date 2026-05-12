@@ -24,13 +24,11 @@ async def get_routing_table_impl(
     policy: list[AccessRule],
 ) -> Any:
     from ..routing_tables.models import ModelsRoutingTable
-    from ..routing_tables.shields import ShieldsRoutingTable
     from ..routing_tables.toolgroups import ToolGroupsRoutingTable
     from ..routing_tables.vector_stores import VectorStoresRoutingTable
 
     api_to_tables = {
         "models": ModelsRoutingTable,
-        "shields": ShieldsRoutingTable,
         "tool_groups": ToolGroupsRoutingTable,
         "vector_stores": VectorStoresRoutingTable,
     }
@@ -48,14 +46,12 @@ async def get_auto_router_impl(
     api: Api, routing_table: RoutingTable, deps: dict[str, Any], run_config: StackConfig, policy: list[AccessRule]
 ) -> Any:
     from .inference import InferenceRouter
-    from .safety import SafetyRouter
     from .tool_runtime import ToolRuntimeRouter
     from .vector_io import VectorIORouter
 
     api_to_routers = {
         "vector_io": VectorIORouter,
         "inference": InferenceRouter,
-        "safety": SafetyRouter,
         "tool_runtime": ToolRuntimeRouter,
     }
     if api.value not in api_to_routers:
@@ -77,8 +73,6 @@ async def get_auto_router_impl(
     elif api == Api.vector_io:
         api_to_dep_impl["vector_stores_config"] = run_config.vector_stores
         api_to_dep_impl["inference_api"] = deps.get(Api.inference)
-    elif api == Api.safety:
-        api_to_dep_impl["safety_config"] = run_config.safety
 
     impl = api_to_routers[api.value](routing_table, **api_to_dep_impl)
 

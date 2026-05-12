@@ -523,6 +523,38 @@ def _clean_schema_descriptions(openapi_schema: dict[str, Any]) -> dict[str, Any]
     return openapi_schema
 
 
+def _promote_model_extra_body_fields(openapi_schema: dict[str, Any]) -> dict[str, Any]:
+    """Strip fields marked x-extra-body-field from schemas and add to x-ogx-extra-body-params."""
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    schema_extra: dict[str, dict[str, Any]] = {}
+    for name, defn in schemas.items():
+        if not isinstance(defn, dict) or "properties" not in defn:
+            continue
+        extra: dict[str, Any] = {}
+        for prop, prop_def in list(defn["properties"].items()):
+            if isinstance(prop_def, dict) and prop_def.pop("x-extra-body-field", None):
+                extra[prop] = prop_def
+                del defn["properties"][prop]
+                if "required" in defn and prop in defn["required"]:
+                    defn["required"].remove(prop)
+        if extra:
+            schema_extra[name] = extra
+    for path_item in openapi_schema.get("paths", {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for method in ("post", "put", "patch"):
+            op = path_item.get(method)
+            if not op:
+                continue
+            rb = op.get("requestBody", {})
+            ref = rb.get("content", {}).get("application/json", {}).get("schema", {})
+            if isinstance(ref, dict) and "$ref" in ref:
+                ref_name = ref["$ref"].split("/")[-1]
+                if ref_name in schema_extra:
+                    rb["x-ogx-extra-body-params"] = schema_extra[ref_name]
+    return openapi_schema
+
+
 def _add_extra_body_params_extension(openapi_schema: dict[str, Any]) -> dict[str, Any]:
     """
     Add x-ogx-extra-body-params extension to requestBody for endpoints with ExtraBodyField parameters.

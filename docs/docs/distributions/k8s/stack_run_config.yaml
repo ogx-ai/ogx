@@ -4,7 +4,6 @@ apis:
 - responses
 - inference
 - files
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -13,13 +12,6 @@ providers:
     provider_type: remote::vllm
     config:
       url: ${env.VLLM_URL:=http://localhost:8000/v1}
-      max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
-      api_token: ${env.VLLM_API_TOKEN:=fake}
-      tls_verify: ${env.VLLM_TLS_VERIFY:=true}
-  - provider_id: vllm-safety
-    provider_type: remote::vllm
-    config:
-      url: ${env.VLLM_SAFETY_URL:=http://localhost:8000/v1}
       max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
       api_token: ${env.VLLM_API_TOKEN:=fake}
       tls_verify: ${env.VLLM_TLS_VERIFY:=true}
@@ -45,15 +37,11 @@ providers:
       metadata_store:
         table_name: files_metadata
         backend: sql_default
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
+      moderation_endpoint: ${env.MODERATION_ENDPOINT:=http://vllm-server-moderation.default.svc.cluster.local:8001/v1/moderations}
       persistence:
         agent_state:
           namespace: agents
@@ -123,12 +111,6 @@ registered_resources:
     model_id: ${env.INFERENCE_MODEL}
     provider_id: vllm-inference
     model_type: llm
-  - metadata: {}
-    model_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
-    provider_id: vllm-safety
-    model_type: llm
-  shields:
-  - shield_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
   vector_dbs: []
   datasets: []
   scoring_fns: []

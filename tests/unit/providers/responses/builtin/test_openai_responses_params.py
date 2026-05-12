@@ -212,7 +212,6 @@ async def test_create_openai_response_with_max_output_tokens_and_tools(openai_re
     "param_name,param_value,backend_param_name,backend_expected_value,response_expected_value,stored_expected_value",
     [
         ("temperature", 1.5, "temperature", 1.5, 1.5, 1.5),
-        ("safety_identifier", "user-123", "safety_identifier", "user-123", "user-123", "user-123"),
         ("max_output_tokens", 500, "max_completion_tokens", 500, 500, 500),
         (
             "prompt_cache_key",
@@ -275,7 +274,7 @@ async def test_params_passed_through_full_chain_to_backend_service(
         tool_runtime_api=AsyncMock(),
         responses_store=mock_responses_store,
         vector_io_api=AsyncMock(),
-        safety_api=AsyncMock(),
+        moderation_endpoint=None,
         conversations_api=AsyncMock(),
         prompts_api=AsyncMock(),
         files_api=AsyncMock(),

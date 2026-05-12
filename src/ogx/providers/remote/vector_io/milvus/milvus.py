@@ -461,6 +461,7 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         inference_api: Inference,
         files_api: Files | None,
         file_processor_api: FileProcessors | None = None,
+        policy: list | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -470,9 +471,16 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         self.client = None
         self.vector_store_table = None
         self.metadata_collection_name = "openai_vector_stores_metadata"
+        self._policy = policy or []
 
     async def initialize(self) -> None:
         self.kvstore = await kvstore_impl(self.config.persistence)
+
+        if self.config.metadata_store:
+            from ogx.core.storage.sqlstore import authorized_sqlstore
+
+            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+
         start_key = VECTOR_DBS_PREFIX
         end_key = f"{VECTOR_DBS_PREFIX}\xff"
         stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
@@ -494,7 +502,9 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
             self.cache[vector_store.identifier] = index
         if isinstance(self.config, RemoteMilvusVectorIOConfig):
             logger.info("Connecting to Milvus server at", uri=self.config.uri)
-            self.client = MilvusClient(**self.config.model_dump(exclude_none=True))
+            self.client = MilvusClient(
+                **self.config.model_dump(exclude_none=True, exclude={"persistence", "metadata_store"})
+            )
         else:
             logger.info("Connecting to Milvus Lite at", db_path=self.config.db_path)
             uri = os.path.expanduser(self.config.db_path)

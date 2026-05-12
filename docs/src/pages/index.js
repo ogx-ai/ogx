@@ -153,9 +153,9 @@ const API_SURFACE = [
     { label: 'Files', path: '/v1/files' },
     { label: 'Batches', path: '/v1/batches' },
   ]},
-  { category: 'Safety & Tools', endpoints: [
+  { category: 'Moderation & Tools', endpoints: [
     { label: 'Moderations', path: '/v1/moderations' },
-    { label: 'Tools', path: '/v1/tools' },
+    { label: 'Tools', path: '/v1/admin/tools' },
     { label: 'Connectors', path: '/v1/connectors' },
   ]},
 ];
@@ -669,6 +669,49 @@ function AnnouncementBanner() {
   );
 }
 
+function V1AnnouncementBanner() {
+  const [visible, setVisible] = useState(true);
+  const [dismissing, setDismissing] = useState(false);
+
+  if (!visible) return null;
+
+  const handleDismiss = () => {
+    setDismissing(true);
+    setTimeout(() => setVisible(false), 350);
+  };
+
+  return (
+    <div className={clsx(styles.announcementBar, styles.announcementBarV1, dismissing && styles.announcementDismissing)}>
+      <div className="container">
+        <div className={styles.announcementInner}>
+          <span className={styles.announcementPulse} aria-hidden="true" />
+          <span className={styles.announcementLabel}>New</span>
+          <span className={styles.announcementSep} aria-hidden="true" />
+          <span className={styles.announcementText}>
+            v1 is here. <span className={styles.announcementHighlight}>No caveats. No beta. Ship it.</span>
+          </span>
+          <a
+            className={styles.announcementLink}
+            href="https://ogx-ai.github.io/blog/ogx-v1"
+          >
+            Read the announcement <span className={styles.announcementArrow}>&rarr;</span>
+          </a>
+          <button
+            type="button"
+            className={styles.announcementDismiss}
+            onClick={handleDismiss}
+            aria-label="Dismiss announcement"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
   useConstellation('hero-constellation');
 
@@ -683,7 +726,7 @@ function Hero() {
               The full stack.
             </h1>
             <p className={styles.subtitle}>
-              Inference, vector stores, file storage, safety, tool calling,
+              Inference, vector stores, file storage, moderation, tool calling,
               and agentic orchestration — as a server or a Python library.
               Pluggable providers, any language, deploy anywhere.
             </p>
@@ -717,9 +760,9 @@ function ApiSurface() {
           <h2>Everything your AI app needs. One process.</h2>
           <p>
             More than inference routing. OGX composes inference, storage,
-            safety, and orchestration into a single process — whether you
+            moderation, and orchestration into a single process — whether you
             run it as a server or import it as a library. Your agent can search
-            a vector store, call a tool, check safety, and stream the response.
+            a vector store, call a tool, apply moderation checks, and stream the response.
             No glue code. No sidecar services.
           </p>
         </div>
@@ -816,7 +859,7 @@ function Architecture() {
         <p className={styles.archDesc}>
           Your application talks to one process — either an HTTP server
           or an in-process library client. That process routes to pluggable
-          providers for inference, vector storage, files, safety, and tools.
+          providers for inference, vector storage, files, moderation, and tools.
           The composition happens at the OGX level, not in your application code.
         </p>
         <div className={styles.archImg}>
@@ -860,9 +903,10 @@ function Bottom() {
 
 export default function Home() {
   return (
-    <Layout title="The Open-Source AI Application Server & Library" description="Inference, vector stores, safety, tools, and agentic orchestration. Server or Python library, OpenAI + Anthropic + Google compatible, pluggable providers.">
+    <Layout title="The Open-Source AI Application Server & Library" description="Inference, vector stores, moderation, tools, and agentic orchestration. Server or Python library, OpenAI + Anthropic + Google compatible, pluggable providers.">
       <main>
         <AnnouncementBanner />
+        <V1AnnouncementBanner />
         <Hero />
         <CliShowcase />
         <ApiSurface />

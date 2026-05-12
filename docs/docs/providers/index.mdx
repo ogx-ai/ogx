@@ -1,6 +1,6 @@
 ---
 title: API Providers
-description: 50+ pluggable providers across inference, vector stores, safety, tools, and file storage
+description: 50+ pluggable providers across inference, vector stores, tools, and file storage
 sidebar_label: Overview
 sidebar_position: 1
 ---
@@ -9,12 +9,12 @@ import { ProviderGrid, ProviderReference } from '@site/src/components/ProviderGr
 
 # API Providers
 
-OGX composes 23 inference providers, 15 vector stores, 7 safety backends, 6 tool runtimes, and 3 file storage options into a single deployable server. No other open-source project covers this surface area in one process.
+OGX composes 23 inference providers, 15 vector stores, 6 tool runtimes, and 3 file storage options into a single deployable server. No other open-source project covers this surface area in one process.
 
 Providers come in two types:
 
 - **Remote**: adapts an external service (Ollama, OpenAI, vLLM, Bedrock, etc.)
-- **Inline**: runs in-process within OGX (FAISS, sentence-transformers, Llama Guard, etc.)
+- **Inline**: runs in-process within OGX (FAISS, sentence-transformers, file-search, etc.)
 
 :::info
 At least one inline provider exists for each API so you can run a fully featured stack locally without any external dependencies.
@@ -32,9 +32,9 @@ At least one inline provider exists for each API so you can run a fully featured
 
 Gateways like LiteLLM route inference requests to multiple providers. That's useful, but inference routing is one API.
 
-OGX composes the full application: an agent running on the Responses API can call a model via any inference provider, search documents in any vector store, check content with any safety backend, invoke tools via MCP, and stream the result back. All in one server process, all through OpenAI-compatible endpoints.
+OGX composes the full application: an agent running on the Responses API can call a model via any inference provider, search documents in any vector store, invoke tools via MCP, and stream the result back. All in one server process, all through OpenAI-compatible endpoints.
 
-The composition is the hard part. Making inference + vector stores + files + safety + tools + agentic orchestration work together correctly across dozens of provider combinations is what takes years, not months.
+The composition is the hard part. Making inference + vector stores + files + tools + agentic orchestration work together correctly across dozens of provider combinations is what takes years, not months.
 
 ## OpenAI Compatibility
 

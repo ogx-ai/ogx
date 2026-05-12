@@ -23,7 +23,6 @@ from ogx.core.datatypes import (
     Provider,
     QualifiedModel,
     RerankerModel,
-    SafetyConfig,
     StackConfig,
     VectorStoresConfig,
 )
@@ -59,10 +58,7 @@ from ogx_api import (
     Prompts,
     Providers,
     RegisterModelRequest,
-    RegisterShieldRequest,
     Responses,
-    Safety,
-    Shields,
     ToolGroupNotFoundError,
     VectorIO,
 )
@@ -75,10 +71,8 @@ class OGX(
     Inference,
     Responses,
     Batches,
-    Safety,
     VectorIO,
     Models,
-    Shields,
     Inspect,
     Files,
     Prompts,
@@ -94,7 +88,6 @@ class OGX(
 # If a request class is specified, the configuration object will be converted to this class before invoking the registration method.
 RESOURCES = [
     ("models", Api.models, "register_model", "list_models", RegisterModelRequest),
-    ("shields", Api.shields, "register_shield", "list_shields", RegisterShieldRequest),
     ("vector_stores", Api.vector_stores, "register_vector_store", "list_vector_stores", None),
 ]
 
@@ -108,7 +101,6 @@ TEST_RECORDING_CONTEXT = None
 RESOURCE_ID_FIELDS = [
     "vector_store_id",
     "model_id",
-    "shield_id",
 ]
 
 
@@ -455,39 +447,6 @@ async def _validate_rewrite_query_model(rewrite_query_model: QualifiedModel, imp
     logger.debug("Validated rewrite query model", model_identifier=model_identifier)
 
 
-async def validate_safety_config(safety_config: SafetyConfig | None, impls: dict[Api, Any]) -> None:
-    """Validate that the configured default shield exists among registered shields.
-
-    Args:
-        safety_config: Optional safety configuration with a default_shield_id.
-        impls: Dictionary mapping APIs to their provider implementations.
-
-    Raises:
-        ValueError: If the default shield ID is not found among registered shields.
-    """
-    if safety_config is None or safety_config.default_shield_id is None:
-        return
-
-    if Api.shields not in impls:
-        raise ValueError("Safety configuration requires the shields API to be enabled")
-
-    if Api.safety not in impls:
-        raise ValueError("Safety configuration requires the safety API to be enabled")
-
-    shields_impl = impls[Api.shields]
-    response = await shields_impl.list_shields()
-    shields_by_id = {shield.identifier: shield for shield in response.data}
-
-    default_shield_id = safety_config.default_shield_id
-    # don't validate if there are no shields registered
-    if shields_by_id and default_shield_id not in shields_by_id:
-        available = sorted(shields_by_id)
-        raise ValueError(
-            f"Configured default_shield_id '{default_shield_id}' not found among registered shields."
-            f" Available shields: {available}"
-        )
-
-
 class EnvVarError(Exception):
     """Raised when a required environment variable is not set or empty."""
 
@@ -784,6 +743,13 @@ class Stack:
         internal_impls = {}
         add_internal_implementations(internal_impls, self.run_config, policy)
 
+        # Register internal SQL tables before resolve_impls — provider initialize()
+        # hooks may issue queries that bind the shared engine, after which tables
+        # registered later are never created.
+        for api in (Api.prompts, Api.conversations, Api.connectors):
+            if api in internal_impls:
+                await internal_impls[api].initialize()
+
         impls = await resolve_impls(
             self.run_config,
             self.provider_registry or get_provider_registry(self.run_config),
@@ -792,19 +758,11 @@ class Stack:
             internal_impls,
         )
 
-        if Api.prompts in impls:
-            await impls[Api.prompts].initialize()
-        if Api.conversations in impls:
-            await impls[Api.conversations].initialize()
-        if Api.connectors in impls:
-            await impls[Api.connectors].initialize()
-
         await register_resources(self.run_config, impls)
         await auto_register_tool_groups(self.run_config, impls)
         await register_connectors(self.run_config, impls)
         await refresh_registry_once(impls)
         await validate_vector_stores_config(self.run_config.vector_stores, impls)
-        await validate_safety_config(self.run_config.safety, impls)
         self.impls = impls
 
     def create_registry_refresh_task(self):
@@ -906,7 +864,7 @@ def run_config_from_dynamic_config_spec(
     Create a dynamic distribution from a list of API providers.
 
     The list should be of the form "api=provider", e.g. "inference=fireworks". If you have
-    multiple pairs, separate them with commas or semicolons, e.g. "inference=fireworks,safety=llama-guard,agents=builtin"
+    multiple pairs, separate them with commas or semicolons, e.g. "inference=fireworks,vector_io=faiss"
 
     You can optionally specify config parameters using URL query parameter syntax,
     e.g. "inference=inline::sentence-transformers?trust_remote_code=true&max_seq_length=512"
@@ -992,6 +950,7 @@ def run_config_from_dynamic_config_spec(
                 conversations=SqlStoreReference(backend="sql_default", table_name="openai_conversations"),
                 prompts=SqlStoreReference(backend="sql_default", table_name="prompts"),
                 connectors=SqlStoreReference(backend="sql_default", table_name="connectors"),
+                vector_stores=SqlStoreReference(backend="sql_default", table_name="vector_store_metadata"),
             ),
         ),
     )

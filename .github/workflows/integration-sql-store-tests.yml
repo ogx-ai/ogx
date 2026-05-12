@@ -13,7 +13,9 @@ on:
       - 'release-[0-9]+.[0-9]+.x'
     paths:
       - 'src/ogx/providers/utils/sqlstore/**'
+      - 'src/ogx/core/storage/kvstore/postgres/**'
       - 'tests/integration/sqlstore/**'
+      - 'tests/integration/providers/utils/kvstore/**'
       - 'uv.lock'
       - 'pyproject.toml'
       - 'requirements.txt'
@@ -69,6 +71,17 @@ jobs:
           POSTGRES_PASSWORD: ogx
         run: |
           uv run pytest -sv tests/integration/providers/utils/sqlstore/
+
+      - name: Run KVStore Connection Resilience Test
+        env:
+          ENABLE_POSTGRES_TESTS: "true"
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: ogx
+          POSTGRES_USER: ogx
+          POSTGRES_PASSWORD: ogx
+        run: |
+          uv run pytest -sv tests/integration/providers/utils/kvstore/
 
       - name: Upload test logs
         if: ${{ always() }}

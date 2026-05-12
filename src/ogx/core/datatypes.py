@@ -27,9 +27,6 @@ from ogx_api import (
     ModelInput,
     ProviderSpec,
     Resource,
-    Safety,
-    Shield,
-    ShieldInput,
     ToolGroup,
     ToolGroupInput,
     ToolRuntime,
@@ -78,12 +75,6 @@ class ModelWithOwner(Model, ResourceWithOwner):
     pass
 
 
-class ShieldWithOwner(Shield, ResourceWithOwner):
-    """A Shield resource extended with ownership information for access control."""
-
-    pass
-
-
 class VectorStoreWithOwner(VectorStore, ResourceWithOwner):
     """A VectorStore resource extended with ownership information for access control."""
 
@@ -96,19 +87,19 @@ class ToolGroupWithOwner(ToolGroup, ResourceWithOwner):
     pass
 
 
-RoutableObject = Model | Shield | VectorStore | ToolGroup
+RoutableObject = Model | VectorStore | ToolGroup
 
 RoutableObjectWithProvider = Annotated[
-    ModelWithOwner | ShieldWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
+    ModelWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | Safety | VectorIO | ToolRuntime
+RoutedProtocol = Inference | VectorIO | ToolRuntime
 
 
-# Example: /inference, /safety
+# Example: /inference, /vector_io
 class AutoRoutedProviderSpec(ProviderSpec):
-    """Provider spec for automatically routed APIs like inference and safety that delegate to a routing table."""
+    """Provider spec for automatically routed APIs like inference and vector_io that delegate to a routing table."""
 
     provider_type: str = "router"
     config_class: str = ""
@@ -121,9 +112,9 @@ class AutoRoutedProviderSpec(ProviderSpec):
     )
 
 
-# Example: /models, /shields
+# Example: /models, /vector_stores
 class RoutingTableProviderSpec(ProviderSpec):
-    """Provider spec for routing table APIs like models and shields that manage resource registries."""
+    """Provider spec for routing table APIs like models and vector_stores that manage resource registries."""
 
     provider_type: str = "routing_table"
     config_class: str = ""
@@ -671,15 +662,6 @@ class VectorStoresConfig(BaseModel):
     )
 
 
-class SafetyConfig(BaseModel):
-    """Configuration for default moderations model."""
-
-    default_shield_id: str | None = Field(
-        default=None,
-        description="ID of the shield to use for when `model` is not specified in the `moderations` API request.",
-    )
-
-
 class QuotaPeriod(StrEnum):
     """Time period for request quota enforcement."""
 
@@ -746,7 +728,6 @@ class RegisteredResources(BaseModel):
     """Registry of resources available in the distribution."""
 
     models: list[ModelInput] = Field(default_factory=list)
-    shields: list[ShieldInput] = Field(default_factory=list)
     vector_stores: list[VectorStoreInput] = Field(default_factory=list)
     tool_groups: list[ToolGroupInput] = Field(default_factory=list, deprecated=True)
 
@@ -765,7 +746,7 @@ class RegisteredResources(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    """Configuration for the HTTP(S) server including TLS, authentication, and quotas."""
+    """Configuration for the HTTP server including TLS and authentication."""
 
     port: int = Field(
         default=8321,
@@ -792,16 +773,6 @@ class ServerConfig(BaseModel):
     host: str | None = Field(
         default=None,
         description="The host the server should listen on",
-    )
-    quota: QuotaConfig | None = Field(
-        default=None,
-        description="Per client quota request configuration",
-    )
-    cors: bool | CORSConfig | None = Field(
-        default=None,
-        description="CORS configuration for cross-origin requests. Can be:\n"
-        "- true: Enable localhost CORS for development\n"
-        "- {allow_origins: [...], allow_methods: [...], ...}: Full configuration",
     )
     workers: int = Field(
         default=1,
@@ -881,11 +852,6 @@ can be instantiated multiple times (with different configs) if necessary.
     vector_stores: VectorStoresConfig | None = Field(
         default=None,
         description="Configuration for vector stores, including default embedding model",
-    )
-
-    safety: SafetyConfig | None = Field(
-        default=None,
-        description="Configuration for default moderations model",
     )
 
     connectors: list[ConnectorInput] = Field(
@@ -973,4 +939,5 @@ can be instantiated multiple times (with different configs) if necessary.
         _ensure_backend(stores.responses, sql_backends, "storage.stores.responses")
         _ensure_backend(stores.prompts, sql_backends, "storage.stores.prompts")
         _ensure_backend(stores.connectors, sql_backends, "storage.stores.connectors")
+        _ensure_backend(stores.vector_stores, sql_backends, "storage.stores.vector_stores")
         return self

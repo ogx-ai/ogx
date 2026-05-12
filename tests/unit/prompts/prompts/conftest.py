@@ -45,7 +45,7 @@ async def temp_prompt_store(tmp_path_factory):
         ),
     )
 
-    # Backends must be registered before PromptServiceImpl constructor calls sqlstore_impl()
+    # Backends must be registered before PromptServiceImpl constructor calls authorized_sqlstore()
     register_kvstore_backends({"kv_test": storage.backends["kv_test"]})
     register_sqlstore_backends({"sql_test": storage.backends["sql_test"]})
 

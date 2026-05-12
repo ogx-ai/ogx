@@ -42,9 +42,6 @@ from ogx_api import (
     ProviderSpec,
     RemoteProviderSpec,
     Responses,
-    Safety,
-    Shields,
-    ShieldsProtocolPrivate,
     ToolGroups,
     ToolGroupsProtocolPrivate,
     ToolRuntime,
@@ -83,8 +80,6 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.vector_io: VectorIO,
         Api.vector_stores: VectorStore,
         Api.models: Models,
-        Api.safety: Safety,
-        Api.shields: Shields,
         Api.tool_groups: ToolGroups,
         Api.tool_runtime: ToolRuntime,
         Api.files: Files,
@@ -134,7 +129,6 @@ def additional_protocols_map() -> dict[Api, Any]:
     return {
         Api.inference: (ModelsProtocolPrivate, Models, Api.models),
         Api.tool_groups: (ToolGroupsProtocolPrivate, ToolGroups, Api.tool_groups),
-        Api.safety: (ShieldsProtocolPrivate, Shields, Api.shields),
     }
 
 

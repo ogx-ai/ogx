@@ -153,8 +153,8 @@ class AuthenticationMiddleware:
                 logger.exception("Error during authentication")
                 return await self._send_auth_error(send, "Authentication service error")
 
-            # Store the client ID in the request scope so that downstream middleware (like QuotaMiddleware)
-            # can identify the requester and enforce per-client rate limits.
+            # Store the client ID in the request scope for downstream use
+            # (e.g., access control, logging, per-client context).
             scope["authenticated_client_id"] = token or validation_result.principal
 
             # Store attributes in request scope

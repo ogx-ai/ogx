@@ -39,7 +39,6 @@ from ogx_api.datatypes import (
     RemoteProviderConfig,
     RemoteProviderSpec,
     RoutingTable,
-    ShieldsProtocolPrivate,
     ToolGroupsProtocolPrivate,
     VectorStoresProtocolPrivate,
 )
@@ -58,7 +57,6 @@ from ogx_api.prompts import Prompts
 from ogx_api.providers import Providers
 from ogx_api.resource import Resource, ResourceType
 from ogx_api.responses import Responses
-from ogx_api.safety import Safety, ShieldStore
 from ogx_api.schema_utils import (
     CallableT,
     ExtraBodyField,
@@ -72,7 +70,6 @@ from ogx_api.schema_utils import (
     register_dynamic_schema_type,
     register_schema,
 )
-from ogx_api.shields import Shield, Shields
 from ogx_api.tools import ToolGroup, ToolGroups, ToolRuntime, ToolStore
 from ogx_api.validators import validate_embeddings_input_is_text
 from ogx_api.vector_io import VectorIO
@@ -94,7 +91,6 @@ __all__ = [
     "RoutingTable",
     # Protocol-private mixins
     "ModelsProtocolPrivate",
-    "ShieldsProtocolPrivate",
     "ToolGroupsProtocolPrivate",
     "VectorStoresProtocolPrivate",
     # Resource base classes
@@ -135,16 +131,12 @@ __all__ = [
     "Prompts",
     "Providers",
     "Responses",
-    "Safety",
-    "ShieldStore",
-    "Shields",
     "ToolGroups",
     "ToolRuntime",
     "ToolStore",
     "VectorIO",
     # Shared resource/value types (canonical home in ogx_api.types)
     "Model",
-    "Shield",
     "ToolGroup",
     "VectorStore",
 ]

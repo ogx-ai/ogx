@@ -109,7 +109,7 @@ jobs:
         id: changed-files
         if: github.event_name == 'pull_request'
         run: |
-          CHANGED=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
+          CHANGED=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
           # Pass as a single-line escaped string for the argument
           {
             echo "files<<EOF"

@@ -76,14 +76,6 @@ Oracle Cloud Infrastructure Generative AI provides access to high-performance AI
 
 Common OCI Generative AI models include access to Meta, Cohere, OpenAI, Grok, and more models.
 
-### Safety: Llama Guard
-
-For content safety and moderation, this distribution uses Meta's LlamaGuard model through the OCI Generative AI service to provide:
-
-- Content filtering and moderation
-- Policy compliance checking
-- Harmful content detection
-
 ### Vector Storage: Multiple Options
 
 The distribution supports several vector storage providers:

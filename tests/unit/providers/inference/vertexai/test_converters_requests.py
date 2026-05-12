@@ -143,7 +143,7 @@ class TestConvertFinishReason:
         [
             ("STOP", "stop"),
             ("MAX_TOKENS", "length"),
-            ("SAFETY", "content_filter"),
+            ("FILTERED_CONTENT", "content_filter"),
             ("RECITATION", "content_filter"),
             ("LANGUAGE", "content_filter"),
             ("BLOCKLIST", "content_filter"),

@@ -48,16 +48,13 @@ class Setup(BaseModel):
 SETUP_DEFINITIONS: dict[str, Setup] = {
     "ollama": Setup(
         name="ollama",
-        description="Local Ollama provider with text + safety models",
+        description="Local Ollama provider with text models",
         env={
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
-            "SAFETY_MODEL": "ollama/llama-guard3:1b",
         },
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
             "embedding_model": "ollama/nomic-embed-text:v1.5",
-            "safety_model": "ollama/llama-guard3:1b",
-            "safety_shield": "llama-guard",
         },
     ),
     "ollama-vision": Setup(
@@ -76,7 +73,6 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="Server-mode tests with Postgres-backed persistence",
         env={
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
-            "SAFETY_MODEL": "ollama/llama-guard3:1b",
             "POSTGRES_HOST": "127.0.0.1",
             "POSTGRES_PORT": "5432",
             "POSTGRES_DB": "ogx",
@@ -87,8 +83,6 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
             "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
-            "safety_model": "ollama/llama-guard3:1b",
-            "safety_shield": "llama-guard",
         },
     ),
     "vllm": Setup(

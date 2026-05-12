@@ -17,7 +17,6 @@ The starter distribution consists of the following provider configurations:
 | eval | `inline::builtin`                                                                                                                                                                                                                                                                                                                       |
 | files | `inline::localfs`                                                                                                                                                                                                                                                                                                                              |
 | inference | `remote::openai`, `remote::fireworks`, `remote::together`, `remote::ollama`, `remote::anthropic`, `remote::gemini`, `remote::groq`, `remote::sambanova`, `remote::vllm`, `remote::cerebras`, `remote::llama-openai-compat`, `remote::nvidia`, `inline::sentence-transformers` |
-| safety | `inline::llama-guard`                                                                                                                                                                                                                                                                                                                          |
 | scoring | `inline::basic`, `inline::llm-as-judge`, `inline::braintrust`                                                                                                                                                                                                                                                                                  |
 | tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol`                                                                                                                                                                                                                                       |
 | vector_io | `inline::faiss`, `inline::sqlite-vec`, `inline::milvus`, `remote::chromadb`, `remote::pgvector`, `remote::qdrant`, `remote::weaviate`, `remote::elasticsearch`, `remote::infinispan`                                                                                                                                                                 |
@@ -147,8 +146,6 @@ export CHROMADB_URL=http://localhost:8000/v1   # enables the ChromaDB vector pro
 export PGVECTOR_DB=ogx_db   # enables the PGVector vector provider
 export INFINISPAN_URL=http://localhost:11222   # enables the Infinispan vector provider
 ```
-
-This distribution comes with a default "llama-guard" shield that can be enabled by setting the `SAFETY_MODEL` environment variable to point to an appropriate Llama Guard model id. Use `ogx-client models list` to see the list of available models.
 
 ## Running
 
