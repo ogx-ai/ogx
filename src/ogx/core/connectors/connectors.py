@@ -60,10 +60,11 @@ class ConnectorServiceImpl(Connectors):
         if not connectors_ref:
             raise ServiceNotEnabledError("storage.stores.connectors")
 
-        self.sql_store = authorized_sqlstore(connectors_ref, self.policy)
+        self._connectors_ref = connectors_ref
 
     async def initialize(self) -> None:
         """Initialize the connector service."""
+        self.sql_store = await authorized_sqlstore(self._connectors_ref, self.policy)
         await self.sql_store.create_table(
             TABLE_CONNECTORS,
             {

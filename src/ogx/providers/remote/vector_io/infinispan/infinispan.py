@@ -575,7 +575,7 @@ class InfinispanVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPr
         if self.config.metadata_store:
             from ogx.core.storage.sqlstore import authorized_sqlstore
 
-            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         # Setup HTTP client with authentication
         auth: httpx.BasicAuth | httpx.DigestAuth | None = None

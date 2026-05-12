@@ -29,7 +29,7 @@ async def provider():
         config = ReferenceBatchesImplConfig(sqlstore=SqlStoreReference(backend=backend_name, table_name="batches"))
 
         # Create sql_store and mock APIs
-        base_sql_store = _sqlstore_impl(config.sqlstore)
+        base_sql_store = await _sqlstore_impl(config.sqlstore)
         sql_store = AuthorizedSqlStore(base_sql_store, policy=[])
         mock_inference = AsyncMock()
         mock_files = AsyncMock()

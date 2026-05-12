@@ -61,9 +61,10 @@ class PromptServiceImpl(Prompts):
         if not prompts_ref:
             raise ServiceNotEnabledError("storage.stores.prompts")
 
-        self.sql_store = authorized_sqlstore(prompts_ref, self.policy)
+        self._prompts_ref = prompts_ref
 
     async def initialize(self) -> None:
+        self.sql_store = await authorized_sqlstore(self._prompts_ref, self.policy)
         await self.sql_store.create_table(
             TABLE_PROMPTS,
             {
