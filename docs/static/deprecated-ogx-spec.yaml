@@ -3196,7 +3196,6 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
-          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -3219,9 +3218,6 @@ components:
           title: Temperature
         text:
           $ref: '#/components/schemas/OpenAIResponseText'
-          default:
-            format:
-              type: text
         top_p:
           type: number
           title: Top P
@@ -3286,8 +3282,10 @@ components:
           title: OpenAIResponseInputToolChoiceMode
         truncation:
           anyOf:
-          - type: string
+          - $ref: '#/components/schemas/ResponseTruncation'
+            title: ResponseTruncation
           - type: 'null'
+          title: ResponseTruncation
         usage:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseUsage'
@@ -3617,7 +3615,6 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
-          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -3640,9 +3637,6 @@ components:
           title: Temperature
         text:
           $ref: '#/components/schemas/OpenAIResponseText'
-          default:
-            format:
-              type: text
         top_p:
           type: number
           title: Top P
@@ -3707,8 +3701,10 @@ components:
           title: OpenAIResponseInputToolChoiceMode
         truncation:
           anyOf:
-          - type: string
+          - $ref: '#/components/schemas/ResponseTruncation'
+            title: ResponseTruncation
           - type: 'null'
+          title: ResponseTruncation
         usage:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseUsage'
@@ -7539,6 +7535,16 @@ components:
             - high
             - xhigh
           - type: 'null'
+        generate_summary:
+          anyOf:
+          - type: string
+            enum:
+            - auto
+            - concise
+            - detailed
+          - type: 'null'
+          description: "Deprecated: use 'summary' instead."
+          deprecated: true
         summary:
           anyOf:
           - type: string
@@ -7804,6 +7810,13 @@ components:
 
         Returns a list of chunks ready for storage in vector databases.
         Each chunk contains the content and metadata.
+    ResponseTruncation:
+      type: string
+      enum:
+      - auto
+      - disabled
+      title: ResponseTruncation
+      description: Controls how the service truncates input when it exceeds the model context window.
     SearchRankingOptions:
       properties:
         ranker:
