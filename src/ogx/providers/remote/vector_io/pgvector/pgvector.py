@@ -13,7 +13,7 @@ from typing import Any
 import asyncpg
 from numpy.typing import NDArray
 from pgvector.asyncpg import register_vector
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
 
 from ogx.core.storage.kvstore import kvstore_impl
 from ogx.log import get_logger
