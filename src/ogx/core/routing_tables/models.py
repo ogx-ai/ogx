@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from ogx.core.access_control.access_control import is_action_allowed
@@ -16,7 +17,11 @@ from ogx.core.request_headers import PROVIDER_DATA_VAR, NeedsRequestProviderData
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
 from ogx_api import (
+    AnthropicListModelsResponse,
+    AnthropicModelInfo,
     GetModelRequest,
+    GoogleListModelsResponse,
+    GoogleModelInfo,
     ListModelsResponse,
     Model,
     ModelNotFoundError,
@@ -187,32 +192,19 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
 
         return dynamic_models
 
-    async def list_models(self) -> ListModelsResponse:
-        # Get models from registry
+    async def _get_all_models(self) -> list[Model]:
+        """Fetch all models from registry and provider_data, deduplicating by identifier."""
         registry_models = await self.get_all_with_type("model")
-
-        # Get additional models available via provider_data (user-specific, not cached)
         dynamic_models = await self._get_dynamic_models_from_provider_data()
-
-        # Combine, avoiding duplicates (registry takes precedence)
         registry_identifiers = {m.identifier for m in registry_models}
         unique_dynamic_models = [m for m in dynamic_models if m.identifier not in registry_identifiers]
+        return registry_models + unique_dynamic_models
 
-        return ListModelsResponse(data=registry_models + unique_dynamic_models)
+    async def list_models(self) -> ListModelsResponse:
+        return ListModelsResponse(data=await self._get_all_models())
 
     async def openai_list_models(self) -> OpenAIListModelsResponse:
-        # Get models from registry
-        registry_models = await self.get_all_with_type("model")
-
-        # Get additional models available via provider_data (user-specific, not cached)
-        dynamic_models = await self._get_dynamic_models_from_provider_data()
-
-        # Combine, avoiding duplicates (registry takes precedence)
-        registry_identifiers = {m.identifier for m in registry_models}
-        unique_dynamic_models = [m for m in dynamic_models if m.identifier not in registry_identifiers]
-
-        all_models = registry_models + unique_dynamic_models
-
+        all_models = await self._get_all_models()
         openai_models = [
             OpenAIModel(
                 id=model.identifier,
@@ -229,6 +221,69 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
             for model in all_models
         ]
         return OpenAIListModelsResponse(data=openai_models)
+
+    async def anthropic_list_models(
+        self,
+        *,
+        before_id: str | None = None,
+        after_id: str | None = None,
+        limit: int | None = None,
+    ) -> AnthropicListModelsResponse:
+        if before_id and after_id:
+            raise ValueError("Failed to list models: before_id and after_id are mutually exclusive.")
+
+        all_models = sorted(await self._get_all_models(), key=lambda model: model.identifier)
+        all_ids = [model.identifier for model in all_models]
+
+        page_limit = limit if limit is not None else 20
+        if page_limit < 1:
+            raise ValueError("Failed to list models: limit must be at least 1.")
+
+        if after_id is not None:
+            if after_id not in all_ids:
+                raise ValueError("Failed to list models: after_id was not found.")
+            start_index = all_ids.index(after_id) + 1
+            end_index = start_index + page_limit
+            page_models = all_models[start_index:end_index]
+            has_more = end_index < len(all_models)
+        elif before_id is not None:
+            if before_id not in all_ids:
+                raise ValueError("Failed to list models: before_id was not found.")
+            end_index = all_ids.index(before_id)
+            start_index = max(0, end_index - page_limit)
+            page_models = all_models[start_index:end_index]
+            has_more = start_index > 0
+        else:
+            page_models = all_models[:page_limit]
+            has_more = len(all_models) > page_limit
+
+        anthropic_models = [
+            AnthropicModelInfo(
+                id=model.identifier,
+                display_name=model.identifier,
+                created_at=datetime.fromtimestamp(model.created, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            for model in page_models
+        ]
+        return AnthropicListModelsResponse(
+            data=anthropic_models,
+            has_more=has_more,
+            first_id=anthropic_models[0].id if anthropic_models else None,
+            last_id=anthropic_models[-1].id if anthropic_models else None,
+        )
+
+    async def google_list_models(self) -> GoogleListModelsResponse:
+        # Always return OGX identifiers under the Gemini-style "models/{id}" prefix
+        # so list -> retrieve round-trips for all providers (Gemini, Vertex, etc.).
+        all_models = await self._get_all_models()
+        google_models = [
+            GoogleModelInfo(
+                name=f"models/{model.identifier}",
+                display_name=model.identifier,
+            )
+            for model in all_models
+        ]
+        return GoogleListModelsResponse(models=google_models)
 
     async def get_model(self, request_or_model_id: GetModelRequest | str) -> Model:
         # Support both the public Models API (GetModelRequest) and internal ModelStore interface (string)
