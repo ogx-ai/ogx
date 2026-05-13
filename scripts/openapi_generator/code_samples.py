@@ -435,7 +435,7 @@ client = genai.Client(
         api_version="v1",
     ),
 )
-model = client.models.get(model="meta-llama/Llama-3.1-8B-Instruct")
+model = client.models.get(model="llama-3.3-70b")
 print(model.name)
 """,
     ("/v1alpha/interactions", "post"): """\
@@ -489,7 +489,7 @@ client = Anthropic(
     api_key="fake",
 )
 
-model = client.models.retrieve("meta-llama/Llama-3.1-8B-Instruct")
+model = client.models.retrieve("llama-3.3-70b")
 print(model.id)""",
         },
     ],
