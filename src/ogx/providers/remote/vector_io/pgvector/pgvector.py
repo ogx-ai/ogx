@@ -4,15 +4,15 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import heapq
+import json
 import re
 from typing import Any
 
-import psycopg2
+import asyncpg
 from numpy.typing import NDArray
-from psycopg2 import sql
-from psycopg2.extensions import cursor
-from psycopg2.extras import Json, execute_values
+from pgvector.asyncpg import register_vector
 from pydantic import BaseModel
 
 from ogx.core.storage.kvstore import kvstore_impl
@@ -67,70 +67,75 @@ _PG_SQL_OPS: dict[str, str] = {
 _VALID_KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
-def check_extension_version(cur):
+def _quote_ident(name: str) -> str:
+    """Quote a PostgreSQL identifier (table/index name) per SQL standard."""
+    return '"' + name.replace('"', '""') + '"'
+
+
+async def check_extension_version(conn: asyncpg.Connection) -> str | None:
     """Query the installed pgvector extension version.
 
     Args:
-        cur: database cursor
+        conn: asyncpg connection
 
     Returns:
         Version string if the extension is installed, otherwise None
     """
-    cur.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
-    result = cur.fetchone()
-    return result[0] if result else None
+    return await conn.fetchval("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
 
 
-def create_vector_extension(cur: cursor) -> None:
+async def create_vector_extension(conn: asyncpg.Connection) -> None:
     """Create the pgvector extension in the database.
 
     Args:
-        cur: database cursor
+        conn: asyncpg connection
     """
     try:
         log.info("Vector extension not found, creating...")
-        cur.execute("CREATE EXTENSION vector;")
+        await conn.execute("CREATE EXTENSION vector;")
         log.info("Vector extension created successfully")
-        log.info(f"Vector extension version: {check_extension_version(cur)}")
+        version = await check_extension_version(conn)
+        log.info("Vector extension version", version=version)
 
-    except psycopg2.Error as e:
+    except asyncpg.PostgresError as e:
         raise RuntimeError(f"Failed to create vector extension for PGVector: {e}") from e
 
 
-def upsert_models(conn, keys_models: list[tuple[str, BaseModel]]):
+async def upsert_models(pool: asyncpg.Pool, keys_models: list[tuple[str, BaseModel]]) -> None:
     """Insert or update serialized Pydantic models in the metadata_store table.
 
     Args:
-        conn: active PostgreSQL connection
+        pool: asyncpg connection pool
         keys_models: list of (key, model) tuples to upsert
     """
-    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-        query = sql.SQL(
+    async with pool.acquire() as conn:
+        values = [(key, json.dumps(model.model_dump())) for key, model in keys_models]
+        await conn.executemany(
             """
             INSERT INTO metadata_store (key, data)
-            VALUES %s
+            VALUES ($1, $2::jsonb)
             ON CONFLICT (key) DO UPDATE
             SET data = EXCLUDED.data
-        """
+            """,
+            values,
         )
 
-        values = [(key, Json(model.model_dump())) for key, model in keys_models]
-        execute_values(cur, query, values, template="(%s, %s)")
 
-
-def remove_vector_store_metadata(conn: psycopg2.extensions.connection, vector_store_id: str) -> None:
-    """
-    Performs removal of vector store metadata from PGVector metadata_store table when vector store is unregistered
+async def remove_vector_store_metadata(pool: asyncpg.Pool, vector_store_id: str) -> None:
+    """Performs removal of vector store metadata from PGVector metadata_store table when vector store is unregistered.
 
     Args:
-        conn: active PostgreSQL connection
+        pool: asyncpg connection pool
         vector_store_id: identifier of VectorStore resource
     """
     try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM metadata_store WHERE key = %s", (vector_store_id,))
-            if cur.rowcount > 0:
-                log.info(f"Removed metadata for vector store '{vector_store_id}' from PGVector metadata_store table.")
+        async with pool.acquire() as conn:
+            result = await conn.execute("DELETE FROM metadata_store WHERE key = $1", vector_store_id)
+            if result and result != "DELETE 0":
+                log.info(
+                    "Removed metadata for vector store from PGVector metadata_store table",
+                    vector_store_id=vector_store_id,
+                )
 
     except Exception as e:
         raise RuntimeError(
@@ -167,14 +172,14 @@ class PGVectorIndex(EmbeddingIndex):
         self,
         vector_store: VectorStore,
         dimension: int,
-        conn: psycopg2.extensions.connection,
+        pool: asyncpg.Pool,
         distance_metric: str,
         vector_index: PGVectorIndexConfig,
         kvstore: KVStore | None = None,
     ):
         self.vector_store = vector_store
         self.dimension = dimension
-        self.conn = conn
+        self.pool = pool
         self.kvstore = kvstore
         self.check_distance_metric_availability(distance_metric)
         self.distance_metric = distance_metric
@@ -183,37 +188,35 @@ class PGVectorIndex(EmbeddingIndex):
 
     async def initialize(self) -> None:
         try:
-            with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            async with self.pool.acquire() as conn:
                 # Sanitize the table name by replacing hyphens with underscores
                 # SQL doesn't allow hyphens in table names, and vector_store.identifier may contain hyphens
                 # when created with patterns like "test-vector-db-{uuid4()}"
                 sanitized_identifier = sanitize_collection_name(self.vector_store.identifier)
                 self.table_name = f"vs_{sanitized_identifier}"
-                self._table_sql = sql.Identifier(self.table_name)
+                self._quoted_table = _quote_ident(self.table_name)
 
-                cur.execute(
-                    sql.SQL(
-                        """
-                    CREATE TABLE IF NOT EXISTS {} (
+                await conn.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {self._quoted_table} (
                         id TEXT PRIMARY KEY,
                         document JSONB,
-                        embedding vector({}),
+                        embedding vector({self.dimension}),
                         content_text TEXT,
                         tokenized_content TSVECTOR
                     )
-                """
-                    ).format(self._table_sql, sql.Literal(self.dimension))
+                    """
                 )
 
                 # pgvector's embedding dimensions requirement to create an index for Approximate Nearest Neighbor (ANN) search is up to 2,000 dimensions for column with type vector
                 if self.dimension <= self.MAX_EMBEDDING_DIMENSION_FOR_HNSW_AND_IVFFLAT_INDEX:
                     if self.vector_index.type == PGVectorIndexType.HNSW:
-                        await self.create_hnsw_vector_index(cur)
+                        await self.create_hnsw_vector_index(conn)
 
                     # Create the index only after the table has some data (https://github.com/pgvector/pgvector?tab=readme-ov-file#ivfflat)
                     elif (
                         self.vector_index.type == PGVectorIndexType.IVFFlat
-                        and not await self.check_conflicting_vector_index_exists(cur)
+                        and not await self.check_conflicting_vector_index_exists(conn)
                     ):
                         log.info(
                             f"Creation of {PGVectorIndexType.IVFFlat} vector index in vector_store: {self.vector_store.identifier} was deferred. It will be created when the table has some data."
@@ -227,7 +230,7 @@ class PGVectorIndex(EmbeddingIndex):
                         "PGVector requires embedding dimensions are up to 2,000 to successfully create a vector index."
                     )
 
-                await self.create_gin_index(cur)
+                await self.create_gin_index(conn)
 
         except Exception as e:
             log.exception(f"Error creating PGVectorIndex for vector_store: {self.vector_store.identifier}")
@@ -243,39 +246,38 @@ class PGVectorIndex(EmbeddingIndex):
             values.append(
                 (
                     f"{chunk.chunk_id}",
-                    Json(chunk.model_dump()),
-                    chunk.embedding,  # Already a list[float]
+                    json.dumps(chunk.model_dump()),
+                    chunk.embedding,
                     content_text,
-                    content_text,  # Pass content_text twice - once for content_text column, once for to_tsvector function. Eg. to_tsvector(content_text) = tokenized_content
+                    content_text,
                 )
             )
 
-        query = sql.SQL(
-            """
-        INSERT INTO {} (id, document, embedding, content_text, tokenized_content)
-        VALUES %s
-        ON CONFLICT (id) DO UPDATE SET
-            embedding = EXCLUDED.embedding,
-            document = EXCLUDED.document,
-            content_text = EXCLUDED.content_text,
-            tokenized_content = EXCLUDED.tokenized_content
-    """
-        ).format(self._table_sql)
-        with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            execute_values(cur, query, values, template="(%s, %s, %s::vector, %s, to_tsvector('english', %s))")
+        async with self.pool.acquire() as conn:
+            await conn.executemany(
+                f"""
+                INSERT INTO {self._quoted_table} (id, document, embedding, content_text, tokenized_content)
+                VALUES ($1, $2::jsonb, $3::vector, $4, to_tsvector('english', $5))
+                ON CONFLICT (id) DO UPDATE SET
+                    embedding = EXCLUDED.embedding,
+                    document = EXCLUDED.document,
+                    content_text = EXCLUDED.content_text,
+                    tokenized_content = EXCLUDED.tokenized_content
+                """,
+                values,
+            )
 
             # Create the IVFFlat index only after the table has some data (https://github.com/pgvector/pgvector?tab=readme-ov-file#ivfflat)
             if (
                 self.vector_index.type == PGVectorIndexType.IVFFlat
                 and self.dimension <= self.MAX_EMBEDDING_DIMENSION_FOR_HNSW_AND_IVFFLAT_INDEX
             ):
-                await self.create_ivfflat_vector_index(cur)
+                await self.create_ivfflat_vector_index(conn)
 
     async def query_vector(
         self, embedding: NDArray, k: int, score_threshold: float, filters: Any = None
     ) -> QueryChunksResponse:
-        """
-        Performs vector similarity search using PostgreSQL's search function. Default distance metric is COSINE.
+        """Performs vector similarity search using PostgreSQL's search function. Default distance metric is COSINE.
 
         Args:
             embedding: The query embedding vector
@@ -286,49 +288,44 @@ class PGVectorIndex(EmbeddingIndex):
         Returns:
             QueryChunksResponse with combined results
         """
-        filter_clause, filter_params = self._translate_filters(filters)
+        filter_clause, filter_params, next_idx = self._translate_filters(filters, param_idx=2)
 
         pgvector_search_function = self.get_pgvector_search_function()
 
-        with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        async with self.pool.acquire() as conn:
             # Specify the number of probes to allow PGVector to use Index Scan using IVFFlat index if it was configured (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options-1)
             if self.vector_index.type == PGVectorIndexType.IVFFlat:
-                cur.execute(
-                    f"""
-                    SET ivfflat.probes = {self.vector_index.probes};
-                """
-                )
+                await conn.execute(f"SET ivfflat.probes = {self.vector_index.probes}")
 
             # Specify the max size of max heap that holds best candidates when traversing the graph (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options)
             elif self.vector_index.type == PGVectorIndexType.HNSW:
-                cur.execute(
-                    f"""
-                    SET hnsw.ef_search = {self.vector_index.ef_search};
-                """
-                )
+                await conn.execute(f"SET hnsw.ef_search = {self.vector_index.ef_search}")
 
-            where = sql.SQL("WHERE {}").format(sql.SQL(filter_clause)) if filter_clause else sql.SQL("")
+            where = f"WHERE {filter_clause}" if filter_clause else ""
 
-            cur.execute(
-                sql.SQL(
-                    """
-            SELECT document, embedding {} %s::vector AS distance
-            FROM {}
-            {}
-            ORDER BY distance
-            LIMIT %s
-        """
-                ).format(sql.SQL(pgvector_search_function), self._table_sql, where),
-                (embedding.tolist(), *filter_params, k),
+            rows = await conn.fetch(
+                f"""
+                SELECT document, embedding {pgvector_search_function} $1::vector AS distance
+                FROM {self._quoted_table}
+                {where}
+                ORDER BY distance
+                LIMIT ${next_idx}
+                """,
+                embedding.tolist(),
+                *filter_params,
+                k,
             )
-            results = cur.fetchall()
 
             chunks = []
             scores = []
-            for doc, dist in results:
+            for row in rows:
+                dist = row["distance"]
                 score = 1.0 / float(dist) if dist != 0 else float("inf")
                 if score < score_threshold:
                     continue
+                doc = row["document"]
+                if isinstance(doc, str):
+                    doc = json.loads(doc)
                 chunks.append(load_embedded_chunk_with_backward_compat(doc))
                 scores.append(score)
 
@@ -341,42 +338,45 @@ class PGVectorIndex(EmbeddingIndex):
         score_threshold: float,
         filters: ComparisonFilter | CompoundFilter | None = None,
     ) -> QueryChunksResponse:
-        """
-        Performs keyword-based search using PostgreSQL's full-text search with ts_rank scoring.
+        """Performs keyword-based search using PostgreSQL's full-text search with ts_rank scoring.
 
         Args:
             query_string: The text query for keyword search
             k: Number of results to return
             score_threshold: Minimum similarity score threshold
+            filters: Optional filters for metadata-based filtering
 
         Returns:
             QueryChunksResponse with combined results
         """
-        filter_clause, filter_params = self._translate_filters(filters)
+        filter_clause, filter_params, next_idx = self._translate_filters(filters, param_idx=3)
 
-        with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            # Use plainto_tsquery to handle user input safely and ts_rank for relevance scoring
-            filter_sql = sql.SQL(" AND ({})").format(sql.SQL(filter_clause)) if filter_clause else sql.SQL("")
+        async with self.pool.acquire() as conn:
+            filter_sql = f" AND ({filter_clause})" if filter_clause else ""
 
-            cur.execute(
-                sql.SQL(
-                    """
-            SELECT document, ts_rank(tokenized_content, plainto_tsquery('english', %s)) AS score
-            FROM {}
-            WHERE tokenized_content @@ plainto_tsquery('english', %s){}
-            ORDER BY score DESC
-            LIMIT %s
-        """
-                ).format(self._table_sql, filter_sql),
-                (query_string, query_string, *filter_params, k),
+            rows = await conn.fetch(
+                f"""
+                SELECT document, ts_rank(tokenized_content, plainto_tsquery('english', $1)) AS score
+                FROM {self._quoted_table}
+                WHERE tokenized_content @@ plainto_tsquery('english', $2){filter_sql}
+                ORDER BY score DESC
+                LIMIT ${next_idx}
+                """,
+                query_string,
+                query_string,
+                *filter_params,
+                k,
             )
-            results = cur.fetchall()
 
             chunks = []
             scores = []
-            for doc, score in results:
+            for row in rows:
+                score = row["score"]
                 if score < score_threshold:
                     continue
+                doc = row["document"]
+                if isinstance(doc, str):
+                    doc = json.loads(doc)
                 chunks.append(load_embedded_chunk_with_backward_compat(doc))
                 scores.append(float(score))
 
@@ -392,8 +392,7 @@ class PGVectorIndex(EmbeddingIndex):
         reranker_params: dict[str, Any] | None = None,
         filters: ComparisonFilter | CompoundFilter | None = None,
     ) -> QueryChunksResponse:
-        """
-        Hybrid search combining vector similarity and keyword search using configurable reranking.
+        """Hybrid search combining vector similarity and keyword search using configurable reranking.
 
         Args:
             embedding: The query embedding vector
@@ -402,6 +401,7 @@ class PGVectorIndex(EmbeddingIndex):
             score_threshold: Minimum similarity score threshold
             reranker_type: Type of reranker to use ("rrf" or "weighted")
             reranker_params: Parameters for the reranker
+            filters: Optional filters for metadata-based filtering
 
         Returns:
             QueryChunksResponse with combined results
@@ -446,31 +446,36 @@ class PGVectorIndex(EmbeddingIndex):
 
         return QueryChunksResponse(chunks=chunks, scores=scores)
 
-    def _translate_filters(self, filters: ComparisonFilter | CompoundFilter | None) -> tuple[str, list[Any]]:
-        """Translate OpenAI-compatible filters to PostgreSQL WHERE clause with parameters.
+    def _translate_filters(
+        self, filters: ComparisonFilter | CompoundFilter | None, param_idx: int = 1
+    ) -> tuple[str, list[Any], int]:
+        """Translate OpenAI-compatible filters to PostgreSQL WHERE clause with $N parameters.
 
         Args:
             filters: The filter to translate (ComparisonFilter or CompoundFilter)
+            param_idx: Starting parameter index for $N placeholders
 
         Returns:
-            A tuple of (where_clause, parameters) where where_clause is a SQL condition string
-            and parameters is a list of values to be bound to the query.
+            A tuple of (where_clause, parameters, next_idx) where where_clause is a SQL condition string,
+            parameters is a list of values to be bound, and next_idx is the next available parameter index.
         """
         if filters is None:
-            return "", []
+            return "", [], param_idx
 
-        return self._translate_single_filter(filters)
+        return self._translate_single_filter(filters, param_idx)
 
-    def _translate_single_filter(self, filter_obj: ComparisonFilter | CompoundFilter) -> tuple[str, list[Any]]:
+    def _translate_single_filter(
+        self, filter_obj: ComparisonFilter | CompoundFilter, param_idx: int
+    ) -> tuple[str, list[Any], int]:
         """Translate a single filter to SQL."""
         if isinstance(filter_obj, ComparisonFilter):
-            return self._translate_comparison_filter(filter_obj)
+            return self._translate_comparison_filter(filter_obj, param_idx)
         elif isinstance(filter_obj, CompoundFilter):
-            return self._translate_compound_filter(filter_obj)
+            return self._translate_compound_filter(filter_obj, param_idx)
         else:
             raise ValueError(f"Unknown filter type: {type(filter_obj)}")
 
-    def _translate_comparison_filter(self, filter_obj: ComparisonFilter) -> tuple[str, list[Any]]:
+    def _translate_comparison_filter(self, filter_obj: ComparisonFilter, param_idx: int) -> tuple[str, list[Any], int]:
         """Translate a comparison filter to PostgreSQL WHERE clause using JSONB operators."""
         key, value, op_type = filter_obj.key, filter_obj.value, filter_obj.type
 
@@ -485,54 +490,53 @@ class PGVectorIndex(EmbeddingIndex):
             sql_op = _PG_SQL_OPS[op_type]
             # Check bool before int since bool is a subclass of int in Python
             if isinstance(value, bool):
-                return f"({expr})::boolean {sql_op} %s", [value]
+                return f"({expr})::boolean {sql_op} ${param_idx}", [value], param_idx + 1
             elif isinstance(value, int | float):
-                return f"({expr})::numeric {sql_op} %s", [value]
+                return f"({expr})::numeric {sql_op} ${param_idx}", [value], param_idx + 1
             else:
-                return f"{expr} {sql_op} %s", [value]
+                return f"{expr} {sql_op} ${param_idx}", [value], param_idx + 1
         elif op_type == "in":
             if not isinstance(value, list):
                 raise ValueError(f"'in' filter requires a list value, got {type(value)}")
-            placeholders = ", ".join("%s" for _ in value)
-            return f"{expr} IN ({placeholders})", [str(v) for v in value]
+            placeholders = ", ".join(f"${param_idx + i}" for i in range(len(value)))
+            return f"{expr} IN ({placeholders})", [str(v) for v in value], param_idx + len(value)
         elif op_type == "nin":
             if not isinstance(value, list):
                 raise ValueError(f"'nin' filter requires a list value, got {type(value)}")
-            placeholders = ", ".join("%s" for _ in value)
-            return f"{expr} NOT IN ({placeholders})", [str(v) for v in value]
+            placeholders = ", ".join(f"${param_idx + i}" for i in range(len(value)))
+            return f"{expr} NOT IN ({placeholders})", [str(v) for v in value], param_idx + len(value)
         else:
             raise ValueError(f"Unknown comparison operator: {op_type}")
 
-    def _translate_compound_filter(self, filter_obj: CompoundFilter) -> tuple[str, list[Any]]:
+    def _translate_compound_filter(self, filter_obj: CompoundFilter, param_idx: int) -> tuple[str, list[Any], int]:
         """Translate a compound filter (and/or) to PostgreSQL WHERE clause."""
         if not filter_obj.filters:
-            return "", []
+            return "", [], param_idx
 
         clauses = []
         params: list[Any] = []
 
         for sub_filter in filter_obj.filters:
-            clause, sub_params = self._translate_single_filter(sub_filter)
+            clause, sub_params, param_idx = self._translate_single_filter(sub_filter, param_idx)
             if clause:
                 clauses.append(f"({clause})")
                 params.extend(sub_params)
 
         if not clauses:
-            return "", []
+            return "", [], param_idx
 
         operator = " AND " if filter_obj.type == "and" else " OR "
-        return operator.join(clauses), params
+        return operator.join(clauses), params, param_idx
 
     async def delete(self):
-        with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            cur.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(self._table_sql))
+        async with self.pool.acquire() as conn:
+            await conn.execute(f"DROP TABLE IF EXISTS {self._quoted_table}")
 
     async def delete_chunks(self, chunks_for_deletion: list[ChunkForDeletion]) -> None:
-        """Remove a chunk from the PostgreSQL table."""
+        """Remove chunks from the PostgreSQL table."""
         chunk_ids = [c.chunk_id for c in chunks_for_deletion]
-        with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            # Fix: Use proper tuple parameter binding with explicit array cast
-            cur.execute(sql.SQL("DELETE FROM {} WHERE id = ANY(%s::text[])").format(self._table_sql), (chunk_ids,))
+        async with self.pool.acquire() as conn:
+            await conn.execute(f"DELETE FROM {self._quoted_table} WHERE id = ANY($1::text[])", chunk_ids)
 
     def get_pgvector_index_operator_class(self) -> str:
         """Get the pgvector index operator class for the current distance metric.
@@ -561,65 +565,57 @@ class PGVectorIndex(EmbeddingIndex):
                 f"Supported metrics are: {', '.join(supported_metrics)}"
             )
 
-    async def create_hnsw_vector_index(self, cur: cursor) -> None:
-        """Create PGVector HNSW vector index for Approximate Nearest Neighbor (ANN) search
+    async def create_hnsw_vector_index(self, conn: asyncpg.Connection) -> None:
+        """Create PGVector HNSW vector index for Approximate Nearest Neighbor (ANN) search.
 
         Args:
-            cur: PostgreSQL cursor
+            conn: asyncpg connection
 
         Raises:
             RuntimeError: If the error occurred when creating vector index in PGVector
         """
-
         # prevents from creating index for the table that already has conflicting index (HNSW or IVFFlat)
-        if await self.check_conflicting_vector_index_exists(cur):
+        if await self.check_conflicting_vector_index_exists(conn):
             return
 
         try:
             index_operator_class = self.get_pgvector_index_operator_class()
+            index_name = _quote_ident(f"{self.table_name}_hnsw_idx")
 
             # Create HNSW (Hierarchical Navigable Small Worlds) index on embedding column to allow efficient and performant vector search in pgvector
             # HNSW finds the approximate nearest neighbors by only calculating distance metric for vectors it visits during graph traversal instead of processing all vectors
-            cur.execute(
-                sql.SQL(
-                    """
-                CREATE INDEX IF NOT EXISTS {}
-                ON {} USING hnsw(embedding {}) WITH (m = {}, ef_construction = {});
-            """
-                ).format(
-                    sql.Identifier(f"{self.table_name}_hnsw_idx"),
-                    self._table_sql,
-                    sql.SQL(index_operator_class),
-                    sql.Literal(self.vector_index.m),
-                    sql.Literal(self.vector_index.ef_construction),
-                )
+            await conn.execute(
+                f"""
+                CREATE INDEX IF NOT EXISTS {index_name}
+                ON {self._quoted_table} USING hnsw(embedding {index_operator_class})
+                WITH (m = {self.vector_index.m}, ef_construction = {self.vector_index.ef_construction});
+                """
             )
             log.info(
                 f"{PGVectorIndexType.HNSW} vector index was created with parameters m = {self.vector_index.m}, ef_construction = {self.vector_index.ef_construction} for vector_store: {self.vector_store.identifier}."
             )
 
-        except psycopg2.Error as e:
+        except asyncpg.PostgresError as e:
             raise RuntimeError(
                 f"Failed to create {PGVectorIndexType.HNSW} vector index for vector_store: {self.vector_store.identifier}: {e}"
             ) from e
 
-    async def create_ivfflat_vector_index(self, cur: cursor) -> None:
-        """Create PGVector IVFFlat vector index for Approximate Nearest Neighbor (ANN) search
+    async def create_ivfflat_vector_index(self, conn: asyncpg.Connection) -> None:
+        """Create PGVector IVFFlat vector index for Approximate Nearest Neighbor (ANN) search.
 
         Args:
-            cur: PostgreSQL cursor
+            conn: asyncpg connection
 
         Raises:
             RuntimeError: If the error occurred when creating vector index in PGVector
         """
-
         # prevents from creating index for the table that already has conflicting index (HNSW or IVFFlat)
-        if await self.check_conflicting_vector_index_exists(cur):
+        if await self.check_conflicting_vector_index_exists(conn):
             return
 
         # don't create index too early as it decreases a performance (https://github.com/pgvector/pgvector?tab=readme-ov-file#ivfflat)
         # create IVFFLAT index only if vector store has rows >= lists * 1000
-        if await self.fetch_number_of_records(cur) < self.vector_index.lists * 1000:
+        if await self.fetch_number_of_records(conn) < self.vector_index.lists * 1000:
             log.info(
                 f"IVFFlat index wasn't created for vector_store {self.vector_store.identifier} because table doesn't have enough records."
             )
@@ -627,37 +623,32 @@ class PGVectorIndex(EmbeddingIndex):
 
         try:
             index_operator_class = self.get_pgvector_index_operator_class()
+            index_name = _quote_ident(f"{self.table_name}_ivfflat_idx")
 
             # Create Inverted File with Flat Compression (IVFFlat) index on embedding column to allow efficient and performant vector search in pgvector
             # IVFFlat index divides vectors into lists, and then searches a subset of those lists that are closest to the query vector
             # Index should be created only after the table has some data (https://github.com/pgvector/pgvector?tab=readme-ov-file#ivfflat)
-            cur.execute(
-                sql.SQL(
-                    """
-                CREATE INDEX IF NOT EXISTS {}
-                ON {} USING ivfflat(embedding {}) WITH (lists = {});
-            """
-                ).format(
-                    sql.Identifier(f"{self.table_name}_ivfflat_idx"),
-                    self._table_sql,
-                    sql.SQL(index_operator_class),
-                    sql.Literal(self.vector_index.lists),
-                )
+            await conn.execute(
+                f"""
+                CREATE INDEX IF NOT EXISTS {index_name}
+                ON {self._quoted_table} USING ivfflat(embedding {index_operator_class})
+                WITH (lists = {self.vector_index.lists});
+                """
             )
             log.info(
                 f"{PGVectorIndexType.IVFFlat} vector index was created with parameter lists = {self.vector_index.lists} for vector_store: {self.vector_store.identifier}."
             )
 
-        except psycopg2.Error as e:
+        except asyncpg.PostgresError as e:
             raise RuntimeError(
                 f"Failed to create {PGVectorIndexType.IVFFlat} vector index for vector_store: {self.vector_store.identifier}: {e}"
             ) from e
 
-    async def check_conflicting_vector_index_exists(self, cur: cursor) -> bool:
-        """Check if vector index of any type has already been created for the table to prevent the conflict
+    async def check_conflicting_vector_index_exists(self, conn: asyncpg.Connection) -> bool:
+        """Check if vector index of any type has already been created for the table to prevent the conflict.
 
         Args:
-            cur: PostgreSQL cursor
+            conn: asyncpg connection
 
         Returns:
             True if exists, otherwise False
@@ -669,25 +660,22 @@ class PGVectorIndex(EmbeddingIndex):
             log.info(
                 f"Checking vector_store: {self.vector_store.identifier} for conflicting vector index in PGVector..."
             )
-            cur.execute(
+            result = await conn.fetchrow(
                 """
                 SELECT indexname FROM pg_indexes
-                WHERE (indexname LIKE %s OR indexname LIKE %s) AND tablename = %s;
+                WHERE (indexname LIKE $1 OR indexname LIKE $2) AND tablename = $3;
                 """,
-                (
-                    "%hnsw%",
-                    "%ivfflat%",
-                    self.table_name,
-                ),
+                "%hnsw%",
+                "%ivfflat%",
+                self.table_name,
             )
-            result = cur.fetchone()
 
             if result:
                 log.warning(
-                    f"Conflicting vector index {result[0]} already exists in vector_store: {self.vector_store.identifier}"
+                    f"Conflicting vector index {result['indexname']} already exists in vector_store: {self.vector_store.identifier}"
                 )
                 log.warning(
-                    f"vector_store: {self.vector_store.identifier} will continue to use vector index {result[0]} to preserve performance."
+                    f"vector_store: {self.vector_store.identifier} will continue to use vector index {result['indexname']} to preserve performance."
                 )
                 return True
 
@@ -695,14 +683,14 @@ class PGVectorIndex(EmbeddingIndex):
             log.info(f"Proceeding with creation of vector index for {self.vector_store.identifier}")
             return False
 
-        except psycopg2.Error as e:
+        except asyncpg.PostgresError as e:
             raise RuntimeError(f"Failed to check if vector index exists in PGVector: {e}") from e
 
-    async def fetch_number_of_records(self, cur: cursor) -> int:
-        """Returns number of records in a vector store
+    async def fetch_number_of_records(self, conn: asyncpg.Connection) -> int:
+        """Returns number of records in a vector store.
 
         Args:
-            cur: PostgreSQL cursor
+            conn: asyncpg connection
 
         Returns:
             number of records in a vector store
@@ -712,51 +700,38 @@ class PGVectorIndex(EmbeddingIndex):
         """
         try:
             log.info(f"Fetching number of records in vector_store: {self.vector_store.identifier}...")
-            cur.execute(
-                sql.SQL(
-                    """
-                SELECT COUNT(DISTINCT id)
-                FROM {};
-                """
-                ).format(self._table_sql)
-            )
-            result = cur.fetchone()
+            count = await conn.fetchval(f"SELECT COUNT(DISTINCT id) FROM {self._quoted_table}")
 
-            if result:
-                log.info(f"vector_store: {self.vector_store.identifier} has {result[0]} records.")
-                return result[0]
+            if count:
+                log.info(f"vector_store: {self.vector_store.identifier} has {count} records.")
+                return count
 
             log.info(f"vector_store: {self.vector_store.identifier} currently doesn't have any records.")
             return 0
 
-        except psycopg2.Error as e:
+        except asyncpg.PostgresError as e:
             raise RuntimeError(f"Failed to check if vector store has records in PGVector: {e}") from e
 
-    async def create_gin_index(self, cur: cursor) -> None:
-        """Create GIN index for full-text search performance
+    async def create_gin_index(self, conn: asyncpg.Connection) -> None:
+        """Create GIN index for full-text search performance.
 
         Args:
-            cur: PostgreSQL cursor
+            conn: asyncpg connection
 
         Raises:
             RuntimeError: If the error occurred when creating GIN index
         """
-
         try:
-            cur.execute(
-                sql.SQL(
-                    """
-                CREATE INDEX IF NOT EXISTS {}
-                ON {} USING GIN(tokenized_content)
-            """
-                ).format(
-                    sql.Identifier(f"{self.table_name}_content_gin_idx"),
-                    self._table_sql,
-                )
+            index_name = _quote_ident(f"{self.table_name}_content_gin_idx")
+            await conn.execute(
+                f"""
+                CREATE INDEX IF NOT EXISTS {index_name}
+                ON {self._quoted_table} USING GIN(tokenized_content)
+                """
             )
             log.info(f"GIN index verified for vector_store: {self.vector_store.identifier}.")
 
-        except psycopg2.Error as e:
+        except asyncpg.PostgresError as e:
             raise RuntimeError(
                 f"Failed to create GIN index for vector_store: {self.vector_store.identifier}: {e}"
             ) from e
@@ -777,14 +752,83 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
         )
         self.config = config
-        self.conn = None
+        self.pool = None
+        self._pool_initialized = False
+        self._pool_lock = asyncio.Lock()
         self.cache = {}
         self.vector_store_table = None
         self.metadata_collection_name = "openai_vector_stores_metadata"
         self._policy = policy or []
 
+    @staticmethod
+    async def _init_connection(conn: asyncpg.Connection) -> None:
+        """Pool init callback — registers pgvector type codec on each new connection."""
+        await register_vector(conn)
+
+    @staticmethod
+    async def _reset_connection(_conn: asyncpg.Connection) -> None:
+        """No-op pool reset — asyncpg's default DEALLOCATE ALL destroys pgvector's custom binary type codecs.
+
+        Skipping reset is safe: SET commands are re-applied per query, and
+        type codecs persist correctly across connection reuses.
+        """
+
+    async def _ensure_pool(self) -> asyncpg.Pool:
+        """Create pool lazily on first use to bind to the current event loop."""
+        async with self._pool_lock:
+            if self.pool is not None:
+                try:
+                    async with self.pool.acquire() as conn:
+                        await conn.fetchval("SELECT 1")
+                    return self.pool
+                except Exception:
+                    log.warning("Recreating connection pool — previous pool is not usable in current event loop")
+                    try:
+                        await self.pool.close()
+                    except Exception:
+                        log.debug("Failed to close stale connection pool during recreation")
+                    self.pool = None
+                    self._pool_initialized = False
+
+            pool = await asyncpg.create_pool(
+                host=self.config.host,
+                port=self.config.port,
+                database=self.config.db,
+                user=self.config.user,
+                password=self.config.password,
+                min_size=self.config.pool_min_size,
+                max_size=self.config.pool_max_size,
+                statement_cache_size=self.config.statement_cache_size,
+                init=self._init_connection,
+                reset=self._reset_connection,
+            )
+
+            try:
+                if not self._pool_initialized:
+                    async with pool.acquire() as conn:
+                        version = await check_extension_version(conn)
+                        if version:
+                            log.info("Vector extension version", version=version)
+                        else:
+                            await create_vector_extension(conn)
+
+                        await conn.execute(
+                            """
+                            CREATE TABLE IF NOT EXISTS metadata_store (
+                                key TEXT PRIMARY KEY,
+                                data JSONB
+                            )
+                            """
+                        )
+                    self._pool_initialized = True
+            except Exception:
+                await pool.close()
+                raise
+
+            self.pool = pool
+            return self.pool
+
     async def initialize(self) -> None:
-        # Create a safe config representation with masked password for logging
         safe_config = {**self.config.model_dump(exclude={"password"}), "password": "******"}
         log.info(f"Initializing PGVector memory adapter with config: {safe_config}")
         self.kvstore = await kvstore_impl(self.config.persistence)
@@ -797,55 +841,40 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         await self.initialize_openai_vector_stores()
 
         try:
-            self.conn = psycopg2.connect(
-                host=self.config.host,
-                port=self.config.port,
-                database=self.config.db,
-                user=self.config.user,
-                password=self.config.password,
-            )
-            self.conn.autocommit = True
-            with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                version = check_extension_version(cur)
-                if version:
-                    log.info(f"Vector extension version: {version}")
-                else:
-                    create_vector_extension(cur)
-
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS metadata_store (
-                        key TEXT PRIMARY KEY,
-                        data JSONB
-                    )
-                """
-                )
+            pool = await self._ensure_pool()
         except Exception as e:
             log.exception("Could not connect to PGVector database server")
             raise RuntimeError("Could not connect to PGVector database server") from e
 
-        # Load existing vector stores from KV store into cache
-        start_key = VECTOR_DBS_PREFIX
-        end_key = f"{VECTOR_DBS_PREFIX}\xff"
-        stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
-        for vector_store_data in stored_vector_stores:
-            vector_store = VectorStore.model_validate_json(vector_store_data)
-            pgvector_index = PGVectorIndex(
-                vector_store=vector_store,
-                dimension=vector_store.embedding_dimension,
-                conn=self.conn,
-                kvstore=self.kvstore,
-                distance_metric=self.config.distance_metric,
-                vector_index=self.config.vector_index,
-            )
-            await pgvector_index.initialize()
-            index = VectorStoreWithIndex(vector_store, index=pgvector_index, inference_api=self.inference_api)
-            self.cache[vector_store.identifier] = index
+        try:
+            # Load existing vector stores from KV store into cache
+            start_key = VECTOR_DBS_PREFIX
+            end_key = f"{VECTOR_DBS_PREFIX}\xff"
+            stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
+            for vector_store_data in stored_vector_stores:
+                vector_store = VectorStore.model_validate_json(vector_store_data)
+                pgvector_index = PGVectorIndex(
+                    vector_store=vector_store,
+                    dimension=vector_store.embedding_dimension,
+                    pool=pool,
+                    kvstore=self.kvstore,
+                    distance_metric=self.config.distance_metric,
+                    vector_index=self.config.vector_index,
+                )
+                await pgvector_index.initialize()
+                index = VectorStoreWithIndex(vector_store, index=pgvector_index, inference_api=self.inference_api)
+                self.cache[vector_store.identifier] = index
+        except Exception:
+            await self.shutdown()
+            raise
 
     async def shutdown(self) -> None:
-        if self.conn is not None:
-            self.conn.close()
-            log.info("Connection to PGVector database server closed")
+        if self.pool is not None:
+            try:
+                await self.pool.close()
+                log.info("Connection pool to PGVector database server closed")
+            except Exception:
+                log.exception("Failed to close PGVector connection pool")
         # Clean up mixin resources (file batch tasks)
         await super().shutdown()
 
@@ -854,18 +883,20 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         if self.kvstore is None:
             raise RuntimeError("KVStore not initialized. Call initialize() before registering vector stores.")
 
+        pool = await self._ensure_pool()
+
         # Save to kvstore for persistence
         key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
         await self.kvstore.set(key=key, value=vector_store.model_dump_json())
 
         # Upsert model metadata in Postgres
-        upsert_models(self.conn, [(vector_store.identifier, vector_store)])
+        await upsert_models(pool, [(vector_store.identifier, vector_store)])
 
         # Create and cache the PGVector index table for the vector DB
         pgvector_index = PGVectorIndex(
             vector_store=vector_store,
             dimension=vector_store.embedding_dimension,
-            conn=self.conn,
+            pool=pool,
             kvstore=self.kvstore,
             distance_metric=self.config.distance_metric,
             vector_index=self.config.vector_index,
@@ -886,7 +917,8 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
         # Delete vector store metadata from PGVector metadata_store table
-        remove_vector_store_metadata(self.conn, vector_store_id)
+        pool = await self._ensure_pool()
+        await remove_vector_store_metadata(pool, vector_store_id)
 
     async def insert_chunks(self, request: InsertChunksRequest) -> None:
         index = await self._get_and_cache_vector_store_index(request.vector_store_id)
@@ -910,10 +942,11 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
             raise VectorStoreNotFoundError(vector_store_id)
 
         vector_store = VectorStore.model_validate_json(vector_store_data)
+        pool = await self._ensure_pool()
         index = PGVectorIndex(
             vector_store,
             vector_store.embedding_dimension,
-            self.conn,
+            pool,
             distance_metric=self.config.distance_metric,
             vector_index=self.config.vector_index,
         )

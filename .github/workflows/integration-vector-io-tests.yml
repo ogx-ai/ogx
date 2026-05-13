@@ -85,20 +85,29 @@ jobs:
         if: matrix.vector-io-provider == 'remote::pgvector'
         run: |
           echo "Waiting for Postgres to be ready..."
-          for _ in {1..30}; do
-            if docker exec pgvector pg_isready -U ogx > /dev/null 2>&1; then
-              echo "Postgres is ready!"
+          for i in {1..30}; do
+            if docker exec pgvector pg_isready -U ogx -d ogx > /dev/null 2>&1; then
+              echo "Postgres is ready after ${i}s!"
               break
             fi
-            echo "Not ready yet... ($i)"
+            echo "Not ready yet... (${i})"
             sleep 1
           done
 
       - name: Enable pgvector extension
         if: matrix.vector-io-provider == 'remote::pgvector'
         run: |
-          PGPASSWORD=ogx psql -h localhost -U ogx -d ogx \
-            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          for i in {1..10}; do
+            if PGPASSWORD=ogx psql -h localhost -U ogx -d ogx \
+              -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null; then
+              echo "pgvector extension enabled"
+              exit 0
+            fi
+            echo "psql not ready yet, retrying... (${i})"
+            sleep 2
+          done
+          echo "Failed to enable pgvector extension after retries"
+          exit 1
 
       - name: Setup Qdrant
         if: matrix.vector-io-provider == 'remote::qdrant'
