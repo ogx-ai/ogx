@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -73,33 +74,36 @@ def _create_s3_client(config: S3FilesImplConfig) -> "S3Client":
 
 
 async def _create_bucket_if_not_exists(client: "S3Client", config: S3FilesImplConfig) -> None:
-    try:
-        client.head_bucket(Bucket=config.bucket_name)
-    except ClientError as e:
-        error_code = e.response["Error"]["Code"]
-        if error_code == "404":
-            if not config.auto_create_bucket:
-                raise RuntimeError(
-                    f"S3 bucket '{config.bucket_name}' does not exist. "
-                    f"Either create the bucket manually or set 'auto_create_bucket: true' in your configuration."
-                ) from e
-            try:
-                # For us-east-1, we can't specify LocationConstraint
-                if config.region == "us-east-1":
-                    client.create_bucket(Bucket=config.bucket_name)
-                else:
-                    client.create_bucket(
-                        Bucket=config.bucket_name,
-                        CreateBucketConfiguration=cast(Any, {"LocationConstraint": config.region}),
-                    )
-            except ClientError as create_error:
-                raise RuntimeError(
-                    f"Failed to create S3 bucket '{config.bucket_name}': {create_error}"
-                ) from create_error
-        elif error_code == "403":
-            raise RuntimeError(f"Access denied to S3 bucket '{config.bucket_name}'") from e
-        else:
-            raise RuntimeError(f"Failed to access S3 bucket '{config.bucket_name}': {e}") from e
+    def _check_and_create() -> None:
+        try:
+            client.head_bucket(Bucket=config.bucket_name)
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            if error_code == "404":
+                if not config.auto_create_bucket:
+                    raise RuntimeError(
+                        f"S3 bucket '{config.bucket_name}' does not exist. "
+                        f"Either create the bucket manually or set 'auto_create_bucket: true' in your configuration."
+                    ) from e
+                try:
+                    # For us-east-1, we can't specify LocationConstraint
+                    if config.region == "us-east-1":
+                        client.create_bucket(Bucket=config.bucket_name)
+                    else:
+                        client.create_bucket(
+                            Bucket=config.bucket_name,
+                            CreateBucketConfiguration=cast(Any, {"LocationConstraint": config.region}),
+                        )
+                except ClientError as create_error:
+                    raise RuntimeError(
+                        f"Failed to create S3 bucket '{config.bucket_name}': {create_error}"
+                    ) from create_error
+            elif error_code == "403":
+                raise RuntimeError(f"Access denied to S3 bucket '{config.bucket_name}'") from e
+            else:
+                raise RuntimeError(f"Failed to access S3 bucket '{config.bucket_name}': {e}") from e
+
+    await asyncio.to_thread(_check_and_create)
 
 
 def _make_file_object(
@@ -164,7 +168,8 @@ class S3FilesImpl(Files):
     async def _delete_file(self, file_id: str) -> None:
         """Delete a file from S3 and the database."""
         try:
-            self.client.delete_object(
+            await asyncio.to_thread(
+                self.client.delete_object,
                 Bucket=self._config.bucket_name,
                 Key=file_id,
             )
@@ -251,7 +256,8 @@ class S3FilesImpl(Files):
         await self.sql_store.insert("openai_files", entry)
 
         try:
-            self.client.put_object(
+            await asyncio.to_thread(
+                self.client.put_object,
                 Bucket=self._config.bucket_name,
                 Key=file_id,
                 Body=content,
@@ -319,12 +325,17 @@ class S3FilesImpl(Files):
         row = await self._get_file(file_id)
 
         try:
-            response = self.client.get_object(
-                Bucket=self._config.bucket_name,
-                Key=row["id"],
-            )
-            # TODO: can we stream this instead of loading it into memory
-            content = response["Body"].read()
+
+            def _download_from_s3() -> bytes:
+                response = self.client.get_object(
+                    Bucket=self._config.bucket_name,
+                    Key=row["id"],
+                )
+                # TODO: can we stream this instead of loading it into memory
+                body: bytes = response["Body"].read()
+                return body
+
+            content = await asyncio.to_thread(_download_from_s3)
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":
                 await self._delete_file(file_id)
