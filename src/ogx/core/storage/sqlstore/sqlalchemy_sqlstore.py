@@ -185,7 +185,13 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         # Register table in metadata - actual creation happens in _ensure_engine()
         if table not in self.metadata.tables:
             Table(table, self.metadata, *sqlalchemy_columns)
-        # If table already exists in metadata, we're done (no need to recreate)
+
+            # If engine is already running, create the new table immediately.
+            # _ensure_engine() only calls create_all once, so tables registered
+            # after that first call would never be physically created.
+            if self._engine is not None:
+                async with self._engine.begin() as conn:
+                    await conn.run_sync(self.metadata.create_all, checkfirst=True)
 
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         await self._ensure_engine()  # Lazy init in current event loop

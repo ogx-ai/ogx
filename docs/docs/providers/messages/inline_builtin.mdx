@@ -10,8 +10,20 @@ title: inline::builtin
 
 Implements the Anthropic Messages API with two modes: native passthrough for providers that support /v1/messages natively (e.g. Ollama, vLLM), and automatic translation for all other providers by converting between Anthropic and OpenAI Chat Completions formats.
 
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `kvstore` | `KVStoreReference` | No |  | Configuration for the key-value store backend used by message batches. |
+| `kvstore.namespace` | `str` | No |  | Key prefix for KVStore backends |
+| `kvstore.backend` | `str` | No |  | Name of backend from storage.backends |
+| `max_concurrent_batches` | `int` | No | 1 | Maximum number of concurrent message batches to process simultaneously. |
+| `max_concurrent_requests_per_batch` | `int` | No | 10 | Maximum number of concurrent requests to process per batch. |
+
 ## Sample Configuration
 
 ```yaml
-{}
+kvstore:
+  namespace: message_batches
+  backend: kv_default
 ```

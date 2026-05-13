@@ -327,3 +327,92 @@ class TestKVStoreToSQLMigration:
             conflict_columns=["id"],
             update_columns=["store_id", "batch_data", "expires_at"],
         )
+
+
+class TestMetadataStoreEnforcement:
+    """Tests for mandatory metadata_store when access control policies are active."""
+
+    async def test_initialize_raises_when_policy_set_but_no_metadata_store(self):
+        mixin = MockVectorStoreMixin(
+            inference_api=AsyncMock(),
+            files_api=AsyncMock(),
+            kvstore=AsyncMock(),
+        )
+        mixin._policy = [MagicMock()]
+
+        with pytest.raises(ValueError, match="metadata_store is required"):
+            await mixin.initialize_openai_vector_stores()
+
+    async def test_initialize_succeeds_when_no_policy(self):
+        kvstore = AsyncMock()
+        kvstore.values_in_range = AsyncMock(return_value=[])
+
+        mixin = MockVectorStoreMixin(
+            inference_api=AsyncMock(),
+            files_api=AsyncMock(),
+            kvstore=kvstore,
+        )
+        mixin._policy = []
+
+        await mixin.initialize_openai_vector_stores()
+
+    async def test_initialize_succeeds_when_policy_and_metadata_store_set(self):
+        metadata_store = MagicMock()
+        metadata_store.create_table = AsyncMock()
+        metadata_store.sql_store = AsyncMock()
+        metadata_store.sql_store.fetch_all = AsyncMock(return_value=MagicMock(data=[]))
+        metadata_store.fetch_all = AsyncMock(return_value=MagicMock(data=[]))
+
+        kvstore = AsyncMock()
+        kvstore.get = AsyncMock(return_value="1")
+        kvstore.values_in_range = AsyncMock(return_value=[])
+
+        mixin = MockVectorStoreMixin(
+            inference_api=AsyncMock(),
+            files_api=AsyncMock(),
+            kvstore=kvstore,
+            metadata_store=metadata_store,
+        )
+        mixin._policy = [MagicMock()]
+
+        await mixin.initialize_openai_vector_stores()
+
+
+class TestFileBatchCleanup:
+    """Tests for metadata-store file batch cleanup behavior."""
+
+    async def test_cleanup_uses_unfiltered_sql_store_access(self):
+        sql_store = AsyncMock()
+        sql_store.fetch_all = AsyncMock(
+            return_value=MagicMock(
+                data=[
+                    {
+                        "id": "batch_1",
+                        "batch_data": {"id": "batch_1", "expires_at": 1},
+                    }
+                ]
+            )
+        )
+        sql_store.delete = AsyncMock()
+
+        metadata_store = MagicMock()
+        metadata_store.sql_store = sql_store
+        metadata_store.fetch_all = AsyncMock(side_effect=AssertionError("filtered fetch_all should not be used"))
+
+        mixin = MockVectorStoreMixin(
+            inference_api=AsyncMock(),
+            files_api=AsyncMock(),
+            kvstore=AsyncMock(),
+            metadata_store=metadata_store,
+        )
+        mixin.openai_file_batches = {"batch_1": {"id": "batch_1"}}
+
+        await mixin._cleanup_expired_file_batches()
+
+        metadata_store.fetch_all.assert_not_called()
+        sql_store.fetch_all.assert_called_once_with(table="vector_store_file_batches")
+        sql_store.delete.assert_called_once_with(
+            table="vector_store_file_batches",
+            where={"id": "batch_1"},
+        )
+        assert "batch_1" not in mixin.openai_file_batches

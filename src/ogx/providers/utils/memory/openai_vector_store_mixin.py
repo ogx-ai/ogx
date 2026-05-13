@@ -599,15 +599,18 @@ class OpenAIVectorStoreMixin(ABC):
     async def _cleanup_expired_file_batches(self) -> None:
         """Clean up expired file batches from persistent storage."""
         if self.metadata_store:
-            results = await self.metadata_store.fetch_all(table=TABLE_VECTOR_STORE_FILE_BATCHES)
+            rows = await self._fetch_all_metadata_rows_unfiltered(table=TABLE_VECTOR_STORE_FILE_BATCHES)
             current_time = int(time.time())
             expired_count = 0
-            for row in results.data:
+            for row in rows:
                 info = row["batch_data"]
                 expires_at = info.get("expires_at")
                 if expires_at and current_time > expires_at:
                     logger.info("Cleaning up expired file batch", id=info["id"])
-                    await self.metadata_store.delete(table=TABLE_VECTOR_STORE_FILE_BATCHES, where={"id": info["id"]})
+                    await self.metadata_store.sql_store.delete(
+                        table=TABLE_VECTOR_STORE_FILE_BATCHES,
+                        where={"id": info["id"]},
+                    )
                     self.openai_file_batches.pop(info["id"], None)
                     expired_count += 1
             if expired_count > 0:
@@ -722,6 +725,12 @@ class OpenAIVectorStoreMixin(ABC):
             logger.warning(
                 "Files API is not available. File attachment operations on vector stores will fail. "
                 "Ensure a 'files' provider is configured if file operations are needed."
+            )
+        policy = getattr(self, "_policy", [])
+        if policy and not self.metadata_store:
+            raise ValueError(
+                "Failed to initialize vector store provider: metadata_store is required when access control "
+                "policies are configured. Configure storage.stores.vector_stores in your server config."
             )
         if self.metadata_store:
             await self._create_metadata_tables()

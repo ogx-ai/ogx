@@ -3376,6 +3376,190 @@ paths:
             schema:
               $ref: '#/components/schemas/AnthropicCountTokensRequest'
         required: true
+  /v1/messages/batches:
+    get:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMessageBatchesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - Messages
+      summary: List Message Batches.
+      description: List all Message Batches with pagination.
+      operationId: list_message_batches_v1_messages_batches_get
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum number of batches to return.
+          default: 20
+          title: Limit
+        description: Maximum number of batches to return.
+      - name: before_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Return batches created before this batch ID.
+          title: Before Id
+        description: Return batches created before this batch ID.
+      - name: after_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Return batches created after this batch ID.
+          title: After Id
+        description: Return batches created after this batch ID.
+    post:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageBatch'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - Messages
+      summary: Create a Message Batch.
+      description: Send a batch of message creation requests.
+      operationId: create_message_batch_v1_messages_batches_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageBatchRequest'
+  /v1/messages/batches/{message_batch_id}:
+    get:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageBatch'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - Messages
+      summary: Retrieve a Message Batch.
+      description: Retrieve the status of a Message Batch by its ID.
+      operationId: retrieve_message_batch_v1_messages_batches__message_batch_id__get
+      parameters:
+      - name: message_batch_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Message Batch Id
+  /v1/messages/batches/{message_batch_id}/cancel:
+    post:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageBatch'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - Messages
+      summary: Cancel a Message Batch.
+      description: Cancel a Message Batch before processing ends.
+      operationId: cancel_message_batch_v1_messages_batches__message_batch_id__cancel_post
+      parameters:
+      - name: message_batch_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Message Batch Id
+  /v1/messages/batches/{message_batch_id}/results:
+    get:
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+        '204':
+          description: Successful Response
+      tags:
+      - Messages
+      summary: Retrieve Message Batch results.
+      description: Stream the results of a Message Batch as JSONL.
+      operationId: retrieve_message_batch_results_v1_messages_batches__message_batch_id__results_get
+      parameters:
+      - name: message_batch_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Message Batch Id
 components:
   schemas:
     Error:
@@ -9726,69 +9910,54 @@ components:
           title: string | list[AnthropicTextBlock]
           description: System prompt. A string or list of text blocks.
         tools:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/AnthropicToolDef'
-            type: array
-          - type: 'null'
+          items:
+            $ref: '#/components/schemas/AnthropicToolDef'
+          type: array
+          title: Tools
           description: Tools available to the model.
         tool_choice:
-          anyOf:
-          - {}
-          - type: 'null'
           title: Tool Choice
           description: "How the model should select tools. One of: 'auto', 'any', 'none', or {type: 'tool', name: '...'}."
         stream:
-          anyOf:
-          - type: boolean
-          - type: 'null'
+          type: boolean
+          title: Stream
           description: Whether to stream the response.
           default: false
         temperature:
-          anyOf:
-          - type: number
-            maximum: 1.0
-            minimum: 0.0
-          - type: 'null'
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Temperature
           description: Sampling temperature.
         top_p:
-          anyOf:
-          - type: number
-            maximum: 1.0
-            minimum: 0.0
-          - type: 'null'
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Top P
           description: Nucleus sampling parameter.
         top_k:
-          anyOf:
-          - type: integer
-            minimum: 1.0
-          - type: 'null'
+          type: integer
+          minimum: 1.0
+          title: Top K
           description: Top-k sampling parameter.
         stop_sequences:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
+          items:
+            type: string
+          type: array
+          title: Stop Sequences
           description: Custom stop sequences.
         metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
+          additionalProperties:
+            type: string
+          type: object
+          title: Metadata
           description: Request metadata.
         thinking:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicThinkingConfig'
-            title: AnthropicThinkingConfig
-          - type: 'null'
+          $ref: '#/components/schemas/AnthropicThinkingConfig'
           description: Extended thinking configuration.
-          title: AnthropicThinkingConfig
         service_tier:
-          anyOf:
-          - type: string
-          - type: 'null'
+          type: string
+          title: Service Tier
           description: Service tier to use.
       additionalProperties: true
       type: object
@@ -10565,6 +10734,21 @@ components:
       - reasoning.encrypted_content
       title: ConversationItemInclude
       description: Specify additional output data to include in the model response.
+    CreateMessageBatchRequest:
+      properties:
+        requests:
+          items:
+            $ref: '#/components/schemas/MessageBatchRequestParams'
+          type: array
+          maxItems: 1000
+          minItems: 1
+          title: Requests
+          description: List of requests for prompt completion.
+      type: object
+      required:
+      - requests
+      title: CreateMessageBatchRequest
+      description: Request body for POST /v1/messages/batches.
     CreateResponseRequest:
       properties:
         input:
@@ -11041,6 +11225,34 @@ components:
       - data
       title: ListConnectorsResponse
       description: Response containing a list of configured connectors
+    ListMessageBatchesResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/MessageBatch'
+          type: array
+          title: Data
+          description: List of MessageBatch objects.
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether there are more results available.
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the first batch in the list.
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the last batch in the list.
+      type: object
+      required:
+      - data
+      - has_more
+      title: ListMessageBatchesResponse
+      description: Response from GET /v1/messages/batches.
     ListToolsResponse:
       properties:
         data:
@@ -11072,6 +11284,111 @@ components:
       - name
       title: MCPListToolsTool
       description: Tool definition returned by MCP list tools operation.
+    MessageBatch:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique object identifier (msgbatch_ prefix).
+        type:
+          type: string
+          title: Type
+          enum:
+          - message_batch
+        processing_status:
+          type: string
+          enum:
+          - in_progress
+          - canceling
+          - ended
+          title: Processing Status
+          description: Processing status of the Message Batch.
+        request_counts:
+          $ref: '#/components/schemas/MessageBatchRequestCounts'
+        created_at:
+          type: string
+          title: Created At
+          description: RFC 3339 datetime when the batch was created.
+        expires_at:
+          type: string
+          title: Expires At
+          description: RFC 3339 datetime when processing will expire.
+        cancel_initiated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: RFC 3339 datetime when cancellation was initiated.
+        ended_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: RFC 3339 datetime when all processing ended.
+        archived_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: RFC 3339 datetime when the batch was archived.
+        results_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: URL to a .jsonl file containing the results.
+      type: object
+      required:
+      - id
+      - processing_status
+      - created_at
+      - expires_at
+      title: MessageBatch
+      description: A Message Batch object.
+    MessageBatchRequestCounts:
+      properties:
+        processing:
+          type: integer
+          title: Processing
+          description: Number of requests currently processing.
+          default: 0
+        succeeded:
+          type: integer
+          title: Succeeded
+          description: Number of successfully completed requests.
+          default: 0
+        errored:
+          type: integer
+          title: Errored
+          description: Number of requests that encountered an error.
+          default: 0
+        canceled:
+          type: integer
+          title: Canceled
+          description: Number of canceled requests.
+          default: 0
+        expired:
+          type: integer
+          title: Expired
+          description: Number of expired requests.
+          default: 0
+      type: object
+      title: MessageBatchRequestCounts
+      description: Tallies of requests by their status within a batch.
+    MessageBatchRequestParams:
+      properties:
+        custom_id:
+          type: string
+          maxLength: 64
+          minLength: 1
+          pattern: ^[a-zA-Z0-9_-]{1,64}$
+          title: Custom Id
+          description: Developer-provided ID for matching results to requests. Must be unique within the batch.
+        params:
+          $ref: '#/components/schemas/AnthropicCreateMessageRequest'
+          description: Messages API creation parameters for the individual request.
+      type: object
+      required:
+      - custom_id
+      - params
+      title: MessageBatchRequestParams
+      description: An individual request within a message batch.
     OpenAIAssistantMessageParam-Input:
       properties:
         role:
