@@ -172,8 +172,9 @@ async def test_invoke_with_search_context_size_updates_result_limit(brave_search
         assert call_kwargs.kwargs["params"]["count"] == 5
         assert result.metadata is not None
         assert len(result.metadata["sources"]) == 5
-        source_urls = [s["url"] for s in result.metadata["sources"]]
-        assert "https://example4.com" in source_urls
+        source_urls = {s["url"] for s in result.metadata["sources"]}
+        expected_urls = {f"https://example{i}.com" for i in range(5)}
+        assert source_urls == expected_urls
 
 
 async def test_invoke_without_extra_params(brave_search, mock_brave_response):
