@@ -61,7 +61,7 @@ class HttpxOciAuth(httpx.Auth):
         try:
             content = request.content
         except httpx.RequestNotRead:
-            content = request.read()
+            content = await request.aread()
 
         def _sign(content: bytes) -> dict:
             req = requests.Request(
