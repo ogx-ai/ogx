@@ -14,7 +14,7 @@ from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import User
 from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, SqlRecord
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
-from ogx.core.storage.sqlstore.sqlstore import SqliteSqlStoreConfig
+from ogx.core.storage.sqlstore.sqlstore import PostgresSqlStoreConfig, SqliteSqlStoreConfig
 from ogx_api.internal.sqlstore import ColumnType
 
 
@@ -498,6 +498,38 @@ async def test_json_extract_text_rejects_malicious_path(mock_get_authenticated_u
         sqlstore._json_extract_text("access_attributes", "teams")
         sqlstore._json_extract("access_attributes", "projects")
         sqlstore._json_extract("access_attributes", "namespaces")
+
+
+def test_json_array_contains_value_uses_backend_specific_sql():
+    """Ensure JSON array containment SQL is valid for both SQLite and PostgreSQL backends."""
+    with TemporaryDirectory() as tmp_dir:
+        sqlite_store = AuthorizedSqlStore(
+            SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_json_array_contains.db")),
+            default_policy(),
+        )
+        sqlite_sql, sqlite_param = sqlite_store._json_array_contains_value(
+            "access_attributes",
+            "roles",
+            "attr_roles_0",
+            "admin",
+        )
+        assert sqlite_sql == (
+            "EXISTS (SELECT 1 FROM json_each(json_extract(access_attributes, '$.roles')) WHERE value = :attr_roles_0)"
+        )
+        assert sqlite_param == "admin"
+
+    postgres_store = AuthorizedSqlStore(
+        SqlAlchemySqlStoreImpl(PostgresSqlStoreConfig(user="test", password="test")),
+        default_policy(),
+    )
+    postgres_sql, postgres_param = postgres_store._json_array_contains_value(
+        "access_attributes",
+        "roles",
+        "attr_roles_0",
+        "admin",
+    )
+    assert postgres_sql == "CAST(access_attributes->'roles' AS jsonb) @> CAST(:attr_roles_0 AS jsonb)"
+    assert postgres_param == '["admin"]'
 
 
 @patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")

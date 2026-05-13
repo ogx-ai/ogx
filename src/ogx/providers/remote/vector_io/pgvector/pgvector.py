@@ -290,6 +290,7 @@ class PGVectorIndex(EmbeddingIndex):
 
         pgvector_search_function = self.get_pgvector_search_function()
 
+<<<<<<< HEAD
         with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             # Specify the number of probes to allow PGVector to use Index Scan using IVFFlat index if it was configured (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options-1)
             if self.vector_index.type == PGVectorIndexType.IVFFlat:
@@ -322,6 +323,36 @@ class PGVectorIndex(EmbeddingIndex):
                 (embedding.tolist(), *filter_params, k),
             )
             results = cur.fetchall()
+=======
+        async with self.pool.acquire() as conn:
+            # Keep query-level search tuning transaction-local and scoped to the
+            # same transaction as the SELECT statement.
+            async with conn.transaction():
+                # Specify the number of probes to allow PGVector to use Index Scan using IVFFlat index if it was configured (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options-1)
+                if self.vector_index.type == PGVectorIndexType.IVFFlat:
+                    await conn.execute("SELECT set_config('ivfflat.probes', $1, true)", str(self.vector_index.probes))
+
+                # Specify the max size of max heap that holds best candidates when traversing the graph (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options)
+                elif self.vector_index.type == PGVectorIndexType.HNSW:
+                    await conn.execute(
+                        "SELECT set_config('hnsw.ef_search', $1, true)", str(self.vector_index.ef_search)
+                    )
+
+                where = f"WHERE {filter_clause}" if filter_clause else ""
+
+                rows = await conn.fetch(
+                    f"""
+                    SELECT document, embedding {pgvector_search_function} $1::vector AS distance
+                    FROM {self._quoted_table}
+                    {where}
+                    ORDER BY distance
+                    LIMIT ${next_idx}
+                    """,
+                    embedding.tolist(),
+                    *filter_params,
+                    k,
+                )
+>>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
 
             chunks = []
             scores = []
@@ -352,12 +383,17 @@ class PGVectorIndex(EmbeddingIndex):
         Returns:
             QueryChunksResponse with combined results
         """
+<<<<<<< HEAD
         filter_clause, filter_params = self._translate_filters(filters)
+=======
+        filter_clause, filter_params, next_idx = self._translate_filters(filters, param_idx=2)
+>>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
 
         with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             # Use plainto_tsquery to handle user input safely and ts_rank for relevance scoring
             filter_sql = sql.SQL(" AND ({})").format(sql.SQL(filter_clause)) if filter_clause else sql.SQL("")
 
+<<<<<<< HEAD
             cur.execute(
                 sql.SQL(
                     """
@@ -369,6 +405,19 @@ class PGVectorIndex(EmbeddingIndex):
         """
                 ).format(self._table_sql, filter_sql),
                 (query_string, query_string, *filter_params, k),
+=======
+            rows = await conn.fetch(
+                f"""
+                SELECT document, ts_rank(tokenized_content, plainto_tsquery('english', $1)) AS score
+                FROM {self._quoted_table}
+                WHERE tokenized_content @@ plainto_tsquery('english', $1){filter_sql}
+                ORDER BY score DESC
+                LIMIT ${next_idx}
+                """,
+                query_string,
+                *filter_params,
+                k,
+>>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
             )
             results = cur.fetchall()
 
@@ -712,6 +761,7 @@ class PGVectorIndex(EmbeddingIndex):
         """
         try:
             log.info(f"Fetching number of records in vector_store: {self.vector_store.identifier}...")
+<<<<<<< HEAD
             cur.execute(
                 sql.SQL(
                     """
@@ -721,6 +771,9 @@ class PGVectorIndex(EmbeddingIndex):
                 ).format(self._table_sql)
             )
             result = cur.fetchone()
+=======
+            count = await conn.fetchval(f"SELECT COUNT(*) FROM {self._quoted_table}")
+>>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
 
             if result:
                 log.info(f"vector_store: {self.vector_store.identifier} has {result[0]} records.")
@@ -783,10 +836,89 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         self.metadata_collection_name = "openai_vector_stores_metadata"
         self._policy = policy or []
 
+<<<<<<< HEAD
     async def initialize(self) -> None:
         # Create a safe config representation with masked password for logging
         safe_config = {**self.config.model_dump(exclude={"password"}), "password": "******"}
         log.info(f"Initializing PGVector memory adapter with config: {safe_config}")
+=======
+    @staticmethod
+    async def _init_connection(conn: asyncpg.Connection) -> None:
+        """Pool init callback — registers pgvector type codec on each new connection."""
+        await register_vector(conn)
+
+    @staticmethod
+    async def _reset_connection(_conn: asyncpg.Connection) -> None:
+        """No-op pool reset — asyncpg's default DEALLOCATE ALL destroys pgvector's custom binary type codecs.
+
+        Skipping reset is safe: SET commands are re-applied per query, and
+        type codecs persist correctly across connection reuses.
+        """
+
+    async def _ensure_pool(self) -> asyncpg.Pool:
+        """Create pool lazily on first use to bind to the current event loop."""
+        async with self._pool_lock:
+            if self.pool is not None:
+                try:
+                    async with self.pool.acquire() as conn:
+                        await conn.fetchval("SELECT 1")
+                    return self.pool
+                except Exception:
+                    log.warning("Recreating connection pool — previous pool is not usable in current event loop")
+                    try:
+                        await self.pool.close()
+                    except Exception:
+                        log.debug("Failed to close stale connection pool during recreation")
+                    self.pool = None
+                    self._pool_initialized = False
+
+            pool = await asyncpg.create_pool(
+                host=self.config.host,
+                port=self.config.port,
+                database=self.config.db,
+                user=self.config.user,
+                password=self.config.password.get_secret_value() if self.config.password else None,
+                min_size=self.config.pool_min_size,
+                max_size=self.config.pool_max_size,
+                statement_cache_size=self.config.statement_cache_size,
+                command_timeout=self.config.command_timeout,
+                init=self._init_connection,
+                reset=self._reset_connection,
+            )
+
+            try:
+                if not self._pool_initialized:
+                    async with pool.acquire() as conn:
+                        version = await check_extension_version(conn)
+                        if version:
+                            log.info("Vector extension version", version=version)
+                        else:
+                            await create_vector_extension(conn)
+
+                        try:
+                            await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+                        except asyncpg.PostgresError:
+                            log.debug("pg_stat_statements not available, skipping")
+
+                        await conn.execute(
+                            """
+                            CREATE TABLE IF NOT EXISTS metadata_store (
+                                key TEXT PRIMARY KEY,
+                                data JSONB
+                            )
+                            """
+                        )
+                    self._pool_initialized = True
+            except Exception:
+                await pool.close()
+                raise
+
+            self.pool = pool
+            return self.pool
+
+    async def initialize(self) -> None:
+        log.info("Initializing PGVector memory adapter", config=self.config.model_dump())
+>>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
         self.kvstore = await kvstore_impl(self.config.persistence)
 
         if self.config.metadata_store:

@@ -58,10 +58,11 @@ class PostgresKVStoreImpl(KVStore):
                     port=int(self.config.port),
                     database=self.config.db,
                     user=self.config.user,
-                    password=self.config.password,
+                    password=self.config.password.get_secret_value() if self.config.password else None,
                     ssl=self._build_ssl(),
                     min_size=self.config.pool_size,
                     max_size=self.config.pool_size + self.config.max_overflow,
+                    command_timeout=self.config.command_timeout,
                 )
                 self._loop = loop
             except Exception as e:
@@ -75,8 +76,15 @@ class PostgresKVStoreImpl(KVStore):
                     CREATE TABLE IF NOT EXISTS {self.config.table_name} (
                         key TEXT PRIMARY KEY,
                         value TEXT,
-                        expiration TIMESTAMP
+                        expiration TIMESTAMPTZ
                     )
+                    """
+                )
+                await conn.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_{self.config.table_name}_expiration
+                    ON {self.config.table_name} (expiration)
+                    WHERE expiration IS NOT NULL
                     """
                 )
                 self._table_created = True
