@@ -99,7 +99,7 @@ starter = [
     "ollama",
     "pandas",
     "pillow",
-    "psycopg2-binary",
+    "pgvector>=0.3.0",
     "pymilvus[milvus-lite]>=2.4.10",
     "pymongo",
     "pypdf>=6.10.2",
@@ -182,8 +182,10 @@ type_checking = [
 test-common = [
     "aiohttp",
     "aiosqlite",
+    "asyncpg>=0.29.0",
     "chardet",
     "mcp>=1.23.0",
+    "pgvector>=0.3.0",
     "psycopg2-binary>=2.9.0",
     "pypdf>=6.10.2",
     "sqlalchemy[asyncio]>=2.0.41",
@@ -196,7 +198,6 @@ unit = [
     "coverage",
     "databricks-sdk",
     "faiss-cpu",
-    "litellm",
     "markitdown[all]",
     "moto[s3]>=5.1.10",
     "ollama",
@@ -367,7 +368,6 @@ convention = "google"
 "src/ogx/core/utils/exec.py" = ["S603"] # Command execution utility
 "src/ogx/core/storage/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
 "src/ogx/providers/**/vector_io/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
-"src/ogx/core/routers/safety.py" = ["S608"] # Error message formatting, not SQL
 "src/ogx/core/library_client.py" = ["S112"] # Intentional try-except-continue for type coercion
 "src/ogx/core/routers/tool_runtime.py" = ["S110"] # Intentional try-except-pass for optional metric context
 "src/ogx/core/routing_tables/models.py" = ["S112"] # Intentional try-except-continue for credential probing
@@ -561,9 +561,6 @@ module = [
     "yaml",
     "fire",
     "redis.asyncio",
-    "psycopg2",
-    "psycopg2.extras",
-    "psycopg2.extensions",
     "torchtune.*",
     "fairscale.*",
     "torchvision.*",

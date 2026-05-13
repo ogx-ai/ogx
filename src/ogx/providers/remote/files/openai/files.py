@@ -30,7 +30,7 @@ from ogx_api import (
 )
 from ogx_api.files.models import OpenAIFileUploadPurpose
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .config import OpenAIFilesImplConfig
 
@@ -74,7 +74,7 @@ class OpenAIFilesImpl(Files):
     def __init__(self, config: OpenAIFilesImplConfig, policy: list[AccessRule]) -> None:
         self._config = config
         self.policy = policy
-        self._client: OpenAI | None = None
+        self._client: AsyncOpenAI | None = None
         self._sql_store: AuthorizedSqlStore | None = None
 
     def _now(self) -> int:
@@ -94,7 +94,7 @@ class OpenAIFilesImpl(Files):
     async def _delete_file(self, file_id: str) -> None:
         """Delete a file from OpenAI and the database."""
         try:
-            self.client.files.delete(file_id)
+            await self.client.files.delete(file_id)
         except Exception as e:
             # If file doesn't exist on OpenAI side, just remove from metadata store
             if "not found" not in str(e).lower():
@@ -109,7 +109,7 @@ class OpenAIFilesImpl(Files):
                 await self._delete_file(file_id)
 
     async def initialize(self) -> None:
-        self._client = OpenAI(api_key=self._config.api_key)
+        self._client = AsyncOpenAI(api_key=self._config.api_key)
 
         self._sql_store = await authorized_sqlstore(self._config.metadata_store, self.policy)
         await self._sql_store.create_table(
@@ -128,7 +128,7 @@ class OpenAIFilesImpl(Files):
         pass
 
     @property
-    def client(self) -> OpenAI:
+    def client(self) -> AsyncOpenAI:
         assert self._client is not None, "Provider not initialized"
         return self._client
 
@@ -164,7 +164,7 @@ class OpenAIFilesImpl(Files):
             file_obj = BytesIO(content)
             file_obj.name = filename
 
-            response = self.client.files.create(
+            response = await self.client.files.create(
                 file=file_obj,
                 purpose=purpose.value,
             )
@@ -240,7 +240,7 @@ class OpenAIFilesImpl(Files):
         row = await self._get_file(file_id)
 
         try:
-            response = self.client.files.content(file_id)
+            response = await self.client.files.content(file_id)
             file_content = response.content
 
         except Exception as e:

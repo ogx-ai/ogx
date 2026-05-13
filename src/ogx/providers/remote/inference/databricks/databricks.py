@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 from collections.abc import AsyncIterator, Iterable
 
 from databricks.sdk import WorkspaceClient
@@ -34,20 +35,20 @@ class DatabricksInferenceAdapter(OpenAIMixin):
         return str(self.config.base_url)
 
     async def list_provider_model_ids(self) -> Iterable[str]:
-        # Filter out None values from endpoint names
         api_token = self._get_api_key_from_config_or_provider_data()
-        # WorkspaceClient expects base host without /serving-endpoints suffix
         base_url_str = str(self.config.base_url)
         if base_url_str.endswith("/serving-endpoints"):
-            host = base_url_str[:-18]  # Remove '/serving-endpoints'
+            host = base_url_str[:-18]
         else:
             host = base_url_str
-        return [
-            endpoint.name  # type: ignore[misc]
-            for endpoint in WorkspaceClient(
-                host=host, token=api_token
-            ).serving_endpoints.list()  # TODO: this is not async
-        ]
+
+        def _list_endpoints() -> list[str]:
+            return [
+                endpoint.name  # type: ignore[misc]
+                for endpoint in WorkspaceClient(host=host, token=api_token).serving_endpoints.list()
+            ]
+
+        return await asyncio.to_thread(_list_endpoints)
 
     async def openai_completion(
         self,
