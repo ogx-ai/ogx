@@ -293,28 +293,33 @@ class PGVectorIndex(EmbeddingIndex):
         pgvector_search_function = self.get_pgvector_search_function()
 
         async with self.pool.acquire() as conn:
-            # Specify the number of probes to allow PGVector to use Index Scan using IVFFlat index if it was configured (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options-1)
-            if self.vector_index.type == PGVectorIndexType.IVFFlat:
-                await conn.execute(f"SET ivfflat.probes = {self.vector_index.probes}")
+            # Keep query-level search tuning transaction-local and scoped to the
+            # same transaction as the SELECT statement.
+            async with conn.transaction():
+                # Specify the number of probes to allow PGVector to use Index Scan using IVFFlat index if it was configured (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options-1)
+                if self.vector_index.type == PGVectorIndexType.IVFFlat:
+                    await conn.execute("SELECT set_config('ivfflat.probes', $1, true)", str(self.vector_index.probes))
 
-            # Specify the max size of max heap that holds best candidates when traversing the graph (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options)
-            elif self.vector_index.type == PGVectorIndexType.HNSW:
-                await conn.execute(f"SET hnsw.ef_search = {self.vector_index.ef_search}")
+                # Specify the max size of max heap that holds best candidates when traversing the graph (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options)
+                elif self.vector_index.type == PGVectorIndexType.HNSW:
+                    await conn.execute(
+                        "SELECT set_config('hnsw.ef_search', $1, true)", str(self.vector_index.ef_search)
+                    )
 
-            where = f"WHERE {filter_clause}" if filter_clause else ""
+                where = f"WHERE {filter_clause}" if filter_clause else ""
 
-            rows = await conn.fetch(
-                f"""
-                SELECT document, embedding {pgvector_search_function} $1::vector AS distance
-                FROM {self._quoted_table}
-                {where}
-                ORDER BY distance
-                LIMIT ${next_idx}
-                """,
-                embedding.tolist(),
-                *filter_params,
-                k,
-            )
+                rows = await conn.fetch(
+                    f"""
+                    SELECT document, embedding {pgvector_search_function} $1::vector AS distance
+                    FROM {self._quoted_table}
+                    {where}
+                    ORDER BY distance
+                    LIMIT ${next_idx}
+                    """,
+                    embedding.tolist(),
+                    *filter_params,
+                    k,
+                )
 
             chunks = []
             scores = []
@@ -349,7 +354,7 @@ class PGVectorIndex(EmbeddingIndex):
         Returns:
             QueryChunksResponse with combined results
         """
-        filter_clause, filter_params, next_idx = self._translate_filters(filters, param_idx=3)
+        filter_clause, filter_params, next_idx = self._translate_filters(filters, param_idx=2)
 
         async with self.pool.acquire() as conn:
             filter_sql = f" AND ({filter_clause})" if filter_clause else ""
@@ -358,11 +363,10 @@ class PGVectorIndex(EmbeddingIndex):
                 f"""
                 SELECT document, ts_rank(tokenized_content, plainto_tsquery('english', $1)) AS score
                 FROM {self._quoted_table}
-                WHERE tokenized_content @@ plainto_tsquery('english', $2){filter_sql}
+                WHERE tokenized_content @@ plainto_tsquery('english', $1){filter_sql}
                 ORDER BY score DESC
                 LIMIT ${next_idx}
                 """,
-                query_string,
                 query_string,
                 *filter_params,
                 k,
@@ -700,7 +704,7 @@ class PGVectorIndex(EmbeddingIndex):
         """
         try:
             log.info(f"Fetching number of records in vector_store: {self.vector_store.identifier}...")
-            count = await conn.fetchval(f"SELECT COUNT(DISTINCT id) FROM {self._quoted_table}")
+            count = await conn.fetchval(f"SELECT COUNT(*) FROM {self._quoted_table}")
 
             if count:
                 log.info(f"vector_store: {self.vector_store.identifier} has {count} records.")
@@ -795,10 +799,11 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 port=self.config.port,
                 database=self.config.db,
                 user=self.config.user,
-                password=self.config.password,
+                password=self.config.password.get_secret_value() if self.config.password else None,
                 min_size=self.config.pool_min_size,
                 max_size=self.config.pool_max_size,
                 statement_cache_size=self.config.statement_cache_size,
+                command_timeout=self.config.command_timeout,
                 init=self._init_connection,
                 reset=self._reset_connection,
             )
@@ -811,6 +816,11 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                             log.info("Vector extension version", version=version)
                         else:
                             await create_vector_extension(conn)
+
+                        try:
+                            await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+                        except asyncpg.PostgresError:
+                            log.debug("pg_stat_statements not available, skipping")
 
                         await conn.execute(
                             """
@@ -829,8 +839,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
             return self.pool
 
     async def initialize(self) -> None:
-        safe_config = {**self.config.model_dump(exclude={"password"}), "password": "******"}
-        log.info(f"Initializing PGVector memory adapter with config: {safe_config}")
+        log.info("Initializing PGVector memory adapter", config=self.config.model_dump())
         self.kvstore = await kvstore_impl(self.config.persistence)
 
         if self.config.metadata_store:

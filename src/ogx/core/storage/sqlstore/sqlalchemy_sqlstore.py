@@ -459,7 +459,11 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 compiled_type = type_impl.compile(dialect=dialect)
 
                 nullable_clause = "" if nullable else " NOT NULL"
-                add_column_sql = text(f"ALTER TABLE {table} ADD COLUMN {column_name} {compiled_type}{nullable_clause}")
+                quoted_table = f'"{table}"' if not self._is_sqlite_backend else table
+                quoted_column = f'"{column_name}"' if not self._is_sqlite_backend else column_name
+                add_column_sql = text(
+                    f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} {compiled_type}{nullable_clause}"
+                )
 
                 await conn.execute(add_column_sql)
         except Exception as e:

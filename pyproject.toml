@@ -363,7 +363,9 @@ convention = "google"
 # Security rule suppressions for known false positives
 "src/ogx/core/datatypes.py" = ["S105"] # Enum values like OAUTH2_TOKEN are not hardcoded secrets
 "src/ogx/distributions/**/*.py" = ["S106"] # Env var template defaults (e.g. ${env.PGVECTOR_PASSWORD:=})
-"src/ogx/providers/remote/**/config.py" = ["S107"] # Env var template defaults in provider configs
+"src/ogx/providers/remote/inference/databricks/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/inference/gemini/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/vector_io/pgvector/config.py" = ["S107"] # Env var template defaults in sample_run_config
 "src/ogx/providers/remote/inference/oci/auth.py" = ["S106"] # pass_phrase="none" placeholder
 "src/ogx/cli/**/*.py" = ["S603", "S607"] # CLI tools legitimately invoke subprocesses
 "src/ogx/core/utils/exec.py" = ["S603"] # Command execution utility
