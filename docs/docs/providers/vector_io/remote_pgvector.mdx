@@ -233,12 +233,13 @@ See [PGVector's documentation](https://github.com/pgvector/pgvector) for more de
 | `port` | `int \| None` | No | 5432 |  |
 | `db` | `str \| None` | No | postgres |  |
 | `user` | `str \| None` | No | postgres |  |
-| `password` | `str \| None` | No | mysecretpassword |  |
+| `password` | `SecretStr \| None` | No |  |  |
 | `distance_metric` | `Literal[COSINE, L2, L1, INNER_PRODUCT] \| None` | No | COSINE | PGVector distance metric used for vector search in PGVectorIndex |
 | `vector_index` | `PGVectorHNSWVectorIndex \| PGVectorIVFFlatVectorIndex \| None` | No | type=&lt;PGVectorIndexType.HNSW: 'HNSW'&gt; m=16 ef_construction=64 ef_search=40 | PGVector vector index used for Approximate Nearest Neighbor (ANN) search |
 | `pool_min_size` | `int` | No | 4 | Minimum number of connections in the asyncpg pool |
 | `pool_max_size` | `int` | No | 20 | Maximum number of connections in the asyncpg pool |
 | `statement_cache_size` | `int` | No | 512 | Size of the prepared statement cache per connection |
+| `command_timeout` | `float` | No | 30.0 | Timeout in seconds for individual SQL statements |
 | `persistence` | `KVStoreReference \| None` | No |  | Config for KV store backend (SQLite only for now) |
 | `persistence.namespace` | `str` | No |  | Key prefix for KVStore backends |
 | `persistence.backend` | `str` | No |  | Name of backend from storage.backends |
