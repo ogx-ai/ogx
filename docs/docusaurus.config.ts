@@ -71,7 +71,7 @@ const config: Config = {
           sidebarPath: require.resolve("./sidebars.ts"),
           // disableVersioning: true,
           docItemComponent: "@theme/ApiItem", // Derived from docusaurus-theme-openapi
-          editUrl: 'https://github.com/ogx-ai/ogx/edit/main/',
+          editUrl: 'https://github.com/ogx-ai/ogx/edit/main/docs/',
           showLastUpdateTime: true,
           showLastUpdateAuthor: false,
           remarkPlugins: [
