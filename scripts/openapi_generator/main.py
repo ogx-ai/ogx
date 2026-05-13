@@ -16,7 +16,16 @@ from typing import Any
 import yaml
 from fastapi.openapi.utils import get_openapi
 
-from . import app, code_samples, multi_sdk, schema_collection, schema_filtering, schema_transforms, state
+from . import (
+    app,
+    code_samples,
+    multi_sdk,
+    multipart_transforms,
+    schema_collection,
+    schema_filtering,
+    schema_transforms,
+    state,
+)
 
 
 def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
@@ -67,6 +76,9 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     # Remove query parameters from POST/PUT/PATCH endpoints that have a request body
     # FastAPI sometimes infers parameters as query params even when they should be in the request body
     openapi_schema = schema_transforms._remove_query_params_from_body_endpoints(openapi_schema)
+
+    # Normalize multipart binary fields to preserve backward-compatible schema shape.
+    openapi_schema = multipart_transforms.normalize_multipart_binary_fields(openapi_schema)
 
     # Promote model fields marked with x-extra-body-field to x-ogx-extra-body-params
     openapi_schema = schema_transforms._promote_model_extra_body_fields(openapi_schema)

@@ -1319,7 +1319,7 @@ class OpenAIVectorStoreMixin(ABC):
                 content_response = await self.files_api.openai_retrieve_file_content(
                     RetrieveFileContentRequest(file_id=file_id)
                 )
-                full_content = content_from_data_and_mime_type(content_response.body, mime_type)
+                full_content = content_from_data_and_mime_type(bytes(content_response.body), mime_type)
                 await self._execute_contextual_chunk_transformation(chunks, full_content, chunking_strategy.contextual)
             if not chunks:
                 vector_store_file_object.status = "failed"
