@@ -47,6 +47,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
         super().__init__(config=config)
         self._iam_token_cache: dict[str, tuple[str, float]] = {}
         self._iam_token_lock = asyncio.Lock()
+        self._iam_refresh_tasks: dict[str, asyncio.Task[str]] = {}
         self._model_specs_cache: list[dict[str, Any]] | None = None
 
     def get_base_url(self) -> str:
@@ -76,6 +77,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
             if time.time() < expiry - 60:
                 return token
 
+        refresh_task: asyncio.Task[str] | None = None
         async with self._iam_token_lock:
             cached = self._iam_token_cache.get(api_key)
             if cached:
@@ -83,23 +85,42 @@ class WatsonXInferenceAdapter(OpenAIMixin):
                 if time.time() < expiry - 60:
                     return token
 
-            try:
-                async with httpx.AsyncClient() as http_client:
-                    resp = await http_client.post(
-                        "https://iam.cloud.ibm.com/identity/token",
-                        headers={"Content-Type": "application/x-www-form-urlencoded"},
-                        content=f"grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey={api_key}",
-                        timeout=30,
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                    token = data["access_token"]
-                    expiry = data.get("expiration", time.time() + 3600)
-                    self._iam_token_cache[api_key] = (token, expiry)
-                    return token
-            except Exception as e:
-                logger.warning("IAM token exchange failed, using API key directly", error=str(e))
-                return api_key
+            refresh_task = self._iam_refresh_tasks.get(api_key)
+            if refresh_task is not None and refresh_task.done():
+                self._iam_refresh_tasks.pop(api_key, None)
+                refresh_task = None
+
+            if refresh_task is None:
+                refresh_task = asyncio.create_task(self._exchange_iam_token(api_key))
+                self._iam_refresh_tasks[api_key] = refresh_task
+
+        try:
+            # Shield shared refresh work from request cancellation.
+            return await asyncio.shield(refresh_task)
+        finally:
+            if refresh_task.done():
+                async with self._iam_token_lock:
+                    if self._iam_refresh_tasks.get(api_key) is refresh_task:
+                        self._iam_refresh_tasks.pop(api_key, None)
+
+    async def _exchange_iam_token(self, api_key: str) -> str:
+        try:
+            async with httpx.AsyncClient() as http_client:
+                resp = await http_client.post(
+                    "https://iam.cloud.ibm.com/identity/token",
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    content=f"grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey={api_key}",
+                    timeout=30,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                token = data["access_token"]
+                expiry = data.get("expiration", time.time() + 3600)
+                self._iam_token_cache[api_key] = (token, expiry)
+                return token
+        except Exception as e:
+            logger.warning("IAM token exchange failed, using API key directly", error=str(e))
+            return api_key
 
     def _get_api_key_or_raise(self) -> str:
         api_key = self._get_api_key_from_config_or_provider_data()
