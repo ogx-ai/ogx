@@ -400,10 +400,29 @@ async def instantiate_provider(
 
     logger.debug("Instantiating provider", provider_id=provider.provider_id, module=provider_spec.module)
     module = importlib.import_module(provider_spec.module)
+
+    def _inject_config_defaults(config_type: type[Any], provider_config: dict[str, Any]) -> dict[str, Any]:
+        fields = getattr(config_type, "__fields__", None)
+        if fields is None:
+            return provider_config
+
+        # Inject vector_stores_config for providers that need it (introspection-based).
+        # Only inject if vector_stores is provided, otherwise let default_factory handle it.
+        if "vector_stores_config" in fields and run_config.vector_stores is not None:
+            provider_config["vector_stores_config"] = run_config.vector_stores
+
+        # Inject metadata_store from server stores config when not explicitly configured.
+        if "metadata_store" in fields:
+            if provider_config.get("metadata_store") is None and run_config.storage.stores.vector_stores is not None:
+                provider_config["metadata_store"] = run_config.storage.stores.vector_stores.model_dump()
+
+        return provider_config
+
     args = []
     if isinstance(provider_spec, RemoteProviderSpec):
         config_type = instantiate_class_type(provider_spec.config_class)
-        config = config_type(**provider.config)
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
+        config = config_type(**provider_config)
 
         method = "get_adapter_impl"
         args = [config, deps]
@@ -423,15 +442,8 @@ async def instantiate_provider(
         args = [provider_spec.api, inner_impls, deps, dist_registry, policy]
     else:
         method = "get_provider_impl"
-        provider_config = provider.config.copy()
-
-        # Inject vector_stores_config for providers that need it (introspection-based)
         config_type = instantiate_class_type(provider_spec.config_class)
-        if hasattr(config_type, "__fields__") and "vector_stores_config" in config_type.__fields__:
-            # Only inject if vector_stores is provided, otherwise let default_factory handle it
-            if run_config.vector_stores is not None:
-                provider_config["vector_stores_config"] = run_config.vector_stores
-
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
         config = config_type(**provider_config)
         args = [config, deps]
         if "policy" in inspect.signature(getattr(module, method)).parameters:

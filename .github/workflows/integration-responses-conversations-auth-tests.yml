@@ -167,6 +167,9 @@ jobs:
               prompts:
                 table_name: prompts
                 backend: sql_default
+              vector_stores:
+                table_name: vector_store_metadata
+                backend: sql_default
           models:
           - model_id: openai/gpt-4o
             model_type: llm
@@ -174,6 +177,8 @@ jobs:
           - model_id: sentence-transformers/nomic-ai/nomic-embed-text-v1.5
             model_type: embedding
             provider_id: sentence-transformers
+            metadata:
+              embedding_dimension: 768
           server:
             port: 8321
             auth:
