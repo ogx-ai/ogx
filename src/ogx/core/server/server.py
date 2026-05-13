@@ -120,6 +120,13 @@ class StackApp(FastAPI):
             future = executor.submit(asyncio.run, self.stack.initialize())  # type: ignore[no-untyped-call]
             future.result()
 
+        # Reset SQL engines that may have been created in the temporary event loop
+        # (e.g. by register_connectors → list_connectors → fetch_all) so they are
+        # recreated lazily in uvicorn's request-handling event loop.
+        from ogx.core.storage.sqlstore.sqlstore import reset_sqlstore_engines
+
+        reset_sqlstore_engines()
+
 
 @asynccontextmanager
 async def lifespan(app: StackApp) -> AsyncIterator[None]:
