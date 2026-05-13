@@ -1,6 +1,6 @@
 # OGX Documentation
 
-Here's a collection of comprehensive guides, examples, and resources for building AI applications with OGX. For the complete documentation, visit our [Github page](https://ogx-ai.github.io/getting_started/quickstart).
+Here's a collection of comprehensive guides, examples, and resources for building AI applications with OGX. For the complete documentation, visit our [Github page](https://ogx-ai.github.io/docs/getting_started/quickstart).
 
 ## Render locally
 
