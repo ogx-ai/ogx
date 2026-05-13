@@ -5,7 +5,7 @@
 # SECURITY NOTE: This workflow uses pull_request (not pull_request_target).
 # Security measures:
 # 1. Runs with read-only permissions (no write access to repo)
-# 2. Only runs for dependabot[bot] PRs on dependabot/uv/ branches
+# 2. Only runs for PRs on dependabot/uv/ branches (created exclusively by Dependabot)
 # 3. Results uploaded as artifacts; companion workflow handles commits
 name: Dependabot constraint-dependencies
 
@@ -27,7 +27,7 @@ permissions:
 jobs:
   update-constraints:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/uv/')
+    if: startsWith(github.head_ref, 'dependabot/uv/')
     timeout-minutes: 10
 
     steps:

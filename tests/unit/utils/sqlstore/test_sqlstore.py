@@ -602,3 +602,34 @@ async def test_pool_recycle_is_configurable():
         pool_recycle=300,
     )
     assert cfg.pool_recycle == 300
+
+
+async def test_late_table_creation_after_engine_init():
+    """Tables registered after the engine has started are still physically created.
+
+    When one provider triggers _ensure_engine (via a data operation) before another
+    provider registers its tables, the late tables must still be created in the
+    database. Regression test for the 'no such table: responses' CI failure.
+    """
+    with TemporaryDirectory() as tmp_dir:
+        db_path = tmp_dir + "/late_table.db"
+        config = SqliteSqlStoreConfig(db_path=db_path)
+        store = SqlAlchemySqlStoreImpl(config)
+
+        await store.create_table(
+            "early_table",
+            {"id": ColumnDefinition(type=ColumnType.STRING, primary_key=True), "data": ColumnType.STRING},
+        )
+        await store.insert("early_table", {"id": "1", "data": "hello"})
+
+        await store.create_table(
+            "late_table",
+            {"id": ColumnDefinition(type=ColumnType.STRING, primary_key=True), "value": ColumnType.STRING},
+        )
+        await store.insert("late_table", {"id": "a", "value": "world"})
+
+        result = await store.fetch_all("late_table")
+        assert len(result.data) == 1
+        assert result.data[0]["value"] == "world"
+
+        await store.shutdown()
