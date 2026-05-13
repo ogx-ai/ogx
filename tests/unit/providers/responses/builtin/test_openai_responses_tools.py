@@ -98,7 +98,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
         openai_responses_impl.tool_groups_api.get_tool.assert_called_once_with("web_search")
         openai_responses_impl.tool_runtime_api.invoke_tool.assert_called_once_with(
             tool_name="web_search",
-            kwargs={"query": "What is the capital of Ireland?", "search_context_size": "medium"},
+            kwargs={"query": "What is the capital of Ireland?"},
         )
 
         openai_responses_impl.responses_store.upsert_response_object.assert_called()
@@ -972,7 +972,7 @@ async def test_web_search_with_filters_and_location(openai_responses_impl, mock_
 
 
 async def test_web_search_without_config_passes_only_query(openai_responses_impl, mock_inference_api):
-    """Test that web search without filters/location only passes query + default search_context_size."""
+    """Test that web search without filters/location only passes query."""
     _setup_web_search_mocks(openai_responses_impl, mock_inference_api)
     await openai_responses_impl.create_openai_response(
         input="What is the capital of Ireland?",
@@ -982,6 +982,6 @@ async def test_web_search_without_config_passes_only_query(openai_responses_impl
     )
     call_kwargs = openai_responses_impl.tool_runtime_api.invoke_tool.call_args.kwargs["kwargs"]
     assert call_kwargs["query"] == "What is the capital of Ireland?"
-    assert call_kwargs["search_context_size"] == "medium"
+    assert "search_context_size" not in call_kwargs
     assert "allowed_domains" not in call_kwargs
     assert "user_location" not in call_kwargs

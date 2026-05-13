@@ -67,7 +67,7 @@ def test_web_search_tool_filters_none_by_default():
     tool = OpenAIResponseInputToolWebSearch(type="web_search")
     assert tool.filters is None
     assert tool.user_location is None
-    assert tool.search_context_size == "medium"
+    assert tool.search_context_size is None
 
 
 def test_web_search_tool_filters_with_empty_allowed_domains():

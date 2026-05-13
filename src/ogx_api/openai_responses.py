@@ -573,7 +573,7 @@ class OpenAIResponseInputToolWebSearch(BaseModel):
         | Literal["web_search_preview_2025_03_11"]
         | Literal["web_search_2025_08_26"]
     ) = "web_search"
-    search_context_size: Literal["low", "medium", "high"] | None = "medium"
+    search_context_size: Literal["low", "medium", "high"] | None = None
     filters: WebSearchFilters | None = None
     user_location: WebSearchUserLocation | None = None
 
