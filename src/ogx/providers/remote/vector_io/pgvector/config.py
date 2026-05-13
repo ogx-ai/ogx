@@ -89,6 +89,11 @@ class PGVectorVectorIOConfig(BaseModel):
         default_factory=PGVectorHNSWVectorIndex,
         description="PGVector vector index used for Approximate Nearest Neighbor (ANN) search",
     )
+    pool_min_size: int = Field(default=4, ge=1, description="Minimum number of connections in the asyncpg pool")
+    pool_max_size: int = Field(default=20, ge=1, description="Maximum number of connections in the asyncpg pool")
+    statement_cache_size: int = Field(
+        default=512, ge=0, description="Size of the prepared statement cache per connection"
+    )
     persistence: KVStoreReference | None = Field(
         description="Config for KV store backend (SQLite only for now)", default=None
     )
@@ -96,6 +101,14 @@ class PGVectorVectorIOConfig(BaseModel):
         default=None,
         description="SQL store reference for tenant-isolated vector store metadata",
     )
+
+    @model_validator(mode="after")
+    def validate_pool_sizes(self) -> Self:
+        if self.pool_min_size > self.pool_max_size:
+            raise ValueError(
+                f"pool_min_size ({self.pool_min_size}) must be less than or equal to pool_max_size ({self.pool_max_size})"
+            )
+        return self
 
     @classmethod
     def sample_run_config(
