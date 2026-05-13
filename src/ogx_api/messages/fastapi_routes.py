@@ -17,7 +17,7 @@ import logging  # allow-direct-logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, HTTPException, Request, Response
+from fastapi import APIRouter, Body, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -262,14 +262,10 @@ def create_router(impl: Messages) -> APIRouter:
         response_model=ListMessageBatchesResponse,
     )
     async def list_message_batches(
-        limit: int = 20,
-        before_id: str | None = None,
-        after_id: str | None = None,
+        request: Annotated[ListMessageBatchesRequest, Query()],
     ) -> Response:
         try:
-            result = await impl.list_message_batches(
-                ListMessageBatchesRequest(limit=limit, before_id=before_id, after_id=after_id),
-            )
+            result = await impl.list_message_batches(request)
         except Exception:
             logger.exception("Failed to list message batches")
             return _anthropic_error_response(500, "Internal server error")

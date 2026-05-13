@@ -3799,8 +3799,12 @@ paths:
         required: false
         schema:
           type: integer
+          maximum: 1000
+          minimum: 1
+          description: Maximum number of batches to return.
           default: 20
           title: Limit
+        description: Maximum number of batches to return.
       - name: before_id
         in: query
         required: false
@@ -3808,7 +3812,9 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
+          description: Return batches created before this batch ID.
           title: Before Id
+        description: Return batches created before this batch ID.
       - name: after_id
         in: query
         required: false
@@ -3816,7 +3822,9 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
+          description: Return batches created after this batch ID.
           title: After Id
+        description: Return batches created after this batch ID.
     post:
       responses:
         '200':
