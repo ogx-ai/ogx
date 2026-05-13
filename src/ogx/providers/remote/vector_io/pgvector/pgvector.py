@@ -302,7 +302,9 @@ class PGVectorIndex(EmbeddingIndex):
 
                 # Specify the max size of max heap that holds best candidates when traversing the graph (https://github.com/pgvector/pgvector?tab=readme-ov-file#query-options)
                 elif self.vector_index.type == PGVectorIndexType.HNSW:
-                    await conn.execute("SELECT set_config('hnsw.ef_search', $1, true)", str(self.vector_index.ef_search))
+                    await conn.execute(
+                        "SELECT set_config('hnsw.ef_search', $1, true)", str(self.vector_index.ef_search)
+                    )
 
                 where = f"WHERE {filter_clause}" if filter_clause else ""
 
