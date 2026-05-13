@@ -106,6 +106,16 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                     await self._add_column_now(table_name, col_name, col_type, nullable)
             self._pending_columns.clear()
 
+    def reset_engine(self) -> None:
+        """Reset engine state so it will be recreated in the next event loop.
+
+        Called after Stack.initialize() completes in a temporary event loop,
+        before uvicorn's request-handling loop takes over. Does not dispose
+        the old engine because the temporary loop is already closed.
+        """
+        self._engine = None
+        self.async_session = None
+
     async def shutdown(self) -> None:
         """Dispose of the async engine and close all connections."""
         if self._engine:

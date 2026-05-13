@@ -98,6 +98,17 @@ def register_sqlstore_backends(backends: dict[str, StorageBackendConfig]) -> Non
         _SQLSTORE_BACKENDS[name] = cfg
 
 
+def reset_sqlstore_engines() -> None:
+    """Reset engines on all cached SqlStore instances.
+
+    Called after Stack.initialize() completes in a temporary event loop so
+    engines are recreated lazily in uvicorn's request-handling event loop.
+    """
+    for instance in _SQLSTORE_INSTANCES.values():
+        if hasattr(instance, "reset_engine"):
+            instance.reset_engine()
+
+
 async def shutdown_sqlstore_backends() -> None:
     """Shutdown all cached SQL store instances."""
     global _SQLSTORE_INSTANCES
