@@ -28,9 +28,15 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
 
     def __init__(self, config: TavilySearchToolConfig):
         self.config = config
+        self._client: httpx.AsyncClient | None = None
 
     async def initialize(self):
-        pass
+        self._client = httpx.AsyncClient(timeout=self.config.to_httpx_timeout())
+
+    async def shutdown(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
 
     async def register_toolgroup(self, toolgroup: ToolGroup) -> None:
         pass
@@ -78,12 +84,13 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
-            response = await client.post(
-                "https://api.tavily.com/search",
-                json={"api_key": api_key, "query": kwargs["query"]},
-            )
-            response.raise_for_status()
+        if self._client is None:
+            raise RuntimeError("Failed to invoke tool: provider not initialized")
+        response = await self._client.post(
+            "https://api.tavily.com/search",
+            json={"api_key": api_key, "query": kwargs["query"]},
+        )
+        response.raise_for_status()
 
         return ToolInvocationResult(content=json.dumps(self._clean_tavily_response(response.json())))
 
