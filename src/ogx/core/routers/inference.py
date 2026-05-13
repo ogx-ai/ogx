@@ -65,6 +65,11 @@ from ogx_api.inference.models import RerankRequest
 logger = get_logger(name=__name__, category="core::routers")
 
 
+def _log_background_task_error(task: asyncio.Task) -> None:
+    if not task.cancelled() and (exc := task.exception()):
+        logger.error("Failed to store chat completion in background", error=str(exc))
+
+
 class InferenceRouter(Inference):
     """Routes to an provider based on the model"""
 
@@ -268,7 +273,8 @@ class InferenceRouter(Inference):
 
         # Store the response with the ID that will be returned to the client
         if self.store:
-            asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            task = asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            task.add_done_callback(_log_background_task_error)
 
         return response
 
@@ -351,27 +357,27 @@ class InferenceRouter(Inference):
         return response
 
     async def health(self) -> dict[str, HealthResponse]:
-        health_statuses = {}
-        timeout = 1  # increasing the timeout to 1 second for health checks
-        for provider_id, impl in self.routing_table.impls_by_provider_id.items():
+        timeout = 1
+        impls_snapshot = dict(self.routing_table.impls_by_provider_id)
+
+        async def _check_one(provider_id: str, impl: object) -> tuple[str, HealthResponse]:
             try:
-                # check if the provider has a health method
                 if not hasattr(impl, "health"):
-                    continue
-                health = await asyncio.wait_for(impl.health(), timeout=timeout)
-                health_statuses[provider_id] = health
+                    return provider_id, HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
+                result = await asyncio.wait_for(impl.health(), timeout=timeout)
+                return provider_id, result
             except TimeoutError:
-                health_statuses[provider_id] = HealthResponse(
+                return provider_id, HealthResponse(
                     status=HealthStatus.ERROR,
                     message=f"Health check timed out after {timeout} seconds",
                 )
             except NotImplementedError:
-                health_statuses[provider_id] = HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
+                return provider_id, HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
             except Exception as e:
-                health_statuses[provider_id] = HealthResponse(
-                    status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}"
-                )
-        return health_statuses
+                return provider_id, HealthResponse(status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}")
+
+        results = await asyncio.gather(*[_check_one(pid, impl) for pid, impl in impls_snapshot.items()])
+        return dict(results)
 
     async def stream_tokens_and_compute_metrics_openai_chat(
         self,
@@ -555,4 +561,5 @@ class InferenceRouter(Inference):
                     object="chat.completion",
                 )
                 logger.debug("InferenceRouter.completion_response", final_response=final_response)
-                asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                task = asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                task.add_done_callback(_log_background_task_error)

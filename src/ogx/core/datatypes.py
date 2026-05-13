@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
 from ogx.core.storage.datatypes import (
@@ -193,7 +193,7 @@ class OAuth2IntrospectionConfig(BaseModel):
 
     url: str
     client_id: str
-    client_secret: str
+    client_secret: SecretStr
     send_secret_in_body: bool = False
 
 

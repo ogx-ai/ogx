@@ -4,7 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Any
 
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.collection import AsyncCollection
@@ -43,10 +44,18 @@ class MongoDBKVStoreImpl(KVStore):
             log.exception("Could not connect to MongoDB database server")
             raise RuntimeError("Could not connect to MongoDB database server") from e
 
+        await self.collection.create_index("key", unique=True)
+        await self.collection.create_index([("expiration", 1)], expireAfterSeconds=0)
+
     def _namespaced_key(self, key: str) -> str:
         if not self.config.namespace:
             return key
         return f"{self.config.namespace}:{key}"
+
+    def _strip_namespace(self, key: str) -> str:
+        if self.config.namespace and key.startswith(f"{self.config.namespace}:"):
+            return key[len(self.config.namespace) + 1 :]
+        return key
 
     async def set(self, key: str, value: str, expiration: datetime | None = None) -> None:
         key = self._namespaced_key(key)
@@ -55,7 +64,11 @@ class MongoDBKVStoreImpl(KVStore):
 
     async def get(self, key: str) -> str | None:
         key = self._namespaced_key(key)
-        query = {"key": key}
+        now = datetime.now(tz=UTC)
+        query: dict[str, Any] = {
+            "key": key,
+            "$or": [{"expiration": None}, {"expiration": {"$gt": now}}],
+        }
         result = await self.collection.find_one(query, {"value": 1, "_id": 0})
         return result["value"] if result else None
 
@@ -66,8 +79,10 @@ class MongoDBKVStoreImpl(KVStore):
     async def values_in_range(self, start_key: str, end_key: str) -> list[str]:
         start_key = self._namespaced_key(start_key)
         end_key = self._namespaced_key(end_key)
-        query = {
+        now = datetime.now(tz=UTC)
+        query: dict[str, Any] = {
             "key": {"$gte": start_key, "$lt": end_key},
+            "$or": [{"expiration": None}, {"expiration": {"$gt": now}}],
         }
         cursor = self.collection.find(query, {"value": 1, "_id": 0}).sort("key", 1)
         result = []
@@ -78,12 +93,15 @@ class MongoDBKVStoreImpl(KVStore):
     async def keys_in_range(self, start_key: str, end_key: str) -> list[str]:
         start_key = self._namespaced_key(start_key)
         end_key = self._namespaced_key(end_key)
-        query = {"key": {"$gte": start_key, "$lt": end_key}}
+        now = datetime.now(tz=UTC)
+        query: dict[str, Any] = {
+            "key": {"$gte": start_key, "$lt": end_key},
+            "$or": [{"expiration": None}, {"expiration": {"$gt": now}}],
+        }
         cursor = self.collection.find(query, {"key": 1, "_id": 0}).sort("key", 1)
-        # AsyncCursor requires async iteration
         result = []
         async for doc in cursor:
-            result.append(doc["key"])
+            result.append(self._strip_namespace(doc["key"]))
         return result
 
     async def shutdown(self) -> None:

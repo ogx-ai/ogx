@@ -73,10 +73,11 @@ class ConversationServiceImpl(Conversations):
         if not conversations_ref:
             raise ServiceNotEnabledError("storage.stores.conversations")
 
-        self.sql_store = authorized_sqlstore(conversations_ref, self.policy)
+        self._conversations_ref = conversations_ref
 
     async def initialize(self) -> None:
         """Initialize the store and create tables."""
+        self.sql_store = await authorized_sqlstore(self._conversations_ref, self.policy)
         await self.sql_store.create_table(
             "openai_conversations",
             {

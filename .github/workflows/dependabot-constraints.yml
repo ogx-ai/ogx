@@ -1,0 +1,156 @@
+# Computes constraint-dependency updates for Dependabot PRs.
+# This workflow runs with read-only permissions for security.
+# A companion workflow (commit-constraint-updates.yml) commits the results.
+#
+# SECURITY NOTE: This workflow uses pull_request (not pull_request_target).
+# Security measures:
+# 1. Runs with read-only permissions (no write access to repo)
+# 2. Only runs for dependabot[bot] PRs on dependabot/uv/ branches
+# 3. Results uploaded as artifacts; companion workflow handles commits
+name: Dependabot constraint-dependencies
+
+run-name: Update constraint-dependencies for Dependabot PR
+
+on:
+  pull_request:
+    paths:
+      - 'uv.lock'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+# Read-only permissions - no write access
+permissions:
+  contents: read
+
+jobs:
+  update-constraints:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/uv/')
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Parse dependency info from Dependabot commit
+        id: parse
+        run: |
+          commit_msg=$(git log -1 --format="%B")
+
+          # Extract dependency-name and dependency-version from the structured
+          # updated-dependencies block in the Dependabot commit message
+          dep_name=$(echo "$commit_msg" | grep -oP '(?<=dependency-name: ).+' | head -1 | tr -d '[:space:]')
+          dep_version=$(echo "$commit_msg" | grep -oP '(?<=dependency-version: ).+' | head -1 | tr -d '[:space:]')
+
+          if [ -z "$dep_name" ] || [ -z "$dep_version" ]; then
+            echo "Could not parse dependency info from commit message"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "dep_name=$dep_name"
+            echo "dep_version=$dep_version"
+            echo "skip=false"
+          } >> "$GITHUB_OUTPUT"
+          echo "Parsed: $dep_name $dep_version"
+
+      - name: Update constraint-dependencies in pyproject.toml
+        if: steps.parse.outputs.skip != 'true'
+        id: update
+        env:
+          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
+          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+        run: |
+          output=$(python3 .github/scripts/update_constraint_deps.py \
+            --dependency-name "$DEP_NAME" \
+            --dependency-version "$DEP_VERSION")
+
+          echo "$output"
+
+          if echo "$output" | grep -q "updated=true"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate uv.lock
+        if: steps.update.outputs.changed == 'true'
+        run: uv lock
+
+      - name: Create PR metadata artifact
+        if: steps.parse.outputs.skip != 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$PR_HEAD_REPO" != "$REPO" ]; then
+            IS_FORK_PR="true"
+          else
+            IS_FORK_PR="false"
+          fi
+
+          mkdir -p pr-metadata
+          cat > pr-metadata/pr-info.json <<EOF
+          {
+            "pr_number": "${PR_NUMBER}",
+            "pr_head_ref": "${PR_HEAD_REF}",
+            "pr_head_sha": "${PR_HEAD_SHA}",
+            "pr_head_repo": "${PR_HEAD_REPO}",
+            "is_fork_pr": "${IS_FORK_PR}"
+          }
+          EOF
+          cat pr-metadata/pr-info.json
+
+      - name: Upload PR metadata
+        if: steps.parse.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-metadata-constraints-${{ github.run_id }}
+          path: pr-metadata/
+          retention-days: 1
+
+      - name: Prepare constraint update artifact
+        if: steps.parse.outputs.skip != 'true'
+        env:
+          CHANGED: ${{ steps.update.outputs.changed }}
+          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
+          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+        run: |
+          mkdir -p constraint-update
+          cat > constraint-update/change-info.json <<EOF
+          {
+            "changed": "${CHANGED}",
+            "dep_name": "${DEP_NAME}",
+            "dep_version": "${DEP_VERSION}"
+          }
+          EOF
+
+          if [ "$CHANGED" = "true" ]; then
+            cp pyproject.toml constraint-update/
+            cp uv.lock constraint-update/
+          fi
+
+      - name: Upload constraint update
+        if: steps.parse.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: constraint-update-${{ github.run_id }}
+          path: constraint-update/
+          retention-days: 1

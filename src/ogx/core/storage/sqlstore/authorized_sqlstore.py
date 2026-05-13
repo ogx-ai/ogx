@@ -82,12 +82,12 @@ class SqlRecord(ProtectedResource):
         self.owner = owner
 
 
-def authorized_sqlstore(reference: SqlStoreReference, policy: list[AccessRule]) -> "AuthorizedSqlStore":
+async def authorized_sqlstore(reference: SqlStoreReference, policy: list[AccessRule]) -> "AuthorizedSqlStore":
     """Create an AuthorizedSqlStore from a store reference and access policy.
 
     This is the only supported way to obtain a SQL store for API use.
     """
-    return AuthorizedSqlStore(_sqlstore_impl(reference), policy)
+    return AuthorizedSqlStore(await _sqlstore_impl(reference), policy)
 
 
 class AuthorizedSqlStore:

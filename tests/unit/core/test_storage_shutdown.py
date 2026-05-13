@@ -149,7 +149,7 @@ class TestSqlStoreShutdown:
             )
 
             # Create instance by calling _sqlstore_impl
-            store = _sqlstore_impl(SqlStoreReference(backend="sql_test", table_name="test"))
+            store = await _sqlstore_impl(SqlStoreReference(backend="sql_test", table_name="test"))
 
             # Verify store is working
             from ogx_api.internal.sqlstore import ColumnType

@@ -792,7 +792,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         if self.config.metadata_store:
             from ogx.core.storage.sqlstore import authorized_sqlstore
 
-            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         await self.initialize_openai_vector_stores()
 

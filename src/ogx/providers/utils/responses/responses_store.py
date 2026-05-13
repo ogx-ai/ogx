@@ -126,7 +126,7 @@ class ResponsesStore:
 
     async def initialize(self):
         """Create the necessary tables if they don't exist."""
-        self.sql_store = authorized_sqlstore(self.reference, self.policy)
+        self.sql_store = await authorized_sqlstore(self.reference, self.policy)
 
         await self.sql_store.create_table(
             self.reference.table_name,

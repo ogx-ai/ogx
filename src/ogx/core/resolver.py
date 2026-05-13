@@ -132,7 +132,6 @@ def additional_protocols_map() -> dict[Api, Any]:
     }
 
 
-# TODO: make all this naming far less atrocious. Provider. ProviderSpec. ProviderWithSpec. WTF!
 class ProviderWithSpec(Provider):
     """A Provider paired with its resolved ProviderSpec for instantiation."""
 

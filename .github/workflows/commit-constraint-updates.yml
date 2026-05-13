@@ -1,0 +1,320 @@
+# Commits constraint-dependency updates from dependabot-constraints.yml back to
+# Dependabot PRs.
+# This workflow runs with elevated permissions but only executes trusted code
+# from the base repo.
+# Triggered via workflow_run after dependabot-constraints.yml completes.
+name: Commit Constraint Updates
+
+on:
+  workflow_run:
+    workflows: ["Dependabot constraint-dependencies"]
+    types:
+      - completed
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  commit-constraint-updates:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Download constraint update artifact
+        id: download-update
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }},
+            });
+
+            const fs = require('fs');
+
+            const constraintArtifact = artifacts.data.artifacts.find(
+              a => a.name.startsWith('constraint-update-')
+            );
+            if (constraintArtifact) {
+              console.log(`Found constraint update artifact: ${constraintArtifact.name}`);
+              const download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: constraintArtifact.id,
+                archive_format: 'zip',
+              });
+              fs.writeFileSync('constraint-update.zip', Buffer.from(download.data));
+            } else {
+              console.log('No constraint update artifact found, skipping');
+              core.setOutput('skip', 'true');
+            }
+
+      - name: Download PR metadata artifact
+        if: steps.download-update.outputs.skip != 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }},
+            });
+
+            const metadataArtifact = artifacts.data.artifacts.find(
+              a => a.name.startsWith('pr-metadata-constraints-')
+            );
+            if (metadataArtifact) {
+              console.log(`Found PR metadata artifact: ${metadataArtifact.name}`);
+              const download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: metadataArtifact.id,
+                archive_format: 'zip',
+              });
+              const fs = require('fs');
+              fs.writeFileSync('pr-metadata.zip', Buffer.from(download.data));
+            } else {
+              console.log('No PR metadata artifact found');
+            }
+
+      - name: Extract artifacts
+        if: steps.download-update.outputs.skip != 'true'
+        run: |
+          if [ -f constraint-update.zip ]; then
+            mkdir -p constraint-update
+            unzip -o constraint-update.zip -d constraint-update/
+          fi
+          if [ -f pr-metadata.zip ]; then
+            unzip -o pr-metadata.zip
+          fi
+
+      - name: Check for changes
+        if: steps.download-update.outputs.skip != 'true'
+        id: changes
+        run: |
+          if [ ! -f constraint-update/change-info.json ]; then
+            echo "No change-info.json found, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=$(jq -r '.changed' constraint-update/change-info.json)
+          DEP_NAME=$(jq -r '.dep_name' constraint-update/change-info.json)
+          DEP_VERSION=$(jq -r '.dep_version' constraint-update/change-info.json)
+
+          {
+            echo "changed=$CHANGED"
+            echo "dep_name=$DEP_NAME"
+            echo "dep_version=$DEP_VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$CHANGED" != "true" ]; then
+            echo "No constraint changes to commit"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get PR information
+        id: pr-info
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            let prNumber = null;
+            let headRepo = null;
+            let headRef = null;
+            let headSha = null;
+
+            if (fs.existsSync('pr-info.json')) {
+              try {
+                const metadata = JSON.parse(fs.readFileSync('pr-info.json', 'utf8'));
+                prNumber = parseInt(metadata.pr_number, 10);
+                headRepo = metadata.pr_head_repo;
+                headRef = metadata.pr_head_ref;
+                headSha = metadata.pr_head_sha;
+                console.log(`Loaded PR info from metadata: PR #${prNumber}`);
+              } catch (e) {
+                console.log(`Failed to parse metadata: ${e.message}`);
+              }
+            }
+
+            // Fallback: check the triggering workflow run
+            if (!prNumber) {
+              const runInfo = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: ${{ github.event.workflow_run.id }},
+              });
+
+              if (runInfo.data.event === 'pull_request' && runInfo.data.pull_requests.length > 0) {
+                const pr = runInfo.data.pull_requests[0];
+                prNumber = pr.number;
+
+                const prData = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+
+                headRepo = prData.data.head.repo.full_name;
+                headRef = prData.data.head.ref;
+                headSha = prData.data.head.sha;
+              } else {
+                console.log('No PR metadata and not a pull_request event, skipping');
+                core.setOutput('skip', 'true');
+                return;
+              }
+            }
+
+            core.setOutput('pr_number', prNumber);
+            core.setOutput('head_repo', headRepo);
+            core.setOutput('head_ref', headRef);
+            core.setOutput('head_sha', headSha);
+            core.setOutput('is_fork_pr', headRepo !== `${context.repo.owner}/${context.repo.repo}`);
+
+      - name: Preserve artifacts before checkout
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true' && steps.pr-info.outputs.is_fork_pr != 'true'
+        run: mv constraint-update /tmp/constraint-update 2>/dev/null || true
+
+      - name: Checkout PR branch (same-repo)
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true' && steps.pr-info.outputs.is_fork_pr != 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ steps.pr-info.outputs.head_repo }}
+          ref: ${{ steps.pr-info.outputs.head_ref }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Restore artifacts after checkout
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true' && steps.pr-info.outputs.is_fork_pr != 'true'
+        run: mv /tmp/constraint-update constraint-update 2>/dev/null || true
+
+      - name: Checkout PR branch (fork)
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true' && steps.pr-info.outputs.is_fork_pr == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          HEAD_REPO: ${{ steps.pr-info.outputs.head_repo }}
+          HEAD_REF: ${{ steps.pr-info.outputs.head_ref }}
+        run: |
+          mv constraint-update /tmp/constraint-update 2>/dev/null || true
+          rm -f constraint-update.zip pr-metadata.zip pr-info.json
+          git clone --depth 1 --branch "${HEAD_REF}" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${HEAD_REPO}.git" .
+          mv /tmp/constraint-update constraint-update 2>/dev/null || true
+
+      - name: Copy updated files to repo
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true'
+        run: |
+          if [ -f constraint-update/pyproject.toml ]; then
+            cp constraint-update/pyproject.toml pyproject.toml
+            echo "Copied updated pyproject.toml"
+          fi
+          if [ -f constraint-update/uv.lock ]; then
+            cp constraint-update/uv.lock uv.lock
+            echo "Copied updated uv.lock"
+          fi
+
+      - name: Commit and push constraint updates
+        id: commit
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.pr-info.outputs.is_fork_pr == 'true' && secrets.RELEASE_PAT || github.token }}
+          PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
+          HEAD_REPO: ${{ steps.pr-info.outputs.head_repo }}
+          HEAD_REF: ${{ steps.pr-info.outputs.head_ref }}
+          IS_FORK_PR: ${{ steps.pr-info.outputs.is_fork_pr }}
+          BASE_REPO: ${{ github.repository }}
+          DEP_NAME: ${{ steps.changes.outputs.dep_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [[ -z $(git status --porcelain pyproject.toml uv.lock) ]]; then
+            echo "No changes to commit"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git add pyproject.toml uv.lock
+          git commit -s -m "fix(deps): update constraint-dependencies for ${DEP_NAME}"
+
+          if [ "$IS_FORK_PR" = "true" ]; then
+            echo "This is a fork PR, checking maintainer permissions..."
+            MAINTAINER_CAN_MODIFY=$(gh pr view "$PR_NUMBER" --repo "$BASE_REPO" \
+              --json maintainerCanModify --jq '.maintainerCanModify')
+
+            if [ "$MAINTAINER_CAN_MODIFY" = "true" ]; then
+              echo "Maintainer can modify - pushing to fork PR branch"
+              git push "https://x-access-token:${GH_TOKEN}@github.com/${HEAD_REPO}.git" \
+                "HEAD:${HEAD_REF}"
+              echo "Successfully pushed constraint updates to fork PR"
+              echo "pushed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::Cannot push to fork PR: 'Allow edits from maintainers' is not enabled"
+              echo "pushed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "Pushing to same-repo PR branch: $HEAD_REF"
+            git push origin "HEAD:${HEAD_REF}"
+            echo "Successfully pushed constraint updates"
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on PR
+        if: steps.commit.outputs.pushed == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
+          DEP_NAME: ${{ steps.changes.outputs.dep_name }}
+          DEP_VERSION: ${{ steps.changes.outputs.dep_version }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            const depName = process.env.DEP_NAME;
+            const depVersion = process.env.DEP_VERSION;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const COMMENT_MARKER = '<!-- commit-constraint-updates-bot -->';
+
+            const message = `${COMMENT_MARKER}\n` +
+              `✅ **Constraint-dependencies updated**\n\n` +
+              `Updated \`pyproject.toml\` constraint for \`${depName}\` to \`>=${depVersion}\` ` +
+              `and regenerated \`uv.lock\`.\n\n` +
+              `[View commit workflow](${runUrl})`;
+
+            try {
+              let existing = null;
+              for await (const response of github.paginate.iterator(
+                github.rest.issues.listComments, {
+                  issue_number: prNumber,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  per_page: 100,
+                }
+              )) {
+                existing = response.data.find(c => c.body.includes(COMMENT_MARKER));
+                if (existing) break;
+              }
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  comment_id: existing.id,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: message,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  issue_number: prNumber,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: message,
+                });
+              }
+            } catch (error) {
+              core.warning(`Could not post PR comment: ${error.message}`);
+            }

@@ -111,7 +111,7 @@ class OpenAIFilesImpl(Files):
     async def initialize(self) -> None:
         self._client = OpenAI(api_key=self._config.api_key)
 
-        self._sql_store = authorized_sqlstore(self._config.metadata_store, self.policy)
+        self._sql_store = await authorized_sqlstore(self._config.metadata_store, self.policy)
         await self._sql_store.create_table(
             "openai_files",
             {
