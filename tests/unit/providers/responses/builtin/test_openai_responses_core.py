@@ -783,6 +783,8 @@ async def test_create_openai_response_with_output_types_as_input(
             name="get_weather",
             arguments='{"city": "Tokyo"}',
             type="function_call",
+            id="fc_call_123",
+            status="in_progress",
         ),
         OpenAIResponseOutputMessageMCPCall(
             id="mcp_456",

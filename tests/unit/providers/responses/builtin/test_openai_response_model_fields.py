@@ -46,15 +46,13 @@ class TestOpenAIResponseMessageFields:
 
 
 class TestOpenAIResponseOutputMessageFunctionToolCallFields:
-    def test_default_id_is_str(self):
-        tc = OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}")
-        assert isinstance(tc.id, str)
-        assert tc.id.startswith("fc_")
+    def test_id_is_required(self):
+        with pytest.raises(ValidationError):
+            OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}", status="in_progress")
 
-    def test_default_status_is_str(self):
-        tc = OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}")
-        assert isinstance(tc.status, str)
-        assert tc.status == "in_progress"
+    def test_status_is_required(self):
+        with pytest.raises(ValidationError):
+            OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}", id="fc_call_123")
 
     def test_explicit_id_and_status(self):
         tc = OpenAIResponseOutputMessageFunctionToolCall(
@@ -65,14 +63,20 @@ class TestOpenAIResponseOutputMessageFunctionToolCallFields:
 
     def test_none_id_rejected(self):
         with pytest.raises(ValidationError):
-            OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}", id=None)
+            OpenAIResponseOutputMessageFunctionToolCall(
+                call_id="call_123", name="func", arguments="{}", id=None, status="in_progress"
+            )
 
     def test_none_status_rejected(self):
         with pytest.raises(ValidationError):
-            OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}", status=None)
+            OpenAIResponseOutputMessageFunctionToolCall(
+                call_id="call_123", name="func", arguments="{}", id="fc_call_123", status=None
+            )
 
     def test_status_transition_preserves_id(self):
-        tc = OpenAIResponseOutputMessageFunctionToolCall(call_id="call_123", name="func", arguments="{}")
+        tc = OpenAIResponseOutputMessageFunctionToolCall(
+            call_id="call_123", name="func", arguments="{}", id="fc_call_123", status="in_progress"
+        )
         assert tc.status == "in_progress"
         completed = tc.model_copy(update={"status": "completed"})
         assert completed.status == "completed"

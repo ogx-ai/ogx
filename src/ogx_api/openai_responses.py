@@ -289,8 +289,8 @@ class OpenAIResponseOutputMessageFunctionToolCall(BaseModel):
     name: str
     arguments: str
     type: Literal["function_call"] = "function_call"
-    id: str = Field(default_factory=lambda: f"fc_{uuid.uuid4()}")
-    status: str = Field(default="in_progress")
+    id: str
+    status: str
 
 
 @json_schema_type

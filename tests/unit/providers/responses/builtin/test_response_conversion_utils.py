@@ -164,6 +164,8 @@ class TestConvertResponseInputToChatMessages:
                 call_id="call_123",
                 name="test_function",
                 arguments='{"param": "value"}',
+                id="fc_call_123",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output="Tool output",
@@ -190,6 +192,8 @@ class TestConvertResponseInputToChatMessages:
                 call_id="call_123",
                 name="search_parks",
                 arguments='{"state_code": "RI"}',
+                id="fc_call_123",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output=[{"type": "input_text", "text": '{"parks": ["Park A", "Park B"]}'}],
@@ -211,6 +215,8 @@ class TestConvertResponseInputToChatMessages:
                 call_id="call_456",
                 name="search",
                 arguments="{}",
+                id="fc_call_456",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output=[{"type": "input_text", "text": "first"}, {"type": "input_text", "text": "second"}],
@@ -235,6 +241,8 @@ class TestConvertResponseInputToChatMessages:
                 call_id="call_789",
                 name="capture_screenshot",
                 arguments='{"url": "https://example.com"}',
+                id="fc_call_789",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output=[{"type": "input_image", "image_url": "data:image/png;base64,iVBORw0KGgo="}],
@@ -263,6 +271,8 @@ class TestConvertResponseInputToChatMessages:
                 call_id="call_mix",
                 name="analyze",
                 arguments="{}",
+                id="fc_call_mix",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output=[
@@ -287,6 +297,8 @@ class TestConvertResponseInputToChatMessages:
                 call_id="call_456",
                 name="test_function",
                 arguments='{"param": "value"}',
+                id="fc_call_456",
+                status="in_progress",
             )
         ]
 
@@ -305,11 +317,15 @@ class TestConvertResponseInputToChatMessages:
                 call_id="call_123",
                 name="test_function_a",
                 arguments='{"param": "value"}',
+                id="fc_call_123",
+                status="in_progress",
             ),
             OpenAIResponseOutputMessageFunctionToolCall(
                 call_id="call_456",
                 name="test_function_b",
                 arguments='{"param": "value"}',
+                id="fc_call_456",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output="AAA",
@@ -513,6 +529,8 @@ class TestReasoningSupportInConversion:
                 call_id="call_abc",
                 name="get_weather",
                 arguments='{"location":"Tokyo","unit":"celsius"}',
+                id="fc_call_abc",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output='{"temperature": 27, "condition": "humid"}',
@@ -772,6 +790,8 @@ class TestReasoningSupportInConversion:
                 call_id="call_no_reason",
                 name="get_weather",
                 arguments='{"location":"Tokyo"}',
+                id="fc_call_no_reason",
+                status="in_progress",
             ),
             OpenAIResponseInputFunctionToolCallOutput(
                 output='{"temperature": 27}',
