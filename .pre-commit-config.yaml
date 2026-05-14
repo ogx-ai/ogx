@@ -140,6 +140,15 @@ repos:
         pass_filenames: false
         require_serial: true
         files: ^docs/static/(ogx-spec\.yaml|openai-spec.*\.yml|openresponses-spec\.json|openai-coverage\.json)$|^docs/docs/api-openai/conformance\.mdx$|^scripts/(openai_coverage|generate_openai_coverage_docs)\.py$
+      - id: openai-responses-drift
+        name: OpenAI Responses Schema Drift
+        additional_dependencies:
+          - *uv-dependency
+        entry: ./scripts/uv-run-with-index.sh run python scripts/check_openai_responses_drift.py --update
+        language: python
+        pass_filenames: false
+        require_serial: true
+        files: ^docs/static/openai-spec.*\.yml$|^src/ogx_api/openai_responses\.py$|^scripts/check_openai_responses_drift\.py$|^docs/static/openai-responses-drift\.json$
       - id: anthropic-coverage
         name: Anthropic Messages API Coverage
         additional_dependencies:
@@ -307,6 +316,26 @@ repos:
               exit 1;
             }
             exit 0
+
+      - id: enforce-authorized-sqlstore
+        name: Enforce AuthorizedSqlStore usage
+        entry: bash
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+        files: ^src/
+        args:
+          - -c
+          - |
+            grep -rn --include="*.py" -E 'sqlstore_impl' src/ \
+              | grep -v 'core/storage/sqlstore/' && {
+              echo;
+              echo "❌ Direct sqlstore_impl usage is not allowed outside core/storage/sqlstore/.";
+              echo "Use authorized_sqlstore() from ogx.core.storage.sqlstore.authorized_sqlstore instead.";
+              echo;
+              exit 1;
+            } || true
 
       - id: check-file-size
         name: Check Python file size limit

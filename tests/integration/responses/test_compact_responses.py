@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 import pytest
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
 from .helpers import skip_if_provider_is_vertexai
 
@@ -36,7 +36,7 @@ class TestCompactResponses:
 
     @pytest.fixture(autouse=True)
     def _skip_non_openai_client(self, responses_client):
-        if isinstance(responses_client, LlamaStackClient):
+        if isinstance(responses_client, OgxClient):
             pytest.skip("Compact tests require OpenAI client")
 
     def test_compact_basic_conversation(self, responses_client, text_model_id):
@@ -248,7 +248,7 @@ class TestContextManagement:
 
     @pytest.fixture(autouse=True)
     def _skip_non_openai_client(self, responses_client):
-        if isinstance(responses_client, LlamaStackClient):
+        if isinstance(responses_client, OgxClient):
             pytest.skip("Context management tests require OpenAI client")
 
     @pytest.fixture(autouse=True)

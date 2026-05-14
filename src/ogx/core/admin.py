@@ -6,7 +6,7 @@
 
 import asyncio
 from importlib.metadata import version
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -32,6 +32,18 @@ from ogx_api import (
     RouteInfo,
     VersionInfo,
 )
+from ogx_api.connectors.api import Connectors
+from ogx_api.connectors.models import (
+    Connector,
+    GetConnectorRequest,
+    GetConnectorToolRequest,
+    ListConnectorsResponse,
+    ListConnectorToolsRequest,
+    ListToolsResponse,
+)
+from ogx_api.tools import ToolDef
+from ogx_api.tools.api import ToolGroups
+from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
 
 logger = get_logger(name=__name__, category="core")
 
@@ -220,3 +232,29 @@ class AdminImpl(Admin):
 
     async def version(self) -> VersionInfo:
         return VersionInfo(version=version("ogx"))
+
+    @property
+    def _connectors(self) -> Connectors:
+        return cast(Connectors, self.deps[Api.connectors.value])
+
+    # Connector delegation methods
+    async def list_connectors(self) -> ListConnectorsResponse:
+        return await self._connectors.list_connectors()
+
+    async def get_connector(self, request: GetConnectorRequest, authorization: str | None = None) -> Connector:
+        return await self._connectors.get_connector(request, authorization=authorization)
+
+    async def list_connector_tools(
+        self, request: ListConnectorToolsRequest, authorization: str | None = None
+    ) -> ListToolsResponse:
+        return await self._connectors.list_connector_tools(request, authorization=authorization)
+
+    async def get_connector_tool(self, request: GetConnectorToolRequest, authorization: str | None = None) -> ToolDef:
+        return await self._connectors.get_connector_tool(request, authorization=authorization)
+
+    @property
+    def _tool_groups(self) -> ToolGroups:
+        return cast(ToolGroups, self.deps[Api.tool_groups.value])
+
+    async def list_tools(self, request: ListToolsRequest) -> ListToolDefsResponse:
+        return await self._tool_groups.list_tools(request)

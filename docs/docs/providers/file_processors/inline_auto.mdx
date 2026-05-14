@@ -1,0 +1,26 @@
+---
+description: "Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Routes PDF and text files to PyPDF, and office/structured formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. Unsupported formats are rejected with a clear error listing the supported types."
+sidebar_label: Auto
+title: inline::auto
+---
+
+# inline::auto
+
+## Description
+
+Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Routes PDF and text files to PyPDF, and office/structured formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. Unsupported formats are rejected with a clear error listing the supported types.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `default_chunk_overlap_tokens` | `int` | No | 400 | Default chunk overlap in tokens when chunking_strategy type is 'auto' |
+| `extract_metadata` | `bool` | No | True | Whether to extract PDF metadata (title, author, etc.) |
+| `clean_text` | `bool` | No | True | Whether to clean extracted text (remove extra whitespace, normalize line breaks) |
+
+## Sample Configuration
+
+```yaml
+{}
+```

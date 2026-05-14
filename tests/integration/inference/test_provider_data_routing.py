@@ -51,7 +51,7 @@ def test_unregistered_model_routing_with_provider_data(client_with_models):
     test_model_id = "anthropic/claude-3-5-sonnet-20241022"
 
     # First, verify the model is NOT registered
-    registered_models = {m.id for m in client.models.list()}
+    registered_models = {m.id for m in client.models.list().data}
     assert test_model_id not in registered_models, f"Model {test_model_id} should not be pre-registered for this test"
 
     # Check if anthropic provider is available in ci-tests

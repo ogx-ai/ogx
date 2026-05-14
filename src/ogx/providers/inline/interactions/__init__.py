@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from ogx.core.datatypes import Api
+from ogx.core.datatypes import AccessRule, Api
 
 from .config import InteractionsConfig
 
@@ -14,9 +14,10 @@ from .config import InteractionsConfig
 async def get_provider_impl(
     config: InteractionsConfig,
     deps: dict[Api, Any],
+    policy: list[AccessRule],
 ):
     from .impl import BuiltinInteractionsImpl
 
-    impl = BuiltinInteractionsImpl(config, deps[Api.inference])
+    impl = BuiltinInteractionsImpl(config, deps[Api.inference], policy)
     await impl.initialize()
     return impl

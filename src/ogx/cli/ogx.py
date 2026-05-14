@@ -6,11 +6,14 @@
 
 import argparse
 
+from ogx.core.utils.config_dirs import migrate_legacy_config_dir
 from ogx.log import setup_logging
 
 # Initialize logging early before any loggers get created
 setup_logging()
 
+from .letsgo import LetsGo
+from .run import Run
 from .stack import StackParser  # type: ignore[attr-defined]
 from .stack.utils import print_subcommand_description
 
@@ -32,6 +35,8 @@ class OGXCLIParser:
         subparsers = self.parser.add_subparsers(title="subcommands")
 
         # Add sub-commands
+        LetsGo.create(subparsers)
+        Run.create(subparsers)
         StackParser.create(subparsers)
 
         print_subcommand_description(self.parser, subparsers)
@@ -48,6 +53,8 @@ class OGXCLIParser:
 
 def main() -> None:
     """Entry point for the OGX CLI."""
+    migrate_legacy_config_dir()
+
     parser = OGXCLIParser()
     args = parser.parse_args()
     parser.run(args)

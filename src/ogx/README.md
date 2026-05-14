@@ -9,7 +9,7 @@ ogx/
   core/               # Server core: routing, resolution, storage, server
   providers/           # All provider implementations (inline + remote)
   distributions/       # Pre-built distribution configurations
-  cli/                 # CLI commands (ogx run, build, configure, etc.)
+  cli/                 # CLI commands (ogx stack run, build, configure, etc.)
   models/              # Model metadata and registries
   testing/             # Test infrastructure (API recorder for record/replay)
   telemetry/           # OpenTelemetry integration

@@ -6,7 +6,7 @@
 
 """
 Regression tests: ensure logging behaves consistently whether the server
-is started via `ogx run` or directly via `uvicorn create_app`.
+is started via `ogx stack run` or directly via `uvicorn create_app`.
 
 These tests verify that:
 1. setup_logging() is called when creating the app

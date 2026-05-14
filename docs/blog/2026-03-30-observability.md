@@ -188,7 +188,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_SERVICE_NAME=ogx-server
 
-uv run opentelemetry-instrument ogx run starter
+uv run opentelemetry-instrument ogx stack run starter
 ```
 
 That's it. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, both auto and manual instrumentation activate. When it's not set, metrics are recorded in memory but never exported — no overhead, no errors.

@@ -19,7 +19,7 @@ sidebar_position: 2
 The starter distribution works for most use cases. It includes all providers and auto-enables them based on available environment variables:
 
 ```bash
-uv run ogx run starter
+uv run ogx stack run starter
 ```
 
 It supports local inference (Ollama), cloud providers (OpenAI, Bedrock, Azure, etc.), and everything in between. See the [Starter Guide](self_hosted_distro/starter) for details.
@@ -31,7 +31,7 @@ A variant of the starter distribution pre-configured with PostgreSQL storage ins
 ```bash
 docker run -it \
   -p 8321:8321 \
-  -v ~/.llama:/root/.llama \
+  -v ~/.ogx:/root/.ogx \
   -e POSTGRES_HOST=host.docker.internal \
   -e POSTGRES_PORT=5432 \
   -e POSTGRES_DB=ogx \

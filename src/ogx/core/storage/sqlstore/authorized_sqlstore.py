@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
@@ -20,7 +21,8 @@ from ogx.core.access_control.conditions import ProtectedResource
 from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 from ogx.core.datatypes import User
 from ogx.core.request_headers import get_authenticated_user
-from ogx.core.storage.datatypes import StorageBackendType
+from ogx.core.storage.datatypes import SqlStoreReference, StorageBackendType
+from ogx.core.storage.sqlstore.sqlstore import _sqlstore_impl
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
@@ -79,6 +81,14 @@ class SqlRecord(ProtectedResource):
         self.type = f"sql_record::{table_name}"
         self.identifier = record_id
         self.owner = owner
+
+
+async def authorized_sqlstore(reference: SqlStoreReference, policy: list[AccessRule]) -> "AuthorizedSqlStore":
+    """Create an AuthorizedSqlStore from a store reference and access policy.
+
+    This is the only supported way to obtain a SQL store for API use.
+    """
+    return AuthorizedSqlStore(await _sqlstore_impl(reference), policy)
 
 
 class AuthorizedSqlStore:
@@ -361,6 +371,28 @@ class AuthorizedSqlStore:
         else:
             raise ValueError(f"Unsupported database type: {self.database_type}")
 
+    def _json_array_contains_value(self, column: str, path: str, param_name: str, value: str) -> tuple[str, Any]:
+        """Generate SQL condition and bind param for checking if a JSON array contains an exact value.
+
+        Args:
+            column: The JSON column name
+            path: The JSON path to the array (e.g., 'roles', 'teams')
+            param_name: Name for the bind parameter
+            value: The exact value to check for in the array
+
+        Returns:
+            A tuple of (sql_condition, param_value)
+        """
+        self._validate_json_path(path)
+        if self.database_type == StorageBackendType.SQL_POSTGRES.value:
+            sql = f"CAST({column}->'{path}' AS jsonb) @> CAST(:{param_name} AS jsonb)"
+            return sql, json.dumps([value])
+        elif self.database_type == StorageBackendType.SQL_SQLITE.value:
+            sql = f"EXISTS (SELECT 1 FROM json_each(json_extract({column}, '$.{path}')) WHERE value = :{param_name})"
+            return sql, value
+        else:
+            raise ValueError(f"Unsupported database type: {self.database_type}")
+
     def _get_public_access_conditions(self) -> list[str]:
         """Get the SQL conditions for public access.
 
@@ -395,9 +427,11 @@ class AuthorizedSqlStore:
                         value_conditions = []
                         for j, value in enumerate(user_values):
                             param_name = f"attr_{attr_key}_{j}"
-                            json_text = self._json_extract_text("access_attributes", attr_key)
-                            value_conditions.append(f"({json_text} LIKE :{param_name})")
-                            params[param_name] = f'%"{value}"%'
+                            condition, param_value = self._json_array_contains_value(
+                                "access_attributes", attr_key, param_name, value
+                            )
+                            value_conditions.append(f"({condition})")
+                            params[param_name] = param_value
 
                         if value_conditions:
                             base_conditions.append(f"({' OR '.join(value_conditions)})")

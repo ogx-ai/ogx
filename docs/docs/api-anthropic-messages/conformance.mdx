@@ -18,12 +18,12 @@ This documentation is auto-generated from the Anthropic Messages API specificati
 
 | Metric | Value |
 |--------|-------|
-| **Overall Conformance Score** | 95.8% |
-| **Endpoints Implemented** | 2/6 |
-| **Total Properties Checked** | 930 |
-| **Schema/Type Issues** | 24 |
-| **Missing Properties** | 15 |
-| **Total Issues to Fix** | 39 |
+| **Overall Conformance Score** | 96.1% |
+| **Endpoints Implemented** | 6/6 |
+| **Total Properties Checked** | 1502 |
+| **Schema/Type Issues** | 30 |
+| **Missing Properties** | 28 |
+| **Total Issues to Fix** | 58 |
 
 ## Category Scores
 
@@ -31,39 +31,135 @@ Categories are sorted by conformance score (lowest first, needing most attention
 
 | Category | Score | Properties | Issues | Missing |
 |----------|-------|------------|--------|---------|
-| Messages | 95.8% | 930 | 24 | 15 |
+| Message Batches | 95.6% | 572 | 11 | 14 |
+| Messages | 96.5% | 930 | 19 | 14 |
 
 ## Missing Endpoints
 
 The following Anthropic API endpoints are not yet implemented in OGX:
 
-### /messages
-
-- `/v1/messages/batches`
-- `/v1/messages/batches/{message_batch_id}`
-- `/v1/messages/batches/{message_batch_id}/cancel`
-- `/v1/messages/batches/{message_batch_id}/results`
+All Anthropic API endpoints are implemented!
 
 ## Detailed Category Breakdown
 
 Below is a detailed breakdown of conformance issues and missing properties for each category.
 
+### Message Batches
+
+**Score:** 95.6% · **Issues:** 11 · **Missing:** 14
+
+#### `/v1/messages/batches`
+
+**GET**
+
+<details>
+<summary>Missing Properties (3)</summary>
+
+- `parameters.header.anthropic-version`
+- `parameters.header.x-api-key`
+- `responses.4XX`
+
+</details>
+
+**POST**
+
+<details>
+<summary>Missing Properties (2)</summary>
+
+- `parameters.header.anthropic-version`
+- `responses.4XX`
+
+</details>
+
+<details>
+<summary>Schema Issues (9)</summary>
+
+| Property | Issues |
+|----------|--------|
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.messages.items.properties.content` | Union variants added: 2; Union variants removed: 2 |
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.model` | Type added: ['string']; Union variants removed: 17 |
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.service_tier` | Enum removed: ['auto', 'standard_only'] |
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.stream` | Default changed: None -&gt; False |
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.system` | Nullable added (Anthropic non-nullable); Union variants added: 3; Union variants removed: 2 |
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.thinking` | Type added: ['object']; Union variants removed: 3 |
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.tool_choice` | Union variants removed: 4 |
+| `requestBody.content.application/json.properties.requests.items.properties.params.properties.tools.items` | Type added: ['object']; Union variants removed: 16 |
+| `responses.200.content.application/json.properties.type` | Default changed: message_batch -&gt; None |
+
+</details>
+
+#### `/v1/messages/batches/{message_batch_id}`
+
+**GET**
+
+<details>
+<summary>Missing Properties (3)</summary>
+
+- `parameters.header.anthropic-version`
+- `parameters.header.x-api-key`
+- `responses.4XX`
+
+</details>
+
+<details>
+<summary>Schema Issues (1)</summary>
+
+| Property | Issues |
+|----------|--------|
+| `responses.200.content.application/json.properties.type` | Default changed: message_batch -&gt; None |
+
+</details>
+
+#### `/v1/messages/batches/{message_batch_id}/cancel`
+
+**POST**
+
+<details>
+<summary>Missing Properties (2)</summary>
+
+- `parameters.header.anthropic-version`
+- `responses.4XX`
+
+</details>
+
+<details>
+<summary>Schema Issues (1)</summary>
+
+| Property | Issues |
+|----------|--------|
+| `responses.200.content.application/json.properties.type` | Default changed: message_batch -&gt; None |
+
+</details>
+
+#### `/v1/messages/batches/{message_batch_id}/results`
+
+**GET**
+
+<details>
+<summary>Missing Properties (4)</summary>
+
+- `parameters.header.anthropic-version`
+- `parameters.header.x-api-key`
+- `responses.200`
+- `responses.4XX`
+
+</details>
+
 ### Messages
 
-**Score:** 95.8% · **Issues:** 24 · **Missing:** 15
+**Score:** 96.5% · **Issues:** 19 · **Missing:** 14
 
 #### `/v1/messages`
 
 **POST**
 
 <details>
-<summary>Missing Properties (9)</summary>
+<summary>Missing Properties (8)</summary>
 
 - `parameters.header.anthropic-version`
 - `requestBody.content.application/json.properties.cache_control`
 - `requestBody.content.application/json.properties.container`
 - `requestBody.content.application/json.properties.inference_geo`
-- `requestBody.content.application/json.properties.metadata.properties.user_id`
 - `requestBody.content.application/json.properties.output_config`
 - `responses.200.content.application/json.properties.container`
 - `responses.200.content.application/json.properties.stop_details`
@@ -72,23 +168,18 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 </details>
 
 <details>
-<summary>Schema Issues (20)</summary>
+<summary>Schema Issues (15)</summary>
 
 | Property | Issues |
 |----------|--------|
 | `requestBody.content.application/json.properties.messages.items.properties.content` | Union variants added: 2; Union variants removed: 2 |
-| `requestBody.content.application/json.properties.metadata` | Type removed: ['object']; Union variants added: 2 |
 | `requestBody.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 17 |
-| `requestBody.content.application/json.properties.service_tier` | Enum removed: ['auto', 'standard_only']; Type removed: ['string']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
-| `requestBody.content.application/json.properties.stop_sequences` | Type removed: ['array']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
-| `requestBody.content.application/json.properties.stream` | Type removed: ['boolean']; Nullable added (Anthropic non-nullable); Union variants added: 2; Default changed: None -&gt; False |
+| `requestBody.content.application/json.properties.service_tier` | Enum removed: ['auto', 'standard_only'] |
+| `requestBody.content.application/json.properties.stream` | Default changed: None -&gt; False |
 | `requestBody.content.application/json.properties.system` | Nullable added (Anthropic non-nullable); Union variants added: 3; Union variants removed: 2 |
-| `requestBody.content.application/json.properties.temperature` | Type removed: ['number']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
-| `requestBody.content.application/json.properties.thinking` | Union variants added: 2 |
-| `requestBody.content.application/json.properties.tool_choice` | Union variants added: 2 |
-| `requestBody.content.application/json.properties.tools` | Type removed: ['array']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
-| `requestBody.content.application/json.properties.top_k` | Type removed: ['integer']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
-| `requestBody.content.application/json.properties.top_p` | Type removed: ['number']; Nullable added (Anthropic non-nullable); Union variants added: 2 |
+| `requestBody.content.application/json.properties.thinking` | Type added: ['object']; Union variants removed: 3 |
+| `requestBody.content.application/json.properties.tool_choice` | Union variants removed: 4 |
+| `requestBody.content.application/json.properties.tools.items` | Type added: ['object']; Union variants removed: 16 |
 | `responses.200.content.application/json.properties.content.items` | Union variants added: 5; Union variants removed: 12 |
 | `responses.200.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 17 |
 | `responses.200.content.application/json.properties.role` | Default changed: assistant -&gt; None |

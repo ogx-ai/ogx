@@ -22,7 +22,7 @@ import sqlite3
 import time
 from typing import Annotated, get_args, get_origin
 
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ class ScoreLedger:
 class ResearchAgent:
     def __init__(
         self,
-        client: LlamaStackClient,
+        client: OgxClient,
         model: str,
         vector_store_id: str,
         prompt_id: str,
@@ -165,7 +165,7 @@ class ResearchAgent:
     @classmethod
     def from_files(
         cls,
-        client: LlamaStackClient,
+        client: OgxClient,
         model: str,
         name: str,
         file_paths: list[str],
@@ -387,7 +387,7 @@ class ResearchAgent:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    client = LlamaStackClient(base_url="http://localhost:8321")
+    client = OgxClient(base_url="http://localhost:8321")
 
     MODEL = "ollama/llama3.1:8b"
     JUDGE_MODEL = "ollama/gpt-oss:20b"

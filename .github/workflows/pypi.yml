@@ -128,6 +128,10 @@ defaults:
   run:
     shell: bash
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -188,6 +192,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -552,10 +557,12 @@ jobs:
   test-package:
     name: Test packages (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build-package
     strategy:
       matrix:
-        python-version: ['3.12', '3.13']
+        # Test 3.13 only on push to main, releases, and scheduled runs
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || fromJSON('["3.12", "3.13"]') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -652,7 +659,7 @@ jobs:
           fi
 
           if [ -d "dist-client-python" ] && ls dist-client-python/*.whl 1>/dev/null 2>&1; then
-            python -c "import llama_stack_client; print(f'ogx_client imported successfully from {llama_stack_client.__file__}')"
+            python -c "import ogx_client; print(f'ogx_client imported successfully from {ogx_client.__file__}')"
           fi
 
       - name: Verify TypeScript package
@@ -670,7 +677,7 @@ jobs:
             echo "TypeScript package installed successfully"
 
             # Verify the package is importable
-            node -e "const pkg = require('llama-stack-client'); console.log('ogx-client package loaded successfully');" || echo "Package may use ES modules, skipping require test"
+            node -e "const pkg = require('ogx-client'); console.log('ogx-client package loaded successfully');" || echo "Package may use ES modules, skipping require test"
           fi
 
   # Publish packages to PyPI/npm
@@ -688,6 +695,7 @@ jobs:
       contents: write  # for gh release upload
       id-token: write  # for PyPI trusted publishing
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: test-package
     strategy:
       max-parallel: 1

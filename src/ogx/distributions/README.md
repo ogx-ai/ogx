@@ -19,14 +19,14 @@ distributions/
 
 ## What Is a Distribution
 
-A distribution is a pre-built configuration that bundles specific providers for a target environment, similar to how Kubernetes has distributions like AKS, EKS, and GKE. The core API stays the same, but each distribution wires different backends. Concretely, it is a `config.yaml` file that defines which APIs to serve, which providers to use for each API, how storage is configured, and what models/shields/datasets to register at startup.
+A distribution is a pre-built configuration that bundles specific providers for a target environment, similar to how Kubernetes has distributions like AKS, EKS, and GKE. The core API stays the same, but each distribution wires different backends. Concretely, it is a `config.yaml` file that defines which APIs to serve, which providers to use for each API, how storage is configured, and what models/resources/datasets to register at startup.
 
 Example from `starter/config.yaml`:
 
 ```yaml
 version: 2
 distro_name: starter
-apis: [inference, agents, safety, vector_io, ...]
+apis: [inference, responses, vector_io, ...]
 providers:
   inference:
     - provider_id: ollama
@@ -48,7 +48,7 @@ Distribution configs use `${env.VAR:=default}` syntax for environment-driven con
 Run a distribution with:
 
 ```bash
-ogx run starter
+ogx stack run starter
 # or
-ogx run --config path/to/config.yaml
+ogx stack run --config path/to/config.yaml
 ```

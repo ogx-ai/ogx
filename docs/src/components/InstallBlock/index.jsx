@@ -3,7 +3,7 @@ import styles from './styles.module.css';
 
 const EXAMPLES = [
   {
-    label: 'Local (Ollama)',
+    label: 'Server',
     command: "uvx --from 'ogx[starter]' ogx stack run starter",
     tokens: [
       { text: 'uvx', style: 'tokenBinary' },
@@ -16,21 +16,28 @@ const EXAMPLES = [
     ],
   },
   {
-    label: 'OpenAI',
-    command: "export OPENAI_API_KEY=sk-xxx\nuvx --from 'ogx[starter]' ogx stack run starter",
+    label: 'Library',
+    command: "from ogx.core.library_client import OGXAsLibraryClient\n\nclient = OGXAsLibraryClient(\"starter\")\nresponse = client.responses.create(model=\"llama-3.3-70b\", input=\"Hello\")",
     lines: [
       [
-        { text: 'export', style: 'tokenBinary' },
-        { text: 'OPENAI_API_KEY=sk-xxx', style: 'tokenFlag' },
+        { text: 'from', style: 'tokenBinary' },
+        { text: 'ogx.core.library_client', style: 'tokenPackage' },
+        { text: 'import', style: 'tokenBinary' },
+        { text: 'OGXAsLibraryClient', style: 'tokenCommand' },
+      ],
+      [],
+      [
+        { text: 'client', style: 'tokenSub' },
+        { text: '=', style: 'tokenSub' },
+        { text: 'OGXAsLibraryClient("starter")', style: 'tokenCommand' },
       ],
       [
-        { text: 'uvx', style: 'tokenBinary' },
-        { text: '--from', style: 'tokenFlag' },
-        { text: "'ogx[starter]'", style: 'tokenPackage' },
-        { text: 'ogx', style: 'tokenCommand' },
-        { text: 'stack', style: 'tokenSub' },
-        { text: 'run', style: 'tokenSub' },
-        { text: 'starter', style: 'tokenAccent' },
+        { text: 'response', style: 'tokenSub' },
+        { text: '=', style: 'tokenSub' },
+        { text: 'client.responses.create(', style: 'tokenCommand' },
+        { text: 'model="llama-3.3-70b",', style: 'tokenFlag' },
+        { text: 'input="Hello"', style: 'tokenAccent' },
+        { text: ')', style: 'tokenCommand' },
       ],
     ],
   },
@@ -75,7 +82,7 @@ export default function InstallBlock() {
   return (
     <div className={styles.installBlock}>
       <p className={styles.tagline}>
-        Try it now, no installation required{' '}
+        Run as a server or import as a Python library{' '}
         <a href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noopener noreferrer" className={styles.taglineLink}>(requires uv)</a>
       </p>
       <div className={styles.tabRow}>
@@ -95,14 +102,18 @@ export default function InstallBlock() {
           <span className={styles.commandReveal} key={active}>
             {EXAMPLES[active].lines ? (
               EXAMPLES[active].lines.map((line, li) => (
-                <span key={li} className={styles.commandLine}>
-                  {line.map((tok, ti) => (
-                    <span key={ti}>
-                      {ti > 0 && <span className={styles.space}> </span>}
-                      <span className={styles[tok.style]}>{tok.text}</span>
-                    </span>
-                  ))}
-                </span>
+                line.length === 0 ? (
+                  <span key={li} className={styles.commandLineBlank}>{' '}</span>
+                ) : (
+                  <span key={li} className={styles.commandLine}>
+                    {line.map((tok, ti) => (
+                      <span key={ti}>
+                        {ti > 0 && <span className={styles.space}> </span>}
+                        <span className={styles[tok.style]}>{tok.text}</span>
+                      </span>
+                    ))}
+                  </span>
+                )
               ))
             ) : (
               EXAMPLES[active].tokens.map((tok, i) => (

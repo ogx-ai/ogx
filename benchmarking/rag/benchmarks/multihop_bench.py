@@ -14,6 +14,7 @@ from datasets import load_dataset
 from lib.ingest import ingest_corpus
 from lib.metrics import answer_metrics, retrieval_metrics
 from lib.query import rag_query_batch
+from lib.search import search_queries
 from lib.utils import IDMapping
 
 from benchmarks.base import BenchmarkRunner
@@ -104,6 +105,7 @@ class MultiHOPBenchmark(BenchmarkRunner):
             per_query[qid] = {
                 "prediction": r["answer"],
                 "ground_truth": self.ground_truths[qid],
+                "retrieved_docs": r.get("retrieved_docs", {}),
             }
 
         self._save_per_query_results(per_query)
@@ -112,13 +114,13 @@ class MultiHOPBenchmark(BenchmarkRunner):
         all_ground_truths = {qid: r["ground_truth"] for qid, r in per_query.items()}
         metrics = answer_metrics(all_predictions, all_ground_truths)
 
-        # Retrieval metrics against evidence docs
+        # Build qrels from evidence docs
+        qrels = {}
         if self.evidence_docs:
             title_to_id = {}
             for doc_id, doc in self.corpus.items():
                 title_to_id[doc.get("title", "")] = doc_id
 
-            qrels = {}
             for qid in queries:
                 qrels[qid] = {}
                 for title in self.evidence_docs.get(qid, []):
@@ -126,9 +128,33 @@ class MultiHOPBenchmark(BenchmarkRunner):
                     if did:
                         qrels[qid][did] = 1
 
+            # Retrieval metrics from Responses API (end-to-end)
             retrieved = {qid: results[qid]["retrieved_docs"] for qid in queries if qid in results}
-            ret_metrics = retrieval_metrics(qrels, retrieved, k_values=[5, 10, 20])
+            non_empty = sum(1 for v in retrieved.values() if v)
+            logger.info(f"Responses API retrieval: {non_empty}/{len(retrieved)} queries have retrieved docs")
+            if non_empty > 0:
+                e2e_ret_metrics = retrieval_metrics(qrels, retrieved, k_values=[5, 10, 20])
+                for k, v in e2e_ret_metrics.items():
+                    metrics[f"e2e_{k}"] = v
+
+        # Retrieval-only evaluation via Vector Stores Search API
+        if qrels and self.mapping:
+            logger.info(f"Running retrieval-only evaluation on {len(queries)} queries...")
+            search_results = search_queries(
+                client=self.client,
+                vector_store_id=self.vector_store_id,
+                queries=queries,
+                mapping=self.mapping,
+                max_num_results=20,
+                search_mode=self.search_mode,
+            )
+            self._save_per_query_retrieval_results(search_results)
+            ret_metrics = retrieval_metrics(qrels, search_results, k_values=[5, 10, 20])
             metrics.update(ret_metrics)
+            logger.info(
+                f"Retrieval metrics: nDCG@10={ret_metrics.get('ndcg_cut_10', 0):.4f}, "
+                f"Recall@10={ret_metrics.get('recall_10', 0):.4f}"
+            )
 
         metrics["dataset"] = "multihop"
         metrics["num_corpus_docs"] = len(self.corpus)

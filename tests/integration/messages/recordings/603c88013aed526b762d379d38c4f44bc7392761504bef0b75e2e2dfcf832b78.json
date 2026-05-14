@@ -1,0 +1,44 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=ollama/llama3.2:3b-instruct-fp16]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_non_streaming_with_stop_sequences[txt=ollama/llama3.2:3b-instruct-fp16]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "llama3.2:3b-instruct-fp16",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Count: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"
+        }
+      ],
+      "max_tokens": 128,
+      "stream": false,
+      "stop_sequences": [
+        ","
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_0efbf373be98978a6efd1dfc",
+      "type": "message",
+      "role": "assistant",
+      "model": "llama3.2:3b-instruct-fp16",
+      "content": [
+        {
+          "type": "text",
+          "text": "I see you're counting up to 10. Here it goes again:\n\n1"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 56,
+        "output_tokens": 17
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

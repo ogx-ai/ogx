@@ -5,13 +5,17 @@
 # the root directory of this source tree.
 
 import asyncio
+import atexit
+import concurrent.futures
 import inspect
 import json
 import logging  # allow-direct-logging
 import os
+import queue
 import sys
+import threading
 import typing
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Mapping
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
@@ -24,18 +28,16 @@ from fastapi import Response as FastAPIResponse
 from ogx.core.utils.type_inspection import is_body_param, is_unwrapped_body_param
 
 try:
-    from llama_stack_client import (
+    from ogx_client import (
         NOT_GIVEN,
         APIResponse,
         AsyncAPIResponse,
-        AsyncLlamaStackClient,
+        AsyncOgxClient,
         AsyncStream,
-        LlamaStackClient,
+        OgxClient,
     )
 except ImportError as e:
-    raise ImportError(
-        "llama-stack-client is not installed. Please install it with `uv pip install ogx[client]`."
-    ) from e
+    raise ImportError("ogx-client is not installed. Please install it with `uv pip install ogx[client]`.") from e
 
 from pydantic import BaseModel, TypeAdapter
 from rich.console import Console
@@ -55,6 +57,12 @@ from ogx.log import get_logger, setup_logging
 logger = get_logger(name=__name__, category="core")
 
 T = TypeVar("T")
+
+_INIT_TIMEOUT: float = 60.0
+_SHUTDOWN_TIMEOUT: float = 10.0
+_CLEANUP_TIMEOUT: float = 5.0
+_HANG_GUARD_TIMEOUT: float = 600.0
+_STREAM_HEARTBEAT_INTERVAL: float = 1.0
 
 
 def convert_pydantic_to_json_value(value: Any) -> Any:
@@ -157,8 +165,12 @@ class LibraryClientHttpxResponse:
         self.headers = response.headers
 
 
-class OGXAsLibraryClient(LlamaStackClient):
-    """Synchronous client that runs a OGX distribution in-process as a library."""
+class OGXAsLibraryClient(OgxClient):
+    """Synchronous client that runs a OGX distribution in-process as a library.
+
+    This is a sync-on-async implementation wrapping `AsyncOGXAsLibraryClient` class,
+    starting a daemon loop thread, which will be shut down when the main thread exits.
+    """
 
     def __init__(
         self,
@@ -172,24 +184,39 @@ class OGXAsLibraryClient(LlamaStackClient):
             config_path_or_distro_name, custom_provider_registry, provider_data, skip_logger_removal
         )
         self.provider_data = provider_data
+        self._shutdown_lock: threading.Lock = threading.Lock()
+        self._shutdown = False
 
+        # stick with one loop and run it in a dedicated daemon thread
         self.loop = asyncio.new_event_loop()
+        self.loop_thread = threading.Thread(
+            target=self._run_event_loop, daemon=True, name="ogx-lib-sync-client-event-loop"
+        )
+        self.loop_thread.start()
 
-        # use a new event loop to avoid interfering with the main event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(self.async_client.initialize())
+            future = asyncio.run_coroutine_threadsafe(self.async_client.initialize(), self.loop)
+            future.result(timeout=_INIT_TIMEOUT)  # Block until initialization completes + timeout if hangs
+        except Exception:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.loop_thread.join(timeout=_CLEANUP_TIMEOUT)
+            raise
+
+        atexit.register(self.shutdown)  # Safety net: if the user forgets to shutdown properly
+
+    def _run_event_loop(self) -> None:
+        """Runs forever in the background thread."""
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_forever()
         finally:
-            asyncio.set_event_loop(None)
+            self.loop.close()  # Close the loop when the thread is instructed to stop
 
     def initialize(self) -> None:
-        """
-        Deprecated method for backward compatibility.
-        """
+        """Deprecated method for backward compatibility."""
         pass
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float = _SHUTDOWN_TIMEOUT) -> None:
         """Shutdown the client and release all resources.
 
         This method should be called when you're done using the client to properly
@@ -199,18 +226,40 @@ class OGXAsLibraryClient(LlamaStackClient):
 
         This method is idempotent and can be called multiple times safely.
 
+        Args:
+            timeout: Maximum seconds to wait for graceful shutdown before forcing close.
+
+        **IMPORTANT!** `shutdown()` is not safe to call concurrently with requests!
+        Use the client as a context manager to assure proper shutdown.
+
         Example:
-            client = OGXAsLibraryClient("starter")
-            # ... use the client ...
-            client.shutdown()
+            with OGXAsLibraryClient("starter") as client:
+                # ... use the client ...
         """
-        loop = self.loop
-        asyncio.set_event_loop(loop)
+        # Guard against calling shutdown before init finishes, or multiple times
+        with self._shutdown_lock:
+            if self._shutdown:
+                return
+            self._shutdown = True
+        if not self.loop.is_running():
+            return
+
+        future = asyncio.run_coroutine_threadsafe(self.async_client.shutdown(), self.loop)
         try:
-            loop.run_until_complete(self.async_client.shutdown())
-        finally:
-            loop.close()
-            asyncio.set_event_loop(None)
+            future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            logger.warning("Async client shutdown timed out", timeout=timeout)
+            future.cancel()
+        except Exception as e:
+            logger.warning("Unexpected error during async client shutdown", exception=e)
+
+        # Safely instruct the background loop to stop
+        self.loop.call_soon_threadsafe(self.loop.stop)
+
+        # Wait for the thread to actually exit
+        self.loop_thread.join(timeout=timeout)
+        if self.loop_thread.is_alive():
+            logger.error("Background event loop thread failed to join (zombie thread)")
 
     def __enter__(self) -> "OGXAsLibraryClient":
         """Enter the context manager.
@@ -229,36 +278,80 @@ class OGXAsLibraryClient(LlamaStackClient):
         self.shutdown()
 
     def request(self, *args: Any, **kwargs: Any) -> Any:
-        loop = self.loop
-        asyncio.set_event_loop(loop)
-
+        # Route streaming vs non-streaming
         if kwargs.get("stream"):
+            return self._stream_request(*args, **kwargs)
 
-            def sync_generator() -> Generator[Any, None, None]:
-                try:
-                    async_stream = loop.run_until_complete(self.async_client.request(*args, **kwargs))
-                    while True:
-                        chunk = loop.run_until_complete(async_stream.__anext__())
-                        yield chunk
-                except StopAsyncIteration:
-                    pass
-                finally:
-                    pending = asyncio.all_tasks(loop)
-                    if pending:
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        coro = self.async_client.request(*args, **kwargs)
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        # the giant timeout here is to prevent it from hanging forever:
+        return future.result(timeout=_HANG_GUARD_TIMEOUT)
 
-            return sync_generator()
-        else:
+    def _stream_request(self, *args: Any, **kwargs: Any) -> Generator[Any, None, None]:
+        """Thread-safe synchronous generator wrapper around an async generator."""
+        # 32 chunks of buffering. LLM token rate makes OOM from unbounded queue unlikely
+        # but a bound prevents runaway memory if the consumer stalls.
+        q: queue.Queue = queue.Queue(maxsize=32)
+
+        async def _consume() -> None:
+            async_gen = None
             try:
-                result = loop.run_until_complete(self.async_client.request(*args, **kwargs))
+                async_gen = await self.async_client.request(*args, **kwargs)
+                async for chunk in async_gen:
+                    while True:
+                        try:
+                            q.put_nowait(("chunk", chunk))
+                            break
+                        except queue.Full:
+                            await asyncio.sleep(0.01)
+
+                while True:
+                    try:
+                        q.put_nowait(("done", None))
+                        break
+                    except queue.Full:
+                        await asyncio.sleep(0.01)
+
+            except asyncio.CancelledError:
+                pass
+            except Exception as err:
+                while True:
+                    try:
+                        q.put_nowait(("error", err))
+                        break
+                    except queue.Full:
+                        await asyncio.sleep(0.01)
             finally:
-                pending = asyncio.all_tasks(loop)
-                if pending:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            return result
+                if async_gen is not None:
+                    await async_gen.aclose()
+
+        future = asyncio.run_coroutine_threadsafe(_consume(), self.loop)
+
+        try:
+            while True:
+                try:
+                    # Timeout prevents the sync thread from hanging forever if the loop dies or shutdown is called.
+                    msg_type, payload = q.get(timeout=1.0)
+                except queue.Empty as err:
+                    with self._shutdown_lock:
+                        if self._shutdown:
+                            raise RuntimeError("Client was shut down during streaming") from err
+
+                    if not self.loop.is_running():
+                        raise RuntimeError("Event loop crashed during streaming") from err
+                    continue
+
+                if msg_type == "chunk":
+                    yield payload
+                elif msg_type == "error":
+                    raise payload
+                elif msg_type == "done":
+                    break
+        finally:
+            future.cancel()
 
 
-class AsyncOGXAsLibraryClient(AsyncLlamaStackClient):
+class AsyncOGXAsLibraryClient(AsyncOgxClient):
     """Async client that runs a OGX distribution in-process as a library."""
 
     def __init__(
@@ -402,26 +495,61 @@ class AsyncOGXAsLibraryClient(AsyncLlamaStackClient):
             raise ValueError("Client not initialized. Please call initialize() first.")
 
         # Create headers with provider data if available
-        headers = options.headers or {}
+        request_headers = self._sanitize_headers(options.headers)
         if self.provider_data:
             keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
-            if all(key not in headers for key in keys):
-                headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
+            if all(key not in request_headers for key in keys):
+                request_headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
 
         # Use context manager for provider data
-        with request_provider_data_context(headers):
+        with request_provider_data_context(request_headers):
             if stream:
                 response = await self._call_streaming(
                     cast_to=cast_to,
                     options=options,
+                    request_headers=request_headers,
                     stream_cls=stream_cls,
                 )
             else:
                 response = await self._call_non_streaming(
                     cast_to=cast_to,
                     options=options,
+                    request_headers=request_headers,
                 )
             return response
+
+    @staticmethod
+    def _coerce_header_component(value: Any) -> str | None:
+        if value is None or value is NOT_GIVEN:
+            return None
+        if value.__class__.__name__ == "Omit":
+            return None
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                return value.decode("latin-1")
+        if isinstance(value, str):
+            return value
+        if isinstance(value, int | float | bool):
+            return str(value)
+        return None
+
+    @classmethod
+    def _sanitize_headers(cls, headers: Any) -> dict[str, str]:
+        if headers is None or headers is NOT_GIVEN or headers.__class__.__name__ == "Omit":
+            return {}
+        if not isinstance(headers, Mapping):
+            return {}
+
+        sanitized_headers: dict[str, str] = {}
+        for key, value in headers.items():
+            normalized_key = cls._coerce_header_component(key)
+            normalized_value = cls._coerce_header_component(value)
+            if normalized_key is None or normalized_value is None:
+                continue
+            sanitized_headers[normalized_key] = normalized_value
+        return sanitized_headers
 
     def _handle_file_uploads(self, options: Any, body: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
         """Handle file uploads from OpenAI client and add them to the request body."""
@@ -453,6 +581,7 @@ class AsyncOGXAsLibraryClient(AsyncLlamaStackClient):
         *,
         cast_to: Any,
         options: Any,
+        request_headers: dict[str, str],
     ) -> Any:
         assert self.route_impls is not None  # Should be guaranteed by request() method, assertion for mypy
         path = options.url
@@ -504,7 +633,7 @@ class AsyncOGXAsLibraryClient(AsyncLlamaStackClient):
                 method=options.method,
                 url=options.url,
                 params=options.params,
-                headers=options.headers or {},
+                headers=request_headers,
                 json=convert_pydantic_to_json_value(filtered_body),
             ),
         )
@@ -523,6 +652,7 @@ class AsyncOGXAsLibraryClient(AsyncLlamaStackClient):
         *,
         cast_to: Any,
         options: Any,
+        request_headers: dict[str, str],
         stream_cls: Any,
     ) -> Any:
         assert self.route_impls is not None  # Should be guaranteed by request() method, assertion for mypy
@@ -575,12 +705,12 @@ class AsyncOGXAsLibraryClient(AsyncLlamaStackClient):
                 method=options.method,
                 url=options.url,
                 params=options.params,
-                headers=options.headers or {},
+                headers=request_headers,
                 json=convert_pydantic_to_json_value(body),
             ),
         )
 
-        # we use asynchronous impl always internally and channel all requests to AsyncLlamaStackClient
+        # we use asynchronous impl always internally and channel all requests to AsyncOgxClient
         # however, the top-level caller may be a SyncAPIClient -- so its stream_cls might be a Stream (SyncStream)
         # so we need to convert it to AsyncStream
         # mypy can't track runtime variables inside the [...] of a generic, so ignore that check

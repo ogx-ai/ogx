@@ -14,4 +14,4 @@ echo "Starting OGX with config: $CONFIG"
 echo "Milvus URI: ${MILVUS_URI:-http://localhost:19530}"
 echo "Port: 8321"
 
-ogx run "$CONFIG" --port 8321
+ogx stack run "$CONFIG" --port 8321

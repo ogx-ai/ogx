@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from ogx.core.storage.datatypes import KVStoreReference
 from ogx.providers.inline.messages.config import MessagesConfig
 from ogx.providers.inline.messages.impl import BuiltinMessagesImpl
 from ogx_api.messages.models import (
@@ -33,7 +34,9 @@ def _msg_to_dict(msg):
 @pytest.fixture
 def impl():
     mock_inference = AsyncMock()
-    return BuiltinMessagesImpl(config=MessagesConfig(), inference_api=mock_inference)
+    mock_kvstore = MagicMock()
+    config = MessagesConfig(kvstore=KVStoreReference(backend="kv_default", namespace="test"))
+    return BuiltinMessagesImpl(config=config, inference_api=mock_inference, kvstore=mock_kvstore)
 
 
 class TestRequestTranslation:

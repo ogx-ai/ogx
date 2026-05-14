@@ -11,7 +11,6 @@ The `ogx/distribution-oci` distribution consists of the following provider confi
 | files | `inline::localfs` |
 | inference | `remote::oci` |
 | responses | `inline::builtin` |
-| safety | `inline::llama-guard` |
 | tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol` |
 | vector_io | `inline::faiss`, `remote::chromadb`, `remote::pgvector` |
 
@@ -79,14 +78,6 @@ Oracle Cloud Infrastructure Generative AI provides access to high-performance AI
 
 Common OCI Generative AI models include access to Meta, Cohere, OpenAI, Grok, and more models.
 
-### Safety: Llama Guard
-
-For content safety and moderation, this distribution uses Meta's LlamaGuard model through the OCI Generative AI service to provide:
-
-- Content filtering and moderation
-- Policy compliance checking
-- Harmful content detection
-
 ### Vector Storage: Multiple Options
 
 The distribution supports several vector storage providers:
@@ -110,7 +101,7 @@ You can run the OCI distribution via Docker or local virtual environment.
 If you've set up your local development environment, you can also build the image using your local virtual environment.
 
 ```bash
-OCI_AUTH=$OCI_AUTH_TYPE OCI_REGION=$OCI_REGION OCI_COMPARTMENT_OCID=$OCI_COMPARTMENT_OCID ogx run --port 8321 oci
+OCI_AUTH=$OCI_AUTH_TYPE OCI_REGION=$OCI_REGION OCI_COMPARTMENT_OCID=$OCI_COMPARTMENT_OCID ogx stack run --port 8321 oci
 ```
 
 ### Configuration Examples

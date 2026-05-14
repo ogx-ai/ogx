@@ -14,6 +14,9 @@
 
 [**Quick Start**](https://ogx-ai.github.io/docs/getting_started/quickstart) | [**Documentation**](https://ogx-ai.github.io/docs) | [**OpenAI API Compatibility**](https://ogx-ai.github.io/docs/api-openai) | [**Discord**](https://discord.gg/ZAFjsrcw)
 
+> [!IMPORTANT]
+> **Llama Stack is now OGX.** The name changed, and so did the mission — model-agnostic, multi-SDK, production-grade. [Read the full announcement →](https://ogx-ai.github.io/blog/from-llama-stack-to-ogx)
+
 **Open-source agentic API server for building AI applications. OpenAI-compatible. Any model, any infrastructure.**
 
 <p align="center">
@@ -59,7 +62,7 @@ curl -LsSf https://github.com/ogx-ai/ogx/raw/main/scripts/install.sh | bash
 uv pip install ogx[starter]
 
 # Start the server (uses the starter distribution with Ollama)
-uv run ogx run starter
+uv run ogx stack run starter
 ```
 
 Then connect with any OpenAI, Anthropic, or Google GenAI client — [Python](https://github.com/openai/openai-python), [TypeScript](https://github.com/openai/openai-node), [curl](https://platform.openai.com/docs/api-reference), or any framework that speaks these APIs.

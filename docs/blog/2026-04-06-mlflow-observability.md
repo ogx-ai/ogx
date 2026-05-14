@@ -316,7 +316,7 @@ OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:5000/v1/traces \
 OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf \
 OTEL_EXPORTER_OTLP_TRACES_HEADERS="x-mlflow-experiment-id=1" \
 OTEL_SERVICE_NAME=ogx-server \
-opentelemetry-instrument ogx run starter
+opentelemetry-instrument ogx stack run starter
 ```
 
 This gives you end-to-end visibility: client-side spans showing the request lifecycle, and server-side spans showing internal OGX processing.

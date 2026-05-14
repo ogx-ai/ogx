@@ -71,7 +71,7 @@ Then authenticate and download models:
 huggingface-cli login
 
 # Download a model
-huggingface-cli download meta-llama/Llama-3.2-3B-Instruct --local-dir ~/.llama/Llama-3.2-3B-Instruct
+huggingface-cli download meta-llama/Llama-3.2-3B-Instruct --local-dir ~/.ogx/Llama-3.2-3B-Instruct
 ```
 
 ## List the downloaded models

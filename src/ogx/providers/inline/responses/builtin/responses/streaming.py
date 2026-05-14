@@ -102,7 +102,6 @@ from ogx_api import (
     ResponseItemInclude,
     ResponseStreamOptions,
     ResponseTruncation,
-    Safety,
     ToolDef,
     WebSearchToolTypes,
 )
@@ -128,6 +127,8 @@ tracer = trace.get_tracer(__name__)
 # Built-in tool names that the server knows how to execute itself.
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
 _SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+
+_GUARDRAIL_BATCH_CHARS = 200
 
 # Maps OpenAI Chat Completions error codes to Responses API error codes
 _RESPONSES_API_ERROR_CODES = {
@@ -231,8 +232,8 @@ class StreamingResponseOrchestrator:
         max_infer_iters: int,
         tool_executor,  # Will be the tool execution logic from the main class
         instructions: str | None,
-        safety_api: Safety | None,
-        guardrail_ids: list[str] | None = None,
+        moderation_endpoint: str | None,
+        enable_guardrails: bool = False,
         connectors_api: Connectors | None = None,
         prompt: OpenAIResponsePrompt | None = None,
         prompt_cache_key: str | None = None,
@@ -240,7 +241,6 @@ class StreamingResponseOrchestrator:
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
         max_output_tokens: int | None = None,
-        safety_identifier: str | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
         include: list[ResponseItemInclude] | None = None,
@@ -258,9 +258,9 @@ class StreamingResponseOrchestrator:
         self.text = text
         self.max_infer_iters = max_infer_iters
         self.tool_executor = tool_executor
-        self.safety_api = safety_api
+        self.moderation_endpoint = moderation_endpoint
         self.connectors_api = connectors_api
-        self.guardrail_ids = guardrail_ids or []
+        self.enable_guardrails = enable_guardrails
         self.prompt = prompt
         self.prompt_cache_key = prompt_cache_key
         # System message that is inserted into the model's context
@@ -272,7 +272,6 @@ class StreamingResponseOrchestrator:
         self.reasoning = reasoning
         # An upper bound for the number of tokens that can be generated for a response
         self.max_output_tokens = max_output_tokens
-        self.safety_identifier = safety_identifier
         # Convert ServiceTier enum to string for internal storage
         # This allows us to update it with the actual tier returned by the provider
         self.service_tier = service_tier.value if service_tier is not None else None
@@ -329,7 +328,6 @@ class StreamingResponseOrchestrator:
             tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
             truncation=self.truncation or "disabled",
             max_output_tokens=self.max_output_tokens,
-            safety_identifier=self.safety_identifier,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
@@ -385,7 +383,6 @@ class StreamingResponseOrchestrator:
             max_tool_calls=self.max_tool_calls,
             reasoning=self.reasoning,
             max_output_tokens=self.max_output_tokens,
-            safety_identifier=self.safety_identifier,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
             truncation=self.truncation or "disabled",
@@ -410,9 +407,12 @@ class StreamingResponseOrchestrator:
         )
 
         # Input safety validation - check messages before processing
-        if self.guardrail_ids:
+        if self.enable_guardrails:
             combined_text = interleaved_content_as_str([msg.content for msg in self.ctx.messages])
-            input_violation_message = await run_guardrails(self.safety_api, combined_text, self.guardrail_ids)
+            input_violation_message = await run_guardrails(
+                self.moderation_endpoint,
+                combined_text,
+            )
             if input_violation_message:
                 logger.info("Input guardrail violation", input_violation_message=input_violation_message)
                 yield await self._create_refusal_response(input_violation_message)
@@ -539,7 +539,6 @@ class StreamingResponseOrchestrator:
                     logprobs=logprobs,
                     parallel_tool_calls=effective_parallel_tool_calls,
                     reasoning_effort=self.reasoning.effort if self.reasoning else None,
-                    safety_identifier=self.safety_identifier,
                     service_tier=ServiceTier(self.service_tier) if self.service_tier else None,
                     max_completion_tokens=remaining_output_tokens,
                     prompt_cache_key=self.prompt_cache_key,
@@ -1038,6 +1037,8 @@ class StreamingResponseOrchestrator:
         message_output_index = len(output_messages)
         reasoning_text_accumulated = []
         refusal_text_accumulated = []
+        pending_guardrail_events: list[OpenAIResponseObjectStream] = []
+        chars_since_last_check = 0
 
         async for raw_chunk in completion_result:
             # Providers returning OpenAIChatCompletionChunkWithReasoning wrap
@@ -1058,9 +1059,6 @@ class StreamingResponseOrchestrator:
 
             # Accumulate usage from chunks (typically in final chunk with stream_options)
             self._accumulate_chunk_usage(chunk)
-
-            # Track deltas for this specific chunk for guardrail validation
-            chunk_events: list[OpenAIResponseObjectStream] = []
 
             for chunk_choice in chunk.choices:
                 # Collect logprobs if present
@@ -1114,13 +1112,15 @@ class StreamingResponseOrchestrator:
                         sequence_number=self.sequence_number,
                     )
                     # Buffer text delta events for guardrail check
-                    if self.guardrail_ids:
-                        chunk_events.append(text_delta_event)
+                    if self.enable_guardrails:
+                        pending_guardrail_events.append(text_delta_event)
                     else:
                         yield text_delta_event
 
                 # Collect content for final response
-                chat_response_content.append(chunk_choice.delta.content or "")
+                content_delta = chunk_choice.delta.content or ""
+                chat_response_content.append(content_delta)
+                chars_since_last_check += len(content_delta)
                 if chunk_choice.finish_reason:
                     chunk_finish_reason = chunk_choice.finish_reason
 
@@ -1136,8 +1136,8 @@ class StreamingResponseOrchestrator:
                         message_output_index=message_output_index,
                     ):
                         # Buffer reasoning events for guardrail check
-                        if self.guardrail_ids:
-                            chunk_events.append(event)
+                        if self.enable_guardrails:
+                            pending_guardrail_events.append(event)
                         else:
                             yield event
                     reasoning_part_emitted = True
@@ -1232,21 +1232,45 @@ class StreamingResponseOrchestrator:
                                     response_tool_call.function.arguments or ""
                                 ) + tool_call.function.arguments
 
-            # Output Safety Validation for this chunk
-            if self.guardrail_ids:
-                # Check guardrails on accumulated text so far
+            # Batched output safety validation. If we have only buffered reasoning events and
+            # no assistant text yet, flush per chunk so reasoning can stream in real time.
+            guardrail_check_due = chars_since_last_check >= _GUARDRAIL_BATCH_CHARS
+            if pending_guardrail_events and not any(chat_response_content):
+                guardrail_check_due = True
+
+            if self.enable_guardrails and guardrail_check_due:
                 accumulated_text = "".join(chat_response_content)
-                violation_message = await run_guardrails(self.safety_api, accumulated_text, self.guardrail_ids)
+                violation_message = await run_guardrails(
+                    self.moderation_endpoint,
+                    accumulated_text,
+                )
                 if violation_message:
                     logger.info("Output guardrail violation", violation_message=violation_message)
-                    chunk_events.clear()
+                    pending_guardrail_events.clear()
                     yield await self._create_refusal_response(violation_message)
                     self.violation_detected = True
                     return
-                else:
-                    # No violation detected, emit all content events for this chunk
-                    for event in chunk_events:
-                        yield event
+                for event in pending_guardrail_events:
+                    yield event
+                pending_guardrail_events.clear()
+                chars_since_last_check = 0
+
+        # Final guardrail check on remaining buffered content
+        if self.enable_guardrails and pending_guardrail_events:
+            accumulated_text = "".join(chat_response_content)
+            violation_message = await run_guardrails(
+                self.moderation_endpoint,
+                accumulated_text,
+            )
+            if violation_message:
+                logger.info("Output guardrail violation", violation_message=violation_message)
+                pending_guardrail_events.clear()
+                yield await self._create_refusal_response(violation_message)
+                self.violation_detected = True
+                return
+            for event in pending_guardrail_events:
+                yield event
+            pending_guardrail_events.clear()
 
         # Emit arguments.done events for completed tool calls (differentiate between MCP and function calls)
         for tool_call_index in sorted(chat_response_tool_calls.keys()):

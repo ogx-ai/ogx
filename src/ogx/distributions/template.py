@@ -18,8 +18,6 @@ from ogx.core.datatypes import (
     BuildProvider,
     ModelInput,
     Provider,
-    SafetyConfig,
-    ShieldInput,
     VectorStoresConfig,
 )
 from ogx.core.distribution import get_provider_registry
@@ -131,58 +129,6 @@ def get_model_registry(
     return models, ids_conflict
 
 
-def get_shield_registry(
-    available_safety_models: dict[str, list[ProviderModelEntry]],
-    ids_conflict_in_models: bool,
-) -> list[ShieldInput]:
-    """Build a shield registry from safety model entries, detecting ID conflicts.
-
-    Args:
-        available_safety_models: mapping of provider IDs to their safety model entries.
-        ids_conflict_in_models: whether model ID conflicts were detected in the model registry.
-
-    Returns:
-        A list of ShieldInput instances for registered shields.
-    """
-    shields = []
-
-    # check for conflicts in shield ids
-    all_ids = set()
-    ids_conflict = False
-
-    for _, entries in available_safety_models.items():
-        for entry in entries:
-            ids = [entry.provider_model_id] + entry.aliases
-            for model_id in ids:
-                if model_id in all_ids:
-                    ids_conflict = True
-                    rich.print(
-                        f"[yellow]Shield id {model_id} conflicts; all shield ids will be prefixed with provider id[/yellow]"
-                    )
-                    break
-            all_ids.update(ids)
-            if ids_conflict:
-                break
-        if ids_conflict:
-            break
-
-    for provider_id, entries in available_safety_models.items():
-        for entry in entries:
-            ids = [entry.provider_model_id] + entry.aliases
-            for model_id in ids:
-                identifier = f"{provider_id}/{model_id}" if ids_conflict and provider_id not in model_id else model_id
-                shields.append(
-                    ShieldInput(
-                        shield_id=identifier,
-                        provider_shield_id=f"{provider_id}/{entry.provider_model_id}"
-                        if ids_conflict_in_models
-                        else entry.provider_model_id,
-                    )
-                )
-
-    return shields
-
-
 class DefaultModel(BaseModel):
     """A model entry used for documentation generation in distribution templates."""
 
@@ -195,10 +141,8 @@ class RunConfigSettings(BaseModel):
 
     provider_overrides: dict[str, list[Provider]] = Field(default_factory=dict)
     default_models: list[ModelInput] | None = None
-    default_shields: list[ShieldInput] | None = None
     default_connectors: list[ConnectorInput] | None = None
     vector_stores_config: VectorStoresConfig | None = None
-    safety_config: SafetyConfig | None = None
     auth_config: dict[str, Any] | None = None
     storage_backends: dict[str, Any] | None = None
     storage_stores: dict[str, Any] | None = None
@@ -230,7 +174,7 @@ class RunConfigSettings(BaseModel):
 
                 config_class = instantiate_class_type(config_class)
                 if hasattr(config_class, "sample_run_config"):
-                    config = config_class.sample_run_config(__distro_dir__=f"~/.llama/distributions/{name}")
+                    config = config_class.sample_run_config(__distro_dir__=f"~/.ogx/distributions/{name}")
                 else:
                     config = {}
                 # BuildProvider does not have a config attribute; skip assignment
@@ -246,11 +190,11 @@ class RunConfigSettings(BaseModel):
 
         storage_backends = self.storage_backends or {
             "kv_default": SqliteKVStoreConfig.sample_run_config(
-                __distro_dir__=f"~/.llama/distributions/{name}",
+                __distro_dir__=f"~/.ogx/distributions/{name}",
                 db_name="kvstore.db",
             ),
             "sql_default": SqliteSqlStoreConfig.sample_run_config(
-                __distro_dir__=f"~/.llama/distributions/{name}",
+                __distro_dir__=f"~/.ogx/distributions/{name}",
                 db_name="sql_store.db",
             ),
         }
@@ -268,13 +212,13 @@ class RunConfigSettings(BaseModel):
                 backend="sql_default",
                 table_name="openai_conversations",
             ).model_dump(exclude_none=True),
-            "prompts": KVStoreReference(
-                backend="kv_default",
-                namespace="prompts",
+            "prompts": SqlStoreReference(
+                backend="sql_default",
+                table_name="prompts",
             ).model_dump(exclude_none=True),
-            "connectors": KVStoreReference(
-                backend="kv_default",
-                namespace="connectors",
+            "connectors": SqlStoreReference(
+                backend="sql_default",
+                table_name="connectors",
             ).model_dump(exclude_none=True),
         }
 
@@ -293,7 +237,6 @@ class RunConfigSettings(BaseModel):
             "storage": storage_config,
             "registered_resources": {
                 "models": [m.model_dump(exclude_none=True) for m in (self.default_models or [])],
-                "shields": [s.model_dump(exclude_none=True) for s in (self.default_shields or [])],
                 "vector_dbs": [],
             },
             "server": {
@@ -306,9 +249,6 @@ class RunConfigSettings(BaseModel):
 
         if self.vector_stores_config:
             config["vector_stores"] = self.vector_stores_config.model_dump(exclude_none=True)
-
-        if self.safety_config:
-            config["safety"] = self.safety_config.model_dump(exclude_none=True)
 
         if self.default_connectors is not None:
             config["connectors"] = [c.model_dump(exclude_none=True) for c in self.default_connectors]

@@ -245,7 +245,7 @@ First, pull the models and start Ollama, then run the OGX starter distribution p
 ```bash
 ollama pull llama3.1:8b
 ollama pull gpt-oss:20b
-OLLAMA_URL=http://localhost:11434/v1 uv run --with ogx ogx run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run --with ogx ogx stack run starter
 ```
 
 The `OLLAMA_URL` environment variable tells the starter distribution to use Ollama as its inference provider. The server starts on `http://localhost:8321` by default.
@@ -253,9 +253,9 @@ The `OLLAMA_URL` environment variable tells the starter distribution to use Olla
 Then create the agent with some engineering documents. Some docs are indexed in the vector store up front; others live in a local directory for the agent to discover and index on demand:
 
 ```python
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
-client = LlamaStackClient(base_url="http://localhost:8321")
+client = OgxClient(base_url="http://localhost:8321")
 
 # Create the initial system prompt
 initial = client.prompts.create(

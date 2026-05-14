@@ -5,9 +5,9 @@
 # the root directory of this source tree.
 
 import pytest
-from llama_stack_client import BadRequestError as OGXBadRequestError
-from llama_stack_client.types.alpha import InferenceRerankResponse
-from llama_stack_client.types.shared.interleaved_content import (
+from ogx_client import BadRequestError as OGXBadRequestError
+from ogx_client.types.alpha import InferenceRerankResponse
+from ogx_client.types.shared.interleaved_content import (
     ImageContentItem,
     ImageContentItemImage,
     ImageContentItemImageURL,

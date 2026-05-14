@@ -325,7 +325,7 @@ class TestTranslateException:
         assert result.status_code == httpx.codes.BAD_REQUEST
 
     def test_service_not_enabled_error_uses_503(self):
-        exc = ServiceNotEnabledError("Safety API")
+        exc = ServiceNotEnabledError("moderation_endpoint")
         result = translate_exception(exc)
         assert result.status_code == httpx.codes.SERVICE_UNAVAILABLE
 

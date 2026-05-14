@@ -15,8 +15,6 @@ import {
   Box,
   Plug,
   Wrench,
-  Shield,
-  ShieldCheck,
   Layers,
   MessageSquare,
 } from "lucide-react";
@@ -50,9 +48,9 @@ import {
 
 const createItems = [
   {
-    title: "Safety",
-    url: "/safety",
-    icon: ShieldCheck,
+    title: "Chat Playground",
+    url: "/chat-playground",
+    icon: MessageCircle,
   },
 ];
 
@@ -118,7 +116,7 @@ const adminItems = [
   {
     title: "System",
     url: "/admin",
-    icon: Shield,
+    icon: Settings2,
   },
 ];
 

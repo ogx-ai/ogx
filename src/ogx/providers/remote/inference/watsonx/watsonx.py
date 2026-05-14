@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import time
 from collections.abc import AsyncIterator, Iterable
 from typing import Any
@@ -45,6 +46,8 @@ class WatsonXInferenceAdapter(OpenAIMixin):
     def __init__(self, config: WatsonXConfig):
         super().__init__(config=config)
         self._iam_token_cache: dict[str, tuple[str, float]] = {}
+        self._iam_token_lock = asyncio.Lock()
+        self._iam_refresh_tasks: dict[str, asyncio.Task[str]] = {}
         self._model_specs_cache: list[dict[str, Any]] | None = None
 
     def get_base_url(self) -> str:
@@ -74,6 +77,33 @@ class WatsonXInferenceAdapter(OpenAIMixin):
             if time.time() < expiry - 60:
                 return token
 
+        refresh_task: asyncio.Task[str] | None = None
+        async with self._iam_token_lock:
+            cached = self._iam_token_cache.get(api_key)
+            if cached:
+                token, expiry = cached
+                if time.time() < expiry - 60:
+                    return token
+
+            refresh_task = self._iam_refresh_tasks.get(api_key)
+            if refresh_task is not None and refresh_task.done():
+                self._iam_refresh_tasks.pop(api_key, None)
+                refresh_task = None
+
+            if refresh_task is None:
+                refresh_task = asyncio.create_task(self._exchange_iam_token(api_key))
+                self._iam_refresh_tasks[api_key] = refresh_task
+
+        try:
+            # Shield shared refresh work from request cancellation.
+            return await asyncio.shield(refresh_task)
+        finally:
+            if refresh_task.done():
+                async with self._iam_token_lock:
+                    if self._iam_refresh_tasks.get(api_key) is refresh_task:
+                        self._iam_refresh_tasks.pop(api_key, None)
+
+    async def _exchange_iam_token(self, api_key: str) -> str:
         try:
             async with httpx.AsyncClient() as http_client:
                 resp = await http_client.post(

@@ -17,7 +17,6 @@ The starter distribution consists of the following provider configurations:
 | eval | `inline::builtin`                                                                                                                                                                                                                                                                                                                       |
 | files | `inline::localfs`                                                                                                                                                                                                                                                                                                                              |
 | inference | `remote::openai`, `remote::fireworks`, `remote::together`, `remote::ollama`, `remote::anthropic`, `remote::gemini`, `remote::groq`, `remote::sambanova`, `remote::vllm`, `remote::cerebras`, `remote::llama-openai-compat`, `remote::nvidia`, `inline::sentence-transformers` |
-| safety | `inline::llama-guard`                                                                                                                                                                                                                                                                                                                          |
 | scoring | `inline::basic`, `inline::llm-as-judge`, `inline::braintrust`                                                                                                                                                                                                                                                                                  |
 | tool_runtime | `remote::brave-search`, `remote::tavily-search`, `inline::file-search`, `remote::model-context-protocol`                                                                                                                                                                                                                                       |
 | vector_io | `inline::faiss`, `inline::sqlite-vec`, `inline::milvus`, `remote::chromadb`, `remote::pgvector`, `remote::qdrant`, `remote::weaviate`, `remote::elasticsearch`, `remote::infinispan`                                                                                                                                                                 |
@@ -103,7 +102,7 @@ The following environment variables can be configured:
 
 ### Vector Database Configuration
 
-- `SQLITE_STORE_DIR`: SQLite store directory (default: `~/.llama/distributions/starter`)
+- `SQLITE_STORE_DIR`: SQLite store directory (default: `~/.ogx/distributions/starter`)
 - `ENABLE_SQLITE_VEC`: Enable SQLite vector provider
 - `ENABLE_CHROMADB`: Enable ChromaDB provider
 - `ENABLE_PGVECTOR`: Enable PGVector provider
@@ -148,8 +147,6 @@ export PGVECTOR_DB=ogx_db   # enables the PGVector vector provider
 export INFINISPAN_URL=http://localhost:11222   # enables the Infinispan vector provider
 ```
 
-This distribution comes with a default "llama-guard" shield that can be enabled by setting the `SAFETY_MODEL` environment variable to point to an appropriate Llama Guard model id. Use `ogx-client models list` to see the list of available models.
-
 ## Running
 
 See [Starting a OGX Server](../starting_ogx_server) for all the ways to run (uv, container, library, Kubernetes).
@@ -157,7 +154,7 @@ See [Starting a OGX Server](../starting_ogx_server) for all the ways to run (uv,
 Quick start:
 
 ```bash
-uvx --from 'ogx[starter]' ogx run starter
+uvx --from 'ogx[starter]' ogx stack run starter
 ```
 
 Or run the pre-built container image from [Docker Hub](https://hub.docker.com/r/ogx/distribution-starter):
@@ -165,7 +162,7 @@ Or run the pre-built container image from [Docker Hub](https://hub.docker.com/r/
 ```bash
 docker run -it \
   -p 8321:8321 \
-  -v ~/.llama:/root/.llama \
+  -v ~/.ogx:/root/.ogx \
   -e OLLAMA_URL=http://host.docker.internal:11434 \
   ogx/distribution-starter
 ```
@@ -175,7 +172,7 @@ docker run -it \
 By default, the starter distribution uses SQLite. For production, use PostgreSQL:
 
 ```bash
-uvx --from 'ogx[starter]' ogx run starter::run-with-postgres-store.yaml
+uvx --from 'ogx[starter]' ogx stack run starter::run-with-postgres-store.yaml
 ```
 
 A pre-built container image with PostgreSQL storage is also available as [`ogx/distribution-postgres-demo`](https://hub.docker.com/r/ogx/distribution-postgres-demo).

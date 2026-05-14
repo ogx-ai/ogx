@@ -14,7 +14,7 @@ It's none of those. OGX is a server. Specifically, it's a **server-side agentic 
 
 This post explains why we renamed, what changed in the project's direction, and what that means for you.
 
-{/*truncate*/}
+<!--truncate-->
 
 ## Why the rename
 

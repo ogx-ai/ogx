@@ -9,7 +9,7 @@ import logging  # allow-direct-logging
 import os
 
 import httpx
-import llama_stack_client
+import ogx_client
 import openai
 import pytest
 
@@ -267,7 +267,7 @@ def test_response_non_streaming_mcp_tool(responses_client, client_with_models, t
         exc_type = (
             AuthenticationRequiredError
             if isinstance(responses_client, OGXAsLibraryClient)
-            else (httpx.HTTPStatusError, openai.AuthenticationError, llama_stack_client.AuthenticationError)
+            else (httpx.HTTPStatusError, openai.AuthenticationError, ogx_client.AuthenticationError)
         )
         # Suppress expected auth error logs only for the failing auth attempt
         with caplog.at_level(logging.CRITICAL, logger="ogx.providers.inline.responses.builtin.responses.streaming"):
@@ -994,7 +994,7 @@ def test_max_tool_calls_invalid(responses_client, text_model_id):
 
     # Create a response with an invalid max_tool_calls value i.e. 0
     # Handle ValueError from LLS and BadRequestError from OpenAI client
-    with pytest.raises((ValueError, llama_stack_client.BadRequestError, openai.BadRequestError)) as excinfo:
+    with pytest.raises((ValueError, ogx_client.BadRequestError, openai.BadRequestError)) as excinfo:
         responses_client.responses.create(
             model=text_model_id,
             input=input,

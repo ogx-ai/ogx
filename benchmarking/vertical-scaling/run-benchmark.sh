@@ -174,7 +174,7 @@ echo "Workers: $WORKERS"
 echo "Backend: $MOCK_URL"
 echo ""
 
-OPENAI_BASE_URL="$MOCK_URL/v1" OPENAI_API_KEY="fake-token" uv run ogx run --providers inference=remote::openai --port $STACK_PORT > "$SCRIPT_DIR/stack.log" 2>&1 &
+OPENAI_BASE_URL="$MOCK_URL/v1" OPENAI_API_KEY="fake-token" uv run ogx stack run --providers inference=remote::openai --port $STACK_PORT > "$SCRIPT_DIR/stack.log" 2>&1 &
 STACK_PID=$!
 echo "$STACK_PID" >> "$PIDS_FILE"
 echo "Stack Server PID: $STACK_PID"

@@ -9,6 +9,7 @@ from urllib.parse import urljoin
 import httpx
 from pydantic import ConfigDict
 
+from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
@@ -58,6 +59,16 @@ class VLLMInferenceAdapter(OpenAIMixin):
         if not self.config.base_url:
             raise ValueError("No base URL configured")
         return str(self.config.base_url)
+
+    def _get_extra_request_headers(self) -> dict[str, str] | None:
+        if not self.config.fairness_header_attribute:
+            return None
+        user = get_authenticated_user()
+        if user and user.attributes:
+            values = user.attributes.get(self.config.fairness_header_attribute, [])
+            if values:
+                return {"x-gateway-inference-fairness-id": values[0]}
+        return None
 
     async def initialize(self) -> None:
         if not self.config.base_url:

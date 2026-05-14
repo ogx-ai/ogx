@@ -763,3 +763,23 @@ async def test_query_chunks_hybrid_tie_breaking(
         "docA",
         "docB",
     }
+
+
+def test_create_sqlite_connection_sets_wal_pragmas(tmp_path):
+    """Verify that new connections use WAL mode, busy_timeout, and synchronous=NORMAL."""
+    db_path = str(tmp_path / "test_pragmas.db")
+    connection = _create_sqlite_connection(db_path)
+    cur = connection.cursor()
+
+    cur.execute("PRAGMA journal_mode")
+    assert cur.fetchone()[0].lower() == "wal"
+
+    cur.execute("PRAGMA busy_timeout")
+    assert cur.fetchone()[0] == 5000
+
+    cur.execute("PRAGMA synchronous")
+    # NORMAL = 1
+    assert cur.fetchone()[0] == 1
+
+    cur.close()
+    connection.close()
