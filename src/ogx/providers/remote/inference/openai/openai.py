@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import warnings
 from collections.abc import AsyncIterator
 
 from ogx.log import get_logger
@@ -113,6 +114,12 @@ class OpenAIInferenceAdapter(OpenAIMixin):
         # Reasoning models (o1/o3/o4) and gpt-5+ reject max_tokens outright.
         # Translate unconditionally since all OpenAI models accept max_completion_tokens.
         if params.max_tokens is not None and params.max_completion_tokens is None:
+            warnings.warn(
+                "max_tokens is deprecated by OpenAI and will be removed in a future release. "
+                "Use max_completion_tokens instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             params = params.model_copy()
             params.max_completion_tokens = params.max_tokens
             params.max_tokens = None
