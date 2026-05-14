@@ -2126,12 +2126,13 @@ components:
           enum:
           - function_call_output
         id:
-          type: string
-          title: Id
+          anyOf:
+          - type: string
+          - type: 'null'
         status:
-          type: string
-          title: Status
-          default: completed
+          anyOf:
+          - type: string
+          - type: 'null'
       type: object
       required:
       - call_id

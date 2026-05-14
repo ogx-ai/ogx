@@ -1548,8 +1548,8 @@ class OpenAIResponseInputFunctionToolCallOutput(BaseModel):
     call_id: str
     output: str | list[OpenAIResponseInputMessageContent]
     type: Literal["function_call_output"] = "function_call_output"
-    id: str = Field(default_factory=lambda: f"fco_{uuid.uuid4()}")
-    status: str = Field(default="completed")
+    id: str | None = None
+    status: str | None = None
 
 
 @json_schema_type

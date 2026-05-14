@@ -10,7 +10,6 @@ import pytest
 from pydantic import ValidationError
 
 from ogx_api import (
-    OpenAIResponseInputFunctionToolCallOutput,
     OpenAIResponseMessage,
     OpenAIResponseOutputMessageFunctionToolCall,
 )
@@ -78,30 +77,3 @@ class TestOpenAIResponseOutputMessageFunctionToolCallFields:
         completed = tc.model_copy(update={"status": "completed"})
         assert completed.status == "completed"
         assert completed.id == tc.id
-
-
-class TestOpenAIResponseInputFunctionToolCallOutputFields:
-    def test_default_id_is_str(self):
-        fco = OpenAIResponseInputFunctionToolCallOutput(call_id="call_123", output="result")
-        assert isinstance(fco.id, str)
-        assert fco.id.startswith("fco_")
-
-    def test_default_status_is_str(self):
-        fco = OpenAIResponseInputFunctionToolCallOutput(call_id="call_123", output="result")
-        assert isinstance(fco.status, str)
-        assert fco.status == "completed"
-
-    def test_explicit_id_and_status(self):
-        fco = OpenAIResponseInputFunctionToolCallOutput(
-            call_id="call_123", output="result", id="my_id", status="in_progress"
-        )
-        assert fco.id == "my_id"
-        assert fco.status == "in_progress"
-
-    def test_none_id_rejected(self):
-        with pytest.raises(ValidationError):
-            OpenAIResponseInputFunctionToolCallOutput(call_id="call_123", output="result", id=None)
-
-    def test_none_status_rejected(self):
-        with pytest.raises(ValidationError):
-            OpenAIResponseInputFunctionToolCallOutput(call_id="call_123", output="result", status=None)
