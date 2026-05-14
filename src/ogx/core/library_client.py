@@ -323,7 +323,12 @@ class OGXAsLibraryClient(OgxClient):
                         await asyncio.sleep(0.01)
             finally:
                 if async_gen is not None:
-                    await async_gen.aclose()
+                    if hasattr(async_gen, "aclose"):
+                        await async_gen.aclose()
+                    elif hasattr(async_gen, "close"):
+                        close = async_gen.close()
+                        if asyncio.iscoroutine(close):
+                            await close
 
         future = asyncio.run_coroutine_threadsafe(_consume(), self.loop)
 
