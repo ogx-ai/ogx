@@ -41,6 +41,15 @@ _MODEL_MAX_OUTPUT_TOKENS: dict[str, int] = {
 
 _WARNED_MODELS: set[str] = set()
 
+# Models that reject max_tokens and require max_completion_tokens.
+# OpenAI reasoning models and gpt-5+ only accept max_completion_tokens.
+_MAX_COMPLETION_TOKENS_ONLY_PREFIXES: tuple[str, ...] = (
+    "o1",
+    "o3",
+    "o4",
+    "gpt-5",
+)
+
 
 #
 # This OpenAI adapter implements Inference methods using OpenAIMixin
@@ -105,10 +114,20 @@ class OpenAIInferenceAdapter(OpenAIMixin):
             metadata=metadata,
         )
 
+    def _requires_max_completion_tokens(self, model: str) -> bool:
+        return any(model.startswith(prefix) for prefix in _MAX_COMPLETION_TOKENS_ONLY_PREFIXES)
+
     async def openai_chat_completion(
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
+        # Translate max_tokens → max_completion_tokens for models that reject max_tokens
+        if self._requires_max_completion_tokens(params.model):
+            if params.max_tokens is not None and params.max_completion_tokens is None:
+                params = params.model_copy()
+                params.max_completion_tokens = params.max_tokens
+                params.max_tokens = None
+
         max_output_tokens = self._get_max_output_tokens(params.model)
         if max_output_tokens is not None:
             updated_params = params

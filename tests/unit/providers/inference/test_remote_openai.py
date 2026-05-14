@@ -226,6 +226,91 @@ class TestOpenAIMaxTokensClamping:
             assert call_kwargs["max_completion_tokens"] == 16384
 
 
+class TestOpenAIMaxTokensTranslation:
+    """Models that reject max_tokens should get max_completion_tokens instead."""
+
+    @pytest.mark.parametrize("model", ["o1", "o3", "o3-mini", "o4-mini", "gpt-5", "gpt-5.4-nano-2026-03-17"])
+    async def test_translates_max_tokens_to_max_completion_tokens(self, mock_openai_response, model):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model=model,
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+                max_tokens=20,
+            )
+            await adapter.openai_chat_completion(params)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs.get("max_tokens") is None
+            assert call_kwargs["max_completion_tokens"] == 20
+
+    async def test_does_not_translate_when_max_completion_tokens_already_set(self, mock_openai_response):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model="o3",
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+                max_tokens=20,
+                max_completion_tokens=50,
+            )
+            await adapter.openai_chat_completion(params)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["max_tokens"] == 20
+            assert call_kwargs["max_completion_tokens"] == 50
+
+    async def test_does_not_translate_for_gpt4_models(self, mock_openai_response):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+                max_tokens=20,
+            )
+            await adapter.openai_chat_completion(params)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["max_tokens"] == 20
+            assert call_kwargs.get("max_completion_tokens") is None
+
+    async def test_does_not_mutate_original_params(self, mock_openai_response):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model="o3",
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+                max_tokens=20,
+            )
+            await adapter.openai_chat_completion(params)
+
+            assert params.max_tokens == 20
+            assert params.max_completion_tokens is None
+
+
 class TestOpenAIModelMetadata:
     def test_construct_model_includes_max_output_tokens(self):
         adapter = _make_adapter()
