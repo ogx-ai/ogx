@@ -20,7 +20,11 @@ import {
 import { useAuthClient } from "@/hooks/use-auth-client";
 import type { Model } from "llama-stack-client/resources/models";
 import type { ResponseCreateParamsStreaming } from "llama-stack-client/resources/responses/responses";
-import { addConversation, getConversation } from "@/lib/conversation-history";
+import {
+  addConversation,
+  getConversation,
+  removeConversation,
+} from "@/lib/conversation-history";
 
 type ModelWithMeta = Model & {
   custom_metadata?: Record<string, unknown>;
@@ -252,6 +256,7 @@ function ChatPlaygroundContent() {
         setError(
           "Failed to load conversation. It may have been deleted. Starting a new chat."
         );
+        removeConversation(conversationParam);
         router.replace("/chat-playground");
         createNewSession();
       } finally {

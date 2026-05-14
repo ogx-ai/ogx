@@ -54,6 +54,18 @@ export function addConversation(entry: ConversationHistoryEntry): void {
   }
 }
 
+export function removeConversation(id: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = getConversationHistory();
+    const updated = existing.filter(e => e.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new Event("conversations-updated"));
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
 export function updateConversation(
   id: string,
   updates: Partial<ConversationHistoryEntry>
