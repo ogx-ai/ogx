@@ -35,6 +35,10 @@ jest.mock("next/navigation", () => ({
   useSearchParams: jest.fn(() => ({
     get: jest.fn(() => null),
   })),
+  useRouter: jest.fn(() => ({
+    replace: jest.fn(),
+    push: jest.fn(),
+  })),
 }));
 
 jest.mock("@/components/chat-playground/chat", () => ({
