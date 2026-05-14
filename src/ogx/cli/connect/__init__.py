@@ -4,4 +4,4 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from .launch import LaunchParser  # noqa
+from .connect import ConnectParser  # noqa

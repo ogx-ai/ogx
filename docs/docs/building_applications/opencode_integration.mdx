@@ -7,7 +7,7 @@ sidebar_position: 6
 
 # OpenCode Integration
 
-OGX includes built-in support for launching [OpenCode](https://opencode.ai), a terminal-based AI coding assistant, with a single command. All available models on your OGX server are automatically configured and ready to use.
+OGX includes built-in support for connecting [OpenCode](https://opencode.ai), a terminal-based AI coding assistant, with a single command. All available models on your OGX server are automatically configured and ready to use.
 
 ## Quick Start
 
@@ -18,17 +18,17 @@ export OPENAI_API_KEY="your-key-here"
 ogx stack run starter
 ```
 
-### 2. Launch OpenCode
+### 2. Connect OpenCode
 
 ```bash
-ogx launch opencode
+ogx connect opencode
 ```
 
 That's it. OpenCode starts with all your OGX models available and the first model pre-selected.
 
 ## How It Works
 
-The `ogx launch opencode` command:
+The `ogx connect opencode` command:
 
 1. Queries the running OGX server for available models
 2. Filters out non-LLM models (embeddings, rerankers)
@@ -36,7 +36,7 @@ The `ogx launch opencode` command:
 4. Launches OpenCode with the configuration via the `OPENCODE_CONFIG_CONTENT` environment variable
 
 ```
-ogx launch opencode
+ogx connect opencode
        |
        v
   GET /v1/models (discover available models)
@@ -54,7 +54,7 @@ ogx launch opencode
 ## CLI Reference
 
 ```bash
-ogx launch opencode [--model MODEL] [--host HOST] [--port PORT]
+ogx connect opencode [--model MODEL] [--host HOST] [--port PORT]
 ```
 
 **Options:**
@@ -72,13 +72,13 @@ All discovered LLM models are available in OpenCode regardless of which model is
 ### With a specific default model
 
 ```bash
-ogx launch opencode --model openai/gpt-4o
+ogx connect opencode --model openai/gpt-4o
 ```
 
 ### With a remote OGX server
 
 ```bash
-ogx launch opencode --host 192.168.1.100 --port 9000
+ogx connect opencode --host 192.168.1.100 --port 9000
 ```
 
 ### With Ollama backend
@@ -88,8 +88,8 @@ ogx launch opencode --host 192.168.1.100 --port 9000
 export OLLAMA_URL="http://localhost:11434/v1"
 ogx stack run starter
 
-# Terminal 2: Launch OpenCode
-ogx launch opencode
+# Terminal 2: Connect OpenCode
+ogx connect opencode
 ```
 
 ### With vLLM backend
@@ -99,14 +99,14 @@ ogx launch opencode
 export VLLM_URL="http://localhost:8000/v1"
 ogx stack run starter
 
-# Terminal 2: Launch OpenCode
-ogx launch opencode --model vllm/Qwen/Qwen3-8B
+# Terminal 2: Connect OpenCode
+ogx connect opencode --model vllm/Qwen/Qwen3-8B
 ```
 
 ## Prerequisites
 
 - **OpenCode** must be installed and available in your `PATH`. Install it from [opencode.ai](https://opencode.ai).
-- **OGX server** must be running before launching OpenCode. Start it with `ogx stack run` or `ogx stack letsgo`.
+- **OGX server** must be running before connecting OpenCode. Start it with `ogx stack run` or `ogx stack letsgo`.
 
 ## Troubleshooting
 

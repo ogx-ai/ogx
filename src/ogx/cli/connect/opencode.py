@@ -20,19 +20,19 @@ from ogx.log import get_logger
 logger = get_logger(name=__name__, category="cli")
 
 
-class LaunchOpenCode(Subcommand):
-    """Launch OpenCode configured to use the running OGX server."""
+class ConnectOpenCode(Subcommand):
+    """Connect OpenCode to the running OGX server."""
 
     def __init__(self, subparsers: argparse._SubParsersAction) -> None:
         super().__init__()
         self.parser = subparsers.add_parser(
             "opencode",
-            prog="ogx launch opencode",
+            prog="ogx connect opencode",
             description="Launch OpenCode connected to the running OGX server.",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
         self._add_arguments()
-        self.parser.set_defaults(func=self._run_launch_opencode_cmd)
+        self.parser.set_defaults(func=self._run_connect_opencode_cmd)
 
     def _add_arguments(self) -> None:
         self.parser.add_argument(
@@ -54,7 +54,7 @@ class LaunchOpenCode(Subcommand):
             help="OGX server host.",
         )
 
-    def _run_launch_opencode_cmd(self, args: argparse.Namespace) -> None:
+    def _run_connect_opencode_cmd(self, args: argparse.Namespace) -> None:
         if not shutil.which("opencode"):
             cprint(
                 "Failed to find 'opencode' in PATH. Install it from https://opencode.ai",
@@ -75,7 +75,7 @@ class LaunchOpenCode(Subcommand):
         config = self._build_opencode_config(base_url, models, default_model)
         config_json = json.dumps(config)
 
-        logger.info("Launching OpenCode", default_model=default_model, models=len(models), base_url=base_url)
+        logger.info("Connecting to OpenCode", default_model=default_model, models=len(models), base_url=base_url)
 
         env = {**os.environ, "OPENCODE_CONFIG_CONTENT": config_json}
         result = subprocess.run(["opencode"], env=env)
