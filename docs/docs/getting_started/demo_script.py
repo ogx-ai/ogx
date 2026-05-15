@@ -93,11 +93,7 @@ response = agent.create_turn(
 # Only call `AgentEventLogger().log(response)` for streaming responses.
 if use_stream:
     for log in AgentEventLogger().log(response):
-        if hasattr(log, 'print'):
-            log.print()
-        else:
-            # Print text chunks inline without newlines
-            print(log, end='', flush=True)
+        print(log, end="", flush=True)
     print()  # Final newline at the end
 else:
     print(response)
