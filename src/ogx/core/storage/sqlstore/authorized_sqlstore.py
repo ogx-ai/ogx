@@ -148,6 +148,26 @@ class AuthorizedSqlStore:
         await self.sql_store.add_column_if_not_exists(table, "access_attributes", ColumnType.JSON)
         await self.sql_store.add_column_if_not_exists(table, "owner_principal", ColumnType.STRING)
 
+    async def add_column_if_not_exists(
+        self,
+        table: str,
+        column_name: str,
+        column_type: ColumnType,
+        nullable: bool = True,
+    ) -> None:
+        """Expose schema migration helper from the wrapped SQL store."""
+        await self.sql_store.add_column_if_not_exists(table, column_name, column_type, nullable)
+
+    async def check_access_for_rows(
+        self,
+        table: str,
+        where: Mapping[str, Any],
+        action: Action,
+    ) -> None:
+        """Validate authorization for matching rows without mutating data."""
+        current_user = get_authenticated_user()
+        await self._check_access_for_rows(table, where, action, current_user)
+
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         """Insert a row or batch of rows with automatic access control attribute capture."""
         current_user = get_authenticated_user()
