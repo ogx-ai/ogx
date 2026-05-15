@@ -46,14 +46,6 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 
-const createItems = [
-  {
-    title: "Chat Playground",
-    url: "/chat-playground",
-    icon: MessageCircle,
-  },
-];
-
 const manageItems = [
   {
     title: "Chat Completions",
@@ -302,7 +294,6 @@ export function AppSidebar() {
                   </SidebarMenuSub>
                 </CollapsibleContent>
               </Collapsible>
-              {renderSidebarItems(createItems)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

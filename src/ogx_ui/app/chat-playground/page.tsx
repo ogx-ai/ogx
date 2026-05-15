@@ -393,6 +393,7 @@ function ChatPlaygroundContent() {
         stream: true,
         conversation: conversationId,
         instructions: session.systemInstructions,
+        include: ["file_search_call.results"],
         ...(tools && { tools }),
       };
 
@@ -405,10 +406,12 @@ function ChatPlaygroundContent() {
       let currentResponseId: string | null = null;
       let assistantMessageAdded = false;
       const collectedAnnotations: FileCitation[] = [];
+      const fileIdMap: Record<string, string> = {};
 
       const updateAssistantMessage = (
         content: string,
-        annotations?: FileCitation[]
+        annotations?: FileCitation[],
+        resolvedFileIdMap?: Record<string, string>
       ) => {
         setCurrentSession(prev => {
           if (!prev) return null;
@@ -418,6 +421,12 @@ function ChatPlaygroundContent() {
             last.content = content;
             if (annotations && annotations.length > 0) {
               last.annotations = annotations;
+            }
+            if (
+              resolvedFileIdMap &&
+              Object.keys(resolvedFileIdMap).length > 0
+            ) {
+              last.fileIdMap = resolvedFileIdMap;
             }
           }
           return {
@@ -484,6 +493,28 @@ function ChatPlaygroundContent() {
             }
           }
 
+          // Capture file search results to map document UUIDs to real file IDs
+          if (chunkObj.type === "response.output_item.done") {
+            const item = chunkObj.item as Record<string, unknown>;
+            if (
+              item?.type === "file_search_call" &&
+              Array.isArray(item.results)
+            ) {
+              for (const result of item.results as Array<
+                Record<string, unknown>
+              >) {
+                const docId = result.file_id as string;
+                const attrs = result.attributes as
+                  | Record<string, unknown>
+                  | undefined;
+                const realFileId = attrs?.file_id as string | undefined;
+                if (docId && realFileId) {
+                  fileIdMap[docId] = realFileId;
+                }
+              }
+            }
+          }
+
           const deltaText =
             chunkObj.type === "response.output_text.delta"
               ? (chunkObj.delta as string) || (chunkObj.text as string)
@@ -494,6 +525,7 @@ function ChatPlaygroundContent() {
 
             if (!assistantMessageAdded) {
               assistantMessageAdded = true;
+              const hasMap = Object.keys(fileIdMap).length > 0;
               setCurrentSession(prev => {
                 if (!prev) return null;
                 return {
@@ -505,24 +537,35 @@ function ChatPlaygroundContent() {
                       role: "assistant" as const,
                       content: fullContent,
                       createdAt: new Date(),
+                      ...(hasMap && { fileIdMap }),
                     },
                   ],
                   updatedAt: Date.now(),
                 };
               });
             } else {
+              const hasMap = Object.keys(fileIdMap).length > 0;
               flushSync(() => {
-                updateAssistantMessage(fullContent);
+                updateAssistantMessage(
+                  fullContent,
+                  undefined,
+                  hasMap ? fileIdMap : undefined
+                );
               });
             }
           }
 
-          // On completion, attach annotations to the message
-          if (
-            chunkObj.type === "response.completed" &&
-            collectedAnnotations.length > 0
-          ) {
-            updateAssistantMessage(fullContent, collectedAnnotations);
+          // On completion, attach annotations and file ID map to the message
+          if (chunkObj.type === "response.completed") {
+            const hasAnnotations = collectedAnnotations.length > 0;
+            const hasFileIdMap = Object.keys(fileIdMap).length > 0;
+            if (hasAnnotations || hasFileIdMap) {
+              updateAssistantMessage(
+                fullContent,
+                hasAnnotations ? collectedAnnotations : undefined,
+                hasFileIdMap ? fileIdMap : undefined
+              );
+            }
           }
         }
       }
