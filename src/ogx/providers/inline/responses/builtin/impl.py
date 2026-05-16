@@ -75,6 +75,7 @@ class BuiltinResponsesImpl(Responses):
         files_api: Files,
         connectors_api: Connectors,
         policy: list[AccessRule],
+        containers_api=None,
     ):
         self.config = config
         self.inference_api = inference_api
@@ -87,6 +88,7 @@ class BuiltinResponsesImpl(Responses):
         self.openai_responses_impl: OpenAIResponsesImpl | None = None
         self.policy = policy
         self.connectors_api = connectors_api
+        self.containers_api = containers_api
 
     async def initialize(self) -> None:
         self.responses_store = ResponsesStore(self.config.persistence.responses, self.policy)
@@ -106,6 +108,7 @@ class BuiltinResponsesImpl(Responses):
             vector_stores_config=self.config.vector_stores_config,
             connectors_api=self.connectors_api,
             compaction_config=self.config.compaction_config,
+            containers_api=self.containers_api,
         )
         await self.openai_responses_impl.initialize()
 

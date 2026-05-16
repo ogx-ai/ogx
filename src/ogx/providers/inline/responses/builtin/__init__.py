@@ -29,6 +29,7 @@ async def get_provider_impl(
         deps[Api.files],
         deps[Api.connectors],
         policy,
+        containers_api=deps.get(Api.containers),
     )
     await impl.initialize()
     return impl

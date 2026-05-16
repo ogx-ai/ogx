@@ -23,6 +23,7 @@ from ogx_api import (
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolShell,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMCPApprovalResponse,
@@ -175,6 +176,8 @@ class ToolContext(BaseModel):
                     server_label=tool.server_label,
                     allowed_tools=tool.allowed_tools,
                 )
+            if isinstance(tool, OpenAIResponseInputToolShell):
+                return tool
             # Exhaustive check - all tool types should be handled above
             raise AssertionError(f"Unexpected tool type: {type(tool)}")
 

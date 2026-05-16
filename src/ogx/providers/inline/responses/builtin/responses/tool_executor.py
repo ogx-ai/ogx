@@ -49,7 +49,7 @@ tracer = trace.get_tracer(__name__)
 
 
 class ToolExecutor:
-    """Executes tool calls including file search, web search, MCP, and function tools."""
+    """Executes tool calls including file search, web search, MCP, shell, and function tools."""
 
     def __init__(
         self,
@@ -58,6 +58,7 @@ class ToolExecutor:
         vector_io_api: VectorIO,
         vector_stores_config=None,
         mcp_session_manager=None,
+        containers_api=None,
     ):
         self.tool_groups_api = tool_groups_api
         self.tool_runtime_api = tool_runtime_api
@@ -65,6 +66,7 @@ class ToolExecutor:
         self.vector_stores_config = vector_stores_config
         # Optional MCPSessionManager for session reuse within a request (fix for #4452)
         self.mcp_session_manager = mcp_session_manager
+        self.containers_api = containers_api
 
     async def execute_tool_call(
         self,
@@ -357,6 +359,8 @@ class ToolExecutor:
                         authorization=mcp_tool.authorization,
                         session_manager=self.mcp_session_manager,
                     )
+            elif function_name == "shell":
+                result = await self._execute_shell_tool(tool_kwargs)
             elif function_name in ("knowledge_search", "file_search"):
                 response_file_search_tool = (
                     next(
@@ -390,6 +394,48 @@ class ToolExecutor:
             error_exc = e
 
         return error_exc, result
+
+    async def _execute_shell_tool(self, tool_kwargs: dict) -> Any:
+        if not self.containers_api:
+            raise ValueError("Failed to execute shell tool: containers API is not configured")
+
+        from ogx_api.containers import (
+            CreateContainerRequest,
+            DeleteContainerRequest,
+            ExecInContainerRequest,
+        )
+
+        container_id = tool_kwargs.get("container_id")
+        commands = tool_kwargs.get("commands", [])
+        timeout_ms = tool_kwargs.get("timeout_ms", 120000)
+        max_output_length = tool_kwargs.get("max_output_length")
+
+        auto_created = False
+        if not container_id:
+            container = await self.containers_api.create_container(
+                CreateContainerRequest(name="shell-auto"),
+            )
+            container_id = container.id
+            auto_created = True
+
+        try:
+            exec_result = await self.containers_api.exec_in_container(
+                ExecInContainerRequest(
+                    container_id=container_id,
+                    commands=commands,
+                    timeout_ms=timeout_ms,
+                    max_output_length=max_output_length,
+                ),
+            )
+            return exec_result
+        finally:
+            if auto_created:
+                try:
+                    await self.containers_api.delete_container(
+                        DeleteContainerRequest(container_id=container_id),
+                    )
+                except Exception:
+                    logger.warning("Failed to cleanup auto-created container", container_id=container_id)
 
     async def _emit_completion_events(
         self,
@@ -503,12 +549,40 @@ class ToolExecutor:
                         )
                 if has_error:
                     message.status = "failed"
+            elif function.name == "shell":
+                from ogx_api.openai_responses import (
+                    OpenAIResponseOutputMessageShellCall,
+                    ShellCallAction,
+                )
+
+                message = OpenAIResponseOutputMessageShellCall(
+                    id=item_id,
+                    call_id=tool_call_id,
+                    action=ShellCallAction(
+                        commands=tool_kwargs.get("commands", []),
+                        timeout_ms=tool_kwargs.get("timeout_ms"),
+                        max_output_length=tool_kwargs.get("max_output_length"),
+                    ),
+                    status="completed" if not has_error else "incomplete",
+                )
             else:
                 raise ValueError(f"Unknown tool {function.name} called")
 
         # Build input message
         input_message: OpenAIToolMessageParam | None = None
-        if result and (result_content := getattr(result, "content", None)):
+        if function.name == "shell" and result:
+            from ogx_api.containers import ExecInContainerResponse
+
+            if isinstance(result, ExecInContainerResponse):
+                output_text = result.stdout
+                if result.stderr:
+                    output_text += f"\nSTDERR:\n{result.stderr}"
+                if result.timed_out:
+                    output_text += "\n[TIMED OUT]"
+                input_message = OpenAIToolMessageParam(content=output_text, tool_call_id=tool_call_id)
+            else:
+                input_message = OpenAIToolMessageParam(content=str(result), tool_call_id=tool_call_id)
+        elif result and (result_content := getattr(result, "content", None)):
             # all the mypy contortions here are still unsatisfactory with random Any typing
             if isinstance(result_content, str):
                 msg_content: str | list[Any] = result_content

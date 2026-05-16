@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -126,7 +127,7 @@ tracer = trace.get_tracer(__name__)
 
 # Built-in tool names that the server knows how to execute itself.
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
-_SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+_SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search", "shell"})
 
 _GUARDRAIL_BATCH_CHARS = 200
 
@@ -1467,6 +1468,16 @@ class StreamingResponseOrchestrator:
                     status="in_progress",
                     queries=[tool_call.function.arguments or ""],
                 )
+            elif tool_call.function.name == "shell":
+                from ogx_api.openai_responses import OpenAIResponseOutputMessageShellCall, ShellCallAction
+
+                tool_kwargs = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
+                item = OpenAIResponseOutputMessageShellCall(
+                    id=matching_item_id,
+                    call_id=tool_call.id or matching_item_id,
+                    action=ShellCallAction(commands=tool_kwargs.get("commands", [])),
+                    status="in_progress",
+                )
             else:
                 raise ValueError(f"Unsupported tool call: {tool_call.function.name}")
 
@@ -1595,6 +1606,27 @@ class StreamingResponseOrchestrator:
                     },
                 )
                 self.ctx.chat_tools.append(make_openai_tool(tool_name, file_search_tool_def))
+            elif input_tool.type == "shell":
+                shell_tool_def = ToolDef(
+                    name="shell",
+                    description="Execute shell commands in a sandboxed container",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "commands": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Shell commands to execute",
+                            },
+                            "timeout_ms": {
+                                "type": "integer",
+                                "description": "Timeout in milliseconds",
+                            },
+                        },
+                        "required": ["commands"],
+                    },
+                )
+                self.ctx.chat_tools.append(make_openai_tool("shell", shell_tool_def))
             elif input_tool.type == "mcp":
                 async for stream_event in self._process_mcp_tool(input_tool, output_messages):
                     yield stream_event

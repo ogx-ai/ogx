@@ -2,6 +2,7 @@ version: 2
 distro_name: starter
 apis:
 - batches
+- containers
 - file_processors
 - files
 - inference
@@ -175,6 +176,13 @@ providers:
       persistence:
         namespace: vector_io::infinispan
         backend: kv_default
+  containers:
+  - provider_id: docker-containers
+    provider_type: inline::docker
+    config:
+      metadata_store:
+        table_name: containers_metadata
+        backend: sql_default
   files:
   - provider_id: builtin-files
     provider_type: inline::localfs

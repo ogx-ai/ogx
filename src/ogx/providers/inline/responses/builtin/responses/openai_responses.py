@@ -119,6 +119,7 @@ class OpenAIResponsesImpl:
         connectors_api: Connectors,
         vector_stores_config=None,
         compaction_config=None,
+        containers_api=None,
     ):
         self.inference_api = inference_api
         self.tool_groups_api = tool_groups_api
@@ -132,10 +133,12 @@ class OpenAIResponsesImpl:
             tool_runtime_api=tool_runtime_api,
             vector_io_api=vector_io_api,
             vector_stores_config=vector_stores_config,
+            containers_api=containers_api,
         )
         self.prompts_api = prompts_api
         self.files_api = files_api
         self.connectors_api = connectors_api
+        self.containers_api = containers_api
 
         self.compaction_config = compaction_config or CompactionConfig()
         self._background_queue: asyncio.Queue[_BackgroundWorkItem] = asyncio.Queue(maxsize=BACKGROUND_QUEUE_MAX_SIZE)
@@ -1131,6 +1134,7 @@ class OpenAIResponsesImpl:
                 vector_io_api=self.vector_io_api,
                 vector_stores_config=self.tool_executor.vector_stores_config,
                 mcp_session_manager=mcp_session_manager,
+                containers_api=self.containers_api,
             )
 
             orchestrator = StreamingResponseOrchestrator(
@@ -1185,7 +1189,7 @@ class OpenAIResponsesImpl:
                         failed_response = stream_chunk.response
                     case "response.output_item.done":
                         item = stream_chunk.item
-                        output_items.append(item)
+                        output_items.append(item)  # type: ignore[arg-type]
                     case _:
                         pass  # Other event types
 
@@ -1547,7 +1551,7 @@ class OpenAIResponsesImpl:
                 OpenAIResponseMessage(role="user", content=[OpenAIResponseInputMessageContentText(text=input)])
             )
         elif isinstance(input, list):
-            conversation_items.extend(item for item in input if not isinstance(item, OpenAIResponseCompaction))
+            conversation_items.extend(item for item in input if not isinstance(item, OpenAIResponseCompaction))  # type: ignore[misc]
 
         conversation_items.extend(output_items)
 

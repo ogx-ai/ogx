@@ -48,6 +48,7 @@ from ogx_api import (
     VectorIO,
     VectorStore,
 )
+from ogx_api.containers import Containers
 from ogx_api import (
     Providers as ProvidersAPI,
 )
@@ -89,6 +90,7 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.connectors: Connectors,
         Api.messages: Messages,
         Api.interactions: Interactions,
+        Api.containers: Containers,
     }
 
     if external_apis:
