@@ -122,6 +122,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     prompts = "prompts"
     conversations = "conversations"
     connectors = "connectors"
+    containers = "containers"
     messages = "messages"
     interactions = "interactions"
 

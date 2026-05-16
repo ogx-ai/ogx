@@ -9,6 +9,8 @@
 Pydantic models are defined in ogx_api.containers.models.
 """
 
+from . import fastapi_routes
+from .api import Containers
 from .models import (
     Container,
     ContainerExpiresAfter,
@@ -25,6 +27,7 @@ from .models import (
 
 __all__ = [
     "Container",
+    "Containers",
     "ContainerExpiresAfter",
     "ContainerNetworkPolicy",
     "CreateContainerRequest",
@@ -35,4 +38,5 @@ __all__ = [
     "NetworkPolicyAllowlist",
     "NetworkPolicyDisabled",
     "RetrieveContainerRequest",
+    "fastapi_routes",
 ]
