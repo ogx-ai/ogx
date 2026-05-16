@@ -24,6 +24,7 @@ import {
   addConversation,
   getConversation,
   removeConversation,
+  updateConversation,
 } from "@/lib/conversation-history";
 
 type ModelWithMeta = Model & {
@@ -205,6 +206,7 @@ function ChatPlaygroundContent() {
         if (saved?.model) {
           setSelectedModel(saved.model);
         }
+        const savedFileIdMap = saved?.fileIdMap;
 
         // Fetch conversation items from API
         const result = await client.conversations.items.list(conversationParam);
@@ -230,11 +232,15 @@ function ChatPlaygroundContent() {
           }
           if (!text) continue;
 
+          const hasCitations = /<\|[^|]+\|>/.test(text);
           messages.push({
             id: (itemObj.id as string) || `${Date.now()}-${messages.length}`,
             role,
             content: text,
             createdAt: new Date(),
+            ...(role === "assistant" &&
+              hasCitations &&
+              savedFileIdMap && { fileIdMap: savedFileIdMap }),
           });
         }
 
@@ -565,6 +571,12 @@ function ChatPlaygroundContent() {
                 hasAnnotations ? collectedAnnotations : undefined,
                 hasFileIdMap ? fileIdMap : undefined
               );
+            }
+            if (hasFileIdMap && conversationId) {
+              const existing = getConversation(conversationId)?.fileIdMap || {};
+              updateConversation(conversationId, {
+                fileIdMap: { ...existing, ...fileIdMap },
+              });
             }
           }
         }

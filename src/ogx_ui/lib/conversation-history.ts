@@ -21,6 +21,7 @@ export interface ConversationHistoryEntry {
   model?: string;
   systemInstructions?: string;
   toolsConfig?: SavedToolsConfig;
+  fileIdMap?: Record<string, string>;
 }
 
 export function getConversationHistory(): ConversationHistoryEntry[] {

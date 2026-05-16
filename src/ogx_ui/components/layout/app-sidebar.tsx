@@ -17,12 +17,14 @@ import {
   Wrench,
   Layers,
   MessageSquare,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   getConversationHistory,
+  removeConversation,
   type ConversationHistoryEntry,
 } from "@/lib/conversation-history";
 import {
@@ -137,7 +139,17 @@ export function AppSidebar() {
   const [conversations, setConversations] = useState<
     ConversationHistoryEntry[]
   >([]);
-  const [isConversationsOpen, setIsConversationsOpen] = useState(false);
+  const [isConversationsOpen, setIsConversationsOpen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem("sidebar-conversations-open") === "true";
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem(
+      "sidebar-conversations-open",
+      String(isConversationsOpen)
+    );
+  }, [isConversationsOpen]);
 
   // Load conversations from localStorage when expanded or updated
   const refreshConversations = useCallback(() => {
@@ -273,13 +285,16 @@ export function AppSidebar() {
                       </SidebarMenuSubItem>
                     ) : (
                       conversations.slice(0, 20).map(conv => (
-                        <SidebarMenuSubItem key={conv.id}>
+                        <SidebarMenuSubItem
+                          key={conv.id}
+                          className="group/conv relative"
+                        >
                           <SidebarMenuSubButton asChild>
                             <Link
                               href={`/chat-playground?conversation=${conv.id}`}
                               title={conv.firstMessage || conv.id}
                             >
-                              <span className="truncate text-xs">
+                              <span className="truncate text-xs pr-5">
                                 {conv.firstMessage
                                   ? conv.firstMessage.length > 30
                                     ? conv.firstMessage.substring(0, 30) + "..."
@@ -288,6 +303,18 @@ export function AppSidebar() {
                               </span>
                             </Link>
                           </SidebarMenuSubButton>
+                          <button
+                            className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded opacity-0 group-hover/conv:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-opacity"
+                            title="Delete conversation"
+                            onClick={e => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              removeConversation(conv.id);
+                              refreshConversations();
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
                         </SidebarMenuSubItem>
                       ))
                     )}
