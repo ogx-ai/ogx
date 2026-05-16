@@ -169,7 +169,7 @@ function processCitations(
       });
     }
     const num = idToIndex.get(id)! + 1;
-    return `[[${num}]](/logs/files/${citations[idToIndex.get(id)!].file_id})`;
+    return `[${num}](/logs/files/${citations[idToIndex.get(id)!].file_id})`;
   });
 
   let cleaned = withNumbers;
