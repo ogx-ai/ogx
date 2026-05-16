@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,19 +6,16 @@
 
 import pytest
 
+from ogx_api.common.responses import Order
 from ogx_api.containers.models import (
     Container,
     ContainerExpiresAfter,
     CreateContainerRequest,
-    DeleteContainerRequest,
     DeleteContainerResponse,
     ListContainersRequest,
-    ListContainersResponse,
     NetworkPolicyAllowlist,
     NetworkPolicyDisabled,
-    RetrieveContainerRequest,
 )
-from ogx_api.common.responses import Order
 
 
 class TestContainerModels:
@@ -44,7 +41,9 @@ class TestContainerModels:
         assert len(req.network_policy.allowed_domains) == 2
 
     def test_create_container_request_invalid_memory_limit(self):
-        with pytest.raises(Exception):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
             CreateContainerRequest(name="test", memory_limit="99g")
 
     def test_container_object(self):

@@ -11,6 +11,8 @@ from .models import (
     CreateContainerRequest,
     DeleteContainerRequest,
     DeleteContainerResponse,
+    ExecInContainerRequest,
+    ExecInContainerResponse,
     ListContainersRequest,
     ListContainersResponse,
     RetrieveContainerRequest,
@@ -40,3 +42,8 @@ class Containers(Protocol):
         self,
         request: DeleteContainerRequest,
     ) -> DeleteContainerResponse: ...
+
+    async def exec_in_container(
+        self,
+        request: ExecInContainerRequest,
+    ) -> ExecInContainerResponse: ...

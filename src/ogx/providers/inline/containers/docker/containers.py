@@ -26,6 +26,8 @@ from ogx_api.containers import (
     CreateContainerRequest,
     DeleteContainerRequest,
     DeleteContainerResponse,
+    ExecInContainerRequest,
+    ExecInContainerResponse,
     ListContainersRequest,
     ListContainersResponse,
     NetworkPolicyAllowlist,
@@ -51,7 +53,7 @@ class DockerContainersImpl(Containers):
     async def initialize(self) -> None:
         if docker is not None:
             try:
-                self.docker_client = await asyncio.to_thread(docker.from_env)
+                self.docker_client = await asyncio.to_thread(docker.from_env)  # type: ignore[func-returns-value]
             except Exception as e:
                 logger.warning("Failed to connect to Docker daemon", error=str(e))
 
@@ -76,7 +78,7 @@ class DockerContainersImpl(Containers):
             await asyncio.to_thread(self.docker_client.close)
 
     def _row_to_container(self, row: dict) -> Container:
-        network_policy = None
+        network_policy: NetworkPolicyAllowlist | NetworkPolicyDisabled | None = None
         policy_json = row.get("network_policy_json")
         if policy_json:
             policy_data = json.loads(policy_json)
@@ -216,3 +218,48 @@ class DockerContainersImpl(Containers):
         await self.sql_store.delete("containers", where={"id": request.container_id})
 
         return DeleteContainerResponse(id=request.container_id)
+
+    async def exec_in_container(self, request: ExecInContainerRequest) -> ExecInContainerResponse:
+        if not self.sql_store:
+            raise RuntimeError("Failed to exec in container: provider not initialized")
+
+        row = await self.sql_store.fetch_one("containers", where={"id": request.container_id})
+        if not row:
+            raise ResourceNotFoundError(f"Failed to exec in container: container '{request.container_id}' not found")
+
+        if not self.docker_client or not row.get("docker_container_id"):
+            raise RuntimeError("Failed to exec in container: Docker is not available")
+
+        dc = await asyncio.to_thread(self.docker_client.containers.get, row["docker_container_id"])
+        combined_command = " && ".join(request.commands)
+        timeout_seconds = (request.timeout_ms or 120000) / 1000.0
+
+        timed_out = False
+        try:
+            exec_result = await asyncio.wait_for(
+                asyncio.to_thread(dc.exec_run, ["sh", "-c", combined_command], demux=True),
+                timeout=timeout_seconds,
+            )
+            exit_code = exec_result.exit_code
+            stdout_bytes, stderr_bytes = exec_result.output
+            stdout = (stdout_bytes or b"").decode("utf-8", errors="replace")
+            stderr = (stderr_bytes or b"").decode("utf-8", errors="replace")
+        except TimeoutError:
+            timed_out = True
+            exit_code = -1
+            stdout = ""
+            stderr = ""
+
+        if request.max_output_length:
+            stdout = stdout[: request.max_output_length]
+            stderr = stderr[: request.max_output_length]
+
+        now = int(time.time())
+        await self.sql_store.update("containers", {"last_active_at": now}, where={"id": request.container_id})
+
+        return ExecInContainerResponse(
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=exit_code,
+            timed_out=timed_out,
+        )

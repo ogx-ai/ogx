@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -56,9 +56,7 @@ class Container(BaseModel):
     last_active_at: Annotated[int | None, WithJsonSchema({"type": "integer"})] = Field(
         default=None, description="Unix timestamp (in seconds) when the container was last active."
     )
-    expires_after: ContainerExpiresAfter | None = Field(
-        default=None, description="The container expiration policy."
-    )
+    expires_after: ContainerExpiresAfter | None = Field(default=None, description="The container expiration policy.")
     memory_limit: Literal["1g", "4g", "16g", "64g"] | None = Field(
         default=None, description="The memory limit configured for the container."
     )
@@ -72,9 +70,7 @@ class CreateContainerRequest(BaseModel):
     """Request model for creating a container."""
 
     name: str = Field(..., description="Name of the container to create.")
-    expires_after: ContainerExpiresAfter | None = Field(
-        default=None, description="Container expiration policy."
-    )
+    expires_after: ContainerExpiresAfter | None = Field(default=None, description="Container expiration policy.")
     memory_limit: Literal["1g", "4g", "16g", "64g"] | None = Field(
         default=None, description="Memory limit for the container. Defaults to '1g'."
     )
@@ -127,3 +123,23 @@ class DeleteContainerResponse(BaseModel):
         default="container.deleted", description="The object type, always 'container.deleted'."
     )
     deleted: bool = Field(default=True, description="Whether the container was successfully deleted.")
+
+
+@json_schema_type
+class ExecInContainerRequest(BaseModel):
+    """Request model for executing commands in a container."""
+
+    container_id: str = Field(..., description="The ID of the container to execute commands in.")
+    commands: list[str] = Field(..., description="Shell commands to execute.")
+    timeout_ms: int | None = Field(default=120000, description="Timeout in milliseconds for command execution.")
+    max_output_length: int | None = Field(default=None, description="Maximum number of characters to return.")
+
+
+@json_schema_type
+class ExecInContainerResponse(BaseModel):
+    """Response for executing commands in a container."""
+
+    stdout: str = Field(default="", description="Standard output from command execution.")
+    stderr: str = Field(default="", description="Standard error from command execution.")
+    exit_code: int = Field(..., description="Exit code from the last command.")
+    timed_out: bool = Field(default=False, description="Whether the command execution timed out.")

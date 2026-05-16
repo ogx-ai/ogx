@@ -1,0 +1,31 @@
+---
+description: "Docker-based container provider for managing sandboxed execution environments."
+sidebar_label: Docker
+title: inline::docker
+---
+
+# inline::docker
+
+## Description
+
+Docker-based container provider for managing sandboxed execution environments.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `default_image` | `str` | No | python:3.12-slim | Default container image to use when not specified |
+| `default_memory_limit` | `Literal[1g, 4g, 16g, 64g]` | No | 1g | Default memory limit for containers |
+| `metadata_store` | `SqlStoreReference` | No |  | SQL store configuration for container metadata |
+| `metadata_store.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `metadata_store.backend` | `str` | No |  | Name of backend from storage.backends |
+
+## Sample Configuration
+
+```yaml
+default_image: python:3.12-slim
+default_memory_limit: 1g
+metadata_store:
+  table_name: containers_metadata
+  backend: sql_default
+```

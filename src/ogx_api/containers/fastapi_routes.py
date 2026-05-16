@@ -17,6 +17,8 @@ from .models import (
     CreateContainerRequest,
     DeleteContainerRequest,
     DeleteContainerResponse,
+    ExecInContainerRequest,
+    ExecInContainerResponse,
     ListContainersRequest,
     ListContainersResponse,
     RetrieveContainerRequest,
@@ -77,5 +79,18 @@ def create_router(impl: Containers) -> APIRouter:
         request: Annotated[DeleteContainerRequest, Depends(get_delete_container_request)],
     ) -> DeleteContainerResponse:
         return await impl.delete_container(request)
+
+    @router.post(
+        "/containers/{container_id}/exec",
+        response_model=ExecInContainerResponse,
+        summary="Execute in container",
+        description="Executes shell commands in a container.",
+    )
+    async def exec_in_container(
+        container_id: str,
+        request: ExecInContainerRequest,
+    ) -> ExecInContainerResponse:
+        request.container_id = container_id
+        return await impl.exec_in_container(request)
 
     return router

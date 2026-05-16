@@ -7023,6 +7023,8 @@ components:
             mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
             message: '#/components/schemas/OpenAIResponseMessage'
             reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+            shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+            shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
             web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
           propertyName: type
         oneOf:
@@ -7042,7 +7044,11 @@ components:
           title: OpenAIResponseMCPApprovalRequest
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
           title: OpenAIResponseOutputMessageReasoningItem
-        title: OpenAIResponseMessage | ... (8 variants)
+        - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+          title: OpenAIResponseOutputMessageShellCall
+        - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
+          title: OpenAIResponseOutputMessageShellCallOutput
+        title: OpenAIResponseMessage | ... (10 variants)
       - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
         title: OpenAIResponseInputFunctionToolCallOutput
       - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
@@ -7233,17 +7239,20 @@ components:
               title: OpenAIResponseInputToolFunction
             - $ref: '#/components/schemas/OpenAIResponseToolMCP'
               title: OpenAIResponseToolMCP
+            - $ref: '#/components/schemas/OpenAIResponseInputToolShell'
+              title: OpenAIResponseInputToolShell
             discriminator:
               propertyName: type
               mapping:
                 file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                 function: '#/components/schemas/OpenAIResponseInputToolFunction'
                 mcp: '#/components/schemas/OpenAIResponseToolMCP'
+                shell: '#/components/schemas/OpenAIResponseInputToolShell'
                 web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-            title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+            title: OpenAIResponseInputToolWebSearch | ... (5 variants)
           type: array
           title: Tools
         tool_choice:
@@ -7347,6 +7356,8 @@ components:
           mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
           message: '#/components/schemas/OpenAIResponseMessage'
           reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+          shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+          shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
           web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
         propertyName: type
       oneOf:
@@ -7366,7 +7377,11 @@ components:
         title: OpenAIResponseMCPApprovalRequest
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
         title: OpenAIResponseOutputMessageReasoningItem
-      title: OpenAIResponseMessage | ... (8 variants)
+      - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+        title: OpenAIResponseOutputMessageShellCall
+      - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
+        title: OpenAIResponseOutputMessageShellCallOutput
+      title: OpenAIResponseMessage | ... (10 variants)
     OpenAIResponsePrompt:
       properties:
         id:
@@ -7425,6 +7440,7 @@ components:
           file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
           function: '#/components/schemas/OpenAIResponseInputToolFunction'
           mcp: '#/components/schemas/OpenAIResponseToolMCP'
+          shell: '#/components/schemas/OpenAIResponseInputToolShell'
           web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
@@ -7439,7 +7455,9 @@ components:
         title: OpenAIResponseInputToolFunction
       - $ref: '#/components/schemas/OpenAIResponseToolMCP'
         title: OpenAIResponseToolMCP
-      title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+      - $ref: '#/components/schemas/OpenAIResponseInputToolShell'
+        title: OpenAIResponseInputToolShell
+      title: OpenAIResponseInputToolWebSearch | ... (5 variants)
     OpenAIResponseToolMCP:
       properties:
         type:
@@ -7495,6 +7513,7 @@ components:
           file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
           function: '#/components/schemas/OpenAIResponseInputToolFunction'
           mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+          shell: '#/components/schemas/OpenAIResponseInputToolShell'
           web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
           web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
@@ -7509,7 +7528,9 @@ components:
         title: OpenAIResponseInputToolFunction
       - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
         title: OpenAIResponseInputToolMCP
-      title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+      - $ref: '#/components/schemas/OpenAIResponseInputToolShell'
+        title: OpenAIResponseInputToolShell
+      title: OpenAIResponseInputToolWebSearch | ... (5 variants)
     OpenAIResponseInputToolMCP:
       properties:
         type:
@@ -7654,17 +7675,20 @@ components:
               title: OpenAIResponseInputToolFunction
             - $ref: '#/components/schemas/OpenAIResponseToolMCP'
               title: OpenAIResponseToolMCP
+            - $ref: '#/components/schemas/OpenAIResponseInputToolShell'
+              title: OpenAIResponseInputToolShell
             discriminator:
               propertyName: type
               mapping:
                 file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                 function: '#/components/schemas/OpenAIResponseInputToolFunction'
                 mcp: '#/components/schemas/OpenAIResponseToolMCP'
+                shell: '#/components/schemas/OpenAIResponseInputToolShell'
                 web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                 web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-            title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+            title: OpenAIResponseInputToolWebSearch | ... (5 variants)
           type: array
           title: Tools
         tool_choice:
@@ -8417,6 +8441,8 @@ components:
               mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
               message: '#/components/schemas/OpenAIResponseMessage'
               reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+              shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+              shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
               web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
             propertyName: type
           oneOf:
@@ -8436,7 +8462,11 @@ components:
             title: OpenAIResponseMCPApprovalRequest
           - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
             title: OpenAIResponseOutputMessageReasoningItem
-          title: OpenAIResponseMessage | ... (8 variants)
+          - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+            title: OpenAIResponseOutputMessageShellCall
+          - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
+            title: OpenAIResponseOutputMessageShellCallOutput
+          title: OpenAIResponseMessage | ... (10 variants)
         output_index:
           title: Output Index
           type: integer
@@ -8471,6 +8501,8 @@ components:
               mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
               message: '#/components/schemas/OpenAIResponseMessage'
               reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+              shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+              shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
               web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
             propertyName: type
           oneOf:
@@ -8490,7 +8522,11 @@ components:
             title: OpenAIResponseMCPApprovalRequest
           - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
             title: OpenAIResponseOutputMessageReasoningItem
-          title: OpenAIResponseMessage | ... (8 variants)
+          - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+            title: OpenAIResponseOutputMessageShellCall
+          - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput'
+            title: OpenAIResponseOutputMessageShellCallOutput
+          title: OpenAIResponseMessage | ... (10 variants)
         output_index:
           title: Output Index
           type: integer
@@ -11038,6 +11074,10 @@ components:
                   title: OpenAIResponseMCPApprovalRequest
                 - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
                   title: OpenAIResponseOutputMessageReasoningItem
+                - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+                  title: OpenAIResponseOutputMessageShellCall
+                - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Input'
+                  title: OpenAIResponseOutputMessageShellCallOutput-Input
                 discriminator:
                   propertyName: type
                   mapping:
@@ -11048,8 +11088,10 @@ components:
                     mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                     message: '#/components/schemas/OpenAIResponseMessage-Input'
                     reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+                    shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+                    shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Input'
                     web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-                title: OpenAIResponseMessage-Input | ... (8 variants)
+                title: OpenAIResponseMessage-Input | ... (10 variants)
               - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
                 title: OpenAIResponseInputFunctionToolCallOutput
               - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
@@ -11090,17 +11132,20 @@ components:
                 title: OpenAIResponseInputToolFunction
               - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
                 title: OpenAIResponseInputToolMCP
+              - $ref: '#/components/schemas/OpenAIResponseInputToolShell'
+                title: OpenAIResponseInputToolShell
               discriminator:
                 propertyName: type
                 mapping:
                   file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                   function: '#/components/schemas/OpenAIResponseInputToolFunction'
                   mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+                  shell: '#/components/schemas/OpenAIResponseInputToolShell'
                   web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-              title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+              title: OpenAIResponseInputToolWebSearch | ... (5 variants)
             type: array
           - type: 'null'
           description: List of tools available to the model. Accepted for compatibility but not used during compaction.
@@ -11244,6 +11289,10 @@ components:
                   title: OpenAIResponseMCPApprovalRequest
                 - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
                   title: OpenAIResponseOutputMessageReasoningItem
+                - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+                  title: OpenAIResponseOutputMessageShellCall
+                - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Input'
+                  title: OpenAIResponseOutputMessageShellCallOutput-Input
                 discriminator:
                   propertyName: type
                   mapping:
@@ -11254,8 +11303,10 @@ components:
                     mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                     message: '#/components/schemas/OpenAIResponseMessage-Input'
                     reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+                    shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+                    shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Input'
                     web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-                title: OpenAIResponseMessage-Input | ... (8 variants)
+                title: OpenAIResponseMessage-Input | ... (10 variants)
               - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
                 title: OpenAIResponseInputFunctionToolCallOutput
               - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
@@ -11392,17 +11443,20 @@ components:
                 title: OpenAIResponseInputToolFunction
               - $ref: '#/components/schemas/OpenAIResponseInputToolMCP'
                 title: OpenAIResponseInputToolMCP
+              - $ref: '#/components/schemas/OpenAIResponseInputToolShell'
+                title: OpenAIResponseInputToolShell
               discriminator:
                 propertyName: type
                 mapping:
                   file_search: '#/components/schemas/OpenAIResponseInputToolFileSearch'
                   function: '#/components/schemas/OpenAIResponseInputToolFunction'
                   mcp: '#/components/schemas/OpenAIResponseInputToolMCP'
+                  shell: '#/components/schemas/OpenAIResponseInputToolShell'
                   web_search: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_2025_08_26: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview: '#/components/schemas/OpenAIResponseInputToolWebSearch'
                   web_search_preview_2025_03_11: '#/components/schemas/OpenAIResponseInputToolWebSearch'
-              title: OpenAIResponseInputToolWebSearch | ... (4 variants)
+              title: OpenAIResponseInputToolWebSearch | ... (5 variants)
             type: array
           - type: 'null'
           description: List of tools available to the model.
@@ -12639,6 +12693,24 @@ components:
       type: object
       title: OpenAIResponseInputToolChoiceWebSearch
       description: Indicates that the model should use web search to generate a response
+    OpenAIResponseInputToolShell:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - shell
+        environment:
+          anyOf:
+          - $ref: '#/components/schemas/ShellContainerAutoEnvironment'
+            title: ShellContainerAutoEnvironment
+          - $ref: '#/components/schemas/ShellContainerReferenceEnvironment'
+            title: ShellContainerReferenceEnvironment
+          - type: 'null'
+          title: ShellContainerAutoEnvironment | ShellContainerReferenceEnvironment
+      type: object
+      title: OpenAIResponseInputToolShell
+      description: Shell tool configuration for executing commands in a container environment.
     OpenAIResponseMessage-Input:
       properties:
         content:
@@ -12974,6 +13046,128 @@ components:
       - text
       title: OpenAIResponseOutputMessageReasoningSummary
       description: A summary of reasoning output from the model.
+    OpenAIResponseOutputMessageShellCall:
+      properties:
+        id:
+          type: string
+          title: Id
+        call_id:
+          type: string
+          title: Call Id
+        action:
+          $ref: '#/components/schemas/ShellCallAction'
+        status:
+          type: string
+          enum:
+          - in_progress
+          - completed
+          - incomplete
+          title: Status
+        type:
+          type: string
+          title: Type
+          enum:
+          - shell_call
+        environment:
+          anyOf:
+          - $ref: '#/components/schemas/ShellContainerReferenceEnvironment'
+            title: ShellContainerReferenceEnvironment
+          - type: 'null'
+          title: ShellContainerReferenceEnvironment
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - call_id
+      - action
+      - status
+      title: OpenAIResponseOutputMessageShellCall
+      description: A tool call that executes one or more shell commands in a managed environment.
+    OpenAIResponseOutputMessageShellCallOutput-Input:
+      properties:
+        id:
+          type: string
+          title: Id
+        call_id:
+          type: string
+          title: Call Id
+        output:
+          items:
+            $ref: '#/components/schemas/ShellOutputContent'
+          type: array
+          title: Output
+        status:
+          type: string
+          enum:
+          - in_progress
+          - completed
+          - incomplete
+          title: Status
+          default: completed
+        type:
+          type: string
+          title: Type
+          enum:
+          - shell_call_output
+        max_output_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - call_id
+      - output
+      title: OpenAIResponseOutputMessageShellCallOutput
+      description: The output of a shell tool call that was emitted.
+    OpenAIResponseOutputMessageShellCallOutput-Output:
+      properties:
+        id:
+          type: string
+          title: Id
+        call_id:
+          type: string
+          title: Call Id
+        output:
+          items:
+            $ref: '#/components/schemas/ShellOutputContent'
+          type: array
+          title: Output
+        status:
+          type: string
+          enum:
+          - in_progress
+          - completed
+          - incomplete
+          title: Status
+          default: completed
+        type:
+          type: string
+          title: Type
+          enum:
+          - shell_call_output
+        max_output_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - call_id
+      - output
+      title: OpenAIResponseOutputMessageShellCallOutput
+      description: The output of a shell tool call that was emitted.
     OpenAIResponseReasoning:
       properties:
         effort:
@@ -13359,6 +13553,118 @@ components:
       - version
       title: SetDefaultVersionBodyRequest
       description: Request body model for setting the default version of a prompt.
+    ShellCallAction:
+      properties:
+        commands:
+          items:
+            type: string
+          type: array
+          title: Commands
+        timeout_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        max_output_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+      type: object
+      required:
+      - commands
+      title: ShellCallAction
+      description: The shell commands and limits that describe how to run the tool call.
+    ShellContainerAutoEnvironment:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - container_auto
+        file_ids:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+        memory_limit:
+          anyOf:
+          - type: string
+            enum:
+            - 1g
+            - 4g
+            - 16g
+            - 64g
+          - type: 'null'
+        network_policy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+      type: object
+      title: ShellContainerAutoEnvironment
+      description: Automatically provisions a container for the shell tool.
+    ShellContainerReferenceEnvironment:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - container_reference
+        container_id:
+          type: string
+          title: Container Id
+      type: object
+      required:
+      - container_id
+      title: ShellContainerReferenceEnvironment
+      description: References an existing container by ID.
+    ShellExitOutcome:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - exit
+        exit_code:
+          type: integer
+          title: Exit Code
+      type: object
+      required:
+      - exit_code
+      title: ShellExitOutcome
+      description: Indicates that the shell commands finished and returned an exit code.
+    ShellOutputContent:
+      properties:
+        stdout:
+          type: string
+          title: Stdout
+        stderr:
+          type: string
+          title: Stderr
+        outcome:
+          anyOf:
+          - $ref: '#/components/schemas/ShellExitOutcome'
+            title: ShellExitOutcome
+          - $ref: '#/components/schemas/ShellTimeoutOutcome'
+            title: ShellTimeoutOutcome
+          title: ShellExitOutcome | ShellTimeoutOutcome
+      type: object
+      required:
+      - stdout
+      - stderr
+      - outcome
+      title: ShellOutputContent
+      description: Captured stdout and stderr for a portion of a shell tool call output.
+    ShellTimeoutOutcome:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - timeout
+      type: object
+      title: ShellTimeoutOutcome
+      description: Indicates that the shell call exceeded its configured time limit.
     UpdatePromptBodyRequest:
       properties:
         prompt:
@@ -13763,6 +14069,49 @@ components:
       - in_progress
       - completed
       type: string
+    OpenAIResponseOutputMessageShellCallOutput:
+      description: The output of a shell tool call that was emitted.
+      properties:
+        id:
+          title: Id
+          type: string
+        call_id:
+          title: Call Id
+          type: string
+        output:
+          items:
+            $ref: '#/components/schemas/ShellOutputContent'
+          title: Output
+          type: array
+        status:
+          default: completed
+          enum:
+          - in_progress
+          - completed
+          - incomplete
+          title: Status
+          type: string
+        type:
+          title: Type
+          type: string
+          enum:
+          - shell_call_output
+        max_output_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          nullable: true
+        created_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          nullable: true
+      required:
+      - id
+      - call_id
+      - output
+      title: OpenAIResponseOutputMessageShellCallOutput
+      type: object
     OpenAIResponseInputToolChoice:
       anyOf:
       - $ref: '#/components/schemas/OpenAIResponseInputToolChoiceMode'
@@ -14141,6 +14490,7 @@ components:
       - prompts
       - conversations
       - connectors
+      - containers
       - messages
       - interactions
       - inspect
@@ -15541,6 +15891,324 @@ components:
       - prompt_id
       title: DeletePromptRequest
       type: object
+    ContainerExpiresAfter:
+      description: Expiration settings for a container.
+      properties:
+        anchor:
+          description: The reference point for the expiration. Currently only 'last_active_at' is supported.
+          title: Anchor
+          type: string
+          enum:
+          - last_active_at
+        minutes:
+          description: The number of minutes after the anchor before the container expires.
+          title: Minutes
+          type: integer
+      required:
+      - minutes
+      title: ContainerExpiresAfter
+      type: object
+    NetworkPolicyDisabled:
+      description: Disabled network policy. No outbound network access.
+      properties:
+        type:
+          description: Disable outbound network access.
+          title: Type
+          type: string
+          enum:
+          - disabled
+      title: NetworkPolicyDisabled
+      type: object
+    NetworkPolicyAllowlist:
+      description: Allowlist network policy. Only specified domains are reachable.
+      properties:
+        type:
+          description: Allow outbound access to specified domains.
+          title: Type
+          type: string
+          enum:
+          - allowlist
+        allowed_domains:
+          description: A list of allowed outbound domains.
+          items:
+            type: string
+          title: Allowed Domains
+          type: array
+      required:
+      - allowed_domains
+      title: NetworkPolicyAllowlist
+      type: object
+    Container:
+      description: A sandboxed container environment.
+      properties:
+        id:
+          description: Unique identifier for the container.
+          title: Id
+          type: string
+        object:
+          description: The object type, always 'container'.
+          title: Object
+          type: string
+          enum:
+          - container
+        name:
+          description: Name of the container.
+          title: Name
+          type: string
+        created_at:
+          description: Unix timestamp (in seconds) when the container was created.
+          title: Created At
+          type: integer
+        status:
+          description: Status of the container (e.g., running, stopped, deleted).
+          title: Status
+          type: string
+        last_active_at:
+          description: Unix timestamp (in seconds) when the container was last active.
+          title: Last Active At
+          type: integer
+          nullable: true
+        expires_after:
+          anyOf:
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
+          - type: 'null'
+          description: The container expiration policy.
+          nullable: true
+          title: ContainerExpiresAfter
+        memory_limit:
+          anyOf:
+          - enum:
+            - 1g
+            - 4g
+            - 16g
+            - 64g
+            type: string
+          - type: 'null'
+          description: The memory limit configured for the container.
+          nullable: true
+        network_policy:
+          anyOf:
+          - $ref: '#/components/schemas/NetworkPolicyDisabled'
+            title: NetworkPolicyDisabled
+          - $ref: '#/components/schemas/NetworkPolicyAllowlist'
+            title: NetworkPolicyAllowlist
+          - type: 'null'
+          description: Network access policy for the container.
+          title: NetworkPolicyDisabled | NetworkPolicyAllowlist
+          nullable: true
+      required:
+      - id
+      - name
+      - created_at
+      - status
+      title: Container
+      type: object
+    CreateContainerRequest:
+      description: Request model for creating a container.
+      properties:
+        name:
+          description: Name of the container to create.
+          title: Name
+          type: string
+        expires_after:
+          anyOf:
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
+          - type: 'null'
+          description: Container expiration policy.
+          nullable: true
+          title: ContainerExpiresAfter
+        memory_limit:
+          anyOf:
+          - enum:
+            - 1g
+            - 4g
+            - 16g
+            - 64g
+            type: string
+          - type: 'null'
+          description: Memory limit for the container. Defaults to '1g'.
+          nullable: true
+        network_policy:
+          anyOf:
+          - $ref: '#/components/schemas/NetworkPolicyDisabled'
+            title: NetworkPolicyDisabled
+          - $ref: '#/components/schemas/NetworkPolicyAllowlist'
+            title: NetworkPolicyAllowlist
+          - type: 'null'
+          description: Network access policy for the container.
+          title: NetworkPolicyDisabled | NetworkPolicyAllowlist
+          nullable: true
+      required:
+      - name
+      title: CreateContainerRequest
+      type: object
+    ListContainersRequest:
+      description: Request model for listing containers.
+      properties:
+        limit:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: 20
+          description: Maximum number of containers to return (1-100).
+        order:
+          anyOf:
+          - $ref: '#/components/schemas/Order'
+            title: Order
+          - type: 'null'
+          default: desc
+          description: Sort order by created_at timestamp.
+          title: Order
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Cursor for pagination. Returns containers after this ID.
+          nullable: true
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter results by container name.
+          nullable: true
+      title: ListContainersRequest
+      type: object
+    ListContainersResponse:
+      description: Response for listing containers.
+      properties:
+        data:
+          description: The list of containers.
+          items:
+            $ref: '#/components/schemas/Container'
+          title: Data
+          type: array
+        has_more:
+          description: Whether there are more containers available.
+          title: Has More
+          type: boolean
+        first_id:
+          description: The ID of the first container in the list.
+          title: First Id
+          type: string
+        last_id:
+          description: The ID of the last container in the list.
+          title: Last Id
+          type: string
+        object:
+          description: The object type, always 'list'.
+          title: Object
+          type: string
+          enum:
+          - list
+      required:
+      - data
+      - has_more
+      - first_id
+      - last_id
+      title: ListContainersResponse
+      type: object
+    RetrieveContainerRequest:
+      description: Request model for retrieving a container.
+      properties:
+        container_id:
+          description: The ID of the container to retrieve.
+          title: Container Id
+          type: string
+      required:
+      - container_id
+      title: RetrieveContainerRequest
+      type: object
+    DeleteContainerRequest:
+      description: Request model for deleting a container.
+      properties:
+        container_id:
+          description: The ID of the container to delete.
+          title: Container Id
+          type: string
+      required:
+      - container_id
+      title: DeleteContainerRequest
+      type: object
+    DeleteContainerResponse:
+      description: Response for deleting a container.
+      properties:
+        id:
+          description: The container identifier that was deleted.
+          title: Id
+          type: string
+        object:
+          description: The object type, always 'container.deleted'.
+          title: Object
+          type: string
+          enum:
+          - container.deleted
+        deleted:
+          default: true
+          description: Whether the container was successfully deleted.
+          title: Deleted
+          type: boolean
+      required:
+      - id
+      title: DeleteContainerResponse
+      type: object
+    ExecInContainerRequest:
+      description: Request model for executing commands in a container.
+      properties:
+        container_id:
+          description: The ID of the container to execute commands in.
+          title: Container Id
+          type: string
+        commands:
+          description: Shell commands to execute.
+          items:
+            type: string
+          title: Commands
+          type: array
+        timeout_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: 120000
+          description: Timeout in milliseconds for command execution.
+        max_output_length:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: Maximum number of characters to return.
+          nullable: true
+      required:
+      - container_id
+      - commands
+      title: ExecInContainerRequest
+      type: object
+    ExecInContainerResponse:
+      description: Response for executing commands in a container.
+      properties:
+        stdout:
+          default: ''
+          description: Standard output from command execution.
+          title: Stdout
+          type: string
+        stderr:
+          default: ''
+          description: Standard error from command execution.
+          title: Stderr
+          type: string
+        exit_code:
+          description: Exit code from the last command.
+          title: Exit Code
+          type: integer
+        timed_out:
+          default: false
+          description: Whether the command execution timed out.
+          title: Timed Out
+          type: boolean
+      required:
+      - exit_code
+      title: ExecInContainerResponse
+      type: object
     OpenAIResponseMessageOutputUnion:
       anyOf:
       - oneOf:
@@ -15560,6 +16228,10 @@ components:
           title: OpenAIResponseMCPApprovalRequest
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
           title: OpenAIResponseOutputMessageReasoningItem
+        - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+          title: OpenAIResponseOutputMessageShellCall
+        - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Output'
+          title: OpenAIResponseOutputMessageShellCallOutput-Output
         discriminator:
           propertyName: type
           mapping:
@@ -15570,9 +16242,11 @@ components:
             mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
             message: '#/components/schemas/OpenAIResponseMessage-Output'
             reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+            shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+            shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Output'
             web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
         x-stainless-naming: OpenAIResponseMessageOutputOneOf
-        title: OpenAIResponseMessage-Output | ... (8 variants)
+        title: OpenAIResponseMessage-Output | ... (10 variants)
       - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
         title: OpenAIResponseInputFunctionToolCallOutput
       - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
@@ -15599,6 +16273,10 @@ components:
         title: OpenAIResponseMCPApprovalRequest
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
         title: OpenAIResponseOutputMessageReasoningItem
+      - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+        title: OpenAIResponseOutputMessageShellCall
+      - $ref: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Output'
+        title: OpenAIResponseOutputMessageShellCallOutput-Output
       discriminator:
         propertyName: type
         mapping:
@@ -15609,9 +16287,11 @@ components:
           mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
           message: '#/components/schemas/OpenAIResponseMessage-Output'
           reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+          shell_call: '#/components/schemas/OpenAIResponseOutputMessageShellCall'
+          shell_call_output: '#/components/schemas/OpenAIResponseOutputMessageShellCallOutput-Output'
           web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
       x-stainless-naming: OpenAIResponseOutputItem
-      title: OpenAIResponseMessage-Output | ... (8 variants)
+      title: OpenAIResponseMessage-Output | ... (10 variants)
     ChatCompletionMessageToolCall:
       properties:
         id:
