@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import type { Model } from "llama-stack-client/resources/models";
+import type { Model } from "ogx-client/resources/models";
 
 export interface VectorStoreFormData {
   name: string;

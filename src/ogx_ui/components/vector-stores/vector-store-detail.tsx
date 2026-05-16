@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import type { VectorStore } from "llama-stack-client/resources/vector-stores/vector-stores";
-import type { VectorStoreFile } from "llama-stack-client/resources/vector-stores/files";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
+import type { VectorStoreFile } from "ogx-client/resources/vector-stores/files";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";

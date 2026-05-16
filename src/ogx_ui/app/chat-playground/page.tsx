@@ -18,8 +18,8 @@ import {
   type FileCitation,
 } from "@/components/chat-playground/chat-message";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import type { Model } from "llama-stack-client/resources/models";
-import type { ResponseCreateParamsStreaming } from "llama-stack-client/resources/responses/responses";
+import type { Model } from "ogx-client/resources/models";
+import type { ResponseCreateParamsStreaming } from "ogx-client/resources/responses/responses";
 import {
   addConversation,
   getConversation,

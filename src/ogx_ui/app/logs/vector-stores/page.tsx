@@ -4,7 +4,7 @@ import React from "react";
 import type {
   ListVectorStoresResponse,
   VectorStore,
-} from "llama-stack-client/resources/vector-stores/vector-stores";
+} from "ogx-client/resources/vector-stores/vector-stores";
 import { useRouter } from "next/navigation";
 import { usePagination } from "@/hooks/use-pagination";
 import { Button } from "@/components/ui/button";

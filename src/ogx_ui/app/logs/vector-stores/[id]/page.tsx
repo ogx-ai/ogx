@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import type { VectorStore } from "llama-stack-client/resources/vector-stores/vector-stores";
-import type { VectorStoreFile } from "llama-stack-client/resources/vector-stores/files";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
+import type { VectorStoreFile } from "ogx-client/resources/vector-stores/files";
 import { VectorStoreDetailView } from "@/components/vector-stores/vector-store-detail";
 
 export default function VectorStoreDetailPage() {

@@ -1,5 +1,5 @@
-import type { FileContentResponse } from "llama-stack-client/resources/vector-stores/files";
-import type { LlamaStackClient } from "llama-stack-client";
+import type { FileContentResponse } from "ogx-client/resources/vector-stores/files";
+import type { OgxClient } from "ogx-client";
 
 export type VectorStoreContent = FileContentResponse.Content;
 export type VectorStoreContentsResponse = FileContentResponse;
@@ -30,7 +30,7 @@ export interface VectorStoreListContentsResponse {
 }
 
 export class ContentsAPI {
-  constructor(private client: LlamaStackClient) {}
+  constructor(private client: OgxClient) {}
 
   async getFileContents(
     vectorStoreId: string,
