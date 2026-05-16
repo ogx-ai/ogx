@@ -53,6 +53,7 @@ CATEGORIES = [
     "tests",
     "telemetry",
     "connectors",
+    "containers",
     "messages",
     "interactions",
 ]
