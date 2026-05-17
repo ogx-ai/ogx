@@ -89,15 +89,12 @@ class PGVectorVectorIOConfig(BaseModel):
         default_factory=PGVectorHNSWVectorIndex,
         description="PGVector vector index used for Approximate Nearest Neighbor (ANN) search",
     )
-<<<<<<< HEAD
-=======
     pool_min_size: int = Field(default=4, ge=1, description="Minimum number of connections in the asyncpg pool")
     pool_max_size: int = Field(default=20, ge=1, description="Maximum number of connections in the asyncpg pool")
     statement_cache_size: int = Field(
         default=512, ge=0, description="Size of the prepared statement cache per connection"
     )
     command_timeout: float = Field(default=30.0, gt=0, description="Timeout in seconds for individual SQL statements")
->>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
     persistence: KVStoreReference | None = Field(
         description="Config for KV store backend (SQLite only for now)", default=None
     )

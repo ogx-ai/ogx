@@ -11,39 +11,11 @@ import pytest
 from psycopg2 import sql
 
 from ogx_api import (
-    EmbeddedChunk,
     OpenAICreateVectorStoreRequestWithExtraBody,
     QueryChunksResponse,
     VectorStore,
 )
 
-<<<<<<< HEAD
-=======
-
-def _make_mock_asyncpg_pool():
-    """Create a mock asyncpg pool with acquire() as async context manager."""
-    pool = MagicMock()
-    mock_conn = MagicMock()
-    mock_conn.execute = AsyncMock()
-    mock_conn.executemany = AsyncMock()
-    mock_conn.fetch = AsyncMock(return_value=[])
-    mock_conn.fetchrow = AsyncMock(return_value=None)
-    mock_conn.fetchval = AsyncMock(return_value=None)
-    tx_acm = AsyncMock()
-    tx_acm.__aenter__ = AsyncMock(return_value=None)
-    tx_acm.__aexit__ = AsyncMock(return_value=False)
-    mock_conn.transaction = MagicMock(return_value=tx_acm)
-
-    acm = AsyncMock()
-    acm.__aenter__ = AsyncMock(return_value=mock_conn)
-    acm.__aexit__ = AsyncMock(return_value=False)
-    pool.acquire = MagicMock(return_value=acm)
-    pool.close = AsyncMock()
-
-    return pool, mock_conn
-
-
->>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
 # This test is a unit test for the inline VectorIO providers. This should only contain
 # tests which are specific to this class. More general (API-level) tests should be placed in
 # tests/integration/vector_io/
@@ -355,24 +327,10 @@ async def test_set_ef_search_called_before_select_in_query_vector(mock_psycopg2_
     calls = cursor.execute.call_args_list
     assert len(calls) == 2, f"Expected exactly 2 execute calls (SET + SELECT), got {len(calls)}"
 
-<<<<<<< HEAD
     set_call_sql = str(calls[0])
     select_call_sql = repr(calls[1][0][0])
     assert f"SET hnsw.ef_search = {index.vector_index.ef_search}" in set_call_sql, (
         f"First call should be SET, got: {set_call_sql}"
-=======
-    assert len(execute_calls) == 1, f"Expected 1 execute call (SET), got {len(execute_calls)}"
-    assert len(fetch_calls) == 1, f"Expected 1 fetch call (SELECT), got {len(fetch_calls)}"
-    mock_conn.transaction.assert_called_once()
-
-    set_call_args = execute_calls[0].args
-    select_call_sql = str(fetch_calls[0])
-    assert set_call_args[0] == "SELECT set_config('hnsw.ef_search', $1, true)", (
-        f"First call should set hnsw.ef_search, got: {set_call_args[0]}"
-    )
-    assert set_call_args[1] == str(index.vector_index.ef_search), (
-        f"Expected ef_search value {index.vector_index.ef_search}, got: {set_call_args[1]}"
->>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
     )
     assert "SELECT document" in select_call_sql, f"Second call should be SELECT, got: {select_call_sql}"
 
@@ -402,198 +360,8 @@ async def test_apply_default_ef_search_for_query_vector(mock_psycopg2_connection
     embedding = np.random.rand(embedding_dimension).astype(np.float32)
     await index.query_vector(embedding, k=5, score_threshold=0.5)
 
-<<<<<<< HEAD
     calls = cursor.execute.call_args_list
     set_call_sql = str(calls[0])
     assert f"SET hnsw.ef_search = {PGVectorHNSWVectorIndex().ef_search}" in set_call_sql, (
         f"Expected default 'SET hnsw.ef_search = {PGVectorHNSWVectorIndex().ef_search}' when ef_search is not explicitly configured, got: {set_call_sql}"
     )
-=======
-    execute_calls = mock_conn.execute.call_args_list
-    set_call_args = execute_calls[0].args
-    assert set_call_args[0] == "SELECT set_config('hnsw.ef_search', $1, true)", (
-        f"Expected set_config call for hnsw.ef_search, got: {set_call_args[0]}"
-    )
-    assert set_call_args[1] == str(PGVectorHNSWVectorIndex().ef_search), (
-        f"Expected default ef_search value {PGVectorHNSWVectorIndex().ef_search}, got: {set_call_args[1]}"
-    )
-    mock_conn.transaction.assert_called_once()
-
-
-async def test_add_chunks_does_not_run_analyze_on_write():
-    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
-    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
-
-    pool, mock_conn = _make_mock_asyncpg_pool()
-
-    index = PGVectorIndex(
-        vector_store=VectorStore(
-            identifier="test-vector-db",
-            embedding_model="test-model",
-            embedding_dimension=2,
-            provider_id="pgvector",
-        ),
-        dimension=2,
-        pool=pool,
-        distance_metric="COSINE",
-        vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=40),
-    )
-    index.table_name = "test_table"
-    index._quoted_table = '"test_table"'
-
-    await index.add_chunks(
-        [
-            EmbeddedChunk(
-                content="hello world",
-                chunk_id="chunk-1",
-                chunk_metadata={},
-                embedding=[0.1, 0.2],
-                embedding_model="test-model",
-                embedding_dimension=2,
-            )
-        ]
-    )
-
-    mock_conn.executemany.assert_called_once()
-    mock_conn.execute.assert_not_called()
-
-
-def _make_pgvector_adapter():
-    """Create a PGVectorVectorIOAdapter with mock dependencies for pool tests."""
-    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex, PGVectorVectorIOConfig
-    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorVectorIOAdapter
-
-    config = PGVectorVectorIOConfig(
-        host="localhost",
-        port=5432,
-        db="test_db",
-        user="test_user",
-        password="test_password",
-        distance_metric="COSINE",
-        vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
-    )
-    mock_inference = AsyncMock()
-    return PGVectorVectorIOAdapter(config, mock_inference, None)
-
-
-async def test_ensure_pool_concurrent_calls_create_single_pool():
-    """Test that concurrent _ensure_pool() calls create only one pool."""
-    adapter = _make_pgvector_adapter()
-    pool, mock_conn = _make_mock_asyncpg_pool()
-    call_count = 0
-
-    async def mock_create_pool(**kwargs):
-        nonlocal call_count
-        call_count += 1
-        return pool
-
-    with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
-        side_effect=mock_create_pool,
-    ):
-        with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
-            new_callable=AsyncMock,
-            return_value="0.5.1",
-        ):
-            results = await asyncio.gather(
-                adapter._ensure_pool(),
-                adapter._ensure_pool(),
-                adapter._ensure_pool(),
-            )
-
-    assert call_count == 1, f"Expected 1 pool creation, got {call_count}"
-    assert all(r is pool for r in results)
-
-
-async def test_ensure_pool_closes_pool_on_init_failure():
-    """Test that pool is closed if one-time initialization fails."""
-    adapter = _make_pgvector_adapter()
-    pool, mock_conn = _make_mock_asyncpg_pool()
-    mock_conn.execute = AsyncMock(side_effect=asyncpg.PostgresError("init failure"))
-
-    with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
-        new_callable=AsyncMock,
-        return_value=pool,
-    ):
-        with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
-            new_callable=AsyncMock,
-            return_value=None,
-        ):
-            with patch(
-                "ogx.providers.remote.vector_io.pgvector.pgvector.create_vector_extension",
-                new_callable=AsyncMock,
-            ):
-                with pytest.raises(asyncpg.PostgresError, match="init failure"):
-                    await adapter._ensure_pool()
-
-    pool.close.assert_awaited_once()
-    assert adapter.pool is None
-    assert adapter._pool_initialized is False
-
-
-async def test_ensure_pool_recreates_on_stale_event_loop():
-    """Test that stale pool is closed and recreated when health check fails."""
-    adapter = _make_pgvector_adapter()
-    stale_pool, stale_conn = _make_mock_asyncpg_pool()
-    stale_conn.fetchval = AsyncMock(side_effect=RuntimeError("wrong event loop"))
-
-    new_pool, new_conn = _make_mock_asyncpg_pool()
-
-    adapter.pool = stale_pool
-    adapter._pool_initialized = True
-
-    with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
-        new_callable=AsyncMock,
-        return_value=new_pool,
-    ):
-        with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
-            new_callable=AsyncMock,
-            return_value="0.5.1",
-        ):
-            result = await adapter._ensure_pool()
-
-    assert result is new_pool
-    stale_pool.close.assert_awaited_once()
-    assert adapter.pool is new_pool
-
-
-async def test_adapter_initialize_cleans_up_pool_on_index_failure():
-    """Test that adapter.initialize() closes pool if PGVectorIndex.initialize() fails."""
-    adapter = _make_pgvector_adapter()
-    pool, mock_conn = _make_mock_asyncpg_pool()
-
-    with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.kvstore_impl", new_callable=AsyncMock
-    ) as mock_kvstore_impl:
-        mock_kvstore = AsyncMock()
-        mock_kvstore.values_in_range = AsyncMock(
-            return_value=['{"identifier":"vs1","embedding_model":"m","embedding_dimension":768,"provider_id":"p"}']
-        )
-        mock_kvstore_impl.return_value = mock_kvstore
-
-        with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
-            new_callable=AsyncMock,
-            return_value=pool,
-        ):
-            with patch(
-                "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
-                new_callable=AsyncMock,
-                return_value="0.5.1",
-            ):
-                with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
-                    with patch(
-                        "ogx.providers.remote.vector_io.pgvector.pgvector.PGVectorIndex.initialize",
-                        new_callable=AsyncMock,
-                        side_effect=RuntimeError("index init failed"),
-                    ):
-                        with pytest.raises(RuntimeError, match="index init failed"):
-                            await adapter.initialize()
-
-    pool.close.assert_awaited_once()
->>>>>>> bd553de5 (fix(storage): harden PostgreSQL storage and pgvector safety defaults (#5834))
