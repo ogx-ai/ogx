@@ -357,18 +357,27 @@ def create_app() -> StackApp:
 
             try:
                 max_decompressed_size = 100 * 1024 * 1024  # 100 MB
-                decompressor = zstandard.ZstdDecompressor()
-                # Use streaming decompression to handle frames without content size
-                reader = decompressor.stream_reader(compressed_body)
-                decompressed_body = reader.read(max_decompressed_size)
-                if reader.read(1):
-                    reader.close()
+
+                def _decompress_zstd(compressed: bytes, max_size: int) -> tuple[bytes | None, bool]:
+                    decompressor = zstandard.ZstdDecompressor()
+                    reader = decompressor.stream_reader(compressed)
+                    try:
+                        data = reader.read(max_size)
+                        is_oversized = bool(reader.read(1))
+                        return (None, True) if is_oversized else (data, False)
+                    finally:
+                        reader.close()
+
+                decompressed_body, oversized = await asyncio.to_thread(
+                    _decompress_zstd, compressed_body, max_decompressed_size
+                )
+
+                if oversized:
                     return await _send_error_response(
                         send,
                         status=413,
                         message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
                     )
-                reader.close()
 
                 # Strip content-encoding header and update content-length
                 new_headers = [

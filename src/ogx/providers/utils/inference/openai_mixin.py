@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import base64
 import ssl
 import uuid
@@ -14,7 +15,7 @@ from typing import Any
 import httpx
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.chat import ChatCompletionChunk
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from ogx.core.request_headers import NeedsRequestProviderData
 from ogx.log import get_logger
@@ -106,9 +107,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     # Format: {"model_id": {"embedding_dimension": 1536, "context_length": 8192}}
     embedding_model_metadata: dict[str, dict[str, int]] = {}
 
-    # Cache of available models keyed by model ID
-    # This is set in list_models() and used in check_model_availability()
-    _model_cache: dict[str, Model] = {}
+    _model_cache: dict[str, Model] = PrivateAttr(default_factory=dict)
 
     # Optional field name in provider data to look for API key, which takes precedence
     provider_data_api_key_field: str | None = None
@@ -117,6 +116,9 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     # SSL context construction touches disk and is expensive
     # Trade-off: SSL context changes require server restart
     shared_ssl_context: ssl.SSLContext | bool = Field(default_factory=ssl.create_default_context, exclude=True)
+
+    _cached_client: AsyncOpenAI | None = PrivateAttr(default=None)
+    _cached_client_key: tuple[str, str] | None = PrivateAttr(default=None)
 
     def get_api_key(self) -> str | None:
         """
@@ -199,10 +201,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
         :return: An iterable of model IDs or None if not implemented
         """
-        client = self.client
-        async with client:
-            model_ids = [m.id async for m in client.models.list()]
-        return model_ids
+        return [m.id async for m in self.client.models.list()]
 
     async def initialize(self) -> None:
         """
@@ -215,26 +214,20 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         pass
 
     async def shutdown(self) -> None:
-        """
-        Shutdown the OpenAI mixin.
-
-        This method provides a default implementation that does nothing.
-        Subclasses can override this method to perform cleanup tasks
-        such as closing connections, releasing resources, etc.
-        """
-        pass
+        """Shutdown the OpenAI mixin, closing the cached HTTP client."""
+        if self._cached_client is not None:
+            await self._cached_client.close()
+            self._cached_client = None
+            self._cached_client_key = None
 
     @property
     def client(self) -> AsyncOpenAI:
         """
         Get an AsyncOpenAI client instance.
 
-        Uses the abstract methods get_api_key() and get_base_url() which must be
-        implemented by child classes.
-
-        Network configuration from config.network is automatically applied.
-        Users can also provide the API key via the provider data header, which
-        is used instead of any config API key.
+        Caches the client keyed by (api_key, base_url) for connection reuse.
+        When the key changes (e.g. per-request provider_data), a new client
+        is created and cached in its place.
         """
 
         api_key = self._get_api_key_from_config_or_provider_data()
@@ -244,19 +237,15 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 message += f' Please provide a valid API key in the provider data header, e.g. x-ogx-provider-data: {{"{self.provider_data_api_key_field}": "<API_KEY>"}}.'
             raise ValueError(message)
 
+        base_url = self.get_base_url()
+        cache_key = (api_key, base_url)
+
+        if self._cached_client is not None and self._cached_client_key == cache_key:
+            return self._cached_client
+
         extra_params = self.get_extra_client_params()
         network_kwargs = build_network_client_kwargs(self.config.network)
 
-        # Handle http_client creation/merging:
-        # - If get_extra_client_params() provides an http_client (e.g., OCI with custom auth),
-        #   merge network config into it. The merge behavior:
-        #   * Preserves auth from get_extra_client_params() (provider-specific auth like OCI signer)
-        #   * Preserves headers from get_extra_client_params() as base
-        #   * Applies network config (TLS, proxy, timeout, headers) on top
-        #   * Network config headers take precedence over provider headers (allows override)
-        # - Otherwise, if network config exists, create http_client from it
-        # - Otherwise, use a cached SSL context for performance
-        # This allows providers with custom auth to still use standard network settings
         if "http_client" in extra_params:
             if network_kwargs:
                 extra_params["http_client"] = _merge_network_config_into_client(
@@ -267,11 +256,15 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         else:
             extra_params["http_client"] = DefaultAsyncHttpxClient(verify=self.shared_ssl_context)
 
-        return AsyncOpenAI(
+        client = AsyncOpenAI(
             api_key=api_key,
-            base_url=self.get_base_url(),
+            base_url=base_url,
             **extra_params,
         )
+
+        self._cached_client = client
+        self._cached_client_key = cache_key
+        return client
 
     def _get_api_key_from_config_or_provider_data(self) -> str | None:
         api_key = self.get_api_key()
@@ -430,7 +423,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 # else it's a string and we don't need to modify it
                 return m
 
-            messages = [await _localize_image_url(m) for m in messages]
+            messages = list(await asyncio.gather(*[_localize_image_url(m) for m in messages]))
 
         request_params = await prepare_openai_completion_params(
             model=provider_model_id,

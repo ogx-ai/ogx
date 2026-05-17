@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import struct
 import time
@@ -742,7 +743,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         self._warn_unsupported_chat_params(params)
         tools, tool_choice = self._resolve_deprecated_tools(params)
 
-        messages = [await self._localize_image_url(message) for message in params.messages]
+        messages = list(await asyncio.gather(*[self._localize_image_url(message) for message in params.messages]))
         system_instruction, contents = converters.convert_openai_messages_to_gemini(messages)
         tools_input = converters.convert_openai_tools_to_gemini(tools)
         config = self._build_generation_config(
