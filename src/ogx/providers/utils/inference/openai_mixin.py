@@ -553,6 +553,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     async def list_models(self) -> list[Model] | None:
         """
         List available models from the provider's /v1/models endpoint augmented with static embedding model metadata.
+        If allowed_models is configured, use that list directly instead of probing the provider.
 
         Also, caches the models in self._model_cache for use in check_model_availability().
 
@@ -560,30 +561,43 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """
         self._model_cache = {}
 
-        api_key = self._get_api_key_from_config_or_provider_data()
-        if not api_key:
-            logger.debug(
-                "list_provider_model_ids() disabled because API key not provided", provider=self.__class__.__name__
+        if self.config.allowed_models is not None:
+            provider_models_ids = self.config.allowed_models
+            logger.info(
+                "Using configured allowed models",
+                provider=self.__class__.__name__,
+                count=len(provider_models_ids),
             )
-            return None
+        else:
+            api_key = self._get_api_key_from_config_or_provider_data()
+            if not api_key:
+                logger.debug(
+                    "list_provider_model_ids() disabled because API key not provided",
+                    provider=self.__class__.__name__,
+                )
+                return None
 
-        try:
-            iterable = await self.list_provider_model_ids()
-        except Exception as e:
-            logger.error("list_provider_model_ids() failed", provider=self.__class__.__name__, error=str(e))
-            raise
-        if not hasattr(iterable, "__iter__"):
-            raise TypeError(
-                f"Failed to list models: {self.__class__.__name__}.list_provider_model_ids() must return an iterable of "
-                f"strings, but returned {type(iterable).__name__}"
+            try:
+                iterable = await self.list_provider_model_ids()
+            except Exception as e:
+                logger.error(
+                    "list_provider_model_ids() failed",
+                    provider=self.__class__.__name__,
+                    error=str(e),
+                )
+                raise
+            if not hasattr(iterable, "__iter__"):
+                raise TypeError(
+                    f"Failed to list models: {self.__class__.__name__}.list_provider_model_ids() must return an iterable of "
+                    f"strings, but returned {type(iterable).__name__}"
+                )
+
+            provider_models_ids = list(iterable)
+            logger.info(
+                "list_provider_model_ids() returned models",
+                provider=self.__class__.__name__,
+                count=len(provider_models_ids),
             )
-
-        provider_models_ids = list(iterable)
-        logger.info(
-            "list_provider_model_ids() returned models",
-            provider=self.__class__.__name__,
-            count=len(provider_models_ids),
-        )
 
         for provider_model_id in provider_models_ids:
             if not isinstance(provider_model_id, str):

@@ -45,7 +45,11 @@ class TestOpenAIMixinListModels:
                 assert model.provider_resource_id == model.identifier
 
             assert len(mixin._model_cache) == 3
-            for model_id in ["some-mock-model-id", "another-mock-model-id", "final-mock-model-id"]:
+            for model_id in [
+                "some-mock-model-id",
+                "another-mock-model-id",
+                "final-mock-model-id",
+            ]:
                 assert model_id in mixin._model_cache
                 cached_model = mixin._model_cache[model_id]
                 assert cached_model.identifier == model_id
@@ -167,7 +171,10 @@ class TestOpenAIMixinImagePreprocessing:
             role="user",
             content=[
                 {"type": "text", "text": "What's in this image?"},
-                {"type": "image_url", "image_url": {"url": "http://example.com/image.jpg"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "http://example.com/image.jpg"},
+                },
             ],
         )
 
@@ -202,7 +209,10 @@ class TestOpenAIMixinImagePreprocessing:
             role="user",
             content=[
                 {"type": "text", "text": "What's in this image?"},
-                {"type": "image_url", "image_url": {"url": "http://example.com/image.jpg"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "http://example.com/image.jpg"},
+                },
             ],
         )
 
@@ -321,7 +331,7 @@ class TestOpenAIMixinAllowedModels:
     """Test cases for allowed_models filtering functionality"""
 
     async def test_list_models_with_allowed_models_filter(self, mixin, mock_client_with_models, mock_client_context):
-        """Test that list_models filters models based on allowed_models"""
+        """Test that list_models uses allowed_models without probing the provider."""
         mixin.config.allowed_models = ["some-mock-model-id", "another-mock-model-id"]
 
         with mock_client_context(mixin, mock_client_with_models):
@@ -334,9 +344,10 @@ class TestOpenAIMixinAllowedModels:
             assert "some-mock-model-id" in model_ids
             assert "another-mock-model-id" in model_ids
             assert "final-mock-model-id" not in model_ids
+            mock_client_with_models.models.list.assert_not_called()
 
     async def test_list_models_with_empty_allowed_models(self, mixin, mock_client_with_models, mock_client_context):
-        """Test that empty allowed_models allows no models"""
+        """Test that empty allowed_models allows no models without probing the provider."""
         mixin.config.allowed_models = []
 
         with mock_client_context(mixin, mock_client_with_models):
@@ -344,6 +355,20 @@ class TestOpenAIMixinAllowedModels:
 
             assert result is not None
             assert len(result) == 0  # No models should be included
+            mock_client_with_models.models.list.assert_not_called()
+
+    async def test_list_models_with_allowed_models_ignores_provider_errors(
+        self, mixin, mock_client_with_exception, mock_client_context
+    ):
+        """Test that allowed_models works when the provider has no /v1/models endpoint."""
+        mixin.config.allowed_models = ["configured-model"]
+
+        with mock_client_context(mixin, mock_client_with_exception):
+            result = await mixin.list_models()
+
+            assert result is not None
+            assert [model.identifier for model in result] == ["configured-model"]
+            mock_client_with_exception.models.list.assert_not_called()
 
     async def test_list_models_with_omitted_allowed_models(self, mixin, mock_client_with_models, mock_client_context):
         """Test that omitted allowed_models allows all models"""
@@ -370,6 +395,7 @@ class TestOpenAIMixinAllowedModels:
             assert await mixin.check_model_availability("final-mock-model-id")
             assert not await mixin.check_model_availability("some-mock-model-id")
             assert not await mixin.check_model_availability("another-mock-model-id")
+            mock_client_with_models.models.list.assert_not_called()
 
 
 class TestOpenAIMixinModelRegistration:
@@ -415,7 +441,8 @@ class TestOpenAIMixinModelRegistration:
 
         with mock_client_context(mixin, mock_client_with_models):
             with pytest.raises(
-                ValueError, match="Model non-existent-model is not available from provider test-provider"
+                ValueError,
+                match="Model non-existent-model is not available from provider test-provider",
             ):
                 await mixin.register_model(model)
             mock_client_with_models.models.list.assert_called_once()
@@ -447,10 +474,11 @@ class TestOpenAIMixinModelRegistration:
             result = await mixin.register_model(allowed_model)
             assert result == allowed_model
             with pytest.raises(
-                ValueError, match="Model final-mock-model-id is not available from provider test-provider"
+                ValueError,
+                match="Model final-mock-model-id is not available from provider test-provider",
             ):
                 await mixin.register_model(disallowed_model)
-            mock_client_with_models.models.list.assert_called_once()
+            mock_client_with_models.models.list.assert_not_called()
 
     async def test_register_embedding_model(self, mixin_with_embeddings, mock_client_context):
         """Test registration of embedding models with metadata"""
