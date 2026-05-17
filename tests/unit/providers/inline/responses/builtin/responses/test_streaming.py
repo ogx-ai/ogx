@@ -14,7 +14,11 @@ from ogx.providers.inline.responses.builtin.responses.streaming import (
     StreamingResponseOrchestrator,
     convert_tooldef_to_chat_tool,
 )
-from ogx.providers.inline.responses.builtin.responses.types import ChatCompletionContext, ToolContext
+from ogx.providers.inline.responses.builtin.responses.types import (
+    AssistantMessageWithReasoning,
+    ChatCompletionContext,
+    ToolContext,
+)
 from ogx.providers.inline.responses.builtin.responses.utils import (
     build_summary_prompt,
     should_summarize_reasoning,
@@ -300,6 +304,30 @@ class TestMixedApproval:
         assert len(replaced_msg.tool_calls) == 2
         tool_call_ids = {tc.id for tc in replaced_msg.tool_calls}
         assert tool_call_ids == {"call_1", "call_2"}
+
+    def test_mix_preserves_reasoning_for_next_turn(self):
+        always_server = _make_mcp_server(require_approval="always")
+        never_server = _make_mcp_server(require_approval="never")
+        tool_map = {"get_weather": never_server, "get_news": always_server}
+        orch = _build_orchestrator(tool_map)
+
+        tc_weather = _make_tool_call("call_1", "get_weather")
+        tc_news = _make_tool_call("call_2", "get_news")
+        response = _make_response([tc_weather, tc_news])
+        messages = ["system_msg", "user_msg"]
+
+        _, _, approvals, result_messages = orch._separate_tool_calls(
+            response,
+            messages,
+            reasoning_content="the model reasoned about available tools",
+        )
+
+        assert len(approvals) == 1
+        replaced_msg = result_messages[2]
+        assert isinstance(replaced_msg, AssistantMessageWithReasoning)
+        assert replaced_msg.reasoning_content == "the model reasoned about available tools"
+        assert len(replaced_msg.tool_calls) == 1
+        assert replaced_msg.tool_calls[0].id == "call_1"
 
     def test_mix_denied_and_executed_replaces_correctly(self):
         mcp_server = _make_mcp_server(require_approval="always")

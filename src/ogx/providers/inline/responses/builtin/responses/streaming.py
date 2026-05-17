@@ -836,9 +836,17 @@ class StreamingResponseOrchestrator:
                             executed_tool_calls.append(tool_call)
                 if has_deferred_or_denied:
                     if executed_tool_calls:
-                        next_turn_messages[-1] = OpenAIAssistantMessageParam(
-                            content=choice.message.content,
-                            tool_calls=executed_tool_calls,
+                        message_kwargs = {
+                            "content": choice.message.content,
+                            "tool_calls": executed_tool_calls,
+                        }
+                        next_turn_messages[-1] = (
+                            AssistantMessageWithReasoning(
+                                **message_kwargs,
+                                reasoning_content=reasoning_content,
+                            )
+                            if reasoning_content
+                            else OpenAIAssistantMessageParam(**message_kwargs)  # type: ignore[assignment]
                         )
                     else:
                         next_turn_messages.pop()
