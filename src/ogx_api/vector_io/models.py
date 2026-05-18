@@ -482,6 +482,9 @@ class SearchRankingOptions(BaseModel):
         - "weighted": Weighted combination of vector and keyword scores
         - "rrf": Reciprocal Rank Fusion algorithm
         - "neural": Neural reranking model (requires model parameter)
+        - "classifier": Classification model that scores chunks by quality/answerability and
+          filters below a confidence threshold (requires model parameter, optional confidence_threshold
+          via score_threshold)
         Note: For OpenAI API compatibility, any string value is accepted, but only the above values are supported.
     :param score_threshold: (Optional) Minimum relevance score threshold for results. Default: 0.0
     :param alpha: (Optional) Weight factor for weighted ranker (0-1).
