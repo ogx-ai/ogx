@@ -301,7 +301,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 model_id="nomic-ai/nomic-embed-text-v1.5",
             ),
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         ),

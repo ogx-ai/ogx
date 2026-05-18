@@ -341,7 +341,9 @@ def instantiate_ogx_client(session):
             rerank_model_opt = session.config.getoption("rerank_model") or ""
             reranker_model = None
             if rerank_model_opt:
-                provider_id_of_reranker = rerank_model_opt.split("/")[0] if "/" in rerank_model_opt else "transformers"
+                provider_id_of_reranker = (
+                    rerank_model_opt.split("/")[0] if "/" in rerank_model_opt else "sentence-transformers"
+                )
                 passed_reranker_model = extract_model(rerank_model_opt, "Qwen/Qwen3-Reranker-0.6B")
                 reranker_model = RerankerModel(
                     provider_id=provider_id_of_reranker,
