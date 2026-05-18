@@ -54,6 +54,10 @@ SAMPLE_PYPROJECT = textwrap.dedent("""\
     ]
 
     [dependency-groups]
+    dev = [
+        "ruff",
+        "black",
+    ]
     test = [
         "google-genai>=1.69.0",
     ]
@@ -454,6 +458,34 @@ class TestMainCli:
         content = pyproject.read_text()
         assert "aiohttp>=3.14.0" in content
         assert "CVE-2026-34514" in content
+
+    def test_bare_dep_no_constraint_adds_to_constraints(self, tmp_path):
+        """A dep without a >= floor in dependencies and not in constraint-dependencies
+        gets added to constraint-dependencies."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(SAMPLE_PYPROJECT)
+
+        result = subprocess.run(
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "ruff",
+                "--dependency-version",
+                "0.12.0",
+                "--pyproject",
+                str(pyproject),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "updated=true" in result.stdout
+        assert "ADDED" in result.stdout
+        content = pyproject.read_text()
+        assert '"ruff>=0.12.0"' in content
+        # Original bare "ruff" in dev deps should be untouched
+        assert '    "ruff",\n' in content
 
     def test_missing_pyproject_returns_error(self, tmp_path):
         result = subprocess.run(
