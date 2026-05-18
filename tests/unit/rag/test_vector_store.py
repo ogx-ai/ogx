@@ -376,7 +376,7 @@ class TestNeuralRerank:
     async def test_neural_rerank_reorders_chunks(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )
@@ -429,7 +429,7 @@ class TestNeuralRerank:
     async def test_neural_rerank_uses_default_model_from_config(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )
@@ -460,12 +460,12 @@ class TestNeuralRerank:
 
         # Verify rerank was called with the fully qualified model ID
         rerank_request = store.inference_api.rerank.call_args.args[0]
-        assert rerank_request.model == "transformers/Qwen/Qwen3-Reranker-0.6B"
+        assert rerank_request.model == "sentence-transformers/Qwen/Qwen3-Reranker-0.6B"
 
     async def test_neural_rerank_uses_model_from_params(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )
@@ -501,7 +501,7 @@ class TestNeuralRerank:
     async def test_neural_rerank_respects_max_chunks_limit(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )

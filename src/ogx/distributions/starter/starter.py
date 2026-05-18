@@ -25,9 +25,6 @@ from ogx.providers.inline.files.localfs.config import LocalfsFilesImplConfig
 from ogx.providers.inline.inference.sentence_transformers import (
     SentenceTransformersInferenceConfig,
 )
-from ogx.providers.inline.inference.transformers.config import (
-    TransformersInferenceConfig,
-)
 from ogx.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
 from ogx.providers.inline.vector_io.milvus.config import MilvusVectorIOConfig
 from ogx.providers.inline.vector_io.sqlite_vec.config import (
@@ -132,7 +129,6 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "inference": [BuildProvider(provider_type=p.provider_type, module=p.module) for p in remote_inference_providers]
         + [
             BuildProvider(provider_type="inline::sentence-transformers"),
-            BuildProvider(provider_type="inline::transformers"),
         ],
         "vector_io": [
             BuildProvider(provider_type="inline::faiss"),
@@ -172,9 +168,9 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         config=SentenceTransformersInferenceConfig.sample_run_config(),
     )
     reranker_provider = Provider(
-        provider_id="transformers",
-        provider_type="inline::transformers",
-        config=TransformersInferenceConfig.sample_run_config(),
+        provider_id="sentence-transformers",
+        provider_type="inline::sentence-transformers",
+        config=SentenceTransformersInferenceConfig.sample_run_config(),
     )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
