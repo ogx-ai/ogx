@@ -7129,10 +7129,10 @@ components:
           - type: 'null'
         error:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseError'
-            title: OpenAIResponseError
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseError'
           - type: 'null'
-          title: OpenAIResponseError
+          title: ErrorUnion
         frequency_penalty:
           type: number
           title: Frequency Penalty
@@ -7141,10 +7141,10 @@ components:
           title: Id
         incomplete_details:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
-            title: OpenAIResponseIncompleteDetails
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
           - type: 'null'
-          title: OpenAIResponseIncompleteDetails
+          title: Incomplete_DetailsUnion
         model:
           type: string
           title: Model
@@ -7183,7 +7183,9 @@ components:
           type: number
           title: Temperature
         text:
-          $ref: '#/components/schemas/OpenAIResponseText'
+          allOf:
+          - $ref: '#/components/schemas/OpenAIResponseText'
+          - description: Text response configuration for OpenAI responses.
         top_p:
           type: number
           title: Top P
@@ -7247,17 +7249,14 @@ components:
           - type: 'null'
           title: OpenAIResponseInputToolChoiceMode
         truncation:
-          anyOf:
+          allOf:
           - $ref: '#/components/schemas/ResponseTruncation'
-            title: ResponseTruncation
-          - type: 'null'
-          title: ResponseTruncation
         usage:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseUsage'
-            title: OpenAIResponseUsage
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseUsage'
           - type: 'null'
-          title: OpenAIResponseUsage
+          title: UsageUnion
         instructions:
           anyOf:
           - type: string
@@ -7268,10 +7267,10 @@ components:
           - type: 'null'
         reasoning:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseReasoning'
-            title: OpenAIResponseReasoning
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseReasoning'
           - type: 'null'
-          title: OpenAIResponseReasoning
+          title: ReasoningUnion
         max_output_tokens:
           anyOf:
           - type: integer
@@ -7279,12 +7278,7 @@ components:
         service_tier:
           type: string
           title: Service Tier
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
+        metadata: {}
         presence_penalty:
           type: number
           title: Presence Penalty
@@ -10897,11 +10891,11 @@ components:
           description: Penalizes new tokens based on their frequency in the text so far.
         text:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseText'
-            title: OpenAIResponseText
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseText'
+            - description: Configuration for text response generation.
           - type: 'null'
-          description: Configuration for text response generation.
-          title: OpenAIResponseText
+          title: TextUnion
         tool_choice:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseInputToolChoiceMode'
@@ -10988,11 +10982,11 @@ components:
           description: Upper bound for the number of tokens that can be generated for a response.
         reasoning:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseReasoning'
-            title: OpenAIResponseReasoning
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseReasoning'
+            - description: Configuration for reasoning effort in responses.
           - type: 'null'
-          description: Configuration for reasoning effort in responses.
-          title: OpenAIResponseReasoning
+          title: ReasoningUnion
         service_tier:
           anyOf:
           - $ref: '#/components/schemas/ServiceTier'
@@ -11008,12 +11002,9 @@ components:
           - type: 'null'
           description: Dictionary of metadata key-value pairs to attach to the response.
         truncation:
-          anyOf:
+          allOf:
           - $ref: '#/components/schemas/ResponseTruncation'
-            title: ResponseTruncation
-          - type: 'null'
-          description: Controls how the service truncates input when it exceeds the model context window.
-          title: ResponseTruncation
+          - description: Controls how the service truncates input when it exceeds the model context window.
         top_logprobs:
           anyOf:
           - type: integer
@@ -11030,11 +11021,11 @@ components:
           description: Penalizes new tokens based on whether they appear in the text so far.
         stream_options:
           anyOf:
-          - $ref: '#/components/schemas/ResponseStreamOptions'
-            title: ResponseStreamOptions
+          - allOf:
+            - $ref: '#/components/schemas/ResponseStreamOptions'
+            - description: Options that control streamed response behavior.
           - type: 'null'
-          description: Options that control streamed response behavior.
-          title: ResponseStreamOptions
+          title: Stream_OptionsUnion
         context_management:
           anyOf:
           - items:
