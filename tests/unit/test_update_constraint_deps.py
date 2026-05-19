@@ -459,11 +459,12 @@ class TestMainCli:
         assert "aiohttp>=3.14.0" in content
         assert "CVE-2026-34514" in content
 
-    def test_bare_dep_no_constraint_adds_to_constraints(self, tmp_path):
-        """A dep without a >= floor in dependencies and not in constraint-dependencies
-        gets added to constraint-dependencies."""
+    def test_bare_dep_skips_without_adding_to_constraints(self, tmp_path):
+        """A dep without a >= floor in dependencies must NOT be added to
+        constraint-dependencies — it is already declared elsewhere."""
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(SAMPLE_PYPROJECT)
+        original = pyproject.read_text()
 
         result = subprocess.run(
             [
@@ -480,12 +481,9 @@ class TestMainCli:
             text=True,
         )
         assert result.returncode == 0
-        assert "updated=true" in result.stdout
-        assert "ADDED" in result.stdout
-        content = pyproject.read_text()
-        assert '"ruff>=0.12.0"' in content
-        # Original bare "ruff" in dev deps should be untouched
-        assert '    "ruff",\n' in content
+        assert "updated=false" in result.stdout
+        assert "SKIP (dependencies)" in result.stdout
+        assert pyproject.read_text() == original
 
     def test_missing_pyproject_returns_error(self, tmp_path):
         result = subprocess.run(
