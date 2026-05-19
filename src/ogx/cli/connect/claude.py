@@ -117,7 +117,7 @@ class ConnectClaude(Subcommand):
         env = self._build_env(base_url, model_mapping)
 
         if args.print_env:
-            for key in ["ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"]:
+            for key in ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"]:
                 print(f"export {key}={env[key]}")
             for key in [
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL",
@@ -150,7 +150,7 @@ class ConnectClaude(Subcommand):
             response = client.models.list()
         except APIConnectionError:
             cprint(
-                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx stack run <config>",
+                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx run <config>",
                 color="red",
                 file=sys.stderr,
             )
@@ -202,7 +202,7 @@ class ConnectClaude(Subcommand):
     def _build_env(self, base_url: str, model_mapping: dict[str, str]) -> dict[str, str]:
         env = {**os.environ}
         env["ANTHROPIC_BASE_URL"] = base_url
-        env["ANTHROPIC_API_KEY"] = "ogx"
+        env["ANTHROPIC_AUTH_TOKEN"] = "ogx"  # noqa: S105 — placeholder, not a real secret
         env.update(model_mapping)
         for key in _VARS_TO_UNSET:
             env.pop(key, None)

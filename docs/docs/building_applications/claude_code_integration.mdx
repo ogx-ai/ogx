@@ -56,7 +56,7 @@ The `ogx connect claude` command:
 1. Queries the running OGX server for available models
 2. Filters out non-LLM models (embeddings, rerankers)
 3. Maps all discovered LLM models to Claude Code's three tiers (haiku/sonnet/opus)
-4. Sets the required environment variables (`ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, model tier mappings)
+4. Sets the required environment variables (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, model tier mappings)
 5. Unsets any Vertex/Bedrock variables that would cause Claude Code to bypass OGX
 6. Launches Claude Code
 
@@ -161,7 +161,7 @@ You can also configure Claude Code manually without the `ogx connect claude` com
 
 ```bash
 export ANTHROPIC_BASE_URL="http://localhost:8321"
-export ANTHROPIC_API_KEY="fake"  # Not validated when using local providers
+export ANTHROPIC_AUTH_TOKEN="ogx"  # Bearer token — no interactive approval needed
 
 # Map Claude model tiers to your backend models
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="openai/gpt-4o-mini"   # Fast/cheap tier

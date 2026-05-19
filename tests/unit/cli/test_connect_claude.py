@@ -231,9 +231,9 @@ class TestEnvironment:
         env = connect_claude._build_env("http://localhost:8321", {})
         assert not env["ANTHROPIC_BASE_URL"].endswith("/v1")
 
-    def test_sets_anthropic_api_key(self, connect_claude: ConnectClaude) -> None:
+    def test_sets_anthropic_auth_token(self, connect_claude: ConnectClaude) -> None:
         env = connect_claude._build_env("http://localhost:8321", {})
-        assert env["ANTHROPIC_API_KEY"] == "ogx"
+        assert env["ANTHROPIC_AUTH_TOKEN"] == "ogx"
 
     def test_sets_model_tier_env_vars(self, connect_claude: ConnectClaude) -> None:
         mapping = {
@@ -276,7 +276,7 @@ class TestPrintEnv:
 
         output = capsys.readouterr().out
         assert "export ANTHROPIC_BASE_URL=http://localhost:8321" in output
-        assert "export ANTHROPIC_API_KEY=ogx" in output
+        assert "export ANTHROPIC_AUTH_TOKEN=ogx" in output
         assert "export ANTHROPIC_DEFAULT_HAIKU_MODEL=gpt-4o" in output
         assert "export ANTHROPIC_DEFAULT_SONNET_MODEL=gpt-4o" in output
         assert "export ANTHROPIC_DEFAULT_OPUS_MODEL=gpt-4o" in output
@@ -323,7 +323,7 @@ class TestConnect:
             mock_run.assert_called_once()
             call_env = mock_run.call_args.kwargs["env"]
             assert call_env["ANTHROPIC_BASE_URL"] == "http://localhost:8321"
-            assert call_env["ANTHROPIC_API_KEY"] == "ogx"
+            assert call_env["ANTHROPIC_AUTH_TOKEN"] == "ogx"
             assert call_env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "gpt-4o"
 
     def test_forwards_extra_args(self, connect_claude: ConnectClaude) -> None:
