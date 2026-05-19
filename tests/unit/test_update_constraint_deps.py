@@ -20,6 +20,8 @@ parse_version = _mod.parse_version
 normalize_pkg_pattern = _mod.normalize_pkg_pattern
 find_constraint_section = _mod.find_constraint_section
 find_constraint_line = _mod.find_constraint_line
+find_dependency_lines = _mod.find_dependency_lines
+insert_constraint = _mod.insert_constraint
 update_constraint = _mod.update_constraint
 main = _mod.main
 
@@ -43,6 +45,21 @@ SAMPLE_PYPROJECT = textwrap.dedent("""\
     dependencies = [
         "requests>=2.28.0",
         "pydantic>=2.11.9",
+    ]
+
+    [project.optional-dependencies]
+    starter = [
+        "aiohttp",
+        "google-genai>=1.69.0",
+    ]
+
+    [dependency-groups]
+    dev = [
+        "ruff",
+        "black",
+    ]
+    test = [
+        "google-genai>=1.69.0",
     ]
 """)
 
@@ -135,6 +152,78 @@ class TestFindConstraintLine:
         assert find_constraint_line(lines, "nonexistent-pkg") is None
 
 
+class TestFindDependencyLines:
+    def test_finds_in_project_dependencies(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        indices = find_dependency_lines(lines, "requests")
+        assert len(indices) == 1
+        assert "requests" in lines[indices[0]]
+
+    def test_finds_in_optional_and_groups(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        indices = find_dependency_lines(lines, "google-genai")
+        assert len(indices) == 2
+        for idx in indices:
+            assert "google-genai" in lines[idx]
+
+    def test_excludes_constraint_dependencies(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        indices = find_dependency_lines(lines, "urllib3")
+        assert len(indices) == 0
+
+    def test_finds_bare_dep_without_version(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        indices = find_dependency_lines(lines, "aiohttp")
+        assert len(indices) == 1
+        assert '"aiohttp"' in lines[indices[0]]
+
+    def test_returns_empty_for_unknown(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        assert find_dependency_lines(lines, "nonexistent") == []
+
+
+class TestInsertConstraint:
+    def test_inserts_alphabetically_middle(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        new_lines, changed, reason = insert_constraint(lines, "google-genai", "2.3.0")
+        assert changed is True
+        assert "added to constraint-dependencies" in reason
+        joined = "".join(new_lines)
+        assert '"google-genai>=2.3.0"' in joined
+        constraint_lines = [line.strip() for line in new_lines if "google-genai" in line or "litellm" in line]
+        assert constraint_lines.index('    "google-genai>=2.3.0",'.strip()) < constraint_lines.index(
+            '    "litellm<1.83.7",                  # upper-bound only'.strip()
+        )
+
+    def test_inserts_alphabetically_beginning(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        new_lines, changed, _ = insert_constraint(lines, "aaa-first", "1.0.0")
+        assert changed is True
+        joined = "".join(new_lines)
+        aaa_pos = joined.index('"aaa-first>=1.0.0"')
+        aiohttp_pos = joined.index('"aiohttp>=')
+        assert aaa_pos < aiohttp_pos
+
+    def test_inserts_alphabetically_end(self):
+        lines = SAMPLE_PYPROJECT.splitlines(keepends=True)
+        new_lines, changed, _ = insert_constraint(lines, "zzz-last", "1.0.0")
+        assert changed is True
+        joined = "".join(new_lines)
+        zzz_pos = joined.index('"zzz-last>=1.0.0"')
+        urllib3_pos = joined.index('"urllib3>=')
+        assert zzz_pos > urllib3_pos
+
+    def test_returns_false_when_no_constraint_section(self):
+        lines = textwrap.dedent("""\
+            [project]
+            name = "no-constraints"
+            dependencies = ["requests"]
+        """).splitlines(keepends=True)
+        _, changed, reason = insert_constraint(lines, "pkg", "1.0.0")
+        assert changed is False
+        assert "not found" in reason
+
+
 class TestUpdateConstraint:
     def test_updates_lower_bound(self):
         line = '    "aiohttp>=3.13.4",                # CVE-2026-34514\n'
@@ -221,7 +310,8 @@ class TestMainCli:
         assert "aiohttp>=3.14.0" in content
         assert "CVE-2026-34514" in content
 
-    def test_skips_unknown_package(self, tmp_path):
+    def test_updates_dependency_in_place(self, tmp_path):
+        """A dep in optional-dependencies/dependency-groups gets updated in place."""
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(SAMPLE_PYPROJECT)
 
@@ -230,7 +320,32 @@ class TestMainCli:
                 "python3",
                 str(_script_path),
                 "--dependency-name",
-                "nonexistent",
+                "google-genai",
+                "--dependency-version",
+                "2.3.0",
+                "--pyproject",
+                str(pyproject),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "updated=true" in result.stdout
+        assert "UPDATED (dependencies)" in result.stdout
+        content = pyproject.read_text()
+        assert content.count("google-genai>=2.3.0") == 2
+        assert "google-genai>=1.69.0" not in content
+
+    def test_adds_unknown_package(self, tmp_path):
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(SAMPLE_PYPROJECT)
+
+        result = subprocess.run(
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "some-new-pkg",
                 "--dependency-version",
                 "1.0.0",
                 "--pyproject",
@@ -240,8 +355,10 @@ class TestMainCli:
             text=True,
         )
         assert result.returncode == 0
-        assert "updated=false" in result.stdout
-        assert pyproject.read_text() == SAMPLE_PYPROJECT
+        assert "updated=true" in result.stdout
+        assert "ADDED" in result.stdout
+        content = pyproject.read_text()
+        assert '"some-new-pkg>=1.0.0"' in content
 
     def test_skips_upper_bound_conflict(self, tmp_path):
         pyproject = tmp_path / "pyproject.toml"
@@ -265,9 +382,9 @@ class TestMainCli:
         assert "updated=false" in result.stdout
         assert "pydantic>=2.11.9,<2.12.0" in pyproject.read_text()
 
-    def test_does_not_modify_project_dependencies(self, tmp_path):
-        """Updating a package that exists in [project] dependencies but not in
-        constraint-dependencies must not touch pyproject.toml."""
+    def test_updates_project_dependency_in_place(self, tmp_path):
+        """A package in [project] dependencies gets updated in place, not added
+        to constraint-dependencies."""
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(SAMPLE_PYPROJECT)
 
@@ -286,8 +403,89 @@ class TestMainCli:
             text=True,
         )
         assert result.returncode == 0
+        assert "updated=true" in result.stdout
+        assert "UPDATED (dependencies)" in result.stdout
+        content = pyproject.read_text()
+        assert "requests>=2.32.0" in content
+
+    def test_skips_dep_in_deps_when_version_not_newer(self, tmp_path):
+        """A dep in dependencies with a >= floor should skip when the new version
+        is not newer, and NOT fall through to add to constraint-dependencies."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(SAMPLE_PYPROJECT)
+        original = pyproject.read_text()
+
+        result = subprocess.run(
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "google-genai",
+                "--dependency-version",
+                "1.50.0",
+                "--pyproject",
+                str(pyproject),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
         assert "updated=false" in result.stdout
-        assert pyproject.read_text() == SAMPLE_PYPROJECT
+        assert pyproject.read_text() == original
+
+    def test_bare_dep_falls_through_to_constraint(self, tmp_path):
+        """A dep without a >= floor in dependencies falls through to
+        constraint-dependencies if present there."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(SAMPLE_PYPROJECT)
+
+        result = subprocess.run(
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "aiohttp",
+                "--dependency-version",
+                "3.14.0",
+                "--pyproject",
+                str(pyproject),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "updated=true" in result.stdout
+        content = pyproject.read_text()
+        assert "aiohttp>=3.14.0" in content
+        assert "CVE-2026-34514" in content
+
+    def test_bare_dep_no_constraint_adds_to_constraints(self, tmp_path):
+        """A dep without a >= floor in dependencies and not in constraint-dependencies
+        gets added to constraint-dependencies."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(SAMPLE_PYPROJECT)
+
+        result = subprocess.run(
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "ruff",
+                "--dependency-version",
+                "0.12.0",
+                "--pyproject",
+                str(pyproject),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "updated=true" in result.stdout
+        assert "ADDED" in result.stdout
+        content = pyproject.read_text()
+        assert '"ruff>=0.12.0"' in content
+        # Original bare "ruff" in dev deps should be untouched
+        assert '    "ruff",\n' in content
 
     def test_missing_pyproject_returns_error(self, tmp_path):
         result = subprocess.run(
