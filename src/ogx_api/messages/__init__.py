@@ -14,6 +14,7 @@ The FastAPI router is defined in ogx_api.messages.fastapi_routes.
 from . import fastapi_routes
 from .api import Messages
 from .models import (
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
@@ -29,6 +30,7 @@ from .models import (
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
     AnthropicUsage,
     ContentBlockDeltaEvent,
     ContentBlockStartEvent,
@@ -50,6 +52,7 @@ from .models import (
 
 __all__ = [
     "Messages",
+    "AnthropicBase64ImageSource",
     "AnthropicContentBlock",
     "AnthropicCountTokensRequest",
     "AnthropicCountTokensResponse",
@@ -58,6 +61,7 @@ __all__ = [
     "AnthropicImageBlock",
     "AnthropicImageSource",
     "AnthropicMessage",
+    "AnthropicURLImageSource",
     "AnthropicMessageResponse",
     "AnthropicTextBlock",
     "AnthropicThinkingBlock",
