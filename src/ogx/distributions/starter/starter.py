@@ -167,15 +167,10 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         provider_type="inline::sentence-transformers",
         config=SentenceTransformersInferenceConfig.sample_run_config(),
     )
-    reranker_provider = Provider(
-        provider_id="sentence-transformers",
-        provider_type="inline::sentence-transformers",
-        config=SentenceTransformersInferenceConfig.sample_run_config(),
-    )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
     default_overrides = {
-        "inference": remote_inference_providers + [embedding_provider, reranker_provider],
+        "inference": remote_inference_providers + [embedding_provider],
         "vector_io": [
             Provider(
                 provider_id="faiss",

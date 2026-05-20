@@ -7,9 +7,6 @@
 
 from ogx.core.datatypes import Provider
 from ogx.distributions.template import DistributionTemplate
-from ogx.providers.inline.inference.sentence_transformers.config import (
-    SentenceTransformersInferenceConfig,
-)
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
 from ogx_api import ConnectorInput, ModelInput, ModelType
 
@@ -95,13 +92,6 @@ def get_distribution_template() -> DistributionTemplate:
         config=WatsonXConfig.sample_run_config(),
     )
 
-    # Override sentence-transformers to use trust_remote_code=True for CI tests
-    sentence_transformers_provider = Provider(
-        provider_id="sentence-transformers",
-        provider_type="inline::sentence-transformers",
-        config=SentenceTransformersInferenceConfig(trust_remote_code=True).model_dump(),
-    )
-
     for run_config in template.run_configs.values():
         if run_config.default_connectors is None:
             run_config.default_connectors = []
@@ -117,12 +107,9 @@ def get_distribution_template() -> DistributionTemplate:
         # Add WatsonX inference provider (vertexai is already in starter distribution)
         run_config.provider_overrides["inference"].append(watsonx_provider)
 
-        # Replace sentence-transformers provider with one that has trust_remote_code=True
-        inference_providers = run_config.provider_overrides["inference"]
-        for i, provider in enumerate(inference_providers):
-            if provider.provider_id == "sentence-transformers":
-                inference_providers[i] = sentence_transformers_provider
-                break
+        for provider in run_config.provider_overrides["inference"]:
+            if provider.provider_type == "inline::sentence-transformers":
+                provider.config["trust_remote_code"] = True
 
         # Add conditional auth config
         run_config.auth_config = auth_config
