@@ -187,7 +187,7 @@ jobs:
           repository: ${{ steps.pr-info.outputs.head_repo }}
           ref: ${{ steps.pr-info.outputs.head_ref }}
           fetch-depth: 0
-          token: ${{ github.token }}
+          token: ${{ secrets.RELEASE_PAT }}
 
       - name: Restore artifacts after checkout
         if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true' && steps.pr-info.outputs.is_fork_pr != 'true'
@@ -222,7 +222,7 @@ jobs:
         id: commit
         if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ steps.pr-info.outputs.is_fork_pr == 'true' && secrets.RELEASE_PAT || github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
           PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
           HEAD_REPO: ${{ steps.pr-info.outputs.head_repo }}
           HEAD_REF: ${{ steps.pr-info.outputs.head_ref }}
@@ -260,7 +260,8 @@ jobs:
             fi
           else
             echo "Pushing to same-repo PR branch: $HEAD_REF"
-            git push origin "HEAD:${HEAD_REF}"
+            git push "https://x-access-token:${GH_TOKEN}@github.com/${BASE_REPO}.git" \
+              "HEAD:${HEAD_REF}"
             echo "Successfully pushed constraint updates"
             echo "pushed=true" >> "$GITHUB_OUTPUT"
           fi
