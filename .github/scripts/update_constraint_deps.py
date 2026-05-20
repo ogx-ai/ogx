@@ -101,13 +101,38 @@ def insert_constraint(lines: list[str], pkg_name: str, version: str) -> tuple[li
     return lines, True, f"{pkg_name}: added to constraint-dependencies with >={version}"
 
 
-def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, bool, str]:
-    """Update the >= lower bound in a constraint-dependencies line.
+def add_floor(line: str, pkg_name: str, version: str) -> tuple[str, bool, str]:
+    """Add a >= floor to a dependency line that has no version specifier.
+
+    Transforms  "pkg"  or  "pkg",  into  "pkg>=version"  or  "pkg>=version",
+    preserving extras, whitespace, trailing comma, and inline comments.
 
     Returns (new_line, changed, reason).
     """
     pkg_pattern = normalize_pkg_pattern(pkg_name)
-    lower_bound_pattern = re.compile(rf'("{pkg_pattern}>=)([\d]+(?:\.[\d]+)*)', re.IGNORECASE)
+    bare_pattern = re.compile(
+        rf'(?P<pre>\s*")(?P<name>{pkg_pattern})(?P<extras>\[[^\]]*\])?(?P<post>")',
+        re.IGNORECASE,
+    )
+    match = bare_pattern.search(line)
+    if not match:
+        return line, False, f"could not parse dependency line for {pkg_name}"
+
+    extras = match.group("extras") or ""
+    new_line = bare_pattern.sub(
+        rf"\g<pre>\g<name>{extras}>={version}\g<post>",
+        line,
+    )
+    return new_line, True, f"{pkg_name}: added >= floor {version}"
+
+
+def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, bool, str]:
+    """Update the >= lower bound in a dependency line.
+
+    Returns (new_line, changed, reason).
+    """
+    pkg_pattern = normalize_pkg_pattern(pkg_name)
+    lower_bound_pattern = re.compile(rf'("{pkg_pattern}(?:\[[^\]]*\])?>=)([\d]+(?:\.[\d]+)*)', re.IGNORECASE)
 
     match = lower_bound_pattern.search(line)
     if not match:
@@ -117,7 +142,9 @@ def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, 
     if parse_version(new_version) <= parse_version(old_version):
         return line, False, (f"{pkg_name}: new version {new_version} <= current floor {old_version}")
 
-    upper_bound_match = re.search(rf'"{pkg_pattern}>=[^"]*,<([\d]+(?:\.[\d]+)*)"', line, re.IGNORECASE)
+    upper_bound_match = re.search(
+        rf'"{pkg_pattern}(?:\[[^\]]*\])?>=(?:[^"]*),<([\d]+(?:\.[\d]+)*)"', line, re.IGNORECASE
+    )
     if upper_bound_match:
         upper_version = upper_bound_match.group(1)
         if parse_version(new_version) >= parse_version(upper_version):
@@ -164,32 +191,31 @@ def main() -> int:
         print("updated=true")
         return 0
 
-    # 2. Try updating >= floors in regular dependency arrays
+    # 2. Update in place in regular dependency arrays — either bump an existing
+    #    >= floor or add one when the dep is bare (no version specifier).
     if dep_indices:
         any_changed = False
-        has_floor = False
+        skip_reasons = []
         for idx in dep_indices:
             new_line, changed, reason = update_constraint(lines[idx], args.dependency_name, args.dependency_version)
+            if not changed and "no >= lower bound" in reason:
+                new_line, changed, reason = add_floor(lines[idx], args.dependency_name, args.dependency_version)
             if changed:
                 lines[idx] = new_line
                 any_changed = True
-                has_floor = True
                 print(f"UPDATED (dependencies): {reason}")
-            elif "no >= lower bound" not in reason:
-                has_floor = True
-                print(f"SKIP (dependencies): {reason}")
+            else:
+                skip_reasons.append(reason)
         if any_changed:
             pyproject_path.write_text("".join(lines))
             print("updated=true")
-            return 0
-        if has_floor:
+        else:
+            for r in skip_reasons:
+                print(f"SKIP (dependencies): {r}")
             print("updated=false")
-            return 0
-        # Found in dependencies but no >= floor anywhere — fall through to
-        # add to constraint-dependencies so the version floor is tracked somewhere
+        return 0
 
-    # 3. Not found in constraint-dependencies, and either not in regular deps
-    #    or present without a >= floor — add to constraint-dependencies
+    # 3. Not found anywhere — add to constraint-dependencies
     lines, changed, reason = insert_constraint(lines, args.dependency_name, args.dependency_version)
     if not changed:
         print(f"SKIP: {reason}")
