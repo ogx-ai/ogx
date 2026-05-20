@@ -164,32 +164,30 @@ def main() -> int:
         print("updated=true")
         return 0
 
-    # 2. Try updating >= floors in regular dependency arrays
+    # 2. Try updating >= floors in regular dependency arrays.
+    #    If the dep is declared here (even without a >= floor), stop — don't
+    #    add a redundant entry to constraint-dependencies.
     if dep_indices:
         any_changed = False
-        has_floor = False
+        skip_reasons = []
         for idx in dep_indices:
             new_line, changed, reason = update_constraint(lines[idx], args.dependency_name, args.dependency_version)
             if changed:
                 lines[idx] = new_line
                 any_changed = True
-                has_floor = True
                 print(f"UPDATED (dependencies): {reason}")
-            elif "no >= lower bound" not in reason:
-                has_floor = True
-                print(f"SKIP (dependencies): {reason}")
+            else:
+                skip_reasons.append(reason)
         if any_changed:
             pyproject_path.write_text("".join(lines))
             print("updated=true")
-            return 0
-        if has_floor:
+        else:
+            for r in skip_reasons:
+                print(f"SKIP (dependencies): {r}")
             print("updated=false")
-            return 0
-        # Found in dependencies but no >= floor anywhere — fall through to
-        # add to constraint-dependencies so the version floor is tracked somewhere
+        return 0
 
-    # 3. Not found in constraint-dependencies, and either not in regular deps
-    #    or present without a >= floor — add to constraint-dependencies
+    # 3. Not found anywhere — add to constraint-dependencies
     lines, changed, reason = insert_constraint(lines, args.dependency_name, args.dependency_version)
     if not changed:
         print(f"SKIP: {reason}")

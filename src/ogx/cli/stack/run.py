@@ -39,7 +39,7 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
         "--port",
         type=int,
         help="Port to run the server on. It can also be passed via the env var OGX_PORT.",
-        default=int(os.getenv("OGX_PORT", 8321)),
+        default=None,
     )
     parser.add_argument(
         "--enable-ui",
@@ -60,7 +60,9 @@ def run_stack_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
     from ogx.core.configure import parse_and_maybe_upgrade_config
 
     if args.enable_ui:
-        _start_ui_development_server(args.port)
+        env_port = os.getenv("OGX_PORT")
+        ui_port = args.port or (int(env_port) if env_port else None) or 8321
+        _start_ui_development_server(ui_port)
 
     if args.config:
         try:
@@ -120,7 +122,8 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
         config_contents = yaml.safe_load(fp)
         config = parse_and_maybe_upgrade_config(config_contents)
 
-    port = args.port or config.server.port
+    env_port = os.getenv("OGX_PORT")
+    port = args.port or (int(env_port) if env_port else None) or config.server.port
     workers = config.server.workers
 
     host = ""
