@@ -341,22 +341,6 @@ convention = "google"
 "benchmarking/**/*.py" = ["D101", "S104", "S110", "S311"] # Ignore docstring and security rules for benchmarking scripts
 "client-sdks/**/*.py" = ["D101", "S110", "S112", "S113"] # Ignore docstring and security rules for client SDKs
 "scripts/**/*.py" = ["D101", "S110", "S112", "S603", "S607"] # Ignore docstring and security rules for scripts
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_support.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_core.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_format.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_word_list.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/scoring_fn/fn_defs/regex_parser_multiple_choice_answer.py" = [
-    "RUF001",
-    "PLE2515",
-]
 "src/ogx/apis/**/__init__.py" = [
     "F403",
 ] # Using import * is acceptable (or at least tolerated) in an __init__.py of a package API
@@ -396,17 +380,16 @@ exclude = [
     # All files now have type annotations! 🎉
     #
     # ============================================================================
-    # Section 2: Files that need strict typing issues fixed (109 files)
+    # Section 2: Files that need strict typing issues fixed (91 files)
     # ============================================================================
     # These files have some type hints but fail strict type checking due to
     # incomplete annotations, Any usage, or other strict mode violations.
     #
-    # Core files (4 files)
-    "^src/ogx/core/server/quota\\.py$",
+    # Core files (3 files)
     "^src/ogx/core/server/routes\\.py$",
     "^src/ogx/core/server/server\\.py$",
     "^src/ogx/core/store/registry\\.py$",
-    # CLI files (8 files)
+    # CLI files (7 files)
     "^src/ogx/cli/stack/_list_deps\\.py$",
     "^src/ogx/cli/stack/list_apis\\.py$",
     "^src/ogx/cli/stack/list_deps\\.py$",
@@ -414,12 +397,9 @@ exclude = [
     "^src/ogx/cli/stack/run\\.py$",
     "^src/ogx/cli/stack/utils\\.py$",
     "^src/ogx/cli/subcommand\\.py$",
-    "^src/ogx/cli/utils\\.py$",
-    # Providers - Inline (27 files)
+    # Providers - Inline (22 files)
     "^src/ogx/providers/inline/batches/reference/__init__\\.py$",
     "^src/ogx/providers/inline/batches/reference/batches\\.py$",
-    "^src/ogx/providers/inline/eval/builtin/__init__\\.py$",
-    "^src/ogx/providers/inline/eval/builtin/eval\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/__init__\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/adapter\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/pypdf\\.py$",
@@ -440,10 +420,7 @@ exclude = [
     "^src/ogx/providers/inline/vector_io/qdrant/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/sqlite_vec\\.py$",
-    # Providers - Remote (43 files)
-    "^src/ogx/providers/remote/eval/nvidia/__init__\\.py$",
-    "^src/ogx/providers/remote/eval/nvidia/config\\.py$",
-    "^src/ogx/providers/remote/eval/nvidia/eval\\.py$",
+    # Providers - Remote (40 files)
     "^src/ogx/providers/remote/files/openai/__init__\\.py$",
     "^src/ogx/providers/remote/files/s3/__init__\\.py$",
     "^src/ogx/providers/remote/inference/anthropic/__init__\\.py$",
@@ -484,30 +461,19 @@ exclude = [
     "^src/ogx/providers/remote/vector_io/infinispan/infinispan\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/__init__\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/oci26ai\\.py$",
-    # Providers - Utils (26 files)
+    # Providers - Utils (15 files)
     "^src/ogx/providers/utils/bedrock/client\\.py$",
     "^src/ogx/providers/utils/bedrock/config\\.py$",
     "^src/ogx/providers/utils/bedrock/refreshable_boto_session\\.py$",
-    "^src/ogx/providers/utils/common/data_schema_validator\\.py$",
     "^src/ogx/providers/utils/common/data_url\\.py$",
-    "^src/ogx/providers/utils/datasetio/url_utils\\.py$",
     "^src/ogx/providers/utils/inference/embedding_mixin\\.py$",
     "^src/ogx/providers/utils/inference/inference_store\\.py$",
     "^src/ogx/providers/utils/inference/model_registry\\.py$",
     "^src/ogx/providers/utils/inference/openai_compat\\.py$",
     "^src/ogx/providers/utils/inference/openai_mixin\\.py$",
     "^src/ogx/providers/utils/inference/prompt_adapter\\.py$",
-    "^src/ogx/providers/utils/kvstore/kvstore\\.py$",
-    "^src/ogx/providers/utils/kvstore/postgres/postgres\\.py$",
-    "^src/ogx/providers/utils/kvstore/redis/redis\\.py$",
     "^src/ogx/providers/utils/memory/vector_store\\.py$",
     "^src/ogx/providers/utils/responses/responses_store\\.py$",
-    "^src/ogx/providers/utils/scheduler\\.py$",
-    "^src/ogx/providers/utils/scoring/aggregation_utils\\.py$",
-    "^src/ogx/providers/utils/scoring/base_scoring_fn\\.py$",
-    "^src/ogx/providers/utils/telemetry/dataset_mixin\\.py$",
-    "^src/ogx/providers/utils/telemetry/trace_protocol\\.py$",
-    "^src/ogx/providers/utils/telemetry/tracing\\.py$",
     "^src/ogx/providers/utils/tools/mcp\\.py$",
     "^src/ogx/providers/utils/tools/ttl_dict\\.py$",
     "^src/ogx/providers/utils/vector_io/vector_utils\\.py$",
@@ -519,7 +485,7 @@ exclude = [
     "^src/ogx/testing/api_recorder\\.py$",
     #
     # ============================================================================
-    # Directory Excludes (35 directories)
+    # Directory Excludes (19 directories)
     # ============================================================================
     # These are entire directories excluded from type checking. Files within
     # these directories need to be analyzed individually and moved to Section 1
@@ -528,23 +494,13 @@ exclude = [
     # Core directories
     "^src/ogx/core/routers/",
     "^src/ogx/core/routing_tables/",
-    # Provider directories - Inline
-    "^src/ogx/providers/inline/datasetio/localfs/",
-    "^src/ogx/providers/inline/scoring/basic/",
-    "^src/ogx/providers/inline/scoring/braintrust/",
-    "^src/ogx/providers/inline/scoring/llm_as_judge/",
     # Provider directories - Remote
-    "^src/ogx/providers/remote/agents/sample/",
-    "^src/ogx/providers/remote/datasetio/huggingface/",
-    "^src/ogx/providers/remote/datasetio/nvidia/",
     "^src/ogx/providers/remote/inference/bedrock/",
     "^src/ogx/providers/remote/inference/nvidia/",
     "^src/ogx/providers/remote/inference/oci/",
     "^src/ogx/providers/remote/inference/passthrough/",
     "^src/ogx/providers/remote/inference/runpod/",
-
     "^src/ogx/providers/remote/inference/watsonx/",
-    "^src/ogx/providers/remote/post_training/nvidia/",
     "^src/ogx/providers/remote/tool_runtime/bing_search/",
     "^src/ogx/providers/remote/tool_runtime/brave_search/",
     "^src/ogx/providers/remote/tool_runtime/model_context_protocol/",

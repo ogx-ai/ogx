@@ -31,6 +31,7 @@ You have two ways to install OGX:
 ## `ogx` subcommands
 
 1. `stack`: Allows you to build a stack using the `ogx` distribution and run a OGX server. You can read more about how to build a OGX distribution in the [Build your own Distribution](../../distributions/building_distro) documentation.
+2. `connect`: Connect third-party tools to the running OGX server. Currently supports `opencode`. See [OpenCode Integration](../../building_applications/opencode_integration) for details.
 
 For downloading models, we recommend using the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli). See [Downloading models](#downloading-models) for more information.
 
@@ -41,17 +42,18 @@ llama --help
 ```
 
 ```text
-usage: llama [-h] {stack} ...
+usage: ogx [-h] {stack,connect} ...
 
 Welcome to the OGX CLI
 
 options:
-  -h, --help  show this help message and exit
+  -h, --help      show this help message and exit
 
 subcommands:
-  {stack}
+  {stack,connect}
 
   stack                 Operations for the OGX / Distributions
+  connect               Connect third-party tools to the running OGX server
 ```
 
 ## Downloading models
