@@ -13292,6 +13292,7 @@ components:
       - connectors
       - messages
       - interactions
+      - skills
       - inspect
       - admin
       title: Api
@@ -14689,6 +14690,311 @@ components:
       required:
       - prompt_id
       title: DeletePromptRequest
+      type: object
+    SkillFile:
+      description: A file within a skill bundle.
+      properties:
+        name:
+          description: Relative path within the bundle (e.g., 'analyze.py')
+          title: Name
+          type: string
+        size:
+          description: File size in bytes
+          title: Size
+          type: integer
+        content_type:
+          description: MIME type of the file
+          title: Content Type
+          type: string
+      required:
+      - name
+      - size
+      - content_type
+      title: SkillFile
+      type: object
+    SkillVersion:
+      description: A specific version of a skill.
+      properties:
+        version:
+          description: Version number as a string
+          title: Version
+          type: string
+        skill_id:
+          description: ID of the parent skill
+          title: Skill Id
+          type: string
+        file_manifest:
+          description: List of files in this version
+          items:
+            $ref: '#/components/schemas/SkillFile'
+          title: File Manifest
+          type: array
+        created_at:
+          description: Unix timestamp when this version was created
+          title: Created At
+          type: integer
+      required:
+      - version
+      - skill_id
+      - created_at
+      title: SkillVersion
+      type: object
+    Skill:
+      description: |-
+        A skill resource representing a versioned bundle of code and data.
+
+        Skills are zip archives containing a SKILL.md manifest and supporting files.
+        They are mounted into container filesystems at /mnt/skills/{skill_name}/.
+      properties:
+        id:
+          description: Unique identifier for the skill
+          title: Id
+          type: string
+        object:
+          title: Object
+          type: string
+          enum:
+          - skill
+        name:
+          description: Human-readable name from SKILL.md frontmatter or create request
+          title: Name
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Description of what the skill does
+          nullable: true
+        default_version:
+          default: '1'
+          description: Version used when no version is specified
+          title: Default Version
+          type: string
+        latest_version:
+          default: '1'
+          description: Most recently uploaded version number
+          title: Latest Version
+          type: string
+        created_at:
+          description: Unix timestamp when the skill was created
+          title: Created At
+          type: integer
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional key-value metadata
+          nullable: true
+      required:
+      - id
+      - name
+      - created_at
+      title: Skill
+      type: object
+    SkillCreateRequest:
+      description: Request to create a new skill. Bundle content is provided via multipart form data.
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Skill name (overrides SKILL.md frontmatter)
+          nullable: true
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Skill description (overrides SKILL.md frontmatter)
+          nullable: true
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional key-value metadata
+          nullable: true
+      title: SkillCreateRequest
+      type: object
+    SkillUpdateRequest:
+      description: Request to update a skill's default version.
+      properties:
+        default_version:
+          description: Version number to set as the default
+          title: Default Version
+          type: string
+      required:
+      - default_version
+      title: SkillUpdateRequest
+      type: object
+    SkillDeleteResponse:
+      description: Response from deleting a skill.
+      properties:
+        id:
+          description: ID of the deleted skill
+          title: Id
+          type: string
+        object:
+          title: Object
+          type: string
+          enum:
+          - skill
+        deleted:
+          default: true
+          description: Whether the skill was successfully deleted
+          title: Deleted
+          type: boolean
+      required:
+      - id
+      title: SkillDeleteResponse
+      type: object
+    SkillVersionDeleteResponse:
+      description: Response from deleting a skill version.
+      properties:
+        id:
+          description: ID of the deleted skill
+          title: Id
+          type: string
+        version:
+          description: Version that was deleted
+          title: Version
+          type: string
+        object:
+          title: Object
+          type: string
+          enum:
+          - skill.version
+        deleted:
+          default: true
+          description: Whether the version was successfully deleted
+          title: Deleted
+          type: boolean
+      required:
+      - id
+      - version
+      title: SkillVersionDeleteResponse
+      type: object
+    ListSkillsRequest:
+      description: Request parameters for listing skills.
+      properties:
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Cursor for pagination
+          nullable: true
+        limit:
+          default: 20
+          description: Maximum number of results
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+        order:
+          default: desc
+          description: Sort order by created_at
+          enum:
+          - asc
+          - desc
+          title: Order
+          type: string
+      title: ListSkillsRequest
+      type: object
+    ListSkillsResponse:
+      description: Response from listing skills.
+      properties:
+        object:
+          title: Object
+          type: string
+          enum:
+          - list
+        data:
+          description: List of skill objects
+          items:
+            $ref: '#/components/schemas/Skill'
+          title: Data
+          type: array
+        has_more:
+          default: false
+          description: Whether there are more results
+          title: Has More
+          type: boolean
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the first item in the list
+          nullable: true
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the last item in the list
+          nullable: true
+      required:
+      - data
+      title: ListSkillsResponse
+      type: object
+    ListSkillVersionsRequest:
+      description: Request parameters for listing skill versions.
+      properties:
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Cursor for pagination
+          nullable: true
+        limit:
+          default: 20
+          description: Maximum number of results
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+        order:
+          default: desc
+          description: Sort order by version
+          enum:
+          - asc
+          - desc
+          title: Order
+          type: string
+      title: ListSkillVersionsRequest
+      type: object
+    ListSkillVersionsResponse:
+      description: Response from listing skill versions.
+      properties:
+        object:
+          title: Object
+          type: string
+          enum:
+          - list
+        data:
+          description: List of skill version objects
+          items:
+            $ref: '#/components/schemas/SkillVersion'
+          title: Data
+          type: array
+        has_more:
+          default: false
+          description: Whether there are more results
+          title: Has More
+          type: boolean
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the first item in the list
+          nullable: true
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the last item in the list
+          nullable: true
+      required:
+      - data
+      title: ListSkillVersionsResponse
       type: object
     OpenAIResponseMessageOutputUnion:
       anyOf:
