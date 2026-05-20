@@ -16,14 +16,19 @@ from ogx.providers.inline.messages.config import MessagesConfig
 from ogx.providers.inline.messages.impl import BuiltinMessagesImpl
 from ogx_api.messages.models import (
     AnthropicBase64ImageSource,
+    AnthropicBashTool,
+    AnthropicCacheControl,
     AnthropicCreateMessageRequest,
+    AnthropicCustomToolDef,
     AnthropicImageBlock,
     AnthropicMessage,
     AnthropicTextBlock,
+    AnthropicTextEditorTool,
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
     AnthropicURLImageSource,
+    AnthropicWebSearchTool,
 )
 
 
@@ -282,6 +287,85 @@ class TestRequestTranslation:
         )
         result = impl._anthropic_to_openai(request)
         assert result.model_extra.get("top_k") == 40
+
+    def test_cache_control_on_text_block_parses(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[AnthropicTextBlock(text="Hello", cache_control=AnthropicCacheControl())],
+                )
+            ],
+            max_tokens=100,
+            system=[AnthropicTextBlock(text="You are helpful.", cache_control=AnthropicCacheControl())],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert len(result.messages) == 2
+        assert _msg_to_dict(result.messages[0])["role"] == "system"
+
+    def test_cache_control_on_tool_def_parses(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[
+                AnthropicCustomToolDef(
+                    name="get_weather",
+                    description="Get weather",
+                    input_schema={"type": "object", "properties": {}},
+                    cache_control=AnthropicCacheControl(),
+                )
+            ],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert len(result.tools) == 1
+        assert result.tools[0]["function"]["name"] == "get_weather"
+
+    def test_server_tools_accepted_in_request(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[
+                AnthropicCustomToolDef(
+                    name="get_weather",
+                    input_schema={"type": "object", "properties": {}},
+                ),
+                AnthropicWebSearchTool(),
+                AnthropicBashTool(),
+                AnthropicTextEditorTool(type="text_editor_20250728", name="str_replace_based_edit_tool"),
+            ],
+        )
+        assert len(request.tools) == 4
+
+    def test_server_tools_dropped_in_translation(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[
+                AnthropicCustomToolDef(
+                    name="get_weather",
+                    input_schema={"type": "object", "properties": {}},
+                ),
+                AnthropicWebSearchTool(),
+                AnthropicBashTool(),
+            ],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert len(result.tools) == 1
+        assert result.tools[0]["function"]["name"] == "get_weather"
+
+    def test_only_server_tools_yields_no_tools_in_translation(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[AnthropicWebSearchTool(), AnthropicBashTool()],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.tools is None
 
 
 class TestResponseTranslation:

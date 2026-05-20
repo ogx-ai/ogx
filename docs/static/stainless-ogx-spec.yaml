@@ -10338,6 +10338,37 @@ components:
       - data
       title: AnthropicBase64ImageSource
       description: Base64-encoded image source.
+    AnthropicBashTool:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - bash_20250124
+        name:
+          type: string
+          title: Name
+          enum:
+          - bash
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
+      type: object
+      title: AnthropicBashTool
+      description: Built-in bash tool (bash_20250124).
+    AnthropicCacheControl:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - ephemeral
+      type: object
+      title: AnthropicCacheControl
+      description: Prompt-cache breakpoint marker.
     AnthropicCountTokensRequest:
       properties:
         model:
@@ -10363,7 +10394,25 @@ components:
         tools:
           anyOf:
           - items:
-              $ref: '#/components/schemas/AnthropicToolDef'
+              oneOf:
+              - $ref: '#/components/schemas/AnthropicCustomToolDef'
+                title: AnthropicCustomToolDef
+              - $ref: '#/components/schemas/AnthropicWebSearchTool'
+                title: AnthropicWebSearchTool
+              - $ref: '#/components/schemas/AnthropicBashTool'
+                title: AnthropicBashTool
+              - $ref: '#/components/schemas/AnthropicTextEditorTool'
+                title: AnthropicTextEditorTool
+              discriminator:
+                propertyName: type
+                mapping:
+                  bash_20250124: '#/components/schemas/AnthropicBashTool'
+                  custom: '#/components/schemas/AnthropicCustomToolDef'
+                  text_editor_20250124: '#/components/schemas/AnthropicTextEditorTool'
+                  text_editor_20250429: '#/components/schemas/AnthropicTextEditorTool'
+                  text_editor_20250728: '#/components/schemas/AnthropicTextEditorTool'
+                  web_search_20250305: '#/components/schemas/AnthropicWebSearchTool'
+              title: AnthropicCustomToolDef | ... (4 variants)
             type: array
           - type: 'null'
           description: Tools to include in token count.
@@ -10412,7 +10461,25 @@ components:
           description: System prompt. A string or list of text blocks.
         tools:
           items:
-            $ref: '#/components/schemas/AnthropicToolDef'
+            oneOf:
+            - $ref: '#/components/schemas/AnthropicCustomToolDef'
+              title: AnthropicCustomToolDef
+            - $ref: '#/components/schemas/AnthropicWebSearchTool'
+              title: AnthropicWebSearchTool
+            - $ref: '#/components/schemas/AnthropicBashTool'
+              title: AnthropicBashTool
+            - $ref: '#/components/schemas/AnthropicTextEditorTool'
+              title: AnthropicTextEditorTool
+            discriminator:
+              propertyName: type
+              mapping:
+                bash_20250124: '#/components/schemas/AnthropicBashTool'
+                custom: '#/components/schemas/AnthropicCustomToolDef'
+                text_editor_20250124: '#/components/schemas/AnthropicTextEditorTool'
+                text_editor_20250429: '#/components/schemas/AnthropicTextEditorTool'
+                text_editor_20250728: '#/components/schemas/AnthropicTextEditorTool'
+                web_search_20250305: '#/components/schemas/AnthropicWebSearchTool'
+            title: AnthropicCustomToolDef | ... (4 variants)
           type: array
           title: Tools
           description: Tools available to the model.
@@ -10468,6 +10535,37 @@ components:
       - max_tokens
       title: AnthropicCreateMessageRequest
       description: Request body for POST /v1/messages.
+    AnthropicCustomToolDef:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - custom
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+        input_schema:
+          additionalProperties: true
+          type: object
+          title: Input Schema
+          description: JSON Schema for the tool's input.
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
+      type: object
+      required:
+      - name
+      - input_schema
+      title: AnthropicCustomToolDef
+      description: Definition of a custom (function-calling) tool.
     AnthropicImageBlock:
       properties:
         type:
@@ -10487,6 +10585,12 @@ components:
             mapping:
               base64: '#/components/schemas/AnthropicBase64ImageSource'
               url: '#/components/schemas/AnthropicURLImageSource'
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
       type: object
       required:
       - source
@@ -10606,11 +10710,45 @@ components:
         text:
           type: string
           title: Text
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
       type: object
       required:
       - text
       title: AnthropicTextBlock
       description: A text content block.
+    AnthropicTextEditorTool:
+      properties:
+        type:
+          type: string
+          enum:
+          - text_editor_20250124
+          - text_editor_20250429
+          - text_editor_20250728
+          title: Type
+        name:
+          type: string
+          title: Name
+        max_characters:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
+      type: object
+      required:
+      - type
+      - name
+      title: AnthropicTextEditorTool
+      description: Built-in text editor tool (all versions).
     AnthropicThinkingBlock:
       properties:
         type:
@@ -10627,6 +10765,12 @@ components:
           - type: string
           - type: 'null'
           description: Signature for the thinking block.
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
       type: object
       required:
       - thinking
@@ -10651,26 +10795,6 @@ components:
       type: object
       title: AnthropicThinkingConfig
       description: Configuration for extended thinking.
-    AnthropicToolDef:
-      properties:
-        name:
-          type: string
-          title: Name
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-        input_schema:
-          additionalProperties: true
-          type: object
-          title: Input Schema
-          description: JSON Schema for the tool's input.
-      type: object
-      required:
-      - name
-      - input_schema
-      title: AnthropicToolDef
-      description: Definition of a tool available to the model.
     AnthropicToolResultBlock-Input:
       properties:
         type:
@@ -10702,6 +10826,12 @@ components:
           - type: boolean
           - type: 'null'
           description: Whether the tool call resulted in an error.
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
       type: object
       required:
       - tool_use_id
@@ -10738,6 +10868,12 @@ components:
           - type: boolean
           - type: 'null'
           description: Whether the tool call resulted in an error.
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
       type: object
       required:
       - tool_use_id
@@ -10763,6 +10899,12 @@ components:
           type: object
           title: Input
           description: Tool input arguments.
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
       type: object
       required:
       - id
@@ -10807,6 +10949,49 @@ components:
       type: object
       title: AnthropicUsage
       description: Token usage statistics.
+    AnthropicWebSearchTool:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - web_search_20250305
+        name:
+          type: string
+          title: Name
+          enum:
+          - web_search
+        max_uses:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        allowed_domains:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+        blocked_domains:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+        user_location:
+          anyOf:
+          - $ref: '#/components/schemas/_WebSearchUserLocation'
+            title: _WebSearchUserLocation
+          - type: 'null'
+          title: _WebSearchUserLocation
+        cache_control:
+          anyOf:
+          - $ref: '#/components/schemas/AnthropicCacheControl'
+            title: AnthropicCacheControl
+          - type: 'null'
+          title: AnthropicCacheControl
+      type: object
+      title: AnthropicWebSearchTool
+      description: Built-in web search tool (web_search_20250305).
     ApprovalFilter:
       properties:
         always:
@@ -13585,6 +13770,31 @@ components:
       type: object
       title: _URLOrData
       description: A URL or a base64 encoded string
+    _WebSearchUserLocation:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - approximate
+        city:
+          anyOf:
+          - type: string
+          - type: 'null'
+        country:
+          anyOf:
+          - type: string
+          - type: 'null'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+        timezone:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      title: _WebSearchUserLocation
     GreedySamplingStrategy:
       description: Greedy sampling strategy that selects the highest probability token at each step.
       properties:

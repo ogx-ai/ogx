@@ -42,13 +42,14 @@ from ogx_api.messages.models import (
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
     AnthropicCreateMessageRequest,
+    AnthropicCustomToolDef,
     AnthropicImageBlock,
     AnthropicMessage,
     AnthropicMessageResponse,
     AnthropicStreamEvent,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
-    AnthropicToolDef,
+    AnthropicTool,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
     AnthropicURLImageSource,
@@ -722,18 +723,23 @@ class BuiltinMessagesImpl(Messages):
 
         return msg
 
-    def _convert_tools_to_openai(self, tools: list[AnthropicToolDef]) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "parameters": tool.input_schema,
-                },
-            }
-            for tool in tools
-        ]
+    def _convert_tools_to_openai(self, tools: list[AnthropicTool]) -> list[dict[str, Any]] | None:
+        result = []
+        for tool in tools:
+            if not isinstance(tool, AnthropicCustomToolDef):
+                logger.debug("Dropping server-side tool in translation mode", tool_type=tool.type)
+                continue
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": tool.input_schema,
+                    },
+                }
+            )
+        return result or None
 
     def _convert_tool_choice_to_openai(self, tool_choice: Any) -> Any:
         if isinstance(tool_choice, str):
