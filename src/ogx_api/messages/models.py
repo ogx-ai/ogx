@@ -31,12 +31,27 @@ class AnthropicTextBlock(BaseModel):
     text: str
 
 
-class AnthropicImageSource(BaseModel):
-    """Source for an image content block."""
+class AnthropicBase64ImageSource(BaseModel):
+    """Base64-encoded image source."""
 
     type: Literal["base64"] = "base64"
-    media_type: str = Field(..., description="MIME type of the image (e.g. image/png).")
+    media_type: Literal["image/jpeg", "image/png", "image/gif", "image/webp"] = Field(
+        ..., description="MIME type of the image."
+    )
     data: str = Field(..., description="Base64-encoded image data.")
+
+
+class AnthropicURLImageSource(BaseModel):
+    """URL image source."""
+
+    type: Literal["url"] = "url"
+    url: str = Field(..., description="URL of the image.")
+
+
+AnthropicImageSource = Annotated[
+    AnthropicBase64ImageSource | AnthropicURLImageSource,
+    Field(discriminator="type"),
+]
 
 
 class AnthropicImageBlock(BaseModel):
