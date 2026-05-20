@@ -1,5 +1,5 @@
-import type { FileContentResponse } from "llama-stack-client/resources/vector-stores/files";
-import type { LlamaStackClient } from "llama-stack-client";
+import type { FileContentResponse } from "ogx-client/resources/vector-stores/files";
+import type { OgxClient } from "ogx-client";
 
 export type VectorStoreContent = FileContentResponse.Content;
 export type VectorStoreContentsResponse = FileContentResponse;
@@ -30,7 +30,7 @@ export interface VectorStoreListContentsResponse {
 }
 
 export class ContentsAPI {
-  constructor(private client: LlamaStackClient) {}
+  constructor(private client: OgxClient) {}
 
   async getFileContents(
     vectorStoreId: string,
@@ -108,32 +108,25 @@ export class ContentsAPI {
     );
     const contentItems: VectorStoreContentItem[] = [];
 
-    fileContents.content.forEach((content, contentIndex) => {
-      const rawContent = content as Record<string, unknown>;
-
-      // Extract actual fields from the API response
-      const embedding = rawContent.embedding as number[] | undefined;
-      const created_timestamp =
-        rawContent.created_timestamp ||
-        rawContent.created_at ||
-        Date.now() / 1000;
-      const chunkMetadata = rawContent.chunk_metadata || {};
+    (fileContents.data ?? []).forEach((item, contentIndex) => {
+      const raw = item as Record<string, unknown>;
+      const chunkMeta = (raw.chunk_metadata ?? {}) as Record<string, unknown>;
       const contentId =
-        rawContent.chunk_metadata?.chunk_id ||
-        rawContent.id ||
-        `content_${fileId}_${contentIndex}`;
-      const objectType = rawContent.object || "vector_store.file.content";
+        chunkMeta.chunk_id || raw.id || `content_${fileId}_${contentIndex}`;
       contentItems.push({
-        id: contentId,
-        object: objectType,
-        created_timestamp: created_timestamp,
+        id: contentId as string,
+        object: (raw.object as string) || "vector_store.file.content",
+        created_timestamp:
+          (raw.created_timestamp as number) ||
+          (raw.created_at as number) ||
+          Date.now() / 1000,
         vector_store_id: vectorStoreId,
         file_id: fileId,
-        content: content,
-        embedding: embedding,
+        content: item,
+        embedding: raw.embedding as number[] | undefined,
         metadata: {
-          ...chunkMetadata, // chunk_metadata fields from API
-          content_length: content.type === "text" ? content.text.length : 0,
+          ...chunkMeta,
+          content_length: item.type === "text" ? item.text.length : 0,
         },
       });
     });

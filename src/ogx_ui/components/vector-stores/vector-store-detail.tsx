@@ -2,13 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import type { VectorStore } from "llama-stack-client/resources/vector-stores/vector-stores";
-import type { VectorStoreFile } from "llama-stack-client/resources/vector-stores/files";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
+import type { VectorStoreFile } from "ogx-client/resources/vector-stores/files";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import { Edit2, Trash2, X } from "lucide-react";
+import { Edit2, Plus, Trash2, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   DetailLoadingView,
   DetailErrorView,
@@ -35,6 +36,7 @@ interface VectorStoreDetailViewProps {
   errorStore: Error | null;
   errorFiles: Error | null;
   id: string;
+  onFilesChanged?: () => void;
 }
 
 export function VectorStoreDetailView({
@@ -45,6 +47,7 @@ export function VectorStoreDetailView({
   errorStore,
   errorFiles,
   id,
+  onFilesChanged,
 }: VectorStoreDetailViewProps) {
   const router = useRouter();
   const client = useAuthClient();
@@ -52,6 +55,12 @@ export function VectorStoreDetailView({
   const [showEditModal, setShowEditModal] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [showSuccessState, setShowSuccessState] = useState(false);
+
+  // Attach file state
+  const [attachFileId, setAttachFileId] = useState("");
+  const [isAttaching, setIsAttaching] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachSuccess, setAttachSuccess] = useState<string | null>(null);
 
   // Handle ESC key to close modal
   useEffect(() => {
@@ -85,28 +94,16 @@ export function VectorStoreDetailView({
     try {
       setModalError(null);
 
-      // Update existing vector store (same logic as list page)
-      const updateParams: {
-        name?: string;
-        extra_body?: Record<string, unknown>;
-      } = {};
+      const updateParams: Record<string, unknown> = {};
 
-      // Only include fields that have changed or are provided
       if (formData.name && formData.name !== store?.name) {
         updateParams.name = formData.name;
       }
-
-      // Add all parameters to extra_body (except provider_id which can't be changed)
-      const extraBody: Record<string, unknown> = {};
       if (formData.embedding_model) {
-        extraBody.embedding_model = formData.embedding_model;
+        updateParams.embedding_model = formData.embedding_model;
       }
       if (formData.embedding_dimension) {
-        extraBody.embedding_dimension = formData.embedding_dimension;
-      }
-
-      if (Object.keys(extraBody).length > 0) {
-        updateParams.extra_body = extraBody;
+        updateParams.embedding_dimension = formData.embedding_dimension;
       }
 
       await client.vectorStores.update(id, updateParams);
@@ -148,6 +145,29 @@ export function VectorStoreDetailView({
     }
   };
 
+  const handleAttachFile = async () => {
+    const trimmedId = attachFileId.trim();
+    if (!trimmedId) return;
+
+    setIsAttaching(true);
+    setAttachError(null);
+    setAttachSuccess(null);
+
+    try {
+      await client.vectorStores.files.create(id, { file_id: trimmedId });
+      setAttachSuccess(`File ${trimmedId} attached successfully.`);
+      setAttachFileId("");
+      onFilesChanged?.();
+    } catch (err: unknown) {
+      console.error("Failed to attach file:", err);
+      setAttachError(
+        err instanceof Error ? err.message : "Failed to attach file"
+      );
+    } finally {
+      setIsAttaching(false);
+    }
+  };
+
   if (errorStore) {
     return (
       <DetailErrorView
@@ -168,9 +188,109 @@ export function VectorStoreDetailView({
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Files</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Files</CardTitle>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Attach File */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Attach File</label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter file ID to attach..."
+                value={attachFileId}
+                onChange={e => {
+                  setAttachFileId(e.target.value);
+                  setAttachError(null);
+                  setAttachSuccess(null);
+                }}
+                disabled={isAttaching}
+                className="flex-1 font-mono text-sm"
+                onKeyDown={e => {
+                  if (e.key === "Enter") handleAttachFile();
+                }}
+              />
+              <Button
+                onClick={handleAttachFile}
+                disabled={!attachFileId.trim() || isAttaching}
+                size="sm"
+              >
+                {isAttaching ? (
+                  <>
+                    <svg
+                      className="animate-spin h-4 w-4 mr-1"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      />
+                    </svg>
+                    Attaching...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Attach
+                  </>
+                )}
+              </Button>
+            </div>
+            {isAttaching && (
+              <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                <svg
+                  className="animate-spin h-3 w-3 text-muted-foreground"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+                <p className="text-xs text-muted-foreground">
+                  Processing file — chunking and computing embeddings...
+                </p>
+              </div>
+            )}
+            {attachError && (
+              <p className="text-destructive text-xs">{attachError}</p>
+            )}
+            {attachSuccess && (
+              <p className="text-green-600 dark:text-green-400 text-xs">
+                {attachSuccess}
+              </p>
+            )}
+            {!isAttaching && !attachError && !attachSuccess && (
+              <p className="text-xs text-muted-foreground">
+                Upload files via the Files page first, then attach them here by
+                ID.
+              </p>
+            )}
+          </div>
+
           {isLoadingFiles ? (
             <Skeleton className="h-4 w-full" />
           ) : errorFiles ? (

@@ -68,7 +68,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Parsed: $dep_name $dep_version"
 
-      - name: Update constraint-dependencies in pyproject.toml
+      - name: Update dependency version floors in pyproject.toml
         if: steps.parse.outputs.skip != 'true'
         id: update
         env:
