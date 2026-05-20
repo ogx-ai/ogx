@@ -9837,6 +9837,32 @@ components:
       type: object
       title: AllowedToolsFilter
       description: Filter configuration for restricting which MCP tools can be used.
+    AnthropicBase64ImageSource:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - base64
+        media_type:
+          type: string
+          enum:
+          - image/jpeg
+          - image/png
+          - image/gif
+          - image/webp
+          title: Media Type
+          description: MIME type of the image.
+        data:
+          type: string
+          title: Data
+          description: Base64-encoded image data.
+      type: object
+      required:
+      - media_type
+      - data
+      title: AnthropicBase64ImageSource
+      description: Base64-encoded image source.
     AnthropicCountTokensRequest:
       properties:
         model:
@@ -9975,33 +10001,22 @@ components:
           enum:
           - image
         source:
-          $ref: '#/components/schemas/AnthropicImageSource'
+          oneOf:
+          - $ref: '#/components/schemas/AnthropicBase64ImageSource'
+            title: AnthropicBase64ImageSource
+          - $ref: '#/components/schemas/AnthropicURLImageSource'
+            title: AnthropicURLImageSource
+          title: AnthropicBase64ImageSource | AnthropicURLImageSource
+          discriminator:
+            propertyName: type
+            mapping:
+              base64: '#/components/schemas/AnthropicBase64ImageSource'
+              url: '#/components/schemas/AnthropicURLImageSource'
       type: object
       required:
       - source
       title: AnthropicImageBlock
       description: An image content block.
-    AnthropicImageSource:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - base64
-        media_type:
-          type: string
-          title: Media Type
-          description: MIME type of the image (e.g. image/png).
-        data:
-          type: string
-          title: Data
-          description: Base64-encoded image data.
-      type: object
-      required:
-      - media_type
-      - data
-      title: AnthropicImageSource
-      description: Source for an image content block.
     AnthropicMessage:
       properties:
         role:
@@ -10280,6 +10295,22 @@ components:
       - input
       title: AnthropicToolUseBlock
       description: A tool use content block in an assistant message.
+    AnthropicURLImageSource:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - url
+        url:
+          type: string
+          title: Url
+          description: URL of the image.
+      type: object
+      required:
+      - url
+      title: AnthropicURLImageSource
+      description: URL image source.
     AnthropicUsage:
       properties:
         input_tokens:

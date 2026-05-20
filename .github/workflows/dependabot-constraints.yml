@@ -52,8 +52,8 @@ jobs:
 
           # Extract dependency-name and dependency-version from the structured
           # updated-dependencies block in the Dependabot commit message
-          dep_name=$(echo "$commit_msg" | grep -oP '(?<=dependency-name: ).+' | head -1 | tr -d '[:space:]')
-          dep_version=$(echo "$commit_msg" | grep -oP '(?<=dependency-version: ).+' | head -1 | tr -d '[:space:]')
+          dep_name=$(echo "$commit_msg" | grep -oP '(?<=dependency-name: ).+' | head -1 | tr -d "[:space:]'\"")
+          dep_version=$(echo "$commit_msg" | grep -oP '(?<=dependency-version: ).+' | head -1 | tr -d "[:space:]'\"")
 
           if [ -z "$dep_name" ] || [ -z "$dep_version" ]; then
             echo "Could not parse dependency info from commit message"
