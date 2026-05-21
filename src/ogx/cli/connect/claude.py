@@ -45,7 +45,7 @@ class ConnectClaude(Subcommand):
             "--model",
             type=str,
             default=None,
-            help="Model ID to map to all Claude tiers (haiku/sonnet/opus). If omitted, the first available model is used.",
+            help="Model ID to map to all Claude tiers (haiku/sonnet/opus). If omitted, tiers are auto-detected from available models.",
         )
         self.parser.add_argument(
             "--haiku-model",
@@ -65,17 +65,12 @@ class ConnectClaude(Subcommand):
             default=None,
             help="Model ID for the opus (capable) tier. Overrides --model for this tier.",
         )
+        default_port = os.getenv("OGX_PORT", "8321")
         self.parser.add_argument(
-            "--port",
-            type=int,
-            help="OGX server port.",
-            default=int(os.getenv("OGX_PORT", 8321)),
-        )
-        self.parser.add_argument(
-            "--host",
+            "--url",
             type=str,
-            default="localhost",
-            help="OGX server host.",
+            default=f"http://localhost:{default_port}",
+            help="OGX server URL.",
         )
         self.parser.add_argument(
             "--print-env",
@@ -98,8 +93,8 @@ class ConnectClaude(Subcommand):
             )
             sys.exit(1)
 
-        api_url = f"http://{args.host}:{args.port}/v1"
-        base_url = f"http://{args.host}:{args.port}"
+        base_url = args.url.rstrip("/")
+        api_url = f"{base_url}/v1"
 
         models = self._fetch_models(api_url)
         if not models:
@@ -179,14 +174,15 @@ class ConnectClaude(Subcommand):
         available_models: list[str],
     ) -> dict[str, str]:
         mapping: dict[str, str] = {}
+        auto_detected = _detect_tier_models(available_models)
         tiers = [
-            ("ANTHROPIC_DEFAULT_HAIKU_MODEL", haiku_model),
-            ("ANTHROPIC_DEFAULT_SONNET_MODEL", sonnet_model),
-            ("ANTHROPIC_DEFAULT_OPUS_MODEL", opus_model),
+            ("ANTHROPIC_DEFAULT_HAIKU_MODEL", haiku_model, "haiku"),
+            ("ANTHROPIC_DEFAULT_SONNET_MODEL", sonnet_model, "sonnet"),
+            ("ANTHROPIC_DEFAULT_OPUS_MODEL", opus_model, "opus"),
         ]
 
-        for env_var, tier_model in tiers:
-            resolved = tier_model or model or available_models[0]
+        for env_var, tier_model, tier_name in tiers:
+            resolved = tier_model or model or auto_detected.get(tier_name) or available_models[0]
             if resolved not in available_models:
                 cprint(
                     f"Failed to find model '{resolved}' on the OGX server.\n"
@@ -207,6 +203,16 @@ class ConnectClaude(Subcommand):
         for key in _VARS_TO_UNSET:
             env.pop(key, None)
         return env
+
+
+def _detect_tier_models(available_models: list[str]) -> dict[str, str]:
+    """Match available models to Claude tiers by looking for tier keywords in model names."""
+    detected: dict[str, str] = {}
+    for tier in ("haiku", "sonnet", "opus"):
+        matches = [m for m in available_models if tier in m.lower()]
+        if matches:
+            detected[tier] = matches[0]
+    return detected
 
 
 def _strip_leading_separator(args: list[str]) -> list[str]:

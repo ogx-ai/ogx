@@ -13,7 +13,7 @@ import httpx
 import pytest
 from openai import APIConnectionError, APIStatusError
 
-from ogx.cli.connect.claude import ConnectClaude, _strip_leading_separator
+from ogx.cli.connect.claude import ConnectClaude, _detect_tier_models, _strip_leading_separator
 
 
 @pytest.fixture
@@ -40,8 +40,7 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 class TestArguments:
     def test_defaults(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args([])
-        assert args.port == 8321
-        assert args.host == "localhost"
+        assert args.url == "http://localhost:8321"
         assert args.model is None
         assert args.haiku_model is None
         assert args.sonnet_model is None
@@ -49,13 +48,9 @@ class TestArguments:
         assert args.print_env is False
         assert args.claude_args == []
 
-    def test_port_override(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--port", "9000"])
-        assert args.port == 9000
-
-    def test_host_override(self, connect_claude: ConnectClaude) -> None:
-        args = connect_claude.parser.parse_args(["--host", "0.0.0.0"])
-        assert args.host == "0.0.0.0"
+    def test_url_override(self, connect_claude: ConnectClaude) -> None:
+        args = connect_claude.parser.parse_args(["--url", "https://ogx.example.com"])
+        assert args.url == "https://ogx.example.com"
 
     def test_model_override(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args(["--model", "gpt-4o"])
@@ -77,12 +72,12 @@ class TestArguments:
         args = connect_claude.parser.parse_args(["--print-env"])
         assert args.print_env is True
 
-    def test_port_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OGX_PORT", "9999")
         subparsers = argparse.ArgumentParser().add_subparsers()
         instance = ConnectClaude(subparsers)
         args = instance.parser.parse_args([])
-        assert args.port == 9999
+        assert args.url == "http://localhost:9999"
 
     def test_claude_args_after_separator(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args(["--", "-p", "hello world"])
@@ -151,7 +146,7 @@ class TestServerProbe:
 
 
 class TestModelMapping:
-    def test_all_tiers_default_to_first_model(self, connect_claude: ConnectClaude) -> None:
+    def test_all_tiers_default_to_first_model_when_no_keywords(self, connect_claude: ConnectClaude) -> None:
         mapping = connect_claude._resolve_model_mapping(
             model=None,
             haiku_model=None,
@@ -162,6 +157,30 @@ class TestModelMapping:
         assert mapping["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "gpt-4o"
         assert mapping["ANTHROPIC_DEFAULT_SONNET_MODEL"] == "gpt-4o"
         assert mapping["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "gpt-4o"
+
+    def test_auto_detects_tiers_from_model_names(self, connect_claude: ConnectClaude) -> None:
+        mapping = connect_claude._resolve_model_mapping(
+            model=None,
+            haiku_model=None,
+            sonnet_model=None,
+            opus_model=None,
+            available_models=["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"],
+        )
+        assert mapping["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "claude-haiku-4-5"
+        assert mapping["ANTHROPIC_DEFAULT_SONNET_MODEL"] == "claude-sonnet-4-6"
+        assert mapping["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "claude-opus-4-7"
+
+    def test_auto_detects_partial_tiers(self, connect_claude: ConnectClaude) -> None:
+        mapping = connect_claude._resolve_model_mapping(
+            model=None,
+            haiku_model=None,
+            sonnet_model=None,
+            opus_model=None,
+            available_models=["claude-sonnet-4-6", "llama-3.3-70b"],
+        )
+        assert mapping["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "claude-sonnet-4-6"
+        assert mapping["ANTHROPIC_DEFAULT_SONNET_MODEL"] == "claude-sonnet-4-6"
+        assert mapping["ANTHROPIC_DEFAULT_OPUS_MODEL"] == "claude-sonnet-4-6"
 
     def test_model_flag_sets_all_tiers(self, connect_claude: ConnectClaude) -> None:
         mapping = connect_claude._resolve_model_mapping(
@@ -283,6 +302,34 @@ class TestPrintEnv:
         assert "unset CLAUDE_CODE_USE_VERTEX" in output
         assert "unset CLAUDE_CODE_USE_BEDROCK" in output
 
+    def test_prints_https_url(self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]) -> None:
+        args = connect_claude.parser.parse_args(
+            ["--print-env", "--url", "https://ogx.example.com", "--model", "gpt-4o"]
+        )
+        mock_client = _make_mock_client([_make_model("gpt-4o")])
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            connect_claude._run_connect_claude_cmd(args)
+
+        output = capsys.readouterr().out
+        assert "export ANTHROPIC_BASE_URL=https://ogx.example.com" in output
+
+    def test_auto_detects_models_in_print_env(
+        self, connect_claude: ConnectClaude, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        args = connect_claude.parser.parse_args(["--print-env"])
+        mock_client = _make_mock_client(
+            [_make_model("claude-haiku-4-5"), _make_model("claude-sonnet-4-6"), _make_model("claude-opus-4-7")]
+        )
+
+        with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
+            connect_claude._run_connect_claude_cmd(args)
+
+        output = capsys.readouterr().out
+        assert "export ANTHROPIC_DEFAULT_HAIKU_MODEL=claude-haiku-4-5" in output
+        assert "export ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-4-6" in output
+        assert "export ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-7" in output
+
     def test_does_not_launch_subprocess(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args(["--print-env", "--model", "gpt-4o"])
         mock_client = _make_mock_client([_make_model("gpt-4o")])
@@ -355,6 +402,28 @@ class TestConnect:
             with pytest.raises(SystemExit) as exc_info:
                 connect_claude._run_connect_claude_cmd(args)
             assert exc_info.value.code == 42
+
+
+class TestDetectTierModels:
+    def test_detects_all_tiers(self) -> None:
+        result = _detect_tier_models(["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"])
+        assert result == {"haiku": "claude-haiku-4-5", "sonnet": "claude-sonnet-4-6", "opus": "claude-opus-4-7"}
+
+    def test_detects_partial_tiers(self) -> None:
+        result = _detect_tier_models(["claude-sonnet-4-6", "llama-3.3-70b"])
+        assert result == {"sonnet": "claude-sonnet-4-6"}
+
+    def test_no_matches(self) -> None:
+        result = _detect_tier_models(["gpt-4o", "llama-3.3-70b"])
+        assert result == {}
+
+    def test_picks_first_match_per_tier(self) -> None:
+        result = _detect_tier_models(["claude-haiku-4-5", "claude-haiku-4-5-20251001"])
+        assert result == {"haiku": "claude-haiku-4-5"}
+
+    def test_case_insensitive(self) -> None:
+        result = _detect_tier_models(["Claude-Haiku-4-5"])
+        assert result == {"haiku": "Claude-Haiku-4-5"}
 
 
 class TestStripLeadingSeparator:
