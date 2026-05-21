@@ -16,6 +16,7 @@ from ._schema_output import (
     _apply_legacy_sorting,
     _dedupe_create_response_request_input_union_for_stainless,
     _extract_duplicate_union_types,
+    _fix_compact_request_schema,
     _write_yaml_file,
     validate_openapi_schema,
 )
@@ -986,5 +987,8 @@ def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         for schema_name, schema_def in openapi_schema["components"]["schemas"].items():
             _fix_schema_recursive(schema_def)
             _add_titles_to_unions(schema_def, schema_name)
+
+    # Run compact transforms AFTER titles are added so the new oneOf wrapper stays title-free.
+    _fix_compact_request_schema(openapi_schema)
 
     return openapi_schema

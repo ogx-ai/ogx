@@ -59,7 +59,7 @@ paths:
           title: Limit
         description: Maximum number of batches to return. Defaults to 20.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -103,7 +103,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateBatchRequest'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -152,7 +152,7 @@ paths:
           title: Batch Id
         description: The ID of the batch to retrieve.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -197,7 +197,7 @@ paths:
           title: Batch Id
         description: The ID of the batch to cancel.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -276,7 +276,7 @@ paths:
           title: Order
         description: 'The order to sort the chat completions by: "asc" or "desc". Defaults to "desc".'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -320,7 +320,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIChatCompletionRequestWithExtraBody'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -370,7 +370,7 @@ paths:
           title: Completion Id
         description: ID of the chat completion.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -415,7 +415,7 @@ paths:
               $ref: '#/components/schemas/OpenAICompletionRequestWithExtraBody'
         required: true
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -690,7 +690,7 @@ paths:
               schema:
                 oneOf:
                 - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+                - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
                 - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                 - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
                 - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -704,7 +704,7 @@ paths:
                   propertyName: type
                   mapping:
                     message: '#/components/schemas/OpenAIResponseMessage-Output'
-                    web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+                    web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
                     file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                     function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
                     function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -834,7 +834,7 @@ paths:
               $ref: '#/components/schemas/OpenAIEmbeddingsRequestWithExtraBody'
         required: true
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -916,7 +916,7 @@ paths:
           title: Purpose
         description: Filter files by purpose.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -958,7 +958,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Body_upload_file_v1_files_post'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1006,7 +1006,7 @@ paths:
           title: File Id
         description: The ID of the file to retrieve.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1050,7 +1050,7 @@ paths:
           title: File Id
         description: The ID of the file to delete.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1095,7 +1095,7 @@ paths:
           title: File Id
         description: The ID of the file to retrieve content from.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1271,7 +1271,7 @@ paths:
           - type: 'null'
           title: X-Goog-Api-Client
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1281,34 +1281,6 @@ paths:
           models = client.models.list()
           for model in models:
               print(model.id)
-      - lang: Anthropic
-        label: Anthropic
-        source: |-
-          from anthropic import Anthropic
-
-          client = Anthropic(
-              base_url="http://localhost:8321/v1",
-              api_key="fake",
-          )
-
-          models = client.models.list()
-          for model in models:
-              print(model.id)
-      - lang: Google
-        label: Google
-        source: |-
-          from google import genai
-          from google.genai import types
-
-          client = genai.Client(
-              api_key="fake",
-              http_options=types.HttpOptions(
-                  base_url="http://localhost:8321",
-                  api_version="v1",
-              ),
-          )
-          for model in client.models.list():
-              print(model.name)
   /v1/models/{model_id}:
     get:
       responses:
@@ -1383,7 +1355,7 @@ paths:
           - type: 'null'
           title: X-Goog-Api-Client
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1392,33 +1364,6 @@ paths:
 
           model = client.models.retrieve("meta-llama/Llama-3.1-8B-Instruct")
           print(model)
-      - lang: Anthropic
-        label: Anthropic
-        source: |-
-          from anthropic import Anthropic
-
-          client = Anthropic(
-              base_url="http://localhost:8321/v1",
-              api_key="fake",
-          )
-
-          model = client.models.retrieve("openai/gpt-4o")
-          print(model.id)
-      - lang: Google
-        label: Google
-        source: |-
-          from google import genai
-          from google.genai import types
-
-          client = genai.Client(
-              api_key="fake",
-              http_options=types.HttpOptions(
-                  base_url="http://localhost:8321",
-                  api_version="v1",
-              ),
-          )
-          model = client.models.get(model="openai/gpt-4o")
-          print(model.name)
   /v1/prompts:
     get:
       responses:
@@ -1798,7 +1743,7 @@ paths:
           title: Order
         description: The order to sort responses by when sorted by created_at ('asc' or 'desc').
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1851,7 +1796,7 @@ paths:
             title: Guardrails
             description: Enable content moderation via the configured moderation_endpoint.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1899,7 +1844,7 @@ paths:
           title: Response Id
         description: The ID of the OpenAI response to retrieve.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1943,7 +1888,7 @@ paths:
           title: Response Id
         description: The ID of the OpenAI response to delete.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2042,7 +1987,7 @@ paths:
           title: Order
         description: The order to return the input items in.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2221,7 +2166,7 @@ paths:
           title: Before
         description: Pagination cursor (before).
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2263,7 +2208,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAICreateVectorStoreRequestWithExtraBody'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2310,7 +2255,7 @@ paths:
           title: Vector Store Id
         description: The vector store identifier.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2360,7 +2305,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIUpdateVectorStoreRequest'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2407,7 +2352,7 @@ paths:
           title: Vector Store Id
         description: The vector store identifier.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2458,7 +2403,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAICreateVectorStoreFileBatchRequestWithExtraBody'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2514,7 +2459,7 @@ paths:
           title: Batch Id
         description: The file batch identifier.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2570,7 +2515,7 @@ paths:
           title: Batch Id
         description: The file batch identifier.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2680,7 +2625,7 @@ paths:
           title: Order
         description: 'Sort order by created_at: asc or desc.'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2788,7 +2733,7 @@ paths:
           title: Filter
         description: Filter by file status.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2839,7 +2784,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIAttachFileRequest'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2895,7 +2840,7 @@ paths:
           title: File Id
         description: The file identifier.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2998,7 +2943,7 @@ paths:
           title: File Id
         description: The file identifier.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3076,7 +3021,7 @@ paths:
           title: Include Metadata
         description: Include chunk metadata.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3130,7 +3075,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAISearchVectorStoreRequest'
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3243,7 +3188,7 @@ paths:
           title: Response Id
         description: The ID of the OpenAI response to cancel.
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3320,7 +3265,7 @@ paths:
           title: Order
         description: Sort order for messages by timestamp. Use "asc" or "desc". Defaults to "asc".
       x-codeSamples:
-      - lang: OpenAI
+      - lang: Python
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3363,8 +3308,8 @@ paths:
               $ref: '#/components/schemas/AnthropicCreateMessageRequest'
         required: true
       x-codeSamples:
-      - lang: Anthropic
-        label: Anthropic
+      - lang: Python
+        label: Anthropic SDK
         source: |-
           from anthropic import Anthropic
 
@@ -3382,6 +3327,23 @@ paths:
           )
 
           print(message.content[0].text)
+      - lang: TypeScript
+        label: Anthropic SDK
+        source: |-
+          import Anthropic from "@anthropic-ai/sdk";
+
+          const client = new Anthropic({
+            baseURL: "http://localhost:8321/v1",
+            apiKey: "fake",
+          });
+
+          const message = await client.messages.create({
+            model: "llama-3.3-70b",
+            max_tokens: 1024,
+            messages: [{ role: "user", content: "What is OGX?" }],
+          });
+
+          console.log(message.content[0].text);
   /v1/messages/count_tokens:
     post:
       responses:
@@ -5675,35 +5637,24 @@ components:
       title: OpenAIResponseOutputMessageMCPListTools
       description: MCP list tools output message containing available tools from an MCP server.
     OpenAIResponseOutputMessageWebSearchToolCall:
-      description: Web search tool call output message for OpenAI responses.
       properties:
         id:
+          type: string
           title: Id
-          type: string
         status:
+          type: string
           title: Status
-          type: string
         type:
-          title: Type
           type: string
+          title: Type
           enum:
           - web_search_call
-        action:
-          anyOf:
-          - $ref: '#/components/schemas/WebSearchActionSearch'
-            title: WebSearchActionSearch
-          - $ref: '#/components/schemas/WebSearchActionOpenPage'
-            title: WebSearchActionOpenPage
-          - $ref: '#/components/schemas/WebSearchActionFind'
-            title: WebSearchActionFind
-          - type: 'null'
-          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
-          nullable: true
+      type: object
       required:
       - id
       - status
       title: OpenAIResponseOutputMessageWebSearchToolCall
-      type: object
+      description: Web search tool call output message for OpenAI responses.
     CreateConversationRequest:
       properties:
         items:
@@ -5712,8 +5663,8 @@ components:
               oneOf:
               - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
                 title: OpenAIResponseMessage-Input
-              - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-                title: OpenAIResponseOutputMessageWebSearchToolCall-Input
+              - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                title: OpenAIResponseOutputMessageWebSearchToolCall
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                 title: OpenAIResponseOutputMessageFileSearchToolCall
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -5745,7 +5696,7 @@ components:
                   mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                   message: '#/components/schemas/OpenAIResponseMessage-Input'
                   reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                  web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
+                  web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
               title: OpenAIResponseMessage-Input | ... (11 variants)
             type: array
           - type: 'null'
@@ -5838,8 +5789,8 @@ components:
             oneOf:
             - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
               title: OpenAIResponseMessage-Output
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
-              title: OpenAIResponseOutputMessageWebSearchToolCall-Output
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+              title: OpenAIResponseOutputMessageWebSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
               title: OpenAIResponseOutputMessageFileSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -5871,7 +5822,7 @@ components:
                 mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                 message: '#/components/schemas/OpenAIResponseMessage-Output'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
             title: OpenAIResponseMessage-Output | ... (11 variants)
           type: array
           title: Data
@@ -5905,8 +5856,8 @@ components:
             oneOf:
             - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
               title: OpenAIResponseMessage-Input
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-              title: OpenAIResponseOutputMessageWebSearchToolCall-Input
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+              title: OpenAIResponseOutputMessageWebSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
               title: OpenAIResponseOutputMessageFileSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -5938,7 +5889,7 @@ components:
                 mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                 message: '#/components/schemas/OpenAIResponseMessage-Input'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
+                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
             title: OpenAIResponseMessage-Input | ... (11 variants)
           type: array
           maxItems: 20
@@ -6739,23 +6690,9 @@ components:
         search_context_size:
           anyOf:
           - type: string
-            enum:
-            - low
-            - medium
-            - high
+            pattern: ^low|medium|high$
           - type: 'null'
-        filters:
-          anyOf:
-          - $ref: '#/components/schemas/WebSearchFilters'
-            title: WebSearchFilters
-          - type: 'null'
-          title: WebSearchFilters
-        user_location:
-          anyOf:
-          - $ref: '#/components/schemas/WebSearchUserLocation'
-            title: WebSearchUserLocation
-          - type: 'null'
-          title: WebSearchUserLocation
+          default: medium
       type: object
       title: OpenAIResponseInputToolWebSearch
       description: Web search tool configuration for OpenAI response inputs.
@@ -6806,6 +6743,7 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
+          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -6828,6 +6766,9 @@ components:
           title: Temperature
         text:
           $ref: '#/components/schemas/OpenAIResponseText'
+          default:
+            format:
+              type: text
         top_p:
           type: number
           title: Top P
@@ -6892,10 +6833,8 @@ components:
           title: OpenAIResponseInputToolChoiceMode
         truncation:
           anyOf:
-          - $ref: '#/components/schemas/ResponseTruncation'
-            title: ResponseTruncation
+          - type: string
           - type: 'null'
-          title: ResponseTruncation
         usage:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseUsage'
@@ -7197,10 +7136,10 @@ components:
           - type: 'null'
         error:
           anyOf:
-          - allOf:
-            - $ref: '#/components/schemas/OpenAIResponseError'
+          - $ref: '#/components/schemas/OpenAIResponseError'
+            title: OpenAIResponseError
           - type: 'null'
-          title: ErrorUnion
+          title: OpenAIResponseError
         frequency_penalty:
           type: number
           title: Frequency Penalty
@@ -7209,10 +7148,10 @@ components:
           title: Id
         incomplete_details:
           anyOf:
-          - allOf:
-            - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
+          - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
+            title: OpenAIResponseIncompleteDetails
           - type: 'null'
-          title: Incomplete_DetailsUnion
+          title: OpenAIResponseIncompleteDetails
         model:
           type: string
           title: Model
@@ -7230,6 +7169,7 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
+          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -7251,9 +7191,10 @@ components:
           type: number
           title: Temperature
         text:
-          allOf:
-          - $ref: '#/components/schemas/OpenAIResponseText'
-          - description: Text response configuration for OpenAI responses.
+          $ref: '#/components/schemas/OpenAIResponseText'
+          default:
+            format:
+              type: text
         top_p:
           type: number
           title: Top P
@@ -7317,14 +7258,15 @@ components:
           - type: 'null'
           title: OpenAIResponseInputToolChoiceMode
         truncation:
-          allOf:
-          - $ref: '#/components/schemas/ResponseTruncation'
+          anyOf:
+          - type: string
+          - type: 'null'
         usage:
           anyOf:
-          - allOf:
-            - $ref: '#/components/schemas/OpenAIResponseUsage'
+          - $ref: '#/components/schemas/OpenAIResponseUsage'
+            title: OpenAIResponseUsage
           - type: 'null'
-          title: UsageUnion
+          title: OpenAIResponseUsage
         instructions:
           anyOf:
           - type: string
@@ -7335,10 +7277,10 @@ components:
           - type: 'null'
         reasoning:
           anyOf:
-          - allOf:
-            - $ref: '#/components/schemas/OpenAIResponseReasoning'
+          - $ref: '#/components/schemas/OpenAIResponseReasoning'
+            title: OpenAIResponseReasoning
           - type: 'null'
-          title: ReasoningUnion
+          title: OpenAIResponseReasoning
         max_output_tokens:
           anyOf:
           - type: integer
@@ -7346,7 +7288,12 @@ components:
         service_tier:
           type: string
           title: Service Tier
-        metadata: {}
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
         presence_penalty:
           type: number
           title: Presence Penalty
@@ -9925,37 +9872,6 @@ components:
       - data
       title: AnthropicBase64ImageSource
       description: Base64-encoded image source.
-    AnthropicBashTool:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - bash_20250124
-        name:
-          type: string
-          title: Name
-          enum:
-          - bash
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
-      type: object
-      title: AnthropicBashTool
-      description: Built-in bash tool (bash_20250124).
-    AnthropicCacheControl:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - ephemeral
-      type: object
-      title: AnthropicCacheControl
-      description: Prompt-cache breakpoint marker.
     AnthropicCountTokensRequest:
       properties:
         model:
@@ -9981,25 +9897,7 @@ components:
         tools:
           anyOf:
           - items:
-              oneOf:
-              - $ref: '#/components/schemas/AnthropicCustomToolDef'
-                title: AnthropicCustomToolDef
-              - $ref: '#/components/schemas/AnthropicWebSearchTool'
-                title: AnthropicWebSearchTool
-              - $ref: '#/components/schemas/AnthropicBashTool'
-                title: AnthropicBashTool
-              - $ref: '#/components/schemas/AnthropicTextEditorTool'
-                title: AnthropicTextEditorTool
-              discriminator:
-                propertyName: type
-                mapping:
-                  bash_20250124: '#/components/schemas/AnthropicBashTool'
-                  custom: '#/components/schemas/AnthropicCustomToolDef'
-                  text_editor_20250124: '#/components/schemas/AnthropicTextEditorTool'
-                  text_editor_20250429: '#/components/schemas/AnthropicTextEditorTool'
-                  text_editor_20250728: '#/components/schemas/AnthropicTextEditorTool'
-                  web_search_20250305: '#/components/schemas/AnthropicWebSearchTool'
-              title: AnthropicCustomToolDef | ... (4 variants)
+              $ref: '#/components/schemas/AnthropicToolDef'
             type: array
           - type: 'null'
           description: Tools to include in token count.
@@ -10048,25 +9946,7 @@ components:
           description: System prompt. A string or list of text blocks.
         tools:
           items:
-            oneOf:
-            - $ref: '#/components/schemas/AnthropicCustomToolDef'
-              title: AnthropicCustomToolDef
-            - $ref: '#/components/schemas/AnthropicWebSearchTool'
-              title: AnthropicWebSearchTool
-            - $ref: '#/components/schemas/AnthropicBashTool'
-              title: AnthropicBashTool
-            - $ref: '#/components/schemas/AnthropicTextEditorTool'
-              title: AnthropicTextEditorTool
-            discriminator:
-              propertyName: type
-              mapping:
-                bash_20250124: '#/components/schemas/AnthropicBashTool'
-                custom: '#/components/schemas/AnthropicCustomToolDef'
-                text_editor_20250124: '#/components/schemas/AnthropicTextEditorTool'
-                text_editor_20250429: '#/components/schemas/AnthropicTextEditorTool'
-                text_editor_20250728: '#/components/schemas/AnthropicTextEditorTool'
-                web_search_20250305: '#/components/schemas/AnthropicWebSearchTool'
-            title: AnthropicCustomToolDef | ... (4 variants)
+            $ref: '#/components/schemas/AnthropicToolDef'
           type: array
           title: Tools
           description: Tools available to the model.
@@ -10122,37 +10002,6 @@ components:
       - max_tokens
       title: AnthropicCreateMessageRequest
       description: Request body for POST /v1/messages.
-    AnthropicCustomToolDef:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - custom
-        name:
-          type: string
-          title: Name
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-        input_schema:
-          additionalProperties: true
-          type: object
-          title: Input Schema
-          description: JSON Schema for the tool's input.
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
-      type: object
-      required:
-      - name
-      - input_schema
-      title: AnthropicCustomToolDef
-      description: Definition of a custom (function-calling) tool.
     AnthropicImageBlock:
       properties:
         type:
@@ -10172,12 +10021,6 @@ components:
             mapping:
               base64: '#/components/schemas/AnthropicBase64ImageSource'
               url: '#/components/schemas/AnthropicURLImageSource'
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
       type: object
       required:
       - source
@@ -10190,7 +10033,6 @@ components:
           enum:
           - user
           - assistant
-          - system
           title: Role
         content:
           anyOf:
@@ -10207,18 +10049,15 @@ components:
                 title: AnthropicToolResultBlock-Input
               - $ref: '#/components/schemas/AnthropicThinkingBlock'
                 title: AnthropicThinkingBlock
-              - $ref: '#/components/schemas/AnthropicRedactedThinkingBlock'
-                title: AnthropicRedactedThinkingBlock
               discriminator:
                 propertyName: type
                 mapping:
                   image: '#/components/schemas/AnthropicImageBlock'
-                  redacted_thinking: '#/components/schemas/AnthropicRedactedThinkingBlock'
                   text: '#/components/schemas/AnthropicTextBlock'
                   thinking: '#/components/schemas/AnthropicThinkingBlock'
                   tool_result: '#/components/schemas/AnthropicToolResultBlock-Input'
                   tool_use: '#/components/schemas/AnthropicToolUseBlock'
-              title: AnthropicTextBlock | ... (6 variants)
+              title: AnthropicTextBlock | ... (5 variants)
             type: array
             title: list[AnthropicTextBlock | AnthropicImageBlock | ...]
           title: string | list[AnthropicTextBlock | AnthropicImageBlock | ...]
@@ -10258,18 +10097,15 @@ components:
               title: AnthropicToolResultBlock-Output
             - $ref: '#/components/schemas/AnthropicThinkingBlock'
               title: AnthropicThinkingBlock
-            - $ref: '#/components/schemas/AnthropicRedactedThinkingBlock'
-              title: AnthropicRedactedThinkingBlock
             discriminator:
               propertyName: type
               mapping:
                 image: '#/components/schemas/AnthropicImageBlock'
-                redacted_thinking: '#/components/schemas/AnthropicRedactedThinkingBlock'
                 text: '#/components/schemas/AnthropicTextBlock'
                 thinking: '#/components/schemas/AnthropicThinkingBlock'
                 tool_result: '#/components/schemas/AnthropicToolResultBlock-Output'
                 tool_use: '#/components/schemas/AnthropicToolUseBlock'
-            title: AnthropicTextBlock | ... (6 variants)
+            title: AnthropicTextBlock | ... (5 variants)
           type: array
           title: Content
           description: Response content blocks.
@@ -10294,22 +10130,6 @@ components:
       - model
       title: AnthropicMessageResponse
       description: Response from POST /v1/messages (non-streaming).
-    AnthropicRedactedThinkingBlock:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - redacted_thinking
-        data:
-          type: string
-          title: Data
-          description: Opaque redacted thinking data.
-      type: object
-      required:
-      - data
-      title: AnthropicRedactedThinkingBlock
-      description: A redacted thinking content block. Must be echoed back as-is in multi-turn.
     AnthropicTextBlock:
       properties:
         type:
@@ -10320,45 +10140,11 @@ components:
         text:
           type: string
           title: Text
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
       type: object
       required:
       - text
       title: AnthropicTextBlock
       description: A text content block.
-    AnthropicTextEditorTool:
-      properties:
-        type:
-          type: string
-          enum:
-          - text_editor_20250124
-          - text_editor_20250429
-          - text_editor_20250728
-          title: Type
-        name:
-          type: string
-          title: Name
-        max_characters:
-          anyOf:
-          - type: integer
-          - type: 'null'
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
-      type: object
-      required:
-      - type
-      - name
-      title: AnthropicTextEditorTool
-      description: Built-in text editor tool (all versions).
     AnthropicThinkingBlock:
       properties:
         type:
@@ -10375,12 +10161,6 @@ components:
           - type: string
           - type: 'null'
           description: Signature for the thinking block.
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
       type: object
       required:
       - thinking
@@ -10399,12 +10179,32 @@ components:
         budget_tokens:
           anyOf:
           - type: integer
-            minimum: 1024.0
+            minimum: 1.0
           - type: 'null'
           description: Maximum tokens for thinking.
       type: object
       title: AnthropicThinkingConfig
       description: Configuration for extended thinking.
+    AnthropicToolDef:
+      properties:
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+        input_schema:
+          additionalProperties: true
+          type: object
+          title: Input Schema
+          description: JSON Schema for the tool's input.
+      type: object
+      required:
+      - name
+      - input_schema
+      title: AnthropicToolDef
+      description: Definition of a tool available to the model.
     AnthropicToolResultBlock-Input:
       properties:
         type:
@@ -10436,12 +10236,6 @@ components:
           - type: boolean
           - type: 'null'
           description: Whether the tool call resulted in an error.
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
       type: object
       required:
       - tool_use_id
@@ -10478,12 +10272,6 @@ components:
           - type: boolean
           - type: 'null'
           description: Whether the tool call resulted in an error.
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
       type: object
       required:
       - tool_use_id
@@ -10509,12 +10297,6 @@ components:
           type: object
           title: Input
           description: Tool input arguments.
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
       type: object
       required:
       - id
@@ -10559,49 +10341,6 @@ components:
       type: object
       title: AnthropicUsage
       description: Token usage statistics.
-    AnthropicWebSearchTool:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - web_search_20250305
-        name:
-          type: string
-          title: Name
-          enum:
-          - web_search
-        max_uses:
-          anyOf:
-          - type: integer
-          - type: 'null'
-        allowed_domains:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-        blocked_domains:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-        user_location:
-          anyOf:
-          - $ref: '#/components/schemas/_WebSearchUserLocation'
-            title: _WebSearchUserLocation
-          - type: 'null'
-          title: _WebSearchUserLocation
-        cache_control:
-          anyOf:
-          - $ref: '#/components/schemas/AnthropicCacheControl'
-            title: AnthropicCacheControl
-          - type: 'null'
-          title: AnthropicCacheControl
-      type: object
-      title: AnthropicWebSearchTool
-      description: Built-in web search tool (web_search_20250305).
     ApprovalFilter:
       properties:
         always:
@@ -10841,54 +10580,57 @@ components:
     CompactResponseRequest:
       properties:
         model:
-          type: string
-          title: Model
+          anyOf:
+          - $ref: '#/components/schemas/ModelIdsResponses'
+          - type: string
+          - type: 'null'
           description: The model to use for generating the compacted summary.
         input:
           anyOf:
-          - type: string
-          - items:
-              anyOf:
-              - oneOf:
+          - oneOf:
+            - type: string
+            - items:
+                anyOf:
+                - oneOf:
+                  - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
+                    title: OpenAIResponseMessage-Input
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                    title: OpenAIResponseOutputMessageWebSearchToolCall
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
+                    title: OpenAIResponseOutputMessageFileSearchToolCall
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
+                    title: OpenAIResponseOutputMessageFunctionToolCall
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
+                    title: OpenAIResponseOutputMessageMCPCall
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
+                    title: OpenAIResponseOutputMessageMCPListTools
+                  - $ref: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
+                    title: OpenAIResponseMCPApprovalRequest
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+                    title: OpenAIResponseOutputMessageReasoningItem
+                  discriminator:
+                    propertyName: type
+                    mapping:
+                      file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
+                      function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
+                      mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
+                      mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
+                      mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
+                      message: '#/components/schemas/OpenAIResponseMessage-Input'
+                      reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+                      web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                  title: OpenAIResponseMessage-Input | ... (8 variants)
+                - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
+                  title: OpenAIResponseInputFunctionToolCallOutput
+                - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
+                  title: OpenAIResponseMCPApprovalResponse
+                - $ref: '#/components/schemas/OpenAIResponseCompaction'
+                  title: OpenAIResponseCompaction
                 - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
                   title: OpenAIResponseMessage-Input
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-                  title: OpenAIResponseOutputMessageWebSearchToolCall-Input
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
-                  title: OpenAIResponseOutputMessageFileSearchToolCall
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
-                  title: OpenAIResponseOutputMessageFunctionToolCall
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
-                  title: OpenAIResponseOutputMessageMCPCall
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                  title: OpenAIResponseOutputMessageMCPListTools
-                - $ref: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
-                  title: OpenAIResponseMCPApprovalRequest
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                  title: OpenAIResponseOutputMessageReasoningItem
-                discriminator:
-                  propertyName: type
-                  mapping:
-                    file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
-                    function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
-                    mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
-                    mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
-                    mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                    message: '#/components/schemas/OpenAIResponseMessage-Input'
-                    reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                    web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-                title: OpenAIResponseMessage-Input | ... (8 variants)
-              - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
-                title: OpenAIResponseInputFunctionToolCallOutput
-              - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
-                title: OpenAIResponseMCPApprovalResponse
-              - $ref: '#/components/schemas/OpenAIResponseCompaction'
-                title: OpenAIResponseCompaction
-              - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
-                title: OpenAIResponseMessage-Input
-              title: OpenAIResponseInputFunctionToolCallOutput | ... (4 variants)
-            type: array
-            title: list[OpenAIResponseMessageUnion | OpenAIResponseInputFunctionToolCallOutput | ...]
+                title: OpenAIResponseInputFunctionToolCallOutput | ... (4 variants)
+              type: array
+              title: list[OpenAIResponseMessageUnion | OpenAIResponseInputFunctionToolCallOutput | ...]
           - type: 'null'
           title: string | list[OpenAIResponseMessageUnion | OpenAIResponseInputFunctionToolCallOutput | ...]
           description: Input message(s) to compact.
@@ -11060,8 +10802,8 @@ components:
               - oneOf:
                 - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
                   title: OpenAIResponseMessage-Input
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-                  title: OpenAIResponseOutputMessageWebSearchToolCall-Input
+                - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                  title: OpenAIResponseOutputMessageWebSearchToolCall
                 - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                   title: OpenAIResponseOutputMessageFileSearchToolCall
                 - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -11084,7 +10826,7 @@ components:
                     mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                     message: '#/components/schemas/OpenAIResponseMessage-Input'
                     reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                    web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
+                    web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
                 title: OpenAIResponseMessage-Input | ... (8 variants)
               - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
                 title: OpenAIResponseInputFunctionToolCallOutput
@@ -11124,6 +10866,7 @@ components:
           - type: boolean
           - type: 'null'
           description: Whether to enable parallel tool calls.
+          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -11144,10 +10887,12 @@ components:
           type: boolean
           title: Store
           description: Whether to store the response in the database.
+          default: true
         stream:
           type: boolean
           title: Stream
           description: Whether to stream the response.
+          default: false
         temperature:
           anyOf:
           - type: number
@@ -11171,11 +10916,11 @@ components:
           description: Penalizes new tokens based on their frequency in the text so far.
         text:
           anyOf:
-          - allOf:
-            - $ref: '#/components/schemas/OpenAIResponseText'
-            - description: Configuration for text response generation.
+          - $ref: '#/components/schemas/OpenAIResponseText'
+            title: OpenAIResponseText
           - type: 'null'
-          title: TextUnion
+          description: Configuration for text response generation.
+          title: OpenAIResponseText
         tool_choice:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseInputToolChoiceMode'
@@ -11262,11 +11007,11 @@ components:
           description: Upper bound for the number of tokens that can be generated for a response.
         reasoning:
           anyOf:
-          - allOf:
-            - $ref: '#/components/schemas/OpenAIResponseReasoning'
-            - description: Configuration for reasoning effort in responses.
+          - $ref: '#/components/schemas/OpenAIResponseReasoning'
+            title: OpenAIResponseReasoning
           - type: 'null'
-          title: ReasoningUnion
+          description: Configuration for reasoning effort in responses.
+          title: OpenAIResponseReasoning
         service_tier:
           anyOf:
           - $ref: '#/components/schemas/ServiceTier'
@@ -11287,9 +11032,12 @@ components:
           - type: 'null'
           description: A stable identifier used to associate the request with an end user, for safety monitoring. Echoed back on the response.
         truncation:
-          allOf:
+          anyOf:
           - $ref: '#/components/schemas/ResponseTruncation'
-          - description: Controls how the service truncates input when it exceeds the model context window.
+            title: ResponseTruncation
+          - type: 'null'
+          description: Controls how the service truncates input when it exceeds the model context window.
+          title: ResponseTruncation
         top_logprobs:
           anyOf:
           - type: integer
@@ -11306,11 +11054,11 @@ components:
           description: Penalizes new tokens based on whether they appear in the text so far.
         stream_options:
           anyOf:
-          - allOf:
-            - $ref: '#/components/schemas/ResponseStreamOptions'
-            - description: Options that control streamed response behavior.
+          - $ref: '#/components/schemas/ResponseStreamOptions'
+            title: ResponseStreamOptions
           - type: 'null'
-          title: Stream_OptionsUnion
+          description: Options that control streamed response behavior.
+          title: ResponseStreamOptions
         context_management:
           anyOf:
           - items:
@@ -12423,64 +12171,6 @@ components:
       - text
       title: OpenAIResponseOutputMessageReasoningSummary
       description: A summary of reasoning output from the model.
-    OpenAIResponseOutputMessageWebSearchToolCall-Input:
-      properties:
-        id:
-          type: string
-          title: Id
-        status:
-          type: string
-          title: Status
-        type:
-          type: string
-          title: Type
-          enum:
-          - web_search_call
-        action:
-          anyOf:
-          - $ref: '#/components/schemas/WebSearchActionSearch'
-            title: WebSearchActionSearch
-          - $ref: '#/components/schemas/WebSearchActionOpenPage'
-            title: WebSearchActionOpenPage
-          - $ref: '#/components/schemas/WebSearchActionFind'
-            title: WebSearchActionFind
-          - type: 'null'
-          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
-      type: object
-      required:
-      - id
-      - status
-      title: OpenAIResponseOutputMessageWebSearchToolCall
-      description: Web search tool call output message for OpenAI responses.
-    OpenAIResponseOutputMessageWebSearchToolCall-Output:
-      properties:
-        id:
-          type: string
-          title: Id
-        status:
-          type: string
-          title: Status
-        type:
-          type: string
-          title: Type
-          enum:
-          - web_search_call
-        action:
-          anyOf:
-          - $ref: '#/components/schemas/WebSearchActionSearch'
-            title: WebSearchActionSearch
-          - $ref: '#/components/schemas/WebSearchActionOpenPage'
-            title: WebSearchActionOpenPage
-          - $ref: '#/components/schemas/WebSearchActionFind'
-            title: WebSearchActionFind
-          - type: 'null'
-          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
-      type: object
-      required:
-      - id
-      - status
-      title: OpenAIResponseOutputMessageWebSearchToolCall
-      description: Web search tool call output message for OpenAI responses.
     OpenAIResponseReasoning:
       properties:
         effort:
@@ -12494,16 +12184,6 @@ components:
             - high
             - xhigh
           - type: 'null'
-        generate_summary:
-          anyOf:
-          - type: string
-            enum:
-            - auto
-            - concise
-            - detailed
-          - type: 'null'
-          description: "Deprecated: use 'summary' instead."
-          deprecated: true
         summary:
           anyOf:
           - type: string
@@ -12787,6 +12467,8 @@ components:
           type: boolean
           title: Include Obfuscation
           description: Whether to obfuscate sensitive information in streamed output.
+          default: true
+      additionalProperties: false
       type: object
       title: ResponseStreamOptions
       description: Options that control streamed response behavior.
@@ -13023,118 +12705,6 @@ components:
       - file_id
       title: VectorStoreFileBatchFileEntry
       description: A file entry for creating a vector store file batch with per-file options.
-    WebSearchActionFind:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - find_in_page
-        url:
-          type: string
-          title: Url
-        pattern:
-          type: string
-          title: Pattern
-      type: object
-      required:
-      - url
-      - pattern
-      title: WebSearchActionFind
-      description: 'Web search action: searches for a pattern within a loaded page.'
-    WebSearchActionOpenPage:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - open_page
-        url:
-          anyOf:
-          - type: string
-          - type: 'null'
-      type: object
-      title: WebSearchActionOpenPage
-      description: 'Web search action: opens a specific URL from search results.'
-    WebSearchActionSearch:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - search
-        query:
-          type: string
-          title: Query
-        queries:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-        sources:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/WebSearchSource'
-            type: array
-          - type: 'null'
-      type: object
-      required:
-      - query
-      title: WebSearchActionSearch
-      description: 'Web search action: performs a search query.'
-    WebSearchFilters:
-      properties:
-        allowed_domains:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-      type: object
-      title: WebSearchFilters
-      description: Domain filters for web search results.
-    WebSearchSource:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - url
-        url:
-          type: string
-          title: Url
-      type: object
-      required:
-      - url
-      title: WebSearchSource
-      description: A source URL returned by a web search action.
-    WebSearchUserLocation:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - approximate
-        city:
-          anyOf:
-          - type: string
-          - type: 'null'
-        country:
-          anyOf:
-          - type: string
-          - type: 'null'
-        region:
-          anyOf:
-          - type: string
-          - type: 'null'
-        timezone:
-          anyOf:
-          - type: string
-          - type: 'null'
-      type: object
-      title: WebSearchUserLocation
-      description: Approximate user location to refine web search results.
     _URLOrData:
       properties:
         url:
@@ -13151,31 +12721,6 @@ components:
       type: object
       title: _URLOrData
       description: A URL or a base64 encoded string
-    _WebSearchUserLocation:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - approximate
-        city:
-          anyOf:
-          - type: string
-          - type: 'null'
-        country:
-          anyOf:
-          - type: string
-          - type: 'null'
-        region:
-          anyOf:
-          - type: string
-          - type: 'null'
-        timezone:
-          anyOf:
-          - type: string
-          - type: 'null'
-      type: object
-      title: _WebSearchUserLocation
     GreedySamplingStrategy:
       description: Greedy sampling strategy that selects the highest probability token at each step.
       properties:
@@ -15471,8 +15016,8 @@ components:
       - oneOf:
         - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
           title: OpenAIResponseMessage-Output
-        - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
-          title: OpenAIResponseOutputMessageWebSearchToolCall-Output
+        - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+          title: OpenAIResponseOutputMessageWebSearchToolCall
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
           title: OpenAIResponseOutputMessageFileSearchToolCall
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -15495,7 +15040,7 @@ components:
             mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
             message: '#/components/schemas/OpenAIResponseMessage-Output'
             reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-            web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+            web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
         x-stainless-naming: OpenAIResponseMessageOutputOneOf
         title: OpenAIResponseMessage-Output | ... (8 variants)
       - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -15510,8 +15055,8 @@ components:
       oneOf:
       - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
         title: OpenAIResponseMessage-Output
-      - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
-        title: OpenAIResponseOutputMessageWebSearchToolCall-Output
+      - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+        title: OpenAIResponseOutputMessageWebSearchToolCall
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
         title: OpenAIResponseOutputMessageFileSearchToolCall
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -15534,7 +15079,7 @@ components:
           mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
           message: '#/components/schemas/OpenAIResponseMessage-Output'
           reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-          web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+          web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
       x-stainless-naming: OpenAIResponseOutputItem
       title: OpenAIResponseMessage-Output | ... (8 variants)
     ChatCompletionMessageToolCall:
@@ -15599,6 +15144,9 @@ components:
       - type
       - custom
       description: A call to a custom tool created by the model.
+    ModelIdsResponses:
+      type: string
+      description: Model identifier.
   responses:
     BadRequest400:
       description: The request was invalid or malformed

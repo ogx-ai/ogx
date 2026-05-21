@@ -1240,7 +1240,7 @@ class OpenAIResponsesImpl:
 
     async def compact_openai_response(
         self,
-        model: str,
+        model: str | None,
         input: str | list[OpenAIResponseInput] | None = None,
         instructions: str | None = None,
         previous_response_id: str | None = None,
@@ -1299,7 +1299,7 @@ class OpenAIResponsesImpl:
         messages.append(OpenAIUserMessageParam(role="user", content=summarization_prompt))
 
         # Call inference to generate the summary (use configured model or fall back to conversation model)
-        summarization_model = self.compaction_config.summarization_model or model
+        summarization_model = self.compaction_config.summarization_model or model or ""
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=summarization_model,
             messages=messages,
@@ -1375,7 +1375,7 @@ class OpenAIResponsesImpl:
         stored_response = OpenAIResponseObject(
             id=response_id,
             created_at=created_at,
-            model=model,
+            model=model or "",
             status="completed",
             output=[],
             usage=usage_data,
