@@ -104,6 +104,8 @@ class Api(Enum, metaclass=DynamicApiMeta):
     :cvar connectors: External connector management (e.g., MCP servers)
     :cvar messages: Anthropic Messages API compatibility layer
     :cvar interactions: Google Interactions API compatibility layer
+    :cvar containers: Sandboxed container management for code/shell tool execution
+    :cvar container_runtime: Backend runtime for containers (Docker/Podman, Kubernetes)
     :cvar inspect: Built-in system inspection and introspection
     """
 
@@ -113,6 +115,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     batches = "batches"
     vector_io = "vector_io"
     tool_runtime = "tool_runtime"
+    container_runtime = "container_runtime"
 
     models = "models"
     vector_stores = "vector_stores"  # only used for routing table
@@ -122,6 +125,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     prompts = "prompts"
     conversations = "conversations"
     connectors = "connectors"
+    containers = "containers"
     messages = "messages"
     interactions = "interactions"
 
