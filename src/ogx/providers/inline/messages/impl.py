@@ -37,6 +37,7 @@ from ogx_api.messages import (
 )
 from ogx_api.messages.models import (
     ANTHROPIC_VERSION,
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
@@ -50,6 +51,7 @@ from ogx_api.messages.models import (
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
     AnthropicUsage,
     CancelMessageBatchRequest,
     ContentBlockDeltaEvent,
@@ -120,6 +122,12 @@ _FINISH_TO_STOP_REASON = {
     "length": "max_tokens",
     "content_filter": "end_turn",
 }
+
+
+def _image_source_to_url(source: AnthropicBase64ImageSource | AnthropicURLImageSource) -> str:
+    if isinstance(source, AnthropicBase64ImageSource):
+        return f"data:{source.media_type};base64,{source.data}"
+    return source.url
 
 
 class BuiltinMessagesImpl(Messages):
@@ -647,10 +655,21 @@ class BuiltinMessagesImpl(Messages):
                         flush_content = text_parts
                     result.append({"role": "user", "content": flush_content})
                     text_parts = []
-                # Tool results become separate tool messages
+                # Tool results become separate tool messages.
+                # OpenAI tool messages only support text content, so image blocks
+                # from tool results are promoted to a follow-up user message.
                 tool_content = block.content
+                image_parts: list[dict[str, Any]] = []
                 if isinstance(tool_content, list):
-                    tool_content = "\n".join(b.text for b in tool_content if isinstance(b, AnthropicTextBlock))
+                    text_pieces = []
+                    for b in tool_content:
+                        if isinstance(b, AnthropicTextBlock):
+                            text_pieces.append(b.text)
+                        elif isinstance(b, AnthropicImageBlock):
+                            image_parts.append(
+                                {"type": "image_url", "image_url": {"url": _image_source_to_url(b.source)}}
+                            )
+                    tool_content = "\n".join(text_pieces)
                 result.append(
                     {
                         "role": "tool",
@@ -658,17 +677,12 @@ class BuiltinMessagesImpl(Messages):
                         "content": tool_content,
                     }
                 )
+                if image_parts:
+                    result.append({"role": "user", "content": image_parts})
             elif isinstance(block, AnthropicTextBlock):
                 text_parts.append({"type": "text", "text": block.text})
             elif isinstance(block, AnthropicImageBlock):
-                text_parts.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{block.source.media_type};base64,{block.source.data}",
-                        },
-                    }
-                )
+                text_parts.append({"type": "image_url", "image_url": {"url": _image_source_to_url(block.source)}})
 
         if text_parts:
             # OpenAI content must be a string or a list, never a single dict

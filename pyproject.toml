@@ -14,6 +14,7 @@ constraint-dependencies = [
     "fonttools>=4.60.2",
     "gitpython>=3.1.47",               # Command injection via Git options bypass
     "h11>=0.16.0",
+    "idna>=3.15",
     "pydantic>=2.11.9,<2.12.0",        # 2.12 breaks int coercion in openai.types.model.Model during test replay
     "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
     "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
@@ -82,7 +83,7 @@ starter = [
     "aiohttp",
     "anthropic",
     "autoevals",
-    "boto3",
+    "boto3>=1.43.9",
     "chardet",
     "chromadb-client",
     "datasets>=4.0.0",
@@ -135,13 +136,13 @@ dev = [
     "pytest-socket",                 # For blocking network access in unit tests
     "nbval",                         # For notebook testing
     "black",
-    "ruff",
+    "ruff>=0.15.13",
     "mypy",
     "pre-commit>=4.4.0",
     "ruamel.yaml",                   # needed for openapi generator
     "openapi-spec-validator>=0.7.2",
     "ogx-client>=1.0.2",
-    "boto3",
+    "boto3>=1.43.9",
     "torch>=2.6.0",
 ]
 # Type checking dependencies - includes type stubs and optional runtime dependencies

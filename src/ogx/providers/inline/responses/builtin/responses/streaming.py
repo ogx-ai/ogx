@@ -328,7 +328,7 @@ class StreamingResponseOrchestrator:
             top_logprobs=self.top_logprobs if self.top_logprobs is not None else 0,
             tools=self.ctx.available_tools(),
             tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
-            truncation=self.truncation or "disabled",
+            truncation=self.truncation or ResponseTruncation.disabled,
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
@@ -382,13 +382,13 @@ class StreamingResponseOrchestrator:
             usage=self.accumulated_usage,
             instructions=self.instructions,
             prompt=self.prompt,
-            parallel_tool_calls=self.parallel_tool_calls,
+            parallel_tool_calls=self.parallel_tool_calls if self.parallel_tool_calls is not None else True,
             max_tool_calls=self.max_tool_calls,
             reasoning=self.reasoning,
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
-            truncation=self.truncation or "disabled",
+            truncation=self.truncation or ResponseTruncation.disabled,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
@@ -526,7 +526,7 @@ class StreamingResponseOrchestrator:
                 # Merge user stream_options with default include_usage
                 effective_stream_options = {"include_usage": True}
                 if self.stream_options:
-                    effective_stream_options.update(self.stream_options)
+                    effective_stream_options.update({k: v for k, v in self.stream_options if v is not None})
 
                 params = OpenAIChatCompletionRequestWithExtraBody(
                     model=self.ctx.model,
