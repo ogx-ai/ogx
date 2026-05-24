@@ -87,6 +87,7 @@ class _ProbeStatus(enum.Enum):
     OK = "ok"
     NO_KEY = "no_key"
     AUTH = "auth"
+    MISSING_DEPS = "missing_deps"
     UNREACHABLE = "unreachable"
 
 
@@ -222,6 +223,7 @@ def _autodetect_providers() -> str:
     ]
 
     passed: list[str] = []
+    has_missing_deps = False
     cprint("Scanning for available providers...", color="cyan")
     for provider_type, base_url_env, default_base_url, api_key_env in candidates:
         status, model_count, base_url, base_source = _probe_provider_availability(
@@ -235,6 +237,9 @@ def _autodetect_providers() -> str:
         if api_key_env:
             parts.append(f"{api_key_env} {'set' if os.getenv(api_key_env) else 'not set'}")
         annotation = ", ".join(parts) if parts else ""
+
+        if status == _ProbeStatus.MISSING_DEPS:
+            has_missing_deps = True
 
         if status == _ProbeStatus.OK:
             passed.append(f"inference={provider_type}")
@@ -252,6 +257,11 @@ def _autodetect_providers() -> str:
                 cprint(f"  ✗ {provider_type} ({annotation}) — auth error", color="yellow")
             else:
                 cprint(f"  ✗ {provider_type} — auth error", color="yellow")
+        elif status == _ProbeStatus.MISSING_DEPS:
+            if annotation:
+                cprint(f"  ✗ {provider_type} ({annotation}) — missing dependencies", color="yellow")
+            else:
+                cprint(f"  ✗ {provider_type} — missing dependencies", color="yellow")
         else:
             if annotation:
                 cprint(f"  ✗ {provider_type} ({annotation}) — unreachable", color="yellow")
@@ -278,6 +288,11 @@ def _autodetect_providers() -> str:
         cprint(f"\nDetected {len(passed)} inference provider(s). Starting stack...", color="cyan")
     else:
         cprint("\nDetected no inference providers, not starting stack.", color="red")
+        if has_missing_deps:
+            cprint(
+                "Hint: Some providers had missing dependencies. Run without --skip-install-deps to auto-install them.",
+                color="cyan",
+            )
     return ",".join(passed + inline_providers)
 
 
@@ -375,6 +390,9 @@ def _probe_provider_availability(
 
             # Substitute environment variables in config (e.g., ${env.VAR_NAME:=default})
             config_defaults = _substitute_env_vars(config_defaults)
+        except ModuleNotFoundError as e:
+            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
         except Exception as e:
             logger.debug("Failed to get config defaults", provider_type=provider_type, error=str(e)[:200])
             return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
@@ -383,6 +401,9 @@ def _probe_provider_availability(
         try:
             config = config_class(**config_defaults)
             logger.debug("Instantiated config", provider_type=provider_type)
+        except ModuleNotFoundError as e:
+            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
         except Exception as e:
             logger.debug("Failed to instantiate config", provider_type=provider_type, error=str(e)[:200])
             return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
@@ -395,6 +416,9 @@ def _probe_provider_availability(
         try:
             module = importlib.import_module(provider_spec.module)
             logger.debug("Imported provider module", provider_type=provider_type, module=provider_spec.module)
+        except ModuleNotFoundError as e:
+            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
         except Exception as e:
             logger.debug("Failed to import provider module", module=provider_spec.module, error=str(e)[:200])
             return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
@@ -416,6 +440,9 @@ def _probe_provider_availability(
             provider.__provider_id__ = provider_type
             provider.__provider_spec__ = provider_spec
             provider.__provider_config__ = config
+        except ModuleNotFoundError as e:
+            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
         except Exception as e:
             error_str = str(e).lower()
             logger.debug("Failed to instantiate provider", provider_type=provider_type, error=str(e)[:300])
