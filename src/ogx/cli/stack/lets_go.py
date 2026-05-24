@@ -5,27 +5,31 @@
 # the root directory of this source tree.
 
 import argparse
+import asyncio
 import enum
+import importlib
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Any, cast
-from urllib.parse import urljoin
+from typing import Any
 
-import httpx
 import yaml
 from termcolor import cprint
 
 from ogx.cli.stack.run import _start_ui_development_server, _uvicorn_run
 from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
+from ogx.core.distribution import get_provider_registry
 from ogx.core.stack import run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
+from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
+from ogx_api import Api, RemoteProviderSpec
 from ogx_api.models.models import ModelInput
 
 logger = get_logger(name=__name__, category="cli")
@@ -201,105 +205,58 @@ def _install_provider_deps(normal_deps: list[str], special_deps: list[str]) -> N
 def _autodetect_providers() -> str:
     """Probe all candidate providers and return a comma-separated providers spec string.
 
-    Each provider is probed independently; all that pass are included in the
-    result. Providers that require an API key skip the network probe entirely
+    Each provider is probed by instantiating it and calling list_models() to confirm
+    availability and model access. Providers that require an API key skip probing
     when the key environment variable is not set.
     """
     candidates = [
-        # provider_type, env_for_base_url, default_base_url, probe_path, requires_api_key, api_key_env, extra_headers, api_key_header
-        ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", "models", False, None, {}, None),
-        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", "health", False, None, {}, None),
-        (
-            "remote::llama-cpp-server",
-            "LLAMA_CPP_SERVER_URL",
-            "http://localhost:8080/v1",
-            "models",
-            False,
-            None,
-            {},
-            None,
-        ),
-        ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "models", True, "OPENAI_API_KEY", {}, None),
-        (
-            "remote::llama-openai-compat",
-            "LLAMA_API_BASE_URL",
-            "https://api.llama.com/compat/v1/",
-            "models",
-            True,
-            "LLAMA_API_KEY",
-            {},
-            None,
-        ),
-        (
-            "remote::anthropic",
-            None,
-            "https://api.anthropic.com/v1",
-            "models",
-            True,
-            "ANTHROPIC_API_KEY",
-            {"anthropic-version": "2023-06-01"},
-            "x-api-key",
-        ),
-        (
-            "remote::gemini",
-            None,
-            "https://generativelanguage.googleapis.com/v1beta/openai",
-            "models",
-            True,
-            "GEMINI_API_KEY",
-            {},
-            None,
-        ),
-        (
-            "remote::azure",
-            "AZURE_API_BASE",
-            "",
-            "openai/models?api-version=2024-12-01-preview",
-            True,
-            "AZURE_API_KEY",
-            {},
-            "api-key",
-        ),
+        # provider_type, base_url_env, default_base_url, api_key_env
+        ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None),
+        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None),
+        ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None),
+        ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY"),
+        ("remote::llama-openai-compat", "LLAMA_API_BASE_URL", "https://api.llama.com/compat/v1/", "LLAMA_API_KEY"),
+        ("remote::anthropic", None, "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY"),
+        ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY"),
+        ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY"),
     ]
 
     passed: list[str] = []
     cprint("Scanning for available providers...", color="cyan")
-    for (
-        provider_type,
-        base_env,
-        default_base,
-        probe_path,
-        requires_key,
-        key_env,
-        extra_headers,
-        api_key_header,
-    ) in candidates:
-        env_val: str | None = os.getenv(base_env) if base_env else None
-        if env_val:
-            base = env_val
-            base_source = f"from {base_env}"
-        else:
-            base = default_base
-            base_source = "default"
-
-        status = _probe_endpoint(base, probe_path, requires_key, key_env, extra_headers, api_key_header)
+    for provider_type, base_url_env, default_base_url, api_key_env in candidates:
+        status, model_count, base_url, base_source = _probe_provider_availability(
+            provider_type, base_url_env, default_base_url, api_key_env
+        )
 
         # Build annotation parts
-        parts = [f"{base}, {base_source}"]
-        if requires_key and key_env:
-            parts.append(f"{key_env} {'set' if os.getenv(key_env) else 'not set'}")
-
-        annotation = ", ".join(parts)
+        parts = []
+        if base_url:
+            parts.append(f"{base_url}, {base_source}")
+        if api_key_env:
+            parts.append(f"{api_key_env} {'set' if os.getenv(api_key_env) else 'not set'}")
+        annotation = ", ".join(parts) if parts else ""
 
         if status == _ProbeStatus.OK:
             passed.append(f"inference={provider_type}")
-            cprint(f"  ✓ {provider_type} ({annotation})", color="green")
+            if annotation:
+                cprint(f"  ✓ {provider_type} ({annotation}) — {model_count} models", color="green")
+            else:
+                cprint(f"  ✓ {provider_type} ({model_count} models)", color="green")
         elif status == _ProbeStatus.NO_KEY:
-            cprint(f"  ✗ {provider_type} ({annotation})", color="yellow")
+            if annotation:
+                cprint(f"  ✗ {provider_type} ({annotation})", color="yellow")
+            else:
+                cprint(f"  ✗ {provider_type}", color="yellow")
         elif status == _ProbeStatus.AUTH:
-            cprint(f"  ✗ {provider_type} ({annotation}) — auth error", color="yellow")
+            if annotation:
+                cprint(f"  ✗ {provider_type} ({annotation}) — auth error", color="yellow")
+            else:
+                cprint(f"  ✗ {provider_type} — auth error", color="yellow")
         else:
-            cprint(f"  ✗ {provider_type} ({annotation}) — unreachable", color="yellow")
+            if annotation:
+                cprint(f"  ✗ {provider_type} ({annotation}) — unreachable", color="yellow")
+            else:
+                cprint(f"  ✗ {provider_type} — unreachable", color="yellow")
 
     # Inline providers require no external service — always include them.
     inline_providers = [
@@ -324,39 +281,203 @@ def _autodetect_providers() -> str:
     return ",".join(passed + inline_providers)
 
 
-def _probe_endpoint(
-    base_url: str,
-    probe_path: str,
-    requires_key: bool,
-    key_env: str | None,
-    extra_headers: dict[str, str] | None = None,
-    api_key_header: str | None = None,
-) -> _ProbeStatus:
-    """Perform a lightweight HTTP probe for a provider."""
-    if not base_url:
-        return _ProbeStatus.UNREACHABLE
+async def _list_models_with_timeout(provider: Any, timeout_seconds: float = 5) -> list[Any] | None:
+    """Call list_models with timeout and proper error handling."""
+    if not hasattr(provider, "list_models"):
+        return None
+    try:
+        models = await asyncio.wait_for(provider.list_models(), timeout=timeout_seconds)
+        return list(models) if models else []
+    except TimeoutError:
+        raise
 
-    url = urljoin(base_url.rstrip("/") + "/", probe_path)
 
-    headers: dict[str, str] = dict(extra_headers or {})
-    if requires_key:
-        if not key_env or not os.getenv(key_env):
-            return _ProbeStatus.NO_KEY
-        key: str = os.getenv(key_env, "")
-        if api_key_header:
-            headers[api_key_header] = key
+def _substitute_env_vars(obj: Any) -> Any:
+    """Recursively substitute ${env.VAR_NAME:=default} patterns with environment variable values."""
+    if isinstance(obj, str):
+        # Pattern: ${env.VAR_NAME:=default_value}
+        pattern = r"\$\{env\.([^}:]+)(?::=([^}]*))?\}"
+
+        def replace_match(match):
+            var_name = match.group(1)
+            default_value = match.group(2) or ""
+            return os.getenv(var_name, default_value)
+
+        return re.sub(pattern, replace_match, obj)
+    elif isinstance(obj, dict):
+        return {k: _substitute_env_vars(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_substitute_env_vars(item) for item in obj]
+    else:
+        return obj
+
+
+async def _instantiate_with_timeout(factory_fn: Any, config: Any) -> Any:
+    """Call factory function with timeout."""
+    try:
+        result = factory_fn(config, {})
+        if asyncio.iscoroutine(result):
+            return await asyncio.wait_for(result, timeout=5.0)
+        return result
+    except TimeoutError:
+        raise
+
+
+def _probe_provider_availability(
+    provider_type: str, base_url_env: str | None, default_base_url: str, api_key_env: str | None
+) -> tuple[_ProbeStatus, int, str, str]:
+    """Instantiate a provider and probe availability by listing models.
+
+    Args:
+        provider_type: Provider type string (e.g., "remote::openai")
+        base_url_env: Environment variable name for base URL override, or None
+        default_base_url: Default base URL if env var not set
+        api_key_env: Environment variable name for API key, or None if not required
+
+    Returns:
+        Tuple of (status, model_count, base_url, base_source).
+        base_source is "default" or the env var name. base_url is empty string if not applicable.
+    """
+    # Determine base URL and source
+    base_url = ""
+    base_source = ""
+    if base_url_env:
+        env_val = os.getenv(base_url_env)
+        if env_val:
+            base_url = env_val
+            base_source = f"from {base_url_env}"
         else:
-            headers["Authorization"] = f"Bearer {key}"
+            base_url = default_base_url
+            base_source = "default"
+    elif default_base_url:
+        base_url = default_base_url
+        base_source = "default"
+
+    # Check if required API key is available
+    if api_key_env and not os.getenv(api_key_env):
+        return _ProbeStatus.NO_KEY, 0, base_url, base_source
 
     try:
-        resp = cast(httpx.Response, httpx.get(url, headers=headers, timeout=2.0))
-        if resp.status_code in (401, 403):
-            return _ProbeStatus.AUTH
-        if resp.status_code < 400:
-            return _ProbeStatus.OK
-        return _ProbeStatus.UNREACHABLE
-    except Exception:
-        return _ProbeStatus.UNREACHABLE
+        # Load provider registry and look up the spec
+        registry = get_provider_registry()
+        if Api.inference not in registry or provider_type not in registry[Api.inference]:
+            logger.debug("Provider not found in registry", provider_type=provider_type)
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+
+        provider_spec = registry[Api.inference][provider_type]
+        logger.debug("Found provider in registry", provider_type=provider_type, module=provider_spec.module)
+
+        # Get config defaults
+        try:
+            config_class = instantiate_class_type(provider_spec.config_class)
+            config_defaults = config_class.sample_run_config(__distro_dir__=tempfile.gettempdir())
+            logger.debug("Got config defaults", provider_type=provider_type)
+
+            # Substitute environment variables in config (e.g., ${env.VAR_NAME:=default})
+            config_defaults = _substitute_env_vars(config_defaults)
+        except Exception as e:
+            logger.debug("Failed to get config defaults", provider_type=provider_type, error=str(e)[:200])
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+
+        # Instantiate config object
+        try:
+            config = config_class(**config_defaults)
+            logger.debug("Instantiated config", provider_type=provider_type)
+        except Exception as e:
+            logger.debug("Failed to instantiate config", provider_type=provider_type, error=str(e)[:200])
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+
+        # Import provider module and instantiate
+        if not provider_spec.module:
+            logger.debug("Provider spec missing module", provider_type=provider_type)
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+
+        try:
+            module = importlib.import_module(provider_spec.module)
+            logger.debug("Imported provider module", provider_type=provider_type, module=provider_spec.module)
+        except Exception as e:
+            logger.debug("Failed to import provider module", module=provider_spec.module, error=str(e)[:200])
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+
+        try:
+            # Call appropriate factory function
+            if isinstance(provider_spec, RemoteProviderSpec):
+                method_name = "get_adapter_impl"
+            else:  # InlineProviderSpec
+                method_name = "get_provider_impl"
+
+            factory_fn = getattr(module, method_name)
+            logger.debug("Calling factory function", provider_type=provider_type, method=method_name)
+            # Pass empty deps dict {} for single-provider probing
+            provider = asyncio.run(_instantiate_with_timeout(factory_fn, config))
+            logger.debug("Provider instantiated successfully", provider_type=provider_type)
+
+            # Set required attributes (normally done by resolver)
+            provider.__provider_id__ = provider_type
+            provider.__provider_spec__ = provider_spec
+            provider.__provider_config__ = config
+        except Exception as e:
+            error_str = str(e).lower()
+            logger.debug("Failed to instantiate provider", provider_type=provider_type, error=str(e)[:300])
+            # Only treat as auth error for specific auth-related keywords
+            if (
+                "401" in error_str
+                or "403" in error_str
+                or "unauthorized" in error_str
+                or "forbidden" in error_str
+                or "invalid_api_key" in error_str
+                or "api_key" in error_str
+            ):
+                logger.warning(
+                    "Provider auth failed", provider_type=provider_type, base_url=base_url, error=str(e)[:200]
+                )
+                return _ProbeStatus.AUTH, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+
+        # List models with timeout
+        try:
+            logger.debug("Calling list_models", provider_type=provider_type)
+            models = asyncio.run(_list_models_with_timeout(provider, timeout_seconds=5))
+            model_count = len(models) if models else 0
+            logger.debug("Listed models successfully", provider_type=provider_type, model_count=model_count)
+
+            # Cleanup provider
+            if hasattr(provider, "aclose"):
+                try:
+                    asyncio.run(provider.aclose())
+                except Exception as e:
+                    logger.debug("Failed to cleanup provider", provider_type=provider_type, error=str(e)[:200])
+
+            if model_count == 0:
+                logger.debug("Provider returned zero models", provider_type=provider_type)
+                return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+            return _ProbeStatus.OK, model_count, base_url, base_source
+        except TimeoutError:
+            logger.debug("Model listing timed out", provider_type=provider_type)
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+        except Exception as e:
+            error_str = str(e).lower()
+            logger.debug("Failed to list models", provider_type=provider_type, error=str(e)[:300])
+            # Only treat as auth error for specific auth-related keywords
+            if (
+                "401" in error_str
+                or "403" in error_str
+                or "unauthorized" in error_str
+                or "forbidden" in error_str
+                or "invalid_api_key" in error_str
+                or "api_key" in error_str
+            ):
+                logger.warning(
+                    "Provider auth failed during model listing",
+                    provider_type=provider_type,
+                    base_url=base_url,
+                    error=str(e)[:200],
+                )
+                return _ProbeStatus.AUTH, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+    except Exception as e:
+        logger.debug("Unexpected error during provider probing", provider_type=provider_type, error=str(e)[:300])
+        return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
 
 
 class StackLetsGo(Subcommand):
