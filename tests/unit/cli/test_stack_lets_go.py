@@ -10,7 +10,6 @@ import argparse
 import warnings
 from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
 
 from ogx.cli.letsgo import LetsGo
@@ -19,8 +18,8 @@ from ogx.cli.stack.lets_go import (
     _CLAUDE_CODE_PROVIDER_PRIORITY,
     StackLetsGo,
     _build_claude_code_aliases,
-    _probe_endpoint,
     _ProbeStatus,
+    _substitute_env_vars,
 )
 
 
@@ -103,140 +102,60 @@ class TestTopLevelLetsGoArguments:
         assert args.skip_install_deps is True
 
 
-class TestProbeEndpoint:
-    def test_empty_base_url_returns_unreachable(self):
-        assert _probe_endpoint("", "models", False, None) == _ProbeStatus.UNREACHABLE
+class TestSubstituteEnvVars:
+    def test_boolean_true_coercion(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("MY_VAR", "true")
+        assert _substitute_env_vars("${env.MY_VAR:=false}") is True
 
-    def test_url_construction_preserves_v1_path(self):
-        """Without a trailing slash urljoin strips the last path segment."""
-        captured: list[str] = []
+    def test_boolean_false_coercion(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("MY_VAR", "false")
+        assert _substitute_env_vars("${env.MY_VAR:=true}") is False
 
-        def fake_get(url: str, **kwargs: object) -> None:
-            captured.append(url)
-            raise OSError("offline")
+    def test_boolean_default_true_coercion(self):
+        assert _substitute_env_vars("${env.NONEXISTENT_VAR_XYZ:=true}") is True
 
-        with patch("ogx.cli.stack.lets_go.httpx.get", side_effect=fake_get):
-            _probe_endpoint("http://localhost:11434/v1", "models", False, None)
+    def test_boolean_default_false_coercion(self):
+        assert _substitute_env_vars("${env.NONEXISTENT_VAR_XYZ:=false}") is False
 
-        assert captured[0] == "http://localhost:11434/v1/models"
+    def test_integer_coercion(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("MY_INT", "4096")
+        result = _substitute_env_vars("${env.MY_INT:=2048}")
+        assert result == 4096
+        assert isinstance(result, int)
 
-    def test_ok_on_200(self):
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            assert _probe_endpoint("http://localhost:11434/v1", "models", False, None) == _ProbeStatus.OK
+    def test_integer_default_coercion(self):
+        result = _substitute_env_vars("${env.NONEXISTENT_INT_XYZ:=2048}")
+        assert result == 2048
+        assert isinstance(result, int)
 
-    def test_ok_on_204(self):
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 204
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            assert _probe_endpoint("http://localhost:8000/v1", "health", False, None) == _ProbeStatus.OK
+    def test_string_passes_through(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("MY_URL", "http://example.com")
+        assert _substitute_env_vars("${env.MY_URL:=http://localhost}") == "http://example.com"
 
-    def test_no_key_when_env_var_unset(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        result = _probe_endpoint("https://api.openai.com/v1", "models", True, "OPENAI_API_KEY")
-        assert result == _ProbeStatus.NO_KEY
+    def test_nested_dict_booleans(self):
+        obj = {"tls": {"verify": "${env.NONEXISTENT_TLS_XYZ:=true}"}}
+        result = _substitute_env_vars(obj)
+        assert result["tls"]["verify"] is True
 
-    def test_no_key_when_key_env_is_none(self):
-        result = _probe_endpoint("https://example.com/v1", "models", True, None)
-        assert result == _ProbeStatus.NO_KEY
+    def test_list_items_coerced(self):
+        obj = ["${env.NONEXISTENT_XYZ:=true}", "${env.NONEXISTENT_XYZ:=42}"]
+        result = _substitute_env_vars(obj)
+        assert result[0] is True
+        assert result[1] == 42
 
-    def test_auth_on_401(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 401
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            assert _probe_endpoint("https://api.openai.com/v1", "models", True, "OPENAI_API_KEY") == _ProbeStatus.AUTH
+    def test_non_template_string_unchanged(self):
+        assert _substitute_env_vars("http://localhost:8080/v1") == "http://localhost:8080/v1"
 
-    def test_auth_on_403(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 403
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            assert _probe_endpoint("https://api.openai.com/v1", "models", True, "OPENAI_API_KEY") == _ProbeStatus.AUTH
-
-    def test_unreachable_on_400(self):
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 400
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            assert _probe_endpoint("http://localhost:11434/v1", "models", False, None) == _ProbeStatus.UNREACHABLE
-
-    def test_unreachable_on_500(self):
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 500
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            assert _probe_endpoint("http://localhost:11434/v1", "models", False, None) == _ProbeStatus.UNREACHABLE
-
-    def test_unreachable_on_connection_error(self):
-        with patch("ogx.cli.stack.lets_go.httpx.get", side_effect=OSError("connection refused")):
-            assert _probe_endpoint("http://localhost:11434/v1", "models", False, None) == _ProbeStatus.UNREACHABLE
-
-    def test_unreachable_on_timeout(self):
-        with patch("ogx.cli.stack.lets_go.httpx.get", side_effect=httpx.TimeoutException("timeout")):
-            assert _probe_endpoint("http://localhost:11434/v1", "models", False, None) == _ProbeStatus.UNREACHABLE
-
-    def test_extra_headers_forwarded(self):
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp) as mock_get:
-            _probe_endpoint(
-                "https://api.anthropic.com/v1",
-                "models",
-                False,
-                None,
-                {"anthropic-version": "2023-06-01"},
-            )
-        assert mock_get.call_args.kwargs["headers"].get("anthropic-version") == "2023-06-01"
-
-    def test_auth_headers_set_when_key_present(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp) as mock_get:
-            _probe_endpoint("https://api.openai.com/v1", "models", True, "OPENAI_API_KEY")
-        headers = mock_get.call_args.kwargs["headers"]
-        assert headers["Authorization"] == "Bearer sk-secret"
-        assert "x-api-key" not in headers
-
-    def test_optional_key_included_when_env_var_set(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("VLLM_API_TOKEN", "vllm-token-123")
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp) as mock_get:
-            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
-        assert result == _ProbeStatus.OK
-        headers = mock_get.call_args.kwargs["headers"]
-        assert headers["Authorization"] == "Bearer vllm-token-123"
-
-    def test_optional_key_omitted_when_env_var_unset(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.delenv("VLLM_API_TOKEN", raising=False)
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 200
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp) as mock_get:
-            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
-        assert result == _ProbeStatus.OK
-        headers = mock_get.call_args.kwargs["headers"]
-        assert "Authorization" not in headers
-
-    def test_needs_key_when_optional_token_unset_and_server_returns_401(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.delenv("VLLM_API_TOKEN", raising=False)
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 401
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
-        assert result == _ProbeStatus.NEEDS_KEY
-
-    def test_auth_when_optional_token_set_and_server_returns_401(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("VLLM_API_TOKEN", "wrong-token")
-        mock_resp = MagicMock(spec=httpx.Response)
-        mock_resp.status_code = 401
-        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
-            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
-        assert result == _ProbeStatus.AUTH
+    def test_non_string_passthrough(self):
+        assert _substitute_env_vars(123) == 123
+        assert _substitute_env_vars(True) is True
 
 
 class TestAutodetect:
-    @patch("ogx.cli.stack.lets_go._probe_endpoint", return_value=_ProbeStatus.UNREACHABLE)
+    @patch(
+        "ogx.cli.stack.lets_go._probe_provider_availability",
+        return_value=(_ProbeStatus.UNREACHABLE, 0, "", "default", None),
+    )
     def test_autodetect_no_providers(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
@@ -246,7 +165,9 @@ class TestAutodetect:
         assert "tool_runtime=inline::file-search" in parts
         assert "responses=inline::builtin" in parts
 
-    @patch("ogx.cli.stack.lets_go._probe_endpoint", return_value=_ProbeStatus.NO_KEY)
+    @patch(
+        "ogx.cli.stack.lets_go._probe_provider_availability", return_value=(_ProbeStatus.NO_KEY, 0, "", "default", None)
+    )
     def test_no_key_providers_excluded(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
@@ -256,7 +177,10 @@ class TestAutodetect:
         assert "tool_runtime=inline::file-search" in parts
         assert "responses=inline::builtin" in parts
 
-    @patch("ogx.cli.stack.lets_go._probe_endpoint", return_value=_ProbeStatus.OK)
+    @patch(
+        "ogx.cli.stack.lets_go._probe_provider_availability",
+        return_value=(_ProbeStatus.OK, 3, "http://test", "default", None),
+    )
     def test_autodetect_all_ok(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
@@ -268,21 +192,20 @@ class TestAutodetect:
         assert "responses=inline::builtin" in parts
         assert len(parts) == 14  # 8 probed + 6 inline
 
-    @patch("ogx.cli.stack.lets_go._probe_endpoint")
+    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_only_ollama(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
         def side_effect(
-            base_url: str,
-            probe_path: str,
-            requires_key: bool,
-            key_env: object,
-            extra_headers: object = None,
-            api_key_header: object = None,
-        ) -> _ProbeStatus:
-            if "11434" in base_url:
-                return _ProbeStatus.OK
-            return _ProbeStatus.UNREACHABLE
+            provider_type: str,
+            base_url_env: object,
+            default_base_url: str,
+            required_api_key_env: object,
+            optional_api_key_env: object = None,
+        ) -> tuple:
+            if provider_type == "remote::ollama":
+                return (_ProbeStatus.OK, 3, "http://localhost:11434/v1", "default", None)
+            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
 
         mock_probe.side_effect = side_effect
         parts = _autodetect_providers().split(",")
@@ -291,29 +214,29 @@ class TestAutodetect:
         assert "responses=inline::builtin" in parts
         assert len(parts) == 7  # 1 inference + 6 inline
 
-    @patch("ogx.cli.stack.lets_go._probe_endpoint")
-    def test_autodetect_uses_env_var_base_url(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
+    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
+    def test_autodetect_uses_env_var_name(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
         monkeypatch.setenv("OLLAMA_URL", "http://myhost:11434/v1")
         captured: list[str] = []
 
         def side_effect(
-            base_url: str,
-            probe_path: str,
-            requires_key: bool,
-            key_env: object,
-            extra_headers: object = None,
-            api_key_header: object = None,
-        ) -> _ProbeStatus:
-            captured.append(base_url)
-            return _ProbeStatus.UNREACHABLE
+            provider_type: str,
+            base_url_env: object,
+            default_base_url: str,
+            required_api_key_env: object,
+            optional_api_key_env: object = None,
+        ) -> tuple:
+            if provider_type == "remote::ollama":
+                captured.append(base_url_env)
+            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
 
         mock_probe.side_effect = side_effect
         _autodetect_providers()
-        assert captured[0] == "http://myhost:11434/v1"
+        assert captured[0] == "OLLAMA_URL"
 
-    @patch("ogx.cli.stack.lets_go._probe_endpoint")
+    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_result_order_matches_candidate_order(
         self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch
     ):
@@ -322,42 +245,40 @@ class TestAutodetect:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
         def side_effect(
-            base_url: str,
-            probe_path: str,
-            requires_key: bool,
-            key_env: object,
-            extra_headers: object = None,
-            api_key_header: object = None,
-        ) -> _ProbeStatus:
-            if "11434" in base_url or "openai.com" in base_url:
-                return _ProbeStatus.OK
-            return _ProbeStatus.UNREACHABLE
+            provider_type: str,
+            base_url_env: object,
+            default_base_url: str,
+            required_api_key_env: object,
+            optional_api_key_env: object = None,
+        ) -> tuple:
+            if provider_type in ("remote::ollama", "remote::openai"):
+                return (_ProbeStatus.OK, 3, "http://test", "default", None)
+            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
 
         mock_probe.side_effect = side_effect
         parts = _autodetect_providers().split(",")
         assert parts.index("inference=remote::ollama") < parts.index("inference=remote::openai")
 
-    @patch("ogx.cli.stack.lets_go._probe_endpoint")
+    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_includes_vllm_on_needs_key(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
         monkeypatch.delenv("VLLM_API_TOKEN", raising=False)
 
         def side_effect(
-            base_url: str,
-            probe_path: str,
-            requires_key: bool,
-            key_env: object,
-            extra_headers: object = None,
-            api_key_header: object = None,
-        ) -> _ProbeStatus:
-            if "8000" in base_url:
-                return _ProbeStatus.NEEDS_KEY
-            return _ProbeStatus.UNREACHABLE
+            provider_type: str,
+            base_url_env: object,
+            default_base_url: str,
+            required_api_key_env: object,
+            optional_api_key_env: object = None,
+        ) -> tuple:
+            if provider_type == "remote::vllm":
+                return (_ProbeStatus.NEEDS_KEY, 3, "http://localhost:8000/v1", "default", None)
+            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
 
         mock_probe.side_effect = side_effect
         parts = _autodetect_providers().split(",")
-        assert "inference=remote::vllm" not in parts
+        assert "inference=remote::vllm" in parts
 
 
 class TestRunCommand:
