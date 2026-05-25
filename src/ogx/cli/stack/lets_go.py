@@ -89,6 +89,7 @@ class _ProbeStatus(enum.Enum):
     AUTH = "auth"
     MISSING_DEPS = "missing_deps"
     UNREACHABLE = "unreachable"
+    NEEDS_KEY = "needs_key"  # reachable but optional auth token not configured
 
 
 def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
@@ -211,31 +212,39 @@ def _autodetect_providers() -> str:
     when the key environment variable is not set.
     """
     candidates = [
-        # provider_type, base_url_env, default_base_url, api_key_env
-        ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None),
-        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None),
-        ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None),
-        ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY"),
-        ("remote::llama-openai-compat", "LLAMA_API_BASE_URL", "https://api.llama.com/compat/v1/", "LLAMA_API_KEY"),
-        ("remote::anthropic", None, "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY"),
-        ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY"),
-        ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY"),
+        # provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env
+        ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None, None),
+        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None, "VLLM_API_TOKEN"),
+        ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None, None),
+        ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", None),
+        (
+            "remote::llama-openai-compat",
+            "LLAMA_API_BASE_URL",
+            "https://api.llama.com/compat/v1/",
+            "LLAMA_API_KEY",
+            None,
+        ),
+        ("remote::anthropic", None, "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", None),
+        ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY", None),
+        ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY", None),
     ]
 
     passed: list[str] = []
     missing_deps_providers: dict[str, list[str]] = {}  # provider_type -> pip_packages
     cprint("Scanning for available providers...", color="cyan")
-    for provider_type, base_url_env, default_base_url, api_key_env in candidates:
+    for provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env in candidates:
         status, model_count, base_url, base_source, pip_packages = _probe_provider_availability(
-            provider_type, base_url_env, default_base_url, api_key_env
+            provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env
         )
 
         # Build annotation parts
         parts = []
         if base_url:
             parts.append(f"{base_url}, {base_source}")
-        if api_key_env:
-            parts.append(f"{api_key_env} {'set' if os.getenv(api_key_env) else 'not set'}")
+        if required_api_key_env:
+            parts.append(f"{required_api_key_env} {'set' if os.getenv(required_api_key_env) else 'not set'}")
+        if optional_api_key_env:
+            parts.append(f"{optional_api_key_env} {'set' if os.getenv(optional_api_key_env) else 'not set'}")
         annotation = ", ".join(parts) if parts else ""
 
         if status == _ProbeStatus.MISSING_DEPS and pip_packages:
@@ -252,6 +261,12 @@ def _autodetect_providers() -> str:
                 cprint(f"  ✗ {provider_type} ({annotation})", color="yellow")
             else:
                 cprint(f"  ✗ {provider_type}", color="yellow")
+        elif status == _ProbeStatus.NEEDS_KEY:
+            passed.append(f"inference={provider_type}")
+            if annotation:
+                cprint(f"  ⊘ {provider_type} ({annotation}) — optional token not configured", color="cyan")
+            else:
+                cprint(f"  ⊘ {provider_type} — optional token not configured", color="cyan")
         elif status == _ProbeStatus.AUTH:
             if annotation:
                 cprint(f"  ✗ {provider_type} ({annotation}) — auth error", color="yellow")
@@ -323,7 +338,18 @@ def _substitute_env_vars(obj: Any) -> Any:
             default_value = match.group(2) or ""
             return os.getenv(var_name, default_value)
 
-        return re.sub(pattern, replace_match, obj)
+        result = re.sub(pattern, replace_match, obj)
+        # Coerce boolean strings so Pydantic validators receive proper bool types
+        if result.lower() == "true":
+            return True
+        if result.lower() == "false":
+            return False
+        # Coerce integer strings
+        try:
+            return int(result)
+        except (ValueError, TypeError):
+            pass
+        return result
     elif isinstance(obj, dict):
         return {k: _substitute_env_vars(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -343,8 +369,24 @@ async def _instantiate_with_timeout(factory_fn: Any, config: Any) -> Any:
         raise
 
 
+def _is_auth_error(e: Exception) -> bool:
+    """Return True if the exception represents an authentication/authorization failure."""
+    error_str = str(e).lower()
+    return (
+        "401" in error_str
+        or "403" in error_str
+        or "unauthorized" in error_str
+        or "forbidden" in error_str
+        or "invalid_api_key" in error_str
+    )
+
+
 def _probe_provider_availability(
-    provider_type: str, base_url_env: str | None, default_base_url: str, api_key_env: str | None
+    provider_type: str,
+    base_url_env: str | None,
+    default_base_url: str,
+    required_api_key_env: str | None,
+    optional_api_key_env: str | None = None,
 ) -> tuple[_ProbeStatus, int, str, str, list[str] | None]:
     """Instantiate a provider and probe availability by listing models.
 
@@ -352,12 +394,14 @@ def _probe_provider_availability(
         provider_type: Provider type string (e.g., "remote::openai")
         base_url_env: Environment variable name for base URL override, or None
         default_base_url: Default base URL if env var not set
-        api_key_env: Environment variable name for API key, or None if not required
+        required_api_key_env: Environment variable name for required API key, or None
+        optional_api_key_env: Environment variable name for optional API key, or None
 
     Returns:
         Tuple of (status, model_count, base_url, base_source, pip_packages).
         base_source is "default" or the env var name. base_url is empty string if not applicable.
         pip_packages is a list of packages to install for MISSING_DEPS, None otherwise.
+        Returns NEEDS_KEY if required key is present but optional key is missing.
     """
     # Determine base URL and source
     base_url = ""
@@ -375,8 +419,11 @@ def _probe_provider_availability(
         base_source = "default"
 
     # Check if required API key is available
-    if api_key_env and not os.getenv(api_key_env):
+    if required_api_key_env and not os.getenv(required_api_key_env):
         return _ProbeStatus.NO_KEY, 0, base_url, base_source, None
+
+    # Track if optional API key is missing (provider works but with reduced functionality)
+    optional_key_missing = optional_api_key_env and not os.getenv(optional_api_key_env)
 
     try:
         # Load provider registry and look up the spec
@@ -450,17 +497,8 @@ def _probe_provider_availability(
             logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
             return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
         except Exception as e:
-            error_str = str(e).lower()
             logger.debug("Failed to instantiate provider", provider_type=provider_type, error=str(e)[:300])
-            # Only treat as auth error for specific auth-related keywords
-            if (
-                "401" in error_str
-                or "403" in error_str
-                or "unauthorized" in error_str
-                or "forbidden" in error_str
-                or "invalid_api_key" in error_str
-                or "api_key" in error_str
-            ):
+            if _is_auth_error(e):
                 logger.warning(
                     "Provider auth failed", provider_type=provider_type, base_url=base_url, error=str(e)[:200]
                 )
@@ -484,22 +522,15 @@ def _probe_provider_availability(
             if model_count == 0:
                 logger.debug("Provider returned zero models", provider_type=provider_type)
                 return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
-            return _ProbeStatus.OK, model_count, base_url, base_source, None
+            # Return NEEDS_KEY if optional API key is missing, otherwise OK
+            status = _ProbeStatus.NEEDS_KEY if optional_key_missing else _ProbeStatus.OK
+            return status, model_count, base_url, base_source, None
         except TimeoutError:
             logger.debug("Model listing timed out", provider_type=provider_type)
             return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
         except Exception as e:
-            error_str = str(e).lower()
             logger.debug("Failed to list models", provider_type=provider_type, error=str(e)[:300])
-            # Only treat as auth error for specific auth-related keywords
-            if (
-                "401" in error_str
-                or "403" in error_str
-                or "unauthorized" in error_str
-                or "forbidden" in error_str
-                or "invalid_api_key" in error_str
-                or "api_key" in error_str
-            ):
+            if _is_auth_error(e):
                 logger.warning(
                     "Provider auth failed during model listing",
                     provider_type=provider_type,

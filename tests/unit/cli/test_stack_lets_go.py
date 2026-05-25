@@ -198,6 +198,42 @@ class TestProbeEndpoint:
         assert headers["Authorization"] == "Bearer sk-secret"
         assert "x-api-key" not in headers
 
+    def test_optional_key_included_when_env_var_set(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("VLLM_API_TOKEN", "vllm-token-123")
+        mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 200
+        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp) as mock_get:
+            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
+        assert result == _ProbeStatus.OK
+        headers = mock_get.call_args.kwargs["headers"]
+        assert headers["Authorization"] == "Bearer vllm-token-123"
+
+    def test_optional_key_omitted_when_env_var_unset(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("VLLM_API_TOKEN", raising=False)
+        mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 200
+        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp) as mock_get:
+            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
+        assert result == _ProbeStatus.OK
+        headers = mock_get.call_args.kwargs["headers"]
+        assert "Authorization" not in headers
+
+    def test_needs_key_when_optional_token_unset_and_server_returns_401(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("VLLM_API_TOKEN", raising=False)
+        mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 401
+        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
+            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
+        assert result == _ProbeStatus.NEEDS_KEY
+
+    def test_auth_when_optional_token_set_and_server_returns_401(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("VLLM_API_TOKEN", "wrong-token")
+        mock_resp = MagicMock(spec=httpx.Response)
+        mock_resp.status_code = 401
+        with patch("ogx.cli.stack.lets_go.httpx.get", return_value=mock_resp):
+            result = _probe_endpoint("http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN")
+        assert result == _ProbeStatus.AUTH
+
 
 class TestAutodetect:
     @patch("ogx.cli.stack.lets_go._probe_endpoint", return_value=_ProbeStatus.UNREACHABLE)
@@ -300,6 +336,28 @@ class TestAutodetect:
         mock_probe.side_effect = side_effect
         parts = _autodetect_providers().split(",")
         assert parts.index("inference=remote::ollama") < parts.index("inference=remote::openai")
+
+    @patch("ogx.cli.stack.lets_go._probe_endpoint")
+    def test_autodetect_includes_vllm_on_needs_key(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _autodetect_providers
+
+        monkeypatch.delenv("VLLM_API_TOKEN", raising=False)
+
+        def side_effect(
+            base_url: str,
+            probe_path: str,
+            requires_key: bool,
+            key_env: object,
+            extra_headers: object = None,
+            api_key_header: object = None,
+        ) -> _ProbeStatus:
+            if "8000" in base_url:
+                return _ProbeStatus.NEEDS_KEY
+            return _ProbeStatus.UNREACHABLE
+
+        mock_probe.side_effect = side_effect
+        parts = _autodetect_providers().split(",")
+        assert "inference=remote::vllm" not in parts
 
 
 class TestRunCommand:
