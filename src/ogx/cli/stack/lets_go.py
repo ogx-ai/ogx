@@ -223,10 +223,10 @@ def _autodetect_providers() -> str:
     ]
 
     passed: list[str] = []
-    has_missing_deps = False
+    missing_deps_providers: dict[str, list[str]] = {}  # provider_type -> pip_packages
     cprint("Scanning for available providers...", color="cyan")
     for provider_type, base_url_env, default_base_url, api_key_env in candidates:
-        status, model_count, base_url, base_source = _probe_provider_availability(
+        status, model_count, base_url, base_source, pip_packages = _probe_provider_availability(
             provider_type, base_url_env, default_base_url, api_key_env
         )
 
@@ -238,8 +238,8 @@ def _autodetect_providers() -> str:
             parts.append(f"{api_key_env} {'set' if os.getenv(api_key_env) else 'not set'}")
         annotation = ", ".join(parts) if parts else ""
 
-        if status == _ProbeStatus.MISSING_DEPS:
-            has_missing_deps = True
+        if status == _ProbeStatus.MISSING_DEPS and pip_packages:
+            missing_deps_providers[provider_type] = pip_packages
 
         if status == _ProbeStatus.OK:
             passed.append(f"inference={provider_type}")
@@ -286,13 +286,18 @@ def _autodetect_providers() -> str:
 
     if passed:
         cprint(f"\nDetected {len(passed)} inference provider(s). Starting stack...", color="cyan")
+        if missing_deps_providers:
+            cprint("Available providers with missing dependencies:", color="cyan")
+            for provider_type, pip_packages in missing_deps_providers.items():
+                packages_str = " ".join(f"'{pkg}'" for pkg in pip_packages)
+                cprint(f"  {provider_type}: uv pip install {packages_str}", color="cyan")
     else:
         cprint("\nDetected no inference providers, not starting stack.", color="red")
-        if has_missing_deps:
-            cprint(
-                "Hint: Some providers had missing dependencies. Run without --skip-install-deps to auto-install them.",
-                color="cyan",
-            )
+        if missing_deps_providers:
+            cprint("Install missing dependencies:", color="cyan")
+            for provider_type, pip_packages in missing_deps_providers.items():
+                packages_str = " ".join(f"'{pkg}'" for pkg in pip_packages)
+                cprint(f"  {provider_type}: uv pip install {packages_str}", color="cyan")
     return ",".join(passed + inline_providers)
 
 
@@ -340,7 +345,7 @@ async def _instantiate_with_timeout(factory_fn: Any, config: Any) -> Any:
 
 def _probe_provider_availability(
     provider_type: str, base_url_env: str | None, default_base_url: str, api_key_env: str | None
-) -> tuple[_ProbeStatus, int, str, str]:
+) -> tuple[_ProbeStatus, int, str, str, list[str] | None]:
     """Instantiate a provider and probe availability by listing models.
 
     Args:
@@ -350,8 +355,9 @@ def _probe_provider_availability(
         api_key_env: Environment variable name for API key, or None if not required
 
     Returns:
-        Tuple of (status, model_count, base_url, base_source).
+        Tuple of (status, model_count, base_url, base_source, pip_packages).
         base_source is "default" or the env var name. base_url is empty string if not applicable.
+        pip_packages is a list of packages to install for MISSING_DEPS, None otherwise.
     """
     # Determine base URL and source
     base_url = ""
@@ -370,14 +376,14 @@ def _probe_provider_availability(
 
     # Check if required API key is available
     if api_key_env and not os.getenv(api_key_env):
-        return _ProbeStatus.NO_KEY, 0, base_url, base_source
+        return _ProbeStatus.NO_KEY, 0, base_url, base_source, None
 
     try:
         # Load provider registry and look up the spec
         registry = get_provider_registry()
         if Api.inference not in registry or provider_type not in registry[Api.inference]:
             logger.debug("Provider not found in registry", provider_type=provider_type)
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
 
         provider_spec = registry[Api.inference][provider_type]
         logger.debug("Found provider in registry", provider_type=provider_type, module=provider_spec.module)
@@ -392,10 +398,10 @@ def _probe_provider_availability(
             config_defaults = _substitute_env_vars(config_defaults)
         except ModuleNotFoundError as e:
             logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
         except Exception as e:
             logger.debug("Failed to get config defaults", provider_type=provider_type, error=str(e)[:200])
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
 
         # Instantiate config object
         try:
@@ -403,25 +409,25 @@ def _probe_provider_availability(
             logger.debug("Instantiated config", provider_type=provider_type)
         except ModuleNotFoundError as e:
             logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
         except Exception as e:
             logger.debug("Failed to instantiate config", provider_type=provider_type, error=str(e)[:200])
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
 
         # Import provider module and instantiate
         if not provider_spec.module:
             logger.debug("Provider spec missing module", provider_type=provider_type)
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
 
         try:
             module = importlib.import_module(provider_spec.module)
             logger.debug("Imported provider module", provider_type=provider_type, module=provider_spec.module)
         except ModuleNotFoundError as e:
             logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
         except Exception as e:
             logger.debug("Failed to import provider module", module=provider_spec.module, error=str(e)[:200])
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
 
         try:
             # Call appropriate factory function
@@ -442,7 +448,7 @@ def _probe_provider_availability(
             provider.__provider_config__ = config
         except ModuleNotFoundError as e:
             logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source
+            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
         except Exception as e:
             error_str = str(e).lower()
             logger.debug("Failed to instantiate provider", provider_type=provider_type, error=str(e)[:300])
@@ -458,8 +464,8 @@ def _probe_provider_availability(
                 logger.warning(
                     "Provider auth failed", provider_type=provider_type, base_url=base_url, error=str(e)[:200]
                 )
-                return _ProbeStatus.AUTH, 0, base_url, base_source
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+                return _ProbeStatus.AUTH, 0, base_url, base_source, None
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
 
         # List models with timeout
         try:
@@ -477,11 +483,11 @@ def _probe_provider_availability(
 
             if model_count == 0:
                 logger.debug("Provider returned zero models", provider_type=provider_type)
-                return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
-            return _ProbeStatus.OK, model_count, base_url, base_source
+                return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
+            return _ProbeStatus.OK, model_count, base_url, base_source, None
         except TimeoutError:
             logger.debug("Model listing timed out", provider_type=provider_type)
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
         except Exception as e:
             error_str = str(e).lower()
             logger.debug("Failed to list models", provider_type=provider_type, error=str(e)[:300])
@@ -500,11 +506,11 @@ def _probe_provider_availability(
                     base_url=base_url,
                     error=str(e)[:200],
                 )
-                return _ProbeStatus.AUTH, 0, base_url, base_source
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+                return _ProbeStatus.AUTH, 0, base_url, base_source, None
+            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
     except Exception as e:
         logger.debug("Unexpected error during provider probing", provider_type=provider_type, error=str(e)[:300])
-        return _ProbeStatus.UNREACHABLE, 0, base_url, base_source
+        return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
 
 
 class StackLetsGo(Subcommand):
