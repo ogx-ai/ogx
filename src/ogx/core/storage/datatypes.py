@@ -211,8 +211,18 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
 
     @property
     def engine_str(self) -> str:
-        pw = self.password.get_secret_value() if self.password else ""
-        return f"postgresql+asyncpg://{self.user}:{pw}@{self.host}:{self.port}/{self.db}"
+        from sqlalchemy.engine import URL
+
+        return str(
+            URL.create(
+                drivername="postgresql+asyncpg",
+                username=self.user,
+                password=self.password.get_secret_value() if self.password else None,
+                host=self.host,
+                port=int(self.port),
+                database=self.db,
+            ).render_as_string(hide_password=False)
+        )
 
     @classmethod
     def pip_packages(cls) -> list[str]:
