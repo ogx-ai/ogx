@@ -19,7 +19,6 @@ from ogx.cli.stack.lets_go import (
     StackLetsGo,
     _build_claude_code_aliases,
     _ProbeStatus,
-    _substitute_env_vars,
 )
 
 
@@ -100,55 +99,6 @@ class TestTopLevelLetsGoArguments:
         assert args.persist_config is True
         assert args.providers_override == "inference=remote::ollama"
         assert args.skip_install_deps is True
-
-
-class TestSubstituteEnvVars:
-    def test_boolean_true_coercion(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("MY_VAR", "true")
-        assert _substitute_env_vars("${env.MY_VAR:=false}") is True
-
-    def test_boolean_false_coercion(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("MY_VAR", "false")
-        assert _substitute_env_vars("${env.MY_VAR:=true}") is False
-
-    def test_boolean_default_true_coercion(self):
-        assert _substitute_env_vars("${env.NONEXISTENT_VAR_XYZ:=true}") is True
-
-    def test_boolean_default_false_coercion(self):
-        assert _substitute_env_vars("${env.NONEXISTENT_VAR_XYZ:=false}") is False
-
-    def test_integer_coercion(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("MY_INT", "4096")
-        result = _substitute_env_vars("${env.MY_INT:=2048}")
-        assert result == 4096
-        assert isinstance(result, int)
-
-    def test_integer_default_coercion(self):
-        result = _substitute_env_vars("${env.NONEXISTENT_INT_XYZ:=2048}")
-        assert result == 2048
-        assert isinstance(result, int)
-
-    def test_string_passes_through(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("MY_URL", "http://example.com")
-        assert _substitute_env_vars("${env.MY_URL:=http://localhost}") == "http://example.com"
-
-    def test_nested_dict_booleans(self):
-        obj = {"tls": {"verify": "${env.NONEXISTENT_TLS_XYZ:=true}"}}
-        result = _substitute_env_vars(obj)
-        assert result["tls"]["verify"] is True
-
-    def test_list_items_coerced(self):
-        obj = ["${env.NONEXISTENT_XYZ:=true}", "${env.NONEXISTENT_XYZ:=42}"]
-        result = _substitute_env_vars(obj)
-        assert result[0] is True
-        assert result[1] == 42
-
-    def test_non_template_string_unchanged(self):
-        assert _substitute_env_vars("http://localhost:8080/v1") == "http://localhost:8080/v1"
-
-    def test_non_string_passthrough(self):
-        assert _substitute_env_vars(123) == 123
-        assert _substitute_env_vars(True) is True
 
 
 class TestAutodetect:

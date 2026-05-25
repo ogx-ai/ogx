@@ -9,7 +9,6 @@ import asyncio
 import enum
 import importlib
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -25,7 +24,7 @@ from ogx.cli.stack.run import _start_ui_development_server, _uvicorn_run
 from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
 from ogx.core.distribution import get_provider_registry
-from ogx.core.stack import run_config_from_dynamic_config_spec
+from ogx.core.stack import replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
@@ -327,37 +326,6 @@ async def _list_models_with_timeout(provider: Any, timeout_seconds: float = 5) -
         raise
 
 
-def _substitute_env_vars(obj: Any) -> Any:
-    """Recursively substitute ${env.VAR_NAME:=default} patterns with environment variable values."""
-    if isinstance(obj, str):
-        # Pattern: ${env.VAR_NAME:=default_value}
-        pattern = r"\$\{env\.([^}:]+)(?::=([^}]*))?\}"
-
-        def replace_match(match):
-            var_name = match.group(1)
-            default_value = match.group(2) or ""
-            return os.getenv(var_name, default_value)
-
-        result = re.sub(pattern, replace_match, obj)
-        # Coerce boolean strings so Pydantic validators receive proper bool types
-        if result.lower() == "true":
-            return True
-        if result.lower() == "false":
-            return False
-        # Coerce integer strings
-        try:
-            return int(result)
-        except (ValueError, TypeError):
-            pass
-        return result
-    elif isinstance(obj, dict):
-        return {k: _substitute_env_vars(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_substitute_env_vars(item) for item in obj]
-    else:
-        return obj
-
-
 async def _instantiate_with_timeout(factory_fn: Any, config: Any) -> Any:
     """Call factory function with timeout."""
     try:
@@ -442,7 +410,7 @@ def _probe_provider_availability(
             logger.debug("Got config defaults", provider_type=provider_type)
 
             # Substitute environment variables in config (e.g., ${env.VAR_NAME:=default})
-            config_defaults = _substitute_env_vars(config_defaults)
+            config_defaults = replace_env_vars(config_defaults)
         except ModuleNotFoundError as e:
             logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
             return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
