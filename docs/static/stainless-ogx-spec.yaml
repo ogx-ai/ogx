@@ -7190,7 +7190,6 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
-          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -7213,9 +7212,6 @@ components:
           title: Temperature
         text:
           $ref: '#/components/schemas/OpenAIResponseText'
-          default:
-            format:
-              type: text
         top_p:
           type: number
           title: Top P
@@ -7280,8 +7276,10 @@ components:
           title: OpenAIResponseInputToolChoiceMode
         truncation:
           anyOf:
-          - type: string
+          - $ref: '#/components/schemas/ResponseTruncation'
+            title: ResponseTruncation
           - type: 'null'
+          title: ResponseTruncation
         usage:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseUsage'
@@ -7611,7 +7609,6 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
-          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -7634,9 +7631,6 @@ components:
           title: Temperature
         text:
           $ref: '#/components/schemas/OpenAIResponseText'
-          default:
-            format:
-              type: text
         top_p:
           type: number
           title: Top P
@@ -7701,8 +7695,10 @@ components:
           title: OpenAIResponseInputToolChoiceMode
         truncation:
           anyOf:
-          - type: string
+          - $ref: '#/components/schemas/ResponseTruncation'
+            title: ResponseTruncation
           - type: 'null'
+          title: ResponseTruncation
         usage:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseUsage'
@@ -10284,6 +10280,32 @@ components:
       type: object
       title: AllowedToolsFilter
       description: Filter configuration for restricting which MCP tools can be used.
+    AnthropicBase64ImageSource:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - base64
+        media_type:
+          type: string
+          enum:
+          - image/jpeg
+          - image/png
+          - image/gif
+          - image/webp
+          title: Media Type
+          description: MIME type of the image.
+        data:
+          type: string
+          title: Data
+          description: Base64-encoded image data.
+      type: object
+      required:
+      - media_type
+      - data
+      title: AnthropicBase64ImageSource
+      description: Base64-encoded image source.
     AnthropicCountTokensRequest:
       properties:
         model:
@@ -10422,33 +10444,22 @@ components:
           enum:
           - image
         source:
-          $ref: '#/components/schemas/AnthropicImageSource'
+          oneOf:
+          - $ref: '#/components/schemas/AnthropicBase64ImageSource'
+            title: AnthropicBase64ImageSource
+          - $ref: '#/components/schemas/AnthropicURLImageSource'
+            title: AnthropicURLImageSource
+          title: AnthropicBase64ImageSource | AnthropicURLImageSource
+          discriminator:
+            propertyName: type
+            mapping:
+              base64: '#/components/schemas/AnthropicBase64ImageSource'
+              url: '#/components/schemas/AnthropicURLImageSource'
       type: object
       required:
       - source
       title: AnthropicImageBlock
       description: An image content block.
-    AnthropicImageSource:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - base64
-        media_type:
-          type: string
-          title: Media Type
-          description: MIME type of the image (e.g. image/png).
-        data:
-          type: string
-          title: Data
-          description: Base64-encoded image data.
-      type: object
-      required:
-      - media_type
-      - data
-      title: AnthropicImageSource
-      description: Source for an image content block.
     AnthropicMessage:
       properties:
         role:
@@ -10727,6 +10738,22 @@ components:
       - input
       title: AnthropicToolUseBlock
       description: A tool use content block in an assistant message.
+    AnthropicURLImageSource:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - url
+        url:
+          type: string
+          title: Url
+          description: URL of the image.
+      type: object
+      required:
+      - url
+      title: AnthropicURLImageSource
+      description: URL image source.
     AnthropicUsage:
       properties:
         input_tokens:
@@ -11292,7 +11319,6 @@ components:
           - type: boolean
           - type: 'null'
           description: Whether to enable parallel tool calls.
-          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -11313,12 +11339,10 @@ components:
           type: boolean
           title: Store
           description: Whether to store the response in the database.
-          default: true
         stream:
           type: boolean
           title: Stream
           description: Whether to stream the response.
-          default: false
         temperature:
           anyOf:
           - type: number
@@ -12987,6 +13011,16 @@ components:
             - high
             - xhigh
           - type: 'null'
+        generate_summary:
+          anyOf:
+          - type: string
+            enum:
+            - auto
+            - concise
+            - detailed
+          - type: 'null'
+          description: "Deprecated: use 'summary' instead."
+          deprecated: true
         summary:
           anyOf:
           - type: string
@@ -13270,8 +13304,6 @@ components:
           type: boolean
           title: Include Obfuscation
           description: Whether to obfuscate sensitive information in streamed output.
-          default: true
-      additionalProperties: false
       type: object
       title: ResponseStreamOptions
       description: Options that control streamed response behavior.

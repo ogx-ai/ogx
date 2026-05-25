@@ -84,6 +84,7 @@ class _ProbeStatus(enum.Enum):
     NO_KEY = "no_key"
     AUTH = "auth"
     UNREACHABLE = "unreachable"
+    NEEDS_KEY = "needs_key"  # reachable but optional auth token not configured
 
 
 def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
@@ -208,7 +209,7 @@ def _autodetect_providers() -> str:
     candidates = [
         # provider_type, env_for_base_url, default_base_url, probe_path, requires_api_key, api_key_env, extra_headers, api_key_header
         ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", "models", False, None, {}, None),
-        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", "health", False, None, {}, None),
+        ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", "models", False, "VLLM_API_TOKEN", {}, None),
         (
             "remote::llama-cpp-server",
             "LLAMA_CPP_SERVER_URL",
@@ -286,7 +287,7 @@ def _autodetect_providers() -> str:
 
         # Build annotation parts
         parts = [f"{base}, {base_source}"]
-        if requires_key and key_env:
+        if key_env:
             parts.append(f"{key_env} {'set' if os.getenv(key_env) else 'not set'}")
 
         annotation = ", ".join(parts)
@@ -296,6 +297,8 @@ def _autodetect_providers() -> str:
             cprint(f"  ✓ {provider_type} ({annotation})", color="green")
         elif status == _ProbeStatus.NO_KEY:
             cprint(f"  ✗ {provider_type} ({annotation})", color="yellow")
+        elif status == _ProbeStatus.NEEDS_KEY:
+            cprint(f"  ✗ {provider_type} ({annotation}) — set {key_env} to authenticate", color="yellow")
         elif status == _ProbeStatus.AUTH:
             cprint(f"  ✗ {provider_type} ({annotation}) — auth error", color="yellow")
         else:
@@ -347,10 +350,16 @@ def _probe_endpoint(
             headers[api_key_header] = key
         else:
             headers["Authorization"] = f"Bearer {key}"
+    elif key_env:
+        key = os.getenv(key_env, "")
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
 
     try:
         resp = cast(httpx.Response, httpx.get(url, headers=headers, timeout=2.0))
         if resp.status_code in (401, 403):
+            if not requires_key and key_env and not os.getenv(key_env):
+                return _ProbeStatus.NEEDS_KEY
             return _ProbeStatus.AUTH
         if resp.status_code < 400:
             return _ProbeStatus.OK

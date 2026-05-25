@@ -15,12 +15,15 @@ from ogx.core.storage.datatypes import KVStoreReference
 from ogx.providers.inline.messages.config import MessagesConfig
 from ogx.providers.inline.messages.impl import BuiltinMessagesImpl
 from ogx_api.messages.models import (
+    AnthropicBase64ImageSource,
     AnthropicCreateMessageRequest,
+    AnthropicImageBlock,
     AnthropicMessage,
     AnthropicTextBlock,
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
 )
 
 
@@ -180,6 +183,95 @@ class TestRequestTranslation:
         assert msg["role"] == "tool"
         assert msg["tool_call_id"] == "toolu_123"
         assert msg["content"] == "72F and sunny"
+
+    def test_base64_image_in_user_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicTextBlock(text="What is in this image?"),
+                        AnthropicImageBlock(
+                            source=AnthropicBase64ImageSource(
+                                media_type="image/png",
+                                data="abc123",
+                            )
+                        ),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        assert len(result.messages) == 1
+        msg = _msg_to_dict(result.messages[0])
+        assert msg["role"] == "user"
+        assert isinstance(msg["content"], list)
+        assert msg["content"][0] == {"type": "text", "text": "What is in this image?"}
+        assert msg["content"][1] == {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,abc123"},
+        }
+
+    def test_url_image_in_user_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicImageBlock(source=AnthropicURLImageSource(url="https://example.com/img.jpg")),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        assert len(result.messages) == 1
+        msg = _msg_to_dict(result.messages[0])
+        assert msg["content"] == [{"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}}]
+
+    def test_image_in_tool_result_promoted_to_user_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicToolResultBlock(
+                            tool_use_id="toolu_abc",
+                            content=[
+                                AnthropicTextBlock(text="Screenshot taken"),
+                                AnthropicImageBlock(
+                                    source=AnthropicBase64ImageSource(
+                                        media_type="image/png",
+                                        data="screenshotdata",
+                                    )
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        # First message: tool result with text only
+        assert len(result.messages) == 2
+        tool_msg = _msg_to_dict(result.messages[0])
+        assert tool_msg["role"] == "tool"
+        assert tool_msg["tool_call_id"] == "toolu_abc"
+        assert tool_msg["content"] == "Screenshot taken"
+        # Second message: image promoted to user message
+        image_msg = _msg_to_dict(result.messages[1])
+        assert image_msg["role"] == "user"
+        assert image_msg["content"] == [
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,screenshotdata"}}
+        ]
 
     def test_top_k_passed_as_extra(self, impl):
         request = AnthropicCreateMessageRequest(
