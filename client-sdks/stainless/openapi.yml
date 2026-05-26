@@ -10618,15 +10618,18 @@ components:
                 title: AnthropicToolResultBlock-Input
               - $ref: '#/components/schemas/AnthropicThinkingBlock'
                 title: AnthropicThinkingBlock
+              - $ref: '#/components/schemas/AnthropicRedactedThinkingBlock'
+                title: AnthropicRedactedThinkingBlock
               discriminator:
                 propertyName: type
                 mapping:
                   image: '#/components/schemas/AnthropicImageBlock'
+                  redacted_thinking: '#/components/schemas/AnthropicRedactedThinkingBlock'
                   text: '#/components/schemas/AnthropicTextBlock'
                   thinking: '#/components/schemas/AnthropicThinkingBlock'
                   tool_result: '#/components/schemas/AnthropicToolResultBlock-Input'
                   tool_use: '#/components/schemas/AnthropicToolUseBlock'
-              title: AnthropicTextBlock | ... (5 variants)
+              title: AnthropicTextBlock | ... (6 variants)
             type: array
             title: list[AnthropicTextBlock | AnthropicImageBlock | ...]
           title: string | list[AnthropicTextBlock | AnthropicImageBlock | ...]
@@ -10666,15 +10669,18 @@ components:
               title: AnthropicToolResultBlock-Output
             - $ref: '#/components/schemas/AnthropicThinkingBlock'
               title: AnthropicThinkingBlock
+            - $ref: '#/components/schemas/AnthropicRedactedThinkingBlock'
+              title: AnthropicRedactedThinkingBlock
             discriminator:
               propertyName: type
               mapping:
                 image: '#/components/schemas/AnthropicImageBlock'
+                redacted_thinking: '#/components/schemas/AnthropicRedactedThinkingBlock'
                 text: '#/components/schemas/AnthropicTextBlock'
                 thinking: '#/components/schemas/AnthropicThinkingBlock'
                 tool_result: '#/components/schemas/AnthropicToolResultBlock-Output'
                 tool_use: '#/components/schemas/AnthropicToolUseBlock'
-            title: AnthropicTextBlock | ... (5 variants)
+            title: AnthropicTextBlock | ... (6 variants)
           type: array
           title: Content
           description: Response content blocks.
@@ -10699,6 +10705,22 @@ components:
       - model
       title: AnthropicMessageResponse
       description: Response from POST /v1/messages (non-streaming).
+    AnthropicRedactedThinkingBlock:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - redacted_thinking
+        data:
+          type: string
+          title: Data
+          description: Opaque redacted thinking data.
+      type: object
+      required:
+      - data
+      title: AnthropicRedactedThinkingBlock
+      description: A redacted thinking content block. Must be echoed back as-is in multi-turn.
     AnthropicTextBlock:
       properties:
         type:
@@ -10748,7 +10770,7 @@ components:
         budget_tokens:
           anyOf:
           - type: integer
-            minimum: 1.0
+            minimum: 1024.0
           - type: 'null'
           description: Maximum tokens for thinking.
       type: object

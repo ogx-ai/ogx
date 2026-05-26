@@ -73,12 +73,20 @@ class AnthropicThinkingBlock(BaseModel):
     signature: str | None = Field(default=None, description="Signature for the thinking block.")
 
 
+class AnthropicRedactedThinkingBlock(BaseModel):
+    """A redacted thinking content block. Must be echoed back as-is in multi-turn."""
+
+    type: Literal["redacted_thinking"] = "redacted_thinking"
+    data: str = Field(..., description="Opaque redacted thinking data.")
+
+
 AnthropicContentBlock = Annotated[
     AnthropicTextBlock
     | AnthropicImageBlock
     | AnthropicToolUseBlock
     | AnthropicToolResultBlock
-    | AnthropicThinkingBlock,
+    | AnthropicThinkingBlock
+    | AnthropicRedactedThinkingBlock,
     Field(discriminator="type"),
 ]
 
@@ -113,7 +121,7 @@ class AnthropicThinkingConfig(BaseModel):
     """Configuration for extended thinking."""
 
     type: Literal["enabled", "disabled", "adaptive"] = "enabled"
-    budget_tokens: int | None = Field(default=None, ge=1, description="Maximum tokens for thinking.")
+    budget_tokens: int | None = Field(default=None, ge=1024, description="Maximum tokens for thinking.")
 
 
 # -- Request models --
@@ -222,12 +230,17 @@ class _ThinkingDelta(BaseModel):
     thinking: str
 
 
+class _SignatureDelta(BaseModel):
+    type: Literal["signature_delta"] = "signature_delta"
+    signature: str
+
+
 class ContentBlockDeltaEvent(BaseModel):
     """A delta within a content block."""
 
     type: Literal["content_block_delta"] = "content_block_delta"
     index: int
-    delta: _TextDelta | _InputJsonDelta | _ThinkingDelta
+    delta: _TextDelta | _InputJsonDelta | _ThinkingDelta | _SignatureDelta
 
 
 class ContentBlockStopEvent(BaseModel):

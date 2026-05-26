@@ -40,6 +40,7 @@ from ogx_api.messages.models import (
     AnthropicImageBlock,
     AnthropicMessage,
     AnthropicMessageResponse,
+    AnthropicRedactedThinkingBlock,
     AnthropicStreamEvent,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
@@ -55,6 +56,7 @@ from ogx_api.messages.models import (
     MessageStopEvent,
     _InputJsonDelta,
     _MessageDelta,
+    _SignatureDelta,
     _TextDelta,
     _ThinkingDelta,
 )
@@ -220,25 +222,31 @@ class BuiltinMessagesImpl(Messages):
             return MessageStartEvent(message=AnthropicMessageResponse(**data["message"]))
         if event_type == "content_block_start":
             block_data = data["content_block"]
-            content_block: AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock
+            content_block: (
+                AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock | AnthropicRedactedThinkingBlock
+            )
             block_type = block_data.get("type")
             if block_type == "tool_use":
                 content_block = AnthropicToolUseBlock(**block_data)
             elif block_type == "thinking":
                 content_block = AnthropicThinkingBlock(**block_data)
+            elif block_type == "redacted_thinking":
+                content_block = AnthropicRedactedThinkingBlock(**block_data)
             else:
                 content_block = AnthropicTextBlock(**block_data)
             return ContentBlockStartEvent(index=data["index"], content_block=content_block)
         if event_type == "content_block_delta":
             delta_data = data["delta"]
             delta_type = delta_data.get("type")
-            delta: _TextDelta | _InputJsonDelta | _ThinkingDelta
+            delta: _TextDelta | _InputJsonDelta | _ThinkingDelta | _SignatureDelta
             if delta_type == "text_delta":
                 delta = _TextDelta(text=delta_data["text"])
             elif delta_type == "input_json_delta":
                 delta = _InputJsonDelta(partial_json=delta_data["partial_json"])
             elif delta_type == "thinking_delta":
                 delta = _ThinkingDelta(thinking=delta_data["thinking"])
+            elif delta_type == "signature_delta":
+                delta = _SignatureDelta(signature=delta_data["signature"])
             else:
                 return None
             return ContentBlockDeltaEvent(index=data["index"], delta=delta)
@@ -286,6 +294,12 @@ class BuiltinMessagesImpl(Messages):
     # -- Request translation --
 
     def _anthropic_to_openai(self, request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
+        if request.thinking and request.thinking.type == "enabled":
+            raise ValueError(
+                "Failed to process thinking request: extended thinking requires a native "
+                "Anthropic-compatible provider; translation mode does not support it"
+            )
+
         messages = self._convert_messages_to_openai(request.system, request.messages)
         tools = self._convert_tools_to_openai(request.tools) if request.tools else None
         tool_choice = self._convert_tool_choice_to_openai(request.tool_choice) if request.tool_choice else None
@@ -293,8 +307,6 @@ class BuiltinMessagesImpl(Messages):
         extra_body: dict[str, Any] = {}
         if request.top_k is not None:
             extra_body["top_k"] = request.top_k
-        # Note: Anthropic's "thinking" parameter has no equivalent in the OpenAI
-        # chat completions API and is intentionally not forwarded.
 
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=request.model,
