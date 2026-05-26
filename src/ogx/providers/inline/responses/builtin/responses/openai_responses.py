@@ -793,14 +793,18 @@ class OpenAIResponsesImpl:
                             if failed_response.error
                             else "response failed but no error message was provided"
                         )
+                        error_code = failed_response.error.code if failed_response.error else "server_error"
                         logger.error(
                             "response creation failed",
                             error_message=error_message,
+                            error_code=error_code,
                             response_id=failed_response.id,
                             model=model,
                         )
-                        # Surface the provider message — it may be actionable (e.g. context window exceeded)
-                        # and is already visible to callers in streaming mode via the response.failed event.
+                        # Surface the provider message — it may be actionable (e.g. wrong tool-call-parser,
+                        # context window exceeded). Use the error code to pick the right HTTP status.
+                        if error_code == "invalid_prompt":
+                            raise InvalidParameterError("model", model, error_message)
                         raise InternalServerError(error_message)
                     case _:
                         pass  # Other event types don't have .response
