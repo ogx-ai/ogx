@@ -226,11 +226,7 @@ class OpenAIResponseMessage(BaseModel):
 
 @json_schema_type
 class WebSearchSource(BaseModel):
-    """A source URL returned by a web search action.
-
-    :param type: Source type, always "url"
-    :param url: The URL of the source
-    """
+    """A source URL returned by a web search action."""
 
     type: Literal["url"] = "url"
     url: str
@@ -238,13 +234,7 @@ class WebSearchSource(BaseModel):
 
 @json_schema_type
 class WebSearchActionSearch(BaseModel):
-    """Web search action: performs a search query.
-
-    :param type: Action type, always "search"
-    :param query: The search query (deprecated in favor of queries)
-    :param queries: The search queries
-    :param sources: Source URLs found by the search
-    """
+    """Web search action: performs a search query."""
 
     type: Literal["search"] = "search"
     query: str
@@ -254,11 +244,7 @@ class WebSearchActionSearch(BaseModel):
 
 @json_schema_type
 class WebSearchActionOpenPage(BaseModel):
-    """Web search action: opens a specific URL from search results.
-
-    :param type: Action type, always "open_page"
-    :param url: The URL opened by the model
-    """
+    """Web search action: opens a specific URL from search results."""
 
     type: Literal["open_page"] = "open_page"
     url: str | None = None
@@ -266,12 +252,7 @@ class WebSearchActionOpenPage(BaseModel):
 
 @json_schema_type
 class WebSearchActionFind(BaseModel):
-    """Web search action: searches for a pattern within a loaded page.
-
-    :param type: Action type, always "find_in_page"
-    :param url: The URL of the page searched
-    :param pattern: The pattern or text to search for
-    """
+    """Web search action: searches for a pattern within a loaded page."""
 
     type: Literal["find_in_page"] = "find_in_page"
     url: str
@@ -280,13 +261,7 @@ class WebSearchActionFind(BaseModel):
 
 @json_schema_type
 class OpenAIResponseOutputMessageWebSearchToolCall(BaseModel):
-    """Web search tool call output message for OpenAI responses.
-
-    :param id: Unique identifier for this tool call
-    :param status: Current status of the web search operation
-    :param type: Tool call type identifier, always "web_search_call"
-    :param action: Details of the search action performed
-    """
+    """Web search tool call output message for OpenAI responses."""
 
     id: str
     status: str
@@ -530,24 +505,14 @@ WebSearchToolTypes = ["web_search", "web_search_preview", "web_search_preview_20
 
 @json_schema_type
 class WebSearchFilters(BaseModel):
-    """Domain filters for web search results.
-
-    :param allowed_domains: List of domains to restrict search results to
-    """
+    """Domain filters for web search results."""
 
     allowed_domains: list[str] | None = None
 
 
 @json_schema_type
 class WebSearchUserLocation(BaseModel):
-    """Approximate user location to refine web search results.
-
-    :param type: Location type, always "approximate"
-    :param city: Free-text city name
-    :param country: ISO 3166-1 alpha-2 country code
-    :param region: Free-text region or state name
-    :param timezone: IANA timezone identifier
-    """
+    """Approximate user location to refine web search results."""
 
     type: Literal["approximate"] = "approximate"
     city: str | None = None
@@ -558,13 +523,7 @@ class WebSearchUserLocation(BaseModel):
 
 @json_schema_type
 class OpenAIResponseInputToolWebSearch(BaseModel):
-    """Web search tool configuration for OpenAI response inputs.
-
-    :param type: Web search tool type variant to use
-    :param search_context_size: (Optional) Size of search context, must be "low", "medium", or "high"
-    :param filters: (Optional) Domain filters to restrict search results
-    :param user_location: (Optional) Approximate user location to refine results
-    """
+    """Web search tool configuration for OpenAI response inputs."""
 
     # Must match values of WebSearchToolTypes above
     type: (
