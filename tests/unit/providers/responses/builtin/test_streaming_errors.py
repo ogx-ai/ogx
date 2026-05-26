@@ -134,6 +134,24 @@ class TestExtractOpenaiError:
             assert code == valid_code
             assert message == "example"
 
+    def test_integer_4xx_code_maps_to_invalid_prompt(self):
+        """vLLM returns integer error codes (e.g. 400). 4xx should map to invalid_prompt."""
+        body = {
+            "error": {"message": "'dict object' has no attribute 'description'", "type": "BadRequestError", "code": 400}
+        }
+        exc = _make_mock_exc(body=body)
+        code, message = extract_openai_error(exc)
+        assert code == "invalid_prompt"
+        assert "'dict object' has no attribute 'description'" in message
+
+    def test_integer_5xx_code_maps_to_server_error(self):
+        """Integer 5xx codes should fall back to server_error."""
+        body = {"error": {"message": "Internal error", "code": 500}}
+        exc = _make_mock_exc(body=body)
+        code, message = extract_openai_error(exc)
+        assert code == "server_error"
+        assert message == "Internal error"
+
     def test_all_spec_codes_are_valid(self):
         """All spec-defined error codes should be accepted (no fallback)."""
         spec_codes = {
