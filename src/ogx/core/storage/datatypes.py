@@ -220,7 +220,7 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
                 host=self.host,
                 port=int(self.port),
                 database=self.db,
-            ).render_as_string(hide_password=False)
+            ).render_as_string(hide_password=False)  # TODO: avoid rendering password
         )
 
     @classmethod
