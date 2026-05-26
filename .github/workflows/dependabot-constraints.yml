@@ -69,20 +69,39 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Parsed: $dep_name $dep_version"
 
-      - name: Update dependency version floors in pyproject.toml
+      - name: Determine target pyproject from changed lock files
         if: steps.parse.outputs.skip != 'true'
+        id: target
+        run: |
+          pyprojects=""
+          if git diff HEAD~1 --name-only | grep -q '^uv\.lock$'; then
+            pyprojects="pyproject.toml"
+          fi
+          if git diff HEAD~1 --name-only | grep -q '^src/ogx_api/uv\.lock$'; then
+            pyprojects="$pyprojects src/ogx_api/pyproject.toml"
+          fi
+          pyprojects=$(echo "$pyprojects" | xargs)
+
+          if [ -z "$pyprojects" ]; then
+            echo "No lock file changes detected, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Target pyproject files: $pyprojects"
+            echo "pyprojects=$pyprojects" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update dependency version floors in pyproject.toml
+        if: steps.parse.outputs.skip != 'true' && steps.target.outputs.skip != 'true'
         id: update
         env:
           DEP_NAME: ${{ steps.parse.outputs.dep_name }}
           DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
         run: |
           changed=false
 
-          for pyproject in pyproject.toml src/ogx_api/pyproject.toml; do
-            if [ ! -f "$pyproject" ]; then
-              continue
-            fi
-
+          for pyproject in $TARGET_PYPROJECTS; do
             echo "--- Checking $pyproject ---"
             output=$(python3 .github/scripts/update_constraint_deps.py \
               --dependency-name "$DEP_NAME" \
