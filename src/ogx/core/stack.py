@@ -176,63 +176,6 @@ async def register_resources(run_config: StackConfig, impls: dict[Api, Any]) -> 
                 if not obj.provider_id or obj.provider_id == "__disabled__":
                     logger.debug("Skipping registration for disabled provider", resource=rsrc.capitalize())
                     continue
-                # Handle provider_id="all" - register unprefixed alias using first active provider
-                if obj.provider_id == "all":
-                    if rsrc != "models":
-                        logger.warning(
-                            "provider_id=all is only supported for models, skipping",
-                            resource=rsrc.capitalize(),
-                        )
-                        continue
-                    # Get all active inference providers from the routing table
-                    routing_table = impls[api]
-                    if not hasattr(routing_table, "impls_by_provider_id"):
-                        logger.warning(
-                            "Cannot resolve provider_id=all - routing table has no providers",
-                            resource=rsrc.capitalize(),
-                        )
-                        continue
-                    provider_ids = list(routing_table.impls_by_provider_id.keys())
-                    if not provider_ids:
-                        logger.warning(
-                            "Cannot resolve provider_id=all - no active providers found",
-                            resource=rsrc.capitalize(),
-                        )
-                        continue
-                    # Use first active provider for the unprefixed alias
-                    first_provider = provider_ids[0]
-                    logger.info(
-                        "Registering unprefixed model alias using first active inference provider",
-                        model_id=obj.model_id,
-                        provider_id=first_provider,
-                        available_providers=provider_ids,
-                    )
-
-                    # Mark this as an unprefixed alias in metadata
-                    metadata = (obj.metadata or {}).copy()
-                    metadata["_unprefixed_alias"] = True
-                    obj_copy = obj.model_copy(
-                        update={
-                            "provider_id": first_provider,
-                            "metadata": metadata,
-                        }
-                    )
-
-                    if request_class is not None:
-                        request = request_class(**obj_copy.model_dump())
-                        try:
-                            await method(request)
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to register unprefixed model alias",
-                                model_id=obj_copy.model_id,
-                                provider_id=first_provider,
-                                error=str(e),
-                            )
-                    else:
-                        await method(**{k: getattr(obj_copy, k) for k in obj_copy.model_dump().keys()})
-                    continue
-
                 logger.debug(
                     "Registering resource for provider",
                     resource=rsrc.capitalize(),

@@ -30,6 +30,26 @@ class MessagesConfig(BaseModel):
         ge=1,
     )
 
+    alias_prefixes: list[str] = Field(
+        default=["claude-"],
+        description=(
+            "Model-ID prefixes treated as fallback aliases. Claude Code hardcodes model IDs "
+            "(e.g. 'claude-haiku-4-5-...') into its background requests; when an unprefixed model "
+            "with one of these prefixes is requested and is not registered, it is rewritten to the "
+            "last real model the same caller used, so those requests follow the user's actual model "
+            "and provider instead of failing."
+        ),
+    )
+
+    fallback_model: str | None = Field(
+        default=None,
+        description=(
+            "Model ID to use for an alias request when the caller has not yet made a request with a "
+            "real model (cold start). When None, an alias request with no prior model returns an error "
+            "rather than silently routing to an arbitrary, possibly expensive, provider."
+        ),
+    )
+
     @classmethod
     def sample_run_config(cls, __distro_dir__: str = "") -> dict[str, Any]:
         return {

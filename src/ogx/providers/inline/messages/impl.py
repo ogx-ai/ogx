@@ -24,6 +24,7 @@ from typing import Any
 
 import httpx
 
+from ogx.core.request_headers import get_authenticated_user
 from ogx.core.storage.kvstore import KVStore
 from ogx.log import get_logger
 from ogx_api import (
@@ -84,6 +85,9 @@ _BATCH_PREFIX = "msgbatch:"
 _BATCH_RESULTS_PREFIX = "msgbatch_results:"
 _BATCH_EXPIRY_HOURS = 24
 
+# Key used for the last-real-model map when auth is disabled (single local caller).
+_ANONYMOUS_PRINCIPAL = "__local__"
+
 logger = get_logger(name=__name__, category="messages")
 
 
@@ -143,6 +147,11 @@ class BuiltinMessagesImpl(Messages):
         # Partial results held in memory so a cancellation can finalize with the
         # truly-completed outcomes, not "all canceled". Keyed by batch_id.
         self._partial_results: dict[str, list[dict[str, Any]]] = {}
+        # Last real (registered) model each caller drove a messages request with,
+        # keyed by auth principal. Used to resolve Claude Code's hardcoded alias
+        # model IDs to the model the caller is actually using. In-memory and
+        # ephemeral by design: a cold start falls back to config.fallback_model.
+        self._last_real_model: dict[str, str] = {}
 
     async def initialize(self) -> None:
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
@@ -155,10 +164,56 @@ class BuiltinMessagesImpl(Messages):
                 active_tasks=len(self._processing_tasks),
             )
 
+    @staticmethod
+    def _principal_key() -> str:
+        user = get_authenticated_user()
+        return user.principal if user and user.principal else _ANONYMOUS_PRINCIPAL
+
+    async def _is_registered_model(self, model: str) -> bool:
+        router = self.inference_api
+        routing_table = getattr(router, "routing_table", None)
+        if routing_table is None:
+            return True
+        try:
+            return await routing_table.get_object_by_identifier("model", model) is not None
+        except (KeyError, ValueError, AttributeError):
+            return False
+
+    async def _resolve_model(self, model: str) -> str:
+        """Resolve a requested model, rewriting Claude Code alias IDs to a real model.
+
+        A registered model is returned unchanged and recorded as the caller's last
+        real model. An unregistered model whose ID matches a configured alias prefix
+        is rewritten to that last real model (or the configured fallback on cold
+        start). Any other unregistered model is returned unchanged so the inference
+        layer raises its usual "model not found" error.
+        """
+        if await self._is_registered_model(model):
+            self._last_real_model[self._principal_key()] = model
+            return model
+
+        if not any(model.startswith(prefix) for prefix in self.config.alias_prefixes):
+            return model
+
+        principal = self._principal_key()
+        target = self._last_real_model.get(principal) or self.config.fallback_model
+        if target is None:
+            raise ValueError(
+                f"Failed to resolve alias model '{model}': no prior model used by this caller and no "
+                "fallback_model configured. Make a request with a real model first, or set "
+                "fallback_model on the messages provider."
+            )
+        logger.info("Resolving alias model to last real model", requested=model, resolved=target, principal=principal)
+        return target
+
     async def create_message(
         self,
         request: AnthropicCreateMessageRequest,
     ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        resolved_model = await self._resolve_model(request.model)
+        if resolved_model != request.model:
+            request = request.model_copy(update={"model": resolved_model})
+
         # Try native passthrough for providers that support /v1/messages directly
         passthrough_url = await self._get_passthrough_url(request.model)
         if passthrough_url:
@@ -177,6 +232,10 @@ class BuiltinMessagesImpl(Messages):
         self,
         request: AnthropicCountTokensRequest,
     ) -> AnthropicCountTokensResponse:
+        resolved_model = await self._resolve_model(request.model)
+        if resolved_model != request.model:
+            request = request.model_copy(update={"model": resolved_model})
+
         passthrough_url = await self._get_passthrough_url(request.model)
         if passthrough_url:
             return await self._passthrough_count_tokens(passthrough_url, request)

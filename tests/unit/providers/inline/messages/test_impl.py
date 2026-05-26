@@ -478,3 +478,60 @@ class TestStreamingTranslation:
 
         msg_delta = [e for e in events if e.type == "message_delta"]
         assert msg_delta[0].delta.stop_reason == "tool_use"
+
+
+def _impl_with_registered(registered: set[str], **config_kwargs):
+    """Build an impl whose routing table reports `registered` model IDs as known."""
+    mock_inference = AsyncMock()
+    routing_table = AsyncMock()
+
+    async def get_object_by_identifier(_type, identifier):
+        return object() if identifier in registered else None
+
+    routing_table.get_object_by_identifier.side_effect = get_object_by_identifier
+    # MagicMock attribute access on an AsyncMock would itself be an AsyncMock, so set
+    # routing_table explicitly to control resolution.
+    mock_inference.routing_table = routing_table
+
+    mock_kvstore = MagicMock()
+    config = MessagesConfig(
+        kvstore=KVStoreReference(backend="kv_default", namespace="test"),
+        **config_kwargs,
+    )
+    return BuiltinMessagesImpl(config=config, inference_api=mock_inference, kvstore=mock_kvstore)
+
+
+class TestAliasResolution:
+    async def test_registered_model_is_recorded_and_unchanged(self):
+        impl = _impl_with_registered({"ollama/gpt-oss"})
+        resolved = await impl._resolve_model("ollama/gpt-oss")
+        assert resolved == "ollama/gpt-oss"
+        assert impl._last_real_model["__local__"] == "ollama/gpt-oss"
+
+    async def test_alias_resolves_to_last_real_model(self):
+        impl = _impl_with_registered({"ollama/gpt-oss"})
+        await impl._resolve_model("ollama/gpt-oss")
+        resolved = await impl._resolve_model("claude-haiku-4-5-20251001")
+        assert resolved == "ollama/gpt-oss"
+
+    async def test_alias_cold_start_uses_fallback_model(self):
+        impl = _impl_with_registered(set(), fallback_model="ollama/llama3.2:1b")
+        resolved = await impl._resolve_model("claude-opus-4-6-20260314")
+        assert resolved == "ollama/llama3.2:1b"
+
+    async def test_alias_cold_start_without_fallback_errors(self):
+        impl = _impl_with_registered(set())
+        with pytest.raises(ValueError, match="no fallback_model configured"):
+            await impl._resolve_model("claude-haiku-4-5-20251001")
+
+    async def test_unknown_non_alias_model_passes_through(self):
+        impl = _impl_with_registered(set())
+        # Not an alias prefix: returned unchanged so inference raises its own error.
+        resolved = await impl._resolve_model("gpt-typo")
+        assert resolved == "gpt-typo"
+
+    async def test_registered_alias_is_not_overridden(self):
+        # A claude-* id that is actually registered (e.g. via lets_go) wins over fallback.
+        impl = _impl_with_registered({"claude-haiku-4-5"})
+        resolved = await impl._resolve_model("claude-haiku-4-5")
+        assert resolved == "claude-haiku-4-5"

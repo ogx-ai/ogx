@@ -19,6 +19,8 @@ Implements the Anthropic Messages API with two modes: native passthrough for pro
 | `kvstore.backend` | `str` | No |  | Name of backend from storage.backends |
 | `max_concurrent_batches` | `int` | No | 1 | Maximum number of concurrent message batches to process simultaneously. |
 | `max_concurrent_requests_per_batch` | `int` | No | 10 | Maximum number of concurrent requests to process per batch. |
+| `alias_prefixes` | `list[str]` | No | ['claude-'] | Model-ID prefixes treated as fallback aliases. Claude Code hardcodes model IDs (e.g. 'claude-haiku-4-5-...') into its background requests; when an unprefixed model with one of these prefixes is requested and is not registered, it is rewritten to the last real model the same caller used, so those requests follow the user's actual model and provider instead of failing. |
+| `fallback_model` | `str \| None` | No |  | Model ID to use for an alias request when the caller has not yet made a request with a real model (cold start). When None, an alias request with no prior model returns an error rather than silently routing to an arbitrary, possibly expensive, provider. |
 
 ## Sample Configuration
 
