@@ -94,9 +94,8 @@ class ConnectClaude(Subcommand):
             sys.exit(1)
 
         base_url = args.url.rstrip("/")
-        api_url = f"{base_url}/v1"
 
-        models = self._fetch_models(api_url)
+        models = self._fetch_models(base_url)
         if not models:
             cprint("Failed to find any LLM models on the OGX server.", color="red", file=sys.stderr)
             sys.exit(1)
