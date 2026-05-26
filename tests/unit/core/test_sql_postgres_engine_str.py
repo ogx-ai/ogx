@@ -74,3 +74,20 @@ class TestSqlPostgresEngineStr:
         assert parsed.hostname == "h"
         assert parsed.port == 5432
         assert parsed.path == "/d"
+
+
+@pytest.mark.parametrize(
+    "username",
+    ["u@ss", "u:ss", "u/ss", "u%ss", "u@ss:w/o%rd", "a@b:c/d%e#f"],
+)
+def test_special_chars_in_username_produce_valid_url(username):
+    config = PostgresSqlStoreConfig(user=username, password=SecretStr("p"), host="h", port=5432, db="d")
+    url = config.engine_str
+    assert url.startswith("postgresql+asyncpg://")
+    assert "@h:5432/d" in url
+    parsed = urlparse(url)
+    assert unquote(parsed.username) == username
+    assert unquote(parsed.password) == "p"
+    assert parsed.hostname == "h"
+    assert parsed.port == 5432
+    assert parsed.path == "/d"
