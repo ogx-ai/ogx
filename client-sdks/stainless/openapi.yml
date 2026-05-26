@@ -61,7 +61,7 @@ paths:
           title: Limit
         description: Maximum number of batches to return. Defaults to 20.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -105,7 +105,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateBatchRequest'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -154,7 +154,7 @@ paths:
           title: Batch Id
         description: The ID of the batch to retrieve.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -199,7 +199,7 @@ paths:
           title: Batch Id
         description: The ID of the batch to cancel.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -278,7 +278,7 @@ paths:
           title: Order
         description: 'The order to sort the chat completions by: "asc" or "desc". Defaults to "desc".'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -322,7 +322,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIChatCompletionRequestWithExtraBody'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -372,7 +372,7 @@ paths:
           title: Completion Id
         description: ID of the chat completion.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -417,7 +417,7 @@ paths:
               $ref: '#/components/schemas/OpenAICompletionRequestWithExtraBody'
         required: true
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -836,7 +836,7 @@ paths:
               $ref: '#/components/schemas/OpenAIEmbeddingsRequestWithExtraBody'
         required: true
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -918,7 +918,7 @@ paths:
           title: Purpose
         description: Filter files by purpose.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -960,7 +960,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Body_upload_file_v1_files_post'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1008,7 +1008,7 @@ paths:
           title: File Id
         description: The ID of the file to retrieve.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1052,7 +1052,7 @@ paths:
           title: File Id
         description: The ID of the file to delete.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1097,7 +1097,7 @@ paths:
           title: File Id
         description: The ID of the file to retrieve content from.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1273,7 +1273,7 @@ paths:
           - type: 'null'
           title: X-Goog-Api-Client
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1283,6 +1283,34 @@ paths:
           models = client.models.list()
           for model in models:
               print(model.id)
+      - lang: Anthropic
+        label: Anthropic
+        source: |-
+          from anthropic import Anthropic
+
+          client = Anthropic(
+              base_url="http://localhost:8321/v1",
+              api_key="fake",
+          )
+
+          models = client.models.list()
+          for model in models:
+              print(model.id)
+      - lang: Google
+        label: Google
+        source: |-
+          from google import genai
+          from google.genai import types
+
+          client = genai.Client(
+              api_key="fake",
+              http_options=types.HttpOptions(
+                  base_url="http://localhost:8321",
+                  api_version="v1",
+              ),
+          )
+          for model in client.models.list():
+              print(model.name)
   /v1/models/{model_id}:
     get:
       responses:
@@ -1357,7 +1385,7 @@ paths:
           - type: 'null'
           title: X-Goog-Api-Client
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1366,6 +1394,33 @@ paths:
 
           model = client.models.retrieve("meta-llama/Llama-3.1-8B-Instruct")
           print(model)
+      - lang: Anthropic
+        label: Anthropic
+        source: |-
+          from anthropic import Anthropic
+
+          client = Anthropic(
+              base_url="http://localhost:8321/v1",
+              api_key="fake",
+          )
+
+          model = client.models.retrieve("openai/gpt-4o")
+          print(model.id)
+      - lang: Google
+        label: Google
+        source: |-
+          from google import genai
+          from google.genai import types
+
+          client = genai.Client(
+              api_key="fake",
+              http_options=types.HttpOptions(
+                  base_url="http://localhost:8321",
+                  api_version="v1",
+              ),
+          )
+          model = client.models.get(model="openai/gpt-4o")
+          print(model.name)
   /v1/prompts:
     get:
       responses:
@@ -1745,7 +1800,7 @@ paths:
           title: Order
         description: The order to sort responses by when sorted by created_at ('asc' or 'desc').
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1798,7 +1853,7 @@ paths:
             title: Guardrails
             description: Enable content moderation via the configured moderation_endpoint.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1846,7 +1901,7 @@ paths:
           title: Response Id
         description: The ID of the OpenAI response to retrieve.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1890,7 +1945,7 @@ paths:
           title: Response Id
         description: The ID of the OpenAI response to delete.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -1989,7 +2044,7 @@ paths:
           title: Order
         description: The order to return the input items in.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2168,7 +2223,7 @@ paths:
           title: Before
         description: Pagination cursor (before).
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2210,7 +2265,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAICreateVectorStoreRequestWithExtraBody'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2257,7 +2312,7 @@ paths:
           title: Vector Store Id
         description: The vector store identifier.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2307,7 +2362,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIUpdateVectorStoreRequest'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2354,7 +2409,7 @@ paths:
           title: Vector Store Id
         description: The vector store identifier.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2405,7 +2460,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAICreateVectorStoreFileBatchRequestWithExtraBody'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2461,7 +2516,7 @@ paths:
           title: Batch Id
         description: The file batch identifier.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2517,7 +2572,7 @@ paths:
           title: Batch Id
         description: The file batch identifier.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2627,7 +2682,7 @@ paths:
           title: Order
         description: 'Sort order by created_at: asc or desc.'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2735,7 +2790,7 @@ paths:
           title: Filter
         description: Filter by file status.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2786,7 +2841,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAIAttachFileRequest'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2842,7 +2897,7 @@ paths:
           title: File Id
         description: The file identifier.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -2945,7 +3000,7 @@ paths:
           title: File Id
         description: The file identifier.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3023,7 +3078,7 @@ paths:
           title: Include Metadata
         description: Include chunk metadata.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3077,7 +3132,7 @@ paths:
             schema:
               $ref: '#/components/schemas/OpenAISearchVectorStoreRequest'
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3552,7 +3607,7 @@ paths:
           title: Response Id
         description: The ID of the OpenAI response to cancel.
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3629,7 +3684,7 @@ paths:
           title: Order
         description: Sort order for messages by timestamp. Use "asc" or "desc". Defaults to "asc".
       x-codeSamples:
-      - lang: Python
+      - lang: OpenAI
         label: OpenAI
         source: |-
           from openai import OpenAI
@@ -3703,8 +3758,8 @@ paths:
               $ref: '#/components/schemas/AnthropicCreateMessageRequest'
         required: true
       x-codeSamples:
-      - lang: Python
-        label: Anthropic SDK
+      - lang: Anthropic
+        label: Anthropic
         source: |-
           from anthropic import Anthropic
 
@@ -3722,23 +3777,6 @@ paths:
           )
 
           print(message.content[0].text)
-      - lang: TypeScript
-        label: Anthropic SDK
-        source: |-
-          import Anthropic from "@anthropic-ai/sdk";
-
-          const client = new Anthropic({
-            baseURL: "http://localhost:8321/v1",
-            apiKey: "fake",
-          });
-
-          const message = await client.messages.create({
-            model: "llama-3.3-70b",
-            max_tokens: 1024,
-            messages: [{ role: "user", content: "What is OGX?" }],
-          });
-
-          console.log(message.content[0].text);
   /v1/messages/count_tokens:
     post:
       responses:
@@ -3989,8 +4027,8 @@ paths:
               $ref: '#/components/schemas/GoogleCreateInteractionRequest'
         required: true
       x-codeSamples:
-      - lang: Python
-        label: Google GenAI
+      - lang: Google
+        label: Google
         source: |-
           from google import genai
           from google.genai import types
@@ -7576,10 +7614,10 @@ components:
           - type: 'null'
         error:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseError'
-            title: OpenAIResponseError
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseError'
           - type: 'null'
-          title: OpenAIResponseError
+          title: ErrorUnion
         frequency_penalty:
           type: number
           title: Frequency Penalty
@@ -7588,10 +7626,10 @@ components:
           title: Id
         incomplete_details:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
-            title: OpenAIResponseIncompleteDetails
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
           - type: 'null'
-          title: OpenAIResponseIncompleteDetails
+          title: Incomplete_DetailsUnion
         model:
           type: string
           title: Model
@@ -7630,7 +7668,9 @@ components:
           type: number
           title: Temperature
         text:
-          $ref: '#/components/schemas/OpenAIResponseText'
+          allOf:
+          - $ref: '#/components/schemas/OpenAIResponseText'
+          - description: Text response configuration for OpenAI responses.
         top_p:
           type: number
           title: Top P
@@ -7694,17 +7734,14 @@ components:
           - type: 'null'
           title: OpenAIResponseInputToolChoiceMode
         truncation:
-          anyOf:
+          allOf:
           - $ref: '#/components/schemas/ResponseTruncation'
-            title: ResponseTruncation
-          - type: 'null'
-          title: ResponseTruncation
         usage:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseUsage'
-            title: OpenAIResponseUsage
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseUsage'
           - type: 'null'
-          title: OpenAIResponseUsage
+          title: UsageUnion
         instructions:
           anyOf:
           - type: string
@@ -7715,10 +7752,10 @@ components:
           - type: 'null'
         reasoning:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseReasoning'
-            title: OpenAIResponseReasoning
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseReasoning'
           - type: 'null'
-          title: OpenAIResponseReasoning
+          title: ReasoningUnion
         max_output_tokens:
           anyOf:
           - type: integer
@@ -7726,12 +7763,7 @@ components:
         service_tier:
           type: string
           title: Service Tier
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
+        metadata: {}
         presence_penalty:
           type: number
           title: Presence Penalty
@@ -11366,11 +11398,11 @@ components:
           description: Penalizes new tokens based on their frequency in the text so far.
         text:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseText'
-            title: OpenAIResponseText
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseText'
+            - description: Configuration for text response generation.
           - type: 'null'
-          description: Configuration for text response generation.
-          title: OpenAIResponseText
+          title: TextUnion
         tool_choice:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseInputToolChoiceMode'
@@ -11457,11 +11489,11 @@ components:
           description: Upper bound for the number of tokens that can be generated for a response.
         reasoning:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseReasoning'
-            title: OpenAIResponseReasoning
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseReasoning'
+            - description: Configuration for reasoning effort in responses.
           - type: 'null'
-          description: Configuration for reasoning effort in responses.
-          title: OpenAIResponseReasoning
+          title: ReasoningUnion
         service_tier:
           anyOf:
           - $ref: '#/components/schemas/ServiceTier'
@@ -11477,12 +11509,9 @@ components:
           - type: 'null'
           description: Dictionary of metadata key-value pairs to attach to the response.
         truncation:
-          anyOf:
+          allOf:
           - $ref: '#/components/schemas/ResponseTruncation'
-            title: ResponseTruncation
-          - type: 'null'
-          description: Controls how the service truncates input when it exceeds the model context window.
-          title: ResponseTruncation
+          - description: Controls how the service truncates input when it exceeds the model context window.
         top_logprobs:
           anyOf:
           - type: integer
@@ -11499,11 +11528,11 @@ components:
           description: Penalizes new tokens based on whether they appear in the text so far.
         stream_options:
           anyOf:
-          - $ref: '#/components/schemas/ResponseStreamOptions'
-            title: ResponseStreamOptions
+          - allOf:
+            - $ref: '#/components/schemas/ResponseStreamOptions'
+            - description: Options that control streamed response behavior.
           - type: 'null'
-          description: Options that control streamed response behavior.
-          title: ResponseStreamOptions
+          title: Stream_OptionsUnion
         context_management:
           anyOf:
           - items:
