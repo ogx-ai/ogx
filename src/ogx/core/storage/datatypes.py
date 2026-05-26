@@ -165,7 +165,7 @@ class SqlAlchemySqlStoreConfig(BaseModel):
 
     @property
     @abstractmethod
-    def engine_str(self) -> str: ...
+    def engine_str(self) -> str | URL: ...
 
     # TODO: move this when we have a better way to specify dependencies with internal APIs
     @classmethod
@@ -211,16 +211,14 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     pool_recycle: int = Field(default=3600, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
 
     @property
-    def engine_str(self) -> str:
-        return str(
-            URL.create(
-                drivername="postgresql+asyncpg",
-                username=self.user,
-                password=self.password.get_secret_value() if self.password else None,
-                host=self.host,
-                port=int(self.port),
-                database=self.db,
-            ).render_as_string(hide_password=False)  # TODO: avoid rendering password
+    def engine_str(self) -> URL:
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.user,
+            password=self.password.get_secret_value() if self.password else None,
+            host=self.host,
+            port=int(self.port),
+            database=self.db,
         )
 
     @classmethod
