@@ -3,7 +3,7 @@ slug: rag-benchmarks
 title: "OGX RAG Benchmarks: Open-Source Retrieval That Outperforms OpenAI"
 authors: [franciscojavierarceo]
 tags: [benchmarks, rag, vector-stores, retrieval, openai-compatibility]
-date: 2026-06-02
+date: 2026-05-26
 ---
 
 We benchmarked OGX's RAG pipeline against OpenAI's file search across four BEIR retrieval datasets, MultiHOP RAG, and Doc2Dial. The results: **OGX hybrid search beats OpenAI on 3 of 4 BEIR datasets**, with up to 29.6% higher nDCG@10 on argument retrieval. Pair it with Gemma 31B and you get end-to-end RAG that exceeds GPT-4.1 by 81% on multi-hop reasoning, all running on your own infrastructure.
