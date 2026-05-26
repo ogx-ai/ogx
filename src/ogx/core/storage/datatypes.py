@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from sqlalchemy.engine import URL
 
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
@@ -211,8 +212,6 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
 
     @property
     def engine_str(self) -> str:
-        from sqlalchemy.engine import URL
-
         return str(
             URL.create(
                 drivername="postgresql+asyncpg",
