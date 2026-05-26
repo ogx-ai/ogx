@@ -378,9 +378,8 @@ class ToolExecutor:
                             query=query,
                             response_file_search_tool=response_file_search_tool,
                         )
-            else:
-                # For web_search, inject config from response_tools into kwargs
-                if function_name == "web_search" and ctx.response_tools:
+            elif function_name == "web_search":
+                if ctx.response_tools:
                     response_web_search_tool = next(
                         (t for t in ctx.response_tools if isinstance(t, OpenAIResponseInputToolWebSearch)),
                         None,
@@ -395,6 +394,17 @@ class ToolExecutor:
                         if response_web_search_tool.search_context_size:
                             tool_kwargs["search_context_size"] = response_web_search_tool.search_context_size
 
+                attributes = {
+                    "tool_name": function_name,
+                }
+                # TODO: follow semantic conventions for Open Telemetry tool spans
+                # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/#execute-tool-span
+                with tracer.start_as_current_span("invoke_tool", attributes=attributes):
+                    result = await self.tool_runtime_api.invoke_tool(
+                        tool_name=function_name,
+                        kwargs=tool_kwargs,
+                    )
+            else:
                 attributes = {
                     "tool_name": function_name,
                 }
