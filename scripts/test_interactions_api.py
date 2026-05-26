@@ -55,7 +55,7 @@ def run_non_streaming_basic(client: genai.Client, model: str) -> None:
         input="What is 2+2? Reply with just the number.",
     )
 
-    assert len(interaction.id) > 0, f"ID should not be empty, got: {interaction.id}"
+    assert interaction.id.startswith("interaction-"), f"ID should start with 'interaction-', got: {interaction.id}"
     assert interaction.status == "completed", f"Status should be 'completed', got: {interaction.status}"
     assert len(interaction.outputs) > 0, "Expected at least one output"
     assert interaction.outputs[0].type == "text", f"Output type should be 'text', got: {interaction.outputs[0].type}"
@@ -234,9 +234,36 @@ def run_tool_calling(client: genai.Client, model: str) -> None:
     print("  PASSED")
 
 
+def run_previous_interaction_id(client: genai.Client, model: str) -> None:
+    """Test 6: Conversation chaining via previous_interaction_id."""
+    print("Test 6: Conversation chaining (previous_interaction_id)...")
+
+    # First interaction: establish context
+    first = client.interactions.create(
+        model=model,
+        input="My name is Alice. Remember it.",
+    )
+    assert first.status == "completed"
+    assert first.id.startswith("interaction-")
+    print(f"  First response: {first.outputs[0].text[:80]}")
+
+    # Second interaction: chain from first, ask about the context
+    second = client.interactions.create(
+        model=model,
+        input="What is my name?",
+        previous_interaction_id=first.id,
+    )
+    assert second.status == "completed"
+    text = second.outputs[0].text.lower()
+    assert "alice" in text, f"Expected 'alice' in chained response, got: {second.outputs[0].text}"
+
+    print(f"  Chained response: {second.outputs[0].text[:80]}")
+    print("  PASSED")
+
+
 def run_streaming_basic(client: genai.Client, model: str) -> None:
-    """Test 6: Streaming interaction with SSE events."""
-    print("Test 6: Streaming basic interaction...")
+    """Test 7: Streaming interaction with SSE events."""
+    print("Test 7: Streaming basic interaction...")
 
     stream = client.interactions.create(
         model=model,
@@ -269,7 +296,7 @@ def run_streaming_basic(client: genai.Client, model: str) -> None:
     full_text = "".join(text_parts)
     assert len(full_text) > 0, "Streaming should produce text"
     assert interaction_id is not None, "Should have received an interaction ID"
-    assert len(interaction_id) > 0, f"ID should not be empty, got: {interaction_id}"
+    assert interaction_id.startswith("interaction-"), f"ID should start with 'interaction-', got: {interaction_id}"
 
     print(f"  Events: {event_types}")
     print(f"  Full text: {full_text[:80]}")
@@ -316,6 +343,7 @@ def main():
         run_non_streaming_multi_turn,
         run_non_streaming_generation_config,
         run_tool_calling,
+        run_previous_interaction_id,
         run_streaming_basic,
     ]
 

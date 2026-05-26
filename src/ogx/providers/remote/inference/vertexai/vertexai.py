@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import struct
 import time
@@ -132,7 +133,7 @@ class GeminiCompletionSamplingParams(BaseModel):
             candidate_count=params.n,
             max_output_tokens=params.max_tokens,
             stop_sequences=stop_sequences,
-            response_logprobs=params.logprobs or None,
+            response_logprobs=params.logprobs is not None and params.logprobs > 0,
         )
 
 
@@ -713,8 +714,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             logger.warning("VertexAI does not support prompt_cache_key; this parameter will be ignored.")
         if params.user is not None:
             logger.debug("VertexAI chat completion ignores the 'user' parameter (it is used in embeddings requests).")
-        if params.safety_identifier is not None:
-            logger.debug("VertexAI does not support safety_identifier; this parameter will be ignored.")
 
     def _resolve_deprecated_tools(
         self,
@@ -744,7 +743,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         self._warn_unsupported_chat_params(params)
         tools, tool_choice = self._resolve_deprecated_tools(params)
 
-        messages = [await self._localize_image_url(message) for message in params.messages]
+        messages = list(await asyncio.gather(*[self._localize_image_url(message) for message in params.messages]))
         system_instruction, contents = converters.convert_openai_messages_to_gemini(messages)
         tools_input = converters.convert_openai_tools_to_gemini(tools)
         config = self._build_generation_config(

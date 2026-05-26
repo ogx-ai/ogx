@@ -6,7 +6,7 @@
 # SECURITY NOTE: This workflow uses pull_request (not pull_request_target) for security.
 # Security measures:
 # 1. Runs with read-only permissions (no write access to repo or secrets exposure)
-# 2. Only ollama provider runs automatically on pull_request (no secrets)
+# 2. Only ollama variants run automatically on pull_request (no secrets needed)
 # 3. API key providers (gpt, azure, bedrock) only run via manual workflow_dispatch
 # 4. Fork PRs with API key providers are blocked (prevents secret theft)
 # 5. Recordings uploaded as artifacts; companion workflow handles commits
@@ -21,6 +21,10 @@ on:
       - 'tests/integration/**'
       - 'src/ogx/**'
       - '!src/ogx_ui/**'
+      # Exclude recordings to prevent a feedback loop with commit-recordings.yml:
+      # that workflow pushes recordings back to the PR branch, which would
+      # otherwise re-trigger this workflow via pull_request: synchronize.
+      - '!tests/integration/**/recordings/**'
   workflow_dispatch:
     inputs:
       pr_number:
@@ -120,13 +124,13 @@ jobs:
           fi
 
           # Determine which providers to run
-          # Security: For pull_request, only run ollama (no secrets)
+          # Security: For pull_request, only run ollama variants (no secrets needed)
           # Manual workflow_dispatch uses input providers (defaults to API providers)
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             PROVIDERS="$INPUT_PROVIDERS"
           else
             # Auto-trigger on PR: only ollama (no secrets exposed to any PR)
-            PROVIDERS="ollama"
+            PROVIDERS="ollama,ollama-reasoning"
           fi
 
           {
@@ -190,6 +194,12 @@ jobs:
         provider:
           - setup: ollama
             suite: base
+          - setup: ollama-vision
+            suite: vision
+          - setup: ollama-reasoning
+            suite: ollama-reasoning
+          - setup: ollama
+            suite: messages
           - setup: gpt
             suite: responses
           - setup: gpt
@@ -238,11 +248,9 @@ jobs:
           project_id: ${{ secrets.VERTEX_AI_PROJECT }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
-      # Note: Using full repo path with pinned SHA ensures actions are loaded from
-      # a trusted commit, not from PR checkout. This is critical for security.
       - name: Setup test environment
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/llama-stack/.github/actions/setup-test-environment@68c0994a790e4f029007f3cce12a744d69a7d435
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@e1ba4f9f10fa45750f5b4f186a0c4ae59bc93e4d
         with:
           python-version: "3.12"
           client-version: "latest"
@@ -252,7 +260,7 @@ jobs:
 
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/llama-stack/.github/actions/run-and-record-tests@68c0994a790e4f029007f3cce12a744d69a7d435
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@e1ba4f9f10fa45750f5b4f186a0c4ae59bc93e4d
         env:
           OPENAI_API_KEY: ${{ matrix.provider.setup == 'gpt' && secrets.OPENAI_API_KEY || '' }}
           AZURE_API_KEY: ${{ matrix.provider.setup == 'azure' && secrets.AZURE_API_KEY || '' }}
@@ -282,7 +290,7 @@ jobs:
         if: steps.should_run.outputs.run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: recordings-${{ matrix.provider.setup }}-${{ github.run_id }}-${{ github.run_attempt || '1' }}
+          name: recordings-${{ matrix.provider.setup }}-${{ matrix.provider.suite }}-${{ github.run_id }}-${{ github.run_attempt || '1' }}
           path: |
             tests/integration/recordings/
             tests/integration/*/recordings/

@@ -44,11 +44,10 @@ def skip_if_provider_doesnt_support_openai_vector_stores(client_with_models):
 
 
 _PROVIDERS_WITH_NATIVE_FILTERING = {
-    "inline::faiss",
-    "inline::sqlite-vec",
-    "inline::milvus",
-    "remote::milvus",
-    "remote::pgvector",
+    "faiss",
+    "sqlite-vec",
+    "milvus",
+    "pgvector",
 }
 
 

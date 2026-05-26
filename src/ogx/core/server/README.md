@@ -10,7 +10,6 @@ server/
   server.py                    # Main FastAPI app, route dispatch, SSE streaming, lifespan
   auth.py                      # AuthenticationMiddleware (Bearer token validation)
   auth_providers.py            # Auth provider implementations (Kubernetes, custom endpoint)
-  quota.py                     # QuotaMiddleware (rate limiting per client)
   metrics.py                   # RequestMetricsMiddleware (per-API request metrics)
   routes.py                    # Route initialization and matching from FastAPI routers
   fastapi_router_registry.py   # Auto-discovery of FastAPI routers from ogx_api packages
@@ -33,7 +32,6 @@ Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-
 - **`RequestMetricsMiddleware`** (`metrics.py`): Tracks per-API request counts and latency metrics. Runs as the outermost middleware.
 - **`AuthenticationMiddleware`** (`auth.py`): Validates Bearer tokens using a configured auth provider (Kubernetes, custom endpoint). Extracts user identity and attributes for access control. Endpoints can opt out by setting `openapi_extra={PUBLIC_ROUTE_KEY: True}` on their route.
 - **`RouteAuthorizationMiddleware`** (`auth.py`): Enforces route-level access policies based on user roles.
-- **`QuotaMiddleware`** (`quota.py`): Enforces per-client rate limits (separate limits for authenticated vs. anonymous). Uses KVStore for tracking request counts.
 - **`ClientVersionMiddleware`** (`server.py`): Rejects requests from clients with incompatible major.minor versions.
 - **`ProviderDataMiddleware`** (`server.py`): Sets up request context for provider data propagation and test context.
 

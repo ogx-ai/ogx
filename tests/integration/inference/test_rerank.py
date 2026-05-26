@@ -3,6 +3,7 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
+import concurrent.futures
 
 import pytest
 from ogx_client import BadRequestError as OGXBadRequestError
@@ -102,6 +103,34 @@ def test_rerank_text(client_with_models, rerank_model_id, query, items, inferenc
     # TODO: Add type validation for response items once InferenceRerankResponseItem is exported from ogx client.
     assert len(response) <= len(items)
     _validate_rerank_response(response, items)
+
+
+def test_rerank_text_parallel(client_with_models, rerank_model_id, inference_provider_type):
+    skip_if_provider_doesnt_support_rerank(inference_provider_type)
+    query_items = [
+        (DUMMY_STRING, [DUMMY_STRING, DUMMY_STRING2]),
+        (DUMMY_TEXT, [DUMMY_TEXT, DUMMY_TEXT2]),
+        (DUMMY_STRING, [DUMMY_STRING2, DUMMY_TEXT]),
+        (DUMMY_TEXT, [DUMMY_STRING, DUMMY_TEXT2]),
+    ]
+    future_to_items = {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(query_items)) as executor:
+        for query, items in query_items:
+            future = executor.submit(
+                client_with_models.alpha.inference.rerank, model=rerank_model_id, query=query, items=items
+            )
+            future_to_items[future] = items
+
+        for future in concurrent.futures.as_completed(future_to_items):
+            original_items = future_to_items[future]
+
+            # .result() will raise the 500 Error as RuntimeError here if the Rust borrower bug is present
+            response = future.result()
+
+            assert isinstance(response, list)
+            assert len(response) <= len(original_items)
+            _validate_rerank_response(response, original_items)
 
 
 @pytest.mark.parametrize(

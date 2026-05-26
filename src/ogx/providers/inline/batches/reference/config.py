@@ -6,14 +6,14 @@
 
 from pydantic import BaseModel, Field
 
-from ogx.core.storage.datatypes import KVStoreReference
+from ogx.core.storage.datatypes import SqlStoreReference
 
 
 class ReferenceBatchesImplConfig(BaseModel):
     """Configuration for the Reference Batches implementation."""
 
-    kvstore: KVStoreReference = Field(
-        description="Configuration for the key-value store backend.",
+    sqlstore: SqlStoreReference = Field(
+        description="Configuration for the SQL store backend.",
     )
 
     max_concurrent_batches: int = Field(
@@ -33,8 +33,8 @@ class ReferenceBatchesImplConfig(BaseModel):
     @classmethod
     def sample_run_config(cls, __distro_dir__: str) -> dict:
         return {
-            "kvstore": KVStoreReference(
-                backend="kv_default",
-                namespace="batches",
+            "sqlstore": SqlStoreReference(
+                backend="sql_default",
+                table_name="batches",
             ).model_dump(exclude_none=True),
         }

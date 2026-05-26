@@ -317,20 +317,6 @@ def patch_httpx_for_test_id():
     OpenAI._prepare_request = patched_prepare_request
 
 
-# currently, unpatch is never called
-def unpatch_httpx_for_test_id():
-    """Remove client _prepare_request patches for test ID injection."""
-    if "ogx_client_prepare_request" not in _original_methods:
-        return
-
-    from ogx_client import OgxClient
-
-    OgxClient._prepare_request = _original_methods["ogx_client_prepare_request"]
-    del _original_methods["ogx_client_prepare_request"]
-    OpenAI._prepare_request = _original_methods["openai_prepare_request"]
-    del _original_methods["openai_prepare_request"]
-
-
 def get_api_recording_mode() -> APIRecordingMode:
     """Return the current API recording mode from the OGX_TEST_INFERENCE_MODE environment variable.
 
@@ -739,7 +725,7 @@ async def _patched_tool_invoke_method(
         raise AssertionError(f"Invalid mode: {_current_mode}")
 
 
-async def _patched_file_processor_method(original_method, provider_name: str, self, request, file=None):
+async def _patched_file_processor_method(original_method, self, request, file=None):
     """Patched version of file processor process_file method.
 
     File processors are local, deterministic operations (no network calls)
@@ -1577,9 +1563,7 @@ def patch_inference_clients():
 
     # Create patched methods for file processors
     async def patched_pypdf_process_file(self, request, file=None):
-        return await _patched_file_processor_method(
-            _original_methods["pypdf_process_file"], "pypdf", self, request, file
-        )
+        return await _patched_file_processor_method(_original_methods["pypdf_process_file"], self, request, file)
 
     # Apply file processor patches
     PyPDFFileProcessorAdapter.process_file = patched_pypdf_process_file

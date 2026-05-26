@@ -24,7 +24,7 @@ from ogx_api import (
     validate_embeddings_input_is_text,
 )
 
-EMBEDDING_MODELS: dict[str, "SentenceTransformer"] = {}
+EMBEDDING_MODELS: dict[tuple[str, bool], "SentenceTransformer"] = {}
 EMBEDDING_MODELS_LOCK = asyncio.Lock()
 
 DARWIN = "Darwin"
@@ -86,12 +86,13 @@ class SentenceTransformerEmbeddingMixin:
     async def _load_sentence_transformer_model(
         self, model: str, trust_remote_code: bool = False
     ) -> "SentenceTransformer":
-        loaded_model = EMBEDDING_MODELS.get(model)
+        cache_key = (model, trust_remote_code)
+        loaded_model = EMBEDDING_MODELS.get(cache_key)
         if loaded_model is not None:
             return loaded_model
 
         async with EMBEDDING_MODELS_LOCK:
-            loaded_model = EMBEDDING_MODELS.get(model)
+            loaded_model = EMBEDDING_MODELS.get(cache_key)
             if loaded_model is not None:
                 return loaded_model
 
@@ -111,5 +112,5 @@ class SentenceTransformerEmbeddingMixin:
                 return SentenceTransformer(model, trust_remote_code=trust_remote_code)
 
             loaded_model = await asyncio.to_thread(_load_model)
-            EMBEDDING_MODELS[model] = loaded_model
+            EMBEDDING_MODELS[cache_key] = loaded_model
             return loaded_model

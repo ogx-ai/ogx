@@ -21,6 +21,7 @@ Security boundaries
   download as a belt-and-suspenders measure.
 """
 
+import asyncio
 import re
 import time
 import uuid
@@ -31,8 +32,7 @@ from fastapi import Response, UploadFile
 from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import AccessRule
 from ogx.core.id_generation import generate_object_id
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, authorized_sqlstore
 from ogx.log import get_logger
 from ogx.providers.utils.files.sanitize import sanitize_content_disposition_filename
 from ogx_api import (
@@ -72,7 +72,7 @@ class LocalfsFilesImpl(Files):
         storage_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize SQL store for metadata
-        self.sql_store = AuthorizedSqlStore(sqlstore_impl(self.config.metadata_store), self.policy)
+        self.sql_store = await authorized_sqlstore(self.config.metadata_store, self.policy)
         await self.sql_store.create_table(
             "openai_files",
             {
@@ -166,8 +166,11 @@ class LocalfsFilesImpl(Files):
         content = await file.read()
         file_size = len(content)
 
-        with open(file_path, "wb") as f:
-            f.write(content)
+        def _write_file() -> None:
+            with open(file_path, "wb") as f:
+                f.write(content)
+
+        await asyncio.to_thread(_write_file)
 
         created_at = int(time.time())
         expires_at = created_at + self.config.ttl_secs
@@ -188,7 +191,7 @@ class LocalfsFilesImpl(Files):
         return OpenAIFileObject(
             id=file_id,
             filename=sanitized_name,
-            purpose=purpose,
+            purpose=OpenAIFilePurpose(purpose.value),
             bytes=file_size,
             created_at=created_at,
             expires_at=expires_at,
@@ -256,8 +259,12 @@ class LocalfsFilesImpl(Files):
         file_id = request.file_id
         # Delete physical file
         _, file_path = await self._lookup_file_id(file_id, action=Action.DELETE)
-        if file_path.exists():
-            file_path.unlink()
+
+        def _delete_if_exists() -> None:
+            if file_path.exists():
+                file_path.unlink()
+
+        await asyncio.to_thread(_delete_if_exists)
 
         # Delete metadata from database
         assert self.sql_store is not None, "Files provider not initialized"
@@ -279,9 +286,11 @@ class LocalfsFilesImpl(Files):
             await self.openai_delete_file(DeleteFileRequest(file_id=file_id))
             raise OpenAIFileObjectNotFoundError(file_id)
 
+        file_content = await asyncio.to_thread(file_path.read_bytes)
+
         # Return as binary response with appropriate content type
         return Response(
-            content=file_path.read_bytes(),
+            content=file_content,
             media_type="application/octet-stream",
             headers={
                 "Content-Disposition": f'attachment; filename="{sanitize_content_disposition_filename(file_obj.filename)}"'

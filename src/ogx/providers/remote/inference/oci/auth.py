@@ -4,7 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from collections.abc import Generator, Mapping
+import asyncio
+from collections.abc import AsyncGenerator, Generator, Mapping
 from typing import Any, override
 
 import httpx
@@ -53,6 +54,28 @@ class HttpxOciAuth(httpx.Auth):
         # Update the original HTTPX request with the signed headers
         request.headers.update(prepared_request.headers)
 
+        yield request
+
+    @override
+    async def async_auth_flow(self, request: httpx.Request) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        try:
+            content = request.content
+        except httpx.RequestNotRead:
+            content = await request.aread()
+
+        def _sign(content: bytes) -> dict:
+            req = requests.Request(
+                method=request.method,
+                url=str(request.url),
+                headers=dict(request.headers),
+                data=content,
+            )
+            prepared_request = req.prepare()
+            self.signer.do_request_sign(prepared_request)  # type: ignore
+            return dict(prepared_request.headers)
+
+        signed_headers = await asyncio.to_thread(_sign, content)
+        request.headers.update(signed_headers)
         yield request
 
 

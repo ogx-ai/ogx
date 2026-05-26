@@ -8,11 +8,11 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import FileDetailPage from "./page";
-import type { VectorStore } from "llama-stack-client/resources/vector-stores/vector-stores";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
 import type {
   VectorStoreFile,
   FileContentResponse,
-} from "llama-stack-client/resources/vector-stores/files";
+} from "ogx-client/resources/vector-stores/files";
 
 const mockPush = jest.fn();
 const mockParams = {

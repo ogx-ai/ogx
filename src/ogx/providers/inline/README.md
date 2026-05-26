@@ -10,7 +10,6 @@ inline/
   batches/             # Batch processing for async job execution
   inference/           # Local inference (sentence-transformers, transformers)
   ios/                 # iOS on-device inference
-  safety/              # Safety checks (llama-guard, code-scanner)
   vector_io/           # Vector storage (sqlite-vec, faiss, chroma, milvus, qdrant)
   tool_runtime/        # Tool runtime (RAG context retrieval)
   files/               # File storage and management

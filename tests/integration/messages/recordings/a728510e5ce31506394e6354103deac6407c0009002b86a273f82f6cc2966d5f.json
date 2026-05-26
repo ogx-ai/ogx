@@ -1,0 +1,41 @@
+{
+  "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_list_includes_new_batch[txt=ollama/llama3.2:3b-instruct-fp16]",
+  "request": {
+    "test_id": "tests/integration/messages/test_message_batches.py::test_messages_batch_list_includes_new_batch[txt=ollama/llama3.2:3b-instruct-fp16]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "llama3.2:3b-instruct-fp16",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say 'ok' and nothing else."
+        }
+      ],
+      "max_tokens": 32,
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_410a7722044fb1319e03d210",
+      "type": "message",
+      "role": "assistant",
+      "model": "llama3.2:3b-instruct-fp16",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "The user wants a minimal response: just \"ok\". They said \"Say 'ok' and nothing else.\" So I must respond with exactly \""
+        }
+      ],
+      "stop_reason": "max_tokens",
+      "usage": {
+        "input_tokens": 75,
+        "output_tokens": 32
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

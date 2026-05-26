@@ -88,7 +88,7 @@ def pytest_runtest_teardown(item):
     was_xfail = getattr(item, "was_xfail", False)
 
     name = item.nodeid
-    if not any(x in name for x in ("inference/", "safety/", "agents/")):
+    if not any(x in name for x in ("inference/", "agents/", "responses/")):
         return
 
     logger.debug(f"Test '{item.nodeid}' outcome was '{outcome}' (xfail={was_xfail})")
@@ -162,7 +162,7 @@ def pytest_addoption(parser):
             a 'pointer' to the stack. this can be either be:
             (a) a template name like `starter`, or
             (b) a path to a config.yaml file, or
-            (c) a dynamic config spec, e.g. `inference=fireworks,safety=llama-guard,agents=builtin`, or
+            (c) a dynamic config spec, e.g. `inference=fireworks,responses=builtin,agents=builtin`, or
             (d) a server config like `server:ci-tests`, or
             (e) a docker config like `docker:ci-tests` (builds and runs container)
             """
@@ -184,10 +184,6 @@ def pytest_addoption(parser):
     parser.addoption(
         "--rerank-model",
         help="comma-separated list of rerank models. Fixture name: rerank_model_id",
-    )
-    parser.addoption(
-        "--safety-shield",
-        help="comma-separated list of safety shields. Fixture name: shield_id",
     )
     parser.addoption(
         "--judge-model",
@@ -234,8 +230,6 @@ MODEL_SHORT_IDS = {
     "meta-llama/Llama-3.2-11B-Vision-Instruct": "11B",
     "meta-llama/Llama-3.2-90B-Vision-Instruct": "90B",
     "meta-llama/Llama-3.3-70B-Instruct": "70B",
-    "meta-llama/Llama-Guard-3-1B": "Guard1B",
-    "meta-llama/Llama-Guard-3-8B": "Guard8B",
     "nomic-ai/nomic-embed-text-v1.5": "Nomic-v1.5",
 }
 
@@ -276,7 +270,6 @@ def pytest_generate_tests(metafunc):
         "text_model_id": ("--text-model", "txt"),
         "vision_model_id": ("--vision-model", "vis"),
         "embedding_model_id": ("--embedding-model", "emb"),
-        "shield_id": ("--safety-shield", "shield"),
         "judge_model_id": ("--judge-model", "judge"),
         "embedding_dimension": ("--embedding-dimension", "dim"),
         "rerank_model_id": ("--rerank-model", "rerank"),

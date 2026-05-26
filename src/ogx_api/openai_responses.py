@@ -5,18 +5,21 @@
 # the root directory of this source tree.
 
 from collections.abc import Sequence
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import TypedDict
 
 from ogx_api.inference import OpenAITokenLogProb
-from ogx_api.schema_utils import json_schema_type, register_schema, remove_null_from_anyof
+from ogx_api.schema_utils import json_schema_type, register_schema, remove_default_from_schema, remove_null_from_anyof
 from ogx_api.vector_io import SearchRankingOptions as FileSearchRankingOptions
 
-# NOTE(ashwin): this file is literally a copy of the OpenAI responses API schema. We should probably
-# take their YAML and generate this file automatically. Their YAML is available.
+# This file defines Pydantic models for the OpenAI Responses API schema. It started as a direct
+# copy of the upstream schema but now includes OGX-specific extensions (MCP tool types, compaction,
+# custom validators). Intentional divergences from the vendored spec are tracked in
+# scripts/check_openai_responses_drift.py. Run that script after updating the vendored spec
+# (docs/static/openai-spec-*.yml) to detect unintentional drift.
 
 
 @json_schema_type
@@ -460,6 +463,11 @@ class OpenAIResponseReasoning(BaseModel):
     """
 
     effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] | None = None
+    generate_summary: Literal["auto", "concise", "detailed"] | None = Field(
+        default=None,
+        deprecated=True,
+        description="Deprecated: use 'summary' instead.",
+    )
     summary: Literal["auto", "concise", "detailed"] | None = Field(
         default=None, description="Summary mode for reasoning output. One of 'auto', 'concise', or 'detailed'."
     )
@@ -757,6 +765,13 @@ class OpenAIResponseIncompleteDetails(BaseModel):
     reason: str
 
 
+class ResponseTruncation(StrEnum):
+    """Controls how the service truncates input when it exceeds the model context window."""
+
+    auto = "auto"
+    disabled = "disabled"
+
+
 @json_schema_type
 class OpenAIResponseObject(BaseModel):
     """Complete OpenAI response object containing generation results and metadata.
@@ -800,26 +815,26 @@ class OpenAIResponseObject(BaseModel):
     model: str
     object: Literal["response"] = "response"
     output: Sequence[OpenAIResponseOutput]
-    parallel_tool_calls: bool | None = Field(default=True, json_schema_extra=remove_null_from_anyof)
+    parallel_tool_calls: bool = Field(default=True, json_schema_extra=remove_default_from_schema)
     previous_response_id: str | None = None
     prompt_cache_key: str | None = None
     prompt: OpenAIResponsePrompt | None = None
     status: str
     temperature: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
-    # Default to text format to avoid breaking the loading of old responses
-    # before the field was added. New responses will have this set always.
-    text: OpenAIResponseText = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text"))
+    text: OpenAIResponseText = Field(
+        default=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        json_schema_extra=remove_default_from_schema,
+    )
     top_p: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     top_logprobs: int | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     tools: Sequence[OpenAIResponseTool] | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     tool_choice: OpenAIResponseInputToolChoice | None = None
-    truncation: str | None = None
+    truncation: ResponseTruncation | None = None
     usage: OpenAIResponseUsage | None = None
     instructions: str | None = None
     max_tool_calls: int | None = None
     reasoning: OpenAIResponseReasoning | None = None
     max_output_tokens: int | None = None
-    safety_identifier: str | None = None
     service_tier: str | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     metadata: dict[str, str] | None = None
     presence_penalty: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)

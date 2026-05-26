@@ -106,6 +106,16 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                     await self._add_column_now(table_name, col_name, col_type, nullable)
             self._pending_columns.clear()
 
+    def reset_engine(self) -> None:
+        """Reset engine state so it will be recreated in the next event loop.
+
+        Called after Stack.initialize() completes in a temporary event loop,
+        before uvicorn's request-handling loop takes over. Does not dispose
+        the old engine because the temporary loop is already closed.
+        """
+        self._engine = None
+        self.async_session = None
+
     async def shutdown(self) -> None:
         """Dispose of the async engine and close all connections."""
         if self._engine:
@@ -185,7 +195,13 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         # Register table in metadata - actual creation happens in _ensure_engine()
         if table not in self.metadata.tables:
             Table(table, self.metadata, *sqlalchemy_columns)
-        # If table already exists in metadata, we're done (no need to recreate)
+
+            # If engine is already running, create the new table immediately.
+            # _ensure_engine() only calls create_all once, so tables registered
+            # after that first call would never be physically created.
+            if self._engine is not None:
+                async with self._engine.begin() as conn:
+                    await conn.run_sync(self.metadata.create_all, checkfirst=True)
 
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
@@ -443,7 +459,11 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 compiled_type = type_impl.compile(dialect=dialect)
 
                 nullable_clause = "" if nullable else " NOT NULL"
-                add_column_sql = text(f"ALTER TABLE {table} ADD COLUMN {column_name} {compiled_type}{nullable_clause}")
+                quoted_table = f'"{table}"' if not self._is_sqlite_backend else table
+                quoted_column = f'"{column_name}"' if not self._is_sqlite_backend else column_name
+                add_column_sql = text(
+                    f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} {compiled_type}{nullable_clause}"
+                )
 
                 await conn.execute(add_column_sql)
         except Exception as e:

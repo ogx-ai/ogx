@@ -31,7 +31,6 @@ Commands:
   post_training      Post-training.
   providers          Manage API providers.
   scoring_functions  Manage scoring functions.
-  shields            Manage safety shield services.
   toolgroups         Manage available tool groups.
 ```
 
@@ -84,8 +83,6 @@ ogx-client providers list
 | memory    | builtin | builtin  |
 +-----------+----------------+-----------------+
 | agents    | builtin | builtin  |
-+-----------+----------------+-----------------+
-| safety    | builtin | builtin  |
 +-----------+----------------+-----------------+
 ```
 
@@ -229,44 +226,6 @@ Unregister a model from distribution endpoint
 ```bash
 ogx-client models unregister <model_id>
 ```
-
-## Shield Management
-
-Manage safety shield services.
-
-### `ogx-client shields list`
-
-Show available safety shields on distribution endpoint
-
-```bash
-ogx-client shields list
-```
-
-```text
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ identifier                       ┃ provider_alias                                                        ┃ params                ┃ provider_id                        ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ ollama                           │ ollama/llama-guard3:1b                                                │                       │ llama-guard                        │
-└──────────────────────────────────┴───────────────────────────────────────────────────────────────────────┴───────────────────────┴────────────────────────────────────┘
-```
-
-### `ogx-client shields register`
-
-Register a new safety shield
-
-```bash
-ogx-client shields register --shield-id <shield-id> [--provider-id <provider-id>] [--provider-shield-id <provider-shield-id>] [--params <params>]
-```
-
-Required arguments:
-
-- `--shield-id`: ID of the shield
-
-Optional arguments:
-
-- `--provider-id`: Provider ID for the shield
-- `--provider-shield-id`: Provider's shield ID
-- `--params`: JSON configuration parameters for the shield
 
 ## Eval execution
 

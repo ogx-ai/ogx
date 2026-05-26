@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ogx.core.storage.datatypes import KVStoreReference
+from ogx.core.storage.datatypes import KVStoreReference, SqlStoreReference
 from ogx_api import json_schema_type
 
 
@@ -20,6 +20,10 @@ class MilvusVectorIOConfig(BaseModel):
     token: str | None = Field(description="The token of the Milvus server")
     consistency_level: str = Field(description="The consistency level of the Milvus server", default="Strong")
     persistence: KVStoreReference = Field(description="Config for KV store backend")
+    metadata_store: SqlStoreReference | None = Field(
+        default=None,
+        description="SQL store reference for tenant-isolated vector store metadata",
+    )
 
     # This configuration allows additional fields to be passed through to the underlying Milvus client.
     # See the [Milvus](https://milvus.io/docs/install-overview.md) documentation for more details about Milvus in general.

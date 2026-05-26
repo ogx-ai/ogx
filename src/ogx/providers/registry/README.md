@@ -11,8 +11,8 @@ registry/
   file_processors.py   # File processor providers
   files.py             # File storage providers
   inference.py         # Inference providers (20+ remote + 2 inline)
+  interactions.py      # Interaction providers
   responses.py         # Responses API providers (inline::builtin)
-  safety.py            # Safety providers (llama-guard, bedrock, etc.)
   tool_runtime.py      # Tool runtime providers
   vector_io.py         # Vector I/O providers
 ```

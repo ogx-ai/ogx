@@ -7,7 +7,6 @@ data:
     - responses
     - inference
     - files
-    - safety
     - tool_runtime
     - vector_io
     providers:
@@ -16,13 +15,6 @@ data:
         provider_type: remote::vllm
         config:
           url: ${env.VLLM_URL:=http://localhost:8000/v1}
-          max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
-          api_token: ${env.VLLM_API_TOKEN:=fake}
-          tls_verify: ${env.VLLM_TLS_VERIFY:=true}
-      - provider_id: vllm-safety
-        provider_type: remote::vllm
-        config:
-          url: ${env.VLLM_SAFETY_URL:=http://localhost:8000/v1}
           max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
           api_token: ${env.VLLM_API_TOKEN:=fake}
           tls_verify: ${env.VLLM_TLS_VERIFY:=true}
@@ -37,30 +29,22 @@ data:
         provider_type: remote::chromadb
         config:
           url: ${env.CHROMADB_URL:=}
-          kvstore:
-            type: postgres
-            host: ${env.POSTGRES_HOST:=localhost}
-            port: ${env.POSTGRES_PORT:=5432}
-            db: ${env.POSTGRES_DB:=ogx}
-            user: ${env.POSTGRES_USER:=ogx}
-            password: ${env.POSTGRES_PASSWORD:=ogx}
+          persistence:
+            namespace: vector_io::chroma_remote
+            backend: kv_default
       files:
       - provider_id: builtin-files
         provider_type: inline::localfs
         config:
           storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/starter/files}
           metadata_store:
-            type: sqlite
-            db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/files_metadata.db
-      safety:
-      - provider_id: llama-guard
-        provider_type: inline::llama-guard
-        config:
-          excluded_categories: []
+            table_name: files_metadata
+            backend: sql_default
       responses:
       - provider_id: builtin
         provider_type: inline::builtin
         config:
+          moderation_endpoint: ${env.MODERATION_ENDPOINT:=http://vllm-server-moderation.default.svc.cluster.local:8001/v1/moderations}
           persistence:
             agent_state:
               namespace: agents
@@ -119,30 +103,21 @@ data:
         prompts:
           backend: kv_default
           namespace: prompts
-    models:
-    - metadata:
-        embedding_dimension: 768
-      model_id: nomic-embed-text-v1.5
-      provider_id: sentence-transformers
-      model_type: embedding
-    - metadata: {}
-      model_id: Qwen/Qwen3-Reranker-0.6B
-      provider_id: transformers
-      model_type: rerank
-    - metadata: {}
-      model_id: ${env.INFERENCE_MODEL}
-      provider_id: vllm-inference
-      model_type: llm
-    - metadata: {}
-      model_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
-      provider_id: vllm-safety
-      model_type: llm
-    shields:
-    - shield_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
-    vector_dbs: []
-    datasets: []
-    scoring_fns: []
-    benchmarks: []
+    registered_resources:
+      models:
+      - metadata:
+          embedding_dimension: 768
+        model_id: nomic-embed-text-v1.5
+        provider_id: sentence-transformers
+        model_type: embedding
+      - metadata: {}
+        model_id: ${env.INFERENCE_MODEL}
+        provider_id: vllm-inference
+        model_type: llm
+      vector_dbs: []
+      datasets: []
+      scoring_fns: []
+      benchmarks: []
     server:
       port: 8321
       auth:

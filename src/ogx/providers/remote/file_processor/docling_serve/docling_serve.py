@@ -70,7 +70,8 @@ class DoclingServeFileProcessor:
             content_response = await self.files_api.openai_retrieve_file_content(
                 RetrieveFileContentRequest(file_id=file_id)
             )
-            content = content_response.body
+            # Normalize bytes/memoryview payloads to bytes for downstream file handling.
+            content = bytes(content_response.body)
 
         document_id = file_id if file_id else str(uuid.uuid4())
         document_metadata: dict[str, Any] = {"filename": filename}
