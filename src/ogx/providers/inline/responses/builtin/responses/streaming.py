@@ -191,6 +191,8 @@ def extract_openai_error(exc: Exception) -> tuple[str, str]:
 
     if raw_code and isinstance(raw_code, str):
         final_code: str = _RESPONSES_API_ERROR_CODES[raw_code] if raw_code in _RESPONSES_API_ERROR_CODES else raw_code
+    elif isinstance(raw_code, int) and 400 <= raw_code < 500:
+        final_code = "invalid_prompt"
     else:
         final_code = "server_error"
 
