@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ogx_api.schema_utils import remove_null_from_anyof
 
@@ -186,6 +186,11 @@ AnthropicTool = Annotated[
 ]
 
 
+def _normalize_tool_types(tools: list[Any]) -> list[Any]:
+    """The Anthropic API allows omitting `type` on custom tools; default absent type to 'custom'."""
+    return [{**t, "type": "custom"} if isinstance(t, dict) and "type" not in t else t for t in tools]
+
+
 # -- Thinking config --
 
 
@@ -249,6 +254,13 @@ class AnthropicCreateMessageRequest(BaseModel):
         default=None, json_schema_extra=remove_null_from_anyof, description="Service tier to use."
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_tools(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("tools"), list):
+            data = {**data, "tools": _normalize_tool_types(data["tools"])}
+        return data
+
 
 class AnthropicCountTokensRequest(BaseModel):
     """Request body for POST /v1/messages/count_tokens."""
@@ -257,6 +269,13 @@ class AnthropicCountTokensRequest(BaseModel):
     messages: list[AnthropicMessage] = Field(..., description="The messages to count tokens for.")
     system: str | list[AnthropicTextBlock] | None = Field(default=None, description="System prompt.")
     tools: list[AnthropicTool] | None = Field(default=None, description="Tools to include in token count.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_tools(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("tools"), list):
+            data = {**data, "tools": _normalize_tool_types(data["tools"])}
+        return data
 
 
 # -- Response models --
