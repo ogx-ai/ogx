@@ -604,6 +604,8 @@ class BuiltinMessagesImpl(Messages):
         extra_body: dict[str, Any] = {}
         if request.top_k is not None:
             extra_body["top_k"] = request.top_k
+        # Note: Anthropic's "thinking" parameter has no equivalent in the OpenAI
+        # chat completions API and is intentionally not forwarded.
 
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=request.model,
