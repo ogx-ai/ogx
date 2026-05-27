@@ -588,7 +588,11 @@ class BuiltinMessagesImpl(Messages):
     def _anthropic_to_openai(self, request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
         messages = self._convert_messages_to_openai(request.system, request.messages)
         tools = self._convert_tools_to_openai(request.tools) if request.tools else None
-        tool_choice = self._convert_tool_choice_to_openai(request.tool_choice) if request.tool_choice else None
+        # tool_choice without tools is an invalid combination for OpenAI-compatible backends.
+        # This happens when request.tools contains only server-side tools, which are all filtered out.
+        tool_choice = (
+            self._convert_tool_choice_to_openai(request.tool_choice) if tools and request.tool_choice else None
+        )
 
         extra_body: dict[str, Any] = {}
         if request.top_k is not None:

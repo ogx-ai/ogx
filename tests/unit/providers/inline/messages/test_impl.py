@@ -367,6 +367,20 @@ class TestRequestTranslation:
         result = impl._anthropic_to_openai(request)
         assert result.tools is None
 
+    def test_tool_choice_dropped_when_all_tools_filtered(self, impl):
+        # tool_choice without tools is invalid for OpenAI backends; it must be dropped
+        # when request.tools contains only server-side tools.
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[AnthropicWebSearchTool()],
+            tool_choice="any",
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.tools is None
+        assert result.tool_choice is None
+
 
 class TestResponseTranslation:
     def test_simple_text_response(self, impl):
