@@ -10417,8 +10417,24 @@ components:
           title: Tools
           description: Tools available to the model.
         tool_choice:
-          title: Tool Choice
+          oneOf:
+          - $ref: '#/components/schemas/_ToolChoiceAuto'
+            title: _ToolChoiceAuto
+          - $ref: '#/components/schemas/_ToolChoiceAny'
+            title: _ToolChoiceAny
+          - $ref: '#/components/schemas/_ToolChoiceNone'
+            title: _ToolChoiceNone
+          - $ref: '#/components/schemas/_ToolChoiceTool'
+            title: _ToolChoiceTool
+          title: _ToolChoiceAuto | ... (4 variants)
           description: "How the model should select tools. One of: 'auto', 'any', 'none', or {type: 'tool', name: '...'}."
+          discriminator:
+            propertyName: type
+            mapping:
+              any: '#/components/schemas/_ToolChoiceAny'
+              auto: '#/components/schemas/_ToolChoiceAuto'
+              none: '#/components/schemas/_ToolChoiceNone'
+              tool: '#/components/schemas/_ToolChoiceTool'
         stream:
           type: boolean
           title: Stream
@@ -13569,6 +13585,59 @@ components:
       - file_id
       title: VectorStoreFileBatchFileEntry
       description: A file entry for creating a vector store file batch with per-file options.
+    _ToolChoiceAny:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - any
+        disable_parallel_tool_use:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+      type: object
+      title: _ToolChoiceAny
+    _ToolChoiceAuto:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - auto
+        disable_parallel_tool_use:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+      type: object
+      title: _ToolChoiceAuto
+    _ToolChoiceNone:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - none
+      type: object
+      title: _ToolChoiceNone
+    _ToolChoiceTool:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - tool
+        name:
+          type: string
+          title: Name
+        disable_parallel_tool_use:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+      type: object
+      required:
+      - name
+      title: _ToolChoiceTool
     _URLOrData:
       properties:
         url:
