@@ -1299,7 +1299,12 @@ class OpenAIResponsesImpl:
         messages.append(OpenAIUserMessageParam(role="user", content=summarization_prompt))
 
         # Call inference to generate the summary (use configured model or fall back to conversation model)
-        summarization_model = self.compaction_config.summarization_model or model or ""
+        summarization_model = self.compaction_config.summarization_model or model
+        if not summarization_model:
+            raise ValueError(
+                "Failed to compact response: no model specified in request and no "
+                "summarization_model configured in CompactionConfig"
+            )
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=summarization_model,
             messages=messages,
@@ -1375,7 +1380,7 @@ class OpenAIResponsesImpl:
         stored_response = OpenAIResponseObject(
             id=response_id,
             created_at=created_at,
-            model=model or "",
+            model=model or summarization_model,
             status="completed",
             output=[],
             usage=usage_data,
