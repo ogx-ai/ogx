@@ -277,8 +277,21 @@ const config: Config = {
     languageTabs: [
       {
         highlight: "python",
-        language: "python",
+        language: "OpenAI",
         logoClass: "python",
+        codeSampleLanguage: "OpenAI",
+      },
+      {
+        highlight: "python",
+        language: "Anthropic",
+        logoClass: "python",
+        codeSampleLanguage: "Anthropic",
+      },
+      {
+        highlight: "python",
+        language: "Google",
+        logoClass: "python",
+        codeSampleLanguage: "Google",
       },
       {
         highlight: "bash",
