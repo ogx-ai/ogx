@@ -56,13 +56,13 @@ class ToolExecutor:
         tool_groups_api: ToolGroups,
         tool_runtime_api: ToolRuntime,
         vector_io_api: VectorIO,
-        vector_stores_config=None,
+        vector_stores_config: VectorStoresConfig | None = None,
         mcp_session_manager=None,
     ):
         self.tool_groups_api = tool_groups_api
         self.tool_runtime_api = tool_runtime_api
         self.vector_io_api = vector_io_api
-        self.vector_stores_config = vector_stores_config
+        self.vector_stores_config = vector_stores_config or VectorStoresConfig()
         # Optional MCPSessionManager for session reuse within a request (fix for #4452)
         self.mcp_session_manager = mcp_session_manager
 
@@ -136,14 +136,7 @@ class ToolExecutor:
         # Create search tasks for all vector stores
         async def search_single_store(vector_store_id):
             try:
-                # Use default_search_mode from config if available
-                search_mode = "vector"
-                if (
-                    self.vector_stores_config
-                    and hasattr(self.vector_stores_config, "chunk_retrieval_params")
-                    and hasattr(self.vector_stores_config.chunk_retrieval_params, "default_search_mode")
-                ):
-                    search_mode = self.vector_stores_config.chunk_retrieval_params.default_search_mode
+                search_mode = self.vector_stores_config.chunk_retrieval_params.default_search_mode
 
                 search_response = await self.vector_io_api.openai_search_vector_store(
                     vector_store_id=vector_store_id,
@@ -171,12 +164,7 @@ class ToolExecutor:
 
         # Get templates from vector stores config, fallback to constants
 
-        # Check if annotations are enabled
-        enable_annotations = (
-            self.vector_stores_config
-            and self.vector_stores_config.annotation_prompt_params
-            and self.vector_stores_config.annotation_prompt_params.enable_annotations
-        )
+        enable_annotations = self.vector_stores_config.annotation_prompt_params.enable_annotations
 
         # Get templates
         header_template = self.vector_stores_config.file_search_params.header_template
