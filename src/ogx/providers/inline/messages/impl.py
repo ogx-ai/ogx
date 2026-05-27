@@ -42,13 +42,14 @@ from ogx_api.messages.models import (
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
     AnthropicCreateMessageRequest,
+    AnthropicCustomToolDef,
     AnthropicImageBlock,
     AnthropicMessage,
     AnthropicMessageResponse,
     AnthropicStreamEvent,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
-    AnthropicToolDef,
+    AnthropicTool,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
     AnthropicURLImageSource,
@@ -590,7 +591,11 @@ class BuiltinMessagesImpl(Messages):
     def _anthropic_to_openai(self, request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
         messages = self._convert_messages_to_openai(request.system, request.messages)
         tools = self._convert_tools_to_openai(request.tools) if request.tools else None
-        tool_choice = self._convert_tool_choice_to_openai(request.tool_choice) if request.tool_choice else None
+        # tool_choice without tools is an invalid combination for OpenAI-compatible backends.
+        # This happens when request.tools contains only server-side tools, which are all filtered out.
+        tool_choice = (
+            self._convert_tool_choice_to_openai(request.tool_choice) if tools and request.tool_choice else None
+        )
 
         parallel_tool_calls: bool | None = None
         if request.tool_choice and getattr(request.tool_choice, "disable_parallel_tool_use", False):
@@ -728,18 +733,23 @@ class BuiltinMessagesImpl(Messages):
 
         return msg
 
-    def _convert_tools_to_openai(self, tools: list[AnthropicToolDef]) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "parameters": tool.input_schema,
-                },
-            }
-            for tool in tools
-        ]
+    def _convert_tools_to_openai(self, tools: list[AnthropicTool]) -> list[dict[str, Any]] | None:
+        result = []
+        for tool in tools:
+            if not isinstance(tool, AnthropicCustomToolDef):
+                logger.debug("Dropping server-side tool in translation mode", tool_type=tool.type)
+                continue
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": tool.input_schema,
+                    },
+                }
+            )
+        return result or None
 
     def _convert_tool_choice_to_openai(self, tool_choice: Any) -> Any:
         if isinstance(tool_choice, _ToolChoiceTool):
