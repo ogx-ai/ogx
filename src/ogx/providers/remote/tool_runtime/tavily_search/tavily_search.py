@@ -26,6 +26,8 @@ from .config import TavilySearchToolConfig
 class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequestProviderData):
     """Tool runtime for performing AI-optimized web searches using the Tavily API."""
 
+    _CONTEXT_SIZE_TO_COUNT = {"low": 3, "medium": 5, "high": 10}
+
     def __init__(self, config: TavilySearchToolConfig):
         self.config = config
         self._client: httpx.AsyncClient | None = None
@@ -84,15 +86,36 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
+        request_body: dict[str, Any] = {
+            "api_key": api_key,
+            "query": kwargs["query"],
+        }
+
+        allowed_domains = kwargs.get("allowed_domains")
+        if allowed_domains:
+            request_body["include_domains"] = allowed_domains
+
+        search_context_size = kwargs.get("search_context_size")
+        if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
+            request_body["max_results"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
+
         if self._client is None:
             raise RuntimeError("Failed to invoke tool: provider not initialized")
         response = await self._client.post(
             "https://api.tavily.com/search",
-            json={"api_key": api_key, "query": kwargs["query"]},
+            json=request_body,
         )
         response.raise_for_status()
 
-        return ToolInvocationResult(content=json.dumps(self._clean_tavily_response(response.json())))
+        response_json = response.json()
+        sources = []
+        for r in response_json.get("results", []):
+            if "url" in r:
+                sources.append({"url": r["url"]})
+        return ToolInvocationResult(
+            content=json.dumps(self._clean_tavily_response(response_json)),
+            metadata={"query": kwargs["query"], "sources": sources},
+        )
 
     def _clean_tavily_response(self, search_response, top_k=3):
         return {"query": search_response["query"], "top_k": search_response["results"]}
