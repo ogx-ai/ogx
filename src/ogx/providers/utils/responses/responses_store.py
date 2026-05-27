@@ -4,6 +4,9 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from collections.abc import Sequence
+
+from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import AccessRule
 from ogx.core.storage.datatypes import ResponsesStoreReference, SqlStoreReference
 from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
@@ -107,6 +110,7 @@ class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObjectWithInput):
     """
 
     messages: list[OpenAIMessageParam] | None = None
+    input_storage_mode: str | None = None
 
 
 class ResponsesStore:
@@ -135,7 +139,20 @@ class ResponsesStore:
                 "created_at": ColumnType.INTEGER,
                 "response_object": ColumnType.JSON,
                 "model": ColumnType.STRING,
+                "previous_response_id": ColumnType.STRING,
+                "input_storage_mode": ColumnType.STRING,
             },
+        )
+        # Backward-compatible schema migration for existing stores.
+        await self.sql_store.add_column_if_not_exists(
+            self.reference.table_name,
+            "previous_response_id",
+            ColumnType.STRING,
+        )
+        await self.sql_store.add_column_if_not_exists(
+            self.reference.table_name,
+            "input_storage_mode",
+            ColumnType.STRING,
         )
 
         await self.sql_store.create_table(
@@ -158,14 +175,16 @@ class ResponsesStore:
         response_object: OpenAIResponseObject,
         input: list[OpenAIResponseInput],
         messages: list[OpenAIMessageParam],
+        incremental_input: bool = False,
     ) -> None:
-        await self._write_response_object(response_object, input, messages)
+        await self._write_response_object(response_object, input, messages, incremental_input)
 
     async def upsert_response_object(
         self,
         response_object: OpenAIResponseObject,
         input: list[OpenAIResponseInput],
         messages: list[OpenAIMessageParam],
+        incremental_input: bool = False,
     ) -> None:
         """Upsert response object using INSERT on first call, UPDATE on subsequent calls.
 
@@ -175,11 +194,55 @@ class ResponsesStore:
         :param response_object: The response object to store/update.
         :param input: The input items for the response.
         :param messages: The chat completion messages (for conversation continuity).
+        :param incremental_input: If True, input contains only new items for this turn.
         """
 
         data = response_object.model_dump()
         data["input"] = [input_item.model_dump() for input_item in input]
         data["messages"] = [msg.model_dump() for msg in messages]
+
+        previous_response_id = data.get("previous_response_id")
+        storage_mode = "incremental" if incremental_input else None
+        preserve_materialized_snapshot = False
+
+        if storage_mode:
+            data["input_storage_mode"] = storage_mode
+            # If the row was previously materialized due to parent deletion, keep that
+            # full snapshot across subsequent streaming upserts.
+            existing_row = await self.sql_store.fetch_one(
+                self.reference.table_name,
+                where={"id": data["id"]},
+            )
+            if existing_row:
+                existing_data = existing_row["response_object"]
+                existing_previous_response_id = existing_row.get("previous_response_id")
+                existing_storage_mode = existing_row.get("input_storage_mode")
+                if (
+                    existing_previous_response_id is None
+                    and existing_storage_mode is None
+                    and previous_response_id is not None
+                ):
+                    preserve_materialized_snapshot = True
+                    data["input"] = existing_data.get("input", [])
+                    data["previous_response_id"] = None
+                    data.pop("input_storage_mode", None)
+                    previous_response_id = None
+                    storage_mode = None
+                elif previous_response_id is not None and existing_previous_response_id != previous_response_id:
+                    # Parent deletion can rewrite ancestry for in-progress children.
+                    # If a stale writer still sends the old previous_response_id, keep
+                    # the rewritten chain to avoid re-introducing dangling ancestry.
+                    preserve_materialized_snapshot = True
+                    data["input"] = existing_data.get("input", [])
+                    data["previous_response_id"] = existing_previous_response_id
+                    previous_response_id = existing_previous_response_id
+                    storage_mode = existing_storage_mode
+                    if storage_mode is not None:
+                        data["input_storage_mode"] = storage_mode
+                    else:
+                        data.pop("input_storage_mode", None)
+        else:
+            data.pop("input_storage_mode", None)
 
         await self.sql_store.upsert(
             table=self.reference.table_name,
@@ -187,21 +250,38 @@ class ResponsesStore:
                 "id": data["id"],
                 "created_at": data["created_at"],
                 "model": data["model"],
+                "previous_response_id": previous_response_id,
+                "input_storage_mode": storage_mode,
                 "response_object": data,
             },
             conflict_columns=["id"],
-            update_columns=["response_object"],
+            update_columns=[
+                "created_at",
+                "model",
+                "previous_response_id",
+                "input_storage_mode",
+                "response_object",
+            ],
         )
+        if preserve_materialized_snapshot:
+            logger.debug("Preserved materialized snapshot during incremental upsert", response_id=data["id"])
 
     async def _write_response_object(
         self,
         response_object: OpenAIResponseObject,
         input: list[OpenAIResponseInput],
         messages: list[OpenAIMessageParam],
+        incremental_input: bool = False,
     ) -> None:
         data = response_object.model_dump()
         data["input"] = [input_item.model_dump() for input_item in input]
         data["messages"] = [msg.model_dump() for msg in messages]
+        storage_mode = "incremental" if incremental_input else None
+        if storage_mode:
+            data["input_storage_mode"] = storage_mode
+        else:
+            data.pop("input_storage_mode", None)
+        previous_response_id = data.get("previous_response_id")
 
         await self.sql_store.insert(
             self.reference.table_name,
@@ -209,6 +289,8 @@ class ResponsesStore:
                 "id": data["id"],
                 "created_at": data["created_at"],
                 "model": data["model"],
+                "previous_response_id": previous_response_id,
+                "input_storage_mode": storage_mode,
                 "response_object": data,
             },
         )
@@ -244,7 +326,27 @@ class ResponsesStore:
             limit=limit,
         )
 
-        data = [OpenAIResponseObjectWithInput(**row["response_object"]) for row in paginated_result.data]
+        response_cache: dict[str, _OpenAIResponseObjectWithInputAndMessages | None] = {}
+        ordered_responses: list[_OpenAIResponseObjectWithInputAndMessages] = []
+        for row in paginated_result.data:
+            response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+            response_cache[response.id] = response
+            ordered_responses.append(response)
+
+        full_input_cache: dict[str, Sequence[OpenAIResponseInput]] = {}
+        data: list[OpenAIResponseObjectWithInput] = []
+        active_response_ids: set[str] = set()
+        for response in ordered_responses:
+            if self._is_incremental_response(response) and response.previous_response_id:
+                response.input = await self._reconstruct_full_input_with_cache(
+                    current_response=response,
+                    response_cache=response_cache,
+                    full_input_cache=full_input_cache,
+                    active_response_ids=active_response_ids,
+                )
+
+            data.append(OpenAIResponseObjectWithInput(**response.model_dump()))
+
         return ListOpenAIResponseObject(
             data=data,
             has_more=paginated_result.has_more,
@@ -252,9 +354,15 @@ class ResponsesStore:
             last_id=data[-1].id if data else "",
         )
 
-    async def get_response_object(self, response_id: str) -> _OpenAIResponseObjectWithInputAndMessages:
-        """
-        Get a response object with automatic access control checking.
+    async def get_response_object(
+        self, response_id: str, reconstruct_input: bool = True
+    ) -> _OpenAIResponseObjectWithInputAndMessages:
+        """Get a response object with automatic access control checking.
+
+        :param response_id: The ID of the response to retrieve.
+        :param reconstruct_input: If True (default), reconstruct full input chain for
+            responses stored in incremental mode. Set to False when only checking
+            response status to avoid unnecessary DB queries.
         """
 
         row = await self.sql_store.fetch_one(
@@ -267,12 +375,206 @@ class ResponsesStore:
             # This provides security by not revealing whether the record exists
             raise ResponseNotFoundError(response_id) from None
 
-        return _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+        response_data = row["response_object"]
+        response = _OpenAIResponseObjectWithInputAndMessages(**response_data)
+
+        if reconstruct_input and self._is_incremental_response(response) and response.previous_response_id:
+            response.input = await self._reconstruct_full_input(response)
+
+        return response
+
+    @staticmethod
+    def _is_incremental_response(response: _OpenAIResponseObjectWithInputAndMessages) -> bool:
+        return response.input_storage_mode == "incremental"
+
+    async def _fetch_response_for_reconstruction(
+        self,
+        response_id: str,
+        response_cache: dict[str, _OpenAIResponseObjectWithInputAndMessages | None],
+    ) -> _OpenAIResponseObjectWithInputAndMessages | None:
+        if response_id in response_cache:
+            return response_cache[response_id]
+
+        row = await self.sql_store.fetch_one(
+            self.reference.table_name,
+            where={"id": response_id},
+        )
+        if not row:
+            response_cache[response_id] = None
+            return None
+
+        response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+        response_cache[response_id] = response
+        return response
+
+    async def _reconstruct_full_input_with_cache(
+        self,
+        current_response: _OpenAIResponseObjectWithInputAndMessages,
+        response_cache: dict[str, _OpenAIResponseObjectWithInputAndMessages | None],
+        full_input_cache: dict[str, Sequence[OpenAIResponseInput]],
+        active_response_ids: set[str],
+    ) -> Sequence[OpenAIResponseInput]:
+        cached_input = full_input_cache.get(current_response.id)
+        if cached_input is not None:
+            return cached_input
+
+        chain: list[_OpenAIResponseObjectWithInputAndMessages] = []
+        response = current_response
+        added_active_ids: list[str] = []
+        try:
+            while True:
+                cached_chain_input = full_input_cache.get(response.id)
+                if cached_chain_input is not None:
+                    break
+
+                if response.id in active_response_ids:
+                    logger.warning(
+                        "Detected cycle in response ancestry chain; using stored input",
+                        response_id=response.id,
+                    )
+                    return list(current_response.input)
+
+                active_response_ids.add(response.id)
+                added_active_ids.append(response.id)
+                chain.append(response)
+
+                if not (self._is_incremental_response(response) and response.previous_response_id):
+                    break
+
+                previous_response = await self._fetch_response_for_reconstruction(
+                    response.previous_response_id,
+                    response_cache,
+                )
+                if previous_response is None:
+                    break
+
+                response = previous_response
+
+            anchor_response_id = response.id
+            anchor_input = full_input_cache.get(anchor_response_id)
+            if anchor_input is None:
+                anchor_input = list(response.input)
+                full_input_cache[anchor_response_id] = anchor_input
+
+            for chain_response in reversed(chain):
+                if chain_response.id == anchor_response_id:
+                    full_input_cache[chain_response.id] = list(anchor_input)
+                    continue
+
+                if self._is_incremental_response(chain_response) and chain_response.previous_response_id:
+                    previous_response = await self._fetch_response_for_reconstruction(
+                        chain_response.previous_response_id,
+                        response_cache,
+                    )
+                    previous_input = full_input_cache.get(chain_response.previous_response_id)
+                    if previous_response and previous_input is not None:
+                        full_input = list(previous_input)
+                        full_input.extend(previous_response.output)
+                        full_input.extend(chain_response.input)
+                        full_input_cache[chain_response.id] = full_input
+                        continue
+
+                full_input_cache[chain_response.id] = list(chain_response.input)
+
+            return full_input_cache.get(current_response.id, list(current_response.input))
+        finally:
+            for response_id in added_active_ids:
+                active_response_ids.discard(response_id)
+
+    async def _reconstruct_full_input(
+        self,
+        current_response: _OpenAIResponseObjectWithInputAndMessages,
+    ) -> Sequence[OpenAIResponseInput]:
+        """Reconstruct full accumulated input for incremental responses."""
+        response_cache: dict[str, _OpenAIResponseObjectWithInputAndMessages | None] = {
+            current_response.id: current_response
+        }
+        return await self._reconstruct_full_input_with_cache(
+            current_response=current_response,
+            response_cache=response_cache,
+            full_input_cache={},
+            active_response_ids=set(),
+        )
+
+    async def _materialize_incremental_children(
+        self,
+        parent_response: _OpenAIResponseObjectWithInputAndMessages,
+    ) -> None:
+        """Rewrite incremental direct children before parent deletion.
+
+        Each child currently references `parent_response.id`. Before deleting that row,
+        rewrite the child to bypass the soon-to-be-missing parent while preserving chain
+        semantics:
+        - child.input = parent.input + parent.output + child.input
+        - child.previous_response_id = parent.previous_response_id (if parent is incremental)
+        - otherwise child becomes a materialized snapshot (previous_response_id=None)
+        """
+        parent_response_id = parent_response.id
+
+        # Use the underlying SQL store so children hidden by READ policy are still
+        # materialized before parent deletion.
+        rows = await self.sql_store.sql_store.fetch_all(
+            table=self.reference.table_name,
+            where={"previous_response_id": parent_response_id},
+        )
+
+        for row in rows.data:
+            response_data = row["response_object"]
+            if response_data.get("input_storage_mode") != "incremental":
+                continue
+
+            child_response = _OpenAIResponseObjectWithInputAndMessages(**response_data)
+            rewritten_input: list[OpenAIResponseInput] = list(parent_response.input)
+            rewritten_input.extend(parent_response.output)
+            rewritten_input.extend(child_response.input)
+
+            child_data = child_response.model_dump()
+            child_data["input"] = [input_item.model_dump() for input_item in rewritten_input]
+            child_data["messages"] = response_data.get("messages", [])
+
+            if self._is_incremental_response(parent_response) and parent_response.previous_response_id:
+                child_previous_response_id = parent_response.previous_response_id
+                child_input_storage_mode = "incremental"
+                child_data["previous_response_id"] = child_previous_response_id
+                child_data["input_storage_mode"] = child_input_storage_mode
+            else:
+                child_previous_response_id = None
+                child_input_storage_mode = None
+                child_data["previous_response_id"] = None
+                child_data.pop("input_storage_mode", None)
+
+            # This write is an internal side effect of deleting the parent response.
+            # It must not require UPDATE permission on child rows.
+            await self.sql_store.sql_store.update(
+                self.reference.table_name,
+                data={
+                    "created_at": child_data["created_at"],
+                    "model": child_data["model"],
+                    "previous_response_id": child_previous_response_id,
+                    "input_storage_mode": child_input_storage_mode,
+                    "response_object": child_data,
+                },
+                where={"id": child_response.id},
+            )
 
     async def delete_response_object(self, response_id: str) -> OpenAIDeleteResponseObject:
         row = await self.sql_store.fetch_one(self.reference.table_name, where={"id": response_id})
         if not row:
             raise ResponseNotFoundError(response_id)
+
+        parent_response = _OpenAIResponseObjectWithInputAndMessages(**row["response_object"])
+
+        # Ensure delete access before running any internal materialization writes.
+        await self.sql_store.check_access_for_rows(
+            table=self.reference.table_name,
+            where={"id": response_id},
+            action=Action.DELETE,
+        )
+
+        # Prevent descendant input truncation after ancestor deletion by rewriting
+        # incremental direct children to bypass this parent record.
+        await self._materialize_incremental_children(parent_response)
+
         await self.sql_store.delete(self.reference.table_name, where={"id": response_id})
         return OpenAIDeleteResponseObject(id=response_id)
 
@@ -309,12 +611,20 @@ class ResponsesStore:
         # Messages are stored in the blob by store/upsert_response_object.
         # Preserve them here so updating status doesn't clobber them.
         data["messages"] = existing_data.get("messages", [])
+        # Preserve incremental input metadata so chained reconstruction remains available.
+        if "input_storage_mode" in existing_data:
+            data["input_storage_mode"] = existing_data["input_storage_mode"]
+        # Status updates should not mutate ancestry linkage.
+        if "previous_response_id" in existing_data:
+            data["previous_response_id"] = existing_data["previous_response_id"]
 
         await self.sql_store.update(
             self.reference.table_name,
             data={
                 "created_at": data["created_at"],
                 "model": data["model"],
+                "previous_response_id": data.get("previous_response_id"),
+                "input_storage_mode": data.get("input_storage_mode"),
                 "response_object": data,
             },
             where={"id": response_object.id},

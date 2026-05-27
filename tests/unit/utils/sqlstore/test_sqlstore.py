@@ -559,7 +559,7 @@ async def test_postgres_pool_config_defaults():
     cfg = PostgresSqlStoreConfig(user="test", password="test")
     assert cfg.pool_size == 10
     assert cfg.max_overflow == 20
-    assert cfg.pool_recycle == -1
+    assert cfg.pool_recycle == 3600
 
 
 async def test_postgres_pool_kwargs_propagate_to_engine():

@@ -39,6 +39,7 @@ from .config import TransformersInferenceConfig
 RERANKER_MODELS: dict[str, tuple] = {}
 
 RERANKER_MODELS_LOCK: asyncio.Lock = asyncio.Lock()
+TOKENIZER_LOCK: threading.Lock = threading.Lock()
 
 DEFAULT_RERANKER_INSTRUCTION = "Given the search query, retrieve relevant passages that answer the query"
 
@@ -191,27 +192,30 @@ class TransformersInferenceImpl(
         """
         # Reranker configuration
         max_length = 8192
-        token_true_id = reranker_tokenizer.convert_tokens_to_ids("yes")
-        token_false_id = reranker_tokenizer.convert_tokens_to_ids("no")
+        # We lock everything that touches reranker_tokenizer because it modifies
+        # its internal Rust state during these operations.
+        with TOKENIZER_LOCK:
+            token_true_id = reranker_tokenizer.convert_tokens_to_ids("yes")
+            token_false_id = reranker_tokenizer.convert_tokens_to_ids("no")
 
-        prefix = '<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
-        suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
-        prefix_tokens = reranker_tokenizer.encode(prefix, add_special_tokens=False)
-        suffix_tokens = reranker_tokenizer.encode(suffix, add_special_tokens=False)
+            prefix = '<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
+            suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+            prefix_tokens = reranker_tokenizer.encode(prefix, add_special_tokens=False)
+            suffix_tokens = reranker_tokenizer.encode(suffix, add_special_tokens=False)
 
-        # Tokenize pairs
-        inputs = reranker_tokenizer(
-            pairs,
-            padding=False,
-            truncation="longest_first",
-            return_attention_mask=False,
-            max_length=max_length - len(prefix_tokens) - len(suffix_tokens),
-        )
+            # Tokenize pairs
+            inputs = reranker_tokenizer(
+                pairs,
+                padding=False,
+                truncation="longest_first",
+                return_attention_mask=False,
+                max_length=max_length - len(prefix_tokens) - len(suffix_tokens),
+            )
 
-        for i, tokens in enumerate(inputs["input_ids"]):
-            inputs["input_ids"][i] = prefix_tokens + tokens + suffix_tokens
+            for i, tokens in enumerate(inputs["input_ids"]):
+                inputs["input_ids"][i] = prefix_tokens + tokens + suffix_tokens
 
-        inputs = reranker_tokenizer.pad(inputs, padding=True, return_tensors="pt", max_length=max_length)
+            inputs = reranker_tokenizer.pad(inputs, padding=True, return_tensors="pt", max_length=max_length)
 
         for key in inputs:
             inputs[key] = inputs[key].to(reranker_model.device)

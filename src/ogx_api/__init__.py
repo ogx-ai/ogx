@@ -282,6 +282,7 @@ from .interactions import (
 )
 from .messages import (
     Messages,
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
@@ -290,6 +291,7 @@ from .messages import (
     AnthropicImageBlock,
     AnthropicImageSource,
     AnthropicMessage,
+    AnthropicURLImageSource,
     AnthropicMessageResponse,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
@@ -978,6 +980,7 @@ __all__ = [
     "GoogleUsage",
     # Messages API
     "Messages",
+    "AnthropicBase64ImageSource",
     "AnthropicContentBlock",
     "AnthropicCountTokensRequest",
     "AnthropicCountTokensResponse",
@@ -986,6 +989,7 @@ __all__ = [
     "AnthropicImageBlock",
     "AnthropicImageSource",
     "AnthropicMessage",
+    "AnthropicURLImageSource",
     "AnthropicMessageResponse",
     "AnthropicTextBlock",
     "AnthropicThinkingBlock",

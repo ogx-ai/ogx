@@ -223,12 +223,16 @@ async def faiss_vec_adapter(unique_kvstore_config, mock_inference_api, embedding
 def _make_mock_asyncpg_pool():
     """Create a mock asyncpg pool with acquire() as async context manager."""
     pool = MagicMock()
-    mock_conn = AsyncMock()
+    mock_conn = MagicMock()
     mock_conn.execute = AsyncMock()
     mock_conn.executemany = AsyncMock()
     mock_conn.fetch = AsyncMock(return_value=[])
     mock_conn.fetchrow = AsyncMock(return_value=None)
     mock_conn.fetchval = AsyncMock(return_value=None)
+    tx_acm = AsyncMock()
+    tx_acm.__aenter__ = AsyncMock(return_value=None)
+    tx_acm.__aexit__ = AsyncMock(return_value=False)
+    mock_conn.transaction = MagicMock(return_value=tx_acm)
 
     # Make pool.acquire() return an async context manager yielding mock_conn
     acm = AsyncMock()

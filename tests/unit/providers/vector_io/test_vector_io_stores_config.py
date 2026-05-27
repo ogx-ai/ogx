@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from ogx_api import (
+    EmbeddedChunk,
     OpenAICreateVectorStoreRequestWithExtraBody,
     QueryChunksResponse,
     VectorStore,
@@ -21,12 +22,16 @@ from ogx_api import (
 def _make_mock_asyncpg_pool():
     """Create a mock asyncpg pool with acquire() as async context manager."""
     pool = MagicMock()
-    mock_conn = AsyncMock()
+    mock_conn = MagicMock()
     mock_conn.execute = AsyncMock()
     mock_conn.executemany = AsyncMock()
     mock_conn.fetch = AsyncMock(return_value=[])
     mock_conn.fetchrow = AsyncMock(return_value=None)
     mock_conn.fetchval = AsyncMock(return_value=None)
+    tx_acm = AsyncMock()
+    tx_acm.__aenter__ = AsyncMock(return_value=None)
+    tx_acm.__aexit__ = AsyncMock(return_value=False)
+    mock_conn.transaction = MagicMock(return_value=tx_acm)
 
     acm = AsyncMock()
     acm.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -325,11 +330,15 @@ async def test_set_ef_search_called_before_select_in_query_vector(mock_asyncpg_p
 
     assert len(execute_calls) == 1, f"Expected 1 execute call (SET), got {len(execute_calls)}"
     assert len(fetch_calls) == 1, f"Expected 1 fetch call (SELECT), got {len(fetch_calls)}"
+    mock_conn.transaction.assert_called_once()
 
-    set_call_sql = str(execute_calls[0])
+    set_call_args = execute_calls[0].args
     select_call_sql = str(fetch_calls[0])
-    assert f"SET hnsw.ef_search = {index.vector_index.ef_search}" in set_call_sql, (
-        f"First call should be SET, got: {set_call_sql}"
+    assert set_call_args[0] == "SELECT set_config('hnsw.ef_search', $1, true)", (
+        f"First call should set hnsw.ef_search, got: {set_call_args[0]}"
+    )
+    assert set_call_args[1] == str(index.vector_index.ef_search), (
+        f"Expected ef_search value {index.vector_index.ef_search}, got: {set_call_args[1]}"
     )
     assert "SELECT document" in select_call_sql, f"Second call should be SELECT, got: {select_call_sql}"
 
@@ -360,10 +369,52 @@ async def test_apply_default_ef_search_for_query_vector(mock_asyncpg_pool, embed
     await index.query_vector(embedding, k=5, score_threshold=0.5)
 
     execute_calls = mock_conn.execute.call_args_list
-    set_call_sql = str(execute_calls[0])
-    assert f"SET hnsw.ef_search = {PGVectorHNSWVectorIndex().ef_search}" in set_call_sql, (
-        f"Expected default 'SET hnsw.ef_search = {PGVectorHNSWVectorIndex().ef_search}' when ef_search is not explicitly configured, got: {set_call_sql}"
+    set_call_args = execute_calls[0].args
+    assert set_call_args[0] == "SELECT set_config('hnsw.ef_search', $1, true)", (
+        f"Expected set_config call for hnsw.ef_search, got: {set_call_args[0]}"
     )
+    assert set_call_args[1] == str(PGVectorHNSWVectorIndex().ef_search), (
+        f"Expected default ef_search value {PGVectorHNSWVectorIndex().ef_search}, got: {set_call_args[1]}"
+    )
+    mock_conn.transaction.assert_called_once()
+
+
+async def test_add_chunks_does_not_run_analyze_on_write():
+    from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
+    from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex
+
+    pool, mock_conn = _make_mock_asyncpg_pool()
+
+    index = PGVectorIndex(
+        vector_store=VectorStore(
+            identifier="test-vector-db",
+            embedding_model="test-model",
+            embedding_dimension=2,
+            provider_id="pgvector",
+        ),
+        dimension=2,
+        pool=pool,
+        distance_metric="COSINE",
+        vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=40),
+    )
+    index.table_name = "test_table"
+    index._quoted_table = '"test_table"'
+
+    await index.add_chunks(
+        [
+            EmbeddedChunk(
+                content="hello world",
+                chunk_id="chunk-1",
+                chunk_metadata={},
+                embedding=[0.1, 0.2],
+                embedding_model="test-model",
+                embedding_dimension=2,
+            )
+        ]
+    )
+
+    mock_conn.executemany.assert_called_once()
+    mock_conn.execute.assert_not_called()
 
 
 def _make_pgvector_adapter():

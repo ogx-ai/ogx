@@ -247,6 +247,7 @@ from ogx_api.interactions import (
 
 # Messages
 from ogx_api.messages import (
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
@@ -262,6 +263,7 @@ from ogx_api.messages import (
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
     AnthropicUsage,
 )
 
@@ -697,6 +699,7 @@ __all__ = [
     "GoogleInteractionResponse",
     "GoogleUsage",
     # Messages (Anthropic)
+    "AnthropicBase64ImageSource",
     "AnthropicContentBlock",
     "AnthropicCountTokensRequest",
     "AnthropicCountTokensResponse",
@@ -705,6 +708,7 @@ __all__ = [
     "AnthropicImageBlock",
     "AnthropicImageSource",
     "AnthropicMessage",
+    "AnthropicURLImageSource",
     "AnthropicMessageResponse",
     "AnthropicTextBlock",
     "AnthropicThinkingBlock",

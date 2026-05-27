@@ -539,6 +539,47 @@ async def test_create_conversation_with_items_supports_pagination(service):
     assert pages == 3
 
 
+async def test_item_ordering_uses_sort_order_not_timestamp(service):
+    """sort_order column must exist and increase monotonically across add_items calls.
+
+    Regression: created_at uses second-precision timestamps, so calls within the
+    same second collide. Ordering must use a dedicated sort_order counter, not
+    created_at. We assert on the column values directly so this fails if
+    sort_order is missing or not populated, regardless of DB-specific row ordering.
+    """
+    from unittest.mock import patch
+
+    conversation = await service.create_conversation(CreateConversationRequest())
+    fixed_time = 1700000000
+
+    with patch("ogx.core.conversations.conversations.time") as mock_time:
+        mock_time.time.return_value = fixed_time
+
+        for i in range(5):
+            items = [
+                OpenAIResponseMessage(
+                    type="message",
+                    role="user",
+                    content=[OpenAIResponseInputMessageContentText(type="input_text", text=f"msg-{i}")],
+                    id=f"msg_{'0' * 44}{i:04d}",
+                    status="completed",
+                )
+            ]
+            await service.add_items(conversation.id, AddItemsRequest(items=items))
+
+    raw = await service.sql_store.fetch_all(
+        table="conversation_items",
+        where={"conversation_id": conversation.id},
+        order_by=[("sort_order", "asc")],
+    )
+
+    sort_orders = [r["sort_order"] for r in raw.data]
+    assert sort_orders == [0, 1, 2, 3, 4]
+
+    timestamps = {r["created_at"] for r in raw.data}
+    assert len(timestamps) == 1, f"All timestamps should be identical, got {timestamps}"
+
+
 async def test_list_items_empty_conversation(service):
     """Listing items on empty conversation returns valid ConversationItemList with empty strings."""
     conversation = await service.create_conversation(CreateConversationRequest())

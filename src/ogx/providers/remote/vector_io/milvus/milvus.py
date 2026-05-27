@@ -87,6 +87,9 @@ class MilvusIndex(EmbeddingIndex):
         self.kvstore = kvstore
         self.use_native_hybrid = use_native_hybrid
 
+    async def _collection_exists(self) -> bool:
+        return await asyncio.to_thread(self.client.has_collection, self.collection_name)
+
     async def initialize(self):
         # MilvusIndex does not require explicit initialization
         # TODO: could move collection creation into initialization but it is not really necessary
@@ -224,6 +227,9 @@ class MilvusIndex(EmbeddingIndex):
     async def query_vector(
         self, embedding: NDArray, k: int, score_threshold: float, filters: Any = None
     ) -> QueryChunksResponse:
+        if not await self._collection_exists():
+            return QueryChunksResponse(chunks=[], scores=[])
+
         # Translate filters to Milvus expression format
         filter_expr = self._translate_filters(filters) if filters else None
 
@@ -254,6 +260,9 @@ class MilvusIndex(EmbeddingIndex):
         """
         Perform BM25-based keyword search using Milvus's built-in full-text search.
         """
+        if not await self._collection_exists():
+            return QueryChunksResponse(chunks=[], scores=[])
+
         try:
             # Translate filters to Milvus expression format
             filter_expr = self._translate_filters(filters) if filters else None
@@ -299,6 +308,9 @@ class MilvusIndex(EmbeddingIndex):
         """
         Fallback to simple text search when BM25 search is not available.
         """
+        if not await self._collection_exists():
+            return QueryChunksResponse(chunks=[], scores=[])
+
         # Simple text search using content field
         search_res = await asyncio.to_thread(
             self.client.query,
@@ -346,6 +358,9 @@ class MilvusIndex(EmbeddingIndex):
         Uses Milvus's hybrid_search method which combines vector search and
         BM25 search server-side with configurable reranking strategies.
         """
+        if not await self._collection_exists():
+            return QueryChunksResponse(chunks=[], scores=[])
+
         search_requests = []
 
         search_requests.append(
@@ -438,6 +453,9 @@ class MilvusIndex(EmbeddingIndex):
 
     async def delete_chunks(self, chunks_for_deletion: list[ChunkForDeletion]) -> None:
         """Remove a chunk from the Milvus collection."""
+        if not await self._collection_exists():
+            return
+
         chunk_ids = [c.chunk_id for c in chunks_for_deletion]
         try:
             # Use IN clause with square brackets and single quotes for VARCHAR field

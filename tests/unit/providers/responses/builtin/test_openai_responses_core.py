@@ -31,6 +31,7 @@ from ogx_api.inference import (
 )
 from ogx_api.openai_responses import (
     ListOpenAIResponseInputItem,
+    OpenAIResponseCompaction,
     OpenAIResponseInputMessageContentText,
     OpenAIResponseMessage,
     OpenAIResponseOutputMessageContentOutputText,
@@ -529,6 +530,30 @@ async def test_list_openai_response_input_items_delegation(openai_responses_impl
     assert result.data[0].id == "msg_123"
 
 
+async def test_get_openai_response_skips_input_reconstruction(openai_responses_impl, mock_responses_store):
+    """GET response should avoid reconstructing incremental input because input is not returned."""
+
+    mock_responses_store.get_response_object.return_value = _OpenAIResponseObjectWithInputAndMessages(
+        id="resp_get_123",
+        object="response",
+        created_at=1234567890,
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        status="completed",
+        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        input=[OpenAIResponseMessage(id="msg_1", role="user", content="Hi")],
+        output=[],
+        store=True,
+    )
+
+    result = await openai_responses_impl.get_openai_response("resp_get_123")
+
+    mock_responses_store.get_response_object.assert_awaited_once_with(
+        "resp_get_123",
+        reconstruct_input=False,
+    )
+    assert result.id == "resp_get_123"
+
+
 async def test_responses_store_list_input_items_logic():
     """Test ResponsesStore list_response_input_items logic - mocks get_response_object to test actual ordering/limiting."""
 
@@ -613,11 +638,11 @@ async def test_responses_store_list_input_items_logic():
     assert len(result.data) == 0  # Should return no items
 
 
-async def test_store_response_uses_rehydrated_input_with_previous_response(
+async def test_store_response_uses_incremental_input_with_previous_response(
     openai_responses_impl, mock_responses_store, mock_inference_api
 ):
-    """Test that _store_response uses the full re-hydrated input (including previous responses)
-    rather than just the original input when previous_response_id is provided."""
+    """Test that storage uses only new input items when previous_response_id is provided,
+    with incremental_input=True flag to enable O(n) storage instead of O(n²)."""
 
     # Setup - Create a previous response that should be included in the stored input
     previous_response = _OpenAIResponseObjectWithInputAndMessages(
@@ -664,24 +689,84 @@ async def test_store_response_uses_rehydrated_input_with_previous_response(
     store_call_args = mock_responses_store.upsert_response_object.call_args
     stored_input = store_call_args.kwargs["input"]
 
-    # Verify that the stored input contains the full re-hydrated conversation:
-    # 1. Previous user message
-    # 2. Previous assistant response
-    # 3. Current user message
-    assert len(stored_input) == 3
-
+    # Only the new input for this turn should be stored (not the full accumulated history)
+    assert len(stored_input) == 1
     assert stored_input[0].role == "user"
-    assert stored_input[0].content[0].text == "What is 2+2?"
+    assert stored_input[0].content[0].text == "Now what is 3+3?"
 
-    assert stored_input[1].role == "assistant"
-    assert stored_input[1].content[0].text == "2+2 equals 4."
-
-    assert stored_input[2].role == "user"
-    assert stored_input[2].content == "Now what is 3+3?"
+    # The incremental_input flag must be set so the store knows to reconstruct on read
+    assert store_call_args.kwargs["incremental_input"] is True
+    assert store_call_args.kwargs["response_object"].previous_response_id == "resp-previous-123"
 
     # Verify the response itself is correct
     assert result.model == model
     assert result.status == "completed"
+
+
+async def test_store_response_disables_incremental_input_when_auto_compaction_applies(
+    openai_responses_impl, mock_responses_store, mock_inference_api
+):
+    """When auto-compaction rewrites history, storage must persist the effective compacted input snapshot."""
+
+    previous_response = _OpenAIResponseObjectWithInputAndMessages(
+        id="resp-previous-123",
+        object="response",
+        created_at=1234567890,
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        status="completed",
+        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        input=[
+            OpenAIResponseMessage(
+                id="msg-prev-user",
+                role="user",
+                content=[OpenAIResponseInputMessageContentText(text="What is 2+2?")],
+            )
+        ],
+        output=[
+            OpenAIResponseMessage(
+                id="msg-prev-assistant",
+                role="assistant",
+                content=[OpenAIResponseOutputMessageContentOutputText(text="2+2 equals 4.")],
+            )
+        ],
+        messages=[
+            OpenAIUserMessageParam(content="What is 2+2?"),
+            OpenAIAssistantMessageParam(content="2+2 equals 4."),
+        ],
+        store=True,
+    )
+
+    mock_responses_store.get_response_object.return_value = previous_response
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+
+    compacted_input = [
+        OpenAIResponseMessage(
+            id="msg-compacted-user",
+            role="user",
+            content=[OpenAIResponseInputMessageContentText(text="Now what is 3+3?")],
+        ),
+        OpenAIResponseCompaction(id="cmp_123", encrypted_content="Compacted context summary"),
+    ]
+    openai_responses_impl._maybe_auto_compact = AsyncMock(return_value=compacted_input)
+
+    await openai_responses_impl.create_openai_response(
+        input="Now what is 3+3?",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        previous_response_id="resp-previous-123",
+        context_management=[{"type": "compaction", "compact_threshold": 1}],
+        store=True,
+    )
+
+    openai_responses_impl._maybe_auto_compact.assert_awaited_once()
+    store_call_args = mock_responses_store.upsert_response_object.call_args
+    stored_input = store_call_args.kwargs["input"]
+
+    assert store_call_args.kwargs["incremental_input"] is False
+    assert len(stored_input) == 2
+    assert isinstance(stored_input[0], OpenAIResponseMessage)
+    assert stored_input[0].content[0].text == "Now what is 3+3?"
+    assert isinstance(stored_input[1], OpenAIResponseCompaction)
+    assert stored_input[1].encrypted_content == "Compacted context summary"
 
 
 @pytest.mark.parametrize(

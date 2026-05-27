@@ -78,6 +78,19 @@ if os.environ.get("OGX_TRACE_WARNINGS"):
     warnings.showwarning = warn_with_traceback
 
 
+def _format_google_error_response(status_code: int, message: str) -> JSONResponse:
+    """Create a Google-format error JSONResponse for the Interactions API."""
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": {"code": status_code, "message": message}},
+    )
+
+
+def _is_interactions_path(request: Request) -> bool:
+    """Check if the request targets the Google Interactions API."""
+    return request.url.path.startswith("/v1alpha/interactions")
+
+
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle uncaught exceptions by translating them to JSON error responses.
 
@@ -90,6 +103,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     """
     traceback.print_exception(type(exc), exc, exc.__traceback__)
     http_exc = translate_exception(exc)
+
+    # Interactions API uses the Google error envelope for all errors,
+    # including request validation errors that are caught before the
+    # handler runs.
+    if _is_interactions_path(request):
+        message = str(http_exc.detail) if isinstance(http_exc.detail, str) else str(exc)
+        return _format_google_error_response(http_exc.status_code, message)
 
     # OpenAI-compat Vector Stores endpoints treat many "not found" conditions as 400s.
     # Our core exceptions model these as ResourceNotFoundError (mapped to 404 by default),
@@ -119,6 +139,13 @@ class StackApp(FastAPI):
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(asyncio.run, self.stack.initialize())  # type: ignore[no-untyped-call]
             future.result()
+
+        # Reset SQL engines that may have been created in the temporary event loop
+        # (e.g. by register_connectors → list_connectors → fetch_all) so they are
+        # recreated lazily in uvicorn's request-handling event loop.
+        from ogx.core.storage.sqlstore.sqlstore import reset_sqlstore_engines
+
+        reset_sqlstore_engines()
 
 
 @asynccontextmanager
@@ -350,18 +377,27 @@ def create_app() -> StackApp:
 
             try:
                 max_decompressed_size = 100 * 1024 * 1024  # 100 MB
-                decompressor = zstandard.ZstdDecompressor()
-                # Use streaming decompression to handle frames without content size
-                reader = decompressor.stream_reader(compressed_body)
-                decompressed_body = reader.read(max_decompressed_size)
-                if reader.read(1):
-                    reader.close()
+
+                def _decompress_zstd(compressed: bytes, max_size: int) -> tuple[bytes | None, bool]:
+                    decompressor = zstandard.ZstdDecompressor()
+                    reader = decompressor.stream_reader(compressed)
+                    try:
+                        data = reader.read(max_size)
+                        is_oversized = bool(reader.read(1))
+                        return (None, True) if is_oversized else (data, False)
+                    finally:
+                        reader.close()
+
+                decompressed_body, oversized = await asyncio.to_thread(
+                    _decompress_zstd, compressed_body, max_decompressed_size
+                )
+
+                if oversized:
                     return await _send_error_response(
                         send,
                         status=413,
                         message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
                     )
-                reader.close()
 
                 # Strip content-encoding header and update content-length
                 new_headers = [

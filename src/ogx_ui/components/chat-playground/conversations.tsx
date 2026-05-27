@@ -15,10 +15,7 @@ import { Trash2 } from "lucide-react";
 import type { Message } from "@/components/chat-playground/chat-message";
 import { useAuthClient } from "@/hooks/use-auth-client";
 import { cleanMessageContent } from "@/lib/message-content-utils";
-import type {
-  Session,
-  SessionCreateParams,
-} from "llama-stack-client/resources/agents";
+import type { Session, SessionCreateParams } from "ogx-client/resources/agents";
 
 export interface ChatSession {
   id: string;

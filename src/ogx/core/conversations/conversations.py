@@ -94,9 +94,12 @@ class ConversationServiceImpl(Conversations):
                 "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
                 "conversation_id": ColumnType.STRING,
                 "created_at": ColumnType.INTEGER,
+                "sort_order": ColumnType.INTEGER,
                 "item_data": ColumnType.JSON,
             },
         )
+        # Migration for existing databases that lack the sort_order column
+        await self.sql_store.sql_store.add_column_if_not_exists("conversation_items", "sort_order", ColumnType.INTEGER)
 
     async def create_conversation(self, request: CreateConversationRequest) -> Conversation:
         """Create a conversation."""
@@ -125,7 +128,8 @@ class ConversationServiceImpl(Conversations):
                 item_record = {
                     "id": item_id,
                     "conversation_id": conversation_id,
-                    "created_at": base_time + i,
+                    "created_at": base_time,
+                    "sort_order": i,
                     "item_data": item_dict,
                 }
 
@@ -208,24 +212,35 @@ class ConversationServiceImpl(Conversations):
         """Validate conversation ID format and return the conversation if it exists."""
         return await self.get_conversation(GetConversationRequest(conversation_id=conversation_id))
 
+    async def _next_sort_order(self, conversation_id: str) -> int:
+        result = await self.sql_store.fetch_all(
+            table="conversation_items",
+            where={"conversation_id": conversation_id},
+            order_by=[("sort_order", "desc")],
+            limit=1,
+        )
+        if result.data:
+            current_max = result.data[0].get("sort_order")
+            return (current_max + 1) if current_max is not None else 0
+        return 0
+
     async def add_items(self, conversation_id: str, request: AddItemsRequest) -> ConversationItemList:
         """Create (add) items to a conversation."""
         await self._get_validated_conversation(conversation_id)
 
         created_items = []
         base_time = int(time.time())
+        base_sort_order = await self._next_sort_order(conversation_id)
 
         for i, item in enumerate(request.items):
             item_dict = item.model_dump()
             item_id = self._get_or_generate_item_id(item, item_dict)
 
-            # make each timestamp unique to maintain order
-            created_at = base_time + i
-
             item_record = {
                 "id": item_id,
                 "conversation_id": conversation_id,
-                "created_at": created_at,
+                "created_at": base_time,
+                "sort_order": base_sort_order + i,
                 "item_data": item_dict,
             }
 
@@ -287,7 +302,7 @@ class ConversationServiceImpl(Conversations):
         result = await self.sql_store.fetch_all(
             table="conversation_items",
             where={"conversation_id": request.conversation_id},
-            order_by=[("created_at", order)],
+            order_by=[("sort_order", order)],
             cursor=("id", request.after) if request.after else None,
             limit=limit,
         )

@@ -7,7 +7,7 @@
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 
 from ogx.core.storage.datatypes import KVStoreReference, SqlStoreReference
 from ogx_api import json_schema_type
@@ -81,7 +81,7 @@ class PGVectorVectorIOConfig(BaseModel):
     port: int | None = Field(default=5432)
     db: str | None = Field(default="postgres")
     user: str | None = Field(default="postgres")
-    password: str | None = Field(default="mysecretpassword")
+    password: SecretStr | None = Field(default=None)
     distance_metric: Literal["COSINE", "L2", "L1", "INNER_PRODUCT"] | None = Field(
         default="COSINE", description="PGVector distance metric used for vector search in PGVectorIndex"
     )
@@ -94,6 +94,7 @@ class PGVectorVectorIOConfig(BaseModel):
     statement_cache_size: int = Field(
         default=512, ge=0, description="Size of the prepared statement cache per connection"
     )
+    command_timeout: float = Field(default=30.0, gt=0, description="Timeout in seconds for individual SQL statements")
     persistence: KVStoreReference | None = Field(
         description="Config for KV store backend (SQLite only for now)", default=None
     )

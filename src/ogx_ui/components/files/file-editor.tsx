@@ -19,7 +19,7 @@ import {
   formatValidationWarnings,
 } from "@/lib/file-validation";
 import { getPurposeDescription } from "@/lib/file-utils";
-import { toFile } from "llama-stack-client";
+import { toFile } from "ogx-client";
 
 interface FileEditorProps {
   onUploadSuccess: () => void;

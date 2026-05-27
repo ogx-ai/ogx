@@ -15,6 +15,7 @@ import tiktoken
 from pydantic import TypeAdapter
 
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
+from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.task import (
     RequestContext,
     activate_request_context,
@@ -117,7 +118,7 @@ class OpenAIResponsesImpl:
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
-        vector_stores_config=None,
+        vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
     ):
         self.inference_api = inference_api
@@ -200,7 +201,7 @@ class OpenAIResponsesImpl:
                     # Response was cancelled via cancel_openai_response
                     logger.info("Background response was cancelled", response_id=response_id)
                     try:
-                        existing = await self.responses_store.get_response_object(response_id)
+                        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
                         if existing.status != "cancelled":
                             existing.status = "cancelled"
                             await self.responses_store.update_response_object(existing)
@@ -213,7 +214,7 @@ class OpenAIResponsesImpl:
                         timeout_seconds=BACKGROUND_RESPONSE_TIMEOUT_SECONDS,
                     )
                     try:
-                        existing = await self.responses_store.get_response_object(response_id)
+                        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
                         existing.status = "failed"
                         existing.error = OpenAIResponseError(
                             code="processing_error",
@@ -228,7 +229,7 @@ class OpenAIResponsesImpl:
                 except Exception as e:
                     logger.exception("Failed to process background response", response_id=response_id)
                     try:
-                        existing = await self.responses_store.get_response_object(response_id)
+                        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
                         existing.status = "failed"
                         existing.error = OpenAIResponseError(
                             code="processing_error",
@@ -415,7 +416,10 @@ class OpenAIResponsesImpl:
         self,
         response_id: str,
     ) -> OpenAIResponseObject:
-        response_with_input = await self.responses_store.get_response_object(response_id)
+        response_with_input = await self.responses_store.get_response_object(
+            response_id,
+            reconstruct_input=False,
+        )
         return response_with_input.to_response_object()
 
     async def list_openai_responses(
@@ -523,6 +527,7 @@ class OpenAIResponsesImpl:
         orchestrator,
         input_items: list[OpenAIResponseInput],
         output_items: list,
+        incremental_input: bool = False,
     ) -> None:
         """Persist response state at significant streaming events.
 
@@ -539,6 +544,7 @@ class OpenAIResponsesImpl:
         :param orchestrator: The streaming orchestrator (for snapshotting response).
         :param input_items: Pre-prepared input items for storage.
         :param output_items: Accumulated output items so far.
+        :param incremental_input: If True, input_items contains only new items for this turn.
         """
         try:
             match stream_chunk.type:
@@ -549,6 +555,7 @@ class OpenAIResponsesImpl:
                         response_object=in_progress_response,
                         input=input_items,
                         messages=[],
+                        incremental_input=incremental_input,
                     )
 
                 case "response.output_item.done":
@@ -568,6 +575,7 @@ class OpenAIResponsesImpl:
                         response_object=current_snapshot,
                         input=input_items,
                         messages=messages_to_store,
+                        incremental_input=incremental_input,
                     )
 
                 case "response.completed" | "response.incomplete":
@@ -583,6 +591,7 @@ class OpenAIResponsesImpl:
                         response_object=final_response,
                         input=input_items,
                         messages=messages_to_store,
+                        incremental_input=incremental_input,
                     )
 
                 case "response.failed":
@@ -599,6 +608,7 @@ class OpenAIResponsesImpl:
                         response_object=failed_response,
                         input=input_items,
                         messages=messages_to_store,
+                        incremental_input=incremental_input,
                     )
         except Exception as e:
             # Best-effort persistence: log error but don't fail the stream
@@ -784,14 +794,18 @@ class OpenAIResponsesImpl:
                             if failed_response.error
                             else "response failed but no error message was provided"
                         )
+                        error_code = failed_response.error.code if failed_response.error else "server_error"
                         logger.error(
                             "response creation failed",
                             error_message=error_message,
+                            error_code=error_code,
                             response_id=failed_response.id,
                             model=model,
                         )
-                        # Surface the provider message — it may be actionable (e.g. context window exceeded)
-                        # and is already visible to callers in streaming mode via the response.failed event.
+                        # Surface the provider message — it may be actionable (e.g. wrong tool-call-parser,
+                        # context window exceeded). Use the error code to pick the right HTTP status.
+                        if error_code == "invalid_prompt":
+                            raise InvalidParameterError("model", model, error_message)
                         raise InternalServerError(error_message)
                     case _:
                         pass  # Other event types don't have .response
@@ -953,7 +967,7 @@ class OpenAIResponsesImpl:
     ) -> None:
         """Inner loop for background response processing, separated for timeout wrapping."""
         # Check if response was cancelled before starting
-        existing = await self.responses_store.get_response_object(response_id)
+        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
         if existing.status == "cancelled":
             logger.info("Background response was cancelled before processing started", response_id=response_id)
             return
@@ -996,7 +1010,7 @@ class OpenAIResponsesImpl:
 
         async for stream_chunk in stream_gen:
             # Check for cancellation periodically
-            current = await self.responses_store.get_response_object(response_id)
+            current = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
             if current.status == "cancelled":
                 logger.info("Background response was cancelled during processing", response_id=response_id)
                 return
@@ -1009,7 +1023,7 @@ class OpenAIResponsesImpl:
 
         if result_response is not None:
             # Check if response was cancelled before final update to avoid race condition
-            current = await self.responses_store.get_response_object(response_id)
+            current = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
             if current.status == "cancelled":
                 logger.info("Background response was cancelled before final update", response_id=response_id)
                 return
@@ -1019,7 +1033,7 @@ class OpenAIResponsesImpl:
             await self.responses_store.update_response_object(result_response)
         else:
             # Something went wrong - mark as failed
-            existing = await self.responses_store.get_response_object(response_id)
+            existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
             if existing.status == "cancelled":
                 logger.info("Background response was cancelled before failure update", response_id=response_id)
                 return
@@ -1075,11 +1089,13 @@ class OpenAIResponsesImpl:
         )
 
         # Auto-compact if context_management is configured (runs on resolved history, not just new input)
+        compacted_history_applied = False
         if context_management:
             compacted_input = await self._maybe_auto_compact(
                 all_input, model, context_management, previous_usage, extra_body=extra_body
             )
             if compacted_input is not all_input:
+                compacted_history_applied = True
                 all_input = compacted_input
                 messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
 
@@ -1129,6 +1145,7 @@ class OpenAIResponsesImpl:
                 created_at=created_at,
                 prompt=prompt,
                 prompt_cache_key=prompt_cache_key,
+                previous_response_id=previous_response_id,
                 text=text,
                 max_infer_iters=max_infer_iters,
                 parallel_tool_calls=parallel_tool_calls,
@@ -1156,7 +1173,14 @@ class OpenAIResponsesImpl:
 
             output_items: list[ConversationItem] = []
 
-            input_items_for_storage = self._prepare_input_items_for_storage(all_input)
+            # Store only new input when building on a previous response (O(n) vs O(n²) storage).
+            # If auto-compaction rewrote the history, store the effective compacted input as a full snapshot
+            # so subsequent previous_response_id turns continue from the compacted context.
+            incremental = bool(previous_response_id) and not compacted_history_applied
+            if incremental:
+                input_items_for_storage = self._prepare_input_items_for_storage(input)
+            else:
+                input_items_for_storage = self._prepare_input_items_for_storage(all_input)
 
             async for stream_chunk in orchestrator.create_response():
                 match stream_chunk.type:
@@ -1178,6 +1202,7 @@ class OpenAIResponsesImpl:
                         orchestrator=orchestrator,
                         input_items=input_items_for_storage,
                         output_items=output_items,
+                        incremental_input=incremental,
                     )
 
                 # Store and sync before yielding terminal events
@@ -1486,7 +1511,7 @@ class OpenAIResponsesImpl:
             ConflictError: If the response is already in a terminal state
         """
         # Get current response state
-        response = await self.responses_store.get_response_object(response_id)
+        response = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
 
         # If already cancelled, return current state (idempotent)
         if response.status == "cancelled":
@@ -1512,7 +1537,7 @@ class OpenAIResponsesImpl:
                 # Note: task removal handled in worker's finally block
 
         # Re-fetch from store to return the persisted state
-        updated = await self.responses_store.get_response_object(response_id)
+        updated = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
         return updated.to_response_object()
 
     async def _sync_response_to_conversation(

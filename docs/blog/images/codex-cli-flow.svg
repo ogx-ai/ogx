@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 280" font-family="'Archivo','Public Sans',-apple-system,BlinkMacSystemFont,sans-serif">
+  <style>
+    :root {
+      --bg: #0e1520;
+      --grid-stroke: #fff;
+      --grid-opacity: 0.04;
+      --col-label: #4b6478;
+      --col-divider: #1e2d3d;
+      --flow-stroke: #1a5c5e;
+      --flow-dot: #2dbdc2;
+      --card-bg: #131e2a;
+      --card-stroke: #1e3040;
+      --item-bg: #182838;
+      --item-text: #7fb8c4;
+      --server-bg: #0d1a24;
+      --server-accent: #0d7377;
+      --server-label: #e0f5f5;
+      --section-label: #2dbdc2;
+      --block-bg: #111f2d;
+      --block-stroke: #1a3545;
+      --block-title: #5da8b0;
+      --block-text: #6b8d96;
+      --muted-text: #3d5a6e;
+      --tagline: #3d5a6e;
+      --shadow-opacity: 0.12;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8f9fa;
+        --grid-stroke: #000;
+        --grid-opacity: 0.04;
+        --col-label: #6b7d8e;
+        --col-divider: #d8dee4;
+        --flow-stroke: #0d7377;
+        --flow-dot: #0d7377;
+        --card-bg: #ffffff;
+        --card-stroke: #d8dee4;
+        --item-bg: #f0f3f5;
+        --item-text: #2d4a56;
+        --server-bg: #ffffff;
+        --server-accent: #0d7377;
+        --server-label: #ffffff;
+        --section-label: #0b6165;
+        --block-bg: #f5f7f8;
+        --block-stroke: #d8dee4;
+        --block-title: #0b6165;
+        --block-text: #4a6570;
+        --muted-text: #6b7d8e;
+        --tagline: #6b7d8e;
+        --shadow-opacity: 0.06;
+      }
+    }
+  </style>
+  <defs>
+    <filter id="s"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="var(--shadow-opacity, 0.12)"/></filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="780" height="280" rx="8" fill="var(--bg)"/>
+
+  <!-- Subtle grid -->
+  <g opacity="var(--grid-opacity)">
+    <pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40,0 L0,0 0,40" fill="none" stroke="var(--grid-stroke)" stroke-width="0.5"/>
+    </pattern>
+    <rect width="780" height="280" fill="url(#g)"/>
+  </g>
+
+  <!-- ========== COLUMN LABELS ========== -->
+  <text x="100" y="28" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">YOUR TERMINAL</text>
+  <text x="390" y="28" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">OGX</text>
+  <text x="665" y="28" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">PROVIDERS</text>
+
+  <!-- Column dividers -->
+  <line x1="220" y1="18" x2="220" y2="255" stroke="var(--col-divider)" stroke-width="1"/>
+  <line x1="540" y1="18" x2="540" y2="255" stroke="var(--col-divider)" stroke-width="1"/>
+
+  <!-- ========== CODEX CLI (left) ========== -->
+  <g filter="url(#s)">
+    <rect x="20" y="44" width="180" height="210" rx="6" fill="var(--card-bg)" stroke="var(--card-stroke)" stroke-width="1"/>
+
+    <!-- Terminal top bar -->
+    <rect x="20" y="44" width="180" height="24" rx="6" fill="var(--item-bg)"/>
+    <rect x="20" y="62" width="180" height="6" fill="var(--item-bg)"/>
+    <circle cx="35" cy="56" r="4" fill="#ff5f57" opacity="0.7"/>
+    <circle cx="49" cy="56" r="4" fill="#ffbd2e" opacity="0.7"/>
+    <circle cx="63" cy="56" r="4" fill="#28c940" opacity="0.7"/>
+    <text x="120" y="60" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600">codex</text>
+
+    <g transform="translate(32, 78)">
+      <rect width="156" height="24" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="16" fill="var(--item-text)" font-size="9" font-weight="500">Code generation</text>
+    </g>
+    <g transform="translate(32, 108)">
+      <rect width="156" height="24" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="16" fill="var(--item-text)" font-size="9" font-weight="500">Shell commands</text>
+    </g>
+    <g transform="translate(32, 138)">
+      <rect width="156" height="24" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="16" fill="var(--item-text)" font-size="9" font-weight="500">File operations</text>
+    </g>
+    <g transform="translate(32, 168)">
+      <rect width="156" height="24" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="16" fill="var(--item-text)" font-size="9" font-weight="500">Multi-turn editing</text>
+    </g>
+
+    <text x="110" y="218" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">Responses API</text>
+    <text x="110" y="230" text-anchor="middle" fill="var(--muted-text)" font-size="7.5">Tools run locally</text>
+  </g>
+
+  <!-- ========== FLOW: Codex → OGX ========== -->
+  <line x1="200" y1="145" x2="250" y2="145" stroke="var(--flow-stroke)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.8">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M200,145 L240,145"/>
+  </circle>
+
+  <!-- ========== OGX SERVER (center) ========== -->
+  <g filter="url(#s)">
+    <rect x="250" y="44" width="280" height="210" rx="6" fill="var(--server-bg)" stroke="var(--server-accent)" stroke-width="1.5"/>
+
+    <rect x="250" y="44" width="280" height="26" rx="6" fill="var(--server-accent)"/>
+    <rect x="250" y="64" width="280" height="6" fill="var(--server-accent)"/>
+    <text x="390" y="62" text-anchor="middle" fill="var(--server-label)" font-size="11" font-weight="700" letter-spacing="1">OGX SERVER</text>
+
+    <!-- Responses Engine -->
+    <g transform="translate(262, 78)">
+      <rect width="256" height="38" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="16" fill="var(--block-title)" font-size="8.5" font-weight="600">Responses Engine</text>
+      <line x1="10" y1="22" x2="246" y2="22" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="33" fill="var(--block-text)" font-size="7.5">agentic loop · tool calling · multi-turn · streaming</text>
+    </g>
+
+    <!-- Compaction -->
+    <g transform="translate(262, 122)">
+      <rect width="256" height="38" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="16" fill="var(--block-title)" font-size="8.5" font-weight="600">Conversation Compaction</text>
+      <line x1="10" y1="22" x2="246" y2="22" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="33" fill="var(--block-text)" font-size="7.5">automatic context compression for long sessions</text>
+    </g>
+
+    <!-- Provider Routing -->
+    <g transform="translate(262, 166)">
+      <rect width="256" height="38" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="16" fill="var(--block-title)" font-size="8.5" font-weight="600">Provider Routing</text>
+      <line x1="10" y1="22" x2="246" y2="22" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="33" fill="var(--block-text)" font-size="7.5">format translation · unified config · any backend</text>
+    </g>
+
+    <text x="390" y="228" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">One config, swap models</text>
+    <text x="390" y="240" text-anchor="middle" fill="var(--muted-text)" font-size="7.5">openai/ · ollama/ · anthropic/ · ...</text>
+  </g>
+
+  <!-- ========== FLOW: OGX → Providers ========== -->
+  <line x1="530" y1="100" x2="560" y2="100" stroke="var(--flow-stroke)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>
+  <line x1="530" y1="145" x2="560" y2="145" stroke="var(--flow-stroke)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>
+  <line x1="530" y1="190" x2="560" y2="190" stroke="var(--flow-stroke)" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.6"/>
+
+  <circle r="3" fill="var(--flow-dot)" opacity="0.7">
+    <animateMotion dur="1.4s" repeatCount="indefinite" path="M530,100 L555,100"/>
+  </circle>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.7">
+    <animateMotion dur="1.4s" repeatCount="indefinite" begin="0.5s" path="M530,145 L555,145"/>
+  </circle>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.7">
+    <animateMotion dur="1.4s" repeatCount="indefinite" begin="1.0s" path="M530,190 L555,190"/>
+  </circle>
+
+  <!-- ========== PROVIDERS (right) ========== -->
+  <g filter="url(#s)">
+    <rect x="560" y="44" width="200" height="210" rx="6" fill="var(--card-bg)" stroke="var(--card-stroke)" stroke-width="1"/>
+
+    <text x="575" y="72" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">INFERENCE</text>
+
+    <g transform="translate(572, 80)">
+      <rect width="88" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">OpenAI</text>
+    </g>
+    <g transform="translate(666, 80)">
+      <rect width="82" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Anthropic</text>
+    </g>
+    <g transform="translate(572, 108)">
+      <rect width="88" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Ollama</text>
+    </g>
+    <g transform="translate(666, 108)">
+      <rect width="82" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">vLLM</text>
+    </g>
+    <g transform="translate(572, 136)">
+      <rect width="88" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">AWS Bedrock</text>
+    </g>
+    <g transform="translate(666, 136)">
+      <rect width="82" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Azure</text>
+    </g>
+    <g transform="translate(572, 164)">
+      <rect width="88" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Fireworks</text>
+    </g>
+    <g transform="translate(666, 164)">
+      <rect width="82" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Together</text>
+    </g>
+    <g transform="translate(572, 192)">
+      <rect width="88" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">Gemini</text>
+    </g>
+    <g transform="translate(666, 192)">
+      <rect width="82" height="22" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="15" fill="var(--item-text)" font-size="8.5">+ 14 more</text>
+    </g>
+
+    <text x="660" y="240" text-anchor="middle" fill="var(--muted-text)" font-size="7.5">23 providers total</text>
+  </g>
+
+  <!-- ========== TAGLINE ========== -->
+  <text x="390" y="272" text-anchor="middle" fill="var(--tagline)" font-size="9" font-weight="600" letter-spacing="1.5">
+    CODEX CLI  ·  ANY MODEL  ·  ONE CONFIG CHANGE
+  </text>
+</svg>
