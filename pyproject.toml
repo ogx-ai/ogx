@@ -69,7 +69,7 @@ dependencies = [
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "mcp>=1.23.0",                                    # for connectors
+    "mcp>=1.23.0,<2.0",                                # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
 ]
 
@@ -186,12 +186,27 @@ type_checking = [
     "sqlite-vec",
     "faiss-cpu",
     "lm-format-enforcer",
-    "mcp>=1.23.0",
+    "mcp>=1.23.0,<2.0",
     "ollama",
     "langchain-openai",
     "langchain-core",
     "langgraph",
+<<<<<<< HEAD
     "ogx-client==1.0.2",
+=======
+    "ogx-client>=1.0.2",
+]
+test-common = [
+    "aiohttp",
+    "aiosqlite",
+    "asyncpg>=0.29.0",
+    "chardet",
+    "mcp>=1.23.0,<2.0",
+    "pgvector>=0.3.0",
+    "psycopg2-binary>=2.9.0",
+    "pypdf>=6.10.2",
+    "sqlalchemy[asyncio]>=2.0.41",
+>>>>>>> bb63ea69 (build(deps): pin mcp SDK below 2.0 ahead of protocol RC (#5953))
 ]
 # These are the dependencies required for running unit tests.
 unit = [
