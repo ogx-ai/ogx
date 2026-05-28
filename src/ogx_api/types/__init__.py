@@ -387,7 +387,13 @@ from ogx_api.openai_responses import (
     OpenAIResponseUsage,
     OpenAIResponseUsageInputTokensDetails,
     OpenAIResponseUsageOutputTokensDetails,
+    WebSearchActionFind,
+    WebSearchActionOpenPage,
+    WebSearchActionSearch,
+    WebSearchFilters,
+    WebSearchSource,
     WebSearchToolTypes,
+    WebSearchUserLocation,
 )
 
 # Prompts
@@ -763,6 +769,8 @@ __all__ = [
     "OpenAIResponseInputToolFunction",
     "OpenAIResponseInputToolMCP",
     "OpenAIResponseInputToolWebSearch",
+    "WebSearchFilters",
+    "WebSearchUserLocation",
     "OpenAIResponseMCPApprovalRequest",
     "OpenAIResponseMCPApprovalResponse",
     "OpenAIResponseMessage",
@@ -827,6 +835,10 @@ __all__ = [
     "OpenAIResponseUsage",
     "OpenAIResponseUsageInputTokensDetails",
     "OpenAIResponseUsageOutputTokensDetails",
+    "WebSearchActionFind",
+    "WebSearchActionOpenPage",
+    "WebSearchActionSearch",
+    "WebSearchSource",
     "WebSearchToolTypes",
     # Prompts
     "CreatePromptRequest",

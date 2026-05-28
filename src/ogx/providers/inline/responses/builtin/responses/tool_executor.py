@@ -21,6 +21,7 @@ from ogx_api import (
     OpenAIImageURL,
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolWebSearch,
     OpenAIResponseObjectStreamResponseFileSearchCallCompleted,
     OpenAIResponseObjectStreamResponseFileSearchCallInProgress,
     OpenAIResponseObjectStreamResponseFileSearchCallSearching,
@@ -40,6 +41,8 @@ from ogx_api import (
     ToolInvocationResult,
     ToolRuntime,
     VectorIO,
+    WebSearchActionSearch,
+    WebSearchSource,
 )
 
 from .types import ChatCompletionContext, ToolExecutionResult
@@ -56,13 +59,13 @@ class ToolExecutor:
         tool_groups_api: ToolGroups,
         tool_runtime_api: ToolRuntime,
         vector_io_api: VectorIO,
-        vector_stores_config=None,
+        vector_stores_config: VectorStoresConfig | None = None,
         mcp_session_manager=None,
     ):
         self.tool_groups_api = tool_groups_api
         self.tool_runtime_api = tool_runtime_api
         self.vector_io_api = vector_io_api
-        self.vector_stores_config = vector_stores_config
+        self.vector_stores_config = vector_stores_config or VectorStoresConfig()
         # Optional MCPSessionManager for session reuse within a request (fix for #4452)
         self.mcp_session_manager = mcp_session_manager
 
@@ -136,14 +139,7 @@ class ToolExecutor:
         # Create search tasks for all vector stores
         async def search_single_store(vector_store_id):
             try:
-                # Use default_search_mode from config if available
-                search_mode = "vector"
-                if (
-                    self.vector_stores_config
-                    and hasattr(self.vector_stores_config, "chunk_retrieval_params")
-                    and hasattr(self.vector_stores_config.chunk_retrieval_params, "default_search_mode")
-                ):
-                    search_mode = self.vector_stores_config.chunk_retrieval_params.default_search_mode
+                search_mode = self.vector_stores_config.chunk_retrieval_params.default_search_mode
 
                 search_response = await self.vector_io_api.openai_search_vector_store(
                     vector_store_id=vector_store_id,
@@ -171,12 +167,7 @@ class ToolExecutor:
 
         # Get templates from vector stores config, fallback to constants
 
-        # Check if annotations are enabled
-        enable_annotations = (
-            self.vector_stores_config
-            and self.vector_stores_config.annotation_prompt_params
-            and self.vector_stores_config.annotation_prompt_params.enable_annotations
-        )
+        enable_annotations = self.vector_stores_config.annotation_prompt_params.enable_annotations
 
         # Get templates
         header_template = self.vector_stores_config.file_search_params.header_template
@@ -375,6 +366,32 @@ class ToolExecutor:
                             query=query,
                             response_file_search_tool=response_file_search_tool,
                         )
+            elif function_name == "web_search":
+                if ctx.response_tools:
+                    response_web_search_tool = next(
+                        (t for t in ctx.response_tools if isinstance(t, OpenAIResponseInputToolWebSearch)),
+                        None,
+                    )
+                    if response_web_search_tool:
+                        if response_web_search_tool.filters and response_web_search_tool.filters.allowed_domains:
+                            tool_kwargs["allowed_domains"] = response_web_search_tool.filters.allowed_domains
+                        if response_web_search_tool.user_location:
+                            tool_kwargs["user_location"] = response_web_search_tool.user_location.model_dump(
+                                exclude_none=True
+                            )
+                        if response_web_search_tool.search_context_size:
+                            tool_kwargs["search_context_size"] = response_web_search_tool.search_context_size
+
+                attributes = {
+                    "tool_name": function_name,
+                }
+                # TODO: follow semantic conventions for Open Telemetry tool spans
+                # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/#execute-tool-span
+                with tracer.start_as_current_span("invoke_tool", attributes=attributes):
+                    result = await self.tool_runtime_api.invoke_tool(
+                        tool_name=function_name,
+                        kwargs=tool_kwargs,
+                    )
             else:
                 attributes = {
                     "tool_name": function_name,
@@ -479,6 +496,17 @@ class ToolExecutor:
                 )
                 if has_error:
                     message.status = "failed"
+                elif result and (metadata := getattr(result, "metadata", None)):
+                    sources = []
+                    for source in metadata.get("sources", []):
+                        if "url" in source:
+                            sources.append(WebSearchSource(url=source["url"]))
+                    query = metadata.get("query", tool_kwargs.get("query", ""))
+                    message.action = WebSearchActionSearch(
+                        query=query,
+                        queries=[query],
+                        sources=sources,
+                    )
             elif function.name in ("knowledge_search", "file_search"):
                 message = OpenAIResponseOutputMessageFileSearchToolCall(
                     id=item_id,

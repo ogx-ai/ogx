@@ -14,12 +14,21 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ogx_api.schema_utils import remove_null_from_anyof
 
 # Anthropic API version we are compatible with
 ANTHROPIC_VERSION = "2023-06-01"
+
+# -- Cache control --
+
+
+class AnthropicCacheControl(BaseModel):
+    """Prompt-cache breakpoint marker."""
+
+    type: Literal["ephemeral"] = "ephemeral"
+
 
 # -- Content blocks --
 
@@ -29,6 +38,7 @@ class AnthropicTextBlock(BaseModel):
 
     type: Literal["text"] = "text"
     text: str
+    cache_control: AnthropicCacheControl | None = None
 
 
 class AnthropicBase64ImageSource(BaseModel):
@@ -59,6 +69,7 @@ class AnthropicImageBlock(BaseModel):
 
     type: Literal["image"] = "image"
     source: AnthropicImageSource
+    cache_control: AnthropicCacheControl | None = None
 
 
 class AnthropicToolUseBlock(BaseModel):
@@ -68,6 +79,7 @@ class AnthropicToolUseBlock(BaseModel):
     id: str = Field(..., description="Unique ID for this tool invocation.")
     name: str = Field(..., description="Name of the tool being called.")
     input: dict[str, Any] = Field(..., description="Tool input arguments.")
+    cache_control: AnthropicCacheControl | None = None
 
 
 class AnthropicToolResultBlock(BaseModel):
@@ -80,6 +92,7 @@ class AnthropicToolResultBlock(BaseModel):
         description="The result content.",
     )
     is_error: bool | None = Field(default=None, description="Whether the tool call resulted in an error.")
+    cache_control: AnthropicCacheControl | None = None
 
 
 class AnthropicThinkingBlock(BaseModel):
@@ -88,6 +101,14 @@ class AnthropicThinkingBlock(BaseModel):
     type: Literal["thinking"] = "thinking"
     thinking: str = Field(..., description="The model's thinking text.")
     signature: str | None = Field(default=None, description="Signature for the thinking block.")
+    cache_control: AnthropicCacheControl | None = None
+
+
+class AnthropicRedactedThinkingBlock(BaseModel):
+    """A redacted thinking content block. Must be echoed back as-is in multi-turn."""
+
+    type: Literal["redacted_thinking"] = "redacted_thinking"
+    data: str = Field(..., description="Opaque redacted thinking data.")
 
 
 AnthropicContentBlock = Annotated[
@@ -95,7 +116,8 @@ AnthropicContentBlock = Annotated[
     | AnthropicImageBlock
     | AnthropicToolUseBlock
     | AnthropicToolResultBlock
-    | AnthropicThinkingBlock,
+    | AnthropicThinkingBlock
+    | AnthropicRedactedThinkingBlock,
     Field(discriminator="type"),
 ]
 
@@ -115,12 +137,66 @@ class AnthropicMessage(BaseModel):
 # -- Tool definitions --
 
 
-class AnthropicToolDef(BaseModel):
-    """Definition of a tool available to the model."""
+class AnthropicCustomToolDef(BaseModel):
+    """Definition of a custom (function-calling) tool."""
 
+    type: Literal["custom"] = "custom"
     name: str
     description: str | None = None
     input_schema: dict[str, Any] = Field(..., description="JSON Schema for the tool's input.")
+    cache_control: AnthropicCacheControl | None = None
+
+
+# Keep the old name as an alias so existing code that constructs AnthropicToolDef still works.
+AnthropicToolDef = AnthropicCustomToolDef
+
+
+class _WebSearchUserLocation(BaseModel):
+    type: Literal["approximate"] = "approximate"
+    city: str | None = None
+    country: str | None = None
+    region: str | None = None
+    timezone: str | None = None
+
+
+class AnthropicWebSearchTool(BaseModel):
+    """Built-in web search tool (web_search_20250305)."""
+
+    type: Literal["web_search_20250305"] = "web_search_20250305"
+    name: Literal["web_search"] = "web_search"
+    max_uses: int | None = None
+    allowed_domains: list[str] | None = None
+    blocked_domains: list[str] | None = None
+    user_location: _WebSearchUserLocation | None = None
+    cache_control: AnthropicCacheControl | None = None
+
+
+class AnthropicBashTool(BaseModel):
+    """Built-in bash tool (bash_20250124)."""
+
+    type: Literal["bash_20250124"] = "bash_20250124"
+    name: Literal["bash"] = "bash"
+    cache_control: AnthropicCacheControl | None = None
+
+
+class AnthropicTextEditorTool(BaseModel):
+    """Built-in text editor tool (all versions)."""
+
+    type: Literal["text_editor_20250124", "text_editor_20250429", "text_editor_20250728"]
+    name: str
+    max_characters: int | None = None
+    cache_control: AnthropicCacheControl | None = None
+
+
+AnthropicTool = Annotated[
+    AnthropicCustomToolDef | AnthropicWebSearchTool | AnthropicBashTool | AnthropicTextEditorTool,
+    Field(discriminator="type"),
+]
+
+
+def _normalize_tool_types(tools: list[Any]) -> list[Any]:
+    """The Anthropic API allows omitting `type` on custom tools; default absent type to 'custom'."""
+    return [{**t, "type": "custom"} if isinstance(t, dict) and "type" not in t else t for t in tools]
 
 
 # -- Thinking config --
@@ -130,7 +206,7 @@ class AnthropicThinkingConfig(BaseModel):
     """Configuration for extended thinking."""
 
     type: Literal["enabled", "disabled", "adaptive"] = "enabled"
-    budget_tokens: int | None = Field(default=None, ge=1, description="Maximum tokens for thinking.")
+    budget_tokens: int | None = Field(default=None, ge=1024, description="Maximum tokens for thinking.")
 
 
 # -- Request models --
@@ -149,7 +225,7 @@ class AnthropicCreateMessageRequest(BaseModel):
         json_schema_extra=remove_null_from_anyof,
         description="System prompt. A string or list of text blocks.",
     )
-    tools: list[AnthropicToolDef] | None = Field(
+    tools: list[AnthropicTool] | None = Field(
         default=None, json_schema_extra=remove_null_from_anyof, description="Tools available to the model."
     )
     tool_choice: Any | None = Field(
@@ -186,6 +262,13 @@ class AnthropicCreateMessageRequest(BaseModel):
         default=None, json_schema_extra=remove_null_from_anyof, description="Service tier to use."
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_tools(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("tools"), list):
+            data = {**data, "tools": _normalize_tool_types(data["tools"])}
+        return data
+
 
 class AnthropicCountTokensRequest(BaseModel):
     """Request body for POST /v1/messages/count_tokens."""
@@ -193,7 +276,14 @@ class AnthropicCountTokensRequest(BaseModel):
     model: str = Field(..., description="The model to use for token counting.")
     messages: list[AnthropicMessage] = Field(..., description="The messages to count tokens for.")
     system: str | list[AnthropicTextBlock] | None = Field(default=None, description="System prompt.")
-    tools: list[AnthropicToolDef] | None = Field(default=None, description="Tools to include in token count.")
+    tools: list[AnthropicTool] | None = Field(default=None, description="Tools to include in token count.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_tools(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("tools"), list):
+            data = {**data, "tools": _normalize_tool_types(data["tools"])}
+        return data
 
 
 # -- Response models --
@@ -263,12 +353,17 @@ class _ThinkingDelta(BaseModel):
     thinking: str
 
 
+class _SignatureDelta(BaseModel):
+    type: Literal["signature_delta"] = "signature_delta"
+    signature: str
+
+
 class ContentBlockDeltaEvent(BaseModel):
     """A delta within a content block."""
 
     type: Literal["content_block_delta"] = "content_block_delta"
     index: int
-    delta: _TextDelta | _InputJsonDelta | _ThinkingDelta
+    delta: _TextDelta | _InputJsonDelta | _ThinkingDelta | _SignatureDelta
 
 
 class ContentBlockStopEvent(BaseModel):

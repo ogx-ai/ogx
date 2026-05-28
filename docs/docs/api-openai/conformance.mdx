@@ -18,12 +18,12 @@ This documentation is auto-generated from the OpenAI API specification compariso
 
 | Metric | Value |
 |--------|-------|
-| **Overall Conformance Score** | 93.4% |
+| **Overall Conformance Score** | 93.7% |
 | **Endpoints Implemented** | 29/146 |
 | **Total Properties Checked** | 3432 |
-| **Schema/Type Issues** | 163 |
+| **Schema/Type Issues** | 152 |
 | **Missing Properties** | 65 |
-| **Total Issues to Fix** | 228 |
+| **Total Issues to Fix** | 217 |
 
 ## Integration Test Coverage
 
@@ -49,8 +49,8 @@ Categories are sorted by conformance score (lowest first, needing most attention
 | Models | 60.0% | 15 | 0 | 6 |
 | Embeddings | 78.6% | 14 | 3 | 0 |
 | Vector stores | 82.9% | 310 | 41 | 12 |
-| Responses | 90.6% | 223 | 21 | 0 |
 | Files | 92.9% | 42 | 1 | 2 |
+| Responses | 95.5% | 223 | 10 | 0 |
 | Chat | 98.7% | 449 | 5 | 1 |
 | Conversations | 99.3% | 2165 | 15 | 1 |
 
@@ -697,55 +697,6 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 
 </details>
 
-### Responses
-
-**Score:** 90.6% · **Issues:** 21 · **Missing:** 0
-
-#### `/responses`
-
-**POST**
-
-<details>
-<summary>Schema Issues (18)</summary>
-
-| Property | Issues | Tested |
-|----------|--------|--------|
-| `requestBody.content.application/json.properties.input` | Union variants added: 2; Union variants removed: 2 | Yes |
-| `requestBody.content.application/json.properties.model` | Type added: ['string']; Nullable removed (OpenAI nullable); Union variants removed: 2 | Yes |
-| `requestBody.content.application/json.properties.reasoning` | Union variants added: 1; Union variants removed: 1 | Yes |
-| `requestBody.content.application/json.properties.service_tier` | Union variants added: 2 | Yes |
-| `requestBody.content.application/json.properties.stream_options` | Union variants added: 1; Union variants removed: 1 | No |
-| `requestBody.content.application/json.properties.text` | Union variants added: 1; Union variants removed: 1 | No |
-| `requestBody.content.application/json.properties.tool_choice` | Union variants added: 2; Union variants removed: 1 | Yes |
-| `requestBody.content.application/json.properties.truncation` | Union variants added: 2 | Yes |
-| `responses.200.content.application/json.properties.error` | Union variants added: 1; Union variants removed: 1 | Yes |
-| `responses.200.content.application/json.properties.incomplete_details` | Union variants added: 1; Union variants removed: 1 | Yes |
-| `responses.200.content.application/json.properties.metadata` | Union variants added: 2 | Yes |
-| `responses.200.content.application/json.properties.output.items` | Union variants added: 8; Union variants removed: 4 | Yes |
-| `responses.200.content.application/json.properties.reasoning` | Union variants added: 1; Union variants removed: 1 | Yes |
-| `responses.200.content.application/json.properties.text` | Type added: ['object'] | No |
-| `responses.200.content.application/json.properties.tool_choice` | Union variants added: 3 | Yes |
-| `responses.200.content.application/json.properties.tools.items` | Union variants added: 4; Union variants removed: 1 | Yes |
-| `responses.200.content.application/json.properties.truncation` | Union variants added: 2 | Yes |
-| `responses.200.content.application/json.properties.usage` | Union variants added: 1; Union variants removed: 1 | Yes |
-
-</details>
-
-#### `/responses/compact`
-
-**POST**
-
-<details>
-<summary>Schema Issues (3)</summary>
-
-| Property | Issues | Tested |
-|----------|--------|--------|
-| `requestBody.content.application/json.properties.input` | Union variants added: 2; Union variants removed: 1 | Yes |
-| `requestBody.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 3 | Yes |
-| `responses.200.content.application/json.properties.output.items` | Union variants added: 4 | Yes |
-
-</details>
-
 ### Files
 
 **Score:** 92.9% · **Issues:** 1 · **Missing:** 2
@@ -768,6 +719,44 @@ Below is a detailed breakdown of conformance issues and missing properties for e
 | Property | Issues |
 |----------|--------|
 | `requestBody.content.multipart/form-data.properties.expires_after` | Type removed: ['object']; Union variants added: 2 |
+
+</details>
+
+### Responses
+
+**Score:** 95.5% · **Issues:** 10 · **Missing:** 0
+
+#### `/responses`
+
+**POST**
+
+<details>
+<summary>Schema Issues (7)</summary>
+
+| Property | Issues | Tested |
+|----------|--------|--------|
+| `requestBody.content.application/json.properties.input` | Union variants added: 2; Union variants removed: 2 | Yes |
+| `requestBody.content.application/json.properties.model` | Type added: ['string']; Nullable removed (OpenAI nullable); Union variants removed: 2 | Yes |
+| `requestBody.content.application/json.properties.service_tier` | Union variants added: 2 | Yes |
+| `requestBody.content.application/json.properties.tool_choice` | Union variants added: 2; Union variants removed: 1 | Yes |
+| `responses.200.content.application/json.properties.output.items` | Union variants added: 8; Union variants removed: 4 | Yes |
+| `responses.200.content.application/json.properties.tool_choice` | Union variants added: 3 | Yes |
+| `responses.200.content.application/json.properties.tools.items` | Union variants added: 4; Union variants removed: 1 | Yes |
+
+</details>
+
+#### `/responses/compact`
+
+**POST**
+
+<details>
+<summary>Schema Issues (3)</summary>
+
+| Property | Issues | Tested |
+|----------|--------|--------|
+| `requestBody.content.application/json.properties.input` | Union variants added: 2; Union variants removed: 1 | Yes |
+| `requestBody.content.application/json.properties.model` | Type added: ['string']; Union variants removed: 3 | Yes |
+| `responses.200.content.application/json.properties.output.items` | Union variants added: 4 | Yes |
 
 </details>
 

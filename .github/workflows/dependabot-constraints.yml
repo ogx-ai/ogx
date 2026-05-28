@@ -15,6 +15,7 @@ on:
   pull_request:
     paths:
       - 'uv.lock'
+      - 'src/ogx_api/uv.lock'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
@@ -68,28 +69,67 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Parsed: $dep_name $dep_version"
 
-      - name: Update dependency version floors in pyproject.toml
+      - name: Determine target pyproject from changed lock files
         if: steps.parse.outputs.skip != 'true'
+        id: target
+        run: |
+          pyprojects=""
+          if git diff HEAD~1 --name-only | grep -q '^uv\.lock$'; then
+            pyprojects="pyproject.toml"
+          fi
+          if git diff HEAD~1 --name-only | grep -q '^src/ogx_api/uv\.lock$'; then
+            pyprojects="$pyprojects src/ogx_api/pyproject.toml"
+          fi
+          pyprojects=$(echo "$pyprojects" | xargs)
+
+          if [ -z "$pyprojects" ]; then
+            echo "No lock file changes detected, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Target pyproject files: $pyprojects"
+            echo "pyprojects=$pyprojects" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update dependency version floors in pyproject.toml
+        if: steps.parse.outputs.skip != 'true' && steps.target.outputs.skip != 'true'
         id: update
         env:
           DEP_NAME: ${{ steps.parse.outputs.dep_name }}
           DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
         run: |
-          output=$(python3 .github/scripts/update_constraint_deps.py \
-            --dependency-name "$DEP_NAME" \
-            --dependency-version "$DEP_VERSION")
+          changed=false
 
-          echo "$output"
+          for pyproject in $TARGET_PYPROJECTS; do
+            echo "--- Checking $pyproject ---"
+            output=$(python3 .github/scripts/update_constraint_deps.py \
+              --dependency-name "$DEP_NAME" \
+              --dependency-version "$DEP_VERSION" \
+              --pyproject "$pyproject")
 
-          if echo "$output" | grep -q "updated=true"; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
+            echo "$output"
 
-      - name: Regenerate uv.lock
+            if echo "$output" | grep -q "updated=true"; then
+              changed=true
+            fi
+          done
+
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate uv.lock files
         if: steps.update.outputs.changed == 'true'
-        run: uv lock
+        env:
+          TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
+        run: |
+          if echo " $TARGET_PYPROJECTS " | grep -q ' pyproject.toml '; then
+            echo "Regenerating root uv.lock"
+            uv lock
+          fi
+          if echo " $TARGET_PYPROJECTS " | grep -q ' src/ogx_api/pyproject.toml '; then
+            echo "Regenerating src/ogx_api/uv.lock"
+            uv lock --directory src/ogx_api
+          fi
 
       - name: Create PR metadata artifact
         if: steps.parse.outputs.skip != 'true'
@@ -132,6 +172,7 @@ jobs:
           CHANGED: ${{ steps.update.outputs.changed }}
           DEP_NAME: ${{ steps.parse.outputs.dep_name }}
           DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
         run: |
           mkdir -p constraint-update
           cat > constraint-update/change-info.json <<EOF
@@ -143,8 +184,15 @@ jobs:
           EOF
 
           if [ "$CHANGED" = "true" ]; then
-            cp pyproject.toml constraint-update/
-            cp uv.lock constraint-update/
+            if echo " $TARGET_PYPROJECTS " | grep -q ' pyproject.toml '; then
+              cp pyproject.toml constraint-update/
+              cp uv.lock constraint-update/
+            fi
+            if echo " $TARGET_PYPROJECTS " | grep -q ' src/ogx_api/pyproject.toml '; then
+              mkdir -p constraint-update/src/ogx_api
+              cp src/ogx_api/pyproject.toml constraint-update/src/ogx_api/
+              cp src/ogx_api/uv.lock constraint-update/src/ogx_api/
+            fi
           fi
 
       - name: Upload constraint update

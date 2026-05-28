@@ -87,7 +87,7 @@ class ConnectOpenCode(Subcommand):
             response = client.models.list()
         except APIConnectionError:
             cprint(
-                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx stack run <config>",
+                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx run <config>",
                 color="red",
                 file=sys.stderr,
             )

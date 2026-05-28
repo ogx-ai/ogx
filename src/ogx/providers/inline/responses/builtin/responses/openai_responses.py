@@ -15,6 +15,7 @@ import tiktoken
 from pydantic import TypeAdapter
 
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
+from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.task import (
     RequestContext,
     activate_request_context,
@@ -117,7 +118,7 @@ class OpenAIResponsesImpl:
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
-        vector_stores_config=None,
+        vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
     ):
         self.inference_api = inference_api
