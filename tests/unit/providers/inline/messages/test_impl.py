@@ -22,8 +22,11 @@ from ogx_api.messages.models import (
     AnthropicCustomToolDef,
     AnthropicImageBlock,
     AnthropicMessage,
+    AnthropicRedactedThinkingBlock,
     AnthropicTextBlock,
     AnthropicTextEditorTool,
+    AnthropicThinkingBlock,
+    AnthropicThinkingConfig,
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
@@ -338,6 +341,28 @@ class TestRequestTranslation:
         result = impl._anthropic_to_openai(request)
         assert result.model_extra.get("top_k") == 40
 
+    def test_redacted_thinking_skipped_in_assistant_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="assistant",
+                    content=[
+                        AnthropicThinkingBlock(thinking="reasoning here", signature="sig123"),
+                        AnthropicRedactedThinkingBlock(data="opaque-data"),
+                        AnthropicTextBlock(text="The answer is 42."),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        msg = _msg_to_dict(result.messages[0])
+        assert msg["role"] == "assistant"
+        assert msg["content"] == "The answer is 42."
+        assert "tool_calls" not in msg
+
     def test_cache_control_on_text_block_parses(self, impl):
         request = AnthropicCreateMessageRequest(
             model="m",
@@ -629,6 +654,35 @@ class TestStreamingTranslation:
 
 
 class TestSSEParsing:
+    def test_signature_delta_parsed(self, impl):
+        event = impl._parse_sse_event(
+            "content_block_delta",
+            {
+                "index": 0,
+                "delta": {"type": "signature_delta", "signature": "ErUBCkYIAxgCIkA"},
+            },
+        )
+        assert event is not None
+        assert event.type == "content_block_delta"
+        assert event.delta.type == "signature_delta"
+        assert event.delta.signature == "ErUBCkYIAxgCIkA"
+
+    def test_redacted_thinking_block_start_parsed(self, impl):
+        event = impl._parse_sse_event(
+            "content_block_start",
+            {
+                "index": 0,
+                "content_block": {
+                    "type": "redacted_thinking",
+                    "data": "opaque-redacted-data-string",
+                },
+            },
+        )
+        assert event is not None
+        assert event.type == "content_block_start"
+        assert event.content_block.type == "redacted_thinking"
+        assert event.content_block.data == "opaque-redacted-data-string"
+
     def test_pause_turn_stop_reason_passthrough(self, impl):
         event = impl._parse_sse_event(
             "message_delta",
@@ -640,3 +694,48 @@ class TestSSEParsing:
         assert event is not None
         assert event.type == "message_delta"
         assert event.delta.stop_reason == "pause_turn"
+
+
+class TestThinkingConfig:
+    def test_budget_tokens_below_minimum_rejected(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            AnthropicThinkingConfig(type="enabled", budget_tokens=500)
+
+    def test_budget_tokens_at_minimum_accepted(self):
+        config = AnthropicThinkingConfig(type="enabled", budget_tokens=1024)
+        assert config.budget_tokens == 1024
+
+    def test_budget_tokens_above_minimum_accepted(self):
+        config = AnthropicThinkingConfig(type="enabled", budget_tokens=4096)
+        assert config.budget_tokens == 4096
+
+    def test_thinking_enabled_raises_in_translation_mode(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Think about this")],
+            max_tokens=8192,
+            thinking=AnthropicThinkingConfig(type="enabled", budget_tokens=4096),
+        )
+        with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
+            impl._anthropic_to_openai(request)
+
+    def test_thinking_disabled_allowed_in_translation_mode(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hello")],
+            max_tokens=100,
+            thinking=AnthropicThinkingConfig(type="disabled"),
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.model == "m"
+
+    def test_thinking_none_allowed_in_translation_mode(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hello")],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.model == "m"
