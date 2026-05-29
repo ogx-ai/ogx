@@ -78,7 +78,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
             temperature=0.1,
             tools=[
                 OpenAIResponseInputToolWebSearch(
-                    name=tool_name,
+                    type=tool_name,
                 )
             ],
         )

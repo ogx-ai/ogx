@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 from collections.abc import AsyncIterator, Iterable
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -175,8 +176,9 @@ class BedrockInferenceAdapter(OpenAIMixin):
 
     async def shutdown(self) -> None:
         if self._sigv4_http_client is not None:
-            await self._sigv4_http_client.aclose()
+            await asyncio.shield(self._sigv4_http_client.aclose())
             self._sigv4_http_client = None
+        await super().shutdown()
 
     async def openai_embeddings(
         self,
