@@ -69,7 +69,7 @@ class ConnectClaude(Subcommand):
         self.parser.add_argument(
             "--url",
             type=str,
-            default=f"http://localhost:{default_port}",
+            default=f"http://localhost:{default_port}/v1",
             help="OGX server URL.",
         )
         self.parser.add_argument(
