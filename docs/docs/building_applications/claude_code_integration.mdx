@@ -7,37 +7,33 @@ sidebar_position: 4
 
 # Claude Code Integration
 
-Llama Stack can act as a backend for [Claude Code](https://claude.com/claude-code), Anthropic's AI coding assistant. Point Claude Code at your Llama Stack server and use any model—from local open models (vLLM, Ollama) to cloud providers (OpenAI, Fireworks, Groq).
+OGX includes built-in support for connecting [Claude Code](https://claude.com/claude-code), Anthropic's AI coding assistant, with a single command. All available models on your OGX server are automatically discovered and mapped to Claude Code's model tiers.
 
 ## Quick Start
 
-### 1. Start Llama Stack
+### 1. Start OGX
 
 ```bash
 # With any provider (examples)
 export OPENAI_API_KEY="your-key-here"
-llama stack run starter
+ogx run starter
 
 # Or with vLLM
 export VLLM_URL="http://localhost:8000/v1"
-llama stack run starter
+ogx run starter
 
 # Or with Ollama
 export OLLAMA_URL="http://localhost:11434/v1"
-llama stack run starter
+ogx run starter
 ```
 
-### 2. Configure Claude Code
-
-Point Claude Code at your Llama Stack server using the `ANTHROPIC_BASE_URL` environment variable:
+### 2. Connect Claude Code
 
 ```bash
-export ANTHROPIC_BASE_URL="http://localhost:8321"
-export ANTHROPIC_API_KEY="fake"  # Not validated when using local providers
-
-# Use Claude Code normally
-claude "Write a hello world function in Python"
+ogx connect claude
 ```
+
+That's it. Claude Code launches with all your OGX models mapped to Claude's haiku/sonnet/opus tiers.
 
 ### 3. Test it out
 
@@ -55,15 +51,32 @@ claude "Add documentation and tests"
 
 ## How It Works
 
-Claude Code sends requests to the Anthropic Messages API (`/v1/messages`). Llama Stack implements this API, translating between formats as needed:
+The `ogx connect claude` command:
+
+1. Queries the running OGX server for available models
+2. Filters out non-LLM models (embeddings, rerankers)
+3. Maps all discovered LLM models to Claude Code's three tiers (haiku/sonnet/opus)
+4. Sets the required environment variables (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, model tier mappings)
+5. Unsets any Vertex/Bedrock variables that would cause Claude Code to bypass OGX
+6. Launches Claude Code
 
 ```
-Claude Code → Llama Stack /v1/messages → Provider
-                          ↓
-                     (translate if needed)
-                          ↓
-                     OpenAI, vLLM, etc.
+ogx connect claude
+       |
+       v
+  GET /v1/models (discover available models)
+       |
+       v
+  Map models to Claude tiers (haiku/sonnet/opus)
+       |
+       v
+  Launch claude with ANTHROPIC_BASE_URL + tier env vars
+       |
+       v
+  Claude Code (connected to OGX)
 ```
+
+Claude Code sends requests to the Anthropic Messages API (`/v1/messages`). OGX implements this API, translating between formats as needed:
 
 **What gets translated:**
 - **Messages format**: Anthropic → OpenAI format (when provider doesn't support Messages API natively)
@@ -75,30 +88,87 @@ Claude Code → Llama Stack /v1/messages → Provider
 - Ollama with `/v1/messages` support
 - vLLM with Anthropic format support
 
-## Model Configuration
-
-### Specifying Models
-
-You can use `--model` to specify which OGX model to use directly:
+## CLI Reference
 
 ```bash
-claude --model "ollama/llama3.2:3b" "Hello world"
-claude --model "vllm/Qwen/Qwen3-8B" "Write code"
+ogx connect claude [--model MODEL] [--haiku-model MODEL] [--sonnet-model MODEL]
+                   [--opus-model MODEL] [--host HOST] [--port PORT]
+                   [--print-env] [-- CLAUDE_ARGS...]
+```
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--model` | First available model | Model ID to map to all three Claude tiers |
+| `--haiku-model` | `--model` value | Model ID for the haiku (fast) tier. Overrides `--model` |
+| `--sonnet-model` | `--model` value | Model ID for the sonnet (balanced) tier. Overrides `--model` |
+| `--opus-model` | `--model` value | Model ID for the opus (capable) tier. Overrides `--model` |
+| `--host` | `localhost` | OGX server host |
+| `--port` | `8321` | OGX server port (also reads `OGX_PORT` env var) |
+| `--print-env` | off | Print shell `export`/`unset` statements instead of launching Claude Code |
+
+Arguments after `--` are forwarded to the `claude` command.
+
+## Model Configuration
+
+### Default behavior
+
+With no model flags, `ogx connect claude` maps all three Claude tiers to the first available LLM model on your OGX server.
+
+### Setting a specific model for all tiers
+
+```bash
+ogx connect claude --model openai/gpt-4o
+```
+
+### Setting different models per tier
+
+```bash
+ogx connect claude \
+  --haiku-model openai/gpt-4o-mini \
+  --sonnet-model openai/gpt-4o \
+  --opus-model openai/o1
+```
+
+### Forwarding arguments to Claude Code
+
+```bash
+# Launch Claude Code in print mode
+ogx connect claude -- -p "Write a hello world function"
+
+# Specify a Claude model name directly
+ogx connect claude -- --model claude-sonnet-4-5
+```
+
+### Using `--print-env` for shell integration
+
+Instead of launching Claude Code, print the environment variables for manual use:
+
+```bash
+# Print and eval
+eval "$(ogx connect claude --print-env --model openai/gpt-4o)"
+claude "Hello world"
 ```
 
 :::note
-Some providers may return errors when Claude Code requests a `max_tokens` value higher than the model supports (e.g., OpenAI models). In that case, use the environment variable approach below, which lets OGX handle the mapping automatically.
+Some providers may return errors when Claude Code requests a `max_tokens` value higher than the model supports (e.g., OpenAI models). In that case, use `--model` to select a model that supports higher token limits, or use the per-tier flags to route different workloads to different models.
 :::
 
-### Model Aliasing via Environment Variables (Recommended)
+### Manual Environment Variable Setup
 
-The recommended approach is to let OGX map Claude's internal model names to your backend models. Claude Code internally uses Claude model names (e.g., `claude-sonnet-4-5`, `claude-haiku-4-5-20251001`) for different tiers of work. You control which backend model each tier maps to with environment variables:
+You can also configure Claude Code manually without the `ogx connect claude` command. Set these environment variables:
 
 ```bash
+export ANTHROPIC_BASE_URL="http://localhost:8321"
+export ANTHROPIC_AUTH_TOKEN="ogx"  # Bearer token — no interactive approval needed
+
 # Map Claude model tiers to your backend models
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="openai/gpt-4o-mini"   # Fast/cheap tier
 export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"       # Balanced tier
 export ANTHROPIC_DEFAULT_OPUS_MODEL="openai/o1"              # Most capable tier
+
+claude "Write a hello world function in Python"
 ```
 
 When Claude Code sends a request for `claude-haiku-4-5-20251001`, OGX routes it to the model specified by `ANTHROPIC_DEFAULT_HAIKU_MODEL`. The starter distribution automatically registers these aliases across all providers:
@@ -138,13 +208,12 @@ Different providers have different strengths when used with Claude Code:
 ### Using OpenAI Models
 
 ```bash
+# Terminal 1: Start OGX
 export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_BASE_URL="http://localhost:8321"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="openai/gpt-4o-mini"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"
+ogx run starter
 
-llama stack run starter
-claude "Implement a binary search tree"
+# Terminal 2: Connect Claude Code
+ogx connect claude --model openai/gpt-4o
 ```
 
 ### Using vLLM with Qwen Models
@@ -153,77 +222,81 @@ claude "Implement a binary search tree"
 # Start vLLM server
 vllm serve Qwen/Qwen3-8B --api-key fake
 
-# Start Llama Stack
+# Terminal 1: Start OGX
 export VLLM_URL="http://localhost:8000/v1"
-export ANTHROPIC_BASE_URL="http://localhost:8321"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="vllm/Qwen/Qwen3-8B"
+ogx run starter
 
-llama stack run starter
-claude "Write a Fibonacci function"
+# Terminal 2: Connect Claude Code
+ogx connect claude --model vllm/Qwen/Qwen3-8B
 ```
 
 ### Using Ollama with Llama Models
 
 ```bash
-# Start Ollama
+# Start Ollama and pull a model
 ollama serve
-
-# Pull a model
 ollama pull llama3.3:70b
 
-# Start Llama Stack
+# Terminal 1: Start OGX
 export OLLAMA_URL="http://localhost:11434/v1"
-export ANTHROPIC_BASE_URL="http://localhost:8321"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="ollama/llama3.3:70b"
+ogx run starter
 
-llama stack run starter
-claude "Explain quicksort"
+# Terminal 2: Connect Claude Code
+ogx connect claude --model ollama/llama3.3:70b
 ```
 
 ### Using Multiple Providers
 
-You can configure different Claude model tiers to route to different providers:
+Route different Claude tiers to different backend models:
 
 ```bash
-# Fast model → local vLLM
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="vllm/Qwen/Qwen3-8B"
+# Terminal 1: Start OGX with multiple providers
+export VLLM_URL="http://localhost:8000/v1"
+export OPENAI_API_KEY="sk-..."
+ogx run starter
 
-# Balanced model → OpenAI GPT-4o
-export ANTHROPIC_DEFAULT_SONNET_MODEL="openai/gpt-4o"
-
-# Most capable → OpenAI o1
-export ANTHROPIC_DEFAULT_OPUS_MODEL="openai/o1"
-
-# Claude Code routes based on which model name it sends internally
-claude "Quick task"  # Uses haiku → vLLM
-claude "Complex task"  # Uses sonnet → OpenAI GPT-4o
+# Terminal 2: Connect with per-tier model mapping
+ogx connect claude \
+  --haiku-model vllm/Qwen/Qwen3-8B \
+  --sonnet-model openai/gpt-4o \
+  --opus-model openai/o1
 ```
+
+### With a Remote OGX Server
+
+```bash
+ogx connect claude --host 192.168.1.100 --port 9000
+```
+
+## Prerequisites
+
+- **Claude Code** must be installed and available in your `PATH`. Install it from [claude.com/download](https://claude.com/download).
+- **OGX server** must be running before connecting Claude Code. Start it with `ogx run starter` or `ogx stack run`.
 
 ## Troubleshooting
 
-### "Model not found" errors
+### "Failed to find 'claude' in PATH"
 
-**Symptom**: `404 Model 'claude-haiku-4-5-20251001' not found`
+Install Claude Code following the instructions at [claude.com/download](https://claude.com/download).
 
-**Solution**: Either pass the model directly or set the appropriate environment variable:
+### "Failed to connect to OGX server"
+
+The OGX server is not running or not reachable at the specified host and port. Start it first:
 
 ```bash
-# Option 1: Direct model specification
-claude --model "your-provider/your-model" "your prompt"
-
-# Option 2: Environment variable mapping (recommended)
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="your-provider/your-model"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="your-provider/your-model"
+ogx run starter
 ```
 
-### "API key not valid" errors when using local providers
+### "Failed to find any LLM models"
 
-**Symptom**: Authentication errors even though you're using a local provider
+The OGX server is running but has no LLM models registered. Check your distribution configuration and ensure at least one inference provider is configured.
 
-**Solution**: Set a fake API key (not validated by llama-stack):
+### Model not found with `--model`
+
+The specified model ID must match exactly what the OGX server reports. List available models:
 
 ```bash
-export ANTHROPIC_API_KEY="fake"
+curl http://localhost:8321/v1/models | python -m json.tool
 ```
 
 ### `max_tokens` errors with OpenAI models
@@ -232,15 +305,15 @@ export ANTHROPIC_API_KEY="fake"
 
 **Explanation**: Claude Code requests a `max_tokens` value based on Claude model limits, which may exceed what the backend model supports. This is common with OpenAI models.
 
-**Workaround**: Use a model that supports a higher token limit, or use the environment variable approach which allows OGX to handle the mapping. This is a known limitation when using `--model` with providers that enforce strict token limits.
+**Workaround**: Use a model that supports a higher token limit, or use per-tier model mapping to route different workloads appropriately.
 
-### Claude Code ignores `ANTHROPIC_BASE_URL`
+### Claude Code ignores `ANTHROPIC_BASE_URL` (manual setup)
 
 **Symptom**: Claude Code connects directly to Anthropic (or Vertex AI / Bedrock) instead of your OGX server.
 
-**Explanation**: If `CLAUDE_CODE_USE_VERTEX=1`, `CLAUDE_CODE_USE_BEDROCK=1`, or related Vertex/Bedrock environment variables are set, Claude Code bypasses `ANTHROPIC_BASE_URL` entirely.
+**Explanation**: If `CLAUDE_CODE_USE_VERTEX=1`, `CLAUDE_CODE_USE_BEDROCK=1`, or related Vertex/Bedrock environment variables are set, Claude Code bypasses `ANTHROPIC_BASE_URL` entirely. The `ogx connect claude` command handles this automatically by unsetting these variables.
 
-**Solution**: Unset these variables before starting Claude Code:
+**Solution** (if not using `ogx connect claude`): Unset these variables before starting Claude Code:
 
 ```bash
 unset CLAUDE_CODE_USE_VERTEX
@@ -253,20 +326,20 @@ unset ANTHROPIC_BEDROCK_SESSION_TOKEN
 
 **Symptom**: Long latency when using OpenAI, Fireworks, etc.
 
-**Explanation**: There's a double proxy overhead (Claude Code → llama-stack → provider). Consider using local providers (vLLM, Ollama) for better performance.
+**Explanation**: There's a double proxy overhead (Claude Code → OGX → provider). Consider using local providers (vLLM, Ollama) for better performance.
 
 ### Tool use not working
 
 **Symptom**: Claude Code can't execute shell commands or file operations
 
-**Explanation**: Tool execution happens in Claude Code's runtime, not llama-stack. Ensure Claude Code has proper permissions and your model supports tool use.
+**Explanation**: Tool execution happens in Claude Code's runtime, not OGX. Ensure Claude Code has proper permissions and your model supports tool use.
 
 ## Performance Considerations
 
 ### Latency Breakdown
 
 ```
-Total latency = Claude Code overhead + llama-stack processing + provider API call + translation overhead
+Total latency = Claude Code overhead + OGX processing + provider API call + translation overhead
 ```
 
 - **Local providers** (vLLM, Ollama): Minimal translation overhead, total latency dominated by inference
@@ -276,15 +349,15 @@ Total latency = Claude Code overhead + llama-stack processing + provider API cal
 ### Optimization Tips
 
 1. **Use local providers** when possible (vLLM, Ollama) to minimize network latency
-2. **Enable prompt caching** with providers that support it (set `ANTHROPIC_API_KEY` to use Bedrock)
+2. **Enable prompt caching** with providers that support it
 3. **Configure native Messages API** support in vLLM/Ollama to skip translation overhead
 4. **Use streaming** (enabled by default in Claude Code) for faster perceived response times
 
 ## Differences from Anthropic Claude
 
-While llama-stack provides full Messages API compatibility, there are some behavioral differences when using alternative models:
+While OGX provides full Messages API compatibility, there are some behavioral differences when using alternative models:
 
-| Feature | Anthropic Claude | Open Models (via llama-stack) |
+| Feature | Anthropic Claude | Open Models (via OGX) |
 |---------|------------------|-------------------------------|
 | **Thinking blocks** | Native support | Varies by model (GPT-4o has reasoning) |
 | **Prompt caching** | Available | Only if provider supports it |
@@ -299,8 +372,8 @@ While llama-stack provides full Messages API compatibility, there are some behav
 If you want more control over how Claude model names map to your providers, you can register models explicitly:
 
 ```bash
-# Start llama stack
-llama stack run starter
+# Start OGX
+ogx run starter
 
 # Register models via API (after startup)
 curl http://localhost:8321/v1/models \
@@ -326,7 +399,7 @@ registered_resources:
 
 ### Using with Claude Agent SDK
 
-If you're building custom agents with the Claude Agent SDK, llama-stack works as a drop-in backend:
+If you're building custom agents with the Claude Agent SDK, OGX works as a drop-in backend:
 
 ```python
 from claude_agent_sdk import Agent
@@ -340,16 +413,6 @@ agent = Agent(
 response = agent.send("Write a function to parse CSV files")
 ```
 
-## Related Documentation
+---
 
-- [Anthropic Messages API](/docs/api-anthropic-messages) - Full API reference and conformance details
-- [Providers](/docs/providers) - Available inference providers and configuration
-- [Starter Distribution](/docs/distributions/starter) - Default distribution setup
-
-## Contributing
-
-Found an issue or want to improve Claude Code integration? Contributions welcome:
-
-- **Report bugs**: [GitHub Issues](https://github.com/meta-llama/llama-stack/issues)
-- **Improve docs**: [Documentation source](https://github.com/meta-llama/llama-stack/tree/main/docs)
-- **Add features**: See [CONTRIBUTING.md](https://github.com/meta-llama/llama-stack/blob/main/CONTRIBUTING.md)
+For more information about OGX's provider architecture, see [Providers Overview](/docs/providers). For Anthropic Messages API conformance details, see [Anthropic Messages API](/docs/api-anthropic-messages).

@@ -139,10 +139,12 @@ export function AppSidebar() {
   const [conversations, setConversations] = useState<
     ConversationHistoryEntry[]
   >([]);
-  const [isConversationsOpen, setIsConversationsOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem("sidebar-conversations-open") === "true";
-  });
+  const [isConversationsOpen, setIsConversationsOpen] = useState(false);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem("sidebar-conversations-open");
+    if (stored === "true") setIsConversationsOpen(true);
+  }, []);
 
   useEffect(() => {
     sessionStorage.setItem(

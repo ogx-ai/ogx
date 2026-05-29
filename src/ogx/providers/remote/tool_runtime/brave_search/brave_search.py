@@ -25,6 +25,8 @@ from .config import BraveSearchToolConfig
 class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequestProviderData):
     """Tool runtime for performing web searches using the Brave Search API."""
 
+    _CONTEXT_SIZE_TO_COUNT = {"low": 3, "medium": 5, "high": 10}
+
     def __init__(self, config: BraveSearchToolConfig):
         self.config = config
 
@@ -83,7 +85,26 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
             "Accept-Encoding": "gzip",
             "Accept": "application/json",
         }
-        payload = {"q": kwargs["query"]}
+
+        query = kwargs["query"]
+
+        allowed_domains = kwargs.get("allowed_domains")
+        if allowed_domains:
+            site_filter = " OR ".join(f"site:{domain}" for domain in allowed_domains)
+            query = f"{query} ({site_filter})"
+
+        payload: dict[str, Any] = {"q": query}
+
+        user_location = kwargs.get("user_location")
+        if user_location and user_location.get("country"):
+            payload["country"] = user_location["country"]
+
+        search_context_size = kwargs.get("search_context_size")
+        result_limit = self.config.max_results
+        if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
+            result_limit = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
+            payload["count"] = result_limit
+
         async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.get(
                 url=url,
@@ -91,17 +112,38 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
                 headers=headers,
             )
             response.raise_for_status()
-        results = self._clean_brave_response(response.json())
+        response_json = response.json()
+        results = self._clean_brave_response(response_json, result_limit)
         content_items = "\n".join([str(result) for result in results])
+        sources = self._extract_sources(response_json, result_limit)
         return ToolInvocationResult(
             content=content_items,
+            metadata={"query": kwargs["query"], "sources": sources},
         )
 
-    def _clean_brave_response(self, search_response):
+    def _extract_sources(self, search_response: dict[str, Any], max_results: int) -> list[dict[str, str]]:
+        sources = []
+        if "mixed" in search_response:
+            for m in search_response["mixed"]["main"][:max_results]:
+                r_type = m["type"]
+                if r_type in search_response:
+                    results = search_response[r_type].get("results", [])
+                    idx = m.get("index")
+                    if idx is not None and idx < len(results):
+                        item = results[idx]
+                    elif isinstance(results, list) and results:
+                        item = results[0]
+                    else:
+                        continue
+                    if isinstance(item, dict) and "url" in item:
+                        sources.append({"url": item["url"]})
+        return sources
+
+    def _clean_brave_response(self, search_response: dict[str, Any], max_results: int) -> list[str]:
         clean_response = []
         if "mixed" in search_response:
             mixed_results = search_response["mixed"]
-            for m in mixed_results["main"][: self.config.max_results]:
+            for m in mixed_results["main"][:max_results]:
                 r_type = m["type"]
                 results = search_response[r_type]["results"]
                 cleaned = self._clean_result_by_type(r_type, results, m.get("index"))
