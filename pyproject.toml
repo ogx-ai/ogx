@@ -65,7 +65,7 @@ dependencies = [
     "termcolor",
     "tiktoken",
     "uvicorn>=0.34.0",                                # server
-    "opentelemetry-sdk>=1.30.0",                      # server
+    "opentelemetry-sdk>=1.42.1",                      # server
     "opentelemetry-exporter-otlp-proto-http>=1.30.0", # server
     "opentelemetry-distro>=0.60b1",                  # optional CLI instrumentation; only pre-releases on PyPI (latest 0.60b1)
     "aiosqlite>=0.21.0",                              # server - for metadata store
@@ -82,9 +82,9 @@ client = [
 ]
 starter = [
     "aiohttp",
-    "anthropic",
+    "anthropic>=0.104.1",
     "autoevals",
-    "boto3>=1.43.9",
+    "boto3>=1.43.15",
     "chardet",
     "chromadb-client",
     "datasets>=4.0.0",
@@ -143,7 +143,7 @@ dev = [
     "ruamel.yaml",                   # needed for openapi generator
     "openapi-spec-validator>=0.7.2",
     "ogx-client>=1.0.2",
-    "boto3>=1.43.9",
+    "boto3>=1.43.15",
     "torch>=2.6.0",
 ]
 # Type checking dependencies - includes type stubs and optional runtime dependencies
@@ -162,11 +162,11 @@ type_checking = [
     "streamlit",
     "streamlit-option-menu",
     "pandas",
-    "anthropic",
-    "databricks-sdk",
+    "anthropic>=0.104.1",
+    "databricks-sdk>=0.112.0",
     "fairscale",
     "torchtune",
-    "trl",
+    "trl>=1.5.0",
     "peft",
     "datasets",
     "together",
@@ -197,10 +197,10 @@ test-common = [
 # These are the dependencies required for running unit tests.
 unit = [
     {include-group = "test-common"},
-    "anthropic",
+    "anthropic>=0.104.1",
     "blobfile",
     "coverage",
-    "databricks-sdk",
+    "databricks-sdk>=0.112.0",
     "faiss-cpu",
     "markitdown[all]",
     "moto[s3]>=5.1.10",
