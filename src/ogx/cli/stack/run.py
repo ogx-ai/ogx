@@ -137,7 +137,7 @@ def _dry_run_validate(config: StackConfig, config_file: Path) -> None:
 
     safe_config = redact_sensitive_fields(config.model_dump(mode="json"))
     clean_config = remove_disabled_providers(safe_config)
-    logger.info("Resolved configuration", config=clean_config)
+    print(yaml.dump(clean_config, indent=2, default_flow_style=False, sort_keys=False))
 
 
 def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
