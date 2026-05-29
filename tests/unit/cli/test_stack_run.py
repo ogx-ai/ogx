@@ -8,11 +8,12 @@
 Unit tests for `ogx run` and `ogx stack run` CLI commands.
 
 Categories:
-  - Arguments: --providers flag is registered and parsed correctly
+  - Arguments: --providers and --dry-run flags are registered and parsed correctly
   - Delegation: --providers delegates to run_config_from_dynamic_config_spec
   - Error propagation: ValueError from the unified impl is printed and causes exit
   - Deprecation: `ogx stack run` emits a FutureWarning
   - Top-level run: `ogx run` works without the `stack` subcommand
+  - Dry run: --dry-run validates config without starting the server
 """
 
 import argparse
@@ -185,3 +186,56 @@ class TestDeprecation:
 
         future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
         assert len(future_warnings) == 0
+
+
+class TestDryRun:
+    def test_dry_run_flag_registered(self, top_level_run: Run):
+        args = top_level_run.parser.parse_args(["starter", "--dry-run"])
+        assert args.dry_run is True
+
+    def test_dry_run_default_is_false(self, top_level_run: Run):
+        args = top_level_run.parser.parse_args(["starter"])
+        assert args.dry_run is False
+
+    def test_dry_run_validates_and_exits_without_starting_server(self, top_level_run: Run, tmp_path: Path):
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("version: 2\ndistro_name: test\napis: []\nproviders: {}\n")
+
+        mock_config = MagicMock(external_providers_dir=None)
+
+        with (
+            patch("ogx.core.configure.parse_and_maybe_upgrade_config", return_value=mock_config),
+            patch("ogx.cli.stack.run._dry_run_validate") as mock_validate,
+            patch("ogx.cli.stack.run._uvicorn_run") as mock_uvicorn,
+            patch("ogx.cli.stack.run.resolve_config_or_distro", return_value=config_file),
+        ):
+            args = top_level_run.parser.parse_args([str(config_file), "--dry-run"])
+            top_level_run._run_cmd(args)
+
+        mock_validate.assert_called_once_with(mock_config, config_file)
+        mock_uvicorn.assert_not_called()
+
+    def test_dry_run_without_config_errors(self, top_level_run: Run):
+        with pytest.raises(SystemExit):
+            args = top_level_run.parser.parse_args(["--dry-run"])
+            top_level_run._run_cmd(args)
+
+    def test_dry_run_with_providers_flag(self, top_level_run: Run, tmp_path: Path):
+        mock_config = MagicMock()
+        mock_config.model_dump.return_value = {}
+
+        with (
+            patch("ogx.cli.stack.run.run_config_from_dynamic_config_spec", return_value=mock_config),
+            patch("ogx.cli.stack.run.DISTRIBS_BASE_DIR", tmp_path),
+            patch(
+                "ogx.core.configure.parse_and_maybe_upgrade_config",
+                return_value=MagicMock(external_providers_dir=None),
+            ),
+            patch("ogx.cli.stack.run._dry_run_validate") as mock_validate,
+            patch("ogx.cli.stack.run._uvicorn_run") as mock_uvicorn,
+        ):
+            args = top_level_run.parser.parse_args(["--providers", "inference=fireworks", "--dry-run"])
+            top_level_run._run_cmd(args)
+
+        mock_validate.assert_called_once()
+        mock_uvicorn.assert_not_called()
