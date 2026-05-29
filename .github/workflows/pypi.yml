@@ -880,7 +880,7 @@ jobs:
   # are published to PyPI. CPU distros are built for linux/amd64 and
   # linux/arm64. GPU distros are built for linux/amd64 only.
   #
-  # Images are pushed to: ogx/distribution-<distro>:<tag>
+  # Images are pushed to: ogxai/distribution-<distro>:<tag>
   #   - Production (release or dry_run=off): tagged with VERSION and "latest"
   #   - Test (test-pypi or schedule): tagged with "test-VERSION"
   publish-docker-images:
@@ -944,7 +944,7 @@ jobs:
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
           DISTRO="${{ matrix.distro }}"
-          IMAGE="ogx/distribution-${DISTRO}"
+          IMAGE="ogxai/distribution-${DISTRO}"
 
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"
