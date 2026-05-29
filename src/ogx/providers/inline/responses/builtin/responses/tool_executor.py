@@ -21,6 +21,7 @@ from ogx_api import (
     OpenAIImageURL,
     OpenAIResponseInputToolFileSearch,
     OpenAIResponseInputToolMCP,
+    OpenAIResponseInputToolWebSearch,
     OpenAIResponseObjectStreamResponseFileSearchCallCompleted,
     OpenAIResponseObjectStreamResponseFileSearchCallInProgress,
     OpenAIResponseObjectStreamResponseFileSearchCallSearching,
@@ -40,6 +41,8 @@ from ogx_api import (
     ToolInvocationResult,
     ToolRuntime,
     VectorIO,
+    WebSearchActionSearch,
+    WebSearchSource,
 )
 
 from .types import ChatCompletionContext, ToolExecutionResult
@@ -363,6 +366,32 @@ class ToolExecutor:
                             query=query,
                             response_file_search_tool=response_file_search_tool,
                         )
+            elif function_name == "web_search":
+                if ctx.response_tools:
+                    response_web_search_tool = next(
+                        (t for t in ctx.response_tools if isinstance(t, OpenAIResponseInputToolWebSearch)),
+                        None,
+                    )
+                    if response_web_search_tool:
+                        if response_web_search_tool.filters and response_web_search_tool.filters.allowed_domains:
+                            tool_kwargs["allowed_domains"] = response_web_search_tool.filters.allowed_domains
+                        if response_web_search_tool.user_location:
+                            tool_kwargs["user_location"] = response_web_search_tool.user_location.model_dump(
+                                exclude_none=True
+                            )
+                        if response_web_search_tool.search_context_size:
+                            tool_kwargs["search_context_size"] = response_web_search_tool.search_context_size
+
+                attributes = {
+                    "tool_name": function_name,
+                }
+                # TODO: follow semantic conventions for Open Telemetry tool spans
+                # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/#execute-tool-span
+                with tracer.start_as_current_span("invoke_tool", attributes=attributes):
+                    result = await self.tool_runtime_api.invoke_tool(
+                        tool_name=function_name,
+                        kwargs=tool_kwargs,
+                    )
             else:
                 attributes = {
                     "tool_name": function_name,
@@ -467,6 +496,17 @@ class ToolExecutor:
                 )
                 if has_error:
                     message.status = "failed"
+                elif result and (metadata := getattr(result, "metadata", None)):
+                    sources = []
+                    for source in metadata.get("sources", []):
+                        if "url" in source:
+                            sources.append(WebSearchSource(url=source["url"]))
+                    query = metadata.get("query", tool_kwargs.get("query", ""))
+                    message.action = WebSearchActionSearch(
+                        query=query,
+                        queries=[query],
+                        sources=sources,
+                    )
             elif function.name in ("knowledge_search", "file_search"):
                 message = OpenAIResponseOutputMessageFileSearchToolCall(
                     id=item_id,
