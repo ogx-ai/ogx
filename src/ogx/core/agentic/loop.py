@@ -78,7 +78,7 @@ class TrueAgenticLoop:
                 try:
                     result = eval(contract.assertion, {"output": tool_output})
                     return (f"assertion: {contract.assertion} → {result}", bool(result))
-                except Exception as e:
+                except (SyntaxError, NameError, TypeError, ValueError) as e:
                     return (f"verify_error: {e}", False)
         return ("no_contract: auto-approved", True)
 
