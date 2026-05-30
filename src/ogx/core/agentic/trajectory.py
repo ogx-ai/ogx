@@ -102,7 +102,7 @@ class AgentTrajectory:
         """
         lines: list[str] = []
         for cycle in self._cycles:
-            status = "✓" if cycle.action.frobenius_closed else "✗"
+            status = "Y" if cycle.action.frobenius_closed else "N"
             lines.append(
                 f"[W{cycle.winding_number}|{status}] "
                 f"{cycle.action.tool_name}"
