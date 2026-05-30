@@ -6,16 +6,20 @@
 
 import argparse
 import asyncio
+import contextlib
 import enum
 import importlib
+import inspect
+import logging  # allow-direct-logging :: for direct logging control in _suppress_provider_logs
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import warnings
+from collections.abc import Awaitable, Callable, Coroutine, Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import yaml
 from termcolor import cprint
@@ -23,17 +27,78 @@ from termcolor import cprint
 from ogx.cli.stack.run import _start_ui_development_server, _uvicorn_run
 from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
+from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
 from ogx.core.stack import replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
-from ogx_api import Api, RemoteProviderSpec
+from ogx_api import Api, ModelType
 from ogx_api.models.models import ModelInput
 
 logger = get_logger(name=__name__, category="cli")
 
-# Model IDs that Claude Code looks for.
+
+# Type protocols for provider and config objects
+@runtime_checkable
+class ProbeableProvider(Protocol):
+    """Protocol for providers that support model listing and lifecycle management."""
+
+    async def list_models(self) -> list[Any]:
+        """Return list of available models."""
+        ...
+
+    def initialize(self) -> Coroutine[Any, Any, None] | None:
+        """Initialize provider (optional async)."""
+        ...
+
+    def shutdown(self) -> Coroutine[Any, Any, None] | None:
+        """Shutdown provider (optional async)."""
+        ...
+
+
+class _FactoryDispatcher:
+    """Determines factory function name and retrieves it from a module based on provider spec type.
+
+    Centralizes the isinstance-based dispatch logic, replacing runtime type checks
+    with a single point of control.
+    """
+
+    @staticmethod
+    def method_name_for_spec(spec: Any) -> str:
+        """Return the factory method name for a given provider spec.
+
+        Uses isinstance to determine spec type (isolated to this method).
+        Returns one of: "get_provider_impl", "get_adapter_impl", "get_auto_router_impl", "get_routing_table_impl".
+        """
+        # Import here to avoid circular imports at module level
+        from ogx.core.datatypes import AutoRoutedProviderSpec, RoutingTableProviderSpec
+        from ogx_api import RemoteProviderSpec
+
+        if isinstance(spec, RemoteProviderSpec):
+            return "get_adapter_impl"
+        elif isinstance(spec, AutoRoutedProviderSpec):
+            return "get_auto_router_impl"
+        elif isinstance(spec, RoutingTableProviderSpec):
+            return "get_routing_table_impl"
+        else:  # Default: InlineProviderSpec
+            return "get_provider_impl"
+
+    @staticmethod
+    def get_factory(spec: Any, module: Any) -> Callable[[Any, dict[str, Any]], Awaitable[Any]] | None:
+        """Retrieve factory function from module for the given spec.
+
+        Args:
+            spec: Provider spec (ProviderSpec subclass).
+            module: Imported module containing factory functions.
+
+        Returns:
+            Factory function callable or None if not found.
+        """
+        method_name = _FactoryDispatcher.method_name_for_spec(spec)
+        return getattr(module, method_name, None)
+
+
 _CLAUDE_CODE_ALIASES: list[str] = [
     "claude-haiku-4-5",
     "claude-sonnet-4-6",
@@ -119,6 +184,54 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Skip automatic installation of provider pip dependencies before starting the server.",
     )
+    parser.add_argument(
+        "--default-embedding-model",
+        type=str,
+        default=None,
+        metavar="PROVIDER_ID/MODEL_ID",
+        help="Default embedding model for vector stores, in the form 'provider_id/model_id' (e.g. 'sentence-transformers/nomic-ai/nomic-embed-text-v1.5'). When omitted, the server auto-detects an embedding model from registered providers.",
+    )
+    parser.add_argument(
+        "--default-embedding-dimension",
+        type=int,
+        default=None,
+        metavar="DIMENSION",
+        help="Embedding dimension for the default embedding model. Required when --default-embedding-model is specified.",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging during provider scanning and server startup.",
+    )
+
+
+def _add_file_search_and_responses(run_config: StackConfig) -> None:
+    """Add file-search and responses providers to the stack config.
+
+    These are only added after confirming an embedding model is available.
+    """
+    # Add tool_runtime API with file-search provider
+    if "tool_runtime" not in run_config.providers:
+        run_config.providers["tool_runtime"] = []
+    if not any(p.provider_type == "inline::file-search" for p in run_config.providers["tool_runtime"]):
+        run_config.providers["tool_runtime"].append(
+            Provider(provider_id="file-search", provider_type="inline::file-search")
+        )
+    # Add tool_runtime to APIs if not already present
+    if "tool_runtime" not in run_config.apis:
+        run_config.apis.append("tool_runtime")
+
+    # Add responses API with builtin provider
+    if "responses" not in run_config.providers:
+        run_config.providers["responses"] = []
+    if not any(p.provider_type == "inline::builtin" for p in run_config.providers["responses"]):
+        run_config.providers["responses"].append(Provider(provider_id="builtin", provider_type="inline::builtin"))
+    # Add responses to APIs if not already present
+    if "responses" not in run_config.apis:
+        run_config.apis.append("responses")
+
+    cprint("  ✓ inline::file-search (built-in)", color="green")
+    cprint("  ✓ inline::builtin responses (built-in)", color="green")
 
 
 def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -130,8 +243,9 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
 
     if args.providers_override:
         providers_spec = args.providers_override
+        autodetect_embedding: tuple[QualifiedModel, int | None] | None = None
     else:
-        providers_spec = _autodetect_providers()
+        providers_spec, autodetect_embedding = _autodetect_providers(debug=getattr(args, "debug", False))
 
     has_inference = any(p.startswith("inference=") for p in (providers_spec or "").split(","))
     if not has_inference:
@@ -158,6 +272,102 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
     if claude_aliases:
         run_config.registered_resources.models.extend(claude_aliases)
         cprint(f"  ✓ Claude Code aliases → {claude_aliases[0].provider_id}", color="green")
+
+    if args.default_embedding_model:
+        if not args.default_embedding_dimension:
+            cprint(
+                "Failed: --default-embedding-dimension is required when --default-embedding-model is specified",
+                color="red",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        provider_id, _, model_id = args.default_embedding_model.partition("/")
+        if not model_id:
+            cprint(
+                f"Failed to parse --default-embedding-model '{args.default_embedding_model}': expected format 'provider_id/model_id'",
+                color="red",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        existing = run_config.vector_stores or VectorStoresConfig()
+        run_config.vector_stores = existing.model_copy(
+            update={"default_embedding_model": QualifiedModel(provider_id=provider_id, model_id=model_id)}
+        )
+        # Explicitly register the model as embedding type so the startup validator and
+        # vector store creation can find it, even when the provider doesn't pre-classify it.
+        run_config.registered_resources.models.append(
+            ModelInput(
+                model_id=model_id,
+                provider_id=provider_id,
+                provider_model_id=model_id,
+                model_type=ModelType.embedding,
+                metadata={"embedding_dimension": args.default_embedding_dimension},
+            )
+        )
+        cprint(
+            f"  ✓ Default embedding model → {args.default_embedding_model} ({args.default_embedding_dimension}d)",
+            color="green",
+        )
+        # Add file-search and responses now that embedding model is confirmed
+        _add_file_search_and_responses(run_config)
+    elif "vector_io" in run_config.providers:
+        detected_result = (
+            autodetect_embedding if autodetect_embedding is not None else _detect_embedding_model(run_config)
+        )
+        if detected_result:
+            detected, embedding_dimension = detected_result
+            if embedding_dimension is None:
+                cprint(
+                    "  ✗ Auto-detected embedding model has no dimension — vector stores, file-search, and responses disabled.",
+                    color="yellow",
+                )
+                cprint(
+                    "    To enable them, run with --default-embedding-model PROVIDER_ID/MODEL_ID --default-embedding-dimension DIMENSION.",
+                    color="yellow",
+                )
+                run_config.providers.pop("vector_io", None)
+                run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+            else:
+                existing = run_config.vector_stores or VectorStoresConfig()
+                run_config.vector_stores = existing.model_copy(update={"default_embedding_model": detected})
+                # Keep auto-detected embeddings consistent with --default-embedding-model:
+                # register them explicitly as embedding models so startup validation
+                # does not rely on provider-side model typing.
+                run_config.registered_resources.models.append(
+                    ModelInput(
+                        model_id=detected.model_id,
+                        provider_id=detected.provider_id,
+                        provider_model_id=detected.model_id,
+                        model_type=ModelType.embedding,
+                        metadata={"embedding_dimension": embedding_dimension},
+                    )
+                )
+                cprint(
+                    f"  ✓ Auto-detected embedding model → {detected.provider_id}/{detected.model_id} ({embedding_dimension}d)",
+                    color="green",
+                )
+                # Add file-search and responses now that embedding model is confirmed
+                _add_file_search_and_responses(run_config)
+        else:
+            cprint(
+                "  ✗ No embedding model detected — vector stores, file-search, and responses disabled.",
+                color="yellow",
+            )
+            cprint(
+                "    To enable them, run with --default-embedding-model PROVIDER_ID/MODEL_ID --default-embedding-dimension DIMENSION.",
+                color="yellow",
+            )
+            run_config.providers.pop("vector_io", None)
+            run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+    else:
+        cprint(
+            "  ✗ No vector store provider detected — file-search and responses disabled.",
+            color="yellow",
+        )
+        cprint(
+            "    To enable them, ensure a vector store is configured and add --default-embedding-model PROVIDER_ID/MODEL_ID.",
+            color="yellow",
+        )
 
     config_dict = run_config.model_dump(mode="json")
 
@@ -203,8 +413,8 @@ def _install_provider_deps(normal_deps: list[str], special_deps: list[str]) -> N
             )
 
 
-def _autodetect_providers() -> str:
-    """Probe all candidate providers and return a comma-separated providers spec string.
+def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedModel, int | None] | None]:
+    """Probe all candidate providers and return a spec string and first detected embedding model.
 
     Each provider is probed by instantiating it and calling list_models() to confirm
     availability and model access. Providers that require an API key skip probing
@@ -230,10 +440,11 @@ def _autodetect_providers() -> str:
 
     passed: list[str] = []
     missing_deps_providers: dict[str, list[str]] = {}  # provider_type -> pip_packages
+    detected_embedding: tuple[QualifiedModel, int | None] | None = None
     cprint("Scanning for available providers...", color="cyan")
     for provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env in candidates:
-        status, model_count, base_url, base_source, pip_packages = _probe_provider_availability(
-            provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env
+        status, models, base_url, base_source, pip_packages = _probe_provider_availability(
+            provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env, debug=debug
         )
 
         # Build annotation parts
@@ -252,9 +463,9 @@ def _autodetect_providers() -> str:
         if status == _ProbeStatus.OK:
             passed.append(f"inference={provider_type}")
             if annotation:
-                cprint(f"  ✓ {provider_type} ({annotation}) — {model_count} models", color="green")
+                cprint(f"  ✓ {provider_type} ({annotation}) — {len(models)} models", color="green")
             else:
-                cprint(f"  ✓ {provider_type} ({model_count} models)", color="green")
+                cprint(f"  ✓ {provider_type} ({len(models)} models)", color="green")
         elif status == _ProbeStatus.NO_KEY:
             if annotation:
                 cprint(f"  ✗ {provider_type} ({annotation})", color="yellow")
@@ -282,57 +493,158 @@ def _autodetect_providers() -> str:
             else:
                 cprint(f"  ✗ {provider_type} — unreachable", color="yellow")
 
+        if status in (_ProbeStatus.OK, _ProbeStatus.NEEDS_KEY) and detected_embedding is None:
+            for model in models:
+                model_type = getattr(model, "model_type", None)
+                identifier = getattr(model, "identifier", None)
+                if model_type == ModelType.embedding or (identifier and "embed" in str(identifier).lower()):
+                    dimension: int | None = None
+                    if hasattr(model, "metadata") and isinstance(model.metadata, dict):
+                        dimension = model.metadata.get("embedding_dimension")
+                    detected_embedding = (
+                        QualifiedModel(provider_id=provider_type.split("::")[-1], model_id=str(identifier)),
+                        dimension,
+                    )
+                    break
+
     # Inline providers require no external service — always include them.
+    # Note: file-search and responses require an embedding model, so they are added later
+    # after confirming an embedding model is available (either user-provided or auto-detected)
     inline_providers = [
         "files=inline::localfs",
         "vector_io=inline::faiss",
-        "tool_runtime=inline::file-search",
         "file_processors=inline::auto",
-        "responses=inline::builtin",
         "messages=inline::builtin",
     ]
     cprint("  ✓ inline::localfs (built-in)", color="green")
     cprint("  ✓ inline::faiss (built-in)", color="green")
-    cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::auto (built-in)", color="green")
-    cprint("  ✓ inline::builtin responses (built-in)", color="green")
     cprint("  ✓ inline::builtin messages (built-in)", color="green")
 
-    if passed:
-        cprint(f"\nDetected {len(passed)} inference provider(s). Starting stack...", color="cyan")
-        if missing_deps_providers:
-            cprint("Available providers with missing dependencies:", color="cyan")
-            for provider_type, pip_packages in missing_deps_providers.items():
-                packages_str = " ".join(f"'{pkg}'" for pkg in pip_packages)
-                cprint(f"  {provider_type}: uv pip install {packages_str}", color="cyan")
-    else:
-        cprint("\nDetected no inference providers, not starting stack.", color="red")
-        if missing_deps_providers:
-            cprint("Install missing dependencies:", color="cyan")
-            for provider_type, pip_packages in missing_deps_providers.items():
-                packages_str = " ".join(f"'{pkg}'" for pkg in pip_packages)
-                cprint(f"  {provider_type}: uv pip install {packages_str}", color="cyan")
-    return ",".join(passed + inline_providers)
+    if missing_deps_providers:
+        cprint("\nAvailable providers with missing dependencies:", color="cyan")
+        for provider_type, pip_packages in missing_deps_providers.items():
+            packages_str = " ".join(f"'{pkg}'" for pkg in pip_packages)
+            cprint(f"  {provider_type}: uv pip install {packages_str}", color="cyan")
+
+    return ",".join(passed + inline_providers), detected_embedding
 
 
-async def _list_models_with_timeout(provider: Any, timeout_seconds: float = 5) -> list[Any] | None:
+async def _list_models_with_timeout(provider: ProbeableProvider, timeout_seconds: float = 5) -> list[Any]:
     """Call list_models with timeout and proper error handling."""
-    if not hasattr(provider, "list_models"):
-        return None
+    models = await asyncio.wait_for(provider.list_models(), timeout=timeout_seconds)
+    return list(models) if models else []
+
+
+async def _list_models_from_provider(provider: Any) -> list[Any]:
+    """Instantiate an inference provider from a runtime `Provider` entry and return its models.
+
+    This uses the provider registry to resolve the provider spec, instantiates the
+    provider implementation via its factory function, then calls `list_models` with
+    a timeout-protected helper.
+    """
+    registry = get_provider_registry()
+    spec = registry.get(Api.inference, {}).get(provider.provider_type)
+    if spec is None or not spec.module:
+        return []
+
     try:
-        models = await asyncio.wait_for(provider.list_models(), timeout=timeout_seconds)
-        return list(models) if models else []
-    except TimeoutError:
-        raise
+        module = importlib.import_module(spec.module)
+    except Exception:
+        return []
+
+    config_type = instantiate_class_type(spec.config_class)
+    provider_config = provider.config if isinstance(provider.config, dict) else {}
+    try:
+        config = config_type(**provider_config)
+    except Exception:
+        return []
+
+    # Use dispatcher to get factory function
+    factory_fn = _FactoryDispatcher.get_factory(spec, module)
+    if factory_fn is None:
+        return []
+
+    try:
+        impl: ProbeableProvider = await _instantiate_with_timeout(factory_fn, config)
+    except Exception:
+        return []
+
+    # Annotate impl for diagnostic messages and cleanup
+    impl.__provider_id__ = provider.provider_id  # type: ignore[attr-defined]
+    impl.__provider_spec__ = spec  # type: ignore[attr-defined]
+
+    # Initialize provider if needed
+    init_result = impl.initialize()
+    if init_result is not None:
+        await asyncio.wait_for(init_result, timeout=5.0)
+
+    try:
+        models = await _list_models_with_timeout(impl, timeout_seconds=5)
+    except Exception:
+        models = []
+
+    # Cleanup provider if needed
+    shutdown_result = impl.shutdown()
+    if shutdown_result is not None:
+        await asyncio.wait_for(shutdown_result, timeout=2.0)
+
+    return models or []
 
 
-async def _instantiate_with_timeout(factory_fn: Any, config: Any) -> Any:
+def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, int | None] | None:
+    """Find an embedding model by instantiating each inference provider and calling list_models().
+
+    Returns tuple of (QualifiedModel, embedding_dimension) or None if not found.
+    Dimension may be None if not available in model metadata — caller must handle this.
+    """
+
+    async def _detect_async() -> tuple[QualifiedModel, int | None] | None:
+        for provider in run_config.providers.get("inference", []):
+            models = await _list_models_from_provider(provider)
+            for model in models:
+                model_type = model.model_type
+                identifier = model.identifier
+                if model_type == ModelType.embedding or (identifier and "embed" in identifier.lower()):
+                    provider_id = provider.provider_id
+                    if provider_id is None:
+                        cprint(
+                            "  ✗ Could not infer embedding model: provider has no provider_id",
+                            color="yellow",
+                        )
+                        continue
+                    if not identifier:
+                        cprint(
+                            f"  ✗ Could not infer embedding model id from provider '{provider_id}'",
+                            color="yellow",
+                        )
+                        continue
+                    # Extract dimension from model metadata; do not guess
+                    dimension: int | None = None
+                    if hasattr(model, "metadata") and isinstance(model.metadata, dict):
+                        dimension = model.metadata.get("embedding_dimension", None)
+                    return (
+                        QualifiedModel(
+                            provider_id=provider_id,
+                            model_id=str(identifier),
+                        ),
+                        dimension,
+                    )
+        return None
+
+    return asyncio.run(_detect_async())
+
+
+async def _instantiate_with_timeout(
+    factory_fn: Callable[[Any, dict[str, Any]], Awaitable[ProbeableProvider] | ProbeableProvider],
+    config: Any,
+) -> ProbeableProvider:
     """Call factory function with timeout."""
     try:
         result = factory_fn(config, {})
-        if asyncio.iscoroutine(result):
-            return await asyncio.wait_for(result, timeout=5.0)
-        return result
+        if inspect.iscoroutine(result):
+            return await asyncio.wait_for(result, timeout=5.0)  # type: ignore[arg-type]
+        return result  # type: ignore[return-value]
     except TimeoutError:
         raise
 
@@ -349,13 +661,35 @@ def _is_auth_error(e: Exception) -> bool:
     )
 
 
+@contextlib.contextmanager
+def _suppress_provider_logs(suppress: bool = True) -> Generator[None, None, None]:
+    """Context manager to suppress all provider-related logs during probing.
+
+    When suppress=True, temporarily disables all logging. When suppress=False,
+    logging is emitted normally. This ensures no logger output appears during provider
+    scanning unless the user passes --debug.
+    """
+    if not suppress:
+        yield
+        return
+
+    # Disable all logging (using level higher than CRITICAL) to suppress all messages
+    previous_disable_level = logging.root.manager.disable
+    logging.disable(100)
+    try:
+        yield
+    finally:
+        logging.disable(previous_disable_level)
+
+
 def _probe_provider_availability(
     provider_type: str,
     base_url_env: str | None,
     default_base_url: str,
     required_api_key_env: str | None,
     optional_api_key_env: str | None = None,
-) -> tuple[_ProbeStatus, int, str, str, list[str] | None]:
+    debug: bool = False,
+) -> tuple[_ProbeStatus, list[Any], str, str, list[str] | None]:
     """Instantiate a provider and probe availability by listing models.
 
     Args:
@@ -366,7 +700,7 @@ def _probe_provider_availability(
         optional_api_key_env: Environment variable name for optional API key, or None
 
     Returns:
-        Tuple of (status, model_count, base_url, base_source, pip_packages).
+        Tuple of (status, models, base_url, base_source, pip_packages).
         base_source is "default" or the env var name. base_url is empty string if not applicable.
         pip_packages is a list of packages to install for MISSING_DEPS, None otherwise.
         Returns NEEDS_KEY if required key is present but optional key is missing.
@@ -388,128 +722,133 @@ def _probe_provider_availability(
 
     # Check if required API key is available
     if required_api_key_env and not os.getenv(required_api_key_env):
-        return _ProbeStatus.NO_KEY, 0, base_url, base_source, None
+        return _ProbeStatus.NO_KEY, [], base_url, base_source, None
 
     # Track if optional API key is missing (provider works but with reduced functionality)
     optional_key_missing = optional_api_key_env and not os.getenv(optional_api_key_env)
 
-    try:
-        # Load provider registry and look up the spec
-        registry = get_provider_registry()
-        if Api.inference not in registry or provider_type not in registry[Api.inference]:
-            logger.debug("Provider not found in registry", provider_type=provider_type)
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
-
-        provider_spec = registry[Api.inference][provider_type]
-        logger.debug("Found provider in registry", provider_type=provider_type, module=provider_spec.module)
-
-        # Get config defaults
+    # Suppress non-critical logging during provider probing unless debug mode is enabled
+    with _suppress_provider_logs(suppress=not debug):
         try:
-            config_class = instantiate_class_type(provider_spec.config_class)
-            config_defaults = config_class.sample_run_config(__distro_dir__=tempfile.gettempdir())
-            logger.debug("Got config defaults", provider_type=provider_type)
+            # Load provider registry and look up the spec
+            registry = get_provider_registry()
+            if Api.inference not in registry or provider_type not in registry[Api.inference]:
+                cprint(f"  ✗ {provider_type} not found in provider registry", color="red")
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
 
-            # Substitute environment variables in config (e.g., ${env.VAR_NAME:=default})
-            config_defaults = replace_env_vars(config_defaults)
-        except ModuleNotFoundError as e:
-            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
-        except Exception as e:
-            logger.debug("Failed to get config defaults", provider_type=provider_type, error=str(e)[:200])
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
+            provider_spec = registry[Api.inference][provider_type]
+            logger.debug("Probing provider", provider_type=provider_type, module=provider_spec.module)
 
-        # Instantiate config object
-        try:
-            config = config_class(**config_defaults)
-            logger.debug("Instantiated config", provider_type=provider_type)
-        except ModuleNotFoundError as e:
-            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
-        except Exception as e:
-            logger.debug("Failed to instantiate config", provider_type=provider_type, error=str(e)[:200])
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
+            # Get config defaults
+            try:
+                config_class = instantiate_class_type(provider_spec.config_class)
+                config_defaults = config_class.sample_run_config(__distro_dir__=tempfile.gettempdir())
+                logger.debug("Loaded config defaults for provider", provider_type=provider_type)
 
-        # Import provider module and instantiate
-        if not provider_spec.module:
-            logger.debug("Provider spec missing module", provider_type=provider_type)
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
+                # Substitute environment variables in config (e.g., ${env.VAR_NAME:=default})
+                config_defaults = replace_env_vars(config_defaults)
 
-        try:
-            module = importlib.import_module(provider_spec.module)
-            logger.debug("Imported provider module", provider_type=provider_type, module=provider_spec.module)
-        except ModuleNotFoundError as e:
-            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
-        except Exception as e:
-            logger.debug("Failed to import provider module", module=provider_spec.module, error=str(e)[:200])
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
+                # Inject the determined base_url into the config for remote providers
+                if base_url and "base_url" in config_defaults:
+                    config_defaults["base_url"] = base_url
+                    logger.debug("Set base_url in config", provider_type=provider_type, base_url=base_url)
+            except ModuleNotFoundError as e:
+                cprint(f"    Missing dependencies for {provider_type}: {str(e)[:200]}", color="red")
+                return _ProbeStatus.MISSING_DEPS, [], base_url, base_source, provider_spec.pip_packages
+            except Exception as e:
+                cprint(f"    Failed to get config defaults for {provider_type}: {str(e)[:200]}", color="red")
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
 
-        try:
-            # Call appropriate factory function
-            if isinstance(provider_spec, RemoteProviderSpec):
-                method_name = "get_adapter_impl"
-            else:  # InlineProviderSpec
-                method_name = "get_provider_impl"
+            # Instantiate config object
+            try:
+                config = config_class(**config_defaults)
+                logger.debug("Instantiated config for provider", provider_type=provider_type)
+            except ModuleNotFoundError as e:
+                cprint(f"    Missing dependencies for {provider_type}: {str(e)[:200]}", color="red")
+                return _ProbeStatus.MISSING_DEPS, [], base_url, base_source, provider_spec.pip_packages
+            except Exception as e:
+                cprint(f"    Failed to instantiate config for {provider_type}: {str(e)[:200]}", color="red")
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
 
-            factory_fn = getattr(module, method_name)
-            logger.debug("Calling factory function", provider_type=provider_type, method=method_name)
-            # Pass empty deps dict {} for single-provider probing
-            provider = asyncio.run(_instantiate_with_timeout(factory_fn, config))
-            logger.debug("Provider instantiated successfully", provider_type=provider_type)
+            # Import provider module and instantiate
+            if not provider_spec.module:
+                cprint(f"    Provider spec missing module for {provider_type}", color="red")
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
 
-            # Set required attributes (normally done by resolver)
-            provider.__provider_id__ = provider_type
-            provider.__provider_spec__ = provider_spec
-            provider.__provider_config__ = config
-        except ModuleNotFoundError as e:
-            logger.debug("Provider dependencies not installed", provider_type=provider_type, module=str(e)[:200])
-            return _ProbeStatus.MISSING_DEPS, 0, base_url, base_source, provider_spec.pip_packages
-        except Exception as e:
-            logger.debug("Failed to instantiate provider", provider_type=provider_type, error=str(e)[:300])
-            if _is_auth_error(e):
-                logger.warning(
-                    "Provider auth failed", provider_type=provider_type, base_url=base_url, error=str(e)[:200]
-                )
-                return _ProbeStatus.AUTH, 0, base_url, base_source, None
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
+            try:
+                module = importlib.import_module(provider_spec.module)
+                logger.debug("Imported provider module", provider_type=provider_type, module=provider_spec.module)
+            except ModuleNotFoundError as e:
+                cprint(f"    Missing dependencies for {provider_type}: {str(e)[:200]}", color="red")
+                return _ProbeStatus.MISSING_DEPS, [], base_url, base_source, provider_spec.pip_packages
+            except Exception as e:
+                cprint(f"    Failed to import provider module {provider_spec.module}: {str(e)[:200]}", color="red")
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
 
-        # List models with timeout
-        try:
-            logger.debug("Calling list_models", provider_type=provider_type)
-            models = asyncio.run(_list_models_with_timeout(provider, timeout_seconds=5))
-            model_count = len(models) if models else 0
-            logger.debug("Listed models successfully", provider_type=provider_type, model_count=model_count)
+            try:
+                # Use dispatcher to get factory function
+                factory_fn = _FactoryDispatcher.get_factory(provider_spec, module)
+                if factory_fn is None:
+                    cprint(f"    Failed to find factory function in {provider_spec.module}", color="red")
+                    return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
 
-            # Cleanup provider
-            if hasattr(provider, "aclose"):
-                try:
-                    asyncio.run(provider.aclose())
-                except Exception as e:
-                    logger.debug("Failed to cleanup provider", provider_type=provider_type, error=str(e)[:200])
-
-            if model_count == 0:
-                logger.debug("Provider returned zero models", provider_type=provider_type)
-                return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
-            # Return NEEDS_KEY if optional API key is missing, otherwise OK
-            status = _ProbeStatus.NEEDS_KEY if optional_key_missing else _ProbeStatus.OK
-            return status, model_count, base_url, base_source, None
-        except TimeoutError:
-            logger.debug("Model listing timed out", provider_type=provider_type)
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
-        except Exception as e:
-            logger.debug("Failed to list models", provider_type=provider_type, error=str(e)[:300])
-            if _is_auth_error(e):
-                logger.warning(
-                    "Provider auth failed during model listing",
+                logger.debug(
+                    "Calling factory function for provider",
                     provider_type=provider_type,
-                    base_url=base_url,
-                    error=str(e)[:200],
+                    factory_name=_FactoryDispatcher.method_name_for_spec(provider_spec),
                 )
-                return _ProbeStatus.AUTH, 0, base_url, base_source, None
-            return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
-    except Exception as e:
-        logger.debug("Unexpected error during provider probing", provider_type=provider_type, error=str(e)[:300])
-        return _ProbeStatus.UNREACHABLE, 0, base_url, base_source, None
+                # Pass empty deps dict {} for single-provider probing
+                provider: ProbeableProvider = asyncio.run(_instantiate_with_timeout(factory_fn, config))  # type: ignore[arg-type]
+                logger.debug("Provider instantiated successfully for provider", provider_type=provider_type)
+
+                # Set required attributes (normally done by resolver)
+                provider.__provider_id__ = provider_type  # type: ignore[attr-defined]
+                provider.__provider_spec__ = provider_spec  # type: ignore[attr-defined]
+                provider.__provider_config__ = config  # type: ignore[attr-defined]
+            except ModuleNotFoundError:
+                return _ProbeStatus.MISSING_DEPS, [], base_url, base_source, provider_spec.pip_packages
+            except Exception as e:
+                if _is_auth_error(e):
+                    return _ProbeStatus.AUTH, [], base_url, base_source, None
+                cprint(f"    Failed to instantiate provider {provider_type}: {str(e)[:300]}", color="red")
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
+
+            # List models with timeout
+            try:
+                logger.debug("Calling list_models for provider", provider_type=provider_type)
+                models = asyncio.run(_list_models_with_timeout(provider, timeout_seconds=5))
+                logger.debug("Listed models for provider", provider_type=provider_type, model_count=len(models))
+
+                # Cleanup provider: call shutdown() if available.
+                try:
+                    shutdown_result = provider.shutdown()
+                    if shutdown_result is not None:
+                        asyncio.run(shutdown_result)  # type: ignore[arg-type]
+                except AttributeError:
+                    # Provider did not declare `shutdown()`; surface as a warning.
+                    cprint(
+                        f"    Provider {provider_type} has no declared 'shutdown' method; skipping cleanup",
+                        color="red",
+                    )
+                except Exception as e:
+                    cprint(f"    Failed to cleanup provider {provider_type}: {str(e)[:200]}", color="red")
+
+                if not models:
+                    cprint(f"    Provider returned zero models for {provider_type}", color="yellow")
+                    return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
+                # Return NEEDS_KEY if optional API key is missing, otherwise OK
+                status = _ProbeStatus.NEEDS_KEY if optional_key_missing else _ProbeStatus.OK
+                return status, models, base_url, base_source, None
+            except TimeoutError:
+                cprint(f"    Model listing timed out for {provider_type}", color="yellow")
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
+            except Exception as e:
+                if _is_auth_error(e):
+                    return _ProbeStatus.AUTH, [], base_url, base_source, None
+                return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
+        except Exception as e:
+            cprint(f"  ✗ Unexpected error during provider probing {provider_type}: {str(e)[:300]}", color="red")
+            return _ProbeStatus.UNREACHABLE, [], base_url, base_source, None
 
 
 class StackLetsGo(Subcommand):

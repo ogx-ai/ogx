@@ -20,6 +20,8 @@ from ogx.cli.stack.lets_go import (
     _build_claude_code_aliases,
     _ProbeStatus,
 )
+from ogx.core.datatypes import QualifiedModel
+from ogx_api import ModelType
 
 
 @pytest.fixture
@@ -366,6 +368,88 @@ class TestRunCommand:
             lets_go._run_stack_lets_go_cmd(args)
 
         mock_subprocess.assert_not_called()
+
+    @patch("ogx.cli.stack.lets_go._uvicorn_run")
+    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
+    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
+    @patch("ogx.cli.stack.lets_go._detect_embedding_model")
+    def test_autodetected_embedding_model_is_registered_as_embedding(
+        self,
+        mock_detect_embedding_model: MagicMock,
+        mock_build_config: MagicMock,
+        mock_get_deps: MagicMock,
+        mock_uvicorn_run: MagicMock,
+        lets_go: StackLetsGo,
+    ):
+        args = lets_go.parser.parse_args([])
+        mock_cfg = MagicMock()
+        mock_cfg.providers = {"inference": [MagicMock()], "vector_io": [MagicMock()]}
+        mock_cfg.vector_stores = None
+        mock_cfg.registered_resources.models = []
+        mock_cfg.model_dump.return_value = {}
+        mock_build_config.return_value = mock_cfg
+        mock_detect_embedding_model.return_value = QualifiedModel(
+            provider_id="openai",
+            model_id="Qwen/Qwen3-Embedding-0.6B",
+        )
+
+        with (
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::openai"),
+            patch("builtins.open", MagicMock()),
+            patch("ogx.cli.stack.lets_go.yaml.dump"),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("ignore", FutureWarning)
+            lets_go._run_stack_lets_go_cmd(args)
+
+        matches = [
+            model
+            for model in mock_cfg.registered_resources.models
+            if model.provider_id == "openai"
+            and model.model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.provider_model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.model_type == ModelType.embedding
+            and model.metadata.get("embedding_dimension") == 512
+        ]
+        assert len(matches) == 1
+
+    @patch("ogx.cli.stack.lets_go._uvicorn_run")
+    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
+    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
+    def test_default_embedding_model_sets_temp_embedding_dimension_metadata(
+        self,
+        mock_build_config: MagicMock,
+        mock_get_deps: MagicMock,
+        mock_uvicorn_run: MagicMock,
+        lets_go: StackLetsGo,
+    ):
+        args = lets_go.parser.parse_args(["--default-embedding-model", "openai/Qwen/Qwen3-Embedding-0.6B"])
+        mock_cfg = MagicMock()
+        mock_cfg.providers = {"inference": [MagicMock()], "vector_io": [MagicMock()]}
+        mock_cfg.vector_stores = None
+        mock_cfg.registered_resources.models = []
+        mock_cfg.model_dump.return_value = {}
+        mock_build_config.return_value = mock_cfg
+
+        with (
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::openai"),
+            patch("builtins.open", MagicMock()),
+            patch("ogx.cli.stack.lets_go.yaml.dump"),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("ignore", FutureWarning)
+            lets_go._run_stack_lets_go_cmd(args)
+
+        matches = [
+            model
+            for model in mock_cfg.registered_resources.models
+            if model.provider_id == "openai"
+            and model.model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.provider_model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.model_type == ModelType.embedding
+            and model.metadata.get("embedding_dimension") == 512
+        ]
+        assert len(matches) == 1
 
 
 class TestDeprecation:

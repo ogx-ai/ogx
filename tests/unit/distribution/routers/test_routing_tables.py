@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ogx.core.datatypes import RegistryEntrySource
+from ogx.core.datatypes import ModelWithOwner, RegistryEntrySource
 from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.core.routing_tables.toolgroups import ToolGroupsRoutingTable
 from ogx_api import (
@@ -182,6 +182,34 @@ async def test_double_registration_models_negative(cached_disk_dist_registry):
         await table.register_model(
             model_id="test-model", provider_id="test_provider", metadata={"param1": "different_value"}
         )
+
+
+async def test_register_model_replaces_provider_listed_conflict(cached_disk_dist_registry):
+    """Explicit registration should replace a pre-listed provider model with the same identifier."""
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
+    await table.initialize()
+
+    await cached_disk_dist_registry.register(
+        ModelWithOwner(
+            identifier="test_provider/test-model",
+            provider_resource_id="test-model",
+            provider_id="test_provider",
+            metadata={},
+            model_type=ModelType.llm,
+            source=RegistryEntrySource.listed_from_provider,
+        )
+    )
+
+    registered = await table.register_model(
+        model_id="test-model",
+        provider_id="test_provider",
+        provider_model_id="test-model",
+        model_type=ModelType.embedding,
+    )
+
+    assert registered.identifier == "test_provider/test-model"
+    assert registered.model_type == ModelType.embedding
+    assert registered.source == RegistryEntrySource.via_register_api
 
 
 async def test_double_registration_different_providers(cached_disk_dist_registry):
