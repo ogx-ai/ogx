@@ -281,6 +281,19 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         else:
             log.info(f"Connecting to Chroma local db at: {self.config.db_path}")
             self.client = chromadb.PersistentClient(path=self.config.db_path)
+
+        # Load existing vector stores from kvstore
+        start_key = VECTOR_DBS_PREFIX
+        end_key = f"{VECTOR_DBS_PREFIX}\xff"
+        stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
+        for vector_store_data in stored_vector_stores:
+            vector_store = VectorStore.model_validate_json(vector_store_data)
+            collection = await maybe_await(self.client.get_or_create_collection(name=vector_store.identifier))
+            index = VectorStoreWithIndex(
+                vector_store, ChromaIndex(self.client, collection), self.inference_api
+            )
+            self.cache[vector_store.identifier] = index
+
         await self.initialize_openai_vector_stores()
 
     async def shutdown(self) -> None:
@@ -288,6 +301,11 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         await super().shutdown()
 
     async def register_vector_store(self, vector_store: VectorStore) -> None:
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before registering vector stores.")
+        key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+        await self.kvstore.set(key=key, value=vector_store.model_dump_json())
+
         collection = await maybe_await(
             self.client.get_or_create_collection(
                 name=vector_store.identifier, metadata={"vector_store": vector_store.model_dump_json()}
@@ -304,6 +322,10 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
 
         await self.cache[vector_store_id].index.delete()
         del self.cache[vector_store_id]
+
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before using vector stores.")
+        await self.kvstore.delete(f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def insert_chunks(self, request: InsertChunksRequest) -> None:
         index = await self._get_and_cache_vector_store_index(request.vector_store_id)

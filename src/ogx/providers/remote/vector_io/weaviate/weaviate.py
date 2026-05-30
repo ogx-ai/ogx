@@ -367,6 +367,11 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         await super().shutdown()
 
     async def register_vector_store(self, vector_store: VectorStore) -> None:
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before registering vector stores.")
+        key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+        await self.kvstore.set(key=key, value=vector_store.model_dump_json())
+
         client = self._get_client()
         sanitized_collection_name = sanitize_collection_name(vector_store.identifier, weaviate_format=True)
         # Create collection if it doesn't exist
@@ -391,6 +396,10 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         client.collections.delete(sanitized_collection_name)
         await self.cache[vector_store_id].index.delete()
         del self.cache[vector_store_id]
+
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before using vector stores.")
+        await self.kvstore.delete(f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def _get_and_cache_vector_store_index(self, vector_store_id: str) -> VectorStoreWithIndex | None:
         if vector_store_id in self.cache:
