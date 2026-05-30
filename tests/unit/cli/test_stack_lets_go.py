@@ -106,43 +106,39 @@ class TestTopLevelLetsGoArguments:
 class TestAutodetect:
     @patch(
         "ogx.cli.stack.lets_go._probe_provider_availability",
-        return_value=(_ProbeStatus.UNREACHABLE, 0, "", "default", None),
+        return_value=(_ProbeStatus.UNREACHABLE, [], "", "default", None),
     )
     def test_autodetect_no_providers(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "files=inline::localfs" in parts
         assert "vector_io=inline::faiss" in parts
-        assert "tool_runtime=inline::file-search" in parts
-        assert "responses=inline::builtin" in parts
 
     @patch(
-        "ogx.cli.stack.lets_go._probe_provider_availability", return_value=(_ProbeStatus.NO_KEY, 0, "", "default", None)
+        "ogx.cli.stack.lets_go._probe_provider_availability",
+        return_value=(_ProbeStatus.NO_KEY, [], "", "default", None),
     )
     def test_no_key_providers_excluded(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "files=inline::localfs" in parts
         assert "vector_io=inline::faiss" in parts
-        assert "tool_runtime=inline::file-search" in parts
-        assert "responses=inline::builtin" in parts
 
     @patch(
         "ogx.cli.stack.lets_go._probe_provider_availability",
-        return_value=(_ProbeStatus.OK, 3, "http://test", "default", None),
+        return_value=(_ProbeStatus.OK, [], "http://test", "default", None),
     )
     def test_autodetect_all_ok(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
-        result = _autodetect_providers()
-        parts = result.split(",")
+        spec, _ = _autodetect_providers()
+        parts = spec.split(",")
         assert "inference=remote::ollama" in parts
         assert "inference=remote::anthropic" in parts
         assert "files=inline::localfs" in parts
-        assert "responses=inline::builtin" in parts
-        assert len(parts) == 14  # 8 probed + 6 inline
+        assert len(parts) == 12  # 8 probed + 4 inline
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_only_ollama(self, mock_probe: MagicMock):
@@ -154,17 +150,17 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type == "remote::ollama":
-                return (_ProbeStatus.OK, 3, "http://localhost:11434/v1", "default", None)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+                return (_ProbeStatus.OK, [], "http://localhost:11434/v1", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "inference=remote::ollama" in parts
         assert "files=inline::localfs" in parts
-        assert "responses=inline::builtin" in parts
-        assert len(parts) == 7  # 1 inference + 6 inline
+        assert len(parts) == 5  # 1 inference + 4 inline
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_uses_env_var_name(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
@@ -179,10 +175,11 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type == "remote::ollama":
                 captured.append(base_url_env)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
         _autodetect_providers()
@@ -202,13 +199,14 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type in ("remote::ollama", "remote::openai"):
-                return (_ProbeStatus.OK, 3, "http://test", "default", None)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+                return (_ProbeStatus.OK, [], "http://test", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert parts.index("inference=remote::ollama") < parts.index("inference=remote::openai")
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
@@ -223,13 +221,14 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type == "remote::vllm":
-                return (_ProbeStatus.NEEDS_KEY, 3, "http://localhost:8000/v1", "default", None)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+                return (_ProbeStatus.NEEDS_KEY, [], "http://localhost:8000/v1", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "inference=remote::vllm" in parts
 
 
@@ -239,7 +238,10 @@ class TestRunCommand:
         with (
             patch(
                 "ogx.cli.stack.lets_go._autodetect_providers",
-                return_value="files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
+                return_value=(
+                    "files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
+                    None,
+                ),
             ),
             warnings.catch_warnings(),
             pytest.raises(SystemExit),
@@ -250,7 +252,7 @@ class TestRunCommand:
     def test_empty_spec_exits(self, lets_go: StackLetsGo):
         args = lets_go.parser.parse_args([])
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=""),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("", None)),
             warnings.catch_warnings(),
             pytest.raises(SystemExit),
         ):
@@ -298,7 +300,7 @@ class TestRunCommand:
         mock_build_config.return_value = mock_cfg
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::ollama"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
@@ -328,7 +330,7 @@ class TestRunCommand:
         mock_subprocess.return_value = MagicMock(returncode=0)
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::ollama"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
@@ -359,7 +361,7 @@ class TestRunCommand:
         mock_build_config.return_value = mock_cfg
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::ollama"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
@@ -388,13 +390,13 @@ class TestRunCommand:
         mock_cfg.registered_resources.models = []
         mock_cfg.model_dump.return_value = {}
         mock_build_config.return_value = mock_cfg
-        mock_detect_embedding_model.return_value = QualifiedModel(
-            provider_id="openai",
-            model_id="Qwen/Qwen3-Embedding-0.6B",
+        mock_detect_embedding_model.return_value = (
+            QualifiedModel(provider_id="openai", model_id="Qwen/Qwen3-Embedding-0.6B"),
+            512,
         )
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::openai"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::openai", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
@@ -423,7 +425,9 @@ class TestRunCommand:
         mock_uvicorn_run: MagicMock,
         lets_go: StackLetsGo,
     ):
-        args = lets_go.parser.parse_args(["--default-embedding-model", "openai/Qwen/Qwen3-Embedding-0.6B"])
+        args = lets_go.parser.parse_args(
+            ["--default-embedding-model", "openai/Qwen/Qwen3-Embedding-0.6B", "--default-embedding-dimension", "512"]
+        )
         mock_cfg = MagicMock()
         mock_cfg.providers = {"inference": [MagicMock()], "vector_io": [MagicMock()]}
         mock_cfg.vector_stores = None
@@ -432,7 +436,7 @@ class TestRunCommand:
         mock_build_config.return_value = mock_cfg
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::openai"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::openai", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
