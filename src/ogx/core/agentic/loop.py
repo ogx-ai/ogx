@@ -148,9 +148,9 @@ class TrueAgenticLoop:
         could trigger alerts, retry logic, or human-in-the-loop approval.
         """
         logger.warning(
-            "Frobenius-open winding: tool=%s closed=%s",
-            result.tool_name,
-            result.frobenius_closed,
+            "Frobenius-open winding",
+            tool=result.tool_name,
+            closed=result.frobenius_closed,
         )
 
     def _final_report(self) -> dict[str, Any]:
