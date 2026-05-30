@@ -206,9 +206,27 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     db: str = "ogx"
     user: str
     password: SecretStr | None = None
+    ssl_mode: str | None = Field(
+        default=None,
+        description="SSL mode for the connection (e.g. 'verify-full', 'require', 'disable')",
+    )
+    ca_cert_path: str | None = Field(
+        default=None,
+        description="Path to the CA certificate file for SSL verification",
+    )
     pool_size: int = Field(default=10, ge=1, description="Number of persistent connections in the pool")
     max_overflow: int = Field(default=20, ge=0, description="Max additional connections beyond pool_size")
     pool_recycle: int = Field(default=3600, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
+
+    def build_ssl(self) -> object:
+        """Build an SSL context from ssl_mode and ca_cert_path, matching PostgresKVStoreConfig behavior."""
+        if self.ssl_mode == "verify-full" and self.ca_cert_path:
+            import ssl as _ssl
+
+            return _ssl.create_default_context(cafile=self.ca_cert_path)
+        if self.ssl_mode and self.ssl_mode != "disable":
+            return self.ssl_mode
+        return None
 
     @property
     def engine_str(self) -> URL:

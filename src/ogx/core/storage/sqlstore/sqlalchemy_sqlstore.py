@@ -136,6 +136,9 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             engine_kwargs["max_overflow"] = self.config.max_overflow
             if self.config.pool_recycle >= 0:
                 engine_kwargs["pool_recycle"] = self.config.pool_recycle
+            ssl_ctx = self.config.build_ssl()
+            if ssl_ctx is not None:
+                connect_args["ssl"] = ssl_ctx
 
         engine = create_async_engine(
             self.config.engine_str,
