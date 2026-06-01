@@ -78,7 +78,7 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
             temperature=0.1,
             tools=[
                 OpenAIResponseInputToolWebSearch(
-                    name=tool_name,
+                    type=tool_name,
                 )
             ],
         )
@@ -556,6 +556,42 @@ async def test_file_search_results_include_chunk_metadata_attributes(mock_vector
         "Machine learning is a subset of AI",
         "Deep learning uses neural networks",
     ]
+
+
+async def test_file_search_works_without_explicit_vector_stores_config(mock_vector_io_api):
+    """Test that file_search works when vector_stores_config is not passed to ToolExecutor."""
+    query = "What is machine learning?"
+    vector_store_id = "test_vector_store"
+
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=[query],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="doc-123",
+                filename="ml-intro.md",
+                content=[VectorStoreContent(type="text", text="Machine learning is a subset of AI")],
+                score=0.95,
+                attributes={},
+            ),
+        ],
+    )
+
+    tool_executor = ToolExecutor(
+        tool_groups_api=None,  # type: ignore
+        tool_runtime_api=None,  # type: ignore
+        vector_io_api=mock_vector_io_api,
+        mcp_session_manager=None,
+    )
+
+    file_search_tool = OpenAIResponseInputToolFileSearch(vector_store_ids=[vector_store_id])
+    result = await tool_executor._execute_file_search_via_vector_store(
+        query=query,
+        response_file_search_tool=file_search_tool,
+    )
+
+    mock_vector_io_api.openai_search_vector_store.assert_called_once()
+    assert result.content is not None
 
 
 async def test_tool_call_arguments_arrive_in_subsequent_delta(openai_responses_impl, mock_inference_api):

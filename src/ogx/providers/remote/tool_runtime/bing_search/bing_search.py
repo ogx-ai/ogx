@@ -26,6 +26,8 @@ from .config import BingSearchToolConfig
 class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequestProviderData):
     """Tool runtime for performing web searches using the Bing Search API."""
 
+    _CONTEXT_SIZE_TO_COUNT = {"low": 3, "medium": 5, "high": 10}
+
     def __init__(self, config: BingSearchToolConfig):
         self.config = config
         self.url = "https://api.bing.microsoft.com/v7.0/search"
@@ -88,12 +90,28 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
         headers = {
             "Ocp-Apim-Subscription-Key": api_key,
         }
-        params = {
+
+        query = kwargs["query"]
+
+        allowed_domains = kwargs.get("allowed_domains")
+        if allowed_domains:
+            site_filter = " OR ".join(f"site:{domain}" for domain in allowed_domains)
+            query = f"{query} ({site_filter})"
+
+        params: dict[str, Any] = {
             "count": self.config.top_k,
             "textDecorations": True,
             "textFormat": "HTML",
-            "q": kwargs["query"],
+            "q": query,
         }
+
+        user_location = kwargs.get("user_location")
+        if user_location and user_location.get("country"):
+            params["cc"] = user_location["country"]
+
+        search_context_size = kwargs.get("search_context_size")
+        if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
+            params["count"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
 
         if self._client is None:
             raise RuntimeError("Failed to invoke tool: provider not initialized")
@@ -104,7 +122,16 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
         )
         response.raise_for_status()
 
-        return ToolInvocationResult(content=json.dumps(self._clean_response(response.json())))
+        response_json = response.json()
+        sources = []
+        if "webPages" in response_json:
+            for page in response_json["webPages"]["value"]:
+                if "url" in page:
+                    sources.append({"url": page["url"]})
+        return ToolInvocationResult(
+            content=json.dumps(self._clean_response(response_json)),
+            metadata={"query": kwargs["query"], "sources": sources},
+        )
 
     def _clean_response(self, search_response):
         clean_response = []

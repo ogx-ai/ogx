@@ -14,6 +14,7 @@ constraint-dependencies = [
     "fonttools>=4.60.2",
     "gitpython>=3.1.47",               # Command injection via Git options bypass
     "h11>=0.16.0",
+    "idna>=3.15",
     "pydantic>=2.11.9,<2.12.0",        # 2.12 breaks int coercion in openai.types.model.Model during test replay
     "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
     "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
@@ -23,7 +24,7 @@ constraint-dependencies = [
     "python-socketio>=5.14.0",         # CVE-2025-61765: RCE via pickle deserialization
     "requests>=2.34.2",
     "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
-    "starlette>=0.49.1",
+    "starlette>=1.0.1",                # CVE-2026-48710
     "tornado>=6.5.5",
     "urllib3>=2.7.0",
     "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
@@ -64,14 +65,15 @@ dependencies = [
     "termcolor",
     "tiktoken",
     "uvicorn>=0.34.0",                                # server
-    "opentelemetry-sdk>=1.30.0",                      # server
+    "opentelemetry-sdk>=1.42.1",                      # server
     "opentelemetry-exporter-otlp-proto-http>=1.30.0", # server
     "opentelemetry-distro>=0.60b1",                  # optional CLI instrumentation; only pre-releases on PyPI (latest 0.60b1)
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "mcp>=1.23.0",                                    # for connectors
+    "mcp>=1.23.0,<2.0",                                # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
+    "models-dev>=1.0.398",
 ]
 
 [project.optional-dependencies]
@@ -80,9 +82,9 @@ client = [
 ]
 starter = [
     "aiohttp",
-    "anthropic",
+    "anthropic>=0.105.2",
     "autoevals",
-    "boto3",
+    "boto3>=1.43.18",
     "chardet",
     "chromadb-client",
     "datasets>=4.0.0",
@@ -112,7 +114,7 @@ starter = [
     "safetensors",
     "scikit-learn",
     "scipy",
-    "sentence-transformers",
+    "sentence-transformers>=5.5.1",
     "sentencepiece",
     "sqlite-vec",
     "together>=2",
@@ -128,20 +130,20 @@ dev = [
     {include-group = "unit"},
     "pytest>=8.4",
     "pytest-timeout",
-    "pytest-asyncio>=1.0",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",
     "pytest-json-report",
     "pytest-socket",                 # For blocking network access in unit tests
     "nbval",                         # For notebook testing
     "black",
-    "ruff",
+    "ruff>=0.15.14",
     "mypy",
     "pre-commit>=4.4.0",
     "ruamel.yaml",                   # needed for openapi generator
-    "openapi-spec-validator>=0.7.2",
+    "openapi-spec-validator>=0.9.0",
     "ogx-client>=1.0.2",
-    "boto3",
+    "boto3>=1.43.18",
     "torch>=2.6.0",
 ]
 # Type checking dependencies - includes type stubs and optional runtime dependencies
@@ -153,18 +155,18 @@ type_checking = [
     "markitdown[all]",
     "pypdf>=6.10.2",
     "pandas-stubs",
-    "types-psutil",
+    "types-psutil>=7.2.2.20260518",
     "types-tqdm",
     "boto3-stubs[s3]",
     "chardet",
-    "streamlit",
+    "streamlit>=1.58.0",
     "streamlit-option-menu",
     "pandas",
-    "anthropic",
-    "databricks-sdk",
+    "anthropic>=0.105.2",
+    "databricks-sdk>=0.112.0",
     "fairscale",
     "torchtune",
-    "trl",
+    "trl>=1.5.0",
     "peft",
     "datasets",
     "together",
@@ -174,9 +176,9 @@ type_checking = [
     "sqlite-vec",
     "faiss-cpu",
     "lm-format-enforcer",
-    "mcp>=1.23.0",
+    "mcp>=1.23.0,<2.0",
     "ollama",
-    "langchain-openai",
+    "langchain-openai>=1.2.2",
     "langchain-core",
     "langgraph",
     "ogx-client>=1.0.2",
@@ -186,7 +188,7 @@ test-common = [
     "aiosqlite",
     "asyncpg>=0.29.0",
     "chardet",
-    "mcp>=1.23.0",
+    "mcp>=1.23.0,<2.0",
     "pgvector>=0.3.0",
     "psycopg2-binary>=2.9.0",
     "pypdf>=6.10.2",
@@ -195,10 +197,10 @@ test-common = [
 # These are the dependencies required for running unit tests.
 unit = [
     {include-group = "test-common"},
-    "anthropic",
+    "anthropic>=0.105.2",
     "blobfile",
     "coverage",
-    "databricks-sdk",
+    "databricks-sdk>=0.112.0",
     "faiss-cpu",
     "markitdown[all]",
     "moto[s3]>=5.1.10",
@@ -218,7 +220,7 @@ test = [
     "elasticsearch>=8.16.0, <9.0.0",
     "google-genai>=2.3.0",
     "langchain-core",
-    "langchain-openai",
+    "langchain-openai>=1.2.2",
     "langgraph",
     "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
     "pymilvus>=2.6.2",
@@ -232,7 +234,7 @@ test = [
 docs = [
     "setuptools",
     "sphinx-autobuild",
-    "myst-parser",
+    "myst-parser>=5.1.0",
     "sphinx",
     "sphinx-rtd-theme",
     "sphinx_rtd_dark_mode",

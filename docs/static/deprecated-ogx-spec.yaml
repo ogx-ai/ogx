@@ -2090,24 +2090,35 @@ components:
       title: OpenAIResponseOutputMessageMCPListTools
       description: MCP list tools output message containing available tools from an MCP server.
     OpenAIResponseOutputMessageWebSearchToolCall:
+      description: Web search tool call output message for OpenAI responses.
       properties:
         id:
-          type: string
           title: Id
+          type: string
         status:
-          type: string
           title: Status
-        type:
           type: string
+        type:
           title: Type
+          type: string
           enum:
           - web_search_call
-      type: object
+        action:
+          anyOf:
+          - $ref: '#/components/schemas/WebSearchActionSearch'
+            title: WebSearchActionSearch
+          - $ref: '#/components/schemas/WebSearchActionOpenPage'
+            title: WebSearchActionOpenPage
+          - $ref: '#/components/schemas/WebSearchActionFind'
+            title: WebSearchActionFind
+          - type: 'null'
+          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
+          nullable: true
       required:
       - id
       - status
       title: OpenAIResponseOutputMessageWebSearchToolCall
-      description: Web search tool call output message for OpenAI responses.
+      type: object
     CreateConversationRequest:
       properties:
         items:
@@ -2116,8 +2127,8 @@ components:
               oneOf:
               - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
                 title: OpenAIResponseMessage-Input
-              - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-                title: OpenAIResponseOutputMessageWebSearchToolCall
+              - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
+                title: OpenAIResponseOutputMessageWebSearchToolCall-Input
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                 title: OpenAIResponseOutputMessageFileSearchToolCall
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -2149,7 +2160,7 @@ components:
                   mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                   message: '#/components/schemas/OpenAIResponseMessage-Input'
                   reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                  web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                  web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
               title: OpenAIResponseMessage-Input | ... (11 variants)
             type: array
           - type: 'null'
@@ -2242,8 +2253,8 @@ components:
             oneOf:
             - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
               title: OpenAIResponseMessage-Output
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-              title: OpenAIResponseOutputMessageWebSearchToolCall
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+              title: OpenAIResponseOutputMessageWebSearchToolCall-Output
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
               title: OpenAIResponseOutputMessageFileSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -2275,7 +2286,7 @@ components:
                 mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                 message: '#/components/schemas/OpenAIResponseMessage-Output'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
             title: OpenAIResponseMessage-Output | ... (11 variants)
           type: array
           title: Data
@@ -2309,8 +2320,8 @@ components:
             oneOf:
             - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
               title: OpenAIResponseMessage-Input
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-              title: OpenAIResponseOutputMessageWebSearchToolCall
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
+              title: OpenAIResponseOutputMessageWebSearchToolCall-Input
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
               title: OpenAIResponseOutputMessageFileSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -2342,7 +2353,7 @@ components:
                 mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
                 message: '#/components/schemas/OpenAIResponseMessage-Input'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
             title: OpenAIResponseMessage-Input | ... (11 variants)
           type: array
           maxItems: 20
@@ -3143,9 +3154,23 @@ components:
         search_context_size:
           anyOf:
           - type: string
-            pattern: ^low|medium|high$
+            enum:
+            - low
+            - medium
+            - high
           - type: 'null'
-          default: medium
+        filters:
+          anyOf:
+          - $ref: '#/components/schemas/WebSearchFilters'
+            title: WebSearchFilters
+          - type: 'null'
+          title: WebSearchFilters
+        user_location:
+          anyOf:
+          - $ref: '#/components/schemas/WebSearchUserLocation'
+            title: WebSearchUserLocation
+          - type: 'null'
+          title: WebSearchUserLocation
       type: object
       title: OpenAIResponseInputToolWebSearch
       description: Web search tool configuration for OpenAI response inputs.
@@ -3196,7 +3221,6 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
-          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -3219,9 +3243,6 @@ components:
           title: Temperature
         text:
           $ref: '#/components/schemas/OpenAIResponseText'
-          default:
-            format:
-              type: text
         top_p:
           type: number
           title: Top P
@@ -3286,8 +3307,10 @@ components:
           title: OpenAIResponseInputToolChoiceMode
         truncation:
           anyOf:
-          - type: string
+          - $ref: '#/components/schemas/ResponseTruncation'
+            title: ResponseTruncation
           - type: 'null'
+          title: ResponseTruncation
         usage:
           anyOf:
           - $ref: '#/components/schemas/OpenAIResponseUsage'
@@ -3584,10 +3607,10 @@ components:
           - type: 'null'
         error:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseError'
-            title: OpenAIResponseError
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseError'
           - type: 'null'
-          title: OpenAIResponseError
+          title: ErrorUnion
         frequency_penalty:
           type: number
           title: Frequency Penalty
@@ -3596,10 +3619,10 @@ components:
           title: Id
         incomplete_details:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
-            title: OpenAIResponseIncompleteDetails
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseIncompleteDetails'
           - type: 'null'
-          title: OpenAIResponseIncompleteDetails
+          title: Incomplete_DetailsUnion
         model:
           type: string
           title: Model
@@ -3617,7 +3640,6 @@ components:
         parallel_tool_calls:
           type: boolean
           title: Parallel Tool Calls
-          default: true
         previous_response_id:
           anyOf:
           - type: string
@@ -3639,10 +3661,9 @@ components:
           type: number
           title: Temperature
         text:
-          $ref: '#/components/schemas/OpenAIResponseText'
-          default:
-            format:
-              type: text
+          allOf:
+          - $ref: '#/components/schemas/OpenAIResponseText'
+          - description: Text response configuration for OpenAI responses.
         top_p:
           type: number
           title: Top P
@@ -3706,15 +3727,14 @@ components:
           - type: 'null'
           title: OpenAIResponseInputToolChoiceMode
         truncation:
-          anyOf:
-          - type: string
-          - type: 'null'
+          allOf:
+          - $ref: '#/components/schemas/ResponseTruncation'
         usage:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseUsage'
-            title: OpenAIResponseUsage
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseUsage'
           - type: 'null'
-          title: OpenAIResponseUsage
+          title: UsageUnion
         instructions:
           anyOf:
           - type: string
@@ -3725,10 +3745,10 @@ components:
           - type: 'null'
         reasoning:
           anyOf:
-          - $ref: '#/components/schemas/OpenAIResponseReasoning'
-            title: OpenAIResponseReasoning
+          - allOf:
+            - $ref: '#/components/schemas/OpenAIResponseReasoning'
           - type: 'null'
-          title: OpenAIResponseReasoning
+          title: ReasoningUnion
         max_output_tokens:
           anyOf:
           - type: integer
@@ -3736,12 +3756,7 @@ components:
         service_tier:
           type: string
           title: Service Tier
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
+        metadata: {}
         presence_penalty:
           type: number
           title: Presence Penalty
@@ -7526,6 +7541,64 @@ components:
       - text
       title: OpenAIResponseOutputMessageReasoningSummary
       description: A summary of reasoning output from the model.
+    OpenAIResponseOutputMessageWebSearchToolCall-Input:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          title: Status
+        type:
+          type: string
+          title: Type
+          enum:
+          - web_search_call
+        action:
+          anyOf:
+          - $ref: '#/components/schemas/WebSearchActionSearch'
+            title: WebSearchActionSearch
+          - $ref: '#/components/schemas/WebSearchActionOpenPage'
+            title: WebSearchActionOpenPage
+          - $ref: '#/components/schemas/WebSearchActionFind'
+            title: WebSearchActionFind
+          - type: 'null'
+          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
+      type: object
+      required:
+      - id
+      - status
+      title: OpenAIResponseOutputMessageWebSearchToolCall
+      description: Web search tool call output message for OpenAI responses.
+    OpenAIResponseOutputMessageWebSearchToolCall-Output:
+      properties:
+        id:
+          type: string
+          title: Id
+        status:
+          type: string
+          title: Status
+        type:
+          type: string
+          title: Type
+          enum:
+          - web_search_call
+        action:
+          anyOf:
+          - $ref: '#/components/schemas/WebSearchActionSearch'
+            title: WebSearchActionSearch
+          - $ref: '#/components/schemas/WebSearchActionOpenPage'
+            title: WebSearchActionOpenPage
+          - $ref: '#/components/schemas/WebSearchActionFind'
+            title: WebSearchActionFind
+          - type: 'null'
+          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
+      type: object
+      required:
+      - id
+      - status
+      title: OpenAIResponseOutputMessageWebSearchToolCall
+      description: Web search tool call output message for OpenAI responses.
     OpenAIResponseReasoning:
       properties:
         effort:
@@ -7539,6 +7612,16 @@ components:
             - high
             - xhigh
           - type: 'null'
+        generate_summary:
+          anyOf:
+          - type: string
+            enum:
+            - auto
+            - concise
+            - detailed
+          - type: 'null'
+          description: "Deprecated: use 'summary' instead."
+          deprecated: true
         summary:
           anyOf:
           - type: string
@@ -7804,6 +7887,13 @@ components:
 
         Returns a list of chunks ready for storage in vector databases.
         Each chunk contains the content and metadata.
+    ResponseTruncation:
+      type: string
+      enum:
+      - auto
+      - disabled
+      title: ResponseTruncation
+      description: Controls how the service truncates input when it exceeds the model context window.
     SearchRankingOptions:
       properties:
         ranker:
@@ -8030,6 +8120,118 @@ components:
       - file_id
       title: VectorStoreFileBatchFileEntry
       description: A file entry for creating a vector store file batch with per-file options.
+    WebSearchActionFind:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - find_in_page
+        url:
+          type: string
+          title: Url
+        pattern:
+          type: string
+          title: Pattern
+      type: object
+      required:
+      - url
+      - pattern
+      title: WebSearchActionFind
+      description: 'Web search action: searches for a pattern within a loaded page.'
+    WebSearchActionOpenPage:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - open_page
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      title: WebSearchActionOpenPage
+      description: 'Web search action: opens a specific URL from search results.'
+    WebSearchActionSearch:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - search
+        query:
+          type: string
+          title: Query
+        queries:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+        sources:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/WebSearchSource'
+            type: array
+          - type: 'null'
+      type: object
+      required:
+      - query
+      title: WebSearchActionSearch
+      description: 'Web search action: performs a search query.'
+    WebSearchFilters:
+      properties:
+        allowed_domains:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+      type: object
+      title: WebSearchFilters
+      description: Domain filters for web search results.
+    WebSearchSource:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - url
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - url
+      title: WebSearchSource
+      description: A source URL returned by a web search action.
+    WebSearchUserLocation:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - approximate
+        city:
+          anyOf:
+          - type: string
+          - type: 'null'
+        country:
+          anyOf:
+          - type: string
+          - type: 'null'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+        timezone:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      title: WebSearchUserLocation
+      description: Approximate user location to refine web search results.
     _URLOrData:
       properties:
         url:
@@ -10068,8 +10270,8 @@ components:
       - oneOf:
         - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
           title: OpenAIResponseMessage-Output
-        - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-          title: OpenAIResponseOutputMessageWebSearchToolCall
+        - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+          title: OpenAIResponseOutputMessageWebSearchToolCall-Output
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
           title: OpenAIResponseOutputMessageFileSearchToolCall
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -10092,7 +10294,7 @@ components:
             mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
             message: '#/components/schemas/OpenAIResponseMessage-Output'
             reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-            web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+            web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
         x-stainless-naming: OpenAIResponseMessageOutputOneOf
         title: OpenAIResponseMessage-Output | ... (8 variants)
       - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
@@ -10107,8 +10309,8 @@ components:
       oneOf:
       - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
         title: OpenAIResponseMessage-Output
-      - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-        title: OpenAIResponseOutputMessageWebSearchToolCall
+      - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+        title: OpenAIResponseOutputMessageWebSearchToolCall-Output
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
         title: OpenAIResponseOutputMessageFileSearchToolCall
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -10131,7 +10333,7 @@ components:
           mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
           message: '#/components/schemas/OpenAIResponseMessage-Output'
           reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-          web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+          web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
       x-stainless-naming: OpenAIResponseOutputItem
       title: OpenAIResponseMessage-Output | ... (8 variants)
     ChatCompletionMessageToolCall:

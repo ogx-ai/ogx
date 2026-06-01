@@ -21,6 +21,7 @@ from . import (
     code_samples,
     multi_sdk,
     multipart_transforms,
+    responses_transforms,
     schema_collection,
     schema_filtering,
     schema_transforms,
@@ -94,6 +95,9 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     # Keep 'type: object' on schemas with properties (OpenAI uses it on 766/772),
     # but strip it from the 6 specific schemas where OpenAI omits it.
     openapi_schema = schema_transforms._remove_type_object_from_openai_schemas(openapi_schema)
+
+    # Align Responses API property schemas with OpenResponses spec structure
+    openapi_schema = responses_transforms._fix_responses_schema_conformance(openapi_schema)
 
     # Extract duplicate union types to shared schema references
     openapi_schema = schema_transforms._extract_duplicate_union_types(openapi_schema)

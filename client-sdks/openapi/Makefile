@@ -118,7 +118,7 @@ sdk: check-generator $(PROCESSED_SPEC) generate-config
 	@echo "Generating Python SDK (version: $(VERSION), package: $(PACKAGE_NAME))..."
 	@mkdir -p $(SDK_OUTPUT_DIR)
 	$(OPENAPI_GENERATOR) generate -i $(PROCESSED_SPEC) -g python -c $(OPENAPI_CONFIG) -o $(SDK_OUTPUT_DIR) \
-		--additional-properties=packageVersion=$(VERSION) -t $(TEMPLATE_DIR)
+		--additional-properties=packageVersion=$(VERSION),httpx=true -t $(TEMPLATE_DIR)
 	@cp -R $(TEMPLATE_DIR)/lib $(SDK_OUTPUT_DIR)/$(PACKAGE_NAME)
 	@echo "Patching SDK with hierarchical API structure..."
 	$(PYTHON) $(PATCH_SCRIPT) --hierarchy $(HIERARCHY_FILE) --sdk-dir $(SDK_OUTPUT_DIR) --package $(PACKAGE_NAME)

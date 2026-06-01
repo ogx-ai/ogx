@@ -4,9 +4,11 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 from collections.abc import AsyncIterator
+from functools import cache
 from urllib.parse import urljoin
 
 import httpx
+import models_dev as _models_dev
 from pydantic import ConfigDict
 
 from ogx.core.request_headers import get_authenticated_user
@@ -38,6 +40,26 @@ from ogx_api.inference import RerankRequest
 from .config import VLLMInferenceAdapterConfig
 
 log = get_logger(name=__name__, category="inference::vllm")
+
+
+def _is_embedding_model(model_id: str, model: _models_dev.Model) -> bool:
+    return (model.family is not None and "embed" in model.family) or "embed" in model_id.lower()
+
+
+@cache
+def _models_dev_index() -> dict[str, _models_dev.Model]:
+    index: dict[str, _models_dev.Model] = {}
+    # Sort so huggingface is processed last: vLLM serves HF model IDs and the
+    # huggingface provider entry is the most authoritative source for them.
+    for provider in sorted(_models_dev.providers(), key=lambda p: p.id == "huggingface"):
+        for model_id, model in provider.models.items():
+            if _is_embedding_model(model_id, model):
+                index[model_id] = model
+    return index
+
+
+def _lookup_models_dev(identifier: str) -> _models_dev.Model | None:
+    return _models_dev_index().get(identifier)
 
 
 class VLLMInferenceAdapter(OpenAIMixin):
@@ -184,14 +206,35 @@ class VLLMInferenceAdapter(OpenAIMixin):
         return _wrap_chunks()
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
-        # vLLM's /v1/models response does not expose a model task/type field, so classify by name.
-        if "embed" in identifier.lower():
+        # vLLM's /v1/models response does not expose a model task/type field,
+        # so we classify with models.dev with a name fallback.
+        md = _lookup_models_dev(identifier)
+        is_embedding = md is not None or "embed" in identifier.lower()
+
+        if is_embedding:
+            metadata: dict[str, int] = {}
+            if md is not None:
+                if md.limit.output:
+                    metadata["embedding_dimension"] = md.limit.output
+                if md.limit.context:
+                    metadata["context_length"] = md.limit.context
+                log.debug(
+                    "Classified embedding model via models.dev",
+                    identifier=identifier,
+                    family=md.family,
+                    metadata=metadata,
+                )
+            else:
+                log.debug(
+                    "Classified embedding model via name heuristic (not in models.dev)",
+                    identifier=identifier,
+                )
             return Model(
                 provider_id=self.__provider_id__,  # type: ignore[attr-defined]
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.embedding,
-                metadata={},
+                metadata=metadata,
             )
         if "rerank" in identifier.lower():
             return Model(
