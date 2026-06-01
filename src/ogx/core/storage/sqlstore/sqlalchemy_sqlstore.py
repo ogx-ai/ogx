@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from ogx.core.storage.datatypes import PostgresSqlStoreConfig, SqlAlchemySqlStoreConfig
+from ogx.core.storage.datatypes import PostgresSqlStoreConfig, SqlAlchemySqlStoreConfig, SqliteSqlStoreConfig
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
@@ -76,7 +76,7 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
     def __init__(self, config: SqlAlchemySqlStoreConfig) -> None:
         self.config = config
-        self._is_sqlite_backend = "sqlite" in self.config.engine_str
+        self._is_sqlite_backend = isinstance(self.config, SqliteSqlStoreConfig)
         self._engine: AsyncEngine | None = None  # Lazy initialization
         self.async_session: async_sessionmaker[AsyncSession] | None = None
         self.metadata = MetaData()

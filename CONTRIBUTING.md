@@ -90,16 +90,16 @@ If in doubt, please open a [issue](https://github.com/ogx-ai/ogx/issues).
 We use GitHub issues to track public bugs. Please ensure your description is
 clear and has sufficient instructions to be able to reproduce the issue.
 
-The OGX Contributors has a [bounty program](http://facebook.com/whitehat/info) for the safe
-disclosure of security bugs. In those cases, please go through the process
-outlined on that page and do not file a public issue.
+For security vulnerabilities, please report them via
+[GitHub Security Advisories](https://github.com/ogx-ai/ogx/security) (private
+reporting). Do not file a public issue for security vulnerabilities.
 
-### Contributor License Agreement ("CLA")
+### Developer Certificate of Origin
 
-In order to accept your pull request, we need you to submit a CLA. You only need
-to do this once to work on any of The OGX Contributors's open source projects.
-
-Complete your CLA here: <https://code.facebook.com/cla>
+All contributions to OGX require a sign-off via the
+[Developer Certificate of Origin (DCO)](https://developercertificate.org/).
+Use `git commit --signoff` (or `-s`) to add a `Signed-off-by` line to your
+commits.
 
 ### I'd like to contribute
 
@@ -137,7 +137,7 @@ Please avoid picking up too many issues at once. This helps you stay focused and
 2. If you've changed APIs, update the documentation.
 3. Ensure the test suite passes.
 4. Make sure your code lints using `pre-commit`.
-5. If you haven't already, complete the Contributor License Agreement ("CLA").
+5. If you haven't already, ensure your commits are signed off (`git commit -s`).
 6. Ensure your pull request follows the [conventional commits format](https://www.conventionalcommits.org/en/v1.0.0/).
 7. Ensure your pull request follows the [coding style](#coding-style).
 
@@ -218,7 +218,7 @@ This process helps ensure that new providers are well-designed, avoid duplicatio
 
 ### License
 
-By contributing to Llama, you agree that your contributions will be licensed
+By contributing to OGX, you agree that your contributions will be licensed
 under the LICENSE file in the root directory of this source tree.
 
 ## Common Tasks

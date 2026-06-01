@@ -42,12 +42,10 @@ class DoclingFileProcessor:
         self.config = config
         self.files_api = files_api
 
-        # Configure PDF pipeline with OCR setting
         pipeline_options = PdfPipelineOptions(
             do_ocr=config.do_ocr,
         )
 
-        # Create converter once with configured options
         self.converter = DocumentConverter(
             format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
         )
@@ -88,7 +86,6 @@ class DoclingFileProcessor:
             tmp.write(content)
             tmp.flush()
 
-            # Pass the file through a temp file and use the optimized pipeline already initialized in config and loaded via init
             result = self.converter.convert(tmp.name)
 
         doc = result.document

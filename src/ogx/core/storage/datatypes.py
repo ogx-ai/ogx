@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from sqlalchemy.engine import URL
 
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
@@ -164,7 +165,7 @@ class SqlAlchemySqlStoreConfig(BaseModel):
 
     @property
     @abstractmethod
-    def engine_str(self) -> str: ...
+    def engine_str(self) -> str | URL: ...
 
     # TODO: move this when we have a better way to specify dependencies with internal APIs
     @classmethod
@@ -210,9 +211,15 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     pool_recycle: int = Field(default=3600, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
 
     @property
-    def engine_str(self) -> str:
-        pw = self.password.get_secret_value() if self.password else ""
-        return f"postgresql+asyncpg://{self.user}:{pw}@{self.host}:{self.port}/{self.db}"
+    def engine_str(self) -> URL:
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.user,
+            password=self.password.get_secret_value() if self.password else None,
+            host=self.host,
+            port=int(self.port),
+            database=self.db,
+        )
 
     @classmethod
     def pip_packages(cls) -> list[str]:

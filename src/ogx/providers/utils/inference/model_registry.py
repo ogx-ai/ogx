@@ -10,9 +10,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, HttpUrl, SecretStr, field_validator, model_validator
 
 from ogx.log import get_logger
-from ogx.providers.utils.inference import (
-    ALL_HUGGINGFACE_REPOS_TO_MODEL_DESCRIPTOR,
-)
 from ogx_api import Model, ModelsProtocolPrivate, ModelType, UnsupportedModelError
 
 logger = get_logger(name=__name__, category="providers::utils")
@@ -188,7 +185,6 @@ class ProviderModelEntry(BaseModel):
 
     provider_model_id: str
     aliases: list[str] = Field(default_factory=list)
-    llama_model: str | None = None
     model_type: ModelType = ModelType.llm
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -206,7 +202,6 @@ class ModelRegistryHelper(ModelsProtocolPrivate):
         self.allowed_models = allowed_models if allowed_models else []
 
         self.alias_to_provider_id_map = {}
-        self.provider_id_to_llama_model_map = {}
         self.model_entries = model_entries or []
         for entry in self.model_entries:
             for alias in entry.aliases:
@@ -214,10 +209,6 @@ class ModelRegistryHelper(ModelsProtocolPrivate):
 
             # also add a mapping from provider model id to itself for easy lookup
             self.alias_to_provider_id_map[entry.provider_model_id] = entry.provider_model_id
-
-            if entry.llama_model:
-                self.alias_to_provider_id_map[entry.llama_model] = entry.provider_model_id
-                self.provider_id_to_llama_model_map[entry.provider_model_id] = entry.llama_model
 
     async def list_models(self) -> list[Model] | None:
         models = []
@@ -242,10 +233,6 @@ class ModelRegistryHelper(ModelsProtocolPrivate):
 
     def get_provider_model_id(self, identifier: str) -> str | None:
         return self.alias_to_provider_id_map.get(identifier, None)
-
-    # TODO: why keep a separate llama model mapping?
-    def get_llama_model(self, provider_model_id: str) -> str | None:
-        return self.provider_id_to_llama_model_map.get(provider_model_id, None)
 
     async def check_model_availability(self, model: str) -> bool:
         """
@@ -286,29 +273,10 @@ class ModelRegistryHelper(ModelsProtocolPrivate):
         if model.model_type == ModelType.embedding:
             # embedding models are always registered by their provider model id and does not need to be mapped to a llama model
             provider_resource_id = model.provider_resource_id
-        if provider_resource_id:
-            if provider_resource_id != supported_model_id:  # be idempotent, only reject differences
-                raise ValueError(
-                    f"Model id '{model.model_id}' is already registered. Please use a different id or unregister it first."
-                )
-        else:
-            llama_model = model.metadata.get("llama_model")
-            if llama_model:
-                existing_llama_model = self.get_llama_model(model.provider_resource_id)
-                if existing_llama_model:
-                    if existing_llama_model != llama_model:
-                        raise ValueError(
-                            f"Provider model id '{model.provider_resource_id}' is already registered to a different llama model: '{existing_llama_model}'"
-                        )
-                else:
-                    if llama_model not in ALL_HUGGINGFACE_REPOS_TO_MODEL_DESCRIPTOR:
-                        raise ValueError(
-                            f"Invalid llama_model '{llama_model}' specified in metadata. "
-                            f"Must be one of: {', '.join(ALL_HUGGINGFACE_REPOS_TO_MODEL_DESCRIPTOR.keys())}"
-                        )
-                    self.provider_id_to_llama_model_map[model.provider_resource_id] = (
-                        ALL_HUGGINGFACE_REPOS_TO_MODEL_DESCRIPTOR[llama_model]
-                    )
+        if provider_resource_id and provider_resource_id != supported_model_id:
+            raise ValueError(
+                f"Model id '{model.model_id}' is already registered. Please use a different id or unregister it first."
+            )
 
         # Register the model alias, ensuring it maps to the correct provider model id
         self.alias_to_provider_id_map[model.model_id] = supported_model_id
