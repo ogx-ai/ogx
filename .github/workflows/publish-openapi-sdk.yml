@@ -1,0 +1,164 @@
+name: Publish OpenAPI SDK to PyPI
+
+run-name: Publish ogx-open-client to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_to:
+        description: 'Publish to PyPI or TestPyPI'
+        required: true
+        default: 'testpypi'
+        type: choice
+        options:
+          - testpypi
+          - pypi
+      dry_run:
+        description: 'Dry run (build only, no publish)'
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'openapi-sdk-v*'  # Tags like openapi-sdk-v0.5.0
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write  # Required for trusted publishing to PyPI
+
+jobs:
+  publish-sdk:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.publish_to == 'pypi' && 'pypi-production' || 'testpypi' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-runner
+        with:
+          python-version: '3.12'
+
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install openapi-generator-cli
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      - name: Verify installations
+        working-directory: client-sdks/openapi
+        run: |
+          set -e
+          echo "=== Java version ==="
+          java -version
+
+          echo "=== OpenAPI Generator version ==="
+          openapi-generator-cli version
+
+          echo "=== SDK version from pyproject.toml ==="
+          make version
+
+      - name: Generate OpenAPI SDK
+        working-directory: client-sdks/openapi
+        run: |
+          echo "Generating SDK with OPEN=1 (ogx_open_client)..."
+          make sdk OPEN=1
+
+      - name: Verify SDK generation
+        working-directory: client-sdks/openapi
+        run: |
+          if [ ! -d sdks/python ]; then
+            echo "Error: SDK directory was not generated"
+            exit 1
+          fi
+
+          PY_FILE_COUNT=$(find sdks/python -name "*.py" | wc -l)
+          echo "Generated Python files: $PY_FILE_COUNT"
+
+          if [ "$PY_FILE_COUNT" -le 10 ]; then
+            echo "Error: Too few Python files generated"
+            exit 1
+          fi
+
+          echo "SDK generated successfully"
+          ls -lh sdks/python/
+
+      - name: Build package
+        working-directory: client-sdks/openapi/sdks/python
+        run: |
+          echo "Building Python package..."
+          uv build
+
+          echo "Built distribution files:"
+          ls -lh dist/
+
+      - name: Publish to TestPyPI (dry-run or manual)
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi' && inputs.dry_run == false) ||
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/openapi-sdk-v') && !contains(github.ref, '-rc') && !contains(github.ref, '-alpha') && !contains(github.ref, '-beta'))
+        working-directory: client-sdks/openapi/sdks/python
+        run: |
+          echo "Publishing to TestPyPI..."
+          uv publish --publish-url https://test.pypi.org/legacy/ dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+      - name: Publish to PyPI (production)
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          inputs.publish_to == 'pypi' &&
+          inputs.dry_run == false
+        working-directory: client-sdks/openapi/sdks/python
+        run: |
+          echo "Publishing to PyPI..."
+          uv publish dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v4.6.0
+        with:
+          name: python-sdk-dist
+          path: client-sdks/openapi/sdks/python/dist/
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          {
+            echo "## SDK Publishing Summary"
+            echo ""
+            echo "- **Event**: ${{ github.event_name }}"
+            echo "- **Dry Run**: ${{ inputs.dry_run || 'false' }}"
+            echo "- **Target**: ${{ inputs.publish_to || 'testpypi (default)' }}"
+            echo "- **Package**: ogx-open-client"
+            echo ""
+
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "✅ Package built successfully (dry-run, not published)"
+            elif [ "${{ inputs.publish_to }}" = "testpypi" ]; then
+              echo "✅ Package published to TestPyPI"
+              echo "Install with: \`pip install --index-url https://test.pypi.org/simple/ ogx-open-client\`"
+            elif [ "${{ github.event_name }}" = "push" ]; then
+              # Check for pre-release tags (same logic as publish step)
+              case "${{ github.ref }}" in
+                *"-rc"*|*"-alpha"*|*"-beta"*)
+                  echo "✅ Package built successfully (pre-release tag, not published)"
+                  ;;
+                *)
+                  echo "✅ Package published to TestPyPI"
+                  echo "Install with: \`pip install --index-url https://test.pypi.org/simple/ ogx-open-client\`"
+                  ;;
+              esac
+            else
+              echo "✅ Package published to PyPI"
+              echo "Install with: \`pip install ogx-open-client\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

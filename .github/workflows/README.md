@@ -25,6 +25,7 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | Pre-commit | [pre-commit.yml](pre-commit.yml) | Run pre-commit checks |
 | Prepare release | [prepare-release.yml](prepare-release.yml) | Prepare release |
 | Test OGX Build | [providers-build.yml](providers-build.yml) | Test ogx build and list-deps |
+| Publish OpenAPI SDK to PyPI | [publish-openapi-sdk.yml](publish-openapi-sdk.yml) | Publish ogx-open-client to PyPI |
 | Build, test, and publish packages | [pypi.yml](pypi.yml) | Build, test, and publish packages |
 | Integration Tests (Record) | [record-integration-tests.yml](record-integration-tests.yml) | Auto-record missing test recordings for PR |
 | Release Branch Scheduled CI | [release-branch-scheduled-ci.yml](release-branch-scheduled-ci.yml) | Scheduled CI checks for active release branches |

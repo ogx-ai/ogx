@@ -880,7 +880,7 @@ jobs:
   # are published to PyPI. CPU distros are built for linux/amd64 and
   # linux/arm64. GPU distros are built for linux/amd64 only.
   #
-  # Images are pushed to: ogx/distribution-<distro>:<tag>
+  # Images are pushed to: ogxai/distribution-<distro>:<tag>
   #   - Production (release or dry_run=off): tagged with VERSION and "latest"
   #   - Test (test-pypi or schedule): tagged with "test-VERSION"
   publish-docker-images:
@@ -928,7 +928,7 @@ jobs:
 
       - name: Set up QEMU for multi-arch builds
         if: contains(matrix.platforms, 'arm64')
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
@@ -944,7 +944,7 @@ jobs:
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
           DISTRO="${{ matrix.distro }}"
-          IMAGE="ogx/distribution-${DISTRO}"
+          IMAGE="ogxai/distribution-${DISTRO}"
 
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"

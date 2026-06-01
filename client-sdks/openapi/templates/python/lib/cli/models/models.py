@@ -19,7 +19,7 @@ def models():
     """Manage GenAI models."""
 
 
-@click.command(name="list", help="Show available llama models at distribution endpoint")
+@click.command(name="list", help="Show available models at distribution endpoint")
 @click.help_option("-h", "--help")
 @click.pass_context
 @handle_client_errors("list models")
