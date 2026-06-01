@@ -97,6 +97,44 @@ class TestRequestTranslation:
         assert m0["role"] == "system"
         assert m0["content"] == "Line 1.\nLine 2."
 
+    def test_inline_system_message_string(self, impl):
+        # Clients such as the Claude Code CLI interleave system-role messages
+        # inside the conversation rather than using the top-level system field.
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(role="user", content="Hi"),
+                AnthropicMessage(role="system", content="Stay terse."),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        m1 = _msg_to_dict(result.messages[1])
+        assert m1["role"] == "system"
+        assert m1["content"] == "Stay terse."
+
+    def test_inline_system_message_text_blocks(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(role="user", content="Hi"),
+                AnthropicMessage(
+                    role="system",
+                    content=[
+                        AnthropicTextBlock(text="Line 1."),
+                        AnthropicTextBlock(text="Line 2."),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        m1 = _msg_to_dict(result.messages[1])
+        assert m1["role"] == "system"
+        assert m1["content"] == "Line 1.\nLine 2."
+
     def test_tool_definitions(self, impl):
         request = AnthropicCreateMessageRequest(
             model="m",
