@@ -25,7 +25,7 @@ inference provider, based on integration test results.
 | openai | 136 | 136 | 0 | 100% |
 | vertexai | 70 | 70 | 0 | 52% |
 | vllm | 3 | 3 | 0 | 2% |
-| watsonx | 53 | 53 | 0 | 39% |
+| watsonx | 61 | 61 | 0 | 45% |
 
 ## Provider Details
 
@@ -100,9 +100,9 @@ Models, endpoints, and versions used during test recordings.
 
 | Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| mcp authorization backward compatibility | ✅ | ✅ | — | ✅ | — | — | — |
-| mcp authorization bearer | ✅ | ✅ | — | ✅ | — | — | — |
-| mcp authorization error when header provided | ⏭️ | ⏭️ | — | ✅ | — | — | — |
+| mcp authorization backward compatibility | ✅ | ✅ | — | ✅ | — | — | ⏭️ |
+| mcp authorization bearer | ✅ | ✅ | — | ✅ | — | — | ⏭️ |
+| mcp authorization error when header provided | ⏭️ | ⏭️ | — | ✅ | — | — | ✅ |
 
 ## Openai Responses
 
@@ -166,13 +166,13 @@ Models, endpoints, and versions used during test recordings.
 | Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | reasoning basic streaming | ✅ | ✅ | ⏭️ | ✅ | ✅ | ✅ | ✅ |
-| reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
-| reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
-| reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
-| reasoning summary event ordering | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
-| reasoning summary non streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
-| reasoning summary streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
-| reasoning summary usage included | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
+| reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
+| reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
+| reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
+| reasoning summary event ordering | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
+| reasoning summary non streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
+| reasoning summary streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
+| reasoning summary usage included | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
 
 ## Responses Access Control
 
