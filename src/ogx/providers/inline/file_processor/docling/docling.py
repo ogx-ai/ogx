@@ -46,7 +46,6 @@ class DoclingFileProcessor:
             do_ocr=config.do_ocr,
         )
 
-        # Create converter once with configured options
         self.converter = DocumentConverter(
             format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
         )
