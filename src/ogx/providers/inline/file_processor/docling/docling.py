@@ -42,7 +42,6 @@ class DoclingFileProcessor:
         self.config = config
         self.files_api = files_api
 
-        # Configure PDF pipeline with OCR setting
         pipeline_options = PdfPipelineOptions(
             do_ocr=config.do_ocr,
         )
