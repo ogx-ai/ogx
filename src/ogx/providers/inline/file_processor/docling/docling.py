@@ -86,7 +86,6 @@ class DoclingFileProcessor:
             tmp.write(content)
             tmp.flush()
 
-            # Pass the file through a temp file and use the optimized pipeline already initialized in config and loaded via init
             result = self.converter.convert(tmp.name)
 
         doc = result.document
