@@ -41,5 +41,5 @@ class DoclingFileProcessorConfig(BaseModel):
         return {
             "default_chunk_size_tokens": 800,
             "default_chunk_overlap_tokens": 400,
-            "do_ocr": False,  # Optimized for digital PDFs
+            "do_ocr": True  # default option for scanned pdfs
         }
