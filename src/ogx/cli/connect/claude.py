@@ -69,7 +69,7 @@ class ConnectClaude(Subcommand):
         self.parser.add_argument(
             "--url",
             type=str,
-            default=f"http://localhost:{default_port}/v1",
+            default=f"http://localhost:{default_port}",
             help="OGX server URL.",
         )
         self.parser.add_argument(
@@ -139,7 +139,7 @@ class ConnectClaude(Subcommand):
         sys.exit(result.returncode)
 
     def _fetch_models(self, base_url: str) -> list[str]:
-        client = OpenAI(base_url=base_url, api_key="unused")
+        client = OpenAI(base_url=f"{base_url}/v1", api_key="unused")
         try:
             response = client.models.list()
         except APIConnectionError:
