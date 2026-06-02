@@ -35,6 +35,7 @@ from ogx.providers.inline.vector_io.sqlite_vec.config import (
 )
 from ogx.providers.registry.inference import available_providers
 from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
+from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
 from ogx.providers.remote.tool_runtime.tavily_search.config import TavilySearchToolConfig
 from ogx.providers.remote.vector_io.chroma.config import ChromaVectorIOConfig
 from ogx.providers.remote.vector_io.elasticsearch.config import ElasticsearchVectorIOConfig
@@ -153,6 +154,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "tool_runtime": [
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
+            BuildProvider(provider_type="remote::nimble-search"),
             BuildProvider(provider_type="inline::file-search"),
             BuildProvider(provider_type="remote::model-context-protocol"),
         ],
@@ -263,6 +265,11 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 provider_id="tavily-search",
                 provider_type="remote::tavily-search",
                 config=TavilySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+            Provider(
+                provider_id="nimble-search",
+                provider_type="remote::nimble-search",
+                config=NimbleSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="file-search",
