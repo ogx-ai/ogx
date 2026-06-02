@@ -11,11 +11,10 @@ from .models import (
     ListSkillVersionsRequest,
     ListSkillVersionsResponse,
     Skill,
-    SkillCreateRequest,
     SkillDeleteResponse,
-    SkillFile,
     SkillUpdateRequest,
     SkillVersion,
+    SkillVersionCreateRequest,
     SkillVersionDeleteResponse,
 )
 
@@ -26,10 +25,9 @@ __all__ = [
     "ListSkillVersionsResponse",
     "Skills",
     "Skill",
-    "SkillCreateRequest",
     "SkillDeleteResponse",
-    "SkillFile",
     "SkillUpdateRequest",
     "SkillVersion",
+    "SkillVersionCreateRequest",
     "SkillVersionDeleteResponse",
 ]

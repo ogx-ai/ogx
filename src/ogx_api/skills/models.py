@@ -22,49 +22,55 @@ MAX_FILES_PER_VERSION = 500
 
 
 @json_schema_type
-class SkillFile(BaseModel):
-    """A file within a skill bundle."""
-
-    name: str = Field(description="Relative path within the bundle (e.g., 'analyze.py')")
-    size: int = Field(description="File size in bytes")
-    content_type: str = Field(description="MIME type of the file")
-
-
-@json_schema_type
 class SkillVersion(BaseModel):
-    """A specific version of a skill."""
+    """A specific version of a skill. Matches OpenAI SkillVersion wire format."""
 
-    version: str = Field(description="Version number as a string")
-    skill_id: str = Field(description="ID of the parent skill")
-    file_manifest: list[SkillFile] = Field(default_factory=list, description="List of files in this version")
+    id: str = Field(description="Unique identifier for this version")
     created_at: int = Field(description="Unix timestamp when this version was created")
+    description: str = Field(description="Description of the skill version")
+    name: str = Field(description="Name of the skill version")
+    object: Literal["skill.version"] = "skill.version"
+    skill_id: str = Field(description="ID of the parent skill")
+    version: str = Field(description="Version number as a string")
 
 
 @json_schema_type
 class Skill(BaseModel):
-    """A skill resource representing a versioned bundle of code and data.
-
-    Skills are zip archives containing a SKILL.md manifest and supporting files.
-    They are mounted into container filesystems at /mnt/skills/{skill_name}/.
-    """
+    """A skill resource. Matches OpenAI Skill wire format."""
 
     id: str = Field(description="Unique identifier for the skill")
-    object: Literal["skill"] = "skill"
-    name: str = Field(description="Human-readable name from SKILL.md frontmatter or create request")
-    description: str | None = Field(default=None, description="Description of what the skill does")
-    default_version: str = Field(default="1", description="Version used when no version is specified")
-    latest_version: str = Field(default="1", description="Most recently uploaded version number")
     created_at: int = Field(description="Unix timestamp when the skill was created")
-    metadata: dict[str, Any] | None = Field(default=None, description="Optional key-value metadata")
+    default_version: str = Field(default="1", description="Version used when no version is specified")
+    description: str = Field(description="Description of what the skill does")
+    latest_version: str = Field(default="1", description="Most recently uploaded version number")
+    name: str = Field(description="Human-readable name from SKILL.md frontmatter")
+    object: Literal["skill"] = "skill"
 
 
 @json_schema_type
-class SkillCreateRequest(BaseModel):
-    """Request to create a new skill. Bundle content is provided via multipart form data."""
+class SkillDeleteResponse(BaseModel):
+    """Response from deleting a skill. Matches OpenAI DeletedSkill wire format."""
 
-    name: str | None = Field(default=None, description="Skill name (overrides SKILL.md frontmatter)")
-    description: str | None = Field(default=None, description="Skill description (overrides SKILL.md frontmatter)")
-    metadata: dict[str, Any] | None = Field(default=None, description="Optional key-value metadata")
+    id: str = Field(description="ID of the deleted skill")
+    deleted: bool = Field(default=True, description="Whether the skill was successfully deleted")
+    object: Literal["skill.deleted"] = "skill.deleted"
+
+
+@json_schema_type
+class SkillVersionDeleteResponse(BaseModel):
+    """Response from deleting a skill version. Matches OpenAI DeletedSkillVersion wire format."""
+
+    id: str = Field(description="ID of the deleted skill")
+    deleted: bool = Field(default=True, description="Whether the version was successfully deleted")
+    object: Literal["skill.version.deleted"] = "skill.version.deleted"
+    version: str = Field(description="Version that was deleted")
+
+
+@json_schema_type
+class SkillVersionCreateRequest(BaseModel):
+    """Request to create a new skill version. Matches OpenAI VersionCreateParams."""
+
+    default: bool = Field(default=False, description="Whether to set this version as the default")
 
 
 @json_schema_type
@@ -72,25 +78,6 @@ class SkillUpdateRequest(BaseModel):
     """Request to update a skill's default version."""
 
     default_version: str = Field(description="Version number to set as the default")
-
-
-@json_schema_type
-class SkillDeleteResponse(BaseModel):
-    """Response from deleting a skill."""
-
-    id: str = Field(description="ID of the deleted skill")
-    object: Literal["skill"] = "skill"
-    deleted: bool = Field(default=True, description="Whether the skill was successfully deleted")
-
-
-@json_schema_type
-class SkillVersionDeleteResponse(BaseModel):
-    """Response from deleting a skill version."""
-
-    id: str = Field(description="ID of the deleted skill")
-    version: str = Field(description="Version that was deleted")
-    object: Literal["skill.version"] = "skill.version"
-    deleted: bool = Field(default=True, description="Whether the version was successfully deleted")
 
 
 @json_schema_type

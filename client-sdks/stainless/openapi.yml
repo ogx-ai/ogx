@@ -15573,130 +15573,144 @@ components:
       - prompt_id
       title: DeletePromptRequest
       type: object
-    SkillFile:
-      description: A file within a skill bundle.
-      properties:
-        name:
-          description: Relative path within the bundle (e.g., 'analyze.py')
-          title: Name
-          type: string
-        size:
-          description: File size in bytes
-          title: Size
-          type: integer
-        content_type:
-          description: MIME type of the file
-          title: Content Type
-          type: string
-      required:
-      - name
-      - size
-      - content_type
-      title: SkillFile
-      type: object
     SkillVersion:
-      description: A specific version of a skill.
+      description: A specific version of a skill. Matches OpenAI SkillVersion wire format.
       properties:
-        version:
-          description: Version number as a string
-          title: Version
+        id:
+          description: Unique identifier for this version
+          title: Id
           type: string
-        skill_id:
-          description: ID of the parent skill
-          title: Skill Id
-          type: string
-        file_manifest:
-          description: List of files in this version
-          items:
-            $ref: '#/components/schemas/SkillFile'
-          title: File Manifest
-          type: array
         created_at:
           description: Unix timestamp when this version was created
           title: Created At
           type: integer
-      required:
-      - version
-      - skill_id
-      - created_at
-      title: SkillVersion
-      type: object
-    Skill:
-      description: |-
-        A skill resource representing a versioned bundle of code and data.
-
-        Skills are zip archives containing a SKILL.md manifest and supporting files.
-        They are mounted into container filesystems at /mnt/skills/{skill_name}/.
-      properties:
-        id:
-          description: Unique identifier for the skill
-          title: Id
+        description:
+          description: Description of the skill version
+          title: Description
+          type: string
+        name:
+          description: Name of the skill version
+          title: Name
           type: string
         object:
           title: Object
           type: string
           enum:
-          - skill
-        name:
-          description: Human-readable name from SKILL.md frontmatter or create request
-          title: Name
+          - skill.version
+        skill_id:
+          description: ID of the parent skill
+          title: Skill Id
           type: string
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Description of what the skill does
-          nullable: true
+        version:
+          description: Version number as a string
+          title: Version
+          type: string
+      required:
+      - id
+      - created_at
+      - description
+      - name
+      - skill_id
+      - version
+      title: SkillVersion
+      type: object
+    Skill:
+      description: A skill resource. Matches OpenAI Skill wire format.
+      properties:
+        id:
+          description: Unique identifier for the skill
+          title: Id
+          type: string
+        created_at:
+          description: Unix timestamp when the skill was created
+          title: Created At
+          type: integer
         default_version:
           default: '1'
           description: Version used when no version is specified
           title: Default Version
+          type: string
+        description:
+          description: Description of what the skill does
+          title: Description
           type: string
         latest_version:
           default: '1'
           description: Most recently uploaded version number
           title: Latest Version
           type: string
-        created_at:
-          description: Unix timestamp when the skill was created
-          title: Created At
-          type: integer
-        metadata:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Optional key-value metadata
-          nullable: true
+        name:
+          description: Human-readable name from SKILL.md frontmatter
+          title: Name
+          type: string
+        object:
+          title: Object
+          type: string
+          enum:
+          - skill
       required:
       - id
-      - name
       - created_at
+      - description
+      - name
       title: Skill
       type: object
-    SkillCreateRequest:
-      description: Request to create a new skill. Bundle content is provided via multipart form data.
+    SkillDeleteResponse:
+      description: Response from deleting a skill. Matches OpenAI DeletedSkill wire format.
       properties:
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Skill name (overrides SKILL.md frontmatter)
-          nullable: true
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Skill description (overrides SKILL.md frontmatter)
-          nullable: true
-        metadata:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Optional key-value metadata
-          nullable: true
-      title: SkillCreateRequest
+        id:
+          description: ID of the deleted skill
+          title: Id
+          type: string
+        deleted:
+          default: true
+          description: Whether the skill was successfully deleted
+          title: Deleted
+          type: boolean
+        object:
+          title: Object
+          type: string
+          enum:
+          - skill.deleted
+      required:
+      - id
+      title: SkillDeleteResponse
+      type: object
+    SkillVersionDeleteResponse:
+      description: Response from deleting a skill version. Matches OpenAI DeletedSkillVersion wire format.
+      properties:
+        id:
+          description: ID of the deleted skill
+          title: Id
+          type: string
+        deleted:
+          default: true
+          description: Whether the version was successfully deleted
+          title: Deleted
+          type: boolean
+        object:
+          title: Object
+          type: string
+          enum:
+          - skill.version.deleted
+        version:
+          description: Version that was deleted
+          title: Version
+          type: string
+      required:
+      - id
+      - version
+      title: SkillVersionDeleteResponse
+      type: object
+    SkillVersionCreateRequest:
+      description: Request to create a new skill version. Matches OpenAI VersionCreateParams.
+      properties:
+        default:
+          type: boolean
+          default: false
+          description: Whether to set this version as the default
+          title: Default
+      title: SkillVersionCreateRequest
       type: object
     SkillUpdateRequest:
       description: Request to update a skill's default version.
@@ -15708,53 +15722,6 @@ components:
       required:
       - default_version
       title: SkillUpdateRequest
-      type: object
-    SkillDeleteResponse:
-      description: Response from deleting a skill.
-      properties:
-        id:
-          description: ID of the deleted skill
-          title: Id
-          type: string
-        object:
-          title: Object
-          type: string
-          enum:
-          - skill
-        deleted:
-          default: true
-          description: Whether the skill was successfully deleted
-          title: Deleted
-          type: boolean
-      required:
-      - id
-      title: SkillDeleteResponse
-      type: object
-    SkillVersionDeleteResponse:
-      description: Response from deleting a skill version.
-      properties:
-        id:
-          description: ID of the deleted skill
-          title: Id
-          type: string
-        version:
-          description: Version that was deleted
-          title: Version
-          type: string
-        object:
-          title: Object
-          type: string
-          enum:
-          - skill.version
-        deleted:
-          default: true
-          description: Whether the version was successfully deleted
-          title: Deleted
-          type: boolean
-      required:
-      - id
-      - version
-      title: SkillVersionDeleteResponse
       type: object
     ListSkillsRequest:
       description: Request parameters for listing skills.

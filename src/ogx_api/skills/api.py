@@ -14,10 +14,10 @@ from .models import (
     ListSkillVersionsRequest,
     ListSkillVersionsResponse,
     Skill,
-    SkillCreateRequest,
     SkillDeleteResponse,
     SkillUpdateRequest,
     SkillVersion,
+    SkillVersionCreateRequest,
     SkillVersionDeleteResponse,
 )
 
@@ -28,14 +28,12 @@ __all__ = ["Skills"]
 class Skills(Protocol):
     """Skills API for managing versioned skill bundles.
 
-    Skills are zip archives containing a SKILL.md manifest and supporting files
-    (code, data, configs). They are mounted into container filesystems and their
-    instructions are injected into the model's system context.
+    Skills are zip archives containing a SKILL.md manifest and supporting files.
+    Conforms to the OpenAI Skills API wire format.
     """
 
     async def create_skill(
         self,
-        request: SkillCreateRequest,
         file: UploadFile,
     ) -> Skill: ...
 
@@ -59,6 +57,7 @@ class Skills(Protocol):
     async def create_skill_version(
         self,
         skill_id: str,
+        request: SkillVersionCreateRequest,
         file: UploadFile,
     ) -> SkillVersion: ...
 
