@@ -174,7 +174,13 @@ class TestBedrockConfigAuthDetection:
         """Config should detect when bearer token is present."""
         from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
-        # Use api_key as that's the alias for auth_credential
+        config = BedrockConfig(aws_bedrock_bearer_token="my-bearer-token")
+        assert config.has_bearer_token() is True
+
+    def test_has_bearer_token_with_legacy_api_key_alias(self):
+        """Config should keep accepting the legacy api_key alias."""
+        from ogx.providers.remote.inference.bedrock.config import BedrockConfig
+
         config = BedrockConfig(api_key="my-bearer-token")
         assert config.has_bearer_token() is True
 
@@ -189,14 +195,14 @@ class TestBedrockConfigAuthDetection:
         """Empty string should be treated as no token."""
         from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
-        config = BedrockConfig(api_key="")
+        config = BedrockConfig(aws_bedrock_bearer_token="")
         assert config.has_bearer_token() is False
 
     def test_has_bearer_token_with_whitespace(self):
         """Whitespace-only string should be treated as no token."""
         from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
-        config = BedrockConfig(api_key="   ")
+        config = BedrockConfig(aws_bedrock_bearer_token="   ")
         assert config.has_bearer_token() is False
 
 
@@ -222,7 +228,7 @@ class TestBedrockInferenceAdapterAuthMode:
 
         config = BedrockConfig(
             region_name="us-east-1",
-            api_key="my-bearer-token",  # Use api_key alias
+            aws_bedrock_bearer_token="my-bearer-token",
         )
         adapter = BedrockInferenceAdapter(config=config)
 
@@ -240,6 +246,21 @@ class TestBedrockInferenceAdapterAuthMode:
         config = BedrockConfig(region_name="us-east-1")
         adapter = BedrockInferenceAdapter(config=config)
 
+        provider_data = BedrockProviderDataValidator(aws_bedrock_bearer_token="per-request-token")
+        with patch.object(adapter, "get_request_provider_data", return_value=provider_data):
+            assert adapter._should_use_sigv4() is False
+
+    def test_should_not_use_sigv4_when_legacy_provider_data_alias_is_used(self):
+        """Legacy provider-data key should still trigger bearer auth."""
+        from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+        from ogx.providers.remote.inference.bedrock.config import (
+            BedrockConfig,
+            BedrockProviderDataValidator,
+        )
+
+        config = BedrockConfig(region_name="us-east-1")
+        adapter = BedrockInferenceAdapter(config=config)
+
         provider_data = BedrockProviderDataValidator(aws_bearer_token_bedrock="per-request-token")
         with patch.object(adapter, "get_request_provider_data", return_value=provider_data):
             assert adapter._should_use_sigv4() is False
@@ -248,7 +269,7 @@ class TestBedrockInferenceAdapterAuthMode:
         """Per-request bearer token override must not be silently discarded by the SigV4 client.
 
         When the server starts in SigV4 mode (_sigv4_http_client is not None) but a request
-        arrives with aws_bearer_token_bedrock in provider data, get_extra_client_params()
+        arrives with aws_bedrock_bearer_token in provider data, get_extra_client_params()
         must return {} so the OpenAI SDK uses the bearer token instead of SigV4 auth.
         """
         from unittest.mock import MagicMock
@@ -266,7 +287,7 @@ class TestBedrockInferenceAdapterAuthMode:
         adapter._sigv4_http_client = MagicMock()
 
         # Per-request bearer token override in provider data
-        provider_data = BedrockProviderDataValidator(aws_bearer_token_bedrock="per-request-token")
+        provider_data = BedrockProviderDataValidator(aws_bedrock_bearer_token="per-request-token")
         with patch.object(adapter, "get_request_provider_data", return_value=provider_data):
             params = adapter.get_extra_client_params()
             # Must return {} — the bearer token path must not receive the SigV4 http_client,
@@ -301,7 +322,7 @@ class TestBedrockInferenceAdapterAuthMode:
         adapter = BedrockInferenceAdapter(config=config)
 
         # Whitespace-only token should be treated as no token (use SigV4)
-        provider_data = BedrockProviderDataValidator(aws_bearer_token_bedrock="   ")
+        provider_data = BedrockProviderDataValidator(aws_bedrock_bearer_token="   ")
         with patch.object(adapter, "get_request_provider_data", return_value=provider_data):
             assert adapter._should_use_sigv4() is True
 
