@@ -313,15 +313,17 @@ class TestSessionConfigGeneration:
 
         session_builder.write_session_files(tmp_path, "https://ogx.example.com/v1", models, "openai/gpt-4o")
 
-        config = tomllib.loads((tmp_path / "config.toml").read_text())
+        config = tomllib.loads((tmp_path / "ogx.config.toml").read_text())
         catalog = json.loads((tmp_path / "ogx-model-catalog.json").read_text())
 
+        assert not (tmp_path / "config.toml").exists()
+        assert config["model"] == "openai/gpt-4o"
+        assert config["model_provider"] == "ogx"
+        assert config["model_catalog_json"] == str(tmp_path / "ogx-model-catalog.json")
+        assert config["features"]["multi_agent"] is False
         assert config["model_providers"]["ogx"]["base_url"] == "https://ogx.example.com/v1"
         assert "env_key" not in config["model_providers"]["ogx"]
         assert config["model_providers"]["ogx"]["env_http_headers"] == {"X-OGX-Provider-Data": "OGX_PROVIDER_DATA"}
-        assert config["profiles"]["ogx"]["model"] == "openai/gpt-4o"
-        assert config["profiles"]["ogx"]["model_provider"] == "ogx"
-        assert config["profiles"]["ogx"]["model_catalog_json"] == str(tmp_path / "ogx-model-catalog.json")
 
         assert catalog["models"][0]["slug"] == "openai/gpt-4o"
         assert catalog["models"][0]["description"] == "Primary OGX model"
@@ -343,7 +345,7 @@ class TestSessionConfigGeneration:
             "openai/gpt-4o",
         )
 
-        config = tomllib.loads((tmp_path / "config.toml").read_text())
+        config = tomllib.loads((tmp_path / "ogx.config.toml").read_text())
         assert config["model_providers"]["ogx"]["env_key"] == "OGX_API_KEY"
 
 
@@ -374,7 +376,7 @@ class TestConnect:
         assert launched_env["OGX_API_KEY"] == "secret-token"
         assert launched_env["OGX_PROVIDER_DATA"] == '{"passthrough_api_key":"abc"}'
 
-        config = tomllib.loads((tmp_path / "config.toml").read_text())
+        config = tomllib.loads((tmp_path / "ogx.config.toml").read_text())
         assert config["model_providers"]["ogx"]["env_key"] == "OGX_API_KEY"
         assert config["model_providers"]["ogx"]["env_http_headers"] == {"X-OGX-Provider-Data": "OGX_PROVIDER_DATA"}
 
@@ -406,9 +408,10 @@ class TestConnect:
         assert mock_run.call_args.args[0] == ["codex", "-p", "ogx"]
         assert mock_run.call_args.kwargs["env"]["CODEX_HOME"] == str(tmp_path)
 
-        config = tomllib.loads((tmp_path / "config.toml").read_text())
+        config = tomllib.loads((tmp_path / "ogx.config.toml").read_text())
         catalog = json.loads((tmp_path / "ogx-model-catalog.json").read_text())
-        assert config["profiles"]["ogx"]["model"] == "openai/gpt-4o"
+        assert config["model"] == "openai/gpt-4o"
+        assert config["features"]["multi_agent"] is False
         assert config["model_providers"]["ogx"]["base_url"] == "http://localhost:8321/v1"
         assert catalog["models"][0]["context_window"] == 200000
 

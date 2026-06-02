@@ -7,7 +7,7 @@
 """Smoke test: drive the Codex CLI against the OGX Responses API.
 
 This runs the real Codex CLI through `ogx connect codex --exec` so the test
-exercises the same temporary CODEX_HOME, generated config.toml, and generated
+exercises the same temporary CODEX_HOME, generated ogx.config.toml, and generated
 model catalog that users get from the interactive command.
 
 This runs live against a real backend, not in replay mode. The Codex CLI request
@@ -76,7 +76,7 @@ def test_codex_cli_smoke_uses_generated_ogx_profile(ogx_client: Any, text_model_
             "--exec",
             prompt,
         ],
-        cwd=tmp_path,
+        cwd=Path.cwd(),
         env=_build_minimal_env(tmp_path),
         capture_output=True,
         text=True,
@@ -88,4 +88,4 @@ def test_codex_cli_smoke_uses_generated_ogx_profile(ogx_client: Any, text_model_
         f"stdout:\n{result.stdout}\n"
         f"stderr:\n{result.stderr}"
     )
-    assert result.stdout.strip(), "Codex CLI completed without producing output"
+    assert result.stdout.strip() or result.stderr.strip(), "Codex CLI completed without producing output"

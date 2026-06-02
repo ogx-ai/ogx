@@ -105,7 +105,16 @@ The generated Codex profile forwards that value as `X-OGX-Provider-Data` on ever
 
 If you prefer to manage Codex configuration yourself, add an OGX provider and model catalog to your Codex config:
 
+Create `~/.codex/ogx.config.toml`:
+
 ```toml
+model = "openai/gpt-4o"
+model_provider = "ogx"
+model_catalog_json = "/absolute/path/to/ogx-model-catalog.json"
+
+[features]
+multi_agent = false
+
 [model_providers.ogx]
 name = "OGX"
 base_url = "http://localhost:8321/v1"
@@ -113,11 +122,6 @@ wire_api = "responses"
 supports_websockets = false
 env_key = "OGX_API_KEY"
 env_http_headers = { "X-OGX-Provider-Data" = "OGX_PROVIDER_DATA" }
-
-[profiles.ogx]
-model = "openai/gpt-4o"
-model_provider = "ogx"
-model_catalog_json = "/absolute/path/to/ogx-model-catalog.json"
 ```
 
 The integration works as a proxy chain: **Codex CLI → OGX → LLM Provider (OpenAI, etc.)**
@@ -146,8 +150,9 @@ Use provider-prefixed model IDs (for example `openai/gpt-4o`), and keep `wire_ap
 Current limitations of this alpha integration:
 
 1. **No memory persistence**: Conversation history isn't saved between Codex sessions
-2. **Limited error handling**: Some provider-specific errors may not surface clearly
-3. **Performance overhead**: Additional proxy layer adds latency
+2. **No Codex multi-agent tools**: The generated OGX profile disables Codex multi-agent tools because current OGX Responses models do not accept Codex's `namespace` tool shape
+3. **Limited error handling**: Some provider-specific errors may not surface clearly
+4. **Performance overhead**: Additional proxy layer adds latency
 
 ## Troubleshooting
 

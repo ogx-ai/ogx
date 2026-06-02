@@ -275,7 +275,7 @@ class CodexSessionBuilder:
         default_model: str,
     ) -> None:
         model_catalog_path = codex_home / "ogx-model-catalog.json"
-        config_path = codex_home / "config.toml"
+        config_path = codex_home / "ogx.config.toml"
         model_catalog_path.write_text(
             json.dumps(self.catalog_builder.build_model_catalog(available_models, default_model), indent=2)
         )
@@ -285,6 +285,13 @@ class CodexSessionBuilder:
     def build_codex_config(base_url: str, model_catalog_path: Path, default_model: str) -> str:
         env_http_headers = '{ "X-OGX-Provider-Data" = "OGX_PROVIDER_DATA" }'
         config_lines = [
+            f"model = {json.dumps(default_model)}",
+            'model_provider = "ogx"',
+            f"model_catalog_json = {json.dumps(str(model_catalog_path))}",
+            "",
+            "[features]",
+            "multi_agent = false",
+            "",
             "[model_providers.ogx]",
             'name = "OGX"',
             f"base_url = {json.dumps(base_url)}",
@@ -301,11 +308,6 @@ class CodexSessionBuilder:
         config_lines.extend(
             [
                 f"env_http_headers = {env_http_headers}",
-                "",
-                "[profiles.ogx]",
-                f"model = {json.dumps(default_model)}",
-                'model_provider = "ogx"',
-                f"model_catalog_json = {json.dumps(str(model_catalog_path))}",
                 "",
             ]
         )
