@@ -17,6 +17,7 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | Integration Auth Tests | [integration-auth-tests.yml](integration-auth-tests.yml) | Run the integration test suite with Kubernetes authentication |
 | Integration Responses, Conversations & Prompts Auth Tests | [integration-responses-conversations-auth-tests.yml](integration-responses-conversations-auth-tests.yml) | Run responses, conversations, and prompts auth tests with Kubernetes authentication |
 | SqlStore Integration Tests | [integration-sql-store-tests.yml](integration-sql-store-tests.yml) | Run the integration test suite with SqlStore |
+| Messages API - Claude Code CLI Smoke Test | [integration-tests-messages-cli.yml](integration-tests-messages-cli.yml) | Drive the real Claude Code CLI against /v1/messages (live, Ollama) |
 | Integration Tests (Replay) | [integration-tests.yml](integration-tests.yml) | Run the integration test suites from tests/integration in replay mode |
 | Vector IO Integration Tests | [integration-vector-io-tests.yml](integration-vector-io-tests.yml) | Run the integration test suite with various VectorIO providers |
 | OpenAPI Generator SDK Validation | [openapi-generator-validation.yml](openapi-generator-validation.yml) | Validate OpenAPI Generator SDK generation |
@@ -25,6 +26,7 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | Pre-commit | [pre-commit.yml](pre-commit.yml) | Run pre-commit checks |
 | Prepare release | [prepare-release.yml](prepare-release.yml) | Prepare release |
 | Test OGX Build | [providers-build.yml](providers-build.yml) | Test ogx build and list-deps |
+| Publish OpenAPI SDK to PyPI | [publish-openapi-sdk.yml](publish-openapi-sdk.yml) | Publish ogx-open-client to PyPI |
 | Build, test, and publish packages | [pypi.yml](pypi.yml) | Build, test, and publish packages |
 | Integration Tests (Record) | [record-integration-tests.yml](record-integration-tests.yml) | Auto-record missing test recordings for PR |
 | Release Branch Scheduled CI | [release-branch-scheduled-ci.yml](release-branch-scheduled-ci.yml) | Scheduled CI checks for active release branches |

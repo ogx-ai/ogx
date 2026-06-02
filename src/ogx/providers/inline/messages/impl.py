@@ -474,11 +474,21 @@ class BuiltinMessagesImpl(Messages):
         # Use the provider_resource_id (model name without provider prefix)
         provider_model = request.model
         router = self.inference_api
+        api_key = "no-key-required"
         if hasattr(router, "routing_table"):
             try:
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
+                    provider_impl = await router.routing_table.get_provider_impl(obj.identifier)
+                    # TODO: this is a sever abstration violation. this all needs to be refactored
+                    #       to use a proper provider interface for messages
+                    if hasattr(provider_impl, "_get_api_key_from_config_or_provider_data"):
+                        key = provider_impl._get_api_key_from_config_or_provider_data()
+                    else:
+                        key = provider_impl.get_api_key() if hasattr(provider_impl, "get_api_key") else None
+                    if key:
+                        api_key = key
             except (KeyError, ValueError, AttributeError):
                 logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
@@ -487,7 +497,7 @@ class BuiltinMessagesImpl(Messages):
         headers = {
             "content-type": "application/json",
             "anthropic-version": ANTHROPIC_VERSION,
-            "x-api-key": "no-key-required",
+            "x-api-key": api_key,
         }
 
         if request.stream:
@@ -584,11 +594,21 @@ class BuiltinMessagesImpl(Messages):
         # Use the provider_resource_id (model name without provider prefix)
         provider_model = request.model
         router = self.inference_api
+        api_key = "no-key-required"
         if hasattr(router, "routing_table"):
             try:
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
+                    provider_impl = await router.routing_table.get_provider_impl(obj.identifier)
+                    # TODO: this needs to be rafactored to avoid abstraction violations and remove
+                    #       duplicated logic with _passthrough_request
+                    if hasattr(provider_impl, "_get_api_key_from_config_or_provider_data"):
+                        key = provider_impl._get_api_key_from_config_or_provider_data()
+                    else:
+                        key = provider_impl.get_api_key() if hasattr(provider_impl, "get_api_key") else None
+                    if key:
+                        api_key = key
             except (KeyError, ValueError, AttributeError):
                 logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
@@ -597,7 +617,7 @@ class BuiltinMessagesImpl(Messages):
         headers = {
             "content-type": "application/json",
             "anthropic-version": ANTHROPIC_VERSION,
-            "x-api-key": "no-key-required",
+            "x-api-key": api_key,
         }
 
         resp = await self._client.post(url, json=body, headers=headers, timeout=30)
@@ -670,6 +690,11 @@ class BuiltinMessagesImpl(Messages):
 
         if msg.role == "assistant":
             return [self._convert_assistant_message(msg.content)]
+
+        if msg.role == "system":
+            # System content blocks are text-only; concatenate to a single string.
+            system_text = "\n".join(block.text for block in msg.content if isinstance(block, AnthropicTextBlock))
+            return [{"role": "system", "content": system_text}]
 
         # User message: may contain text and/or tool_result blocks
         result: list[dict[str, Any]] = []

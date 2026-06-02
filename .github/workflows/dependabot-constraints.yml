@@ -122,14 +122,15 @@ jobs:
         env:
           TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
         run: |
-          if echo " $TARGET_PYPROJECTS " | grep -q ' pyproject.toml '; then
-            echo "Regenerating root uv.lock"
-            uv lock
-          fi
           if echo " $TARGET_PYPROJECTS " | grep -q ' src/ogx_api/pyproject.toml '; then
             echo "Regenerating src/ogx_api/uv.lock"
             uv lock --directory src/ogx_api
           fi
+          # Always regenerate root uv.lock: ogx-api is a workspace dependency
+          # of the root project, so any change to src/ogx_api/pyproject.toml
+          # also invalidates the root lock file.
+          echo "Regenerating root uv.lock"
+          uv lock
 
       - name: Create PR metadata artifact
         if: steps.parse.outputs.skip != 'true'
@@ -184,10 +185,12 @@ jobs:
           EOF
 
           if [ "$CHANGED" = "true" ]; then
-            if echo " $TARGET_PYPROJECTS " | grep -q ' pyproject.toml '; then
+            # Always include root uv.lock since ogx-api is a workspace
+            # dependency — any sub-package change invalidates the root lock.
+            if [ -f pyproject.toml ]; then
               cp pyproject.toml constraint-update/
-              cp uv.lock constraint-update/
             fi
+            cp uv.lock constraint-update/
             if echo " $TARGET_PYPROJECTS " | grep -q ' src/ogx_api/pyproject.toml '; then
               mkdir -p constraint-update/src/ogx_api
               cp src/ogx_api/pyproject.toml constraint-update/src/ogx_api/

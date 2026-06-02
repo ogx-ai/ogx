@@ -127,7 +127,10 @@ AnthropicContentBlock = Annotated[
 class AnthropicMessage(BaseModel):
     """A message in the conversation."""
 
-    role: Literal["user", "assistant"]
+    # The Anthropic spec places the system prompt in a top-level `system` field, but
+    # real clients (e.g. the Claude Code CLI) interleave system-role messages inside
+    # the conversation. Accept "system" here so those requests are not rejected.
+    role: Literal["user", "assistant", "system"]
     content: str | list[AnthropicContentBlock] = Field(
         ...,
         description="Message content: a string for simple text, or a list of content blocks.",

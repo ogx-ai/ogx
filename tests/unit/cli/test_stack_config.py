@@ -244,6 +244,7 @@ def test_providers_flag_generates_config_with_api_keys():
         image_type=None,
         distro_name=None,
         enable_ui=False,
+        dry_run=False,
     )
 
     # Mock _uvicorn_run to prevent starting a server
