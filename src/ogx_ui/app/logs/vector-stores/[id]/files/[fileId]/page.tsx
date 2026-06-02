@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import type { VectorStore } from "llama-stack-client/resources/vector-stores/vector-stores";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
 import type {
   VectorStoreFile,
   FileContentResponse,
-} from "llama-stack-client/resources/vector-stores/files";
+} from "ogx-client/resources/vector-stores/files";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -221,7 +221,7 @@ export default function FileDetailPage() {
             <div className="text-destructive text-sm">
               Error loading content summary: {errorContents.message}
             </div>
-          ) : contents && contents.content.length > 0 ? (
+          ) : contents?.content && contents.content.length > 0 ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>

@@ -312,15 +312,17 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
 
     def _get_client(self) -> weaviate.WeaviateClient:
         if "localhost" in self.config.weaviate_cluster_url:
-            log.info("Using Weaviate locally in container")
             host, port = self.config.weaviate_cluster_url.split(":")
-            key = "local_test"
+            key = f"local::{host}::{port}"
+            if key in self.client_cache:
+                return self.client_cache[key]
+            log.info("Using Weaviate locally in container")
             client = weaviate.connect_to_local(host=host, port=port)
         else:
-            log.info("Using Weaviate remote cluster with URL")
             key = f"{self.config.weaviate_cluster_url}::{self.config.weaviate_api_key}"
             if key in self.client_cache:
                 return self.client_cache[key]
+            log.info("Using Weaviate remote cluster with URL")
             client = weaviate.connect_to_weaviate_cloud(
                 cluster_url=self.config.weaviate_cluster_url,
                 auth_credentials=Auth.api_key(self.config.weaviate_api_key),

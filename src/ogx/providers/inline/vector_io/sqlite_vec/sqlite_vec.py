@@ -460,8 +460,10 @@ class SQLiteVecIndex(EmbeddingIndex):
             reranker_params = {}
 
         # Get results from both search methods, passing filters to each
-        vector_response = await self.query_vector(embedding, k, score_threshold, filters)
-        keyword_response = await self.query_keyword(query_string, k, score_threshold, filters)
+        vector_response, keyword_response = await asyncio.gather(
+            self.query_vector(embedding, k, score_threshold, filters),
+            self.query_keyword(query_string, k, score_threshold, filters),
+        )
 
         # Convert responses to score dictionaries using chunk_id (EmbeddedChunk inherits from Chunk)
         vector_scores = {
