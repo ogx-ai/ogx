@@ -7,7 +7,7 @@
 
 import pytest
 
-from ogx.core.datatypes import VectorStoreWithOwner
+from ogx.core.datatypes import User, VectorStoreWithOwner
 from ogx.core.storage.datatypes import SqliteKVStoreConfig
 from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
 from ogx.core.store.registry import (
@@ -96,7 +96,13 @@ async def test_cached_registry_updates(cached_disk_dist_registry):
     )
     await cached_disk_dist_registry.register(new_vector_store)
 
-    # Verify in cache
+    # Verify in cache — covers the else-obj branch: on first registration
+    # (no existing DB object) the incoming obj itself must be cached.
+    cached_vector_store = cached_disk_dist_registry.get_cached("vector_store", "test_vector_store_2")
+    assert cached_vector_store is not None
+    assert cached_vector_store.identifier == new_vector_store.identifier
+    assert cached_vector_store.provider_id == new_vector_store.provider_id
+
     result_vector_store = await cached_disk_dist_registry.get("vector_store", "test_vector_store_2")
     assert result_vector_store is not None
     assert result_vector_store.identifier == new_vector_store.identifier
@@ -307,8 +313,6 @@ async def test_restart_registration_with_owner_mismatch(disk_dist_registry):
     is not in the incoming object's ``model_fields_set``, it is treated
     as an unset field and the existing record is accepted as-is.
     """
-    from ogx.core.datatypes import User
-
     # First registration with owner (as if set during initial startup)
     vector_store_with_owner = VectorStoreWithOwner(
         identifier="restart_test_vs",
@@ -420,6 +424,49 @@ async def test_multi_worker_cache_synchronization(sqlite_kvstore, sample_vector_
     all_objects_b = await worker_b_registry.get_all()
     assert len(all_objects_b) == 1
     assert all_objects_b[0].identifier == sample_vector_store.identifier
+
+
+async def test_cached_registry_preserves_owner_on_subset_reregistration(cached_disk_dist_registry):
+    """Regression test for cache corruption on subset re-registration.
+
+    On server restart, config-provided objects re-register without owner. The
+    no-op subset path must cache the full DB object, not the incoming partial
+    one, so that mutable fields like owner survive across restarts.
+    """
+    owner = User(principal="admin", attributes=None)
+    full_vs = VectorStoreWithOwner(
+        identifier="owned_vs",
+        embedding_model="all-MiniLM-L6-v2",
+        embedding_dimension=384,
+        provider_resource_id="owned_vs",
+        provider_id="test-provider",
+        owner=owner,
+    )
+
+    # Initial registration — full object with owner
+    assert await cached_disk_dist_registry.register(full_vs)
+
+    # Simulate server restart: re-register from config without owner
+    subset_vs = VectorStoreWithOwner(
+        identifier="owned_vs",
+        embedding_model="all-MiniLM-L6-v2",
+        embedding_dimension=384,
+        provider_resource_id="owned_vs",
+        provider_id="test-provider",
+    )
+    assert await cached_disk_dist_registry.register(subset_vs)
+
+    # Cache must hold the full DB object — owner must not be dropped
+    cached = cached_disk_dist_registry.get_cached("vector_store", "owned_vs")
+    assert cached is not None
+    assert cached.owner is not None
+    assert cached.owner.principal == "admin"
+
+    # get() must also return the full object
+    retrieved = await cached_disk_dist_registry.get("vector_store", "owned_vs")
+    assert retrieved is not None
+    assert retrieved.owner is not None
+    assert retrieved.owner.principal == "admin"
 
 
 async def test_multi_worker_get_all_synchronization(sqlite_kvstore, sample_vector_store, sample_model):

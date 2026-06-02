@@ -21,6 +21,7 @@ from ogx.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
 from ogx_api import (
     HealthStatus,
     Model,
+    ModelType,
     OpenAIChatCompletion,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionResponseMessage,
@@ -317,7 +318,57 @@ async def test_vllm_chat_completion_extra_body():
         assert call_kwargs["extra_body"]["chat_template_kwargs"] == {"thinking": True}
 
 
-class TestHealthTLSConfig:
+class TestConstructModelFromIdentifier:
+    def _make_adapter(self) -> VLLMInferenceAdapter:
+        config = VLLMInferenceAdapterConfig(base_url="http://mocked.localhost:12345")
+        adapter = VLLMInferenceAdapter(config=config)
+        adapter.__provider_id__ = "vllm"
+        return adapter
+
+    def test_family_check_classifies_embedding_without_embed_in_identifier(self):
+        # intfloat/multilingual-e5-large-instruct has no "embed" in its identifier
+        # but its models.dev family is "text-embedding", so it must be classified
+        # as an embedding model with metadata populated from models.dev.
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("intfloat/multilingual-e5-large-instruct")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata.get("embedding_dimension") == 512
+
+    def test_known_embedding_model_populates_metadata_from_models_dev(self):
+        # text-embedding-3-large is in models_dev (openai provider) with
+        # limit.output=3072 (embedding dimension) and limit.context=8191.
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("text-embedding-3-large")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata.get("embedding_dimension") == 3072
+        assert model.metadata.get("context_length") == 8191
+
+    def test_unknown_embedding_model_falls_back_to_name_heuristic(self):
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("acme/custom-embed-v1")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata == {}
+
+    def test_rerank_model_classified_correctly(self):
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("Qwen/Qwen3-Reranker-0.6B")
+
+        assert model.model_type == ModelType.rerank
+
+    def test_huggingface_provider_wins_over_other_providers(self):
+        # Qwen/Qwen3-Embedding-8B exists in multiple providers. evroc records
+        # output=40960 (the context window, not the embedding dimension).
+        # huggingface correctly records output=4096. The index must prefer
+        # huggingface so callers see the right embedding_dimension.
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("Qwen/Qwen3-Embedding-8B")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata.get("embedding_dimension") == 4096
+
     """Tests that health() honours TLS/network configuration."""
 
     async def test_health_uses_shared_ssl_context_by_default(self):

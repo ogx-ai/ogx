@@ -1,0 +1,64 @@
+{
+  "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=ollama/llama3.2:3b-instruct-fp16]",
+  "request": {
+    "test_id": "tests/integration/messages/test_messages.py::test_messages_with_tool_definitions[txt=ollama/llama3.2:3b-instruct-fp16]",
+    "url": "http://0.0.0.0:11434/v1/messages",
+    "method": "POST",
+    "payload": {
+      "model": "llama3.2:3b-instruct-fp16",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in San Francisco?"
+        }
+      ],
+      "max_tokens": 256,
+      "tools": [
+        {
+          "type": "custom",
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "msg_d4c53aa765b01197dc6e38d9",
+      "type": "message",
+      "role": "assistant",
+      "model": "llama3.2:3b-instruct-fp16",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call_m7i7a2un",
+          "name": "get_weather",
+          "input": {
+            "location": "San Francisco, CA"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 167,
+        "output_tokens": 20
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

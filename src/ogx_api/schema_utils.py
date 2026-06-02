@@ -248,6 +248,17 @@ def remove_null_from_anyof(schema: dict[str, Any], *, add_nullable: bool = False
             schema["nullable"] = True
 
 
+def remove_default_from_schema(schema: dict[str, Any]) -> None:
+    """Remove the default value from a JSON schema."""
+    schema.pop("default", None)
+
+
+def flatten_nullable_remove_default(schema: dict[str, Any]) -> None:
+    """Remove null from anyOf and strip default values from schema."""
+    remove_null_from_anyof(schema)
+    schema.pop("default", None)
+
+
 def nullable_openai_style(schema: dict[str, Any]) -> None:
     """Shorthand for remove_null_from_anyof with add_nullable=True.
 

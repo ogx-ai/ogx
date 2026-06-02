@@ -410,6 +410,34 @@ for result in results:
 
 # Google GenAI SDK code samples for Interactions API endpoints.
 _GOOGLE_CODE_SAMPLES: dict[tuple[str, str], str] = {
+    ("/v1/models", "get"): """\
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    api_key="fake",
+    http_options=types.HttpOptions(
+        base_url="http://localhost:8321",
+        api_version="v1",
+    ),
+)
+for model in client.models.list():
+    print(model.name)
+""",
+    ("/v1/models/{model_id}", "get"): """\
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    api_key="fake",
+    http_options=types.HttpOptions(
+        base_url="http://localhost:8321",
+        api_version="v1",
+    ),
+)
+model = client.models.get(model="openai/gpt-4o")
+print(model.name)
+""",
     ("/v1alpha/interactions", "post"): """\
 from google import genai
 from google.genai import types
@@ -432,10 +460,43 @@ print(interaction.outputs[0].text)
 
 # Anthropic SDK code samples for the Messages API endpoints.
 _ANTHROPIC_CODE_SAMPLES: dict[tuple[str, str], list[dict[str, str]]] = {
+    ("/v1/models", "get"): [
+        {
+            "lang": "Anthropic",
+            "label": "Anthropic",
+            "source": """\
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+models = client.models.list()
+for model in models:
+    print(model.id)""",
+        },
+    ],
+    ("/v1/models/{model_id}", "get"): [
+        {
+            "lang": "Anthropic",
+            "label": "Anthropic",
+            "source": """\
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+model = client.models.retrieve("openai/gpt-4o")
+print(model.id)""",
+        },
+    ],
     ("/v1/messages", "post"): [
         {
-            "lang": "Python",
-            "label": "Anthropic SDK",
+            "lang": "Anthropic",
+            "label": "Anthropic",
             "source": """\
 from anthropic import Anthropic
 
@@ -453,25 +514,6 @@ message = client.messages.create(
 )
 
 print(message.content[0].text)""",
-        },
-        {
-            "lang": "TypeScript",
-            "label": "Anthropic SDK",
-            "source": """\
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic({
-  baseURL: "http://localhost:8321/v1",
-  apiKey: "fake",
-});
-
-const message = await client.messages.create({
-  model: "llama-3.3-70b",
-  max_tokens: 1024,
-  messages: [{ role: "user", content: "What is OGX?" }],
-});
-
-console.log(message.content[0].text);""",
         },
     ],
 }
@@ -510,7 +552,7 @@ def _add_openai_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
             continue
 
         code_sample = {
-            "lang": "Python",
+            "lang": "OpenAI",
             "label": "OpenAI",
             "source": source_code.rstrip("\n"),
         }
@@ -537,8 +579,8 @@ def _add_google_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
             continue
 
         code_sample = {
-            "lang": "Python",
-            "label": "Google GenAI",
+            "lang": "Google",
+            "label": "Google",
             "source": source_code.rstrip("\n"),
         }
 
