@@ -40,12 +40,15 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _run_query(prompt: str, base_url: str, model: str) -> list:
+def _run_query(prompt: str, base_url: str, model: str, cwd: str) -> list:
     """Run a single Agent SDK query() to completion and return all messages."""
     from claude_agent_sdk import ClaudeAgentOptions, query
 
     options = ClaudeAgentOptions(
         model=model,
+        # Run from an isolated directory so the spawned CLI does not pick up
+        # repo-local context, which matters while permissions are bypassed.
+        cwd=cwd,
         # Passed to the spawned CLI subprocess so it reaches OGX instead of
         # api.anthropic.com.
         env={
@@ -72,7 +75,7 @@ def _run_query(prompt: str, base_url: str, model: str) -> list:
     return messages
 
 
-def test_claude_agent_sdk_smoke(messages_base_url, text_model_id):
+def test_claude_agent_sdk_smoke(messages_base_url, text_model_id, tmp_path):
     """Claude Agent SDK completes a session against /v1/messages without error.
 
     The smoke signal is integration health, not answer quality: the SDK drives a
@@ -88,7 +91,7 @@ def test_claude_agent_sdk_smoke(messages_base_url, text_model_id):
     prompt = "What is the capital of France? Reply with only the city name and nothing else."
     base_url = str(messages_base_url).rstrip("/")
 
-    messages = _run_query(prompt, base_url, text_model_id)
+    messages = _run_query(prompt, base_url, text_model_id, cwd=str(tmp_path))
 
     results = [m for m in messages if isinstance(m, ResultMessage)]
     assert results, f"Agent SDK session produced no ResultMessage; got: {[type(m).__name__ for m in messages]}"
