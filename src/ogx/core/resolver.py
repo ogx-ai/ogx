@@ -9,7 +9,6 @@ import importlib.metadata
 import inspect
 from typing import Any
 
-from ogx.core.client import get_client_impl
 from ogx.core.datatypes import (
     AccessRule,
     AutoRoutedProviderSpec,
@@ -41,12 +40,8 @@ from ogx_api import (
     ModelsProtocolPrivate,
     Prompts,
     ProviderSpec,
-    RemoteProviderConfig,
     RemoteProviderSpec,
     Responses,
-    Safety,
-    Shields,
-    ShieldsProtocolPrivate,
     ToolGroups,
     ToolGroupsProtocolPrivate,
     ToolRuntime,
@@ -85,8 +80,6 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.vector_io: VectorIO,
         Api.vector_stores: VectorStore,
         Api.models: Models,
-        Api.safety: Safety,
-        Api.shields: Shields,
         Api.tool_groups: ToolGroups,
         Api.tool_runtime: ToolRuntime,
         Api.files: Files,
@@ -136,11 +129,9 @@ def additional_protocols_map() -> dict[Api, Any]:
     return {
         Api.inference: (ModelsProtocolPrivate, Models, Api.models),
         Api.tool_groups: (ToolGroupsProtocolPrivate, ToolGroups, Api.tool_groups),
-        Api.safety: (ShieldsProtocolPrivate, Shields, Api.shields),
     }
 
 
-# TODO: make all this naming far less atrocious. Provider. ProviderSpec. ProviderWithSpec. WTF!
 class ProviderWithSpec(Provider):
     """A Provider paired with its resolved ProviderSpec for instantiation."""
 
@@ -409,10 +400,29 @@ async def instantiate_provider(
 
     logger.debug("Instantiating provider", provider_id=provider.provider_id, module=provider_spec.module)
     module = importlib.import_module(provider_spec.module)
+
+    def _inject_config_defaults(config_type: type[Any], provider_config: dict[str, Any]) -> dict[str, Any]:
+        fields = getattr(config_type, "__fields__", None)
+        if fields is None:
+            return provider_config
+
+        # Inject vector_stores_config for providers that need it (introspection-based).
+        # Only inject if vector_stores is provided, otherwise let default_factory handle it.
+        if "vector_stores_config" in fields and run_config.vector_stores is not None:
+            provider_config["vector_stores_config"] = run_config.vector_stores
+
+        # Inject metadata_store from server stores config when not explicitly configured.
+        if "metadata_store" in fields:
+            if provider_config.get("metadata_store") is None and run_config.storage.stores.vector_stores is not None:
+                provider_config["metadata_store"] = run_config.storage.stores.vector_stores.model_dump()
+
+        return provider_config
+
     args = []
     if isinstance(provider_spec, RemoteProviderSpec):
         config_type = instantiate_class_type(provider_spec.config_class)
-        config = config_type(**provider.config)
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
+        config = config_type(**provider_config)
 
         method = "get_adapter_impl"
         args = [config, deps]
@@ -432,15 +442,8 @@ async def instantiate_provider(
         args = [provider_spec.api, inner_impls, deps, dist_registry, policy]
     else:
         method = "get_provider_impl"
-        provider_config = provider.config.copy()
-
-        # Inject vector_stores_config for providers that need it (introspection-based)
         config_type = instantiate_class_type(provider_spec.config_class)
-        if hasattr(config_type, "__fields__") and "vector_stores_config" in config_type.__fields__:
-            # Only inject if vector_stores is provided, otherwise let default_factory handle it
-            if run_config.vector_stores is not None:
-                provider_config["vector_stores_config"] = run_config.vector_stores
-
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
         config = config_type(**provider_config)
         args = [config, deps]
         if "policy" in inspect.signature(getattr(module, method)).parameters:
@@ -519,38 +522,3 @@ def check_protocol_compliance(obj: Any, protocol: Any) -> None:
         raise ValueError(
             f"Provider `{obj.__provider_id__} ({obj.__provider_spec__.api})` does not implement the following methods:\n{missing_methods}"
         )
-
-
-async def resolve_remote_stack_impls(
-    config: RemoteProviderConfig,
-    apis: list[str],
-) -> dict[Api, Any]:
-    """Resolve provider implementations for a remote stack by creating API clients.
-
-    Args:
-        config: Remote provider configuration containing the connection URL.
-        apis: List of API names to resolve.
-
-    Returns:
-        Dictionary mapping APIs to their remote client implementations.
-    """
-    protocols = api_protocol_map()
-    additional_protocols = additional_protocols_map()
-
-    impls = {}
-    for api_str in apis:
-        api = Api(api_str)
-        impls[api] = await get_client_impl(
-            protocols[api],
-            config,
-            {},
-        )
-        if api in additional_protocols:
-            _, additional_protocol, additional_api = additional_protocols[api]
-            impls[additional_api] = await get_client_impl(
-                additional_protocol,
-                config,
-                {},
-            )
-
-    return impls

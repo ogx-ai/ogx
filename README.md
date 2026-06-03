@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://pypi.org/project/ogx/"><img src="https://img.shields.io/pypi/v/ogx?logo=pypi" alt="PyPI Version"></a>
   <a href="https://pypi.org/project/ogx/"><img src="https://img.shields.io/pypi/dm/ogx" alt="PyPI Downloads"></a>
-  <a href="https://hub.docker.com/u/ogx"><img src="https://img.shields.io/docker/pulls/ogx/distribution-starter?logo=docker" alt="Docker Hub Pulls"></a>
+  <a href="https://hub.docker.com/u/ogxai"><img src="https://img.shields.io/docker/pulls/ogxai/distribution-starter?logo=docker" alt="Docker Hub Pulls"></a>
   <a href="https://github.com/ogx-ai/ogx/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/ogx.svg" alt="License"></a>
   <a href="https://discord.gg/ZAFjsrcw"><img src="https://img.shields.io/discord/1257833999603335178?color=5865F2&logo=discord&logoColor=ffffff" alt="Discord"></a>
   <a href="https://github.com/ogx-ai/ogx/actions/workflows/unit-tests.yml?query=branch%3Amain"><img src="https://github.com/ogx-ai/ogx/actions/workflows/unit-tests.yml/badge.svg?branch=main" alt="Unit Tests"></a>
@@ -13,6 +13,9 @@
 </p>
 
 [**Quick Start**](https://ogx-ai.github.io/docs/getting_started/quickstart) | [**Documentation**](https://ogx-ai.github.io/docs) | [**OpenAI API Compatibility**](https://ogx-ai.github.io/docs/api-openai) | [**Discord**](https://discord.gg/ZAFjsrcw)
+
+> [!IMPORTANT]
+> **Llama Stack is now OGX.** The name changed, and so did the mission — model-agnostic, multi-SDK, production-grade. [Read the full announcement →](https://ogx-ai.github.io/blog/from-llama-stack-to-ogx)
 
 **Open-source agentic API server for building AI applications. OpenAI-compatible. Any model, any infrastructure.**
 
@@ -59,7 +62,7 @@ curl -LsSf https://github.com/ogx-ai/ogx/raw/main/scripts/install.sh | bash
 uv pip install ogx[starter]
 
 # Start the server (uses the starter distribution with Ollama)
-uv run ogx run starter
+uv run ogx stack run starter
 ```
 
 Then connect with any OpenAI, Anthropic, or Google GenAI client — [Python](https://github.com/openai/openai-python), [TypeScript](https://github.com/openai/openai-node), [curl](https://platform.openai.com/docs/api-reference), or any framework that speaks these APIs.
@@ -75,10 +78,22 @@ See the [Quick Start guide](https://ogx-ai.github.io/docs/getting_started/quicks
 
 **Client SDKs:**
 
+OGX provides official client SDKs for Python and TypeScript:
+
 |  Language |  SDK | Package |
 | :----: | :----: | :----: |
 | Python |  [ogx-client-python](https://github.com/ogx-ai/ogx-client-python) | [![PyPI version](https://img.shields.io/pypi/v/ogx_client.svg)](https://pypi.org/project/ogx_client/) |
 | TypeScript   | [ogx-client-typescript](https://github.com/ogx-ai/ogx-client-typescript) | [![NPM version](https://img.shields.io/npm/v/ogx-client.svg)](https://npmjs.org/package/ogx-client) |
+
+**Alternative Python SDK:**
+
+For users who prefer an OpenAPI Generator-based SDK, an alternative Python client is available:
+
+- **[ogx-open-client](https://pypi.org/project/ogx-open-client/)** — Auto-generated from OpenAPI spec, provides similar functionality with a different generation approach
+- **[Usage Examples](client-sdks/openapi/USAGE_EXAMPLES.md)** — End-to-end code examples for all major features
+- **[Strategy & Rationale](client-sdks/openapi/STRATEGY.md)** — Why two SDKs, when to use which, and long-term plans
+
+The official `ogx_client` SDK is recommended for most use cases. The `ogx_open_client` package offers an alternative for teams with specific OpenAPI tooling requirements.
 
 ## Community
 

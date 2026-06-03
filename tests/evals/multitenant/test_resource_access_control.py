@@ -70,7 +70,7 @@ TENANT_A_MODEL = _MockResource(
 PUBLIC_MODEL = _MockResource(
     resource_type="model",
     identifier="llama-3-base",
-    owner=User(principal="system", attributes={}),
+    owner=None,
 )
 
 
@@ -235,7 +235,7 @@ class TestABACCorrectnessMetrics:
             for resource in resources:
                 for action in actions:
                     # Determine expected result
-                    if not resource.owner.attributes:
+                    if not resource.owner:
                         # Public resource: accessible to all
                         expected = True
                     elif user == TENANT_ADMIN:

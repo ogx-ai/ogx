@@ -11,16 +11,17 @@ OGX provides a compatibility layer for the [Google Interactions API](https://ai.
 
 ```python
 from google import genai
+from google.genai import types
 
 client = genai.Client(
-    http_options={"api_version": "v1alpha"},
-    vertexai=False,
-    api_key="fake",
+    api_key="no-key-required",
+    http_options=types.HttpOptions(
+        base_url="http://localhost:8321",
+        api_version="v1alpha",
+    ),
 )
-# Override the base URL to point at OGX
-client._api_client._url = "http://localhost:8321"
 
-response = client.models.generate_interaction(
+response = client.interactions.create(
     model="llama-3.3-70b",
     input="Hello",
 )
@@ -63,13 +64,25 @@ flowchart TD
 - **Streaming** via Server-Sent Events matching Google's event format
 - **System instructions** mapped to the system role
 - **Generation config** parameters (temperature, top_p, top_k, max_output_tokens)
+- **Tool calling** with function declarations, function_call outputs, and function_response inputs
 
-**Passthrough path** (Gemini): when using the Gemini inference provider, non-streaming requests are forwarded directly to Google's API without translation.
+**Passthrough path** (Gemini): when using the Gemini inference provider, requests are forwarded directly to Google's API without translation, including raw SSE streaming.
+
+## Using with Google ADK
+
+The [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/) can use the Interactions API as its inference backend when `use_interactions_api=True` is set on the `Gemini` model. However, ADK's `Gemini` class currently creates its own `google.genai.Client` internally and does not allow injecting a pre-configured client with a custom `base_url`.
+
+This means you cannot point ADK at an OGX server out of the box. There is an [open PR](https://github.com/google/adk-python/pull/5035) to add a `client` parameter to the `Gemini` class. Until it merges, using ADK with OGX requires either:
+
+- Monkey-patching `Gemini.api_client` with a custom `genai.Client` pointed at the OGX server
+- Implementing a custom `BaseLlm` subclass that uses `genai.Client(http_options={"base_url": "..."})` directly
+
+The GenAI SDK itself works without issues - you can create a `genai.Client` with a custom `base_url` and call `client.interactions.create(...)` directly against OGX.
 
 ## Known limitations
 
 - Only text content is supported; multimodal inputs (images, audio, video) are not yet implemented
-- Tool declarations (Function, GoogleSearch, CodeExecution, MCP) are not yet supported
-- Background execution and interaction storage (`store`, `background`) are not available
+- Conversation chaining via `previous_interaction_id` is not yet available
+- Background execution is not available
 - The GET, DELETE, and Cancel endpoints are not yet implemented
 - Response modalities are accepted for compatibility but ignored

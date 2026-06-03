@@ -178,7 +178,7 @@ def test_expires_after_requests(openai_client):
 @patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 def test_files_authentication_isolation(mock_get_authenticated_user, ogx_client):
     """Test that users can only access their own files."""
-    from llama_stack_client import NotFoundError
+    from ogx_client import NotFoundError
 
     client = ogx_client
 

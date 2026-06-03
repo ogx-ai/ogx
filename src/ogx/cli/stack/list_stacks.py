@@ -41,7 +41,7 @@ class StackListBuilds(Subcommand):
                 if stack_dir.is_dir() and not stack_dir.name.startswith(".") and not stack_dir.name.startswith("__"):
                     distributions[stack_dir.name] = (stack_dir, "built-in")
 
-        # Get custom/run distributions from ~/.llama/distributions
+        # Get custom/run distributions from ~/.ogx/distributions
         # These override built-in ones if they have the same name
         if DISTRIBS_BASE_DIR.exists():
             for stack_dir in DISTRIBS_BASE_DIR.iterdir():

@@ -4,7 +4,7 @@ import React from "react";
 import type {
   ListVectorStoresResponse,
   VectorStore,
-} from "llama-stack-client/resources/vector-stores/vector-stores";
+} from "ogx-client/resources/vector-stores/vector-stores";
 import { useRouter } from "next/navigation";
 import { usePagination } from "@/hooks/use-pagination";
 import { Button } from "@/components/ui/button";
@@ -108,27 +108,16 @@ export default function VectorStoresPage() {
 
       if (editingStore) {
         // Update existing vector store
-        const updateParams: {
-          name?: string;
-          extra_body?: Record<string, unknown>;
-        } = {};
+        const updateParams: Record<string, unknown> = {};
 
-        // Only include fields that have changed or are provided
         if (formData.name && formData.name !== editingStore.name) {
           updateParams.name = formData.name;
         }
-
-        // Add all parameters to extra_body (except provider_id which can't be changed)
-        const extraBody: Record<string, unknown> = {};
         if (formData.embedding_model) {
-          extraBody.embedding_model = formData.embedding_model;
+          updateParams.embedding_model = formData.embedding_model;
         }
         if (formData.embedding_dimension) {
-          extraBody.embedding_dimension = formData.embedding_dimension;
-        }
-
-        if (Object.keys(extraBody).length > 0) {
-          updateParams.extra_body = extraBody;
+          updateParams.embedding_dimension = formData.embedding_dimension;
         }
 
         await client.vectorStores.update(editingStore.id, updateParams);
@@ -141,33 +130,18 @@ export default function VectorStoresPage() {
         return;
       }
 
-      const createParams: {
-        name?: string;
-        provider_id?: string;
-        extra_body?: Record<string, unknown>;
-      } = {
+      const createParams: Record<string, unknown> = {
         name: formData.name || undefined,
       };
 
-      // Extract provider_id to top-level (like Python client does)
       if (formData.provider_id) {
         createParams.provider_id = formData.provider_id;
       }
-
-      // Add remaining parameters to extra_body
-      const extraBody: Record<string, unknown> = {};
-      if (formData.provider_id) {
-        extraBody.provider_id = formData.provider_id;
-      }
       if (formData.embedding_model) {
-        extraBody.embedding_model = formData.embedding_model;
+        createParams.embedding_model = formData.embedding_model;
       }
       if (formData.embedding_dimension) {
-        extraBody.embedding_dimension = formData.embedding_dimension;
-      }
-
-      if (Object.keys(extraBody).length > 0) {
-        createParams.extra_body = extraBody;
+        createParams.embedding_dimension = formData.embedding_dimension;
       }
 
       await client.vectorStores.create(createParams);

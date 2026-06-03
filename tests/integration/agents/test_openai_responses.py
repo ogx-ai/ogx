@@ -4,9 +4,19 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 import pytest
-from openai import NotFoundError, OpenAI
+from openai import APIStatusError, NotFoundError, OpenAI
 
 from ogx.core.library_client import OGXAsLibraryClient
+
+
+def _create_guardrailed_response_or_skip(compat_client: OpenAI, **kwargs):
+    """Create a guardrailed response or skip if moderation isn't configured."""
+    try:
+        return compat_client.responses.create(**kwargs)
+    except APIStatusError as exc:
+        if exc.status_code == 503 and "moderation_endpoint" in str(exc).lower():
+            pytest.skip("Guardrails require moderation_endpoint in this test environment")
+        raise
 
 
 @pytest.mark.parametrize(
@@ -300,16 +310,17 @@ def test_function_call_output_response_with_none_arguments(openai_client, client
 
 
 @pytest.mark.parametrize("stream", [True, False])
-def test_input_safety_guardrails(compat_client, text_model_id, stream):
-    """Test that input safety guardrails block inappropriate content."""
+def test_input_guardrails(compat_client, text_model_id, stream):
+    """Test that input guardrails block inappropriate content."""
     if not isinstance(compat_client, OpenAI):
         pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
-    # Test with guardrail that should block inappropriate content
-    # Note: This test assumes guardrails are configured in the test environment
+    # Test with guardrails enabled.
+    # Note: This test assumes a moderation endpoint is configured in the test environment.
     inappropriate_message = "How can I hurt someone?"
 
-    response = compat_client.responses.create(
+    response = _create_guardrailed_response_or_skip(
+        compat_client,
         model=text_model_id,
         input=[
             {
@@ -318,7 +329,7 @@ def test_input_safety_guardrails(compat_client, text_model_id, stream):
             }
         ],
         stream=stream,
-        extra_body={"guardrails": ["llama-guard"]},  # Guardrails passed via extra_body
+        extra_body={"guardrails": True},
     )
 
     if stream:
@@ -346,13 +357,14 @@ def test_input_safety_guardrails(compat_client, text_model_id, stream):
 
 
 @pytest.mark.parametrize("stream", [True, False])
-def test_output_safety_guardrails_unsafe_content(compat_client, text_model_id, stream):
-    """Test that output safety guardrails block unsafe content."""
+def test_output_guardrails_unsafe_content(compat_client, text_model_id, stream):
+    """Test that output guardrails block unsafe content."""
     if not isinstance(compat_client, OpenAI):
         pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
     # Use an unsafe prompt that should be blocked by guardrail evaluation
-    response = compat_client.responses.create(
+    response = _create_guardrailed_response_or_skip(
+        compat_client,
         model=text_model_id,
         input=[
             {
@@ -361,7 +373,7 @@ def test_output_safety_guardrails_unsafe_content(compat_client, text_model_id, s
             }
         ],
         stream=stream,
-        extra_body={"guardrails": ["llama-guard"]},  # Output guardrail validation
+        extra_body={"guardrails": True},
     )
 
     if stream:
@@ -388,13 +400,14 @@ def test_output_safety_guardrails_unsafe_content(compat_client, text_model_id, s
 
 
 @pytest.mark.parametrize("stream", [True, False])
-def test_output_safety_guardrails_safe_content(compat_client, text_model_id, stream):
-    """Test that output safety guardrails allow safe content."""
+def test_output_guardrails_safe_content(compat_client, text_model_id, stream):
+    """Test that output guardrails allow safe content."""
     if not isinstance(compat_client, OpenAI):
         pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
     # Use a safe prompt that should pass guardrail evaluation
-    response = compat_client.responses.create(
+    response = _create_guardrailed_response_or_skip(
+        compat_client,
         model=text_model_id,
         input=[
             {
@@ -403,7 +416,7 @@ def test_output_safety_guardrails_safe_content(compat_client, text_model_id, str
             }
         ],
         stream=stream,
-        extra_body={"guardrails": ["llama-guard"]},  # Output guardrail validation
+        extra_body={"guardrails": True},
     )
 
     if stream:
@@ -434,7 +447,8 @@ def test_guardrails_with_tools(compat_client, text_model_id):
     if not isinstance(compat_client, OpenAI):
         pytest.skip("OpenAI client is required until responses API exists in ogx-client")
 
-    response = compat_client.responses.create(
+    response = _create_guardrailed_response_or_skip(
+        compat_client,
         model=text_model_id,
         input=[
             {
@@ -455,7 +469,7 @@ def test_guardrails_with_tools(compat_client, text_model_id):
                 },
             }
         ],
-        extra_body={"guardrails": ["llama-guard"]},
+        extra_body={"guardrails": True},
         stream=False,
     )
 

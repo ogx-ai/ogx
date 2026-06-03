@@ -9,7 +9,6 @@ from collections.abc import AsyncIterator
 from opentelemetry import metrics
 
 from ogx.core.datatypes import AccessRule
-from ogx.core.storage.kvstore import InmemoryKVStoreImpl, kvstore_impl
 from ogx.log import get_logger
 from ogx.providers.utils.responses.responses_store import ResponsesStore
 from ogx.telemetry.constants import RESPONSES_PARAMETER_USAGE_TOTAL
@@ -33,7 +32,6 @@ from ogx_api import (
     Prompts,
     Responses,
     RetrieveResponseRequest,
-    Safety,
     ToolGroups,
     ToolRuntime,
     VectorIO,
@@ -70,7 +68,6 @@ class BuiltinResponsesImpl(Responses):
         config: BuiltinResponsesImplConfig,
         inference_api: Inference,
         vector_io_api: VectorIO,
-        safety_api: Safety | None,
         tool_runtime_api: ToolRuntime,
         tool_groups_api: ToolGroups,
         conversations_api: Conversations,
@@ -82,19 +79,16 @@ class BuiltinResponsesImpl(Responses):
         self.config = config
         self.inference_api = inference_api
         self.vector_io_api = vector_io_api
-        self.safety_api = safety_api
         self.tool_runtime_api = tool_runtime_api
         self.tool_groups_api = tool_groups_api
         self.conversations_api = conversations_api
         self.prompts_api = prompts_api
         self.files_api = files_api
-        self.in_memory_store = InmemoryKVStoreImpl()
         self.openai_responses_impl: OpenAIResponsesImpl | None = None
         self.policy = policy
         self.connectors_api = connectors_api
 
     async def initialize(self) -> None:
-        self.persistence_store = await kvstore_impl(self.config.persistence.agent_state)
         self.responses_store = ResponsesStore(self.config.persistence.responses, self.policy)
         await self.responses_store.initialize()
         if not self.responses_store.sql_store:
@@ -105,7 +99,7 @@ class BuiltinResponsesImpl(Responses):
             tool_runtime_api=self.tool_runtime_api,
             responses_store=self.responses_store,
             vector_io_api=self.vector_io_api,
-            safety_api=self.safety_api,
+            moderation_endpoint=self.config.moderation_endpoint,
             conversations_api=self.conversations_api,
             prompts_api=self.prompts_api,
             files_api=self.files_api,
@@ -161,7 +155,6 @@ class BuiltinResponsesImpl(Responses):
             max_tool_calls=request.max_tool_calls,
             max_output_tokens=request.max_output_tokens,
             reasoning=request.reasoning,
-            safety_identifier=request.safety_identifier,
             service_tier=request.service_tier,
             metadata=request.metadata,
             background=request.background,
@@ -208,6 +201,7 @@ class BuiltinResponsesImpl(Responses):
             instructions=request.instructions,
             previous_response_id=request.previous_response_id,
             prompt_cache_key=request.prompt_cache_key,
+            extra_body=request.model_extra,
         )
 
     async def delete_openai_response(

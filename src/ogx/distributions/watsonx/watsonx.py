@@ -26,7 +26,6 @@ def get_distribution_template(name: str = "watsonx") -> DistributionTemplate:
             BuildProvider(provider_type="inline::sentence-transformers"),
         ],
         "vector_io": [BuildProvider(provider_type="inline::faiss")],
-        "safety": [BuildProvider(provider_type="inline::llama-guard")],
         "responses": [BuildProvider(provider_type="inline::builtin")],
         "tool_runtime": [
             BuildProvider(provider_type="remote::brave-search"),
@@ -46,7 +45,7 @@ def get_distribution_template(name: str = "watsonx") -> DistributionTemplate:
     files_provider = Provider(
         provider_id="builtin-files",
         provider_type="inline::localfs",
-        config=LocalfsFilesImplConfig.sample_run_config(f"~/.llama/distributions/{name}"),
+        config=LocalfsFilesImplConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
     )
     return DistributionTemplate(
         name=name,

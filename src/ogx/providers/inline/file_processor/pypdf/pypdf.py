@@ -55,7 +55,7 @@ class PyPDFFileProcessor:
 
         start_time = time.time()
 
-        # Upload size limits are enforced by the router layer (upload_safety.py).
+        # Upload size limits are enforced by the router layer (upload_limits.py).
         # The provider trusts that `file` has already been bounded-read and
         # `file_id` references a file accepted by the Files API.
         if file:
@@ -78,9 +78,13 @@ class PyPDFFileProcessor:
         elif mime_category == "text":
             return self._process_text(content, filename, file_id, chunking_strategy, start_time)
         else:
-            # Attempt text decoding as a fallback for unknown types
-            log.warning("Unknown mime type, attempting text extraction", mime_type=mime_type, filename=filename)
-            return self._process_text(content, filename, file_id, chunking_strategy, start_time)
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"File type '{mime_type or 'unknown'}' is not supported by the pypdf file processor. "
+                    "Supported types: PDF and text files (txt, csv, md, etc.)."
+                ),
+            )
 
     def _process_pdf(
         self,

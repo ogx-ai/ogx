@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import type { ResponseObject } from "llama-stack-client/resources/responses/responses";
+import type { ResponseObject } from "ogx-client/resources/responses/responses";
 import { OpenAIResponse, InputItemListResponse } from "@/lib/types";
 import { ResponseDetailView } from "@/components/responses/responses-detail";
 import { useAuthClient } from "@/hooks/use-auth-client";

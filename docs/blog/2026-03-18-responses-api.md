@@ -11,7 +11,7 @@ The [Responses API](https://developers.openai.com/blog/responses-api) is rapidly
 
 This post covers why the Responses API matters, what OGX's implementation enables, and how it connects to the broader move toward open agent standards like Open Responses.
 
-{/*truncate*/}
+<!--truncate-->
 
 ## Why the Responses API?
 

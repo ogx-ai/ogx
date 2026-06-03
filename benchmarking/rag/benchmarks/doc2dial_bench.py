@@ -12,8 +12,9 @@ import json
 import logging  # allow-direct-logging
 
 from lib.ingest import ingest_corpus
-from lib.metrics import answer_metrics
+from lib.metrics import answer_metrics, retrieval_metrics
 from lib.query import rag_conversation
+from lib.search import search_queries
 from lib.utils import IDMapping
 
 from benchmarks.base import BenchmarkRunner
@@ -157,6 +158,8 @@ class Doc2DialBenchmark(BenchmarkRunner):
                 per_query[qid] = {
                     "prediction": result["answer"],
                     "ground_truth": turn["answer"],
+                    "retrieved_docs": result.get("retrieved_docs", {}),
+                    "doc_id": turn.get("doc_id", ""),
                 }
 
             self._save_per_query_results(per_query)
@@ -171,6 +174,38 @@ class Doc2DialBenchmark(BenchmarkRunner):
         all_predictions = {qid: r["prediction"] for qid, r in per_query.items()}
         all_ground_truths = {qid: r["ground_truth"] for qid, r in per_query.items()}
         metrics = answer_metrics(all_predictions, all_ground_truths)
+
+        # Retrieval-only evaluation via Vector Stores Search API
+        queries = {}
+        qrels = {}
+        for conv in self.conversations:
+            dial_id = conv["dial_id"]
+            valid_turns = [t for t in conv["turns"] if t["query"]]
+            for i, turn in enumerate(valid_turns):
+                qid = f"{dial_id}_{i}"
+                queries[qid] = turn["query"]
+                doc_id = turn.get("doc_id", "")
+                if doc_id:
+                    qrels[qid] = {doc_id: 1}
+
+        if qrels and self.mapping:
+            logger.info(f"Running retrieval-only evaluation on {len(queries)} queries...")
+            search_results = search_queries(
+                client=self.client,
+                vector_store_id=self.vector_store_id,
+                queries=queries,
+                mapping=self.mapping,
+                max_num_results=10,
+                search_mode=self.search_mode,
+            )
+            self._save_per_query_retrieval_results(search_results)
+            ret_metrics = retrieval_metrics(qrels, search_results, k_values=[5, 10])
+            metrics.update(ret_metrics)
+            logger.info(
+                f"Retrieval metrics: nDCG@10={ret_metrics.get('ndcg_cut_10', 0):.4f}, "
+                f"Recall@10={ret_metrics.get('recall_10', 0):.4f}"
+            )
+
         metrics["dataset"] = "doc2dial"
         metrics["num_conversations"] = len(completed_dials)
         metrics["num_documents"] = len(self.corpus)

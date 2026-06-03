@@ -131,6 +131,8 @@ IMPLEMENTED_REQUEST_PROPS = {
     "input",
     "system_instruction",
     "generation_config",
+    "tools",
+    "previous_interaction_id",
     "stream",
     "response_modalities",
 }
@@ -166,10 +168,15 @@ IMPLEMENTED_USAGE_PROPS = {
 # Content types we support
 IMPLEMENTED_CONTENT_TYPES = {
     "TextContent",
+    "FunctionCallContent",
+    "FunctionResultContent",
+    "ThoughtContent",
 }
 
 # Tool types we support
-IMPLEMENTED_TOOL_TYPES: set[str] = set()
+IMPLEMENTED_TOOL_TYPES = {
+    "Function",
+}
 
 # Streaming events we support
 IMPLEMENTED_STREAMING_EVENTS = {

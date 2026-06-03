@@ -28,7 +28,7 @@ We evaluated OGX against OpenAI across four benchmark suites covering retrieval 
 
 | Benchmark | Type | OpenAI (F1) | OGX vector (F1) | OGX hybrid (F1) | OGX hybrid + Gemma 31B (F1) |
 |---|---|---|---|---|---|
-| MultiHOP RAG | Multi-hop reasoning | 0.0114 | 0.0141 | **0.0141** | — |
+| MultiHOP RAG | Multi-hop reasoning | 0.0114 | 0.0141 | 0.0141 | **0.0207** |
 | Doc2Dial | Document-grounded dialogue | **0.1337** | 0.0962 | 0.0966 | 0.0634 |
 
 *Metric: Token-level F1 (SQuAD-style). Higher is better. OpenAI and OGX vector/hybrid used GPT-4.1 for generation. The Gemma 31B column uses google/gemma-4-31B-it served via vLLM.*
@@ -39,13 +39,13 @@ We evaluated OGX against OpenAI across four benchmark suites covering retrieval 
 - **OGX outperforms OpenAI on arguana by 29%** (0.3835 vs 0.2960), a dataset that benefits from keyword matching on argumentative text.
 - **fiqa is the gap** — OpenAI leads by 19% on this financial QA dataset (0.2862 vs 0.2399), likely due to differences in embedding models and chunking strategies for longer financial documents.
 - **End-to-end RAG scores are low across all backends**, reflecting the difficulty of these benchmarks (multi-hop reasoning, document-grounded dialogue) rather than a RAG-specific weakness.
-- **Open-source models plug in without code changes.** Gemma 4 31B-IT, served via vLLM, produced coherent answers with zero empty responses across all 1,203 Doc2Dial queries. Lower F1 reflects response verbosity (~2,500 chars avg vs ~95 char ground truths), not retrieval failure — the same retrieval pipeline powers all OGX runs.
+- **Open-source models plug in without code changes.** Gemma 4 31B-IT, served via vLLM, produced coherent answers across both Doc2Dial (1,203 queries, zero empty responses) and MultiHOP RAG (2,556 queries). On MultiHOP, Gemma 31B outperforms GPT-4.1 by +47% F1 — the only benchmark where the open-source model beats the proprietary one.
 
 ### Additional Retrieval Metrics
 
 #### Recall@10
 
-| Dataset | OpenAI | LS vector | LS hybrid |
+| Dataset | OpenAI | OGX vector | OGX hybrid |
 |---|---|---|---|
 | nfcorpus | 0.1469 | 0.1482 | **0.1646** |
 | scifact | 0.8067 | **0.8369** | 0.8362 |
@@ -54,7 +54,7 @@ We evaluated OGX against OpenAI across four benchmark suites covering retrieval 
 
 #### MAP@10
 
-| Dataset | OpenAI | LS vector | LS hybrid |
+| Dataset | OpenAI | OGX vector | OGX hybrid |
 |---|---|---|---|
 | nfcorpus | 0.1208 | 0.1153 | **0.1286** |
 | scifact | 0.6818 | 0.6442 | **0.6697** |
@@ -67,17 +67,19 @@ We evaluated OGX against OpenAI across four benchmark suites covering retrieval 
 
 Multi-hop reasoning over 609 news articles, 2,556 queries.
 
-| Metric | OpenAI | LS vector | LS hybrid |
-|---|---|---|---|
-| **F1** | 0.0114 | **0.0141** | 0.0141 |
-| Exact Match | 0.0 | 0.0 | 0.0 |
-| ROUGE-L | 0.0116 | **0.0147** | 0.0147 |
+| Metric | OpenAI | OGX vector | OGX hybrid | OGX hybrid + Gemma 31B |
+|---|---|---|---|---|
+| **F1** | 0.0114 | 0.0141 | 0.0141 | **0.0207** |
+| Exact Match | 0.0 | 0.0 | 0.0 | 0.0004 |
+| ROUGE-L | 0.0116 | 0.0147 | 0.0147 | **0.0203** |
+
+> Gemma 31B outperforms GPT-4.1 on MultiHOP by +47% F1, suggesting its more verbose, synthesized responses better capture multi-hop reasoning across documents.
 
 #### Doc2Dial
 
 Document-grounded dialogue: 488 documents, 200 conversations, 1,203 total turns.
 
-| Metric | OpenAI | LS vector | LS hybrid | LS hybrid + Gemma 31B |
+| Metric | OpenAI | OGX vector | OGX hybrid | OGX hybrid + Gemma 31B |
 |---|---|---|---|---|
 | **F1** | **0.1337** | 0.0962 | 0.0966 | 0.0634 |
 | Exact Match | 0.0 | 0.0 | 0.0 | 0.0 |
@@ -87,7 +89,7 @@ Document-grounded dialogue: 488 documents, 200 conversations, 1,203 total turns.
 
 ## Analysis
 
-### Where Llama Stack wins
+### Where OGX wins
 
 - **arguana** (+29.6% nDCG@10): Argumentative text benefits from hybrid search — keyword matching catches specific argument patterns that pure semantic search misses.
 - **nfcorpus** (+6.1% nDCG@10): Biomedical domain similarly benefits from hybrid search, where exact term matching (drug names, conditions) complements semantic similarity.
@@ -98,7 +100,7 @@ Document-grounded dialogue: 488 documents, 200 conversations, 1,203 total turns.
 - **fiqa** (+19.3% nDCG@10): The largest corpus (57K docs) with financial domain text. OpenAI's proprietary embedding model likely handles financial terminology better than nomic-embed-text-v1.5, which is a general-purpose model.
 - **Doc2Dial** (+39% F1): Precise passage retrieval for dialogue grounding benefits from OpenAI's retrieval system. This is the biggest quality gap.
 
-### Vector vs Hybrid on Llama Stack
+### Vector vs Hybrid on OGX
 
 | Dataset | Vector nDCG@10 | Hybrid nDCG@10 | Winner |
 |---|---|---|---|
@@ -111,13 +113,13 @@ Hybrid search outperforms vector on 3 of 4 BEIR datasets. The exception is fiqa,
 
 ### Open-source model (Gemma 31B)
 
-Gemma 4 31B-IT was served via vLLM and connected to OGX as a `remote::openai` inference provider, using the same retrieval pipeline as the GPT-4.1 runs. The model produced coherent, relevant answers with zero empty responses across all 1,203 Doc2Dial queries. Lower F1/ROUGE-L scores vs GPT-4.1 are driven by response verbosity, not retrieval failure — the same retrieval pipeline powers all OGX runs regardless of generation model. This demonstrates OGX's model-swappable architecture: open-source models can be plugged in without any code changes.
+Gemma 4 31B-IT was served via vLLM and connected to OGX as a `remote::openai` inference provider, using the same retrieval pipeline as the GPT-4.1 runs. On **MultiHOP RAG**, Gemma 31B outperforms GPT-4.1 by +47% F1 (0.0207 vs 0.0141), suggesting its more verbose, synthesized responses better capture multi-hop reasoning. On **Doc2Dial**, lower F1/ROUGE-L scores vs GPT-4.1 are driven by response verbosity (avg ~2,500 chars vs ~95 char ground truths), not retrieval failure — the model produced zero empty responses across all 1,203 queries. This demonstrates OGX's model-swappable architecture: open-source models can be plugged in without any code changes.
 
 ### Generation quality observations
 
 - All end-to-end benchmarks show low absolute scores (F1 < 0.15), which is consistent with prior work on these datasets.
 - Exact Match is 0.0 across all backends — the model generates verbose answers while ground truths are often short extractive spans.
-- For GPT-4.1 runs, answer quality differences reflect retrieval quality differences, not generation differences. For the Gemma run, the generation model's verbosity is an additional factor.
+- For GPT-4.1 runs, answer quality differences reflect retrieval quality differences, not generation differences. The Gemma 31B results show that model choice matters: verbosity hurts on Doc2Dial (short ground truths) but helps on MultiHOP (multi-document synthesis).
 
 ## Methodology
 

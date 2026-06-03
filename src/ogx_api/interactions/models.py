@@ -12,9 +12,9 @@ following the Google Interactions API specification.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # -- Content items --
 
@@ -26,6 +26,44 @@ class GoogleTextContent(BaseModel):
     text: str
 
 
+class GoogleFunctionCallContent(BaseModel):
+    """A function call content item (model requesting a tool invocation)."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    type: Literal["function_call"] = "function_call"
+    id: str | None = Field(default=None, description="Unique identifier for this function call.")
+    name: str = Field(..., description="Name of the function to call.")
+    args: dict[str, Any] = Field(
+        default_factory=dict,
+        alias="arguments",
+        description="Arguments for the function call.",
+    )
+
+
+class GoogleFunctionResponseContent(BaseModel):
+    """A function response/result content item (user providing tool results).
+
+    Accepts both 'function_response' (generateContent API) and 'function_result'
+    (Interactions API) type values, and both 'response' and 'result' field names.
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    type: Literal["function_response", "function_result"] = "function_result"
+    call_id: str | None = Field(default=None, description="ID of the function call this responds to.")
+    id: str | None = Field(default=None, description="Deprecated alias for call_id.")
+    name: str = Field(..., description="Name of the function that was called.")
+    response: dict[str, Any] = Field(
+        default_factory=dict,
+        alias="result",
+        description="The function's return value.",
+    )
+
+
+GoogleContentItem = GoogleTextContent | GoogleFunctionCallContent | GoogleFunctionResponseContent
+
+
 # -- Conversation turns --
 
 
@@ -33,16 +71,59 @@ class GoogleInputTurn(BaseModel):
     """A conversation turn in the input."""
 
     role: Literal["user", "model"]
-    content: list[GoogleTextContent] = Field(
+    content: str | list[GoogleContentItem] = Field(
         ...,
-        description="Content items for this turn.",
+        description="Content items for this turn. Can be a plain string or a list of content items.",
     )
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def _coerce_content(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v
+        if isinstance(v, list):
+            result = []
+            for item in v:
+                if isinstance(item, dict) and "type" not in item:
+                    # Default to text content when type is missing
+                    item = {**item, "type": "text"}
+                result.append(item)
+            return result
+        return v
 
 
 GoogleInputItem = Annotated[
     GoogleInputTurn,
     Field(description="A conversation turn."),
 ]
+
+
+# -- Tool definitions --
+
+
+class GoogleFunctionDeclaration(BaseModel):
+    """A function declaration for tool calling."""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str = Field(..., description="The name of the function.")
+    description: str | None = Field(default=None, description="Description of the function.")
+    parameters: dict[str, Any] | None = Field(
+        default=None,
+        description="JSON Schema for the function's input parameters.",
+    )
+
+
+class GoogleTool(BaseModel):
+    """A tool containing function declarations."""
+
+    model_config = ConfigDict(extra="allow")
+
+    type: str = Field(default="function", description="Tool type.")
+    function_declarations: list[GoogleFunctionDeclaration] = Field(
+        ...,
+        description="List of function declarations.",
+    )
 
 
 # -- Generation config --
@@ -78,6 +159,14 @@ class GoogleCreateInteractionRequest(BaseModel):
         default=None,
         description="Generation parameters.",
     )
+    tools: list[GoogleTool] | None = Field(
+        default=None,
+        description="Tools (function declarations) available to the model.",
+    )
+    previous_interaction_id: str | None = Field(
+        default=None,
+        description="ID of a previous interaction to continue the conversation from.",
+    )
     stream: bool | None = Field(default=False, description="Whether to stream the response via SSE.")
     response_modalities: list[str] | None = Field(
         default=None,
@@ -95,29 +184,44 @@ class GoogleTextOutput(BaseModel):
     text: str
 
 
+class GoogleFunctionCallOutput(BaseModel):
+    """A function call output item (model requesting a tool invocation)."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    type: Literal["function_call"] = "function_call"
+    id: str | None = Field(default=None, description="Unique identifier for this function call.")
+    name: str = Field(..., description="Name of the function to call.")
+    args: dict[str, Any] = Field(
+        default_factory=dict,
+        alias="arguments",
+        description="Arguments for the function call.",
+    )
+
+
 class GoogleThoughtOutput(BaseModel):
-    """A thought output item emitted by Gemini."""
-
-    type: Literal["thought"] = "thought"
-    signature: str | None = None
-
-
-class GoogleOutput(BaseModel):
-    """Fallback output item for forward compatibility with new Google output types."""
+    """A thought/reasoning output item (model's internal reasoning)."""
 
     model_config = ConfigDict(extra="allow")
 
-    type: str
-    text: str | None = None
-    signature: str | None = None
+    type: Literal["thought"] = "thought"
+    signature: str | None = Field(default=None, description="Signature for the thought block.")
 
 
 class GoogleUsage(BaseModel):
     """Token usage statistics."""
 
+    model_config = ConfigDict(extra="allow")
+
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     total_tokens: int = 0
+
+
+GoogleOutputItem = Annotated[
+    GoogleTextOutput | GoogleFunctionCallOutput | GoogleThoughtOutput,
+    Field(discriminator="type"),
+]
 
 
 class GoogleInteractionResponse(BaseModel):
@@ -128,10 +232,7 @@ class GoogleInteractionResponse(BaseModel):
     status: Literal["completed"] = "completed"
     updated: str | None = Field(default=None, description="Last update timestamp.")
     model: str = Field(..., description="Model used for generation.")
-    outputs: list[GoogleTextOutput | GoogleThoughtOutput | GoogleOutput] = Field(
-        ...,
-        description="Response output items.",
-    )
+    outputs: list[GoogleOutputItem] = Field(..., description="Response output items.")
     role: Literal["model"] = "model"
     usage: GoogleUsage = Field(default_factory=GoogleUsage)
     object: Literal["interaction"] = "interaction"
@@ -172,7 +273,15 @@ class InteractionStartEvent(BaseModel):
 class _ContentRef(BaseModel):
     """Content type reference used in content.start events."""
 
-    type: Literal["text"] = "text"
+    type: Literal["text", "function_call"] = "text"
+
+
+class _FunctionCallContentRef(BaseModel):
+    """Content reference for function_call content.start events."""
+
+    type: Literal["function_call"] = "function_call"
+    id: str | None = None
+    name: str | None = None
 
 
 class ContentStartEvent(BaseModel):
@@ -180,7 +289,7 @@ class ContentStartEvent(BaseModel):
 
     event_type: Literal["content.start"] = "content.start"
     index: int
-    content: _ContentRef = Field(default_factory=_ContentRef)
+    content: _ContentRef | _FunctionCallContentRef = Field(default_factory=_ContentRef)
 
 
 class _TextDelta(BaseModel):
@@ -188,12 +297,17 @@ class _TextDelta(BaseModel):
     text: str
 
 
+class _FunctionCallDelta(BaseModel):
+    type: Literal["function_call"] = "function_call"
+    args: str = Field(..., description="Partial JSON string for function call arguments.")
+
+
 class ContentDeltaEvent(BaseModel):
     """A delta within a content block."""
 
     event_type: Literal["content.delta"] = "content.delta"
     index: int
-    delta: _TextDelta
+    delta: _TextDelta | _FunctionCallDelta
 
 
 class ContentStopEvent(BaseModel):

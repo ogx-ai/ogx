@@ -106,6 +106,20 @@ class BenchmarkRunner(ABC):
         path = self.output_dir / "per_query_results.json"
         path.write_text(json.dumps(results, indent=2))
 
+    def _load_per_query_retrieval_results(self) -> dict:
+        """Load existing per_query_retrieval_results.json if resuming."""
+        path = self.output_dir / "per_query_retrieval_results.json"
+        if self.resume and path.exists():
+            data = json.loads(path.read_text())
+            logger.info(f"Resumed {len(data)} existing retrieval results from {path}")
+            return data
+        return {}
+
+    def _save_per_query_retrieval_results(self, results: dict) -> None:
+        """Write per_query_retrieval_results.json."""
+        path = self.output_dir / "per_query_retrieval_results.json"
+        path.write_text(json.dumps(results, indent=2))
+
     def _print_metrics(self, metrics: dict) -> None:
         """Pretty-print metrics summary."""
         logger.info(f"--- {self.name} Results ---")

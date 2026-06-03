@@ -46,7 +46,6 @@ class RedisKVStoreImpl(KVStore):
         value = await client.get(key)
         if value is None:
             return None
-        await client.ttl(key)
         if isinstance(value, bytes):
             return value.decode("utf-8")
         if isinstance(value, str):

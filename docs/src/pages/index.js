@@ -153,9 +153,9 @@ const API_SURFACE = [
     { label: 'Files', path: '/v1/files' },
     { label: 'Batches', path: '/v1/batches' },
   ]},
-  { category: 'Safety & Tools', endpoints: [
+  { category: 'Moderation & Tools', endpoints: [
     { label: 'Moderations', path: '/v1/moderations' },
-    { label: 'Tools', path: '/v1/tools' },
+    { label: 'Tools', path: '/v1/admin/tools' },
     { label: 'Connectors', path: '/v1/connectors' },
   ]},
 ];
@@ -176,6 +176,44 @@ const PROVIDERS = [
   { name: 'Milvus', href: '/docs/providers/vector_io/remote_milvus' },
   { name: 'Weaviate', href: '/docs/providers/vector_io/remote_weaviate' },
 ];
+
+const CLI_DEMOS = {
+  claude: {
+    label: 'Claude Code',
+    command: 'claude',
+    envVar: 'ANTHROPIC_BASE_URL',
+    lines: [
+      { type: 'command', text: '$ export ANTHROPIC_BASE_URL=http://localhost:8321/v1', delay: 0 },
+      { type: 'command', text: '$ claude', delay: 400 },
+      { type: 'blank', text: '', delay: 100 },
+      { type: 'brand', text: ' ▐▛███▜▌   Claude Code', delay: 0 },
+      { type: 'brand-dim', text: '▝▜█████▛▘  llama-3.3-70b via OGX', delay: 0 },
+      { type: 'brand-dim', text: '  ▘▘ ▝▝    ~/my-project', delay: 0 },
+      { type: 'blank', text: '', delay: 300 },
+      { type: 'prompt', text: '> hey big dawg', delay: 300 },
+      { type: 'blank', text: '', delay: 400 },
+      { type: 'result', text: 'Hello from OGX!', delay: 0 },
+    ],
+  },
+  codex: {
+    label: 'Codex',
+    command: 'codex',
+    envVar: 'OPENAI_BASE_URL',
+    lines: [
+      { type: 'command', text: '$ cat ~/.codex/config.toml', delay: 0 },
+      { type: 'brand-dim', text: '[model_providers.ogx]', delay: 0 },
+      { type: 'brand-dim', text: 'base_url = "http://localhost:8321/v1"', delay: 0 },
+      { type: 'blank', text: '', delay: 200 },
+      { type: 'command', text: '$ codex', delay: 400 },
+      { type: 'blank', text: '', delay: 100 },
+      { type: 'brand-box', text: '>_ OpenAI Codex\n\nmodel: llama-3.3-70b via OGX', delay: 0 },
+      { type: 'blank', text: '', delay: 300 },
+      { type: 'prompt', text: '> hey big dawg', delay: 300 },
+      { type: 'blank', text: '', delay: 400 },
+      { type: 'result', text: 'Hello from OGX!', delay: 0 },
+    ],
+  },
+};
 
 /* Custom Tidal theme for the landing page code block */
 const tidalDark = {
@@ -339,6 +377,160 @@ function CodeBlock() {
   );
 }
 
+function useTerminalAnimation(lines, shouldStart) {
+  const [visibleLines, setVisibleLines] = useState([]);
+  const [typingLine, setTypingLine] = useState(null);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!shouldStart) return;
+    let cancelled = false;
+
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (mq.matches) {
+      setVisibleLines(lines.map(l => l.text));
+      setTypingLine(null);
+      setDone(true);
+      return;
+    }
+
+    async function animate() {
+      const shown = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (cancelled) return;
+        const line = lines[i];
+
+        if (line.type === 'blank') {
+          shown.push('');
+          setVisibleLines([...shown]);
+          await sleep(line.delay);
+          continue;
+        }
+
+        if (line.type === 'command' || line.type === 'prompt') {
+          let partial = '';
+          for (let c = 0; c < line.text.length; c++) {
+            if (cancelled) return;
+            partial += line.text[c];
+            setTypingLine(partial);
+            await sleep(30 + Math.random() * 20);
+          }
+          setTypingLine(null);
+          shown.push(line.text);
+          setVisibleLines([...shown]);
+          await sleep(line.delay);
+        } else {
+          await sleep(line.delay);
+          if (cancelled) return;
+          shown.push(line.text);
+          setVisibleLines([...shown]);
+        }
+      }
+      setDone(true);
+    }
+
+    animate();
+    return () => { cancelled = true; };
+  }, [shouldStart, lines]);
+
+  return { visibleLines, typingLine, done };
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function CliShowcase() {
+  const [started, setStarted] = useState(false);
+  const sectionRef = useRef(null);
+
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (mq.matches) { setStarted(true); return; }
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setStarted(true); observer.disconnect(); } },
+      { threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const claudeAnim = useTerminalAnimation(CLI_DEMOS.claude.lines, started);
+  const codexAnim = useTerminalAnimation(CLI_DEMOS.codex.lines, claudeAnim.done);
+
+  return (
+    <section className={styles.cliSection} ref={sectionRef}>
+      <div className="container">
+        <div className={styles.cliHeader}>
+          <h2>Your tools. Any model.</h2>
+          <p>
+            Configure OGX with any provider — Ollama, vLLM, Bedrock, Azure, or
+            your own. Then point{' '}
+            <a href="https://ogx-ai.github.io/docs/building_applications/claude_code_integration">Claude Code</a>,{' '}
+            <a href="https://ogx-ai.github.io/docs/building_applications/codex_cli_integration">Codex</a>, or{' '}
+            <a href="https://ogx-ai.github.io/blog/opencode-blog">OpenCode</a>{' '}
+            at it. Same workflow, any model.
+          </p>
+        </div>
+        <div className={styles.cliTerminals}>
+          <TerminalWindow demo={CLI_DEMOS.claude} anim={claudeAnim} />
+          <TerminalWindow demo={CLI_DEMOS.codex} anim={codexAnim} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TerminalWindow({demo, anim}) {
+  return (
+    <div className={clsx(styles.cliTerminal, styles.cliTerminalFadeIn)}>
+      <div className={styles.cliTerminalBar}>
+        <span className={styles.cliTerminalFlow}>
+          {demo.label} → OGX
+        </span>
+      </div>
+      <div className={styles.cliTerminalBody}>
+        {anim.visibleLines.map((line, i) => {
+          const meta = demo.lines[i];
+          if (!meta) return null;
+          const cls = {
+            command: styles.cliLineCommand,
+            prompt: styles.cliLinePrompt,
+            status: styles.cliLineStatus,
+            result: styles.cliLineResult,
+            'result-cont': styles.cliLineResultCont,
+            blank: styles.cliLineBlank,
+            brand: styles.cliLineBrand,
+            'brand-dim': styles.cliLineBrandDim,
+            'brand-box': styles.cliLineBrandBox,
+          }[meta.type] || '';
+          if (meta.type === 'blank') return <div key={i} className={styles.cliLineBlank} />;
+          if (meta.type === 'brand-box') {
+            return (
+              <div key={i} className={styles.cliLineBrandBox}>
+                {line.split('\n').map((l, j) => (
+                  <div key={j}>{l || ' '}</div>
+                ))}
+              </div>
+            );
+          }
+          return (
+            <div key={i} className={clsx(styles.cliLine, cls)}>{line}</div>
+          );
+        })}
+        {anim.typingLine !== null && (
+          <div className={clsx(styles.cliLine, styles.cliLineCommand)}>
+            {anim.typingLine}
+            <span className={styles.cliCursor} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function useConstellation(canvasId) {
   useEffect(() => {
     const canvas = document.getElementById(canvasId);
@@ -434,6 +626,92 @@ function useConstellation(canvasId) {
   }, [canvasId]);
 }
 
+function AnnouncementBanner() {
+  const [visible, setVisible] = useState(true);
+  const [dismissing, setDismissing] = useState(false);
+
+  if (!visible) return null;
+
+  const handleDismiss = () => {
+    setDismissing(true);
+    setTimeout(() => setVisible(false), 350);
+  };
+
+  return (
+    <div className={clsx(styles.announcementBar, dismissing && styles.announcementDismissing)}>
+      <div className="container">
+        <div className={styles.announcementInner}>
+          <span className={styles.announcementPulse} aria-hidden="true" />
+          <span className={styles.announcementLabel}>New</span>
+          <span className={styles.announcementSep} aria-hidden="true" />
+          <span className={styles.announcementText}>
+            Llama Stack is now <span className={styles.announcementHighlight}>OGX</span>
+          </span>
+          <a
+            className={styles.announcementLink}
+            href="https://ogx-ai.github.io/blog/from-llama-stack-to-ogx"
+          >
+            Read the story <span className={styles.announcementArrow}>&rarr;</span>
+          </a>
+          <button
+            type="button"
+            className={styles.announcementDismiss}
+            onClick={handleDismiss}
+            aria-label="Dismiss announcement"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function V1AnnouncementBanner() {
+  const [visible, setVisible] = useState(true);
+  const [dismissing, setDismissing] = useState(false);
+
+  if (!visible) return null;
+
+  const handleDismiss = () => {
+    setDismissing(true);
+    setTimeout(() => setVisible(false), 350);
+  };
+
+  return (
+    <div className={clsx(styles.announcementBar, styles.announcementBarV1, dismissing && styles.announcementDismissing)}>
+      <div className="container">
+        <div className={styles.announcementInner}>
+          <span className={styles.announcementPulse} aria-hidden="true" />
+          <span className={styles.announcementLabel}>New</span>
+          <span className={styles.announcementSep} aria-hidden="true" />
+          <span className={styles.announcementText}>
+            v1 is here. <span className={styles.announcementHighlight}>No caveats. No beta. Ship it.</span>
+          </span>
+          <a
+            className={styles.announcementLink}
+            href="https://ogx-ai.github.io/blog/ogx-v1"
+          >
+            Read the announcement <span className={styles.announcementArrow}>&rarr;</span>
+          </a>
+          <button
+            type="button"
+            className={styles.announcementDismiss}
+            onClick={handleDismiss}
+            aria-label="Dismiss announcement"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
   useConstellation('hero-constellation');
 
@@ -448,8 +726,8 @@ function Hero() {
               The full stack.
             </h1>
             <p className={styles.subtitle}>
-              Inference, vector stores, file storage, safety, tool calling,
-              and agentic orchestration in a single OpenAI-compatible server.
+              Inference, vector stores, file storage, moderation, tool calling,
+              and agentic orchestration — as a server or a Python library.
               Pluggable providers, any language, deploy anywhere.
             </p>
             <InstallBlock />
@@ -479,11 +757,12 @@ function ApiSurface() {
     <Section className={styles.apiSection}>
       <div className="container">
         <div className={styles.apiHeader}>
-          <h2>Everything your AI app needs. One server.</h2>
+          <h2>Everything your AI app needs. One process.</h2>
           <p>
             More than inference routing. OGX composes inference, storage,
-            safety, and orchestration into a single process. Your agent can search
-            a vector store, call a tool, check safety, and stream the response.
+            moderation, and orchestration into a single process — whether you
+            run it as a server or import it as a library. Your agent can search
+            a vector store, call a tool, apply moderation checks, and stream the response.
             No glue code. No sidecar services.
           </p>
         </div>
@@ -513,34 +792,35 @@ function ApiSurface() {
   );
 }
 
-function ServerNotLibrary() {
+function ServerAndLibrary() {
   return (
     <Section className={styles.serverSection}>
       <div className="container">
         <div className={styles.serverLayout}>
           <div>
-            <h2>A server, not a library</h2>
+            <h2>Server or library. Your call.</h2>
             <p>
-              SDK abstractions couple your app to a specific language, release
-              cycle, and import path. OGX is an HTTP server. Your app
-              talks to a standard API.
+              Deploy OGX as an HTTP server for production — any language,
+              any client, standard API. Or import it directly as a Python
+              library for scripts, notebooks, and rapid prototyping with
+              zero network overhead.
             </p>
             <p>
-              Write in Python, Go, TypeScript, curl. Swap the server without
-              touching application code. That's the difference between library
-              abstraction and server abstraction.
+              Same capabilities either way. Start with the library, graduate
+              to the server when you need multi-language access or
+              independent scaling.
             </p>
           </div>
           <div className={styles.serverComparison}>
             <div className={styles.comparisonRow}>
-              <span className={styles.comparisonLabel}>SDK library</span>
-              <code className={styles.comparisonCode}>from sdk import ...</code>
-              <span className={styles.comparisonNote}>coupled</span>
-            </div>
-            <div className={styles.comparisonRow}>
-              <span className={styles.comparisonLabel}>OGX</span>
+              <span className={styles.comparisonLabel}>Server</span>
               <code className={styles.comparisonCode}>POST /v1/responses</code>
               <span className={styles.comparisonGood}>any language</span>
+            </div>
+            <div className={styles.comparisonRow}>
+              <span className={styles.comparisonLabel}>Library</span>
+              <code className={styles.comparisonCode}>client.responses.create(...)</code>
+              <span className={styles.comparisonGood}>zero overhead</span>
             </div>
           </div>
         </div>
@@ -577,10 +857,10 @@ function Architecture() {
       <div className="container">
         <h2>How it works</h2>
         <p className={styles.archDesc}>
-          Your application talks to one server. That server routes
-          to pluggable providers for inference, vector storage, files,
-          safety, and tools. The composition happens at the server level,
-          not in your application code.
+          Your application talks to one process — either an HTTP server
+          or an in-process library client. That process routes to pluggable
+          providers for inference, vector storage, files, moderation, and tools.
+          The composition happens at the OGX level, not in your application code.
         </p>
         <div className={styles.archImg}>
           <img src="/img/architecture-animated.svg" alt="OGX Architecture" loading="lazy" />
@@ -623,11 +903,14 @@ function Bottom() {
 
 export default function Home() {
   return (
-    <Layout title="The Open-Source AI Application Server" description="Inference, vector stores, safety, tools, and agentic orchestration. One server, OpenAI + Anthropic + Google compatible, pluggable providers.">
+    <Layout title="The Open-Source AI Application Server & Library" description="Inference, vector stores, moderation, tools, and agentic orchestration. Server or Python library, OpenAI + Anthropic + Google compatible, pluggable providers.">
       <main>
+        <AnnouncementBanner />
+        <V1AnnouncementBanner />
         <Hero />
+        <CliShowcase />
         <ApiSurface />
-        <ServerNotLibrary />
+        <ServerAndLibrary />
         <Providers />
         <Architecture />
         <Bottom />

@@ -8,7 +8,7 @@ import time
 from io import BytesIO
 
 import pytest
-from llama_stack_client import BadRequestError
+from ogx_client import BadRequestError
 from openai import BadRequestError as OpenAIBadRequestError
 from openai import OpenAI
 
@@ -44,11 +44,10 @@ def skip_if_provider_doesnt_support_openai_vector_stores(client_with_models):
 
 
 _PROVIDERS_WITH_NATIVE_FILTERING = {
-    "inline::faiss",
-    "inline::sqlite-vec",
-    "inline::milvus",
-    "remote::milvus",
-    "remote::pgvector",
+    "faiss",
+    "sqlite-vec",
+    "milvus",
+    "pgvector",
 }
 
 

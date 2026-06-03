@@ -24,8 +24,9 @@ from ogx_api.openai_responses import (
     OpenAIResponsePrompt,
     OpenAIResponseReasoning,
     OpenAIResponseText,
+    ResponseTruncation,
 )
-from ogx_api.schema_utils import remove_null_from_anyof
+from ogx_api.schema_utils import flatten_nullable_remove_default, remove_default_from_schema, remove_null_from_anyof
 
 
 class ResponseItemInclude(StrEnum):
@@ -38,13 +39,6 @@ class ResponseItemInclude(StrEnum):
     message_input_image_image_url = "message.input_image.image_url"
     message_output_text_logprobs = "message.output_text.logprobs"
     reasoning_encrypted_content = "reasoning.encrypted_content"
-
-
-class ResponseTruncation(StrEnum):
-    """Controls how the service truncates input when it exceeds the model context window."""
-
-    auto = "auto"  # Let the service decide how to truncate
-    disabled = "disabled"  # Disable truncation; context over limit results in 400 error
 
 
 class ResponseGuardrailSpec(BaseModel):
@@ -62,11 +56,10 @@ ResponseGuardrail = str | ResponseGuardrailSpec
 class ResponseStreamOptions(BaseModel):
     """Options that control streamed response behavior."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    include_obfuscation: bool = Field(
-        default=True,
+    include_obfuscation: bool | None = Field(
+        default=None,
         description="Whether to obfuscate sensitive information in streamed output.",
+        json_schema_extra=remove_null_from_anyof,
     )
 
 
@@ -103,6 +96,7 @@ class CreateResponseRequest(BaseModel):
     parallel_tool_calls: bool | None = Field(
         default=True,
         description="Whether to enable parallel tool calls.",
+        json_schema_extra=remove_default_from_schema,
     )
     previous_response_id: str | None = Field(
         default=None,
@@ -120,12 +114,12 @@ class CreateResponseRequest(BaseModel):
     store: bool | None = Field(
         default=True,
         description="Whether to store the response in the database.",
-        json_schema_extra=remove_null_from_anyof,
+        json_schema_extra=flatten_nullable_remove_default,
     )
     stream: bool | None = Field(
         default=False,
         description="Whether to stream the response.",
-        json_schema_extra=remove_null_from_anyof,
+        json_schema_extra=flatten_nullable_remove_default,
     )
     temperature: float | None = Field(
         default=None,
@@ -167,9 +161,10 @@ class CreateResponseRequest(BaseModel):
         ge=1,
         description="Maximum number of inference iterations.",
     )
-    guardrails: list[ResponseGuardrail] | None = Field(
+    guardrails: bool | None = Field(
         default=None,
-        description="List of guardrails to apply during response generation.",
+        description="Enable content moderation via the configured moderation_endpoint.",
+        json_schema_extra={"x-extra-body-field": True},
     )
     max_tool_calls: int | None = Field(
         default=None,
@@ -184,11 +179,6 @@ class CreateResponseRequest(BaseModel):
     reasoning: OpenAIResponseReasoning | None = Field(
         default=None,
         description="Configuration for reasoning effort in responses.",
-    )
-    safety_identifier: str | None = Field(
-        default=None,
-        max_length=64,
-        description="A stable identifier used for safety monitoring and abuse detection.",
     )
     service_tier: ServiceTier | None = Field(
         default=None,

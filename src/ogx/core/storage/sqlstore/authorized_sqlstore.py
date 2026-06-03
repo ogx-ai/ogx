@@ -4,16 +4,25 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
-from ogx.core.access_control.access_control import AccessDeniedError, default_policy, is_action_allowed
+_VALID_JSON_PATH_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+from ogx.core.access_control.access_control import (
+    ALLOWED_ATTRIBUTE_KEYS,
+    AccessDeniedError,
+    default_policy,
+    is_action_allowed,
+)
 from ogx.core.access_control.conditions import ProtectedResource
 from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 from ogx.core.datatypes import User
 from ogx.core.request_headers import get_authenticated_user
-from ogx.core.storage.datatypes import StorageBackendType
+from ogx.core.storage.datatypes import SqlStoreReference, StorageBackendType
+from ogx.core.storage.sqlstore.sqlstore import _sqlstore_impl
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
@@ -35,7 +44,7 @@ SQL_OPTIMIZED_POLICY = [
         permit=Scope(actions=list(Action)),
         when=["user in owners " + name],
     )
-    for name in ["roles", "teams", "projects", "namespaces"]
+    for name in ALLOWED_ATTRIBUTE_KEYS
 ] + [
     AccessRule(
         permit=Scope(actions=list(Action)),
@@ -72,6 +81,14 @@ class SqlRecord(ProtectedResource):
         self.type = f"sql_record::{table_name}"
         self.identifier = record_id
         self.owner = owner
+
+
+async def authorized_sqlstore(reference: SqlStoreReference, policy: list[AccessRule]) -> "AuthorizedSqlStore":
+    """Create an AuthorizedSqlStore from a store reference and access policy.
+
+    This is the only supported way to obtain a SQL store for API use.
+    """
+    return AuthorizedSqlStore(await _sqlstore_impl(reference), policy)
 
 
 class AuthorizedSqlStore:
@@ -131,6 +148,26 @@ class AuthorizedSqlStore:
         await self.sql_store.add_column_if_not_exists(table, "access_attributes", ColumnType.JSON)
         await self.sql_store.add_column_if_not_exists(table, "owner_principal", ColumnType.STRING)
 
+    async def add_column_if_not_exists(
+        self,
+        table: str,
+        column_name: str,
+        column_type: ColumnType,
+        nullable: bool = True,
+    ) -> None:
+        """Expose schema migration helper from the wrapped SQL store."""
+        await self.sql_store.add_column_if_not_exists(table, column_name, column_type, nullable)
+
+    async def check_access_for_rows(
+        self,
+        table: str,
+        where: Mapping[str, Any],
+        action: Action,
+    ) -> None:
+        """Validate authorization for matching rows without mutating data."""
+        current_user = get_authenticated_user()
+        await self._check_access_for_rows(table, where, action, current_user)
+
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         """Insert a row or batch of rows with automatic access control attribute capture."""
         current_user = get_authenticated_user()
@@ -148,9 +185,32 @@ class AuthorizedSqlStore:
         conflict_columns: list[str],
         update_columns: list[str] | None = None,
     ) -> None:
-        """Upsert a row with automatic access control attribute capture."""
+        """Upsert a row with access control enforcement.
+
+        Verifies the current user has UPDATE permission on any existing row
+        matching the conflict columns before upserting. Original ownership is
+        preserved on conflict - upserting a record does not transfer ownership
+        to the caller.
+        """
         current_user = get_authenticated_user()
+
+        conflict_where = {col: data[col] for col in conflict_columns if col in data}
+        if conflict_where:
+            await self._check_access_for_rows(table, conflict_where, Action.UPDATE, current_user)
+
         enhanced_data = _enhance_item_with_access_control(data, current_user)
+
+        # Strip ownership fields from the update side so a conflict resolution
+        # cannot transfer ownership from the original owner to the caller.
+        if update_columns is not None:
+            update_columns = [c for c in update_columns if c not in ("owner_principal", "access_attributes")]
+        else:
+            update_columns = [
+                c
+                for c in enhanced_data.keys()
+                if c not in conflict_columns and c not in ("owner_principal", "access_attributes")
+            ]
+
         await self.sql_store.upsert(
             table=table,
             data=enhanced_data,
@@ -313,6 +373,11 @@ class AuthorizedSqlStore:
         else:
             return self._build_conservative_where_clause()
 
+    @staticmethod
+    def _validate_json_path(path: str) -> None:
+        if not _VALID_JSON_PATH_RE.match(path):
+            raise ValueError(f"Invalid attribute key for JSON path: {path!r}")
+
     def _json_extract(self, column: str, path: str) -> str:
         """Extract JSON value (keeping JSON type).
 
@@ -323,6 +388,7 @@ class AuthorizedSqlStore:
         Returns:
             SQL expression to extract JSON value
         """
+        self._validate_json_path(path)
         if self.database_type == StorageBackendType.SQL_POSTGRES.value:
             return f"{column}->'{path}'"
         elif self.database_type == StorageBackendType.SQL_SQLITE.value:
@@ -340,10 +406,33 @@ class AuthorizedSqlStore:
         Returns:
             SQL expression to extract JSON value as text
         """
+        self._validate_json_path(path)
         if self.database_type == StorageBackendType.SQL_POSTGRES.value:
             return f"{column}->>'{path}'"
         elif self.database_type == StorageBackendType.SQL_SQLITE.value:
             return f"JSON_EXTRACT({column}, '$.{path}')"
+        else:
+            raise ValueError(f"Unsupported database type: {self.database_type}")
+
+    def _json_array_contains_value(self, column: str, path: str, param_name: str, value: str) -> tuple[str, Any]:
+        """Generate SQL condition and bind param for checking if a JSON array contains an exact value.
+
+        Args:
+            column: The JSON column name
+            path: The JSON path to the array (e.g., 'roles', 'teams')
+            param_name: Name for the bind parameter
+            value: The exact value to check for in the array
+
+        Returns:
+            A tuple of (sql_condition, param_value)
+        """
+        self._validate_json_path(path)
+        if self.database_type == StorageBackendType.SQL_POSTGRES.value:
+            sql = f"CAST({column}->'{path}' AS jsonb) @> CAST(:{param_name} AS jsonb)"
+            return sql, json.dumps([value])
+        elif self.database_type == StorageBackendType.SQL_SQLITE.value:
+            sql = f"EXISTS (SELECT 1 FROM json_each(json_extract({column}, '$.{path}')) WHERE value = :{param_name})"
+            return sql, value
         else:
             raise ValueError(f"Unsupported database type: {self.database_type}")
 
@@ -374,14 +463,18 @@ class AuthorizedSqlStore:
 
             if current_user.attributes:
                 for attr_key, user_values in current_user.attributes.items():
+                    if attr_key not in ALLOWED_ATTRIBUTE_KEYS:
+                        logger.warning("Skipping unrecognized attribute key", attr_key=attr_key)
+                        continue
                     if user_values:
                         value_conditions = []
-                        safe_key = re.sub(r"[^a-zA-Z0-9_]", "_", attr_key)
                         for j, value in enumerate(user_values):
-                            param_name = f"attr_{safe_key}_{j}"
-                            json_text = self._json_extract_text("access_attributes", attr_key)
-                            value_conditions.append(f"({json_text} LIKE :{param_name})")
-                            params[param_name] = f'%"{value}"%'
+                            param_name = f"attr_{attr_key}_{j}"
+                            condition, param_value = self._json_array_contains_value(
+                                "access_attributes", attr_key, param_name, value
+                            )
+                            value_conditions.append(f"({condition})")
+                            params[param_name] = param_value
 
                         if value_conditions:
                             base_conditions.append(f"({' OR '.join(value_conditions)})")

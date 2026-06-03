@@ -19,6 +19,7 @@ from ogx_api.files.models import (
     DeleteFileRequest,
     ListFilesRequest,
     OpenAIFileObject,
+    OpenAIFileUploadPurpose,
     RetrieveFileContentRequest,
     RetrieveFileRequest,
     UploadFileRequest,
@@ -96,7 +97,7 @@ class TestOpenAIFilesAPI:
 
     async def test_upload_different_purposes(self, files_provider, sample_text_file):
         """Test uploading files with different purposes."""
-        purposes = list(OpenAIFilePurpose)
+        purposes = list(OpenAIFileUploadPurpose)
 
         uploaded_files = []
         for purpose in purposes:
@@ -104,7 +105,7 @@ class TestOpenAIFilesAPI:
                 request=UploadFileRequest(purpose=purpose), file=sample_text_file
             )
             uploaded_files.append(result)
-            assert result.purpose == purpose
+            assert result.purpose == OpenAIFilePurpose(purpose.value)
 
     async def test_upload_different_file_types(self, files_provider, sample_text_file, sample_json_file, large_file):
         """Test uploading different types and sizes of files."""
@@ -446,6 +447,137 @@ class TestOpenAIFilesAPI:
         )
         assert result.status == "processed"
         assert result.status_details == ""
+
+    async def test_upload_purpose_fine_tune(self, files_provider, sample_text_file):
+        """Test uploading a file with fine-tune purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.FINE_TUNE), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.FINE_TUNE
+
+    async def test_upload_purpose_vision(self, files_provider, sample_text_file):
+        """Test uploading a file with vision purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.VISION), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.VISION
+
+    async def test_upload_purpose_user_data(self, files_provider, sample_text_file):
+        """Test uploading a file with user_data purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.USER_DATA), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.USER_DATA
+
+    async def test_upload_purpose_evals(self, files_provider, sample_text_file):
+        """Test uploading a file with evals purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        result = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.EVALS), file=sample_text_file
+        )
+        assert result.purpose == OpenAIFilePurpose.EVALS
+
+    async def test_response_purpose_includes_output_types(self):
+        """Test that OpenAIFilePurpose includes system-generated output purpose values."""
+        assert OpenAIFilePurpose.ASSISTANTS_OUTPUT == "assistants_output"
+        assert OpenAIFilePurpose.BATCH_OUTPUT == "batch_output"
+        assert OpenAIFilePurpose.FINE_TUNE_RESULTS == "fine-tune-results"
+
+    async def test_list_files_filter_by_fine_tune_purpose(self, files_provider, sample_text_file):
+        """Test listing files filtered by fine-tune purpose."""
+        from ogx_api.files.models import OpenAIFileUploadPurpose
+
+        await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.FINE_TUNE), file=sample_text_file
+        )
+        await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS), file=sample_text_file
+        )
+
+        result = await files_provider.openai_list_files(request=ListFilesRequest(purpose=OpenAIFilePurpose.FINE_TUNE))
+        assert len(result.data) == 1
+        assert result.data[0].purpose == OpenAIFilePurpose.FINE_TUNE
+
+    async def test_expires_at_excluded_from_json_when_none(self):
+        """Test that expires_at is excluded from serialized output when None."""
+        file_obj = OpenAIFileObject(
+            id="file-abc123",
+            bytes=100,
+            created_at=1234567890,
+            expires_at=None,
+            filename="test.txt",
+            purpose=OpenAIFilePurpose.ASSISTANTS,
+            status="processed",
+            status_details="",
+        )
+        data = file_obj.model_dump(exclude_none=True)
+        assert "expires_at" not in data
+
+    async def test_status_details_excluded_from_json_when_empty(self):
+        """Test that status_details is excluded from serialized output when empty."""
+        file_obj = OpenAIFileObject(
+            id="file-abc123",
+            bytes=100,
+            created_at=1234567890,
+            filename="test.txt",
+            purpose=OpenAIFilePurpose.ASSISTANTS,
+            status="processed",
+        )
+        data = file_obj.model_dump(exclude_none=True)
+        assert "status_details" not in data
+
+    async def test_status_details_optional(self):
+        """Test that status_details can be omitted when constructing OpenAIFileObject."""
+        file_obj = OpenAIFileObject(
+            id="file-abc123",
+            bytes=100,
+            created_at=1234567890,
+            filename="test.txt",
+            purpose=OpenAIFilePurpose.ASSISTANTS,
+            status="processed",
+        )
+        assert file_obj.status_details is None
+
+    async def test_expires_at_json_schema_is_integer(self):
+        """Test that expires_at JSON schema type is integer (not a union with null)."""
+        schema = OpenAIFileObject.model_json_schema()
+        expires_at_prop = schema["properties"]["expires_at"]
+        assert expires_at_prop.get("type") == "integer", f"expires_at schema should be integer, got: {expires_at_prop}"
+        assert "anyOf" not in expires_at_prop
+
+    async def test_upload_expires_after_schema_present(self):
+        """Test that expires_after is present in the upload schema."""
+        from unittest.mock import AsyncMock
+
+        from ogx_api.files.api import Files
+        from ogx_api.files.fastapi_routes import create_router
+
+        mock_impl = AsyncMock(spec=Files)
+        router = create_router(mock_impl)
+
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        app.include_router(router)
+        schema = app.openapi()
+
+        upload_path = schema["paths"]["/v1/files"]
+        body_schema_ref = upload_path["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]
+
+        if "$ref" in body_schema_ref:
+            ref_name = body_schema_ref["$ref"].split("/")[-1]
+            body_schema = schema["components"]["schemas"][ref_name]
+        else:
+            body_schema = body_schema_ref
+
+        assert "expires_after" in body_schema["properties"], "expires_after should be in upload schema"
 
     async def test_after_pagination_works(self, files_provider, sample_text_file):
         """Test that 'after' pagination works correctly."""

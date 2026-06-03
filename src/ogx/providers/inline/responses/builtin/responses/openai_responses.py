@@ -12,9 +12,10 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 import tiktoken
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
 
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
+from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.task import (
     RequestContext,
     activate_request_context,
@@ -68,11 +69,9 @@ from ogx_api import (
     OpenAIUserMessageParam,
     Order,
     Prompts,
-    ResponseGuardrailSpec,
     ResponseItemInclude,
     ResponseStreamOptions,
     ResponseTruncation,
-    Safety,
     ServiceNotEnabledError,
     ToolGroups,
     ToolRuntime,
@@ -87,7 +86,6 @@ from .utils import (
     convert_response_content_to_chat_content,
     convert_response_input_to_chat_messages,
     convert_response_text_to_chat_response_format,
-    extract_guardrail_ids,
 )
 
 logger = get_logger(name=__name__, category="openai_responses")
@@ -105,13 +103,6 @@ class _BackgroundWorkItem:
     kwargs: dict = field(default_factory=dict)
 
 
-class OpenAIResponsePreviousResponseWithInputItems(BaseModel):
-    """Container for a previous response object paired with its input items."""
-
-    input_items: ListOpenAIResponseInputItem
-    response: OpenAIResponseObject
-
-
 class OpenAIResponsesImpl:
     """Implementation of the OpenAI Responses API with streaming, tool calling, and persistence."""
 
@@ -122,12 +113,12 @@ class OpenAIResponsesImpl:
         tool_runtime_api: ToolRuntime,
         responses_store: ResponsesStore,
         vector_io_api: VectorIO,  # VectorIO
-        safety_api: Safety | None,
+        moderation_endpoint: str | None,
         conversations_api: Conversations,
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
-        vector_stores_config=None,
+        vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
     ):
         self.inference_api = inference_api
@@ -135,7 +126,7 @@ class OpenAIResponsesImpl:
         self.tool_runtime_api = tool_runtime_api
         self.responses_store = responses_store
         self.vector_io_api = vector_io_api
-        self.safety_api = safety_api
+        self.moderation_endpoint = moderation_endpoint
         self.conversations_api = conversations_api
         self.tool_executor = ToolExecutor(
             tool_groups_api=tool_groups_api,
@@ -210,7 +201,7 @@ class OpenAIResponsesImpl:
                     # Response was cancelled via cancel_openai_response
                     logger.info("Background response was cancelled", response_id=response_id)
                     try:
-                        existing = await self.responses_store.get_response_object(response_id)
+                        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
                         if existing.status != "cancelled":
                             existing.status = "cancelled"
                             await self.responses_store.update_response_object(existing)
@@ -223,7 +214,7 @@ class OpenAIResponsesImpl:
                         timeout_seconds=BACKGROUND_RESPONSE_TIMEOUT_SECONDS,
                     )
                     try:
-                        existing = await self.responses_store.get_response_object(response_id)
+                        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
                         existing.status = "failed"
                         existing.error = OpenAIResponseError(
                             code="processing_error",
@@ -238,7 +229,7 @@ class OpenAIResponsesImpl:
                 except Exception as e:
                     logger.exception("Failed to process background response", response_id=response_id)
                     try:
-                        existing = await self.responses_store.get_response_object(response_id)
+                        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
                         existing.status = "failed"
                         existing.error = OpenAIResponseError(
                             code="processing_error",
@@ -425,7 +416,10 @@ class OpenAIResponsesImpl:
         self,
         response_id: str,
     ) -> OpenAIResponseObject:
-        response_with_input = await self.responses_store.get_response_object(response_id)
+        response_with_input = await self.responses_store.get_response_object(
+            response_id,
+            reconstruct_input=False,
+        )
         return response_with_input.to_response_object()
 
     async def list_openai_responses(
@@ -533,6 +527,7 @@ class OpenAIResponsesImpl:
         orchestrator,
         input_items: list[OpenAIResponseInput],
         output_items: list,
+        incremental_input: bool = False,
     ) -> None:
         """Persist response state at significant streaming events.
 
@@ -549,6 +544,7 @@ class OpenAIResponsesImpl:
         :param orchestrator: The streaming orchestrator (for snapshotting response).
         :param input_items: Pre-prepared input items for storage.
         :param output_items: Accumulated output items so far.
+        :param incremental_input: If True, input_items contains only new items for this turn.
         """
         try:
             match stream_chunk.type:
@@ -559,6 +555,7 @@ class OpenAIResponsesImpl:
                         response_object=in_progress_response,
                         input=input_items,
                         messages=[],
+                        incremental_input=incremental_input,
                     )
 
                 case "response.output_item.done":
@@ -578,6 +575,7 @@ class OpenAIResponsesImpl:
                         response_object=current_snapshot,
                         input=input_items,
                         messages=messages_to_store,
+                        incremental_input=incremental_input,
                     )
 
                 case "response.completed" | "response.incomplete":
@@ -593,6 +591,7 @@ class OpenAIResponsesImpl:
                         response_object=final_response,
                         input=input_items,
                         messages=messages_to_store,
+                        incremental_input=incremental_input,
                     )
 
                 case "response.failed":
@@ -609,6 +608,7 @@ class OpenAIResponsesImpl:
                         response_object=failed_response,
                         input=input_items,
                         messages=messages_to_store,
+                        incremental_input=incremental_input,
                     )
         except Exception as e:
             # Best-effort persistence: log error but don't fail the stream
@@ -634,12 +634,11 @@ class OpenAIResponsesImpl:
         tools: list[OpenAIResponseInputTool] | None = None,
         include: list[ResponseItemInclude] | None = None,
         max_infer_iters: int | None = 10,
-        guardrails: list[str | ResponseGuardrailSpec] | None = None,
+        guardrails: bool | None = None,
         parallel_tool_calls: bool | None = None,
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
         max_output_tokens: int | None = None,
-        safety_identifier: str | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
         truncation: ResponseTruncation | None = None,
@@ -678,13 +677,12 @@ class OpenAIResponsesImpl:
                                 "Authorization credentials must be passed via the 'authorization' parameter, not 'headers'.",
                             )
 
-        guardrail_ids = extract_guardrail_ids(guardrails) if guardrails else []
+        enable_guardrails = bool(guardrails)
 
-        # Validate that Safety API is available if guardrails are requested
-        if guardrail_ids and self.safety_api is None:
+        if enable_guardrails and not self.moderation_endpoint:
             raise ServiceNotEnabledError(
-                "Safety API",
-                provider_specific_message="Ensure the Safety API is enabled in your stack, otherwise remove the 'guardrails' parameter from your request.",
+                "moderation_endpoint",
+                provider_specific_message="Guardrails require a moderation endpoint to be configured on the server. Contact your platform administrator to set 'moderation_endpoint' on the responses provider, or remove the 'guardrails' parameter from your request.",
             )
 
         if conversation is not None:
@@ -722,12 +720,11 @@ class OpenAIResponsesImpl:
                 tools=tools,
                 include=include,
                 max_infer_iters=max_infer_iters,
-                guardrail_ids=guardrail_ids,
+                enable_guardrails=enable_guardrails,
                 parallel_tool_calls=parallel_tool_calls,
                 max_tool_calls=max_tool_calls,
                 reasoning=reasoning,
                 max_output_tokens=max_output_tokens,
-                safety_identifier=safety_identifier,
                 service_tier=service_tier,
                 metadata=metadata,
                 truncation=truncation,
@@ -752,12 +749,11 @@ class OpenAIResponsesImpl:
             tools=tools,
             tool_choice=tool_choice,
             max_infer_iters=max_infer_iters,
-            guardrail_ids=guardrail_ids,
+            enable_guardrails=enable_guardrails,
             parallel_tool_calls=parallel_tool_calls,
             max_tool_calls=max_tool_calls,
             reasoning=reasoning,
             max_output_tokens=max_output_tokens,
-            safety_identifier=safety_identifier,
             service_tier=service_tier,
             metadata=metadata,
             include=include,
@@ -798,14 +794,18 @@ class OpenAIResponsesImpl:
                             if failed_response.error
                             else "response failed but no error message was provided"
                         )
+                        error_code = failed_response.error.code if failed_response.error else "server_error"
                         logger.error(
                             "response creation failed",
                             error_message=error_message,
+                            error_code=error_code,
                             response_id=failed_response.id,
                             model=model,
                         )
-                        # Surface the provider message — it may be actionable (e.g. context window exceeded)
-                        # and is already visible to callers in streaming mode via the response.failed event.
+                        # Surface the provider message — it may be actionable (e.g. wrong tool-call-parser,
+                        # context window exceeded). Use the error code to pick the right HTTP status.
+                        if error_code == "invalid_prompt":
+                            raise InvalidParameterError("model", model, error_message)
                         raise InternalServerError(error_message)
                     case _:
                         pass  # Other event types don't have .response
@@ -838,12 +838,11 @@ class OpenAIResponsesImpl:
         tools: list[OpenAIResponseInputTool] | None = None,
         include: list[ResponseItemInclude] | None = None,
         max_infer_iters: int | None = 10,
-        guardrail_ids: list[str] | None = None,
+        enable_guardrails: bool = False,
         parallel_tool_calls: bool | None = None,
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
         max_output_tokens: int | None = None,
-        safety_identifier: str | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
         truncation: ResponseTruncation | None = None,
@@ -916,12 +915,11 @@ class OpenAIResponsesImpl:
                         tools=tools,
                         include=include,
                         max_infer_iters=max_infer_iters,
-                        guardrail_ids=guardrail_ids,
+                        enable_guardrails=enable_guardrails,
                         parallel_tool_calls=parallel_tool_calls,
                         max_tool_calls=max_tool_calls,
                         reasoning=reasoning,
                         max_output_tokens=max_output_tokens,
-                        safety_identifier=safety_identifier,
                         service_tier=service_tier,
                         metadata=metadata,
                         truncation=truncation,
@@ -955,12 +953,11 @@ class OpenAIResponsesImpl:
         tools: list[OpenAIResponseInputTool] | None = None,
         include: list[ResponseItemInclude] | None = None,
         max_infer_iters: int | None = 10,
-        guardrail_ids: list[str] | None = None,
+        enable_guardrails: bool = False,
         parallel_tool_calls: bool | None = None,
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
         max_output_tokens: int | None = None,
-        safety_identifier: str | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
         truncation: ResponseTruncation | None = None,
@@ -970,7 +967,7 @@ class OpenAIResponsesImpl:
     ) -> None:
         """Inner loop for background response processing, separated for timeout wrapping."""
         # Check if response was cancelled before starting
-        existing = await self.responses_store.get_response_object(response_id)
+        existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
         if existing.status == "cancelled":
             logger.info("Background response was cancelled before processing started", response_id=response_id)
             return
@@ -994,12 +991,11 @@ class OpenAIResponsesImpl:
             tools=tools,
             tool_choice=tool_choice,
             max_infer_iters=max_infer_iters,
-            guardrail_ids=guardrail_ids,
+            enable_guardrails=enable_guardrails,
             parallel_tool_calls=parallel_tool_calls,
             max_tool_calls=max_tool_calls,
             reasoning=reasoning,
             max_output_tokens=max_output_tokens,
-            safety_identifier=safety_identifier,
             service_tier=service_tier,
             metadata=metadata,
             include=include,
@@ -1014,7 +1010,7 @@ class OpenAIResponsesImpl:
 
         async for stream_chunk in stream_gen:
             # Check for cancellation periodically
-            current = await self.responses_store.get_response_object(response_id)
+            current = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
             if current.status == "cancelled":
                 logger.info("Background response was cancelled during processing", response_id=response_id)
                 return
@@ -1027,7 +1023,7 @@ class OpenAIResponsesImpl:
 
         if result_response is not None:
             # Check if response was cancelled before final update to avoid race condition
-            current = await self.responses_store.get_response_object(response_id)
+            current = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
             if current.status == "cancelled":
                 logger.info("Background response was cancelled before final update", response_id=response_id)
                 return
@@ -1037,7 +1033,7 @@ class OpenAIResponsesImpl:
             await self.responses_store.update_response_object(result_response)
         else:
             # Something went wrong - mark as failed
-            existing = await self.responses_store.get_response_object(response_id)
+            existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
             if existing.status == "cancelled":
                 logger.info("Background response was cancelled before failure update", response_id=response_id)
                 return
@@ -1066,12 +1062,11 @@ class OpenAIResponsesImpl:
         tools: list[OpenAIResponseInputTool] | None = None,
         tool_choice: OpenAIResponseInputToolChoice | None = None,
         max_infer_iters: int | None = 10,
-        guardrail_ids: list[str] | None = None,
+        enable_guardrails: bool = False,
         parallel_tool_calls: bool | None = True,
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
         max_output_tokens: int | None = None,
-        safety_identifier: str | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
         include: list[ResponseItemInclude] | None = None,
@@ -1094,9 +1089,13 @@ class OpenAIResponsesImpl:
         )
 
         # Auto-compact if context_management is configured (runs on resolved history, not just new input)
+        compacted_history_applied = False
         if context_management:
-            compacted_input = await self._maybe_auto_compact(all_input, model, context_management, previous_usage)
+            compacted_input = await self._maybe_auto_compact(
+                all_input, model, context_management, previous_usage, extra_body=extra_body
+            )
             if compacted_input is not all_input:
+                compacted_history_applied = True
                 all_input = compacted_input
                 messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
 
@@ -1146,18 +1145,18 @@ class OpenAIResponsesImpl:
                 created_at=created_at,
                 prompt=prompt,
                 prompt_cache_key=prompt_cache_key,
+                previous_response_id=previous_response_id,
                 text=text,
                 max_infer_iters=max_infer_iters,
                 parallel_tool_calls=parallel_tool_calls,
                 tool_executor=request_tool_executor,
-                safety_api=self.safety_api,
+                moderation_endpoint=self.moderation_endpoint,
                 connectors_api=self.connectors_api,
-                guardrail_ids=guardrail_ids,
+                enable_guardrails=enable_guardrails,
                 instructions=instructions,
                 max_tool_calls=max_tool_calls,
                 reasoning=reasoning,
                 max_output_tokens=max_output_tokens,
-                safety_identifier=safety_identifier,
                 service_tier=service_tier,
                 metadata=metadata,
                 include=include,
@@ -1174,7 +1173,14 @@ class OpenAIResponsesImpl:
 
             output_items: list[ConversationItem] = []
 
-            input_items_for_storage = self._prepare_input_items_for_storage(all_input)
+            # Store only new input when building on a previous response (O(n) vs O(n²) storage).
+            # If auto-compaction rewrote the history, store the effective compacted input as a full snapshot
+            # so subsequent previous_response_id turns continue from the compacted context.
+            incremental = bool(previous_response_id) and not compacted_history_applied
+            if incremental:
+                input_items_for_storage = self._prepare_input_items_for_storage(input)
+            else:
+                input_items_for_storage = self._prepare_input_items_for_storage(all_input)
 
             async for stream_chunk in orchestrator.create_response():
                 match stream_chunk.type:
@@ -1196,6 +1202,7 @@ class OpenAIResponsesImpl:
                         orchestrator=orchestrator,
                         input_items=input_items_for_storage,
                         output_items=output_items,
+                        incremental_input=incremental,
                     )
 
                 # Store and sync before yielding terminal events
@@ -1225,6 +1232,7 @@ class OpenAIResponsesImpl:
         instructions: str | None = None,
         previous_response_id: str | None = None,
         prompt_cache_key: str | None = None,
+        extra_body: dict | None = None,
     ) -> OpenAICompactedResponse:
         # Resolve input from previous_response_id or direct input
         resolved_messages = None
@@ -1371,46 +1379,86 @@ class OpenAIResponsesImpl:
             usage=usage_data,
         )
 
-    def _count_tokens(self, input: str | list[OpenAIResponseInput], model: str = "") -> int:
-        """Estimate token count using tiktoken. Used as fallback when provider usage is unavailable."""
-        # Use explicitly configured encoding, or resolve from model name
-        if self.compaction_config.tokenizer_encoding:
-            encoding = tiktoken.get_encoding(self.compaction_config.tokenizer_encoding)
-        else:
-            # Strip provider prefix (e.g. "openai/gpt-4o" -> "gpt-4o") for tiktoken lookup
-            model_name = model.split("/")[-1] if "/" in model else model
+    def _resolve_encoding(self, model: str, extra_body: dict | None = None) -> tiktoken.Encoding | None:
+        """Resolve tiktoken encoding via a 5-step chain. Returns None for character fallback."""
+        # 1. Per-request override (fail hard if invalid)
+        if extra_body and (enc_name := extra_body.get("tokenizer_encoding")):
             try:
-                encoding = tiktoken.encoding_for_model(model_name)
-            except KeyError as e:
-                raise ValueError(
-                    f"Failed to resolve tiktoken encoding for model '{model}'. "
-                    "Set 'tokenizer_encoding' in compaction_config (e.g. 'o200k_base') "
-                    "or use an OpenAI model name that tiktoken recognizes."
-                ) from e
+                return tiktoken.get_encoding(enc_name)
+            except ValueError:
+                raise InvalidParameterError(
+                    "tokenizer_encoding",
+                    enc_name,
+                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base').",
+                ) from None
 
-        if isinstance(input, str):
-            return len(encoding.encode(input))
+        # 2. Admin default (validated at startup by CompactionConfig)
+        if self.compaction_config.tokenizer_encoding:
+            return tiktoken.get_encoding(self.compaction_config.tokenizer_encoding)
 
-        total_tokens = 0
-        for item in input:
+        # 3. tiktoken built-in (soft fail)
+        model_name = model.split("/")[-1] if "/" in model else model
+        try:
+            return tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            pass
+
+        # 4. Model-family mapping (soft fail)
+        base = model_name.lower()
+        for prefix, enc_name in self.compaction_config.model_tokenizer_mappings.items():
+            if base.startswith(prefix.lower()):
+                try:
+                    return tiktoken.get_encoding(enc_name)
+                except ValueError:
+                    logger.warning("Invalid encoding in model_tokenizer_mappings", prefix=prefix, encoding=enc_name)
+                    break
+
+        # 5. Character fallback
+        logger.warning("Could not resolve tokenizer encoding, using character-based estimate", model=model)
+        return None
+
+    def _count_tokens(
+        self, input: str | list[OpenAIResponseInput], model: str = "", extra_body: dict | None = None
+    ) -> int:
+        """Estimate token count. Uses tiktoken when possible, character-based estimate as fallback."""
+        encoding = self._resolve_encoding(model, extra_body)
+        if encoding is not None:
+            return self._count_with_encoding(encoding, input)
+        return self._estimate_tokens_by_chars(input)
+
+    @staticmethod
+    def _extract_text_segments(items: list[OpenAIResponseInput]) -> list[str]:
+        segments: list[str] = []
+        for item in items:
             if isinstance(item, OpenAIResponseMessage):
                 if isinstance(item.content, str):
-                    total_tokens += len(encoding.encode(item.content))
+                    segments.append(item.content)
                 elif isinstance(item.content, list):
                     for part in item.content:
                         if hasattr(part, "text"):
-                            total_tokens += len(encoding.encode(part.text))
+                            segments.append(part.text)
             elif isinstance(item, OpenAIResponseCompaction):
-                total_tokens += len(encoding.encode(item.encrypted_content))
+                segments.append(item.encrypted_content)
             elif hasattr(item, "arguments"):
                 args = getattr(item, "arguments", "")
                 if args:
-                    total_tokens += len(encoding.encode(args))
+                    segments.append(args)
             elif hasattr(item, "output"):
                 output = getattr(item, "output", "")
                 if isinstance(output, str):
-                    total_tokens += len(encoding.encode(output))
-        return total_tokens
+                    segments.append(output)
+        return segments
+
+    def _count_with_encoding(self, encoding: tiktoken.Encoding, input: str | list[OpenAIResponseInput]) -> int:
+        if isinstance(input, str):
+            return len(encoding.encode(input))
+        return sum(len(encoding.encode(s)) for s in self._extract_text_segments(input))
+
+    def _estimate_tokens_by_chars(self, input: str | list[OpenAIResponseInput]) -> int:
+        if isinstance(input, str):
+            return max(1, len(input) // 4)
+        total_chars = sum(len(s) for s in self._extract_text_segments(input))
+        return max(1, total_chars // 4)
 
     async def _maybe_auto_compact(
         self,
@@ -1418,6 +1466,7 @@ class OpenAIResponsesImpl:
         model: str,
         context_management: list,
         previous_usage: OpenAIResponseUsage | None = None,
+        extra_body: dict | None = None,
     ) -> str | list[OpenAIResponseInput]:
         """Auto-compact input if token count exceeds compact_threshold."""
         for entry in context_management:
@@ -1437,7 +1486,7 @@ class OpenAIResponsesImpl:
             if previous_usage and previous_usage.total_tokens:
                 token_count = previous_usage.total_tokens
             else:
-                token_count = self._count_tokens(input, model=model)
+                token_count = self._count_tokens(input, model=model, extra_body=extra_body)
             if token_count > threshold:
                 logger.debug("Auto-compacting", token_count=token_count, threshold=threshold)
                 compacted = await self.compact_openai_response(model=model, input=input)
@@ -1462,7 +1511,7 @@ class OpenAIResponsesImpl:
             ConflictError: If the response is already in a terminal state
         """
         # Get current response state
-        response = await self.responses_store.get_response_object(response_id)
+        response = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
 
         # If already cancelled, return current state (idempotent)
         if response.status == "cancelled":
@@ -1488,7 +1537,7 @@ class OpenAIResponsesImpl:
                 # Note: task removal handled in worker's finally block
 
         # Re-fetch from store to return the persisted state
-        updated = await self.responses_store.get_response_object(response_id)
+        updated = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
         return updated.to_response_object()
 
     async def _sync_response_to_conversation(

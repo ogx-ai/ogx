@@ -459,7 +459,8 @@ def test_oauth2_with_jwks_token_expected(
     oauth2_client, jwt_token_valid, mock_jwks_urlopen_with_auth_required, suppress_auth_errors
 ):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
-    assert response.status_code == 401
+    assert response.status_code == 503
+    assert "Authentication service unavailable" in response.json()["error"]["message"]
 
 
 def test_oauth2_with_jwks_token_configured(oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_urlopen):
@@ -583,6 +584,34 @@ def test_get_attributes_from_claims():
     assert attributes["app2_roles"] == ["role3"]
     assert attributes["tenant"] == ["tenant1"]
     assert attributes["region"] == ["us-west"]
+
+    # Test escaped dots for keys with literal dots (e.g., Kubernetes "kubernetes.io")
+    claims = {
+        "kubernetes.io": {
+            "namespace": "ogx",
+            "serviceaccount": {"name": "tenant-a", "uid": "abc-123"},
+        },
+        "sub": "system:serviceaccount:ogx:tenant-a",
+    }
+    attributes = get_attributes_from_claims(
+        claims, {"kubernetes\\.io.serviceaccount.name": "teams", "sub": "principal"}
+    )
+    assert attributes["teams"] == ["tenant-a"]
+    assert attributes["principal"] == ["system:serviceaccount:ogx:tenant-a"]
+
+    # Test fully escaped literal key (all dots escaped)
+    claims = {
+        "my.dotted.key": "literal-value",
+    }
+    attributes = get_attributes_from_claims(claims, {"my\\.dotted\\.key": "test"})
+    assert attributes["test"] == ["literal-value"]
+
+    # Test mixing escaped and unescaped dots
+    claims = {
+        "resource.access": {"ogx": {"roles": ["admin", "user"]}},
+    }
+    attributes = get_attributes_from_claims(claims, {"resource\\.access.ogx.roles": "roles"})
+    assert set(attributes["roles"]) == {"admin", "user"}
 
 
 # TODO: add more tests for oauth2 token provider

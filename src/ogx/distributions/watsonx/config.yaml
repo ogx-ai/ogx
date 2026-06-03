@@ -4,7 +4,6 @@ apis:
 - files
 - inference
 - responses
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -22,19 +21,11 @@ providers:
       persistence:
         namespace: vector_io::faiss
         backend: kv_default
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
       persistence:
-        agent_state:
-          namespace: agents
-          backend: kv_default
         responses:
           table_name: responses
           backend: sql_default
@@ -59,7 +50,7 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/watsonx/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/watsonx/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default
@@ -67,10 +58,10 @@ storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/watsonx}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/watsonx}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/watsonx}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/watsonx}/sql_store.db
   stores:
     metadata:
       namespace: registry
@@ -84,14 +75,13 @@ storage:
       table_name: openai_conversations
       backend: sql_default
     prompts:
-      namespace: prompts
-      backend: kv_default
+      table_name: prompts
+      backend: sql_default
     connectors:
-      namespace: connectors
-      backend: kv_default
+      table_name: connectors
+      backend: sql_default
 registered_resources:
   models: []
-  shields: []
   vector_dbs: []
 server:
   port: 8321

@@ -7,6 +7,8 @@
 from collections.abc import AsyncIterator
 from typing import Protocol, runtime_checkable
 
+from fastapi.responses import JSONResponse
+
 from .models import (
     GoogleCreateInteractionRequest,
     GoogleInteractionResponse,
@@ -21,4 +23,4 @@ class Interactions(Protocol):
     async def create_interaction(
         self,
         request: GoogleCreateInteractionRequest,
-    ) -> GoogleInteractionResponse | AsyncIterator[GoogleStreamEvent] | AsyncIterator[str]: ...
+    ) -> GoogleInteractionResponse | AsyncIterator[GoogleStreamEvent] | AsyncIterator[str] | JSONResponse: ...

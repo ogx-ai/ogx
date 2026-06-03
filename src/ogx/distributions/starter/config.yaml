@@ -8,7 +8,6 @@ apis:
 - interactions
 - messages
 - responses
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -44,7 +43,7 @@ providers:
   - provider_id: bedrock
     provider_type: remote::bedrock
     config:
-      api_key: ${env.AWS_BEARER_TOKEN_BEDROCK:=}
+      aws_bedrock_bearer_token: ${env.AWS_BEDROCK_BEARER_TOKEN:=}
       region_name: ${env.AWS_DEFAULT_REGION:=us-east-2}
       aws_role_arn: ${env.AWS_ROLE_ARN:=}
       aws_web_identity_token_file: ${env.AWS_WEB_IDENTITY_TOKEN_FILE:=}
@@ -106,14 +105,14 @@ providers:
   - provider_id: sqlite-vec
     provider_type: inline::sqlite-vec
     config:
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/sqlite_vec.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/sqlite_vec.db
       persistence:
         namespace: vector_io::sqlite_vec
         backend: kv_default
   - provider_id: ${env.MILVUS_URL:+milvus}
     provider_type: inline::milvus
     config:
-      db_path: ${env.MILVUS_DB_PATH:=~/.llama/distributions/starter}/milvus.db
+      db_path: ${env.MILVUS_DB_PATH:=~/.ogx/distributions/starter}/milvus.db
       persistence:
         namespace: vector_io::milvus
         backend: kv_default
@@ -180,34 +179,32 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/starter/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/starter/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default
   file_processors:
-  - provider_id: pypdf
-    provider_type: inline::pypdf
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
-  - provider_id: code-scanner
-    provider_type: inline::code-scanner
+  - provider_id: auto
+    provider_type: inline::auto
   interactions:
   - provider_id: builtin
     provider_type: inline::builtin
+    config:
+      store:
+        table_name: interactions
+        backend: sql_default
   messages:
   - provider_id: builtin
     provider_type: inline::builtin
+    config:
+      kvstore:
+        namespace: message_batches
+        backend: kv_default
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
       persistence:
-        agent_state:
-          namespace: agents
-          backend: kv_default
         responses:
           table_name: responses
           backend: sql_default
@@ -232,17 +229,17 @@ providers:
   - provider_id: reference
     provider_type: inline::reference
     config:
-      kvstore:
-        namespace: batches
-        backend: kv_default
+      sqlstore:
+        table_name: batches
+        backend: sql_default
 storage:
   backends:
     kv_default:
       type: kv_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/kvstore.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/kvstore.db
     sql_default:
       type: sql_sqlite
-      db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/starter}/sql_store.db
+      db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/starter}/sql_store.db
   stores:
     metadata:
       namespace: registry
@@ -256,11 +253,11 @@ storage:
       table_name: openai_conversations
       backend: sql_default
     prompts:
-      namespace: prompts
-      backend: kv_default
+      table_name: prompts
+      backend: sql_default
     connectors:
-      namespace: connectors
-      backend: kv_default
+      table_name: connectors
+      backend: sql_default
 registered_resources:
   models:
   - metadata: {}
@@ -278,13 +275,6 @@ registered_resources:
     provider_id: all
     provider_model_id: auto
     model_type: llm
-  shields:
-  - shield_id: llama-guard
-    provider_id: ${env.SAFETY_MODEL:+llama-guard}
-    provider_shield_id: ${env.SAFETY_MODEL:=}
-  - shield_id: code-scanner
-    provider_id: ${env.CODE_SCANNER_MODEL:+code-scanner}
-    provider_shield_id: ${env.CODE_SCANNER_MODEL:=}
   vector_dbs: []
 server:
   port: 8321
@@ -347,6 +337,4 @@ vector_stores:
     default_timeout_seconds: 120
     default_max_concurrency: 3
     max_document_tokens: 100000
-safety:
-  default_shield_id: llama-guard
 connectors: []

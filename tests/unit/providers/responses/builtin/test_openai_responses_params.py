@@ -212,7 +212,6 @@ async def test_create_openai_response_with_max_output_tokens_and_tools(openai_re
     "param_name,param_value,backend_param_name,backend_expected_value,response_expected_value,stored_expected_value",
     [
         ("temperature", 1.5, "temperature", 1.5, 1.5, 1.5),
-        ("safety_identifier", "user-123", "safety_identifier", "user-123", "user-123", "user-123"),
         ("max_output_tokens", 500, "max_completion_tokens", 500, 500, 500),
         (
             "prompt_cache_key",
@@ -275,7 +274,7 @@ async def test_params_passed_through_full_chain_to_backend_service(
         tool_runtime_api=AsyncMock(),
         responses_store=mock_responses_store,
         vector_io_api=AsyncMock(),
-        safety_api=AsyncMock(),
+        moderation_endpoint=None,
         conversations_api=AsyncMock(),
         prompts_api=AsyncMock(),
         files_api=AsyncMock(),
@@ -787,7 +786,7 @@ async def test_create_openai_response_with_empty_stream_options(openai_responses
     """Test that default stream_options still merges with default include_usage."""
     input_text = "Test empty options"
     model = "meta-llama/Llama-3.1-8B-Instruct"
-    stream_options = ResponseStreamOptions()  # Uses default include_obfuscation=True
+    stream_options = ResponseStreamOptions()  # No explicit fields set
 
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
@@ -802,10 +801,10 @@ async def test_create_openai_response_with_empty_stream_options(openai_responses
     # Collect chunks (consume the async iterator)
     _ = [chunk async for chunk in result]
 
-    # Verify the stream_options has both defaults
+    # Verify the stream_options has include_usage default
     mock_inference_api.openai_chat_completion.assert_called()
     call_args = mock_inference_api.openai_chat_completion.call_args
     params = call_args.args[0]
     assert params.stream_options is not None
     assert params.stream_options["include_usage"] is True
-    assert params.stream_options["include_obfuscation"] is True
+    assert "include_obfuscation" not in params.stream_options

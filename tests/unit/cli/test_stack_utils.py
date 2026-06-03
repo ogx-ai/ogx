@@ -55,7 +55,7 @@ def test_add_dependent_providers_include_configs():
         provider_registry=provider_registry,
         requested_provider_types=["inline::builtin"],
         include_configs=True,
-        distro_dir="~/.llama/distributions/providers-run",
+        distro_dir="~/.ogx/distributions/providers-run",
     )
 
     # Some providers like sentence-transformers don't need configuration,

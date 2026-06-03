@@ -13,14 +13,11 @@ utils/
   files/               # File handling utilities
   memory/              # Memory/vector store utilities
   responses/           # Responses API store
-  safety.py            # Safety utilities
   scoring/             # Scoring utilities
   tools/               # Tool utilities (MCP client, TTL cache)
   vector_io/           # Vector I/O utilities
   __init__.py
   forward_headers.py   # Provider data header forwarding
-  pagination.py        # Pagination helpers for list endpoints
-  scheduler.py         # Job scheduling for async operations
 ```
 
 ## Key Components

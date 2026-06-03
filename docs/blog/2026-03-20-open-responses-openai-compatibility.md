@@ -10,7 +10,7 @@ We're excited to share that OGX has achieved **100% compliance with the Open Res
 
 With comprehensive support for Files, Vector Stores, Search, Conversations, Prompts, Chat Completions, the full Responses API, plus powerful extensions like MCP tool integration, Tool Calling, and Connectors, OGX offers something unique in the AI infrastructure landscape: a SaaS-like experience that runs entirely on your terms.
 
-{/*truncate*/}
+<!--truncate-->
 
 ## Recognition by the Open Responses Community
 
@@ -102,9 +102,9 @@ response = client.responses.create(
 OGX extends OpenAI compatibility with full programmatic prompt management. With OpenAI, prompts are created through their admin portal and referenced by ID in the Responses API. OGX provides the same referencing pattern, plus a complete CRUD API for creating and managing prompts programmatically:
 
 ```python
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
-ls_client = LlamaStackClient()
+ls_client = OgxClient()
 
 # Create reusable prompt templates with variables
 prompt = ls_client.prompts.create(
@@ -200,7 +200,7 @@ ollama run gpt-oss:20b
 
 # Launch OGX with the starter distribution
 
-OLLAMA_URL=http://localhost:11434/v1 uv run ogx run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run ogx stack run starter
 ```
 
 ```python
@@ -220,7 +220,7 @@ print(response.output_text)
 ```bash
 # Deploy with your preferred infrastructure
 # Docker, Kubernetes, or bare metal — your choice
-docker run -p 8321:8321 ogx/distribution-starter:latest
+docker run -p 8321:8321 ogxai/distribution-starter:latest
 ```
 
 ## Framework Ecosystem Compatibility
@@ -252,10 +252,10 @@ llm = ChatOpenAI(
 ### **Native OGX Client**
 
 ```python
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
 # Access the full OGX API surface
-client = LlamaStackClient(base_url="http://your-ogx")
+client = OgxClient(base_url="http://your-ogx")
 ```
 
 ## Built for Open Standards

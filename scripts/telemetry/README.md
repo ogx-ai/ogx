@@ -87,7 +87,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_SERVICE_NAME=ogx-server
 
-uv run opentelemetry-instrument ogx run starter
+uv run opentelemetry-instrument ogx stack run starter
 ```
 
 > **Note:** The `opentelemetry-instrument` wrapper automatically instruments the application and sends traces/metrics to the OTel Collector.

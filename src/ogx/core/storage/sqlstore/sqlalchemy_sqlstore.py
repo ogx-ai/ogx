@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from ogx.core.storage.datatypes import PostgresSqlStoreConfig, SqlAlchemySqlStoreConfig
+from ogx.core.storage.datatypes import PostgresSqlStoreConfig, SqlAlchemySqlStoreConfig, SqliteSqlStoreConfig
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
@@ -76,7 +76,7 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
     def __init__(self, config: SqlAlchemySqlStoreConfig) -> None:
         self.config = config
-        self._is_sqlite_backend = "sqlite" in self.config.engine_str
+        self._is_sqlite_backend = isinstance(self.config, SqliteSqlStoreConfig)
         self._engine: AsyncEngine | None = None  # Lazy initialization
         self.async_session: async_sessionmaker[AsyncSession] | None = None
         self.metadata = MetaData()
@@ -105,6 +105,16 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 for col_name, col_type, nullable in columns:
                     await self._add_column_now(table_name, col_name, col_type, nullable)
             self._pending_columns.clear()
+
+    def reset_engine(self) -> None:
+        """Reset engine state so it will be recreated in the next event loop.
+
+        Called after Stack.initialize() completes in a temporary event loop,
+        before uvicorn's request-handling loop takes over. Does not dispose
+        the old engine because the temporary loop is already closed.
+        """
+        self._engine = None
+        self.async_session = None
 
     async def shutdown(self) -> None:
         """Dispose of the async engine and close all connections."""
@@ -185,7 +195,13 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         # Register table in metadata - actual creation happens in _ensure_engine()
         if table not in self.metadata.tables:
             Table(table, self.metadata, *sqlalchemy_columns)
-        # If table already exists in metadata, we're done (no need to recreate)
+
+            # If engine is already running, create the new table immediately.
+            # _ensure_engine() only calls create_all once, so tables registered
+            # after that first call would never be physically created.
+            if self._engine is not None:
+                async with self._engine.begin() as conn:
+                    await conn.run_sync(self.metadata.create_all, checkfirst=True)
 
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
@@ -443,14 +459,19 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 compiled_type = type_impl.compile(dialect=dialect)
 
                 nullable_clause = "" if nullable else " NOT NULL"
-                add_column_sql = text(f"ALTER TABLE {table} ADD COLUMN {column_name} {compiled_type}{nullable_clause}")
+                quoted_table = f'"{table}"' if not self._is_sqlite_backend else table
+                quoted_column = f'"{column_name}"' if not self._is_sqlite_backend else column_name
+                add_column_sql = text(
+                    f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} {compiled_type}{nullable_clause}"
+                )
 
                 await conn.execute(add_column_sql)
         except Exception as e:
-            # If any error occurs during migration, log it but don't fail
-            # The table creation will handle adding the column
-            logger.error("Error adding column to table", column_name=column_name, table=table, error=str(e))
-            pass
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "duplicate column" in error_msg:
+                logger.debug("Column already exists, skipping", table=table, column=column_name)
+            else:
+                raise RuntimeError(f"Failed to add column {column_name} to {table}") from e
 
     def _get_dialect_insert(self, table: Table) -> Any:
         if self._is_sqlite_backend:

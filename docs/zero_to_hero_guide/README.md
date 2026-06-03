@@ -95,7 +95,7 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
 2. **Start the distribution**:
 
    ```bash
-   ogx run starter
+   ogx stack run starter
    ```
 
 3. **Set the ENV variables by exporting them to the terminal**:
@@ -104,7 +104,7 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
    export OLLAMA_URL="http://localhost:11434"
    export OGX_PORT=8321
    export INFERENCE_MODEL="meta-llama/Llama-3.2-3B-Instruct"
-   export SAFETY_MODEL="meta-llama/Llama-Guard-3-1B"
+   export MODERATION_ENDPOINT="http://localhost:11434/v1/moderations"
    ```
 
 4. **Run the OGX**:
@@ -112,9 +112,9 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
 
    ```bash
    INFERENCE_MODEL=$INFERENCE_MODEL \
-   SAFETY_MODEL=$SAFETY_MODEL \
+   MODERATION_ENDPOINT=$MODERATION_ENDPOINT \
    OLLAMA_URL=$OLLAMA_URL \
-   uv run --with ogx ogx run starter \
+   uv run --with ogx ogx stack run starter \
       --port $OGX_PORT
    ```
 
@@ -235,7 +235,7 @@ In `test_ogx.py`, write the following code:
 
 ```python
 import os
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
 # Get the model ID from the environment variable
 INFERENCE_MODEL = os.environ.get("INFERENCE_MODEL")
@@ -245,7 +245,7 @@ if INFERENCE_MODEL is None:
     raise ValueError("The environment variable 'INFERENCE_MODEL' is not set.")
 
 # Initialize the client
-client = LlamaStackClient(base_url="http://localhost:8321")
+client = OgxClient(base_url="http://localhost:8321")
 
 # Create a chat completion request
 response = client.chat.completions.create(
@@ -290,12 +290,11 @@ This command initializes the model to interact with your local OGX instance.
 - [Chat with Image - OGX Vision API](03_Image_Chat101.ipynb)
 - [Tool Calling: How to and Details](04_Tool_Calling101.ipynb)
 - [Memory API: Show Simple In-Memory Retrieval](05_Memory101.ipynb)
-- [Using Safety API in Conversation](06_Safety101.ipynb)
 - [Agents API: Explain Components](07_Agents101.ipynb)
 
 **Explore Client SDKs**: Utilize our client SDKs for various languages to integrate OGX into your applications:
 
-- [Python SDK](https://github.com/meta-llama/llama-stack-client-python)
+- [Python SDK](https://github.com/ogx-ai/ogx-client-python)
 - [Node SDK](https://github.com/ogx-ai/ogx-client-node)
 - [Swift SDK](https://github.com/ogx-ai/ogx-client-swift)
 - [Kotlin SDK](https://github.com/ogx-ai/ogx-client-kotlin)

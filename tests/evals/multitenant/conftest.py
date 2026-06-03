@@ -21,11 +21,11 @@ Embedding design:
 import numpy as np
 import pytest
 
-from ogx.apis.vector_io import Chunk, ChunkMetadata
 from ogx.core.access_control.access_control import default_policy
 from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 from ogx.core.datatypes import User
 from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import SQLiteVecIndex
+from ogx_api import Chunk, ChunkMetadata, EmbeddedChunk
 
 EMBEDDING_DIMENSION = 128
 NUM_TOPICS = 5
@@ -200,16 +200,21 @@ def _make_query_embedding(topic_base: np.ndarray, seed: int = 999) -> np.ndarray
 TOPIC_BASES = _build_topic_bases(NUM_TOPICS, EMBEDDING_DIMENSION)
 
 
-def _build_chunks_and_embeddings():
-    """Build the full corpus: chunks tagged with tenant_id and their embeddings."""
-    chunks = []
-    embeddings = []
+def _build_embedded_chunks():
+    """Build the full corpus as EmbeddedChunk objects for vector store insertion."""
+    embedded_chunks = []
 
     for tenant_id, docs in [("tenant-a", TENANT_A_DOCS), ("tenant-b", TENANT_B_DOCS)]:
         tenant_seed_offset = 0 if tenant_id == "tenant-a" else 1000
         for topic_idx, topic in enumerate(TOPICS):
-            chunk = Chunk(
+            chunk_id = f"{tenant_id}-{topic}-chunk-0"
+            emb = _make_embedding(
+                TOPIC_BASES[topic_idx],
+                tenant_seed=tenant_seed_offset + topic_idx,
+            )
+            ec = EmbeddedChunk(
                 content=docs[topic],
+                chunk_id=chunk_id,
                 metadata={
                     "document_id": f"{tenant_id}-{topic}",
                     "tenant_id": tenant_id,
@@ -217,21 +222,30 @@ def _build_chunks_and_embeddings():
                 },
                 chunk_metadata=ChunkMetadata(
                     document_id=f"{tenant_id}-{topic}",
-                    chunk_id=f"{tenant_id}-{topic}-chunk-0",
+                    chunk_id=chunk_id,
                     source=f"{tenant_id}/{topic}.txt",
                 ),
+                embedding=emb.tolist(),
+                embedding_model="synthetic",
+                embedding_dimension=EMBEDDING_DIMENSION,
             )
-            emb = _make_embedding(
-                TOPIC_BASES[topic_idx],
-                tenant_seed=tenant_seed_offset + topic_idx,
-            )
-            chunks.append(chunk)
-            embeddings.append(emb)
+            embedded_chunks.append(ec)
 
-    return chunks, np.array(embeddings)
+    return embedded_chunks
 
 
-ALL_CHUNKS, ALL_EMBEDDINGS = _build_chunks_and_embeddings()
+ALL_EMBEDDED_CHUNKS = _build_embedded_chunks()
+
+# Plain Chunk views (for metadata filtering tests that don't need embeddings)
+ALL_CHUNKS = [
+    Chunk(
+        content=ec.content,
+        chunk_id=ec.chunk_id,
+        metadata=ec.metadata,
+        chunk_metadata=ec.chunk_metadata,
+    )
+    for ec in ALL_EMBEDDED_CHUNKS
+]
 
 # Query embeddings, one per topic
 QUERY_EMBEDDINGS = {topic: _make_query_embedding(TOPIC_BASES[idx], seed=2000 + idx) for idx, topic in enumerate(TOPICS)}
@@ -248,11 +262,6 @@ def topic_bases():
 @pytest.fixture(scope="session")
 def all_chunks():
     return ALL_CHUNKS
-
-
-@pytest.fixture(scope="session")
-def all_embeddings():
-    return ALL_EMBEDDINGS
 
 
 @pytest.fixture(scope="session")
@@ -277,7 +286,7 @@ async def shared_vector_index(tmp_path):
     bank_id = "shared_store"
     index = SQLiteVecIndex(EMBEDDING_DIMENSION, db_path, bank_id)
     await index.initialize()
-    await index.add_chunks(list(ALL_CHUNKS), ALL_EMBEDDINGS)
+    await index.add_chunks(list(ALL_EMBEDDED_CHUNKS))
     yield index
     await index.delete()
 
@@ -289,9 +298,8 @@ async def tenant_a_vector_index(tmp_path):
     bank_id = "tenant_a_store"
     index = SQLiteVecIndex(EMBEDDING_DIMENSION, db_path, bank_id)
     await index.initialize()
-    a_chunks = [c for c in ALL_CHUNKS if c.metadata.get("tenant_id") == "tenant-a"]
-    a_embeddings = ALL_EMBEDDINGS[: len(a_chunks)]
-    await index.add_chunks(a_chunks, a_embeddings)
+    a_chunks = [ec for ec in ALL_EMBEDDED_CHUNKS if ec.metadata.get("tenant_id") == "tenant-a"]
+    await index.add_chunks(a_chunks)
     yield index
     await index.delete()
 
@@ -303,9 +311,8 @@ async def tenant_b_vector_index(tmp_path):
     bank_id = "tenant_b_store"
     index = SQLiteVecIndex(EMBEDDING_DIMENSION, db_path, bank_id)
     await index.initialize()
-    b_chunks = [c for c in ALL_CHUNKS if c.metadata.get("tenant_id") == "tenant-b"]
-    b_embeddings = ALL_EMBEDDINGS[len(TOPICS) :]
-    await index.add_chunks(b_chunks, b_embeddings)
+    b_chunks = [ec for ec in ALL_EMBEDDED_CHUNKS if ec.metadata.get("tenant_id") == "tenant-b"]
+    await index.add_chunks(b_chunks)
     yield index
     await index.delete()
 

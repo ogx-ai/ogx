@@ -7,7 +7,7 @@ Server core for OGX: routing, provider resolution, storage, and the FastAPI serv
 ```text
 core/
   server/              # FastAPI server, auth middleware, quota middleware
-  routers/             # API-specific routers (inference, safety, eval, etc.)
+  routers/             # API-specific routers (inference, vector_io, tool_runtime)
   routing_tables/      # Resource-to-provider mapping tables
   storage/             # KVStore and SqlStore backends
   store/               # Distribution registry (persists registered resources)
@@ -36,4 +36,4 @@ core/
 - `Stack` (`stack.py`) -- Orchestrates initialization: loads config, resolves providers, registers resources, starts background tasks.
 - `resolve_impls()` (`resolver.py`) -- The provider resolution engine. Validates providers against the registry, sorts by dependency order, instantiates each one.
 - `CommonRoutingTableImpl` (`routing_tables/common.py`) -- Base class for all routing tables. Manages the mapping from resource identifiers to provider implementations.
-- `DistributionRegistry` (`store/`) -- Persistent registry of all resources (models, shields, etc.) across providers.
+- `DistributionRegistry` (`store/`) -- Persistent registry of all resources (models, vector stores, tool groups, etc.) across providers.

@@ -71,7 +71,7 @@ const config: Config = {
           sidebarPath: require.resolve("./sidebars.ts"),
           // disableVersioning: true,
           docItemComponent: "@theme/ApiItem", // Derived from docusaurus-theme-openapi
-          editUrl: 'https://github.com/ogx-ai/ogx/edit/main/',
+          editUrl: 'https://github.com/ogx-ai/ogx/edit/main/docs/',
           showLastUpdateTime: true,
           showLastUpdateAuthor: false,
           remarkPlugins: [
@@ -153,7 +153,7 @@ const config: Config = {
           position: 'right',
           dropdownActiveClassDisabled: true,
           dropdownItemsAfter: [
-            { to: '/versions.html', label: 'All versions' },
+            { to: '/versions', label: 'All versions' },
           ],
         },
       ],
@@ -277,8 +277,21 @@ const config: Config = {
     languageTabs: [
       {
         highlight: "python",
-        language: "python",
+        language: "OpenAI",
         logoClass: "python",
+        codeSampleLanguage: "OpenAI",
+      },
+      {
+        highlight: "python",
+        language: "Anthropic",
+        logoClass: "python",
+        codeSampleLanguage: "Anthropic",
+      },
+      {
+        highlight: "python",
+        language: "Google",
+        logoClass: "python",
+        codeSampleLanguage: "Google",
       },
       {
         highlight: "bash",

@@ -5,26 +5,26 @@
 # the root directory of this source tree.
 
 import pytest
-from llama_stack_client import LlamaStackClient
+from ogx_client import OgxClient
 
 from ogx.core.library_client import OGXAsLibraryClient
 
 
 class TestInspect:
     @pytest.mark.skip(reason="inspect tests disabled")
-    def test_health(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+    def test_health(self, ogx_client: OGXAsLibraryClient | OgxClient):
         health = ogx_client.inspect.health()
         assert health is not None
         assert health.status == "OK"
 
     @pytest.mark.skip(reason="inspect tests disabled")
-    def test_version(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+    def test_version(self, ogx_client: OGXAsLibraryClient | OgxClient):
         version = ogx_client.inspect.version()
         assert version is not None
         assert version.version is not None
 
     @pytest.mark.skip(reason="inspect tests disabled")
-    def test_list_routes_default(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+    def test_list_routes_default(self, ogx_client: OGXAsLibraryClient | OgxClient):
         """Test list_routes with default filter (non-deprecated v1 routes)."""
         response = ogx_client.routes.list()
         assert response is not None
@@ -43,7 +43,7 @@ class TestInspect:
         assert "/health" in paths or "/v1/health" in paths
 
     @pytest.mark.skip(reason="inspect tests disabled")
-    def test_list_routes_filter_by_deprecated(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+    def test_list_routes_filter_by_deprecated(self, ogx_client: OGXAsLibraryClient | OgxClient):
         """Test list_routes with deprecated filter."""
         response = ogx_client.routes.list(api_filter="deprecated")
         assert response is not None
@@ -58,7 +58,7 @@ class TestInspect:
             assert len(openai_routes) > 0, "Deprecated filter should include /openai/ routes"
 
     @pytest.mark.skip(reason="inspect tests disabled")
-    def test_list_routes_filter_by_v1(self, ogx_client: OGXAsLibraryClient | LlamaStackClient):
+    def test_list_routes_filter_by_v1(self, ogx_client: OGXAsLibraryClient | OgxClient):
         """Test list_routes with v1 filter."""
         response = ogx_client.routes.list(api_filter="v1")
         assert response is not None

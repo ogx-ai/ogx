@@ -6,13 +6,24 @@ on:
   push:
     branches: [main]
     paths: ['docs/**']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy versioned docs for (e.g., v0.7.1). Leave empty to deploy latest.'
+        required: false
+        type: string
 
 concurrency:
   group: trigger-docs-deploy
   cancel-in-progress: true
 
 jobs:
-  trigger:
+  trigger-latest:
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.tag == '')
     runs-on: ubuntu-latest
     steps:
       - name: Trigger docs site build and deploy
@@ -21,5 +32,25 @@ jobs:
             -f event_type=docs-update \
             -f 'client_payload[sha]=${{ github.sha }}' \
             -f 'client_payload[ref]=${{ github.ref }}'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+
+  trigger-version:
+    if: |
+      (github.event_name == 'release' && !github.event.release.prerelease && !github.event.release.draft) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger versioned docs build and deploy
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+          fi
+          gh api repos/ogx-ai/ogx-ai.github.io/dispatches \
+            -f event_type=docs-version-deploy \
+            -f "client_payload[version]=${TAG}" \
+            -f 'client_payload[sha]=${{ github.sha }}'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}

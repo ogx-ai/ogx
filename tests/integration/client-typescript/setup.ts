@@ -9,7 +9,7 @@
  * This file mimics pytest's fixture system by providing shared test configuration.
  */
 
-import LlamaStackClient from 'llama-stack-client';
+import OgxClient from 'ogx-client';
 
 /**
  * Load test configuration from the Python setup system.
@@ -62,7 +62,7 @@ beforeAll(() => {
  * @param testId - Test ID to send in X-OGX-Provider-Data header for replay mode.
  *                 Format: "tests/integration/responses/test_basic_responses.py::test_name[params]"
  */
-export function createTestClient(testId?: string): LlamaStackClient {
+export function createTestClient(testId?: string): OgxClient {
   const headers: Record<string, string> = {};
 
   // In server mode with replay, send test ID for recording isolation
@@ -72,7 +72,7 @@ export function createTestClient(testId?: string): LlamaStackClient {
     });
   }
 
-  return new LlamaStackClient({
+  return new OgxClient({
     baseURL: TEST_CONFIG.baseURL,
     timeout: 60000, // 60 seconds
     defaultHeaders: headers,

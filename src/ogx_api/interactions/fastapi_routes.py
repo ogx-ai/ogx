@@ -151,6 +151,9 @@ def create_router(impl: Interactions) -> APIRouter:
             # Raw SSE passthrough — forward bytes directly, no context wrapping
             # needed since the stream doesn't access request contextvars
             return StreamingResponse(cast(AsyncIterator[str], result), media_type="text/event-stream")
+        if isinstance(result, JSONResponse):
+            # Raw JSON passthrough from provider — forward as-is
+            return result
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
                 _preserve_context_for_sse(_google_sse_generator(cast(AsyncIterator[Any], result))),

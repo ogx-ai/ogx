@@ -6,7 +6,7 @@ API and Provider specifications for OGX - a lightweight package with protocol de
 
 `ogx-api` is a minimal dependency package that contains:
 
-- **API Protocol Definitions**: Type-safe protocol definitions for all OGX APIs (inference, agents, safety, etc.)
+- **API Protocol Definitions**: Type-safe protocol definitions for OGX APIs (inference, agents, responses, etc.)
 - **Provider Specifications**: Provider spec definitions for building custom providers
 - **Data Types**: Shared data types and models used across the OGX ecosystem
 - **Type Utilities**: Strong typing utilities and schema validation

@@ -23,6 +23,8 @@ from .datatypes import (
 
 logger = get_logger(name=__name__, category="core::auth")
 
+ALLOWED_ATTRIBUTE_KEYS = frozenset({"roles", "teams", "projects", "namespaces"})
+
 
 def matches_resource(resource_scope: str, actual_resource: str) -> bool:
     """Check if a resource scope pattern matches an actual resource identifier.
@@ -121,7 +123,7 @@ def default_policy() -> list[AccessRule]:
             permit=Scope(actions=list(Action)),
             when=["user in owners " + name],
         )
-        for name in ["roles", "teams", "projects", "namespaces"]
+        for name in ALLOWED_ATTRIBUTE_KEYS
     ] + [
         AccessRule(
             permit=Scope(actions=list(Action)),
