@@ -88,4 +88,8 @@ jobs:
           setup: 'ollama'
           suite: 'messages'
           inference-mode: 'live'
-          pattern: '(test_claude_code_cli_smoke or test_claude_agent_sdk_smoke)'
+          # Selects both test_claude_code_cli_smoke and test_claude_agent_sdk_smoke.
+          # Must stay a single shell word: run-and-record-tests passes --pattern
+          # unquoted, so a -k expression with spaces would be split into separate
+          # arguments.
+          pattern: 'test_claude'
