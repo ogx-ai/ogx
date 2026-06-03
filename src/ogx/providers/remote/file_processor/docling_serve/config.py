@@ -28,10 +28,18 @@ class DoclingServeFileProcessorConfig(BaseModel):
         le=4096,
         description="Default chunk size in tokens when chunking_strategy type is 'auto'",
     )
+    mode: str = Field(
+        default="async",
+        description=(
+            "API mode: 'async' (use asynchronous submit/poll endpoints, recommended for both local and SaaS), "
+            "'sync' (use synchronous endpoints, fallback option), or 'auto' (detect server capabilities)"
+        ),
+    )
 
     @classmethod
     def sample_run_config(cls, **kwargs: Any) -> dict[str, Any]:
         return {
             "base_url": "${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}",
             "api_key": "${env.DOCLING_SERVE_API_KEY:=}",
+            "mode": "${env.DOCLING_SERVE_MODE:=async}",
         }
