@@ -17,7 +17,7 @@ parent-child API relationships, enabling nested access like:
 For a hierarchy like {chat: {completions: {}}}, this will:
 1. Add an import of CompletionsApi in chat_api.py
 2. Add a property `self.completions` in ChatApi
-3. Wire up `client.chat.completions = client.completions` in LlamaStackClient
+3. Wire up `client.chat.completions = client.completions` in OgxClient
 """
 
 import argparse
@@ -152,7 +152,7 @@ def patch_optional_import(api_file: Path) -> bool:
 
 
 def patch_ogx_client(client_file: Path, pairs: list[tuple[str, str]]) -> bool:
-    """Patch LlamaStackClient to wire up parent-child API relationships.
+    """Patch OgxClient to wire up parent-child API relationships.
 
     Looks for the '# Nested API structure' comment and inserts assignments like:
         self.chat.completions = self.completions
@@ -208,7 +208,7 @@ def patch_ogx_client(client_file: Path, pairs: list[tuple[str, str]]) -> bool:
     with open(client_file, "w") as f:
         f.writelines(lines)
 
-    print(f"  Patched LlamaStackClient with {len(pairs)} parent-child relationships")
+    print(f"  Patched OgxClient with {len(pairs)} parent-child relationships")
     return True
 
 
@@ -309,7 +309,7 @@ def patch_apis(hierarchy_file: str, sdk_dir: str, package_name: str = "ogx_clien
     if client_file.exists():
         patch_ogx_client(client_file, pairs)
     else:
-        print(f"  Warning: LlamaStackClient not found at {client_file}")
+        print(f"  Warning: OgxClient not found at {client_file}")
 
     # Inject proxy methods for shared endpoints
     proxy_methods = data.get("proxy_methods", [])

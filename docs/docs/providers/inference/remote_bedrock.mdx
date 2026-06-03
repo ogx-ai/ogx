@@ -1,5 +1,5 @@
 ---
-description: "AWS Bedrock inference provider using OpenAI compatible endpoint."
+description: "AWS Bedrock inference provider for the OpenAI-compatible runtime, with AWS credential-chain auth by default and an optional bearer-token override."
 sidebar_label: Remote - Bedrock
 title: remote::bedrock
 ---
@@ -8,7 +8,7 @@ title: remote::bedrock
 
 ## Description
 
-AWS Bedrock inference provider using OpenAI compatible endpoint.
+AWS Bedrock inference provider for the OpenAI-compatible runtime, with AWS credential-chain auth by default and an optional bearer-token override.
 
 ## Configuration
 
@@ -16,7 +16,7 @@ AWS Bedrock inference provider using OpenAI compatible endpoint.
 |-------|------|----------|---------|-------------|
 | `allowed_models` | `list[str] \| None` | No |  | List of models that should be registered with the model registry. If None, all models are allowed. |
 | `refresh_models` | `bool` | No | False | Whether to refresh models periodically from the provider |
-| `api_key` | `SecretStr \| None` | No |  | Authentication credential for the provider |
+| `aws_bedrock_bearer_token` | `SecretStr \| None` | No |  | Optional bearer token for Amazon Bedrock's OpenAI-compatible runtime. Leave unset to use the server's AWS credential chain (recommended). |
 | `network` | `NetworkConfig \| None` | No |  | Network configuration including TLS, proxy, and timeout settings. |
 | `network.tls` | `TLSConfig \| None` | No |  | TLS/SSL configuration for secure connections. |
 | `network.tls.verify` | `bool \| Path` | No | True | Whether to verify TLS certificates. Can be a boolean or a path to a CA certificate file. |
@@ -51,7 +51,7 @@ AWS Bedrock inference provider using OpenAI compatible endpoint.
 ## Sample Configuration
 
 ```yaml
-api_key: ${env.AWS_BEARER_TOKEN_BEDROCK:=}
+aws_bedrock_bearer_token: ${env.AWS_BEDROCK_BEARER_TOKEN:=}
 region_name: ${env.AWS_DEFAULT_REGION:=us-east-2}
 aws_role_arn: ${env.AWS_ROLE_ARN:=}
 aws_web_identity_token_file: ${env.AWS_WEB_IDENTITY_TOKEN_FILE:=}

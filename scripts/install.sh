@@ -15,7 +15,7 @@ set -Eeuo pipefail
 PORT=8321
 OLLAMA_PORT=11434
 MODEL_ALIAS="llama3.2:3b"
-SERVER_IMAGE="docker.io/ogx/distribution-starter:latest"
+SERVER_IMAGE="docker.io/ogxai/distribution-starter:latest"
 WAIT_TIMEOUT=30
 TEMP_LOG=""
 WITH_TELEMETRY=true

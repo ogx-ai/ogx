@@ -117,8 +117,8 @@ class BuiltinResponsesImplConfig(BaseModel):
 
     persistence: ResponsesPersistenceConfig
 
-    vector_stores_config: VectorStoresConfig | None = Field(
-        default=None,
+    vector_stores_config: VectorStoresConfig = Field(
+        default_factory=VectorStoresConfig,
         description="Configuration for vector store prompt templates and behavior",
     )
 

@@ -4,14 +4,14 @@ import {{{packageName}}}
 {{#vendorExtensions.x-py-example-import}}
 {{{.}}}
 {{/vendorExtensions.x-py-example-import}}
-from {{{packageName}}} import {{#async}}AsyncLlamaStackClient{{/async}}{{^async}}LlamaStackClient{{/async}}
+from {{{packageName}}} import {{#async}}AsyncOgxClient{{/async}}{{^async}}OgxClient{{/async}}
 from {{{packageName}}}.rest import ApiException
 from pprint import pprint
 
 {{> python_doc_auth_partial}}
 
 # Create a OGX client instance
-{{#async}}async {{/async}}with {{#async}}AsyncLlamaStackClient{{/async}}{{^async}}LlamaStackClient{{/async}}(configuration) as client:
+{{#async}}async {{/async}}with {{#async}}AsyncOgxClient{{/async}}{{^async}}OgxClient{{/async}}(configuration) as client:
     {{#allParams}}
     {{paramName}} = {{{example}}} # {{{dataType}}} | {{{description}}}{{^required}} (optional){{/required}}{{#defaultValue}} (default to {{{.}}}){{/defaultValue}}
     {{/allParams}}

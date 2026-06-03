@@ -78,6 +78,19 @@ if os.environ.get("OGX_TRACE_WARNINGS"):
     warnings.showwarning = warn_with_traceback
 
 
+def _format_google_error_response(status_code: int, message: str) -> JSONResponse:
+    """Create a Google-format error JSONResponse for the Interactions API."""
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": {"code": status_code, "message": message}},
+    )
+
+
+def _is_interactions_path(request: Request) -> bool:
+    """Check if the request targets the Google Interactions API."""
+    return request.url.path.startswith("/v1alpha/interactions")
+
+
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle uncaught exceptions by translating them to JSON error responses.
 
@@ -90,6 +103,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     """
     traceback.print_exception(type(exc), exc, exc.__traceback__)
     http_exc = translate_exception(exc)
+
+    # Interactions API uses the Google error envelope for all errors,
+    # including request validation errors that are caught before the
+    # handler runs.
+    if _is_interactions_path(request):
+        message = str(http_exc.detail) if isinstance(http_exc.detail, str) else str(exc)
+        return _format_google_error_response(http_exc.status_code, message)
 
     # OpenAI-compat Vector Stores endpoints treat many "not found" conditions as 400s.
     # Our core exceptions model these as ResourceNotFoundError (mapped to 404 by default),

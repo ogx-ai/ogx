@@ -225,17 +225,48 @@ class OpenAIResponseMessage(BaseModel):
 
 
 @json_schema_type
-class OpenAIResponseOutputMessageWebSearchToolCall(BaseModel):
-    """Web search tool call output message for OpenAI responses.
+class WebSearchSource(BaseModel):
+    """A source URL returned by a web search action."""
 
-    :param id: Unique identifier for this tool call
-    :param status: Current status of the web search operation
-    :param type: Tool call type identifier, always "web_search_call"
-    """
+    type: Literal["url"] = "url"
+    url: str
+
+
+@json_schema_type
+class WebSearchActionSearch(BaseModel):
+    """Web search action: performs a search query."""
+
+    type: Literal["search"] = "search"
+    query: str
+    queries: list[str] | None = None
+    sources: list[WebSearchSource] | None = None
+
+
+@json_schema_type
+class WebSearchActionOpenPage(BaseModel):
+    """Web search action: opens a specific URL from search results."""
+
+    type: Literal["open_page"] = "open_page"
+    url: str | None = None
+
+
+@json_schema_type
+class WebSearchActionFind(BaseModel):
+    """Web search action: searches for a pattern within a loaded page."""
+
+    type: Literal["find_in_page"] = "find_in_page"
+    url: str
+    pattern: str
+
+
+@json_schema_type
+class OpenAIResponseOutputMessageWebSearchToolCall(BaseModel):
+    """Web search tool call output message for OpenAI responses."""
 
     id: str
     status: str
     type: Literal["web_search_call"] = "web_search_call"
+    action: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind | None = None
 
 
 class OpenAIResponseOutputMessageFileSearchToolCallResults(BaseModel):
@@ -478,12 +509,26 @@ WebSearchToolTypes = ["web_search", "web_search_preview", "web_search_preview_20
 
 
 @json_schema_type
-class OpenAIResponseInputToolWebSearch(BaseModel):
-    """Web search tool configuration for OpenAI response inputs.
+class WebSearchFilters(BaseModel):
+    """Domain filters for web search results."""
 
-    :param type: Web search tool type variant to use
-    :param search_context_size: (Optional) Size of search context, must be "low", "medium", or "high"
-    """
+    allowed_domains: list[str] | None = None
+
+
+@json_schema_type
+class WebSearchUserLocation(BaseModel):
+    """Approximate user location to refine web search results."""
+
+    type: Literal["approximate"] = "approximate"
+    city: str | None = None
+    country: str | None = None
+    region: str | None = None
+    timezone: str | None = None
+
+
+@json_schema_type
+class OpenAIResponseInputToolWebSearch(BaseModel):
+    """Web search tool configuration for OpenAI response inputs."""
 
     # Must match values of WebSearchToolTypes above
     type: (
@@ -492,9 +537,9 @@ class OpenAIResponseInputToolWebSearch(BaseModel):
         | Literal["web_search_preview_2025_03_11"]
         | Literal["web_search_2025_08_26"]
     ) = "web_search"
-    # TODO: actually use search_context_size somewhere...
-    search_context_size: str | None = Field(default="medium", pattern="^low|medium|high$")
-    # TODO: add user_location
+    search_context_size: Literal["low", "medium", "high"] | None = None
+    filters: WebSearchFilters | None = None
+    user_location: WebSearchUserLocation | None = None
 
 
 @json_schema_type

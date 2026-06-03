@@ -185,9 +185,32 @@ class AuthorizedSqlStore:
         conflict_columns: list[str],
         update_columns: list[str] | None = None,
     ) -> None:
-        """Upsert a row with automatic access control attribute capture."""
+        """Upsert a row with access control enforcement.
+
+        Verifies the current user has UPDATE permission on any existing row
+        matching the conflict columns before upserting. Original ownership is
+        preserved on conflict - upserting a record does not transfer ownership
+        to the caller.
+        """
         current_user = get_authenticated_user()
+
+        conflict_where = {col: data[col] for col in conflict_columns if col in data}
+        if conflict_where:
+            await self._check_access_for_rows(table, conflict_where, Action.UPDATE, current_user)
+
         enhanced_data = _enhance_item_with_access_control(data, current_user)
+
+        # Strip ownership fields from the update side so a conflict resolution
+        # cannot transfer ownership from the original owner to the caller.
+        if update_columns is not None:
+            update_columns = [c for c in update_columns if c not in ("owner_principal", "access_attributes")]
+        else:
+            update_columns = [
+                c
+                for c in enhanced_data.keys()
+                if c not in conflict_columns and c not in ("owner_principal", "access_attributes")
+            ]
+
         await self.sql_store.upsert(
             table=table,
             data=enhanced_data,
