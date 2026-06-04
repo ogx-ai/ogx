@@ -35,6 +35,12 @@
         {{#bodyParam}}{{^isPrimitiveType}}
         # If body param not provided, construct from kwargs
         if {{paramName}} is None and kwargs:
+            # Merge extra_body contents into top-level kwargs (OpenAI SDK convention).
+            # The OpenAI SDK treats extra_body as a dict whose keys are merged into
+            # the request body; replicate that behavior here.
+            _extra_body = kwargs.pop("extra_body", None)
+            if isinstance(_extra_body, dict):
+                kwargs.update(_extra_body)
             try:
                 # Try proper type conversion via from_json
                 {{paramName}} = {{{dataType}}}.from_json(json.dumps(kwargs))
