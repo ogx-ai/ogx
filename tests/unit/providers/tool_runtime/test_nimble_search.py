@@ -78,8 +78,8 @@ async def test_invoke_without_extra_params_sends_config_defaults(nimble_search, 
     assert request_body["query"] == "test query"
     assert request_body["max_results"] == 3
     assert request_body["search_depth"] == "lite"
-    assert request_body["country"] == "US"
-    assert request_body["locale"] == "en"
+    assert "country" not in request_body
+    assert "locale" not in request_body
     assert "include_domains" not in request_body
 
 
@@ -137,17 +137,24 @@ async def test_unknown_search_context_size_keeps_config_default(nimble_search, m
     assert request_body["max_results"] == 3
 
 
-async def test_user_location_kwarg_is_ignored(nimble_search, mock_nimble_response):
+async def test_user_location_country_is_forwarded(nimble_search, mock_nimble_response):
     nimble_search._client.post = AsyncMock(return_value=mock_nimble_response)
     await nimble_search.invoke_tool(
         "web_search",
         {"query": "q", "user_location": {"country": "GB", "city": "London"}},
     )
     request_body = nimble_search._client.post.call_args.kwargs["json"]
+    # Geo comes from the per-request user_location, not server config.
+    assert request_body["country"] == "GB"
     assert "user_location" not in request_body
-    assert "location" not in request_body
-    # Geo-targeting stays driven by the static config default, not the kwarg.
-    assert request_body["country"] == "US"
+
+
+async def test_no_user_location_means_no_country(nimble_search, mock_nimble_response):
+    nimble_search._client.post = AsyncMock(return_value=mock_nimble_response)
+    await nimble_search.invoke_tool("web_search", {"query": "q"})
+    request_body = nimble_search._client.post.call_args.kwargs["json"]
+    assert "country" not in request_body
+    assert "locale" not in request_body
 
 
 async def test_missing_api_key_raises(mock_nimble_response):

@@ -49,7 +49,7 @@ class NimbleSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
 
     def _get_api_key(self) -> str:
         if self.config.api_key:
-            return self.config.api_key
+            return self.config.api_key.get_secret_value()
 
         provider_data = self.get_request_provider_data()
         if provider_data is None or not provider_data.nimble_search_api_key:
@@ -87,19 +87,20 @@ class NimbleSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        # Geo-targeting is configured statically via country/locale; the per-request
-        # user_location kwarg is intentionally not forwarded.
         request_body: dict[str, Any] = {
             "query": kwargs["query"],
             "max_results": self.config.max_results,
             "search_depth": self.config.search_depth,
-            "country": self.config.country,
-            "locale": self.config.locale,
         }
 
         allowed_domains = kwargs.get("allowed_domains")
         if allowed_domains:
             request_body["include_domains"] = allowed_domains
+
+        # Geo-targeting is per-request user-supplied context, not server config.
+        user_location = kwargs.get("user_location")
+        if user_location and user_location.get("country"):
+            request_body["country"] = user_location["country"]
 
         search_context_size = kwargs.get("search_context_size")
         if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:

@@ -16,11 +16,9 @@ Nimble Search tool for web search via Nimble's SERP-backed search API.
 |-------|------|----------|---------|-------------|
 | `timeout` | `float` | No | 30.0 | Overall HTTP timeout in seconds for requests to external services. |
 | `connect_timeout` | `float` | No | 10.0 | TCP connect timeout in seconds. Shorter than the overall timeout to fail fast on unreachable hosts. |
-| `api_key` | `str \| None` | No |  | The Nimble API key, sent as a Bearer token |
+| `api_key` | `SecretStr \| None` | No |  | The Nimble API key, sent as a Bearer token |
 | `max_results` | `int` | No | 3 | The maximum number of results to return |
 | `search_depth` | `Literal[lite, deep]` | No | lite | Content richness: 'lite' returns title, URL, and description; 'deep' returns full page content |
-| `country` | `str` | No | US | Country code for geo-targeted results (e.g., 'US', 'GB', 'IL') |
-| `locale` | `str` | No | en | Language/locale code (e.g., 'en', 'fr', 'de') |
 
 ## Sample Configuration
 
@@ -28,6 +26,4 @@ Nimble Search tool for web search via Nimble's SERP-backed search API.
 api_key: ${env.NIMBLE_API_KEY:=}
 max_results: 3
 search_depth: lite
-country: US
-locale: en
 ```
