@@ -38,7 +38,7 @@ try:
     )
 except ImportError:
     try:
-        from ogx_client import (
+        from ogx_client import (  # type: ignore[assignment,no-redef]
             NOT_GIVEN,
             APIResponse,
             AsyncAPIResponse,
@@ -48,7 +48,7 @@ except ImportError:
         )
     except ImportError as e:
         raise ImportError(
-            "ogx-client is not installed. Please install it with `ub pip install ogx[openclient]` or `uv pip install ogx[client]`."
+            "ogx-open-client is not installed. Please install it with `uv pip install ogx[openclient]` or `uv pip install ogx[client]`."
         ) from e
 
 from pydantic import BaseModel, TypeAdapter
@@ -654,7 +654,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
                 json=convert_pydantic_to_json_value(filtered_body),
             ),
         )
-        response = APIResponse(
+        response: APIResponse[Any] = APIResponse(
             raw=mock_response,
             client=self,
             cast_to=cast_to,
@@ -733,7 +733,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         # mypy can't track runtime variables inside the [...] of a generic, so ignore that check
         args = get_args(stream_cls)
         stream_cls = AsyncStream[args[0]]  # type: ignore[valid-type]
-        response = AsyncAPIResponse(
+        response: AsyncAPIResponse = AsyncAPIResponse(  # type: ignore[call-arg]
             raw=mock_response,
             client=self,
             cast_to=cast_to,
