@@ -16,7 +16,7 @@ import time
 import warnings
 
 import pytest
-from ogx_client import NOT_GIVEN, Omit
+from ogx_open_client import NOT_GIVEN, Omit
 
 from ogx.core.library_client import (
     AsyncOGXAsLibraryClient,

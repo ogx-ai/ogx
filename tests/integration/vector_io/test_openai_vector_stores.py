@@ -8,7 +8,7 @@ import time
 from io import BytesIO
 
 import pytest
-from ogx_client import BadRequestError
+from ogx_open_client import BadRequestError
 from openai import BadRequestError as OpenAIBadRequestError
 from openai import OpenAI
 
@@ -142,6 +142,33 @@ def skip_if_provider_doesnt_support_openai_vector_stores_search(
         f"Search mode '{search_mode}' is not supported by any available provider. "
         f"Supported providers for '{search_mode}': {supported_providers}"
     )
+
+
+def _get_file_content(client, vector_store_id, file_id, include_embeddings=None, include_metadata=None):
+    """Fetch vector store file content, adapting parameters to the client type.
+
+    The OpenAI SDK doesn't have include_embeddings/include_metadata as direct
+    parameters, so we pass them via extra_query. The generated SDK has them
+    as first-class parameters and doesn't support extra_query.
+    """
+    if isinstance(client, OpenAI):
+        extra_query = {}
+        if include_embeddings is not None:
+            extra_query["include_embeddings"] = include_embeddings
+        if include_metadata is not None:
+            extra_query["include_metadata"] = include_metadata
+        return client.vector_stores.files.content(
+            vector_store_id=vector_store_id,
+            file_id=file_id,
+            extra_query=extra_query if extra_query else None,
+        )
+    else:
+        return client.vector_stores.files.content(
+            vector_store_id=vector_store_id,
+            file_id=file_id,
+            include_embeddings=include_embeddings,
+            include_metadata=include_metadata,
+        )
 
 
 @pytest.fixture(scope="session")
@@ -5263,7 +5290,7 @@ def test_openai_vector_store_embedding_config_from_metadata(
 def test_openai_vector_store_file_contents_with_extra_query(
     compat_client_with_empty_stores, client_with_models, embedding_model_id, embedding_dimension, vector_io_provider_id
 ):
-    """Test that vector store file contents endpoint supports extra_query parameter."""
+    """Test that vector store file contents endpoint supports include_embeddings and include_metadata flags."""
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
     compat_client = compat_client_with_empty_stores
 
@@ -5296,15 +5323,18 @@ def test_openai_vector_store_file_contents_with_extra_query(
     # Wait for processing
     time.sleep(2)
 
-    # Test that extra_query parameter is accepted and processed
-    content_with_extra_query = compat_client.vector_stores.files.content(
+    # Test that include flags are accepted and processed
+    content_with_extra_query = _get_file_content(
+        compat_client,
         vector_store_id=vector_store.id,
         file_id=file.id,
-        extra_query={"include_embeddings": True, "include_metadata": True},
+        include_embeddings=True,
+        include_metadata=True,
     )
 
-    # Test without extra_query for comparison
-    content_without_extra_query = compat_client.vector_stores.files.content(
+    # Test without include flags for comparison
+    content_without_extra_query = _get_file_content(
+        compat_client,
         vector_store_id=vector_store.id,
         file_id=file.id,
     )
@@ -5315,12 +5345,12 @@ def test_openai_vector_store_file_contents_with_extra_query(
     assert len(content_with_extra_query.data) > 0
     assert len(content_without_extra_query.data) > 0
 
-    # Validate that extra_query parameter is processed correctly
+    # Validate that include flags are processed correctly
     # Both should have the embedding/metadata fields available (may be None based on flags)
     first_chunk_with_flags = content_with_extra_query.data[0]
     first_chunk_without_flags = content_without_extra_query.data[0]
 
-    # The key validation: extra_query fields are present in the response
+    # The key validation: expected fields are present in the response
     # Handle both dict and object responses (different clients may return different formats)
     def has_field(obj, field):
         if isinstance(obj, dict):
@@ -5331,8 +5361,10 @@ def test_openai_vector_store_file_contents_with_extra_query(
     # Validate that all expected fields are present in both responses
     expected_fields = ["embedding", "chunk_metadata", "metadata", "text"]
     for field in expected_fields:
-        assert has_field(first_chunk_with_flags, field), f"Field '{field}' missing from response with extra_query"
-        assert has_field(first_chunk_without_flags, field), f"Field '{field}' missing from response without extra_query"
+        assert has_field(first_chunk_with_flags, field), f"Field '{field}' missing from response with include flags"
+        assert has_field(first_chunk_without_flags, field), (
+            f"Field '{field}' missing from response without include flags"
+        )
 
     # Validate content is the same
     def get_field(obj, field):

@@ -28,7 +28,7 @@ from fastapi import Response as FastAPIResponse
 from ogx.core.utils.type_inspection import is_body_param, is_unwrapped_body_param
 
 try:
-    from ogx_client import (
+    from ogx_open_client import (
         NOT_GIVEN,
         APIResponse,
         AsyncAPIResponse,
@@ -36,8 +36,20 @@ try:
         AsyncStream,
         OgxClient,
     )
-except ImportError as e:
-    raise ImportError("ogx-client is not installed. Please install it with `uv pip install ogx[client]`.") from e
+except ImportError:
+    try:
+        from ogx_client import (
+            NOT_GIVEN,
+            APIResponse,
+            AsyncAPIResponse,
+            AsyncOgxClient,
+            AsyncStream,
+            OgxClient,
+        )
+    except ImportError as e:
+        raise ImportError(
+            "ogx-client is not installed. Please install it with `ub pip install ogx[openclient]` or `uv pip install ogx[client]`."
+        ) from e
 
 from pydantic import BaseModel, TypeAdapter
 from rich.console import Console
