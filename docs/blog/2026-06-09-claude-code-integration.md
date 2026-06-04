@@ -3,7 +3,7 @@ slug: claude-code-integration
 title: "Using Claude Code with Any Model via OGX"
 authors: [leseb, cdoern]
 tags: [claude-code, anthropic, integration, tutorial, vllm, ollama, openai]
-date: 2026-06-02
+date: 2026-06-09
 ---
 
 Claude Code is one of the best coding assistants available. But what if you want to use it with GPT-4o, Qwen, Llama, or a model running on your own hardware? OGX makes that possible. Point Claude Code at an OGX server and use any model from any provider — local or cloud — without changing how you use Claude Code.
