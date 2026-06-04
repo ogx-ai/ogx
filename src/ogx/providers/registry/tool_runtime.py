@@ -79,7 +79,7 @@ def available_providers() -> list[ProviderSpec]:
             provider_type="remote::nimble-search",
             module="ogx.providers.remote.tool_runtime.nimble_search",
             config_class="ogx.providers.remote.tool_runtime.nimble_search.config.NimbleSearchToolConfig",
-            pip_packages=["requests"],
+            pip_packages=[],
             provider_data_validator="ogx.providers.remote.tool_runtime.nimble_search.NimbleSearchToolProviderDataValidator",
             toolgroup_id="builtin::websearch",
             description="Nimble Search tool for web search via Nimble's SERP-backed search API.",
