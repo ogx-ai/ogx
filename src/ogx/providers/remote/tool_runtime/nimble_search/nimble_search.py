@@ -115,14 +115,18 @@ class NimbleSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         )
         if response.status_code == 403:
             # The account is not entitled to the requested capability (e.g. a higher
-            # search_depth tier). Surface a clear tool error instead of raising.
+            # search_depth tier). Surface a clear tool error without raising, and include
+            # content so the executor forwards the reason to the model rather than a
+            # generic "Tool execution failed".
+            message = (
+                f"Failed to query Nimble Search: the account is not entitled to "
+                f"search_depth={self.config.search_depth!r}. Use search_depth='lite' "
+                f"or contact Nimble to enable higher tiers."
+            )
             return ToolInvocationResult(
+                content=json.dumps({"error": message}),
                 error_code=403,
-                error_message=(
-                    f"Failed to query Nimble Search: the account is not entitled to "
-                    f"search_depth={self.config.search_depth!r}. Use search_depth='lite' "
-                    f"or contact Nimble to enable higher tiers."
-                ),
+                error_message=message,
                 metadata={"query": kwargs["query"], "sources": []},
             )
         response.raise_for_status()

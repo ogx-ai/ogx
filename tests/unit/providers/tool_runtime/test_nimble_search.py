@@ -177,4 +177,7 @@ async def test_403_returns_graceful_tool_error(nimble_search):
     result = await nimble_search.invoke_tool("web_search", {"query": "q"})
     assert result.error_code == 403
     assert "Nimble Search" in result.error_message
+    # The error must be forwarded to the model as content, not silently dropped.
+    assert result.content
+    assert "Nimble Search" in json.loads(result.content)["error"]
     assert result.metadata["sources"] == []
