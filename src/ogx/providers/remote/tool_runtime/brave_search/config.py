@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 
 from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 
@@ -14,7 +14,7 @@ from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 class BraveSearchToolConfig(BaseToolRuntimeConfig):
     """Configuration for the Brave Search tool runtime."""
 
-    api_key: str | None = Field(
+    api_key: SecretStr | None = Field(
         default=None,
         description="The Brave Search API Key",
     )
