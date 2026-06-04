@@ -678,6 +678,11 @@ class BuiltinMessagesImpl(Messages):
         if msg.role == "assistant":
             return [self._convert_assistant_message(msg.content)]
 
+        if msg.role == "system":
+            # System content blocks are text-only; concatenate to a single string.
+            system_text = "\n".join(block.text for block in msg.content if isinstance(block, AnthropicTextBlock))
+            return [{"role": "system", "content": system_text}]
+
         # User message: may contain text and/or tool_result blocks
         result: list[dict[str, Any]] = []
         text_parts: list[dict[str, Any]] = []
