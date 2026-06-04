@@ -295,9 +295,14 @@ def patch_httpx_for_test_id():
 
     def patched_prepare_request(self, request):
         # Call original first (it's a sync method that returns None)
-        # Determine which original to call based on client type
-        _original_methods["ogx_client_prepare_request"](self, request)
-        _original_methods["openai_prepare_request"](self, request)
+        # Use .get() to handle cases where the originals weren't stored yet
+        # (e.g. class identity mismatch between ogx_open_client and ogx_client)
+        ogx_orig = _original_methods.get("ogx_client_prepare_request")
+        if ogx_orig is not None:
+            ogx_orig(self, request)
+        openai_orig = _original_methods.get("openai_prepare_request")
+        if openai_orig is not None:
+            openai_orig(self, request)
 
         # Only inject test ID in server mode
         stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
