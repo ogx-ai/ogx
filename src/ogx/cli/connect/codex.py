@@ -45,16 +45,20 @@ class CodexServerDiscovery:
         self.timeout_seconds = timeout_seconds
 
     def normalize_base_url(self, raw_base_url: str) -> str:
-        parsed = urlsplit(raw_base_url.strip())
+        base_url = raw_base_url.strip()
+        parsed = urlsplit(base_url)
         if not parsed.scheme or not parsed.netloc:
             _exit_with_error(
                 f"Failed to parse OGX base URL '{raw_base_url}'.\n"
-                "Provide a full URL such as http://localhost:8321/v1 or https://ogx.example.com/v1."
+                "Provide a full OpenAI-compatible API base URL such as "
+                "http://localhost:8321/v1 or https://ogx.example.com/v1."
+            )
+        if not parsed.path.rstrip("/").endswith("/v1"):
+            _exit_with_error(
+                f"Failed to parse OGX base URL '{raw_base_url}'.\nInclude the OpenAI-compatible API path, such as /v1."
             )
 
-        path = parsed.path.rstrip("/")
-        normalized_path = "/v1" if not path else path
-        return urlunsplit((parsed.scheme, parsed.netloc, normalized_path, parsed.query, ""))
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
 
     def fetch_models(self, base_url: str) -> list[DiscoveredCodexModel]:
         default_headers = self.build_request_headers()
@@ -73,7 +77,7 @@ class CodexServerDiscovery:
             )
         except APIConnectionError:
             _exit_with_error(
-                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx stack run <config>"
+                f"Failed to connect to OGX server at {base_url}\nStart the server first with: ogx run <config>"
             )
         except APIStatusError as e:
             _exit_with_error(f"Failed to query models from OGX server at {base_url} (HTTP {e.status_code})")
@@ -344,7 +348,7 @@ class ConnectCodex(Subcommand):
             "--base-url",
             type=str,
             default=os.getenv("OGX_BASE_URL", self.DEFAULT_BASE_URL),
-            help="OGX OpenAI-compatible base URL. If no path is provided, /v1 is appended.",
+            help="OGX OpenAI-compatible API base URL, including /v1.",
         )
         self.parser.add_argument(
             "--exec",

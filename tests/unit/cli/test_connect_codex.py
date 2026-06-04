@@ -92,11 +92,19 @@ class TestArguments:
 
 
 class TestBaseUrlNormalization:
-    def test_appends_v1_when_path_missing(self, discovery: CodexServerDiscovery) -> None:
-        assert discovery.normalize_base_url("https://ogx.example.com") == "https://ogx.example.com/v1"
+    def test_exits_when_path_missing(self, discovery: CodexServerDiscovery) -> None:
+        with pytest.raises(SystemExit):
+            discovery.normalize_base_url("https://ogx.example.com")
 
     def test_preserves_explicit_path(self, discovery: CodexServerDiscovery) -> None:
         assert discovery.normalize_base_url("https://ogx.example.com/prefix/v1") == "https://ogx.example.com/prefix/v1"
+
+    def test_preserves_explicit_v1_path(self, discovery: CodexServerDiscovery) -> None:
+        assert discovery.normalize_base_url("https://ogx.example.com/v1") == "https://ogx.example.com/v1"
+
+    def test_exits_when_path_does_not_include_v1(self, discovery: CodexServerDiscovery) -> None:
+        with pytest.raises(SystemExit):
+            discovery.normalize_base_url("https://ogx.example.com/api")
 
     def test_exits_when_base_url_invalid(self, discovery: CodexServerDiscovery) -> None:
         with pytest.raises(SystemExit):

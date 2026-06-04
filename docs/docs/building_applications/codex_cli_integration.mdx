@@ -12,7 +12,7 @@ This integration is in early development (alpha status). While core functionalit
 
 ```bash
 export OPENAI_API_KEY="your-key-here"
-ogx stack run starter
+ogx run starter
 ```
 
 ### 2. Connect Codex
@@ -58,7 +58,7 @@ ogx connect codex [--model MODEL] [--base-url URL] [--exec PROMPT]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--model` | First available model | Model to pre-select for Codex |
-| `--base-url` | `http://localhost:8321/v1` | Full OGX OpenAI-compatible base URL. Also reads `OGX_BASE_URL`. If the URL has no path, `ogx connect codex` appends `/v1`. |
+| `--base-url` | `http://localhost:8321/v1` | Full OGX OpenAI-compatible API base URL, including `/v1`. Also reads `OGX_BASE_URL`. |
 | `--exec` | Interactive Codex | Run Codex non-interactively with the provided prompt. Uses the same generated OGX session config as the interactive command. |
 
 ## Configuration Examples
@@ -164,7 +164,7 @@ Current limitations of this alpha integration:
 
 **"Failed to find 'codex' in PATH"**: Install Codex from the [Codex GitHub repository](https://github.com/openai/codex) and make sure the `codex` binary is available on your shell path.
 
-**"Failed to connect to OGX server"**: Start the OGX server first with `ogx stack run <config>` or point `--base-url` at a reachable server.
+**"Failed to connect to OGX server"**: Start the OGX server first with `ogx run <config>` or point `--base-url` at a reachable server.
 
 **Authenticated deployments**: Set `OGX_API_KEY` when your OGX deployment requires bearer auth. Set `OGX_PROVIDER_DATA` when OGX expects request-scoped passthrough credentials.
 
