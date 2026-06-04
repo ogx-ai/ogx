@@ -371,6 +371,11 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     export OTEL_BSP_EXPORT_TIMEOUT="2000"
     export OTEL_METRIC_EXPORT_INTERVAL="200"
 
+    # Expose the Prometheus scrape endpoint at /v1/metrics so the metrics endpoint
+    # integration tests (tests/integration/inspect/test_metrics_endpoint.py) can scrape it.
+    # Exported so both the server process and the pytest process observe the flag.
+    export OGX_PROMETHEUS_ENABLED="1"
+
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
     nohup ogx stack run $stack_config >server-main.log 2>&1 &

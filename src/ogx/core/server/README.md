@@ -36,6 +36,21 @@ Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-
 - **`ClientVersionMiddleware`** (`server.py`): Rejects requests from clients with incompatible major.minor versions.
 - **`ProviderDataMiddleware`** (`server.py`): Sets up request context for provider data propagation and test context.
 
+### Metrics Export
+
+OTel metrics can be exported two ways, independently and simultaneously:
+
+- **OTLP push** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to push metrics to an OTel Collector.
+- **Prometheus scrape** — set `OGX_PROMETHEUS_ENABLED` (`1`/`true`/`yes`/`on`) to expose all
+  metrics at `GET /v1/metrics` in Prometheus exposition format, suitable for scrape-based
+  monitoring systems. The route is declared on the
+  Inspect API router (`ogx_api/inspect_api/fastapi_routes.py`) alongside `/v1/health`, opts
+  out of auth via `PUBLIC_ROUTE_KEY`, returns `404` when disabled, and is excluded from
+  `RequestMetricsMiddleware`.
+
+Both readers are attached to a single global `MeterProvider` in
+`ogx.telemetry.setup_telemetry()`.
+
 ### Response Handling
 
 - Non-streaming responses return JSON via FastAPI's standard response handling.

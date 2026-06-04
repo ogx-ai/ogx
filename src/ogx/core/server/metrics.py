@@ -44,7 +44,7 @@ concurrent_requests: UpDownCounter = meter.create_up_down_counter(
 )
 
 # Paths excluded from metrics collection
-_EXCLUDED_PATHS = ("/docs", "/redoc", "/openapi.json", "/favicon.ico", "/static")
+_EXCLUDED_PATHS = ("/docs", "/redoc", "/openapi.json", "/favicon.ico", "/static", "/v1/metrics")
 
 
 class RouteInfo:
