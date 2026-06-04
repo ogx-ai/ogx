@@ -286,6 +286,7 @@ def _autodetect_providers() -> str:
     inline_providers = [
         "files=inline::localfs",
         "vector_io=inline::faiss",
+        "batches=inline::reference",
         "tool_runtime=inline::file-search",
         "file_processors=inline::auto",
         "responses=inline::builtin",
@@ -293,6 +294,7 @@ def _autodetect_providers() -> str:
     ]
     cprint("  ✓ inline::localfs (built-in)", color="green")
     cprint("  ✓ inline::faiss (built-in)", color="green")
+    cprint("  ✓ inline::reference batches (built-in)", color="green")
     cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::auto (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")

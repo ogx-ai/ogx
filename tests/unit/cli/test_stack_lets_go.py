@@ -140,7 +140,7 @@ class TestAutodetect:
         assert "inference=remote::anthropic" in parts
         assert "files=inline::localfs" in parts
         assert "responses=inline::builtin" in parts
-        assert len(parts) == 14  # 8 probed + 6 inline
+        assert len(parts) == 15  # 8 probed + 7 inline
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_only_ollama(self, mock_probe: MagicMock):
@@ -162,7 +162,7 @@ class TestAutodetect:
         assert "inference=remote::ollama" in parts
         assert "files=inline::localfs" in parts
         assert "responses=inline::builtin" in parts
-        assert len(parts) == 7  # 1 inference + 6 inline
+        assert len(parts) == 8  # 1 inference + 7 inline
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_uses_env_var_name(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
