@@ -37,19 +37,23 @@ from ogx_api.messages import (
 )
 from ogx_api.messages.models import (
     ANTHROPIC_VERSION,
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
     AnthropicCreateMessageRequest,
+    AnthropicCustomToolDef,
     AnthropicImageBlock,
     AnthropicMessage,
     AnthropicMessageResponse,
+    AnthropicRedactedThinkingBlock,
     AnthropicStreamEvent,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
-    AnthropicToolDef,
+    AnthropicTool,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
     AnthropicUsage,
     CancelMessageBatchRequest,
     ContentBlockDeltaEvent,
@@ -72,6 +76,7 @@ from ogx_api.messages.models import (
     _AnthropicErrorDetail,
     _InputJsonDelta,
     _MessageDelta,
+    _SignatureDelta,
     _TextDelta,
     _ThinkingDelta,
 )
@@ -120,6 +125,12 @@ _FINISH_TO_STOP_REASON = {
     "length": "max_tokens",
     "content_filter": "end_turn",
 }
+
+
+def _image_source_to_url(source: AnthropicBase64ImageSource | AnthropicURLImageSource) -> str:
+    if isinstance(source, AnthropicBase64ImageSource):
+        return f"data:{source.media_type};base64,{source.data}"
+    return source.url
 
 
 class BuiltinMessagesImpl(Messages):
@@ -461,11 +472,21 @@ class BuiltinMessagesImpl(Messages):
         # Use the provider_resource_id (model name without provider prefix)
         provider_model = request.model
         router = self.inference_api
+        api_key = "no-key-required"
         if hasattr(router, "routing_table"):
             try:
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
+                    provider_impl = await router.routing_table.get_provider_impl(obj.identifier)
+                    # TODO: this is a sever abstration violation. this all needs to be refactored
+                    #       to use a proper provider interface for messages
+                    if hasattr(provider_impl, "_get_api_key_from_config_or_provider_data"):
+                        key = provider_impl._get_api_key_from_config_or_provider_data()
+                    else:
+                        key = provider_impl.get_api_key() if hasattr(provider_impl, "get_api_key") else None
+                    if key:
+                        api_key = key
             except (KeyError, ValueError, AttributeError):
                 logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
@@ -474,7 +495,7 @@ class BuiltinMessagesImpl(Messages):
         headers = {
             "content-type": "application/json",
             "anthropic-version": ANTHROPIC_VERSION,
-            "x-api-key": "no-key-required",
+            "x-api-key": api_key,
         }
 
         if request.stream:
@@ -511,25 +532,31 @@ class BuiltinMessagesImpl(Messages):
             return MessageStartEvent(message=AnthropicMessageResponse(**data["message"]))
         if event_type == "content_block_start":
             block_data = data["content_block"]
-            content_block: AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock
+            content_block: (
+                AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock | AnthropicRedactedThinkingBlock
+            )
             block_type = block_data.get("type")
             if block_type == "tool_use":
                 content_block = AnthropicToolUseBlock(**block_data)
             elif block_type == "thinking":
                 content_block = AnthropicThinkingBlock(**block_data)
+            elif block_type == "redacted_thinking":
+                content_block = AnthropicRedactedThinkingBlock(**block_data)
             else:
                 content_block = AnthropicTextBlock(**block_data)
             return ContentBlockStartEvent(index=data["index"], content_block=content_block)
         if event_type == "content_block_delta":
             delta_data = data["delta"]
             delta_type = delta_data.get("type")
-            delta: _TextDelta | _InputJsonDelta | _ThinkingDelta
+            delta: _TextDelta | _InputJsonDelta | _ThinkingDelta | _SignatureDelta
             if delta_type == "text_delta":
                 delta = _TextDelta(text=delta_data["text"])
             elif delta_type == "input_json_delta":
                 delta = _InputJsonDelta(partial_json=delta_data["partial_json"])
             elif delta_type == "thinking_delta":
                 delta = _ThinkingDelta(thinking=delta_data["thinking"])
+            elif delta_type == "signature_delta":
+                delta = _SignatureDelta(signature=delta_data["signature"])
             else:
                 return None
             return ContentBlockDeltaEvent(index=data["index"], delta=delta)
@@ -554,11 +581,21 @@ class BuiltinMessagesImpl(Messages):
         # Use the provider_resource_id (model name without provider prefix)
         provider_model = request.model
         router = self.inference_api
+        api_key = "no-key-required"
         if hasattr(router, "routing_table"):
             try:
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
+                    provider_impl = await router.routing_table.get_provider_impl(obj.identifier)
+                    # TODO: this needs to be rafactored to avoid abstraction violations and remove
+                    #       duplicated logic with _passthrough_request
+                    if hasattr(provider_impl, "_get_api_key_from_config_or_provider_data"):
+                        key = provider_impl._get_api_key_from_config_or_provider_data()
+                    else:
+                        key = provider_impl.get_api_key() if hasattr(provider_impl, "get_api_key") else None
+                    if key:
+                        api_key = key
             except (KeyError, ValueError, AttributeError):
                 logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
@@ -567,7 +604,7 @@ class BuiltinMessagesImpl(Messages):
         headers = {
             "content-type": "application/json",
             "anthropic-version": ANTHROPIC_VERSION,
-            "x-api-key": "no-key-required",
+            "x-api-key": api_key,
         }
 
         resp = await self._client.post(url, json=body, headers=headers, timeout=30)
@@ -577,15 +614,23 @@ class BuiltinMessagesImpl(Messages):
     # -- Request translation --
 
     def _anthropic_to_openai(self, request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
+        if request.thinking and request.thinking.type == "enabled":
+            raise ValueError(
+                "Failed to process thinking request: extended thinking requires a native "
+                "Anthropic-compatible provider; translation mode does not support it"
+            )
+
         messages = self._convert_messages_to_openai(request.system, request.messages)
         tools = self._convert_tools_to_openai(request.tools) if request.tools else None
-        tool_choice = self._convert_tool_choice_to_openai(request.tool_choice) if request.tool_choice else None
+        # tool_choice without tools is an invalid combination for OpenAI-compatible backends.
+        # This happens when request.tools contains only server-side tools, which are all filtered out.
+        tool_choice = (
+            self._convert_tool_choice_to_openai(request.tool_choice) if tools and request.tool_choice else None
+        )
 
         extra_body: dict[str, Any] = {}
         if request.top_k is not None:
             extra_body["top_k"] = request.top_k
-        # Note: Anthropic's "thinking" parameter has no equivalent in the OpenAI
-        # chat completions API and is intentionally not forwarded.
 
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=request.model,
@@ -647,10 +692,21 @@ class BuiltinMessagesImpl(Messages):
                         flush_content = text_parts
                     result.append({"role": "user", "content": flush_content})
                     text_parts = []
-                # Tool results become separate tool messages
+                # Tool results become separate tool messages.
+                # OpenAI tool messages only support text content, so image blocks
+                # from tool results are promoted to a follow-up user message.
                 tool_content = block.content
+                image_parts: list[dict[str, Any]] = []
                 if isinstance(tool_content, list):
-                    tool_content = "\n".join(b.text for b in tool_content if isinstance(b, AnthropicTextBlock))
+                    text_pieces = []
+                    for b in tool_content:
+                        if isinstance(b, AnthropicTextBlock):
+                            text_pieces.append(b.text)
+                        elif isinstance(b, AnthropicImageBlock):
+                            image_parts.append(
+                                {"type": "image_url", "image_url": {"url": _image_source_to_url(b.source)}}
+                            )
+                    tool_content = "\n".join(text_pieces)
                 result.append(
                     {
                         "role": "tool",
@@ -658,17 +714,12 @@ class BuiltinMessagesImpl(Messages):
                         "content": tool_content,
                     }
                 )
+                if image_parts:
+                    result.append({"role": "user", "content": image_parts})
             elif isinstance(block, AnthropicTextBlock):
                 text_parts.append({"type": "text", "text": block.text})
             elif isinstance(block, AnthropicImageBlock):
-                text_parts.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{block.source.media_type};base64,{block.source.data}",
-                        },
-                    }
-                )
+                text_parts.append({"type": "image_url", "image_url": {"url": _image_source_to_url(block.source)}})
 
         if text_parts:
             # OpenAI content must be a string or a list, never a single dict
@@ -708,18 +759,23 @@ class BuiltinMessagesImpl(Messages):
 
         return msg
 
-    def _convert_tools_to_openai(self, tools: list[AnthropicToolDef]) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "parameters": tool.input_schema,
-                },
-            }
-            for tool in tools
-        ]
+    def _convert_tools_to_openai(self, tools: list[AnthropicTool]) -> list[dict[str, Any]] | None:
+        result = []
+        for tool in tools:
+            if not isinstance(tool, AnthropicCustomToolDef):
+                logger.debug("Dropping server-side tool in translation mode", tool_type=tool.type)
+                continue
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": tool.input_schema,
+                    },
+                }
+            )
+        return result or None
 
     def _convert_tool_choice_to_openai(self, tool_choice: Any) -> Any:
         if isinstance(tool_choice, str):

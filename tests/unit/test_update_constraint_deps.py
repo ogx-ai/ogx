@@ -22,6 +22,7 @@ find_constraint_section = _mod.find_constraint_section
 find_constraint_line = _mod.find_constraint_line
 find_dependency_lines = _mod.find_dependency_lines
 insert_constraint = _mod.insert_constraint
+add_floor = _mod.add_floor
 update_constraint = _mod.update_constraint
 main = _mod.main
 
@@ -50,13 +51,14 @@ SAMPLE_PYPROJECT = textwrap.dedent("""\
     [project.optional-dependencies]
     starter = [
         "aiohttp",
+        "boto3",
         "google-genai>=1.69.0",
     ]
 
     [dependency-groups]
     dev = [
         "ruff",
-        "black",
+        "boto3",
     ]
     test = [
         "google-genai>=1.69.0",
@@ -222,6 +224,34 @@ class TestInsertConstraint:
         _, changed, reason = insert_constraint(lines, "pkg", "1.0.0")
         assert changed is False
         assert "not found" in reason
+
+
+class TestAddFloor:
+    def test_adds_floor_to_bare_dep(self):
+        line = '    "boto3",\n'
+        new_line, changed, reason = add_floor(line, "boto3", "1.43.9")
+        assert changed is True
+        assert '"boto3>=1.43.9"' in new_line
+        assert new_line.endswith(",\n")
+
+    def test_preserves_extras(self):
+        line = '    "pyjwt[crypto]",\n'
+        new_line, changed, _ = add_floor(line, "pyjwt", "2.12.0")
+        assert changed is True
+        assert '"pyjwt[crypto]>=2.12.0"' in new_line
+
+    def test_preserves_inline_comment(self):
+        line = '    "ruff",                            # linter\n'
+        new_line, changed, _ = add_floor(line, "ruff", "0.15.13")
+        assert changed is True
+        assert '"ruff>=0.15.13"' in new_line
+        assert "# linter" in new_line
+
+    def test_preserves_whitespace(self):
+        line = '    "boto3",\n'
+        new_line, changed, _ = add_floor(line, "boto3", "1.43.9")
+        assert changed is True
+        assert new_line.startswith("    ")
 
 
 class TestUpdateConstraint:
@@ -459,9 +489,9 @@ class TestMainCli:
         assert "aiohttp>=3.14.0" in content
         assert "CVE-2026-34514" in content
 
-    def test_bare_dep_no_constraint_adds_to_constraints(self, tmp_path):
-        """A dep without a >= floor in dependencies and not in constraint-dependencies
-        gets added to constraint-dependencies."""
+    def test_bare_dep_gets_floor_added_in_place(self, tmp_path):
+        """A bare dep (no version specifier) gets a >= floor added in place,
+        not added to constraint-dependencies."""
         pyproject = tmp_path / "pyproject.toml"
         pyproject.write_text(SAMPLE_PYPROJECT)
 
@@ -472,7 +502,7 @@ class TestMainCli:
                 "--dependency-name",
                 "ruff",
                 "--dependency-version",
-                "0.12.0",
+                "0.15.13",
                 "--pyproject",
                 str(pyproject),
             ],
@@ -481,11 +511,38 @@ class TestMainCli:
         )
         assert result.returncode == 0
         assert "updated=true" in result.stdout
-        assert "ADDED" in result.stdout
+        assert "UPDATED (dependencies)" in result.stdout
         content = pyproject.read_text()
-        assert '"ruff>=0.12.0"' in content
-        # Original bare "ruff" in dev deps should be untouched
-        assert '    "ruff",\n' in content
+        assert '"ruff>=0.15.13"' in content
+        assert "constraint-dependencies" in content
+        # Must NOT appear in constraint-dependencies
+        constraint_start = content.index("constraint-dependencies")
+        constraint_end = content.index("]", constraint_start)
+        assert "ruff" not in content[constraint_start:constraint_end]
+
+    def test_bare_dep_multiple_occurrences(self, tmp_path):
+        """A bare dep appearing in multiple sections gets >= floor added everywhere."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(SAMPLE_PYPROJECT)
+
+        result = subprocess.run(
+            [
+                "python3",
+                str(_script_path),
+                "--dependency-name",
+                "boto3",
+                "--dependency-version",
+                "1.43.9",
+                "--pyproject",
+                str(pyproject),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        assert "updated=true" in result.stdout
+        content = pyproject.read_text()
+        assert content.count("boto3>=1.43.9") == 2
 
     def test_missing_pyproject_returns_error(self, tmp_path):
         result = subprocess.run(

@@ -15,12 +15,23 @@ from ogx.core.storage.datatypes import KVStoreReference
 from ogx.providers.inline.messages.config import MessagesConfig
 from ogx.providers.inline.messages.impl import BuiltinMessagesImpl
 from ogx_api.messages.models import (
+    AnthropicBase64ImageSource,
+    AnthropicBashTool,
+    AnthropicCacheControl,
     AnthropicCreateMessageRequest,
+    AnthropicCustomToolDef,
+    AnthropicImageBlock,
     AnthropicMessage,
+    AnthropicRedactedThinkingBlock,
     AnthropicTextBlock,
+    AnthropicTextEditorTool,
+    AnthropicThinkingBlock,
+    AnthropicThinkingConfig,
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
+    AnthropicWebSearchTool,
 )
 
 
@@ -181,6 +192,95 @@ class TestRequestTranslation:
         assert msg["tool_call_id"] == "toolu_123"
         assert msg["content"] == "72F and sunny"
 
+    def test_base64_image_in_user_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicTextBlock(text="What is in this image?"),
+                        AnthropicImageBlock(
+                            source=AnthropicBase64ImageSource(
+                                media_type="image/png",
+                                data="abc123",
+                            )
+                        ),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        assert len(result.messages) == 1
+        msg = _msg_to_dict(result.messages[0])
+        assert msg["role"] == "user"
+        assert isinstance(msg["content"], list)
+        assert msg["content"][0] == {"type": "text", "text": "What is in this image?"}
+        assert msg["content"][1] == {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,abc123"},
+        }
+
+    def test_url_image_in_user_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicImageBlock(source=AnthropicURLImageSource(url="https://example.com/img.jpg")),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        assert len(result.messages) == 1
+        msg = _msg_to_dict(result.messages[0])
+        assert msg["content"] == [{"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}}]
+
+    def test_image_in_tool_result_promoted_to_user_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicToolResultBlock(
+                            tool_use_id="toolu_abc",
+                            content=[
+                                AnthropicTextBlock(text="Screenshot taken"),
+                                AnthropicImageBlock(
+                                    source=AnthropicBase64ImageSource(
+                                        media_type="image/png",
+                                        data="screenshotdata",
+                                    )
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        # First message: tool result with text only
+        assert len(result.messages) == 2
+        tool_msg = _msg_to_dict(result.messages[0])
+        assert tool_msg["role"] == "tool"
+        assert tool_msg["tool_call_id"] == "toolu_abc"
+        assert tool_msg["content"] == "Screenshot taken"
+        # Second message: image promoted to user message
+        image_msg = _msg_to_dict(result.messages[1])
+        assert image_msg["role"] == "user"
+        assert image_msg["content"] == [
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,screenshotdata"}}
+        ]
+
     def test_top_k_passed_as_extra(self, impl):
         request = AnthropicCreateMessageRequest(
             model="m",
@@ -190,6 +290,121 @@ class TestRequestTranslation:
         )
         result = impl._anthropic_to_openai(request)
         assert result.model_extra.get("top_k") == 40
+
+    def test_redacted_thinking_skipped_in_assistant_message(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="assistant",
+                    content=[
+                        AnthropicThinkingBlock(thinking="reasoning here", signature="sig123"),
+                        AnthropicRedactedThinkingBlock(data="opaque-data"),
+                        AnthropicTextBlock(text="The answer is 42."),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+
+        msg = _msg_to_dict(result.messages[0])
+        assert msg["role"] == "assistant"
+        assert msg["content"] == "The answer is 42."
+        assert "tool_calls" not in msg
+
+    def test_cache_control_on_text_block_parses(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="user",
+                    content=[AnthropicTextBlock(text="Hello", cache_control=AnthropicCacheControl())],
+                )
+            ],
+            max_tokens=100,
+            system=[AnthropicTextBlock(text="You are helpful.", cache_control=AnthropicCacheControl())],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert len(result.messages) == 2
+        assert _msg_to_dict(result.messages[0])["role"] == "system"
+
+    def test_cache_control_on_tool_def_parses(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[
+                AnthropicCustomToolDef(
+                    name="get_weather",
+                    description="Get weather",
+                    input_schema={"type": "object", "properties": {}},
+                    cache_control=AnthropicCacheControl(),
+                )
+            ],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert len(result.tools) == 1
+        assert result.tools[0]["function"]["name"] == "get_weather"
+
+    def test_server_tools_accepted_in_request(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[
+                AnthropicCustomToolDef(
+                    name="get_weather",
+                    input_schema={"type": "object", "properties": {}},
+                ),
+                AnthropicWebSearchTool(),
+                AnthropicBashTool(),
+                AnthropicTextEditorTool(type="text_editor_20250728", name="str_replace_based_edit_tool"),
+            ],
+        )
+        assert len(request.tools) == 4
+
+    def test_server_tools_dropped_in_translation(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[
+                AnthropicCustomToolDef(
+                    name="get_weather",
+                    input_schema={"type": "object", "properties": {}},
+                ),
+                AnthropicWebSearchTool(),
+                AnthropicBashTool(),
+            ],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert len(result.tools) == 1
+        assert result.tools[0]["function"]["name"] == "get_weather"
+
+    def test_only_server_tools_yields_no_tools_in_translation(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[AnthropicWebSearchTool(), AnthropicBashTool()],
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.tools is None
+
+    def test_tool_choice_dropped_when_all_tools_filtered(self, impl):
+        # tool_choice without tools is invalid for OpenAI backends; it must be dropped
+        # when request.tools contains only server-side tools.
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[AnthropicWebSearchTool()],
+            tool_choice="any",
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.tools is None
+        assert result.tool_choice is None
 
 
 class TestResponseTranslation:
@@ -386,3 +601,79 @@ class TestStreamingTranslation:
 
         msg_delta = [e for e in events if e.type == "message_delta"]
         assert msg_delta[0].delta.stop_reason == "tool_use"
+
+
+class TestSSEParsing:
+    def test_signature_delta_parsed(self, impl):
+        event = impl._parse_sse_event(
+            "content_block_delta",
+            {
+                "index": 0,
+                "delta": {"type": "signature_delta", "signature": "ErUBCkYIAxgCIkA"},
+            },
+        )
+        assert event is not None
+        assert event.type == "content_block_delta"
+        assert event.delta.type == "signature_delta"
+        assert event.delta.signature == "ErUBCkYIAxgCIkA"
+
+    def test_redacted_thinking_block_start_parsed(self, impl):
+        event = impl._parse_sse_event(
+            "content_block_start",
+            {
+                "index": 0,
+                "content_block": {
+                    "type": "redacted_thinking",
+                    "data": "opaque-redacted-data-string",
+                },
+            },
+        )
+        assert event is not None
+        assert event.type == "content_block_start"
+        assert event.content_block.type == "redacted_thinking"
+        assert event.content_block.data == "opaque-redacted-data-string"
+
+
+class TestThinkingConfig:
+    def test_budget_tokens_below_minimum_rejected(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            AnthropicThinkingConfig(type="enabled", budget_tokens=500)
+
+    def test_budget_tokens_at_minimum_accepted(self):
+        config = AnthropicThinkingConfig(type="enabled", budget_tokens=1024)
+        assert config.budget_tokens == 1024
+
+    def test_budget_tokens_above_minimum_accepted(self):
+        config = AnthropicThinkingConfig(type="enabled", budget_tokens=4096)
+        assert config.budget_tokens == 4096
+
+    def test_thinking_enabled_raises_in_translation_mode(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Think about this")],
+            max_tokens=8192,
+            thinking=AnthropicThinkingConfig(type="enabled", budget_tokens=4096),
+        )
+        with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
+            impl._anthropic_to_openai(request)
+
+    def test_thinking_disabled_allowed_in_translation_mode(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hello")],
+            max_tokens=100,
+            thinking=AnthropicThinkingConfig(type="disabled"),
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.model == "m"
+
+    def test_thinking_none_allowed_in_translation_mode(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hello")],
+            max_tokens=100,
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.model == "m"
