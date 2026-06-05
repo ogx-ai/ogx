@@ -18,6 +18,7 @@ authors:
   - name: Sébastien Han
     affiliation: 1
   - name: Matthew Farrellee
+    affiliation: 3
   - name: Charlie Doern
     affiliation: 1
   - name: Yuan Tang
@@ -27,19 +28,21 @@ authors:
   - name: Varsha Prasad Narsing
     orcid: 0009-0006-4421-3632
     affiliation: 1
-  - name: Raghotham Murthy
-    affiliation: 2
   - name: Gordon Sim
     affiliation: 1
   - name: Sumanth Kamenani
     affiliation: 1
   - name: Ben Browning
     affiliation: 1
+  - name: Raghotham Murthy
+    affiliation: 2
 affiliations:
   - name: Red Hat AI, USA
     index: 1
   - name: Meta, USA
     index: 2
+  - name: Independent
+    index: 3
 date: 2 June 2026
 bibliography: paper.bib
 ---
@@ -141,6 +144,6 @@ Generative AI tools, including GitHub Copilot and Anthropic Claude models availa
 
 # Acknowledgements
 
-We thank Meta for creating and open-sourcing Llama Stack, now renamed OGX. We are grateful to Red Hat for supporting the development of OGX and the Kubernetes Operator through employee time and infrastructure support. We thank the OGX contributor community for their sustained contributions to the project.
+We thank Meta for creating and open-sourcing Llama Stack, now renamed OGX. We are grateful to Red Hat for supporting the development of OGX through employee time and infrastructure support. We thank the OGX contributor community for their sustained contributions to the project.
 
 # References
