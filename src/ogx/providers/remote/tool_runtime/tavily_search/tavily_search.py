@@ -48,7 +48,7 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
 
     def _get_api_key(self) -> str:
         if self.config.api_key:
-            return self.config.api_key
+            return self.config.api_key.get_secret_value()
 
         provider_data = self.get_request_provider_data()
         if provider_data is None or not provider_data.tavily_search_api_key:

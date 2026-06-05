@@ -1,0 +1,95 @@
+name: Messages API - Claude Code Client Smoke Tests
+
+run-name: Drive the Claude Code CLI and Agent SDK against /v1/messages (live, Ollama)
+
+on:
+  push:
+    branches:
+      - main
+      - 'release-[0-9]+.[0-9]+.x'
+  pull_request:
+    branches:
+      - main
+      - 'release-[0-9]+.[0-9]+.x'
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/ogx/providers/inline/messages/**'
+      - 'src/ogx_api/**'
+      - 'tests/integration/messages/**'
+      - 'uv.lock'
+      - 'pyproject.toml'
+      - '.github/workflows/integration-tests-messages-clients.yml'
+      - '.github/actions/setup-test-environment/action.yml'
+      - '.github/actions/run-and-record-tests/action.yml'
+      - 'scripts/integration-tests.sh'
+  merge_group:
+    branches:
+      - main
+      - 'release-[0-9]+.[0-9]+.x'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned for reproducibility. Both clients ultimately drive the Claude Code
+  # CLI, which bakes the cwd, date, and platform into every request body, so
+  # their traffic cannot be recorded/replayed; these tests run live against
+  # Ollama instead. Bumping only changes the client behavior under test.
+  CLAUDE_CODE_CLI_VERSION: '2.1.159'
+  # The Agent SDK is installed at workflow time rather than as a project
+  # dependency, since only this one live smoke test uses it; it spawns the same
+  # CLI. The SDK test self-skips if the package is unavailable.
+  CLAUDE_AGENT_SDK_VERSION: '0.2.87'
+
+jobs:
+  claude-code-client-smoke:
+    name: Claude Code CLI + Agent SDK smoke (ollama, live)
+    runs-on: ubuntu-latest
+    # CPU-only runners generate slowly; the live sessions can take several
+    # minutes against the Ollama model. Keep ample headroom over the tests' own
+    # 600s timeouts plus environment setup.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Live mode (not replay) so the Ollama backend is provisioned and the real
+      # client traffic reaches a real model.
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: '3.12'
+          client-version: 'latest'
+          setup: 'ollama'
+          suite: 'messages'
+          inference-mode: 'live'
+
+      # Both clients need the Claude Code CLI at runtime: the CLI test invokes it
+      # directly, and the SDK spawns it as a subprocess.
+      - name: Install Claude Code CLI
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_CLI_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/claude" --version
+
+      - name: Install Claude Agent SDK
+        run: uv pip install "claude-agent-sdk==${CLAUDE_AGENT_SDK_VERSION}"
+
+      - name: Run Claude Code client smoke tests
+        uses: ./.github/actions/run-and-record-tests
+        with:
+          stack-config: 'server:ci-tests'
+          setup: 'ollama'
+          suite: 'messages'
+          inference-mode: 'live'
+          # Selects both test_claude_code_cli_smoke and test_claude_agent_sdk_smoke.
+          # Must stay a single shell word: run-and-record-tests passes --pattern
+          # unquoted, so a -k expression with spaces would be split into separate
+          # arguments.
+          pattern: 'test_claude'
