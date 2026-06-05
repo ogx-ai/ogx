@@ -83,27 +83,17 @@ class OpenAIInferenceAdapter(OpenAIMixin):
         return None
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
-        if metadata := self.embedding_model_metadata.get(identifier):
-            return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.embedding,
-                metadata=metadata,
-            )
+        model = super().construct_model_from_identifier(identifier)
 
-        metadata = {}
-        max_output_tokens = self._get_max_output_tokens(identifier)
-        if max_output_tokens is not None:
-            metadata["max_output_tokens"] = max_output_tokens
+        # Add max_output_tokens metadata for LLM models
+        if model.model_type == ModelType.llm:
+            max_output_tokens = self._get_max_output_tokens(identifier)
+            if max_output_tokens is not None:
+                metadata = dict(model.metadata or {})
+                metadata["max_output_tokens"] = max_output_tokens
+                model = model.model_copy(update={"metadata": metadata})
 
-        return Model(
-            provider_id=self.__provider_id__,  # type: ignore[attr-defined]
-            provider_resource_id=identifier,
-            identifier=identifier,
-            model_type=ModelType.llm,
-            metadata=metadata,
-        )
+        return model
 
     async def openai_chat_completion(
         self,

@@ -125,7 +125,10 @@ def available_providers() -> list[ProviderSpec]:
             module="ogx.providers.remote.inference.bedrock",
             config_class="ogx.providers.remote.inference.bedrock.BedrockConfig",
             provider_data_validator="ogx.providers.remote.inference.bedrock.config.BedrockProviderDataValidator",
-            description="AWS Bedrock inference provider using OpenAI compatible endpoint.",
+            description=(
+                "AWS Bedrock inference provider for the OpenAI-compatible runtime, "
+                "with AWS credential-chain auth by default and an optional bearer-token override."
+            ),
         ),
         RemoteProviderSpec(
             api=Api.inference,
