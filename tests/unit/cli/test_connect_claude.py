@@ -40,7 +40,7 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 class TestArguments:
     def test_defaults(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args([])
-        assert args.url == "http://localhost:8321"
+        assert args.url == "http://localhost:8321/v1"
         assert args.model is None
         assert args.haiku_model is None
         assert args.sonnet_model is None
@@ -77,7 +77,7 @@ class TestArguments:
         subparsers = argparse.ArgumentParser().add_subparsers()
         instance = ConnectClaude(subparsers)
         args = instance.parser.parse_args([])
-        assert args.url == "http://localhost:9999"
+        assert args.url == "http://localhost:9999/v1"
 
     def test_claude_args_after_separator(self, connect_claude: ConnectClaude) -> None:
         args = connect_claude.parser.parse_args(["--", "-p", "hello world"])
@@ -246,9 +246,9 @@ class TestEnvironment:
         env = connect_claude._build_env("http://localhost:8321", {})
         assert env["ANTHROPIC_BASE_URL"] == "http://localhost:8321"
 
-    def test_base_url_has_no_v1_suffix(self, connect_claude: ConnectClaude) -> None:
-        env = connect_claude._build_env("http://localhost:8321", {})
-        assert not env["ANTHROPIC_BASE_URL"].endswith("/v1")
+    def test_base_url_strips_v1_suffix(self, connect_claude: ConnectClaude) -> None:
+        env = connect_claude._build_env("http://localhost:8321/v1", {})
+        assert env["ANTHROPIC_BASE_URL"] == "http://localhost:8321"
 
     def test_sets_anthropic_auth_token(self, connect_claude: ConnectClaude) -> None:
         env = connect_claude._build_env("http://localhost:8321", {})
