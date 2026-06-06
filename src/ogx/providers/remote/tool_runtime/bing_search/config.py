@@ -6,13 +6,18 @@
 
 from typing import Any
 
+from pydantic import Field, SecretStr
+
 from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 
 
 class BingSearchToolConfig(BaseToolRuntimeConfig):
     """Configuration for Bing Search Tool Runtime"""
 
-    api_key: str | None = None
+    api_key: SecretStr | None = Field(
+        default=None,
+        description="The Bing Search API Key. Can be overridden per-request via X-OGX-Provider-Data header.",
+    )
     top_k: int = 3
 
     @classmethod

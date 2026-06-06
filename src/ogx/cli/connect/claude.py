@@ -69,7 +69,7 @@ class ConnectClaude(Subcommand):
         self.parser.add_argument(
             "--url",
             type=str,
-            default=f"http://localhost:{default_port}",
+            default=f"http://localhost:{default_port}/v1",
             help="OGX server URL.",
         )
         self.parser.add_argument(
@@ -196,7 +196,7 @@ class ConnectClaude(Subcommand):
 
     def _build_env(self, base_url: str, model_mapping: dict[str, str]) -> dict[str, str]:
         env = {**os.environ}
-        env["ANTHROPIC_BASE_URL"] = base_url
+        env["ANTHROPIC_BASE_URL"] = base_url.removesuffix("/v1")
         env["ANTHROPIC_AUTH_TOKEN"] = "ogx"  # noqa: S105 — placeholder, not a real secret
         env.update(model_mapping)
         for key in _VARS_TO_UNSET:

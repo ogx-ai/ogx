@@ -195,9 +195,22 @@ jobs:
           docker logs infinispan
           exit 1
 
+      - name: Cache Hugging Face models
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-${{ matrix.python-version }}-nomic-embed-text-v1.5
+
       - name: Build OGX
         run: |
           uv run --no-sync ogx stack list-deps ci-tests | xargs -L1 uv pip install
+
+      - name: Pre-download embedding model
+        run: |
+          uv run --no-sync python - <<'PY'
+          from sentence_transformers import SentenceTransformer
+          SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
+          PY
 
       - name: Check Storage and Memory Available Before Tests
         if: ${{ always() }}
@@ -207,6 +220,8 @@ jobs:
 
       - name: Run Vector IO Integration Tests
         env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
           ENABLE_CHROMADB: ${{ matrix.vector-io-provider == 'remote::chromadb' && 'true' || '' }}
           CHROMADB_URL: ${{ matrix.vector-io-provider == 'remote::chromadb' && 'http://localhost:8000' || '' }}
           ENABLE_PGVECTOR: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'true' || '' }}
