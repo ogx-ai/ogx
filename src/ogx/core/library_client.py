@@ -219,8 +219,10 @@ class OGXAsLibraryClient(OgxClient):
         # Patch api_client.call_api to route requests in-process instead of over HTTP.
         # The generated SDK's call chain is: API method → api_client.call_api() → rest.request() → httpx.
         # We intercept at call_api so the request never reaches httpx/network.
-        self._original_call_api = self.api_client.call_api
-        self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
+        # Only applies to ogx_open_client; the stainless SDK uses a request() override instead.
+        if hasattr(self, "api_client") and hasattr(self.api_client, "call_api"):
+            self._original_call_api = self.api_client.call_api
+            self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
 
     def _run_event_loop(self) -> None:
         """Runs forever in the background thread."""
@@ -412,7 +414,11 @@ class OGXAsLibraryClient(OgxClient):
         from urllib.parse import urlparse
 
         from fastapi.responses import StreamingResponse
-        from ogx_open_client.rest import RESTResponse
+
+        try:
+            from ogx_open_client.rest import RESTResponse
+        except ImportError:
+            from ogx_client.rest import RESTResponse  # type: ignore[assignment]
 
         async_client = self.async_client
         assert async_client.route_impls is not None, "Client not initialized"
@@ -493,7 +499,12 @@ class OGXAsLibraryClient(OgxClient):
 
             # Build the response
             if isinstance(result, StreamingResponse):
-                # Streaming response — collect SSE chunks into a sync-iterable response
+                # Streaming response — collect SSE chunks into a sync-iterable response.
+                # TODO: This buffers the entire stream before returning, losing time-to-first-token
+                # benefits. For true incremental streaming, we'd need a SyncByteStream adapter that
+                # bridges the async generator to sync iter_bytes() via a queue (similar to
+                # _stream_request). Acceptable for now since in-process library mode is primarily
+                # used for testing, not latency-sensitive production streaming.
                 content_type = result.media_type or "text/event-stream"
 
                 # Collect all chunks from the async generator
