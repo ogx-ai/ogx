@@ -33,7 +33,7 @@ class GeminiConfig(RemoteInferenceProviderConfig):
 
     access_token: SecretStr | None = Field(
         default=None,
-        description="OAuth2 access token for Gemini. When set, used instead of api_key for Bearer authentication.",
+        description="OAuth2 access token for Gemini Bearer authentication. Mutually exclusive with api_key.",
     )
     project: str | None = Field(
         default=None,
@@ -59,12 +59,15 @@ class GeminiConfig(RemoteInferenceProviderConfig):
     def sample_run_config(
         cls,
         api_key: str = "${env.GEMINI_API_KEY:=}",
-        access_token: str = "${env.GEMINI_ACCESS_TOKEN:=}",
-        project: str = "${env.GEMINI_AI_PROJECT:=}",
+        access_token: str | None = None,
+        project: str | None = None,
         **kwargs,
     ) -> dict[str, Any]:
-        return {
-            "api_key": api_key,
-            "access_token": access_token,
-            "project": project,
-        }
+        config: dict[str, Any] = {}
+        if api_key:
+            config["api_key"] = api_key
+        if access_token:
+            config["access_token"] = access_token
+        if project:
+            config["project"] = project
+        return config
