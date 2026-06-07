@@ -368,7 +368,7 @@ async def validate_vector_stores_config(vector_stores_config: VectorStoresConfig
 
 
 async def _validate_embedding_model(embedding_model: QualifiedModel, impls: dict[Api, Any]) -> None:
-    """Validate that an embedding model exists and has required metadata."""
+    """Validate that an embedding model exists and is accessible."""
     provider_id = embedding_model.provider_id
     model_id = embedding_model.model_id
     model_identifier = f"{provider_id}/{model_id}"
@@ -378,7 +378,7 @@ async def _validate_embedding_model(embedding_model: QualifiedModel, impls: dict
 
     models_impl = impls[Api.models]
     response = await models_impl.list_models()
-    models_list = {m.identifier: m for m in response.data if m.model_type == "embedding"}
+    models_list = {m.identifier: m for m in response.data if m.model_type == ModelType.embedding}
 
     model = models_list.get(model_identifier)
     if model is None:
@@ -386,15 +386,14 @@ async def _validate_embedding_model(embedding_model: QualifiedModel, impls: dict
             f"Embedding model '{model_identifier}' not found. Available embedding models: {list(models_list.keys())}"
         )
 
-    # if not in metadata, fetch from config default
+    # embedding_dimension may be absent when the model was registered without static metadata;
+    # it will be probed lazily at vector store creation time if needed.
     embedding_dimension = model.metadata.get("embedding_dimension", embedding_model.embedding_dimensions)
-    if embedding_dimension is None:
-        raise ValueError(f"Embedding model '{model_identifier}' is missing 'embedding_dimension' in metadata")
-
-    try:
-        int(embedding_dimension)
-    except ValueError as err:
-        raise ValueError(f"Embedding dimension '{embedding_dimension}' cannot be converted to an integer") from err
+    if embedding_dimension is not None:
+        try:
+            int(embedding_dimension)
+        except ValueError as err:
+            raise ValueError(f"Embedding dimension '{embedding_dimension}' cannot be converted to an integer") from err
 
     logger.debug(
         "Validated embedding model", model_identifier=model_identifier, embedding_dimension=embedding_dimension

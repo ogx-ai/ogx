@@ -39,16 +39,14 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
     async def unregister_toolgroup(self, toolgroup_id: str) -> None:
         return
 
-    def _get_api_key(self) -> str:
-        if self.config.api_key:
-            return self.config.api_key.get_secret_value()
+    def _get_api_key(self) -> str | None:
+        api_key = self.config.api_key.get_secret_value() if self.config.api_key else None
 
         provider_data = self.get_request_provider_data()
-        if provider_data is None or not provider_data.brave_search_api_key:
-            raise ValueError(
-                'Pass Search provider\'s API Key in the header X-OGX-Provider-Data as { "brave_search_api_key": <your api key>}'
-            )
-        return provider_data.brave_search_api_key.get_secret_value()
+        if provider_data and provider_data.brave_search_api_key:
+            api_key = provider_data.brave_search_api_key.get_secret_value()
+
+        return api_key
 
     async def list_runtime_tools(
         self,
@@ -80,11 +78,12 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
         url = "https://api.search.brave.com/res/v1/web/search"
-        headers = {
-            "X-Subscription-Token": api_key,
+        headers: dict[str, str] = {
             "Accept-Encoding": "gzip",
             "Accept": "application/json",
         }
+        if api_key:
+            headers["X-Subscription-Token"] = api_key
 
         query = kwargs["query"]
 
