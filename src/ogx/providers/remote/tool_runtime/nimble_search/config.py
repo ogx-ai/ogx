@@ -16,7 +16,7 @@ class NimbleSearchToolConfig(BaseToolRuntimeConfig):
 
     api_key: SecretStr | None = Field(
         default=None,
-        description="The Nimble API key, sent as a Bearer token",
+        description="The Nimble API key, sent as a Bearer token. Can be overridden per-request via the X-OGX-Provider-Data header.",
     )
     max_results: int = Field(
         default=3,

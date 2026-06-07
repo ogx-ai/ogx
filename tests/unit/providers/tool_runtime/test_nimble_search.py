@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
 from ogx.providers.remote.tool_runtime.nimble_search.nimble_search import NimbleSearchToolRuntimeImpl
@@ -18,6 +19,8 @@ from ogx.providers.remote.tool_runtime.nimble_search.nimble_search import Nimble
 def nimble_search():
     impl = NimbleSearchToolRuntimeImpl(NimbleSearchToolConfig(api_key="test-key", max_results=3))
     impl._client = MagicMock(spec=httpx.AsyncClient)
+    # No per-request provider data by default; _get_api_key now always consults it.
+    impl.get_request_provider_data = MagicMock(return_value=None)
     return impl
 
 
@@ -157,14 +160,25 @@ async def test_no_user_location_means_no_country(nimble_search, mock_nimble_resp
     assert "locale" not in request_body
 
 
-async def test_missing_api_key_raises(mock_nimble_response):
+async def test_missing_api_key_sends_no_auth_header(mock_nimble_response):
     impl = NimbleSearchToolRuntimeImpl(NimbleSearchToolConfig(api_key=None))
     impl._client = MagicMock(spec=httpx.AsyncClient)
     impl._client.post = AsyncMock(return_value=mock_nimble_response)
-    # No config key and no per-request provider data -> clear error, no network call.
+    # No config key and no per-request provider data -> no Authorization header; the API
+    # rejects the request, matching the sibling search providers (no early raise).
     impl.get_request_provider_data = MagicMock(return_value=None)
-    with pytest.raises(ValueError, match="Failed to get Nimble API key"):
-        await impl.invoke_tool("web_search", {"query": "q"})
+    await impl.invoke_tool("web_search", {"query": "q"})
+    assert "Authorization" not in impl._client.post.call_args.kwargs["headers"]
+
+
+async def test_provider_data_overrides_config_api_key(nimble_search, mock_nimble_response):
+    nimble_search._client.post = AsyncMock(return_value=mock_nimble_response)
+    # Config carries "test-key"; a per-request provider-data key must take precedence.
+    provider_data = MagicMock()
+    provider_data.nimble_search_api_key = SecretStr("override-key")
+    nimble_search.get_request_provider_data = MagicMock(return_value=provider_data)
+    await nimble_search.invoke_tool("web_search", {"query": "q"})
+    assert nimble_search._client.post.call_args.kwargs["headers"]["Authorization"] == "Bearer override-key"
 
 
 async def test_403_returns_graceful_tool_error(nimble_search):

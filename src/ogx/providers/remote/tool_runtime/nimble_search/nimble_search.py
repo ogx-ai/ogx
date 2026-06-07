@@ -47,16 +47,14 @@ class NimbleSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
     async def unregister_toolgroup(self, toolgroup_id: str) -> None:
         return
 
-    def _get_api_key(self) -> str:
-        if self.config.api_key:
-            return self.config.api_key.get_secret_value()
+    def _get_api_key(self) -> str | None:
+        api_key = self.config.api_key.get_secret_value() if self.config.api_key else None
 
         provider_data = self.get_request_provider_data()
-        if provider_data is None or not provider_data.nimble_search_api_key:
-            raise ValueError(
-                'Failed to get Nimble API key: pass it in the header X-OGX-Provider-Data as { "nimble_search_api_key": <your api key>}'
-            )
-        return str(provider_data.nimble_search_api_key.get_secret_value())
+        if provider_data and provider_data.nimble_search_api_key:
+            api_key = str(provider_data.nimble_search_api_key.get_secret_value())
+
+        return api_key
 
     async def list_runtime_tools(
         self,
@@ -108,10 +106,11 @@ class NimbleSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
 
         if self._client is None:
             raise RuntimeError("Failed to invoke tool: provider not initialized")
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         response = await self._client.post(
             self._SEARCH_URL,
             json=request_body,
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
         )
         if response.status_code == 403:
             # The account is not entitled to the requested capability (e.g. a higher
