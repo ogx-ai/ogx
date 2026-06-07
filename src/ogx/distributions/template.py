@@ -237,7 +237,7 @@ class RunConfigSettings(BaseModel):
             "storage": storage_config,
             "registered_resources": {
                 "models": [m.model_dump(exclude_none=True) for m in (self.default_models or [])],
-                "vector_dbs": [],
+                "vector_stores": [],
             },
             "server": {
                 "port": 8321,
