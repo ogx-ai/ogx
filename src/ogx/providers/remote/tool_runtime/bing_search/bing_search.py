@@ -47,16 +47,14 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
     async def unregister_toolgroup(self, toolgroup_id: str) -> None:
         return
 
-    def _get_api_key(self) -> str:
-        if self.config.api_key:
-            return self.config.api_key.get_secret_value()
+    def _get_api_key(self) -> str | None:
+        api_key = self.config.api_key.get_secret_value() if self.config.api_key else None
 
         provider_data = self.get_request_provider_data()
-        if provider_data is None or not provider_data.bing_search_api_key:
-            raise ValueError(
-                'Pass Bing Search API Key in the header X-OGX-Provider-Data as { "bing_search_api_key": <your api key>}'
-            )
-        return provider_data.bing_search_api_key.get_secret_value()
+        if provider_data and provider_data.bing_search_api_key:
+            api_key = provider_data.bing_search_api_key.get_secret_value()
+
+        return api_key
 
     async def list_runtime_tools(
         self,
@@ -87,9 +85,9 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        headers = {
-            "Ocp-Apim-Subscription-Key": api_key,
-        }
+        headers: dict[str, str] = {}
+        if api_key:
+            headers["Ocp-Apim-Subscription-Key"] = api_key
 
         query = kwargs["query"]
 

@@ -18,6 +18,7 @@ authors:
   - name: Sébastien Han
     affiliation: 1
   - name: Matthew Farrellee
+    affiliation: 3
   - name: Charlie Doern
     affiliation: 1
   - name: Yuan Tang
@@ -27,32 +28,34 @@ authors:
   - name: Varsha Prasad Narsing
     orcid: 0009-0006-4421-3632
     affiliation: 1
-  - name: Raghotham Murthy
-    affiliation: 2
   - name: Gordon Sim
     affiliation: 1
   - name: Sumanth Kamenani
     affiliation: 1
   - name: Ben Browning
     affiliation: 1
+  - name: Raghotham Murthy
+    affiliation: 2
 affiliations:
   - name: Red Hat AI, USA
     index: 1
   - name: Meta, USA
     index: 2
+  - name: Independent
+    index: 3
 date: 2 June 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-OGX (Open GenAI Stack), formerly Llama Stack [@llamastack], is an open-source AI application server and Python library that implements the APIs of major frontier labs (OpenAI, Anthropic, Google) with pluggable backend providers [@ogx]. It allows teams to build AI systems---including retrieval-augmented generation (RAG) pipelines, multi-turn conversational agents, and tool-calling workflows---against a single, stable API surface and then deploy them with any combination of inference engine, vector database, and safety backend, without changing application code.
+OGX (Open GenAI Stack), formerly Llama Stack [@llamastack], is an open-source AI application server and Python library that implements the APIs of major frontier labs (OpenAI, Anthropic, Google) with pluggable backend providers [@ogx]. Teams building agentic AI applications---such as retrieval-augmented generation (RAG) pipelines, multi-turn conversational agents, and tool-calling workflows---can develop against a single, stable API surface and deploy with any combination of inference engine, vector database, and safety backend, without changing application code.
 
 OGX's primary API focus is the Responses API for server-side agentic orchestration, conforming to the Open Responses specification [@openresponses]. The server also exposes Chat Completions, Embeddings, Vector Stores, Files, and Batches endpoints. Beyond OpenAI compatibility, OGX natively supports the Anthropic Messages API (`/v1/messages`) and Google GenAI Interactions API (`/v1alpha/interactions`), allowing teams using any of the three major client SDKs to connect to the same server. OGX supports over 20 inference providers (including vLLM, Ollama, OpenAI, Anthropic, Bedrock, and Gemini), 13 vector store backends, and 7 safety providers. It can run as an HTTP server for production deployments or be imported directly as a Python library for scripting and notebooks. A companion Kubernetes Operator [@ogxk8soperator] automates deployment lifecycle management through custom resources, supporting multi-architecture builds, hot-swappable distribution images, and both shared and per-tenant isolation topologies. Together, OGX and its operator serve as the self-hosted, model-agnostic backend for AI-powered developer tools such as Claude Code, Codex CLI, OpenCode, and OpenHands.
 
 # Statement of Need
 
-AI application development today is tightly coupled to proprietary API providers. An application written against OpenAI's API often cannot switch to an open-weight model served by vLLM or Ollama without rewriting its inference, retrieval, and tool-calling logic. This coupling limits reproducibility, makes comparisons across model providers difficult, and prevents teams from running AI workloads on controlled infrastructure---a requirement in regulated, privacy-sensitive, and air-gapped environments.
+AI application development today is tightly coupled to proprietary API providers. While inference-only workloads can increasingly be swapped across providers---vLLM, for example, supports the Responses API for basic inference---applications that rely on the full stack (retrieval, tool calling, conversation state, safety guardrails) remain difficult to migrate without rewriting significant application logic. This coupling limits reproducibility, makes comparisons across model providers difficult, and prevents teams from running AI workloads on controlled infrastructure---a requirement in regulated, privacy-sensitive, and air-gapped environments.
 
 Existing open-source tools address parts of this problem but not the whole. Inference engines like vLLM [@kwon2023vllm] and SGLang [@sglang] serve models efficiently but do not provide retrieval, tool calling, or conversation management. Gateway proxies like LiteLLM route requests across providers but do not execute the agentic loop or manage vector stores. Client-side frameworks like LangChain [@langchain] and LangGraph [@langgraph] provide developer abstractions but push orchestration, state management, and security enforcement to the application layer.
 
@@ -94,7 +97,7 @@ The Responses API implements server-side agentic orchestration: the inference-to
 
 OGX is extending server-side execution with a Containers API and a Skills API. The Containers API (`/v1/containers`) manages sandboxed execution environments---matching the OpenAI Containers API---enabling models to execute shell commands in isolated Docker, Podman, or Kubernetes containers via a `shell` tool in the Responses API. The Skills API (`/v1alpha/skills`) manages versioned skill bundles that package tools, prompts, and configuration into reusable, composable units. Together, these APIs move code execution and task composition onto the server, extending the same trust-boundary principle that governs retrieval and tool authorization.
 
-Unlike inference engines and API gateways that treat requests as stateless, OGX manages state natively: the Conversations API persists multi-turn history with tenant-scoped isolation, the Prompts API provides versioned prompt templates, and a resource registry tracks models, vector stores, and files as first-class server objects. A Compaction API summarizes long histories to manage context window limits. This state layer is what makes OGX a complete application server rather than a stateless proxy.
+Unlike inference engines and API gateways that treat requests as stateless, OGX manages state natively: the Conversations API persists multi-turn history with tenant-scoped isolation, the Prompts API provides versioned prompt templates, and a resource registry tracks models, vector stores, and files as first-class server objects. A Compaction API summarizes long histories to manage context window limits. Telemetry is built on OpenTelemetry (OTEL) with MLflow [@mlflow] tracing integration for logging spans, tool calls, and retrieval steps to existing ML experiment tracking infrastructure. This state and observability layer is what makes OGX a complete application server rather than a stateless proxy.
 
 For multitenant deployments, OGX provides attribute-based access control (ABAC) that enforces tenant isolation at the retrieval, tool execution, state management, and API routing layers. The security properties of this architecture have been formally analyzed and empirically validated [@arceo2026securing].
 
@@ -118,7 +121,7 @@ with open("manual.pdf", "rb") as file:
 
 # Query with server-side RAG via the Responses API
 response = client.responses.create(
-    model="llama-3.3-70b-instruct",
+    model="meta-llama/Llama-3.2-3B-Instruct",
     input="What are the installation requirements?",
     tools=[{"type": "file_search", "vector_store_ids": [vector_store.id]}],
 )
@@ -141,6 +144,6 @@ Generative AI tools, including GitHub Copilot and Anthropic Claude models availa
 
 # Acknowledgements
 
-We thank Meta for creating and open-sourcing Llama Stack, now renamed OGX. We are grateful to Red Hat for supporting the development of OGX and the Kubernetes Operator through employee time and infrastructure support. We thank the OGX contributor community for their sustained contributions to the project.
+We thank Meta for creating and open-sourcing Llama Stack, now renamed OGX. We are grateful to Red Hat for supporting the development of OGX through employee time and infrastructure support. We thank the OGX contributor community for their sustained contributions to the project.
 
 # References

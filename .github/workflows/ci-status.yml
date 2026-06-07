@@ -43,8 +43,8 @@ jobs:
             const excludedApps = new Set(['mergify']);
 
             const terminalStatuses = new Set(['completed']);
-            const successConclusions = new Set(['success', 'skipped', 'neutral']);
-            const failureConclusions = new Set(['failure', 'cancelled', 'timed_out']);
+            const successConclusions = new Set(['success', 'skipped', 'neutral', 'cancelled']);
+            const failureConclusions = new Set(['failure', 'timed_out']);
 
             while (true) {
               const { data: checkRuns } = await github.rest.checks.listForRef({
