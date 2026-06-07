@@ -28,7 +28,7 @@ class GeminiConfig(RemoteInferenceProviderConfig):
     Supports either a static API key (``api_key`` / ``GEMINI_API_KEY``) or an
     OAuth2 access token (``access_token`` / ``GEMINI_ACCESS_TOKEN``) for
     short-lived credential injection (e.g. ``gcloud auth application-default
-    print-access-token``).  When both are set, ``access_token`` takes precedence.
+    print-access-token``).  Configure exactly one of the two credentials.
     """
 
     access_token: SecretStr | None = Field(
