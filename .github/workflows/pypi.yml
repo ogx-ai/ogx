@@ -65,6 +65,11 @@
 #   published successfully but image builds failed. Requires "version" to be
 #   set to the already-published version.
 #
+# package_name: PyPI package to bundle in the Docker images. Defaults to "ogx".
+#   Set to "llama-stack" to publish images for pre-rename releases (e.g. 0.5.0),
+#   which were published under the old package name. The CLI binary and home
+#   directory are derived automatically ("llama-stack" -> "llama"/".llama").
+#
 # =============================================================================
 
 name: Build, test, and publish packages
@@ -120,6 +125,11 @@ on:
         required: false
         type: boolean
         default: false
+      package_name:
+        description: 'PyPI package to bundle in Docker images. Use "llama-stack" for pre-rename releases (e.g. 0.5.0).'
+        required: false
+        type: string
+        default: 'ogx'
 
 env:
   LC_ALL: en_US.UTF-8
@@ -949,37 +959,48 @@ jobs:
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"
 
+          # PyPI package to bundle. Pre-rename releases (e.g. 0.5.0) shipped as
+          # "llama-stack"; the CLI binary is derived by stripping the "-stack"
+          # suffix ("llama-stack" -> "llama", "ogx" -> "ogx").
+          PACKAGE_NAME="${{ inputs.package_name || 'ogx' }}"
+          CLI_NAME="${PACKAGE_NAME%-stack}"
+          {
+            echo "package_name=${PACKAGE_NAME}"
+            echo "cli_name=${CLI_NAME}"
+          } >> "$GITHUB_OUTPUT"
+
           if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
             {
               echo "install_mode=pypi"
               echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest"
               echo "version_arg=PYPI_VERSION=${VERSION}"
             } >> "$GITHUB_OUTPUT"
-            echo "Publishing production image: ${IMAGE}:${VERSION} + latest"
+            echo "Publishing production image: ${IMAGE}:${VERSION} + latest (package: ${PACKAGE_NAME})"
           else
             {
               echo "install_mode=test-pypi"
               echo "tags=${IMAGE}:test-${VERSION}"
               echo "version_arg=TEST_PYPI_VERSION=${VERSION}"
             } >> "$GITHUB_OUTPUT"
-            echo "Publishing test image: ${IMAGE}:test-${VERSION}"
+            echo "Publishing test image: ${IMAGE}:test-${VERSION} (package: ${PACKAGE_NAME})"
           fi
 
       - name: Wait for package on test PyPI
         if: steps.meta.outputs.install_mode == 'test-pypi'
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
-          URL="https://test.pypi.org/pypi/ogx/${VERSION}/json"
+          PACKAGE_NAME="${{ steps.meta.outputs.package_name }}"
+          URL="https://test.pypi.org/pypi/${PACKAGE_NAME}/${VERSION}/json"
           echo "Polling ${URL} ..."
           for i in $(seq 1 20); do
             if curl -sf "$URL" -o /dev/null; then
-              echo "ogx==${VERSION} is available on test PyPI"
+              echo "${PACKAGE_NAME}==${VERSION} is available on test PyPI"
               exit 0
             fi
             echo "Attempt ${i}/20: not yet available, waiting 30s..."
             sleep 30
           done
-          echo "::error::ogx==${VERSION} did not appear on test PyPI after 10 minutes"
+          echo "::error::${PACKAGE_NAME}==${VERSION} did not appear on test PyPI after 10 minutes"
           exit 1
 
       - name: Build and push Docker image
@@ -993,4 +1014,6 @@ jobs:
           build-args: |
             DISTRO_NAME=${{ matrix.distro }}
             INSTALL_MODE=${{ steps.meta.outputs.install_mode }}
+            PACKAGE_NAME=${{ steps.meta.outputs.package_name }}
+            CLI_NAME=${{ steps.meta.outputs.cli_name }}
             ${{ steps.meta.outputs.version_arg }}
