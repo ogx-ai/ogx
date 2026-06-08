@@ -1307,13 +1307,19 @@ class OpenAIResponsesImpl:
         output_items: list[OpenAIResponseInput] = []
         for item in all_input:
             if isinstance(item, OpenAIResponseMessage) and item.role == "user":
+                # Normalize bare-string content to a content-part list so the
+                # compacted output message matches the response message schema,
+                # which requires content to be an array of parts.
+                content = item.content
+                if isinstance(content, str):
+                    content = [OpenAIResponseInputMessageContentText(text=content)]
                 output_items.append(
                     OpenAIResponseMessage(
                         id=f"msg_{uuid.uuid4().hex[:24]}",
                         type="message",
                         status="completed",
                         role="user",
-                        content=item.content,
+                        content=content,
                     )
                 )
 
