@@ -46,16 +46,14 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
     async def unregister_toolgroup(self, toolgroup_id: str) -> None:
         return
 
-    def _get_api_key(self) -> str:
-        if self.config.api_key:
-            return self.config.api_key.get_secret_value()
+    def _get_api_key(self) -> str | None:
+        api_key = self.config.api_key.get_secret_value() if self.config.api_key else None
 
         provider_data = self.get_request_provider_data()
-        if provider_data is None or not provider_data.tavily_search_api_key:
-            raise ValueError(
-                'Pass Search provider\'s API Key in the header X-OGX-Provider-Data as { "tavily_search_api_key": <your api key>}'
-            )
-        return provider_data.tavily_search_api_key.get_secret_value()
+        if provider_data and provider_data.tavily_search_api_key:
+            api_key = provider_data.tavily_search_api_key.get_secret_value()
+
+        return api_key
 
     async def list_runtime_tools(
         self,
@@ -87,9 +85,10 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
         request_body: dict[str, Any] = {
-            "api_key": api_key,
             "query": kwargs["query"],
         }
+        if api_key:
+            request_body["api_key"] = api_key
 
         allowed_domains = kwargs.get("allowed_domains")
         if allowed_domains:

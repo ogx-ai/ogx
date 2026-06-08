@@ -16,7 +16,7 @@ class TavilySearchToolConfig(BaseToolRuntimeConfig):
 
     api_key: SecretStr | None = Field(
         default=None,
-        description="The Tavily Search API Key",
+        description="The Tavily Search API Key. Can be overridden per-request via X-OGX-Provider-Data header.",
     )
     max_results: int = Field(
         default=3,

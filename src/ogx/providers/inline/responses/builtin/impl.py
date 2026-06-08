@@ -100,6 +100,7 @@ class BuiltinResponsesImpl(Responses):
             responses_store=self.responses_store,
             vector_io_api=self.vector_io_api,
             moderation_endpoint=self.config.moderation_endpoint,
+            moderation_headers=self.config.moderation_headers,
             conversations_api=self.conversations_api,
             prompts_api=self.prompts_api,
             files_api=self.files_api,

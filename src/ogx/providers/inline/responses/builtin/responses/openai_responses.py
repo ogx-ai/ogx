@@ -118,6 +118,7 @@ class OpenAIResponsesImpl:
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
+        moderation_headers: dict[str, str] | None = None,
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
     ):
@@ -127,6 +128,7 @@ class OpenAIResponsesImpl:
         self.responses_store = responses_store
         self.vector_io_api = vector_io_api
         self.moderation_endpoint = moderation_endpoint
+        self.moderation_headers = moderation_headers
         self.conversations_api = conversations_api
         self.tool_executor = ToolExecutor(
             tool_groups_api=tool_groups_api,
@@ -1151,6 +1153,7 @@ class OpenAIResponsesImpl:
                 parallel_tool_calls=parallel_tool_calls,
                 tool_executor=request_tool_executor,
                 moderation_endpoint=self.moderation_endpoint,
+                moderation_headers=self.moderation_headers,
                 connectors_api=self.connectors_api,
                 enable_guardrails=enable_guardrails,
                 instructions=instructions,
