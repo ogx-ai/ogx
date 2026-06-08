@@ -281,7 +281,7 @@ class TestSessionConfigGeneration:
         assert entry["slug"] == "openai/gpt-4o"
         assert entry["description"] == "Primary OGX model"
         assert entry["context_window"] == 256000
-        assert entry["base_instructions"] is None
+        assert entry["base_instructions"] == ""
         assert entry["supported_reasoning_levels"][0]["effort"] == "medium"
         assert entry["default_reasoning_level"] == "medium"
         assert entry["priority"] == 0

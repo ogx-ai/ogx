@@ -176,7 +176,7 @@ class CodexCatalogBuilder:
             "default_service_tier": None,
             "availability_nux": None,
             "upgrade": None,
-            "base_instructions": None,
+            "base_instructions": "",
             "model_messages": None,
             "supports_reasoning_summaries": False,
             "default_reasoning_summary": "auto",
