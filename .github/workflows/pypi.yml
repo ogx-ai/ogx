@@ -70,6 +70,10 @@
 #   which were published under the old package name. The CLI binary and home
 #   directory are derived automatically ("llama-stack" -> "llama"/".llama").
 #
+# skip_latest: When true, production image builds are tagged only with the
+#   version and not also as "latest". Use when backfilling an older release so
+#   it does not become the default image users pull.
+#
 # =============================================================================
 
 name: Build, test, and publish packages
@@ -130,6 +134,11 @@ on:
         required: false
         type: string
         default: 'ogx'
+      skip_latest:
+        description: 'Do not also tag/push images as "latest". Use when backfilling an older release so it does not become the default pull.'
+        required: false
+        type: boolean
+        default: false
 
 env:
   LC_ALL: en_US.UTF-8
@@ -970,12 +979,19 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
+            if [ "${{ inputs.skip_latest }}" == "true" ]; then
+              TAGS="${IMAGE}:${VERSION}"
+              LATEST_NOTE=""
+            else
+              TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
+              LATEST_NOTE=" + latest"
+            fi
             {
               echo "install_mode=pypi"
-              echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest"
+              echo "tags=${TAGS}"
               echo "version_arg=PYPI_VERSION=${VERSION}"
             } >> "$GITHUB_OUTPUT"
-            echo "Publishing production image: ${IMAGE}:${VERSION} + latest (package: ${PACKAGE_NAME})"
+            echo "Publishing production image: ${IMAGE}:${VERSION}${LATEST_NOTE} (package: ${PACKAGE_NAME})"
           else
             {
               echo "install_mode=test-pypi"
