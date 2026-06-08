@@ -181,9 +181,7 @@ class AuthenticationMiddleware:
 
         return await self.app(scope, receive, send)
 
-    async def _send_auth_error(
-        self, send: Send, message: str, status: int = 401, is_websocket: bool = False
-    ) -> None:
+    async def _send_auth_error(self, send: Send, message: str, status: int = 401, is_websocket: bool = False) -> None:
         if is_websocket:
             # Reject the handshake before it is accepted. 4401 is the WebSocket
             # convention for "unauthorized" (4000-4999 is the app-defined range).
