@@ -235,6 +235,7 @@ class StreamingResponseOrchestrator:
         tool_executor,  # Will be the tool execution logic from the main class
         instructions: str | None,
         moderation_endpoint: str | None,
+        moderation_headers: dict[str, str] | None = None,
         enable_guardrails: bool = False,
         connectors_api: Connectors | None = None,
         prompt: OpenAIResponsePrompt | None = None,
@@ -262,6 +263,7 @@ class StreamingResponseOrchestrator:
         self.max_infer_iters = max_infer_iters
         self.tool_executor = tool_executor
         self.moderation_endpoint = moderation_endpoint
+        self.moderation_headers = moderation_headers
         self.connectors_api = connectors_api
         self.enable_guardrails = enable_guardrails
         self.prompt = prompt
@@ -418,6 +420,7 @@ class StreamingResponseOrchestrator:
             input_violation_message = await run_guardrails(
                 self.moderation_endpoint,
                 combined_text,
+                headers=self.moderation_headers,
             )
             if input_violation_message:
                 logger.info("Input guardrail violation", input_violation_message=input_violation_message)
@@ -1148,6 +1151,7 @@ class StreamingResponseOrchestrator:
                             yield event
                     reasoning_part_emitted = True
                     reasoning_text_accumulated.append(reasoning_content)
+                    chars_since_last_check += len(reasoning_content)
 
                 # Handle refusal content if present
                 if chunk_choice.delta.refusal:
@@ -1238,17 +1242,18 @@ class StreamingResponseOrchestrator:
                                     response_tool_call.function.arguments or ""
                                 ) + tool_call.function.arguments
 
-            # Batched output safety validation. If we have only buffered reasoning events and
-            # no assistant text yet, flush per chunk so reasoning can stream in real time.
+            # Batched output safety validation — reasoning text is included in moderation
+            # checks because reasoning events are user-visible in the stream.
             guardrail_check_due = chars_since_last_check >= _GUARDRAIL_BATCH_CHARS
             if pending_guardrail_events and not any(chat_response_content):
                 guardrail_check_due = True
 
             if self.enable_guardrails and guardrail_check_due:
-                accumulated_text = "".join(chat_response_content)
+                accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
                 violation_message = await run_guardrails(
                     self.moderation_endpoint,
                     accumulated_text,
+                    headers=self.moderation_headers,
                 )
                 if violation_message:
                     logger.info("Output guardrail violation", violation_message=violation_message)
@@ -1263,10 +1268,11 @@ class StreamingResponseOrchestrator:
 
         # Final guardrail check on remaining buffered content
         if self.enable_guardrails and pending_guardrail_events:
-            accumulated_text = "".join(chat_response_content)
+            accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
             violation_message = await run_guardrails(
                 self.moderation_endpoint,
                 accumulated_text,
+                headers=self.moderation_headers,
             )
             if violation_message:
                 logger.info("Output guardrail violation", violation_message=violation_message)
