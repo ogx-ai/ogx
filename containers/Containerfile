@@ -94,6 +94,10 @@ RUN set -eux; \
 
 # Install ogx
 # Use UV_EXTRA_INDEX_URL inline only for editable install with RC dependencies
+# When a version is pinned, also pin the matching API package. The meta package
+# depends on "<package>-api" without a version constraint, so an unpinned install
+# would resolve to the latest API package, which is incompatible with older
+# meta-package releases (e.g. llama-stack 0.5.2 + llama-stack-api 0.7.x).
 RUN set -eux; \
     SAVED_UV_EXTRA_INDEX_URL="${UV_EXTRA_INDEX_URL:-}"; \
     SAVED_UV_INDEX_STRATEGY="${UV_INDEX_STRATEGY:-}"; \
@@ -112,13 +116,13 @@ RUN set -eux; \
     elif [ "$INSTALL_MODE" = "test-pypi" ]; then \
         uv pip install --no-cache fastapi libcst; \
         if [ -n "$TEST_PYPI_VERSION" ]; then \
-            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "${PACKAGE_NAME}==$TEST_PYPI_VERSION"; \
+            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "${PACKAGE_NAME}==$TEST_PYPI_VERSION" "${PACKAGE_NAME}-api==$TEST_PYPI_VERSION"; \
         else \
             uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "$PACKAGE_NAME"; \
         fi; \
     else \
         if [ -n "$PYPI_VERSION" ]; then \
-            uv pip install --no-cache "${PACKAGE_NAME}==$PYPI_VERSION"; \
+            uv pip install --no-cache "${PACKAGE_NAME}==$PYPI_VERSION" "${PACKAGE_NAME}-api==$PYPI_VERSION"; \
         else \
             uv pip install --no-cache "$PACKAGE_NAME"; \
         fi; \
