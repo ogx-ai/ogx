@@ -507,18 +507,7 @@ def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedMode
                 cprint(f"  ✗ {provider_type} — unreachable", color="yellow")
 
         if status in (_ProbeStatus.OK, _ProbeStatus.NEEDS_KEY) and detected_embedding is None:
-            for model in models:
-                model_type = getattr(model, "model_type", None)
-                identifier = getattr(model, "identifier", None)
-                if model_type == ModelType.embedding or (identifier and "embed" in str(identifier).lower()):
-                    dimension: int | None = None
-                    if hasattr(model, "metadata") and isinstance(model.metadata, dict):
-                        dimension = model.metadata.get("embedding_dimension")
-                    detected_embedding = (
-                        QualifiedModel(provider_id=provider_type.split("::")[-1], model_id=str(identifier)),
-                        dimension,
-                    )
-                    break
+            detected_embedding = _pick_embedding_from_models(models, provider_type.split("::")[-1])
 
     # Inline providers require no external service — always include them.
     # Note: file-search and responses require an embedding model, so they are added later
@@ -607,6 +596,24 @@ async def _list_models_from_provider(provider: Any) -> list[Any]:
     return models or []
 
 
+def _pick_embedding_from_models(models: list[Any], provider_id: str) -> tuple[QualifiedModel, int | None] | None:
+    """Return the best embedding model from a list, preferring one with dimension metadata."""
+    best: tuple[QualifiedModel, int | None] | None = None
+    for model in models:
+        if getattr(model, "model_type", None) != ModelType.embedding:
+            continue
+        identifier = getattr(model, "identifier", None)
+        if not identifier:
+            continue
+        dimension: int | None = None
+        if hasattr(model, "metadata") and isinstance(model.metadata, dict):
+            dimension = model.metadata.get("embedding_dimension")
+        best = (QualifiedModel(provider_id=provider_id, model_id=str(identifier)), dimension)
+        if dimension is not None:
+            break
+    return best
+
+
 def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, int | None] | None:
     """Find an embedding model by instantiating each inference provider and calling list_models().
 
@@ -616,35 +623,12 @@ def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, in
 
     async def _detect_async() -> tuple[QualifiedModel, int | None] | None:
         for provider in run_config.providers.get("inference", []):
+            if not provider.provider_id:
+                continue
             models = await _list_models_from_provider(provider)
-            for model in models:
-                model_type = model.model_type
-                identifier = model.identifier
-                if model_type == ModelType.embedding or (identifier and "embed" in identifier.lower()):
-                    provider_id = provider.provider_id
-                    if provider_id is None:
-                        cprint(
-                            "  ✗ Could not infer embedding model: provider has no provider_id",
-                            color="yellow",
-                        )
-                        continue
-                    if not identifier:
-                        cprint(
-                            f"  ✗ Could not infer embedding model id from provider '{provider_id}'",
-                            color="yellow",
-                        )
-                        continue
-                    # Extract dimension from model metadata; do not guess
-                    dimension: int | None = None
-                    if hasattr(model, "metadata") and isinstance(model.metadata, dict):
-                        dimension = model.metadata.get("embedding_dimension", None)
-                    return (
-                        QualifiedModel(
-                            provider_id=provider_id,
-                            model_id=str(identifier),
-                        ),
-                        dimension,
-                    )
+            result = _pick_embedding_from_models(models, provider.provider_id)
+            if result is not None:
+                return result
         return None
 
     return asyncio.run(_detect_async())
