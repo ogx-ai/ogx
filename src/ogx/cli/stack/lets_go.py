@@ -225,7 +225,20 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     if "responses" not in run_config.providers:
         run_config.providers["responses"] = []
     if not any(p.provider_type == "inline::builtin" for p in run_config.providers["responses"]):
-        run_config.providers["responses"].append(Provider(provider_id="builtin", provider_type="inline::builtin"))
+        run_config.providers["responses"].append(
+            Provider(
+                provider_id="builtin",
+                provider_type="inline::builtin",
+                config={
+                    "persistence": {
+                        "responses": {
+                            "table_name": "responses",
+                            "backend": "sql_default",
+                        }
+                    }
+                },
+            )
+        )
     # Add responses to APIs if not already present
     if "responses" not in run_config.apis:
         run_config.apis.append("responses")

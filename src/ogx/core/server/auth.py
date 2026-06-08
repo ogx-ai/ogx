@@ -98,7 +98,12 @@ class AuthenticationMiddleware:
         self.auth_provider = create_auth_provider(auth_config)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
-        if scope["type"] == "http":
+        # Authenticate both HTTP requests and WebSocket handshakes. WebSocket
+        # connections carry their bearer token in the handshake headers just like
+        # HTTP, but skip this middleware unless we handle the "websocket" scope
+        # type explicitly (otherwise they reach the app unauthenticated).
+        if scope["type"] in ("http", "websocket"):
+            is_websocket = scope["type"] == "websocket"
             # Find the route and check if authentication is required
             path = scope.get("path", "")
             method = scope.get("method", "GET")
@@ -106,17 +111,20 @@ class AuthenticationMiddleware:
             if not hasattr(self, "route_impls"):
                 self.route_impls = initialize_route_impls(self.impls)
 
+            # WebSocket routes are not part of the generated webmethod table, so
+            # the require_authentication opt-out only applies to HTTP routes.
             webmethod = None
-            try:
-                _, _, _, webmethod = find_matching_route(method, path, self.route_impls)
-            except ValueError:
-                # If no matching endpoint is found, pass here to run auth anyways
-                pass
+            if not is_websocket:
+                try:
+                    _, _, _, webmethod = find_matching_route(method, path, self.route_impls)
+                except ValueError:
+                    # If no matching endpoint is found, pass here to run auth anyways
+                    pass
 
-            # If webmethod explicitly sets require_authentication=False, allow without auth
-            if webmethod and webmethod.require_authentication is False:
-                logger.debug("Allowing unauthenticated access to endpoint", path=path)
-                return await self.app(scope, receive, send)
+                # If webmethod explicitly sets require_authentication=False, allow without auth
+                if webmethod and webmethod.require_authentication is False:
+                    logger.debug("Allowing unauthenticated access to endpoint", path=path)
+                    return await self.app(scope, receive, send)
 
             # Handle authentication
             if self.auth_provider.requires_http_bearer:
@@ -125,10 +133,12 @@ class AuthenticationMiddleware:
 
                 if not auth_header:
                     error_msg = self.auth_provider.get_auth_error_message(scope)
-                    return await self._send_auth_error(send, error_msg)
+                    return await self._send_auth_error(send, error_msg, is_websocket=is_websocket)
 
                 if not auth_header.startswith("Bearer "):
-                    return await self._send_auth_error(send, "Invalid Authorization header format")
+                    return await self._send_auth_error(
+                        send, "Invalid Authorization header format", is_websocket=is_websocket
+                    )
 
                 token = auth_header.split("Bearer ", 1)[1]
             else:
@@ -139,19 +149,21 @@ class AuthenticationMiddleware:
                 validation_result = await self.auth_provider.validate_token(token, scope)
             except AuthServiceUnavailableError as e:
                 logger.warning("Authentication service unavailable", error=str(e))
-                return await self._send_auth_error(send, str(e), status=503)
+                return await self._send_auth_error(send, str(e), status=503, is_websocket=is_websocket)
             except httpx.TimeoutException:
                 logger.warning("Authentication request timed out")
-                return await self._send_auth_error(send, "Authentication service timeout", status=503)
+                return await self._send_auth_error(
+                    send, "Authentication service timeout", status=503, is_websocket=is_websocket
+                )
             except TokenValidationError as e:
                 logger.warning("Token validation failed", error=str(e))
-                return await self._send_auth_error(send, str(e))
+                return await self._send_auth_error(send, str(e), is_websocket=is_websocket)
             except ValueError as e:
                 logger.warning("Authentication error", error=str(e))
-                return await self._send_auth_error(send, str(e))
+                return await self._send_auth_error(send, str(e), is_websocket=is_websocket)
             except Exception:
                 logger.exception("Error during authentication")
-                return await self._send_auth_error(send, "Authentication service error")
+                return await self._send_auth_error(send, "Authentication service error", is_websocket=is_websocket)
 
             # Store the client ID in the request scope for downstream use
             # (e.g., access control, logging, per-client context).
@@ -169,7 +181,12 @@ class AuthenticationMiddleware:
 
         return await self.app(scope, receive, send)
 
-    async def _send_auth_error(self, send: Send, message: str, status: int = 401) -> None:
+    async def _send_auth_error(self, send: Send, message: str, status: int = 401, is_websocket: bool = False) -> None:
+        if is_websocket:
+            # Reject the handshake before it is accepted. 4401 is the WebSocket
+            # convention for "unauthorized" (4000-4999 is the app-defined range).
+            await send({"type": "websocket.close", "code": 4401})
+            return
         await send(
             {
                 "type": "http.response.start",
@@ -194,14 +211,16 @@ class RouteAuthorizationMiddleware:
         self.route_policy = route_policy
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
-        # Only process HTTP requests
-        if scope["type"] != "http":
+        # Authorize HTTP requests and WebSocket handshakes; everything else
+        # (e.g. lifespan) passes through untouched.
+        if scope["type"] not in ("http", "websocket"):
             return await self.app(scope, receive, send)
 
         # If no route policy configured, allow all routes (backward compatible)
         if not self.route_policy:
             return await self.app(scope, receive, send)
 
+        is_websocket = scope["type"] == "websocket"
         route = scope.get("path", "")
         # Normalize route: remove trailing slash (except for root "/")
         if route != "/" and route.endswith("/"):
@@ -213,7 +232,10 @@ class RouteAuthorizationMiddleware:
         # Check if user has permission to access this route
         if not self._is_route_allowed(route, user):
             return await self._send_error(
-                send, f"Access denied: insufficient permissions for route {route}", status=403
+                send,
+                f"Access denied: insufficient permissions for route {route}",
+                status=403,
+                is_websocket=is_websocket,
             )
 
         return await self.app(scope, receive, send)
@@ -369,8 +391,12 @@ class RouteAuthorizationMiddleware:
         # No conditions specified - rule applies regardless of user
         return True
 
-    async def _send_error(self, send: Send, message: str, status: int = 403) -> None:
+    async def _send_error(self, send: Send, message: str, status: int = 403, is_websocket: bool = False) -> None:
         """Send an error response."""
+        if is_websocket:
+            # 4403 mirrors the HTTP 403 forbidden in the app-defined close range.
+            await send({"type": "websocket.close", "code": 4403})
+            return
         await send(
             {
                 "type": "http.response.start",

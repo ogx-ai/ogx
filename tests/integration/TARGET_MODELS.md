@@ -14,15 +14,15 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `bedrock` | `bedrock` | library client only; 3 roots |
 | `base` | `ollama-postgres` | server client only; Postgres store |
 | `vision` | `ollama-vision` | `test_vision_inference.py` only |
-| `responses` | `gpt` | `responses` only; Responses coverage: 130/130 (100%) |
-| `responses` | `azure` | `responses` only; Responses coverage: 111/130 (85%) |
-| `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 130/130 (100%) |
-| `responses` | `watsonx` | `responses` only; Responses coverage: 53/130 (41%) |
-| `responses` | `vertexai` | `responses` only; Responses coverage: 70/130 (54%) |
-| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/130 (21%) |
+| `responses` | `gpt` | `responses` only; Responses coverage: 136/136 (100%) |
+| `responses` | `azure` | `responses` only; Responses coverage: 111/136 (82%) |
+| `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 136/136 (100%) |
+| `responses` | `watsonx` | `responses` only; Responses coverage: 53/136 (39%) |
+| `responses` | `vertexai` | `responses` only; Responses coverage: 70/136 (51%) |
+| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/136 (20%) |
 | `base-vllm-subset` | `vllm` | `inference` only |
-| `vllm-reasoning` | `vllm` | `test_reasoning.py` only; Responses coverage: 3/130 (2%) |
-| `ollama-reasoning` | `ollama-reasoning` | 3 roots; Responses coverage: 2/130 (2%) |
+| `vllm-reasoning` | `vllm` | `test_reasoning.py` only; Responses coverage: 3/136 (2%) |
+| `ollama-reasoning` | `ollama-reasoning` | 3 roots; Responses coverage: 2/136 (1%) |
 | `messages` | `ollama` | `messages` only |
 | `messages-openai` | `gpt` | `messages` only |
 | `interactions` | `gemini` | `interactions` only |
@@ -74,12 +74,12 @@ This section is derived from the same replay recordings used to generate `docs/d
 
 | Provider | Tested | Passing | Coverage |
 |----------|--------|---------|----------|
-| OpenAI | 130 | 130 | 100% |
-| Azure | 111 | 111 | 85% |
-| Vertex AI | 70 | 70 | 54% |
-| WatsonX | 53 | 53 | 41% |
-| Bedrock | 27 | 27 | 21% |
-| Ollama | 2 | 2 | 2% |
+| OpenAI | 136 | 136 | 100% |
+| Azure | 111 | 111 | 82% |
+| Vertex AI | 70 | 70 | 51% |
+| WatsonX | 53 | 53 | 39% |
+| Bedrock | 27 | 27 | 20% |
 | vLLM | 3 | 3 | 2% |
+| Ollama | 2 | 2 | 1% |
 
-Total Responses features counted: 130.
+Total Responses features counted: 136.

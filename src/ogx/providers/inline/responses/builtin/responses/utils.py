@@ -547,11 +547,15 @@ def is_function_tool_call(
 async def run_guardrails(
     moderation_endpoint: str | None,
     messages: str,
+    headers: dict[str, str] | None = None,
 ) -> str | None:
     """Run content moderation by calling an external OpenAI-compatible moderation endpoint.
 
     The endpoint must conform to the OpenAI Moderations API response format:
     {"id": "...", "model": "...", "results": [{"flagged": bool, "categories": {...}, ...}]}
+
+    This function fails closed: any error communicating with the moderation endpoint
+    or parsing its response returns a blocking message rather than allowing content through.
     """
     if not messages or not moderation_endpoint:
         return None
@@ -560,14 +564,19 @@ async def run_guardrails(
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
         try:
-            resp = await client.post(moderation_endpoint, json={"input": messages})
+            resp = await client.post(moderation_endpoint, json={"input": messages}, headers=headers)
             resp.raise_for_status()
-        except httpx.HTTPError:
+        except (httpx.HTTPError, httpx.InvalidURL):
             logger.warning("Failed to call moderation endpoint", endpoint=moderation_endpoint)
-            return None
+            return "Failed to validate content: moderation service unavailable"
 
-    data = resp.json()
-    results = data.get("results")
+    try:
+        data = resp.json()
+    except Exception:
+        logger.warning("Failed to parse moderation response as JSON", endpoint=moderation_endpoint)
+        return "Failed to validate content: moderation service returned invalid response"
+
+    results = data.get("results") if isinstance(data, dict) else None
     if not isinstance(results, list):
         logger.warning(
             "Moderation endpoint returned unexpected format (expected OpenAI-compatible "
@@ -575,13 +584,24 @@ async def run_guardrails(
             endpoint=moderation_endpoint,
             response_keys=list(data.keys()) if isinstance(data, dict) else type(data).__name__,
         )
-        return None
+        return "Failed to validate content: moderation response has unexpected format"
+    if not results:
+        logger.warning("Moderation endpoint returned no results", endpoint=moderation_endpoint)
+        return "Failed to validate content: moderation response has unexpected format"
 
     for result in results:
         if not isinstance(result, dict):
-            continue
-        if result.get("flagged", False):
-            categories = result.get("categories", {})
+            logger.warning("Failed to parse moderation result entry", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        flagged = result.get("flagged")
+        if not isinstance(flagged, bool):
+            logger.warning("Failed to parse moderation result flagged field", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        categories = result.get("categories", {})
+        if not isinstance(categories, dict):
+            logger.warning("Failed to parse moderation result categories", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        if flagged:
             flagged_cats = [c for c, f in categories.items() if f]
             msg = "Content blocked by safety guardrails"
             if flagged_cats:
