@@ -238,16 +238,24 @@ async def _send_ws_error(
     message: str,
     param: str | None = None,
 ) -> None:
-    """Send a WebSocket error envelope (matches the OpenResponses error event)."""
-    await websocket.send_text(
-        json.dumps(
-            {
-                "type": "error",
-                "status": status,
-                "error": {"code": code, "message": message, "param": param},
-            }
+    """Send a WebSocket error envelope (matches the OpenResponses error event).
+
+    Sending is best-effort: if the client has already disconnected (a common
+    cause of the failure we are reporting), the send raises and is suppressed so
+    it does not mask the original error or produce a spurious traceback.
+    """
+    try:
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "error",
+                    "status": status,
+                    "error": {"code": code, "message": message, "param": param},
+                }
+            )
         )
-    )
+    except Exception:
+        logger.debug("Failed to send WebSocket error envelope; client likely disconnected")
 
 
 async def _handle_ws_responses_turn(
@@ -317,6 +325,10 @@ async def _handle_ws_responses_turn(
         async for event in result:
             await websocket.send_text(event.model_dump_json())
             event_type = getattr(event, "type", None)
+            # An incomplete response (e.g. truncated at max_output_tokens) is a
+            # successful terminal state and remains continuable, matching the
+            # HTTP previous_response_id path which can continue any stored
+            # terminal response. Only response.failed is treated as a failure.
             if event_type in ("response.completed", "response.incomplete"):
                 final_response = getattr(event, "response", None)
             elif event_type == "response.failed":
