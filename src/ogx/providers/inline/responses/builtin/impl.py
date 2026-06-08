@@ -158,6 +158,7 @@ class BuiltinResponsesImpl(Responses):
             reasoning=request.reasoning,
             service_tier=request.service_tier,
             metadata=request.metadata,
+            safety_identifier=request.safety_identifier,
             background=request.background,
             truncation=request.truncation,
             top_logprobs=request.top_logprobs,

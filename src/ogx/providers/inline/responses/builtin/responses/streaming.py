@@ -247,6 +247,7 @@ class StreamingResponseOrchestrator:
         max_output_tokens: int | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
         include: list[ResponseItemInclude] | None = None,
         store: bool | None = True,
         truncation: ResponseTruncation | None = None,
@@ -282,6 +283,7 @@ class StreamingResponseOrchestrator:
         # This allows us to update it with the actual tier returned by the provider
         self.service_tier = service_tier.value if service_tier is not None else None
         self.metadata = metadata
+        self.safety_identifier = safety_identifier
         self.truncation = truncation
         self.top_logprobs = top_logprobs
         self.stream_options = stream_options
@@ -336,6 +338,7 @@ class StreamingResponseOrchestrator:
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
+            safety_identifier=self.safety_identifier,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
@@ -392,6 +395,7 @@ class StreamingResponseOrchestrator:
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
+            safety_identifier=self.safety_identifier,
             truncation=self.truncation or ResponseTruncation.disabled,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,

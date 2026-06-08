@@ -3350,6 +3350,10 @@ components:
         store:
           type: boolean
           title: Store
+        safety_identifier:
+          anyOf:
+          - type: string
+          - type: 'null'
         input:
           items:
             $ref: '#/components/schemas/OpenAIResponseMessageOutputUnion'
@@ -3445,6 +3449,7 @@ components:
             - medium
             - high
           - type: 'null'
+          default: medium
       type: object
       title: OpenAIResponseText
       description: Text response configuration for OpenAI responses.
@@ -3763,6 +3768,10 @@ components:
         store:
           type: boolean
           title: Store
+        safety_identifier:
+          anyOf:
+          - type: string
+          - type: 'null'
       type: object
       required:
       - created_at
