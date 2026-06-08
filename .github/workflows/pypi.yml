@@ -973,9 +973,15 @@ jobs:
           # suffix ("llama-stack" -> "llama", "ogx" -> "ogx").
           PACKAGE_NAME="${{ inputs.package_name || 'ogx' }}"
           CLI_NAME="${PACKAGE_NAME%-stack}"
+          # Backfilling a non-ogx (pre-rename) package pins old dependencies that
+          # can conflict with the latest OTel auto-instrumentation packages, so
+          # make the bootstrap best-effort for those builds. The ogx path stays
+          # strict.
+          if [ "$PACKAGE_NAME" == "ogx" ]; then OTEL_BEST_EFFORT=""; else OTEL_BEST_EFFORT="1"; fi
           {
             echo "package_name=${PACKAGE_NAME}"
             echo "cli_name=${CLI_NAME}"
+            echo "otel_best_effort=${OTEL_BEST_EFFORT}"
           } >> "$GITHUB_OUTPUT"
 
           if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
@@ -1032,4 +1038,5 @@ jobs:
             INSTALL_MODE=${{ steps.meta.outputs.install_mode }}
             PACKAGE_NAME=${{ steps.meta.outputs.package_name }}
             CLI_NAME=${{ steps.meta.outputs.cli_name }}
+            OTEL_BEST_EFFORT=${{ steps.meta.outputs.otel_best_effort }}
             ${{ steps.meta.outputs.version_arg }}
