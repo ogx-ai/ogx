@@ -98,6 +98,9 @@ RUN set -eux; \
 # depends on "<package>-api" without a version constraint, so an unpinned install
 # would resolve to the latest API package, which is incompatible with older
 # meta-package releases (e.g. llama-stack 0.5.2 + llama-stack-api 0.7.x).
+# The API package is installed first and best-effort: very old releases
+# (e.g. llama-stack < 0.4.0) bundled the API in the meta package and have no
+# separate "<package>-api" distribution, so a missing pin is not an error.
 RUN set -eux; \
     SAVED_UV_EXTRA_INDEX_URL="${UV_EXTRA_INDEX_URL:-}"; \
     SAVED_UV_INDEX_STRATEGY="${UV_INDEX_STRATEGY:-}"; \
@@ -116,13 +119,19 @@ RUN set -eux; \
     elif [ "$INSTALL_MODE" = "test-pypi" ]; then \
         uv pip install --no-cache fastapi libcst; \
         if [ -n "$TEST_PYPI_VERSION" ]; then \
-            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "${PACKAGE_NAME}==$TEST_PYPI_VERSION" "${PACKAGE_NAME}-api==$TEST_PYPI_VERSION"; \
+            if ! uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "${PACKAGE_NAME}-api==$TEST_PYPI_VERSION"; then \
+                echo "No ${PACKAGE_NAME}-api==$TEST_PYPI_VERSION found; assuming the API is bundled in ${PACKAGE_NAME}"; \
+            fi; \
+            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "${PACKAGE_NAME}==$TEST_PYPI_VERSION"; \
         else \
             uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "$PACKAGE_NAME"; \
         fi; \
     else \
         if [ -n "$PYPI_VERSION" ]; then \
-            uv pip install --no-cache "${PACKAGE_NAME}==$PYPI_VERSION" "${PACKAGE_NAME}-api==$PYPI_VERSION"; \
+            if ! uv pip install --no-cache "${PACKAGE_NAME}-api==$PYPI_VERSION"; then \
+                echo "No ${PACKAGE_NAME}-api==$PYPI_VERSION found; assuming the API is bundled in ${PACKAGE_NAME}"; \
+            fi; \
+            uv pip install --no-cache "${PACKAGE_NAME}==$PYPI_VERSION"; \
         else \
             uv pip install --no-cache "$PACKAGE_NAME"; \
         fi; \
