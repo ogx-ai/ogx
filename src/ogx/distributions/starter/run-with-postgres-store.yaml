@@ -221,6 +221,12 @@ providers:
     config:
       api_key: ${env.TAVILY_SEARCH_API_KEY:=}
       max_results: 3
+  - provider_id: nimble-search
+    provider_type: remote::nimble-search
+    config:
+      api_key: ${env.NIMBLE_API_KEY:=}
+      max_results: 3
+      search_depth: lite
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
