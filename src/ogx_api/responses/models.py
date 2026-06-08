@@ -188,6 +188,10 @@ class CreateResponseRequest(BaseModel):
         default=None,
         description="Dictionary of metadata key-value pairs to attach to the response.",
     )
+    safety_identifier: str | None = Field(
+        default=None,
+        description="A stable identifier used to associate the request with an end user, for safety monitoring. Echoed back on the response.",
+    )
     truncation: ResponseTruncation | None = Field(
         default=None,
         description="Controls how the service truncates input when it exceeds the model context window.",

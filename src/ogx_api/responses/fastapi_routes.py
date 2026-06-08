@@ -336,6 +336,11 @@ async def _handle_ws_responses_turn(
         if building_on is not None:
             session_cache.pop(building_on, None)
     elif final_response is not None and store is False:
+        # Only the latest response in a chain is ever needed for continuation.
+        # Evict the predecessor when extending it so a long-lived connection does
+        # not accumulate every turn's (growing) history.
+        if building_on is not None:
+            session_cache.pop(building_on, None)
         session_cache[final_response.id] = (
             sent_input,
             [item.model_dump() for item in final_response.output],
