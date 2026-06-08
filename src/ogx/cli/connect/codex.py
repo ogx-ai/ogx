@@ -64,7 +64,7 @@ class CodexServerDiscovery:
         default_headers = self.build_request_headers()
         client = OpenAI(
             base_url=base_url,
-            api_key=os.getenv("OGX_API_KEY", "").strip() or "unused",
+            api_key=os.getenv("OGX_API_KEY", "unused"),
             timeout=self.timeout_seconds,
             default_headers=default_headers or None,
         )
@@ -132,19 +132,13 @@ class CodexCatalogBuilder:
     """Translate discovered OGX models into the generated Codex catalog schema."""
 
     DEFAULT_CONTEXT_WINDOW = 128000
-    DEFAULT_BASE_INSTRUCTIONS = (
-        "You are Codex, a coding agent. You and the user share the same workspace and "
-        "collaborate to achieve the user's goals."
-    )
 
     def __init__(
         self,
         *,
         default_context_window: int = DEFAULT_CONTEXT_WINDOW,
-        default_base_instructions: str = DEFAULT_BASE_INSTRUCTIONS,
     ) -> None:
         self.default_context_window = default_context_window
-        self.default_base_instructions = default_base_instructions
 
     def build_model_catalog(
         self, available_models: list[DiscoveredCodexModel], default_model: str
@@ -182,7 +176,7 @@ class CodexCatalogBuilder:
             "default_service_tier": None,
             "availability_nux": None,
             "upgrade": None,
-            "base_instructions": self.default_base_instructions,
+            "base_instructions": None,
             "model_messages": None,
             "supports_reasoning_summaries": False,
             "default_reasoning_summary": "auto",
@@ -345,7 +339,7 @@ class ConnectCodex(Subcommand):
             help="Default model ID. If omitted, the first available model is used.",
         )
         self.parser.add_argument(
-            "--base-url",
+            "--url",
             type=str,
             default=os.getenv("OGX_BASE_URL", self.DEFAULT_BASE_URL),
             help="OGX OpenAI-compatible API base URL, including /v1.",
@@ -362,7 +356,7 @@ class ConnectCodex(Subcommand):
         if not shutil.which("codex"):
             _exit_with_error("Failed to find 'codex' in PATH. Install it from https://github.com/openai/codex")
 
-        base_url = self.discovery.normalize_base_url(args.base_url)
+        base_url = self.discovery.normalize_base_url(args.url)
 
         models = self.discovery.fetch_models(base_url)
         if not models:

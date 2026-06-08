@@ -68,12 +68,12 @@ def _make_mock_client(models: list[MagicMock]) -> MagicMock:
 class TestArguments:
     def test_defaults(self, connect_codex: ConnectCodex) -> None:
         args = connect_codex.parser.parse_args([])
-        assert args.base_url == connect_codex.DEFAULT_BASE_URL
+        assert args.url == connect_codex.DEFAULT_BASE_URL
         assert args.model is None
 
-    def test_base_url_override(self, connect_codex: ConnectCodex) -> None:
-        args = connect_codex.parser.parse_args(["--base-url", "https://ogx.example.com/v1"])
-        assert args.base_url == "https://ogx.example.com/v1"
+    def test_url_override(self, connect_codex: ConnectCodex) -> None:
+        args = connect_codex.parser.parse_args(["--url", "https://ogx.example.com/v1"])
+        assert args.url == "https://ogx.example.com/v1"
 
     def test_model_override(self, connect_codex: ConnectCodex) -> None:
         args = connect_codex.parser.parse_args(["--model", "openai/gpt-4o"])
@@ -83,12 +83,12 @@ class TestArguments:
         args = connect_codex.parser.parse_args(["--exec", "Reply with only Paris"])
         assert args.exec_prompt == "Reply with only Paris"
 
-    def test_base_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OGX_BASE_URL", "https://ogx.example.com/custom/v1")
         subparsers = argparse.ArgumentParser().add_subparsers()
         instance = ConnectCodex(subparsers)
         args = instance.parser.parse_args([])
-        assert args.base_url == "https://ogx.example.com/custom/v1"
+        assert args.url == "https://ogx.example.com/custom/v1"
 
 
 class TestBaseUrlNormalization:
@@ -281,6 +281,7 @@ class TestSessionConfigGeneration:
         assert entry["slug"] == "openai/gpt-4o"
         assert entry["description"] == "Primary OGX model"
         assert entry["context_window"] == 256000
+        assert entry["base_instructions"] is None
         assert entry["supported_reasoning_levels"][0]["effort"] == "medium"
         assert entry["default_reasoning_level"] == "medium"
         assert entry["priority"] == 0
