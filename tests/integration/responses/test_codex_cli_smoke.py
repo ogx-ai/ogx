@@ -69,7 +69,7 @@ def test_codex_cli_smoke_uses_generated_ogx_profile(ogx_client: Any, text_model_
             "ogx.cli.ogx",
             "connect",
             "codex",
-            "--base-url",
+            "--url",
             base_url,
             "--model",
             text_model_id,
