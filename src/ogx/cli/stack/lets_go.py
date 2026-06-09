@@ -29,7 +29,7 @@ from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
 from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
-from ogx.core.stack import replace_env_vars, run_config_from_dynamic_config_spec
+from ogx.core.stack import extract_env_var_references, replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
@@ -242,6 +242,72 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     # Add responses to APIs if not already present
     if "responses" not in run_config.apis:
         run_config.apis.append("responses")
+
+    # Add web search providers in priority order: brave -> tavily -> bing
+    _web_search_order = [
+        ("remote::brave-search", "brave-search"),
+        ("remote::tavily-search", "tavily-search"),
+        ("remote::bing-search", "bing-search"),
+    ]
+    tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
+    existing_web_search: set[str] = {
+        p.provider_type
+        for p in run_config.providers["tool_runtime"]
+        if p.provider_type in {pt for pt, _ in _web_search_order}
+    }
+
+    added = False
+    all_env_vars: list[str] = []
+
+    for provider_type, provider_id in _web_search_order:
+        if provider_type in existing_web_search:
+            cprint(f"  ✓ {provider_id} (web search)", color="green")
+            added = True
+            continue
+
+        spec = tool_runtime_registry.get(provider_type)
+        if spec is None:
+            continue
+
+        try:
+            config_class = instantiate_class_type(spec.config_class)
+            config_template = config_class.sample_run_config(__distro_dir__=tempfile.gettempdir())
+        except Exception:
+            cprint(f"  ✗ {provider_id} (web search) — failed to construct config template", color="yellow")
+            continue
+
+        env_vars_in_template = extract_env_var_references(config_template)
+        all_env_vars.extend(env_vars_in_template)
+
+        if not any(os.environ.get(v) for v in env_vars_in_template):
+            continue
+
+        try:
+            resolved_config = replace_env_vars(config_template)
+            config_class(**resolved_config)  # validate construction
+        except Exception:
+            cprint(f"  ✗ {provider_id} (web search) — failed to construct config with env vars", color="yellow")
+            continue  # noqa S112 -- exception is reported to the user via cprint before continuing
+
+        run_config.providers["tool_runtime"].append(
+            Provider(
+                provider_id=provider_id,
+                provider_type=provider_type,
+                config=resolved_config,
+            )
+        )
+        cprint(f"  ✓ {provider_id} (web search)", color="green")
+        added = True
+
+    if not added:
+        if all_env_vars:
+            vars_str = ", ".join(dict.fromkeys(all_env_vars))
+            cprint(
+                f"  ✗ web search disabled (no API key set — set {vars_str})",
+                color="yellow",
+            )
+        else:
+            cprint("  ✗ web search disabled", color="yellow")
 
     cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
