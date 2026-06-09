@@ -558,7 +558,6 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("TAVILY_SEARCH_API_KEY", raising=False)
         monkeypatch.delenv("BING_API_KEY", raising=False)
 
-
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
             _add_file_search_and_responses(
                 StackConfig(
@@ -587,7 +586,6 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
         monkeypatch.setenv("TAVILY_SEARCH_API_KEY", "tavily-key")
         monkeypatch.delenv("BING_API_KEY", raising=False)
-
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
             _add_file_search_and_responses(

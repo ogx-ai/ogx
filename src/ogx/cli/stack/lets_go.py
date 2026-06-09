@@ -289,7 +289,6 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             cprint(f"  ✗ {provider_id} (web search) — failed to construct config with env vars", color="yellow")
             continue  # noqa S112 -- exception is reported to the user via cprint before continuing
 
-
         run_config.providers["tool_runtime"].append(
             Provider(
                 provider_id=provider_id,
