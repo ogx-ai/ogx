@@ -11,7 +11,7 @@ This RFC proposes adding three new capabilities to OGX:
 
 1. **Skills API** — CRUD endpoints for managing versioned skill bundles (zip archives with `SKILL.md` manifests), conforming to the [OpenAI Skills API](https://developers.openai.com/api/docs/guides/tools-skills) and the open [Agent Skills standard](https://agentskills.io).
 2. **Containers API** — CRUD endpoints for managing sandboxed execution environments and their files, conforming to the [OpenAI Containers API](https://developers.openai.com/api/reference/resources/containers).
-3. **ContainerRuntime provider** — A new provider protocol abstracting over container execution backends, with three implementations: `inline::docker` (Docker/Podman via Docker API), `inline::openshell` ([OpenShell](https://docs.nvidia.com/openshell/latest/home) Gateway API for policy-enforced isolation), and `remote::kubernetes` (direct Kubernetes API).
+3. **ContainerRuntime provider** — A new provider protocol abstracting over container execution backends, with three implementations: `remote::reference` (Docker/Podman via [Docker Engine API](https://docs.docker.com/reference/api/engine/)), `remote::openshell` ([OpenShell](https://github.com/NVIDIA/OpenShell) Gateway API for policy-enforced isolation), and `remote::kubernetes` (direct Kubernetes API).
 
 Together, these enable OGX to support the `shell` tool and `code_interpreter` tool in the Responses API, executing model-generated commands in secure, sandboxed containers with skill code mounted into the filesystem.
 
@@ -32,14 +32,8 @@ Both tools require a secure execution substrate: sandboxed containers with confi
 
 - The OpenAI Skills API and Shell tool are generally available.
 - The `ResponseItemInclude` enum in `ogx_api/responses/models.py` already references `code_interpreter_call.outputs` as an include option, indicating this capability was anticipated, though no actual tool types, input types, or output item types for shell or code_interpreter exist yet in the codebase.
-- NVIDIA OpenShell provides a viable sandbox runtime for policy-enforced container isolation.
+- Multiple open-source sandbox runtimes exist ([OpenShell](https://github.com/NVIDIA/OpenShell), gVisor, Kata Containers) that can back a container execution provider.
 - Users evaluating OGX for production agent workloads need feature parity with OpenAI's tool execution capabilities.
-
-### External projects
-
-**NVIDIA OpenShell** provides a lightweight, policy-driven sandbox runtime. Its architecture has four components: a Gateway (control plane for sandbox lifecycle and auth), Sandboxes (isolated containers with policy-enforced egress), a Policy Engine (declarative YAML constraints across filesystem/network/process/inference layers), and a Privacy Router. It supports Docker, Podman, VM (MicroVM-backed), and Kubernetes compute drivers. When backed by K8s, the OpenShell Gateway runs as a StatefulSet and creates sandbox pods directly in a configured namespace — it owns the full sandbox lifecycle. The MicroVM driver (~125ms boot, ~5MB overhead) runs standalone without Docker, using Hypervisor.framework on macOS and KVM on Linux.
-
-**[Kagenti](https://kagenti.github.io/.github/)** — Kagenti's architecture is actively evolving. How it relates to OGX's container execution model is TBD and will be addressed in a follow-up once the Kagenti architecture stabilizes.
 
 ## Design Decisions
 
@@ -47,11 +41,12 @@ Both tools require a secure execution substrate: sandboxed containers with confi
 
 The design follows OGX's established pattern: each API gets its own module in `ogx_api/` with models, protocol, and routes. A new `ContainerRuntime` provider protocol abstracts over execution backends.
 
-Three alternatives were considered:
+Four alternatives were considered:
 
 1. **Two APIs + ContainerRuntime provider** (chosen) — Clean separation of concerns, OpenAI-compatible API surface (pending wire-level validation), follows existing OGX patterns. The API layer (HTTP routing and validation) is separate from the runtime layer (actual container orchestration).
-2. **Single unified "Sandbox" API** — Merges containers and skills into one API. Simpler internally but diverges from OpenAI's resource separation, making it harder to evolve skill management (sharing, discovery) independently of container lifecycle.
-3. **Tool Runtime extension only** — Extends existing `ToolRuntime` provider without new API surfaces. Minimal new code but doesn't expose the Containers/Skills CRUD API, breaking OpenAI compatibility for clients that pre-create containers or manage skills.
+2. **Subprocess execution** — Run shell commands as subprocesses in the OGX server process. Simplest possible path but provides no isolation: no filesystem sandbox, no network restrictions, no resource limits. Commands run with the server's permissions. Rejected because any production use of model-generated shell commands requires a security boundary.
+3. **Single unified "Sandbox" API** — Merges containers and skills into one API. Simpler internally but diverges from OpenAI's resource separation, making it harder to evolve skill management (sharing, discovery) independently of container lifecycle.
+4. **Tool Runtime extension only** — Extends existing `ToolRuntime` provider without new API surfaces. Minimal new code but doesn't expose the Containers/Skills CRUD API, breaking OpenAI compatibility for clients that pre-create containers or manage skills.
 
 ### Unified Execution Substrate
 
@@ -59,21 +54,19 @@ Containers serve as the unified execution substrate for both `shell_call` and `c
 
 ### Provider Model: Three ContainerRuntime Providers
 
-OGX is an API compatibility layer, not an infrastructure orchestrator. The `ContainerRuntime` provider has three implementations, each named after the technology it talks to (following the same convention as `inline::faiss`, `inline::chromadb`, `inline::sqlite-vec`, etc.):
+OGX is an API compatibility layer, not an infrastructure orchestrator. All three `ContainerRuntime` providers are `remote::` because OGX acts as a client to an external daemon or API — consistent with how `remote::ollama` and `remote::vllm` work even when the daemon runs locally. In OGX's architecture, `inline::` means code running in the OGX Python process itself (e.g., `inline::sentence-transformers`); `remote::` means OGX is a client to a separate process:
 
 | Provider | OGX talks to | Sandbox lifecycle owned by | When to use it |
 |----------|-------------|---------------------------|----------------|
-| `inline::docker` | Docker API | OGX directly | Simplest path. Docker/Podman on your machine, basic container isolation. Dev, CI, local demos. |
-| `inline::openshell` | [OpenShell](https://docs.nvidia.com/openshell/latest/home) Gateway API | OpenShell Gateway | Policy-enforced isolation with your choice of compute driver (Docker, Podman, MicroVM, or K8s). The Gateway owns the full sandbox lifecycle — when backed by K8s, the Gateway creates and manages sandbox pods directly. |
-| `remote::kubernetes` | Kubernetes API | K8s cluster (no OpenShell) | Direct pod submission. OGX sets `sandbox_required: true`; the cluster enforces isolation via native mechanisms (RuntimeClass, NetworkPolicy, etc.). |
+| `remote::reference` | [Docker Engine API](https://docs.docker.com/reference/api/engine/) | OGX (via Docker/Podman daemon) | Simplest path. Docker or Podman on your machine, basic container isolation. Dev, CI, local demos. |
+| `remote::openshell` | [OpenShell Gateway API](https://github.com/NVIDIA/OpenShell) | OpenShell Gateway | Policy-enforced isolation with pluggable compute drivers (container, MicroVM, or K8s). |
+| `remote::kubernetes` | Kubernetes API | K8s cluster | Direct pod submission. OGX sets `sandbox_required: true`; the cluster enforces isolation via native mechanisms (RuntimeClass, NetworkPolicy, etc.). |
 
-`inline::docker` is `inline::` (not `remote::`) because the provider code ships in-tree and manages container lifecycle directly. Docker's API is the same whether the daemon is local or remote — you just change the socket URL — so there's no need for a separate `remote::docker` provider.
-
-The key distinction between `inline::openshell` on K8s and `remote::kubernetes` is **who owns sandbox policy**. With `inline::openshell`, OGX controls policy through the OpenShell Gateway, which runs as a StatefulSet and creates sandbox pods in a configured namespace. With `remote::kubernetes`, OGX submits pods and the cluster handles everything — OGX doesn't know or care how sandboxing is enforced.
+The key distinction between `remote::openshell` on K8s and `remote::kubernetes` is **who owns sandbox policy**. With `remote::openshell`, OGX controls policy through the Gateway. With `remote::kubernetes`, OGX submits pods and the cluster handles everything.
 
 ### Operator-Configurable Security Policy
 
-Security policy defaults to network-disabled containers (matching OpenAI) but is operator-configurable. For `remote::kubernetes`, sandbox enforcement is a cluster-side responsibility — OGX passes the `sandbox_required` flag and policy configuration, and the cluster infrastructure enforces it. For `inline::docker`, basic policy uses Docker network and volume settings. For `inline::openshell`, the OpenShell Gateway enforces its four-layer security policy (filesystem, network, process, inference). Request-level policy can only restrict beyond operator defaults, never expand.
+Security policy defaults to network-disabled containers (matching OpenAI) but is operator-configurable. Operators can set `NetworkPolicy` type to `allowlist` with specific domains to permit outbound access (e.g., internet access while isolating from host infrastructure) — not just `--network=none`. For `remote::kubernetes`, sandbox enforcement is a cluster-side responsibility — OGX passes the `sandbox_required` flag and policy configuration, and the cluster infrastructure enforces it. For `remote::reference`, basic policy uses Docker/Podman network and volume settings. For `remote::openshell`, the Gateway enforces policy. Request-level policy can only restrict beyond operator defaults, never expand.
 
 ### OpenAI API Conformance
 
@@ -226,7 +219,7 @@ All endpoints are prefixed with `/v1alpha`.
 class Container(BaseModel):
     id: str
     name: str | None
-    status: Literal["pending", "running", "stopped", "expired"]
+    status: Literal["pending", "running", "stopped", "expired", "failed"]
     memory_limit: Literal["1g", "4g", "16g", "64g"]
     expires_after: ExpiresAfter | None
     network_policy: NetworkPolicy
@@ -389,22 +382,27 @@ class ShellOutcome(BaseModel):
 
 ### Provider Implementations
 
-#### `inline::docker` — Docker/Podman Container Execution
+#### `remote::reference` — Docker/Podman Container Execution
 
-The simplest path. Talks to the Docker API to manage containers directly. Also works with Podman via its Docker-compatible API mode — no separate config needed, just point Podman at the Docker socket.
+The simplest path. Talks to the [Docker Engine API](https://docs.docker.com/reference/api/engine/) to manage containers directly. Also works with Podman, which exposes a Docker-compatible API — configure `base_url` to point at the Podman socket (e.g., `unix:///run/podman/podman.sock`).
 
 - Uses the Docker SDK for Python (`docker` package) to manage containers.
 - Default container image: A Debian-based image with common language runtimes (Python, Node, Go, Java). The exact versions should track what OpenAI's hosted containers provide at the time of implementation.
 - Commands executed via `container.exec_run()`.
 - Skill bundles extracted into `/mnt/skills/` via volume mounts or `container.put_archive()`.
-- Network isolation via Docker network settings (`--network=none` for disabled).
+- Network isolation: `--network=none` for `disabled` policy; Docker/Podman network configuration for `allowlist` policy with domain-level egress rules.
 - Resource limits via Docker cgroup settings (`--memory`, `--cpus`).
-- Container expiration managed by a background asyncio task that periodically checks `last_active_at`.
+- Container expiration via Docker's native `--stop-timeout` and health check mechanisms. No custom background asyncio task needed.
 
 Configuration:
 
 ```python
-class DockerContainerRuntimeConfig(BaseModel):
+class ReferenceContainerRuntimeConfig(BaseModel):
+    base_url: str | None = Field(
+        default=None,
+        description="Docker/Podman daemon URL (e.g., unix:///var/run/docker.sock). "
+        "Uses default socket if not set.",
+    )
     default_image: str = Field(
         default="debian:12-slim",
         description="Default container image for sandbox environments",
@@ -421,15 +419,11 @@ class DockerContainerRuntimeConfig(BaseModel):
 
 **Security trade-offs:** Provides basic container isolation via Docker/Podman but lacks fine-grained policy enforcement. Suitable for development, CI, and demos where preventing accidental `rm -rf /` matters more than hardened multi-tenant isolation.
 
-#### `inline::openshell` — OpenShell Gateway Execution
+#### `remote::openshell` — OpenShell Gateway Execution
 
-Talks to the [OpenShell Gateway API](https://docs.nvidia.com/openshell/latest/home) for policy-enforced isolation. The Gateway owns the full sandbox lifecycle and supports multiple compute drivers:
+Talks to the [OpenShell Gateway API](https://github.com/NVIDIA/OpenShell) for policy-enforced isolation. The Gateway owns the full sandbox lifecycle and supports multiple compute drivers (container, MicroVM, K8s).
 
-- **Docker/Podman** — Container isolation with OpenShell's four-layer policy enforcement (filesystem, network, process, inference).
-- **MicroVM** — Lightweight VM isolation (~125ms boot, ~5MB overhead). Runs standalone without Docker, using Hypervisor.framework on macOS and KVM on Linux.
-- **Kubernetes** — The Gateway runs as a StatefulSet and creates sandbox pods directly in a configured namespace. OGX controls policy through the Gateway; the Gateway manages the pods.
-
-This is why `inline::openshell` is its own provider rather than a config flag on `inline::docker` — OpenShell's MicroVM driver is a genuinely different container lifecycle API that doesn't go through Docker at all.
+`remote::openshell` is its own provider rather than a config flag on `remote::reference` because the Gateway exposes a different API and lifecycle model — OGX delegates policy enforcement entirely to the Gateway rather than managing Docker settings directly.
 
 Configuration:
 
@@ -459,7 +453,7 @@ The production-grade provider for cluster deployments. OGX submits container wor
 - Creates containers as Kubernetes pods via the K8s API.
 - Files uploaded to containers via pod exec or init containers.
 - Shell commands executed via pod exec.
-- Container expiration managed via K8s TTL controllers or OGX-side cleanup.
+- Container expiration managed via K8s TTL controllers or Job `activeDeadlineSeconds`.
 - OGX exposes a `sandbox_required` knob: when `true`, OGX annotates pods to signal that the cluster must run them in a sandboxed environment. How the cluster enforces this (OpenShell, agent-sandbox, gVisor, Kata Containers, etc.) is determined by cluster-side admission controllers, operators, or runtime classes.
 
 Configuration:
@@ -498,7 +492,7 @@ class KubernetesContainerRuntimeConfig(BaseModel):
 - **Native K8s**: Use RuntimeClasses (gVisor, Kata Containers), Pod Security Standards, and NetworkPolicies directly.
 - **Future alternatives**: Any sandbox technology that integrates with Kubernetes runtime classes or admission controllers can be used without changing OGX code.
 
-> **Note:** If you want OpenShell's policy enforcement on K8s, use `inline::openshell` instead — the Gateway runs as a StatefulSet and manages sandbox pods directly. `remote::kubernetes` is for direct K8s API submission without OpenShell in the loop.
+> **Note:** If you want OpenShell's policy enforcement on K8s, use `remote::openshell` instead — the Gateway manages sandbox pods directly. `remote::kubernetes` is for direct K8s API submission without OpenShell in the loop.
 
 ### Dependency Graph
 
@@ -672,13 +666,13 @@ Operators configure default policy and ceilings via distribution config:
 ```yaml
 # Development: Docker/Podman on your machine
 container_runtime:
-  provider_type: inline::docker
+  provider_type: remote::reference
   config:
     default_image: debian:12-slim
 
 # Policy-enforced isolation via OpenShell Gateway
 container_runtime:
-  provider_type: inline::openshell
+  provider_type: remote::openshell
   config:
     gateway_url: http://localhost:8443
     default_image: debian:12-slim
@@ -704,16 +698,16 @@ If a request specifies a domain not in the operator's `allowed_network_domains`,
 
 ### Policy Enforcement by Backend
 
-| Concern | `inline::docker` | `inline::openshell` | `remote::kubernetes` |
-|---------|------------------|---------------------|---------------------|
-| Network | Docker `--network=none` (basic) | OpenShell policy engine | Cluster-side (K8s NetworkPolicy, etc.) |
+| Concern | `remote::reference` | `remote::openshell` | `remote::kubernetes` |
+|---------|---------------------|---------------------|---------------------|
+| Network | Docker/Podman network settings | OpenShell policy engine | Cluster-side (K8s NetworkPolicy, etc.) |
 | Filesystem | Docker volume mounts (coarse) | OpenShell path rules | Cluster-side (volume mounts, seccomp) |
 | Process | Docker default seccomp profile | OpenShell syscall restrictions | Cluster-side (Pod Security Standards) |
 | Identity | Docker user namespace (basic) | OpenShell manages identity | Cluster-side (service accounts, SPIRE) |
 | Resources | Docker `--memory` / `--cpus` cgroups | OpenShell manages cgroups | K8s resource requests/limits |
 | Credential injection | Environment variables in `exec_run()` | OpenShell manages secrets | K8s Secrets |
 
-> **Note:** For `remote::kubernetes`, security enforcement is entirely a cluster-side responsibility. OGX signals intent (`sandbox_required`, `NetworkPolicy`) but does not enforce. For `inline::docker`, security isolation is basic container-level. For `inline::openshell`, the OpenShell Gateway provides four-layer policy enforcement (filesystem, network, process, inference) regardless of compute driver.
+> **Note:** For `remote::kubernetes`, security enforcement is entirely a cluster-side responsibility. OGX signals intent (`sandbox_required`, `NetworkPolicy`) but does not enforce. For `remote::reference`, security isolation is basic container-level. For `remote::openshell`, the Gateway provides policy enforcement regardless of compute driver.
 
 ### Credential Masking
 
@@ -749,16 +743,6 @@ src/ogx/providers/
     containers.py          # available_providers() for Containers
 
   inline/
-    container_runtime/
-      docker/
-        __init__.py        # get_provider_impl()
-        config.py          # DockerContainerRuntimeConfig
-        impl.py            # DockerContainerRuntime
-      openshell/
-        __init__.py        # get_provider_impl()
-        config.py          # OpenShellContainerRuntimeConfig
-        impl.py            # OpenShellContainerRuntime
-
     skills/
       builtin/
         __init__.py        # get_provider_impl()
@@ -771,6 +755,14 @@ src/ogx/providers/
 
   remote/
     container_runtime/
+      reference/
+        __init__.py        # get_adapter_impl()
+        config.py          # ReferenceContainerRuntimeConfig
+        impl.py            # ReferenceContainerRuntime
+      openshell/
+        __init__.py        # get_adapter_impl()
+        config.py          # OpenShellContainerRuntimeConfig
+        impl.py            # OpenShellContainerRuntime
       kubernetes/
         __init__.py        # get_adapter_impl()
         config.py          # KubernetesContainerRuntimeConfig
@@ -792,7 +784,7 @@ tests/
 - `src/ogx_api/openai_responses.py` — Add `OpenAIResponseInputToolShell` and extend the `OpenAIResponseInputTool` union (currently only web_search, file_search, function, mcp). Add `ShellCall`, `ShellCallOutputItem`, `CodeInterpreterCall`, `CodeInterpreterCallOutput` output item types. All of these are new types — no existing shell or code_interpreter types exist in the codebase.
 - `src/ogx/providers/inline/responses/` — Extend Responses provider to handle `shell` tool and `code_interpreter` tool by delegating to `ContainerRuntime`.
 - `src/ogx/distributions/starter/` — Add optional `container_runtime` provider configuration.
-- `src/ogx/distributions/ci-tests/` — Add `ci-tests-containers` configuration with `inline::docker` provider.
+- `src/ogx/distributions/ci-tests/` — Add `ci-tests-containers` configuration with `remote::reference` provider.
 
 ## Testing Strategy
 
@@ -800,13 +792,13 @@ tests/
 
 - **Skills API**: CRUD operations, version management, SKILL.md manifest parsing (valid and malformed), zip validation (size limits, file count limits, missing SKILL.md).
 - **Containers API**: CRUD operations, file upload/download, expiration logic, network policy validation, policy layering (request vs operator ceiling).
-- **ContainerRuntime protocol**: Mock implementations testing the interface contract, ensuring all three backends (`inline::docker`, `inline::openshell`, `remote::kubernetes`) can satisfy the protocol.
+- **ContainerRuntime protocol**: Mock implementations testing the interface contract, ensuring all three backends (`remote::reference`, `remote::openshell`, `remote::kubernetes`) can satisfy the protocol.
 - **Shell/code interpreter integration**: Mock `ContainerRuntime`, verify the Responses provider correctly delegates `shell_call` and `code_interpreter_call` execution.
 - **Response item types**: Serialization/deserialization of `ShellCall`, `ShellCallOutput`.
 
 ### Integration tests
 
-- Use `inline::docker` provider with Docker as the real backend.
+- Use `remote::reference` provider with Docker as the real backend.
 - Extend the existing recording/replay system for container interactions (new recording category).
 - Test scenarios:
   - `shell_call` with `container_auto` — verify ephemeral container create → execute → destroy lifecycle.
@@ -818,16 +810,16 @@ tests/
 
 ### CI configuration
 
-- Add `ci-tests-containers` distribution config with `inline::docker` provider.
+- Add `ci-tests-containers` distribution config with `remote::reference` provider.
 - CI environment requires Docker-in-Docker or rootless Podman for container tests.
 - Integration tests for `remote::kubernetes` run separately in environments with a K8s cluster available.
 
 ## Rollout Plan
 
-### Phase 1: API Surface + `inline::docker` Provider + Wire Compatibility Validation
+### Phase 1: API Surface + `remote::reference` Provider + Wire Compatibility Validation
 
 - Implement `ogx_api/skills/` and `ogx_api/containers/` — full CRUD endpoints at `/v1alpha`.
-- Implement `inline::docker` ContainerRuntime using Docker API (also works with Podman).
+- Implement `remote::reference` ContainerRuntime using Docker Engine API (also works with Podman).
 - Integrate shell tool into the Responses provider.
 - **Validate wire-level compatibility** of all request/response models against the current OpenAI API spec. Update models in this RFC as needed before implementation proceeds.
 - Update `docs/static/openai-coverage.json` to track Skills and Containers endpoint conformance.
@@ -840,11 +832,11 @@ tests/
 - Test with multiple cluster sandbox configurations (native K8s security, etc.).
 - Document how cluster administrators configure sandbox enforcement.
 
-### Phase 3: `inline::openshell` Provider
+### Phase 3: `remote::openshell` Provider
 
-- Implement `inline::openshell` ContainerRuntime provider targeting the OpenShell Gateway API.
-- Test with OpenShell using Docker, Podman, MicroVM, and Kubernetes compute drivers.
-- Document the policy enforcement capabilities vs. `inline::docker`.
+- Implement `remote::openshell` ContainerRuntime provider targeting the OpenShell Gateway API.
+- Test with OpenShell using its available compute drivers.
+- Document the policy enforcement capabilities vs. `remote::reference`.
 
 ### Phase 4: Code Interpreter Unification
 
@@ -878,8 +870,8 @@ tests/
 - [OpenAI Code Interpreter Containers Guide](https://developers.openai.com/api/docs/guides/tools-code-interpreter#containers)
 - [OpenAI Containers API Reference](https://developers.openai.com/api/reference/resources/containers)
 - [Agent Skills Standard](https://agentskills.io)
-- [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) / [OpenShell Docs](https://docs.nvidia.com/openshell/latest/home)
-- [Kagenti](https://kagenti.github.io/.github/) (architecture TBD)
+- [Docker Engine API](https://docs.docker.com/reference/api/engine/)
+- [OpenShell](https://github.com/NVIDIA/OpenShell)
 - [OGX API Leveling](docs/docs/concepts/apis/api_leveling.mdx)
 - [OGX Microservices Decomposition RFC](docs/rfcs/2026-04-30-microservices-decomposition.md)
 - [Skills, Containers, and Code Execution in OGX (Overview)](skills-containers-overview.md)

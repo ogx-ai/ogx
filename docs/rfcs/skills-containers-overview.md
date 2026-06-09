@@ -20,17 +20,15 @@ All endpoints launch at `/v1alpha`.
 
 ## Architecture
 
-OGX is an API compatibility layer, not an infrastructure orchestrator. The `ContainerRuntime` provider has three implementations, each named after the technology it talks to:
+OGX is an API compatibility layer, not an infrastructure orchestrator. All three `ContainerRuntime` providers are `remote::` — OGX acts as a client to an external daemon or API, consistent with how `remote::ollama` and `remote::vllm` work even when the daemon runs locally:
 
 | Provider | OGX talks to | Sandbox lifecycle owned by | When to use it |
 |----------|-------------|---------------------------|----------------|
-| `inline::docker` | Docker API | OGX directly | Simplest path. Docker/Podman on your machine, basic container isolation. Dev, CI, local demos. |
-| `inline::openshell` | [OpenShell](https://docs.nvidia.com/openshell/latest/home) Gateway API | OpenShell Gateway | Policy-enforced isolation with your choice of compute driver (Docker, Podman, MicroVM, or K8s). The Gateway owns the full sandbox lifecycle — when backed by K8s, the Gateway creates and manages sandbox pods directly. |
-| `remote::kubernetes` | Kubernetes API | K8s cluster (no OpenShell) | Direct pod submission. OGX sets `sandbox_required: true`; the cluster enforces isolation via native mechanisms (RuntimeClass, NetworkPolicy, etc.). |
+| `remote::reference` | [Docker Engine API](https://docs.docker.com/reference/api/engine/) | OGX (via Docker/Podman daemon) | Simplest path. Docker or Podman on your machine, basic container isolation. Dev, CI, local demos. |
+| `remote::openshell` | [OpenShell Gateway API](https://github.com/NVIDIA/OpenShell) | OpenShell Gateway | Policy-enforced isolation with pluggable compute drivers (container, MicroVM, or K8s). |
+| `remote::kubernetes` | Kubernetes API | K8s cluster | Direct pod submission. OGX sets `sandbox_required: true`; the cluster enforces isolation via native mechanisms (RuntimeClass, NetworkPolicy, etc.). |
 
-`inline::docker` is `inline::` (not `remote::`) because the provider code ships in-tree and manages container lifecycle directly. Docker's API is the same whether the daemon is local or remote — you just change the socket URL — so there's no need for a separate `remote::docker` provider.
-
-The key distinction between `inline::openshell` on K8s and `remote::kubernetes` is **who owns sandbox policy**. With `inline::openshell`, OGX controls policy through the OpenShell Gateway, which runs as a StatefulSet and creates sandbox pods in a configured namespace. With `remote::kubernetes`, OGX submits pods and the cluster handles everything — OGX doesn't know or care how sandboxing is enforced.
+The key distinction between `remote::openshell` on K8s and `remote::kubernetes` is **who owns sandbox policy**. With `remote::openshell`, OGX controls policy through the Gateway. With `remote::kubernetes`, OGX submits pods and the cluster handles everything.
 
 ```text
 ┌──────────────────────────────────────────────────────────┐
@@ -53,22 +51,12 @@ The key distinction between `inline::openshell` on K8s and `remote::kubernetes` 
 └─────────────────┼──────────┼────────────┼────────────────┘
                   │          │            │
                   ▼          ▼            ▼
-       ┌─────────-─┐  ┌─────────────┐  ┌──────────────┐
-       │  Docker   │  │  OpenShell  │  │  Kubernetes  │
-       │  API      │  │  Gateway    │  │  API         │
-       │ (Podman)  │  │ (StatefulSet│  │ (direct pod  │
-       │           │  │   on K8s or │  │  submission, │
-       │           │  │   local)    │  │  no OpenShell│
-       │           │  │             │  │  involved)   │
-       │           │  │  ┌────────┐ │  │              │
-       │           │  │  │Compute │ │  │              │
-       │           │  │  │Driver: │ │  │              │
-       │           │  │  │Docker, │ │  │              │
-       │           │  │  │Podman, │ │  │              │
-       │           │  │  │MicroVM,│ │  │              │
-       │           │  │  │or K8s  │ │  │              │
-       │           │  │  └────────┘ │  │              │
-       └───-───────┘  └─────────────┘  └──────────────┘
+       ┌────────────┐  ┌─────────────┐  ┌──────────────┐
+       │  Docker /  │  │  OpenShell  │  │  Kubernetes  │
+       │  Podman    │  │  Gateway    │  │  API         │
+       │  Engine    │  │             │  │              │
+       │  API       │  │             │  │              │
+       └────────────┘  └─────────────┘  └──────────────┘
 ```
 
 ## How it works in the Responses API
@@ -83,15 +71,15 @@ When a client includes a `shell` tool in a request, three environment modes:
 
 ## Security defaults
 
-Matches [OpenAI's posture](https://developers.openai.com/api/docs/guides/tools-shell): network disabled, no root, no TTY, ephemeral by default. Operators set a policy ceiling in config; per-request policy can restrict further but never expand beyond it.
+Matches [OpenAI's posture](https://developers.openai.com/api/docs/guides/tools-shell): network disabled by default, no root, no TTY, ephemeral by default. Operators can configure a `NetworkPolicy` with type `allowlist` to permit outbound access to specific domains (e.g., internet access while isolating from host infrastructure). Per-request policy can restrict further but never expand beyond the operator ceiling.
 
 ## Rollout
 
 | Phase | What |
 |-------|------|
-| 1 | Skills + Containers APIs, `inline::docker`, shell tool integration, OpenAI wire compatibility validation |
+| 1 | Skills + Containers APIs, `remote::reference` provider, shell tool integration, OpenAI wire compatibility validation |
 | 2 | `remote::kubernetes` provider |
-| 3 | `inline::openshell` provider (MicroVM + policy-enforced isolation) |
+| 3 | `remote::openshell` provider |
 | 4 | `code_interpreter` unification |
 | 5 | API graduation (`/v1alpha` → `/v1beta` → `/v1`) |
 
@@ -108,4 +96,4 @@ Matches [OpenAI's posture](https://developers.openai.com/api/docs/guides/tools-s
 
 - [Implementation reference (data models, protocols, file structure)](skills-containers-implementation-ref.md)
 - [OpenAI Skills API](https://developers.openai.com/api/docs/guides/tools-skills) | [Containers API](https://developers.openai.com/api/reference/resources/containers) | [Shell Tool](https://developers.openai.com/api/docs/guides/tools-shell) | [Code Interpreter](https://developers.openai.com/api/docs/guides/tools-code-interpreter#containers)
-- [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) | [Agent Skills Standard](https://agentskills.io)
+- [Docker Engine API](https://docs.docker.com/reference/api/engine/) | [OpenShell](https://github.com/NVIDIA/OpenShell) | [Agent Skills Standard](https://agentskills.io)
