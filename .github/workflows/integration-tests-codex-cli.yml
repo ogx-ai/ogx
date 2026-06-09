@@ -40,6 +40,7 @@ permissions:
 
 env:
   CODEX_CLI_VERSION: '0.136.0'
+  CODEX_SMOKE_TEXT_MODEL: 'ollama/llama3.2:1b'
 
 jobs:
   codex-cli-smoke:
@@ -69,6 +70,9 @@ jobs:
           npm install -g "@openai/codex@${CODEX_CLI_VERSION}"
           codex --version
 
+      - name: Pull Codex smoke model
+        run: docker exec ollama ollama pull "${CODEX_SMOKE_TEXT_MODEL#ollama/}"
+
       - name: Run Codex CLI smoke test
         uses: ./.github/actions/run-and-record-tests
         with:
@@ -77,3 +81,4 @@ jobs:
           suite: 'responses'
           inference-mode: 'live'
           pattern: 'test_codex_cli_smoke_uses_generated_ogx_profile'
+          text-model: ${{ env.CODEX_SMOKE_TEXT_MODEL }}
