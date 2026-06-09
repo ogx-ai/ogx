@@ -19,13 +19,13 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 111 | 111 | 0 | 85% |
-| bedrock | 27 | 27 | 0 | 21% |
+| azure | 111 | 111 | 0 | 82% |
+| bedrock | 27 | 27 | 0 | 20% |
 | ollama | 2 | 2 | 0 | 2% |
-| openai | 130 | 130 | 0 | 100% |
-| vertexai | 70 | 70 | 0 | 54% |
+| openai | 136 | 136 | 0 | 100% |
+| vertexai | 70 | 70 | 0 | 52% |
 | vllm | 3 | 3 | 0 | 2% |
-| watsonx | 53 | 53 | 0 | 41% |
+| watsonx | 53 | 53 | 0 | 39% |
 
 ## Provider Details
 
@@ -102,6 +102,7 @@ Models, endpoints, and versions used during test recordings.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | mcp authorization backward compatibility | ✅ | ✅ | — | ✅ | — | — | — |
 | mcp authorization bearer | ✅ | ✅ | — | ✅ | — | — | — |
+| mcp authorization error when header provided | ⏭️ | ⏭️ | — | ✅ | — | — | — |
 
 ## Openai Responses
 
@@ -166,7 +167,12 @@ Models, endpoints, and versions used during test recordings.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | reasoning basic streaming | ✅ | ✅ | ⏭️ | ✅ | ✅ | ✅ | ✅ |
 | reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
+| reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
 | reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
+| reasoning summary event ordering | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
+| reasoning summary non streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
+| reasoning summary streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
+| reasoning summary usage included | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
 
 ## Responses Access Control
 

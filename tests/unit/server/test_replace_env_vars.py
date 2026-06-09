@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from ogx.core.stack import EnvVarError, replace_env_vars
+from ogx.core.stack import EnvVarError, extract_env_var_references, replace_env_vars
 
 
 @pytest.fixture
@@ -281,3 +281,47 @@ def test_auth_provider_with_complex_config(setup_env_vars):
     finally:
         del os.environ["ENABLE_AUTH"]
         del os.environ["KEYCLOAK_URL"]
+
+
+class TestExtractEnvVarReferences:
+    def test_simple_string_reference(self):
+        refs = extract_env_var_references("${env.FOO}")
+        assert refs == ["FOO"]
+
+    def test_nested_dict_references(self):
+        config = {"api_key": "${env.API_KEY}", "nested": {"secret": "${env.SECRET}"}}
+        refs = extract_env_var_references(config)
+        assert sorted(refs) == ["API_KEY", "SECRET"]
+
+    def test_list_values(self):
+        config = {"keys": ["${env.KEY1}", "${env.KEY2}"]}
+        refs = extract_env_var_references(config)
+        assert sorted(refs) == ["KEY1", "KEY2"]
+
+    def test_default_value_syntax(self):
+        config = {"key": "${env.FOO:=default}"}
+        refs = extract_env_var_references(config)
+        assert refs == ["FOO"]
+
+    def test_conditional_syntax(self):
+        config = {"key": "${env.FOO:+value}"}
+        refs = extract_env_var_references(config)
+        assert refs == ["FOO"]
+
+    def test_no_env_vars(self):
+        refs = extract_env_var_references({"key": "plain-value"})
+        assert refs == []
+
+    def test_mixed_references_and_plain(self):
+        config = {"a": "${env.ALPHA}", "b": "nope", "c": 42, "d": ["${env.BETA}"]}
+        refs = extract_env_var_references(config)
+        assert sorted(refs) == ["ALPHA", "BETA"]
+
+    def test_duplicate_references(self):
+        config = {"a": "${env.KEY}", "b": "${env.KEY}"}
+        refs = extract_env_var_references(config)
+        assert refs == ["KEY", "KEY"]
+
+    def test_non_string_iterables(self):
+        refs = extract_env_var_references({"num": 123, "flag": True, "nothing": None})
+        assert refs == []
