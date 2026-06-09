@@ -8,6 +8,7 @@ apis:
 - interactions
 - messages
 - responses
+- skills
 - tool_runtime
 - vector_io
 providers:
@@ -216,6 +217,13 @@ providers:
           backend: sql_default
           max_write_queue_size: 10000
           num_writers: 4
+  skills:
+  - provider_id: builtin
+    provider_type: inline::builtin
+    config:
+      persistence:
+        namespace: skills
+        backend: kv_default
   tool_runtime:
   - provider_id: brave-search
     provider_type: remote::brave-search
