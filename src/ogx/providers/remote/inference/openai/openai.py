@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 
 from ogx.log import get_logger
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
@@ -57,6 +57,7 @@ class OpenAIInferenceAdapter(OpenAIMixin):
     supports_tokenized_embeddings_input: bool = True
 
     embedding_model_metadata: dict[str, dict[str, int]] = {
+        "text-embedding-ada-002": {"embedding_dimension": 1536, "context_length": 8192},
         "text-embedding-3-small": {"embedding_dimension": 1536, "context_length": 8192},
         "text-embedding-3-large": {"embedding_dimension": 3072, "context_length": 8192},
     }
@@ -81,6 +82,19 @@ class OpenAIInferenceAdapter(OpenAIMixin):
                 model=model,
             )
         return None
+
+    async def list_provider_model_ids(self) -> Iterable[str]:
+        """
+        Filter out realtime & audio models.
+        """
+        ids = []
+        for m in await super().list_provider_model_ids():
+            for excluded in {"whisper", "tts", "realtime", "audio"}:
+                if excluded in m:
+                    break
+            else:
+                ids.append(m)
+        return ids
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         model = super().construct_model_from_identifier(identifier)
