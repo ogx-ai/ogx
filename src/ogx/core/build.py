@@ -26,6 +26,7 @@ SERVER_DEPENDENCIES = [
     "uvicorn",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
+    "opentelemetry-exporter-otlp-proto-grpc",
 ]
 
 
