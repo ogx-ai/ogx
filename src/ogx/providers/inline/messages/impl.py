@@ -60,6 +60,7 @@ from ogx_api.messages.models import (
     ContentBlockStartEvent,
     ContentBlockStopEvent,
     CreateMessageBatchRequest,
+    ErrorStreamEvent,
     ListMessageBatchesRequest,
     ListMessageBatchesResponse,
     MessageBatch,
@@ -71,6 +72,7 @@ from ogx_api.messages.models import (
     MessageDeltaEvent,
     MessageStartEvent,
     MessageStopEvent,
+    PingEvent,
     RetrieveMessageBatchRequest,
     RetrieveMessageBatchResultsRequest,
     _AnthropicErrorDetail,
@@ -515,19 +517,26 @@ class BuiltinMessagesImpl(Messages):
         body: dict[str, Any],
     ) -> AsyncIterator[AnthropicStreamEvent]:
         """Stream SSE events directly from the provider."""
-        async with self._client.stream("POST", url, json=body, headers=headers, timeout=300) as resp:
-            resp.raise_for_status()
-            event_type = None
-            async for line in resp.aiter_lines():
-                line = line.strip()
-                if line.startswith("event: "):
-                    event_type = line[7:]
-                elif line.startswith("data: ") and event_type:
-                    data = json.loads(line[6:])
-                    event = self._parse_sse_event(event_type, data)
-                    if event:
-                        yield event
-                    event_type = None
+        try:
+            async with self._client.stream("POST", url, json=body, headers=headers, timeout=300) as resp:
+                resp.raise_for_status()
+                event_type = None
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if line.startswith("event: "):
+                        event_type = line[7:]
+                    elif line.startswith("data: ") and event_type:
+                        data = json.loads(line[6:])
+                        event = self._parse_sse_event(event_type, data)
+                        if event:
+                            yield event
+                        event_type = None
+        except Exception:
+            logger.exception("Failed to stream passthrough response")
+            yield ErrorStreamEvent(
+                error=_AnthropicErrorDetail(type="api_error", message="Internal server error"),
+            )
+            return
 
     def _parse_sse_event(self, event_type: str, data: dict[str, Any]) -> AnthropicStreamEvent | None:
         """Parse an Anthropic SSE event from its type and data."""
@@ -572,6 +581,10 @@ class BuiltinMessagesImpl(Messages):
             )
         if event_type == "message_stop":
             return MessageStopEvent()
+        if event_type == "ping":
+            return PingEvent()
+        if event_type == "error":
+            return ErrorStreamEvent(error=_AnthropicErrorDetail(**data["error"]))
         return None
 
     async def _passthrough_count_tokens(
@@ -874,6 +887,7 @@ class BuiltinMessagesImpl(Messages):
                 usage=AnthropicUsage(input_tokens=0, output_tokens=0),
             ),
         )
+        yield PingEvent()
 
         content_block_index = 0
         in_text_block = False
@@ -884,9 +898,71 @@ class BuiltinMessagesImpl(Messages):
         cache_read_tokens: int | None = None
         stop_reason = "end_turn"
 
-        async for chunk in openai_stream:
-            if not chunk.choices:
-                # Usage-only chunk
+        try:
+            async for chunk in openai_stream:
+                if not chunk.choices:
+                    # Usage-only chunk
+                    if chunk.usage:
+                        input_tokens = chunk.usage.prompt_tokens or 0
+                        output_tokens = chunk.usage.completion_tokens or 0
+                        if chunk.usage.prompt_tokens_details and hasattr(
+                            chunk.usage.prompt_tokens_details, "cached_tokens"
+                        ):
+                            cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    continue
+
+                choice = chunk.choices[0]
+                delta = choice.delta
+
+                if delta and delta.content:
+                    if not in_text_block:
+                        yield ContentBlockStartEvent(
+                            index=content_block_index,
+                            content_block=AnthropicTextBlock(text=""),
+                        )
+                        in_text_block = True
+
+                    yield ContentBlockDeltaEvent(
+                        index=content_block_index,
+                        delta=_TextDelta(text=delta.content),
+                    )
+
+                if delta and delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        tc_idx = tc_delta.index if tc_delta.index is not None else 0
+
+                        if tc_idx not in in_tool_blocks:
+                            # Close text block if open
+                            if in_text_block:
+                                yield ContentBlockStopEvent(index=content_block_index)
+                                yield PingEvent()
+                                content_block_index += 1
+                                in_text_block = False
+
+                            # Start new tool_use block
+                            in_tool_blocks[tc_idx] = True
+                            tool_call_index_to_block_index[tc_idx] = content_block_index
+
+                            yield ContentBlockStartEvent(
+                                index=content_block_index,
+                                content_block=AnthropicToolUseBlock(
+                                    id=tc_delta.id or f"toolu_{uuid.uuid4().hex[:24]}",
+                                    name=tc_delta.function.name if tc_delta.function and tc_delta.function.name else "",
+                                    input={},
+                                ),
+                            )
+                            content_block_index += 1
+
+                        if tc_delta.function and tc_delta.function.arguments:
+                            block_idx = tool_call_index_to_block_index[tc_idx]
+                            yield ContentBlockDeltaEvent(
+                                index=block_idx,
+                                delta=_InputJsonDelta(partial_json=tc_delta.function.arguments),
+                            )
+
+                if choice.finish_reason:
+                    stop_reason = _FINISH_TO_STOP_REASON.get(choice.finish_reason, "end_turn")
+
                 if chunk.usage:
                     input_tokens = chunk.usage.prompt_tokens or 0
                     output_tokens = chunk.usage.completion_tokens or 0
@@ -894,71 +970,21 @@ class BuiltinMessagesImpl(Messages):
                         chunk.usage.prompt_tokens_details, "cached_tokens"
                     ):
                         cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
-                continue
-
-            choice = chunk.choices[0]
-            delta = choice.delta
-
-            if delta and delta.content:
-                if not in_text_block:
-                    yield ContentBlockStartEvent(
-                        index=content_block_index,
-                        content_block=AnthropicTextBlock(text=""),
-                    )
-                    in_text_block = True
-
-                yield ContentBlockDeltaEvent(
-                    index=content_block_index,
-                    delta=_TextDelta(text=delta.content),
-                )
-
-            if delta and delta.tool_calls:
-                for tc_delta in delta.tool_calls:
-                    tc_idx = tc_delta.index if tc_delta.index is not None else 0
-
-                    if tc_idx not in in_tool_blocks:
-                        # Close text block if open
-                        if in_text_block:
-                            yield ContentBlockStopEvent(index=content_block_index)
-                            content_block_index += 1
-                            in_text_block = False
-
-                        # Start new tool_use block
-                        in_tool_blocks[tc_idx] = True
-                        tool_call_index_to_block_index[tc_idx] = content_block_index
-
-                        yield ContentBlockStartEvent(
-                            index=content_block_index,
-                            content_block=AnthropicToolUseBlock(
-                                id=tc_delta.id or f"toolu_{uuid.uuid4().hex[:24]}",
-                                name=tc_delta.function.name if tc_delta.function and tc_delta.function.name else "",
-                                input={},
-                            ),
-                        )
-                        content_block_index += 1
-
-                    if tc_delta.function and tc_delta.function.arguments:
-                        block_idx = tool_call_index_to_block_index[tc_idx]
-                        yield ContentBlockDeltaEvent(
-                            index=block_idx,
-                            delta=_InputJsonDelta(partial_json=tc_delta.function.arguments),
-                        )
-
-            if choice.finish_reason:
-                stop_reason = _FINISH_TO_STOP_REASON.get(choice.finish_reason, "end_turn")
-
-            if chunk.usage:
-                input_tokens = chunk.usage.prompt_tokens or 0
-                output_tokens = chunk.usage.completion_tokens or 0
-                if chunk.usage.prompt_tokens_details and hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
-                    cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+        except Exception:
+            logger.exception("Failed to stream translation response")
+            yield ErrorStreamEvent(
+                error=_AnthropicErrorDetail(type="api_error", message="Internal server error"),
+            )
+            return
 
         # Close any open blocks
         if in_text_block:
             yield ContentBlockStopEvent(index=content_block_index)
+            yield PingEvent()
 
         for _tc_idx, block_idx in tool_call_index_to_block_index.items():
             yield ContentBlockStopEvent(index=block_idx)
+            yield PingEvent()
 
         # Final events
         yield MessageDeltaEvent(

@@ -434,16 +434,6 @@ class MessageStopEvent(BaseModel):
     type: Literal["message_stop"] = "message_stop"
 
 
-AnthropicStreamEvent = (
-    MessageStartEvent
-    | ContentBlockStartEvent
-    | ContentBlockDeltaEvent
-    | ContentBlockStopEvent
-    | MessageDeltaEvent
-    | MessageStopEvent
-)
-
-
 # -- Error response --
 
 
@@ -457,6 +447,31 @@ class AnthropicErrorResponse(BaseModel):
 
     type: Literal["error"] = "error"
     error: _AnthropicErrorDetail
+
+
+class PingEvent(BaseModel):
+    """Keep-alive heartbeat sent between content blocks."""
+
+    type: Literal["ping"] = "ping"
+
+
+class ErrorStreamEvent(BaseModel):
+    """Mid-stream error event sent before the stream closes."""
+
+    type: Literal["error"] = "error"
+    error: _AnthropicErrorDetail
+
+
+AnthropicStreamEvent = (
+    MessageStartEvent
+    | ContentBlockStartEvent
+    | ContentBlockDeltaEvent
+    | ContentBlockStopEvent
+    | MessageDeltaEvent
+    | MessageStopEvent
+    | PingEvent
+    | ErrorStreamEvent
+)
 
 
 # -- Message Batches --

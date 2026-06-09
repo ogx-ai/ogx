@@ -619,18 +619,20 @@ class TestStreamingTranslation:
             events.append(event)
 
         assert events[0].type == "message_start"
-        assert events[1].type == "content_block_start"
-        assert events[1].content_block.type == "text"
-        assert events[2].type == "content_block_delta"
-        assert events[2].delta.text == "Hello"
+        assert events[1].type == "ping"
+        assert events[2].type == "content_block_start"
+        assert events[2].content_block.type == "text"
         assert events[3].type == "content_block_delta"
-        assert events[3].delta.text == " world"
+        assert events[3].delta.text == "Hello"
         assert events[4].type == "content_block_delta"
-        assert events[4].delta.text == "!"
-        assert events[5].type == "content_block_stop"
-        assert events[6].type == "message_delta"
-        assert events[6].delta.stop_reason == "end_turn"
-        assert events[7].type == "message_stop"
+        assert events[4].delta.text == " world"
+        assert events[5].type == "content_block_delta"
+        assert events[5].delta.text == "!"
+        assert events[6].type == "content_block_stop"
+        assert events[7].type == "ping"
+        assert events[8].type == "message_delta"
+        assert events[8].delta.stop_reason == "end_turn"
+        assert events[9].type == "message_stop"
 
     async def test_tool_call_streaming(self, impl):
         chunks = []
@@ -777,3 +779,124 @@ class TestThinkingConfig:
         )
         result = impl._anthropic_to_openai(request)
         assert result.model == "m"
+
+
+class TestPingEvents:
+    async def test_ping_after_message_start_in_text_stream(self, impl):
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = "Hi"
+        chunk.choices[0].delta.tool_calls = None
+        chunk.choices[0].finish_reason = "stop"
+        chunk.usage = None
+
+        async def mock_stream():
+            yield chunk
+
+        events = []
+        async for event in impl._stream_openai_to_anthropic(mock_stream(), "m"):
+            events.append(event)
+
+        assert events[0].type == "message_start"
+        assert events[1].type == "ping"
+        assert events[2].type == "content_block_start"
+
+    async def test_ping_after_content_block_stop_in_text_stream(self, impl):
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = "Hi"
+        chunk.choices[0].delta.tool_calls = None
+        chunk.choices[0].finish_reason = "stop"
+        chunk.usage = None
+
+        async def mock_stream():
+            yield chunk
+
+        events = []
+        async for event in impl._stream_openai_to_anthropic(mock_stream(), "m"):
+            events.append(event)
+
+        stop_indices = [i for i, e in enumerate(events) if e.type == "content_block_stop"]
+        for idx in stop_indices:
+            assert events[idx + 1].type == "ping"
+
+    async def test_ping_after_content_block_stop_in_tool_stream(self, impl):
+        tc_delta = MagicMock()
+        tc_delta.index = 0
+        tc_delta.id = "call_abc"
+        tc_delta.function = MagicMock()
+        tc_delta.function.name = "search"
+        tc_delta.function.arguments = '{"q": "x"}'
+
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = None
+        chunk.choices[0].delta.tool_calls = [tc_delta]
+        chunk.choices[0].finish_reason = "tool_calls"
+        chunk.usage = None
+
+        async def mock_stream():
+            yield chunk
+
+        events = []
+        async for event in impl._stream_openai_to_anthropic(mock_stream(), "m"):
+            events.append(event)
+
+        stop_indices = [i for i, e in enumerate(events) if e.type == "content_block_stop"]
+        assert len(stop_indices) >= 1
+        for idx in stop_indices:
+            assert events[idx + 1].type == "ping"
+
+
+class TestErrorStreamEvent:
+    async def test_error_event_on_mid_stream_exception(self, impl):
+        async def failing_stream():
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta = MagicMock()
+            chunk.choices[0].delta.content = "partial"
+            chunk.choices[0].delta.tool_calls = None
+            chunk.choices[0].finish_reason = None
+            chunk.usage = None
+            yield chunk
+            raise RuntimeError("connection lost")
+
+        events = []
+        async for event in impl._stream_openai_to_anthropic(failing_stream(), "m"):
+            events.append(event)
+
+        assert events[0].type == "message_start"
+        assert events[-1].type == "error"
+        assert events[-1].error.type == "api_error"
+
+    async def test_error_event_terminates_stream(self, impl):
+        async def failing_stream():
+            raise RuntimeError("immediate failure")
+            yield  # noqa: unreachable — makes this an async generator
+
+        events = []
+        async for event in impl._stream_openai_to_anthropic(failing_stream(), "m"):
+            events.append(event)
+
+        assert events[0].type == "message_start"
+        assert events[1].type == "ping"
+        assert events[2].type == "error"
+        assert len(events) == 3
+
+    def test_ping_event_parsed(self, impl):
+        event = impl._parse_sse_event("ping", {})
+        assert event is not None
+        assert event.type == "ping"
+
+    def test_error_event_parsed(self, impl):
+        event = impl._parse_sse_event(
+            "error",
+            {"error": {"type": "api_error", "message": "something broke"}},
+        )
+        assert event is not None
+        assert event.type == "error"
+        assert event.error.type == "api_error"
+        assert event.error.message == "something broke"
