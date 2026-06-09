@@ -1,34 +1,10 @@
 name: Responses API - Codex CLI Smoke Test
 
-run-name: Drive the real Codex CLI against /v1/responses (live, Ollama)
+run-name: Manually drive the real Codex CLI against /v1/responses
 
 on:
-  push:
-    branches:
-      - main
-      - 'release-[0-9]+.[0-9]+.x'
-  pull_request:
-    branches:
-      - main
-      - 'release-[0-9]+.[0-9]+.x'
-    types: [opened, synchronize, reopened]
-    paths:
-      - 'src/ogx/cli/connect/**'
-      - 'tests/unit/cli/test_connect_codex.py'
-      - 'tests/integration/responses/test_codex_cli_smoke.py'
-      - 'docs/docs/building_applications/codex_cli_integration.mdx'
-      - 'docs/docs/references/ogx_cli_reference/index.md'
-      - '.github/workflows/integration-tests-codex-cli.yml'
-      - '.github/actions/setup-test-environment/action.yml'
-      - '.github/actions/setup-ollama/action.yml'
-      - '.github/actions/run-and-record-tests/action.yml'
-      - 'scripts/integration-tests.sh'
-      - 'pyproject.toml'
-      - 'uv.lock'
-  merge_group:
-    branches:
-      - main
-      - 'release-[0-9]+.[0-9]+.x'
+  # Keep this manual until local providers can complete a clean Codex turn.
+  # See https://github.com/ogx-ai/ogx/issues/6069.
   workflow_dispatch:
 
 concurrency:
@@ -75,6 +51,8 @@ jobs:
 
       - name: Run Codex CLI smoke test
         uses: ./.github/actions/run-and-record-tests
+        env:
+          OGX_ENABLE_CODEX_CLI_SMOKE: '1'
         with:
           stack-config: 'server:ci-tests'
           setup: 'ollama'

@@ -27,11 +27,18 @@ import pytest
 from ogx.core.library_client import OGXAsLibraryClient
 
 CODEX_CLI = shutil.which("codex")
+EXPECTED_CODEX_OUTPUT = "OGX_CODEX_OK"
 
-pytestmark = pytest.mark.skipif(
-    CODEX_CLI is None,
-    reason="Codex CLI not installed; install @openai/codex to run",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        CODEX_CLI is None,
+        reason="Codex CLI not installed; install @openai/codex to run",
+    ),
+    pytest.mark.skipif(
+        os.getenv("OGX_ENABLE_CODEX_CLI_SMOKE") != "1",
+        reason="Codex CLI smoke is live-only; set OGX_ENABLE_CODEX_CLI_SMOKE=1 to run",
+    ),
+]
 
 
 def _build_minimal_env(tmp_path: Path) -> dict[str, str]:
@@ -60,7 +67,7 @@ def test_codex_cli_smoke_uses_generated_ogx_profile(ogx_client: Any, text_model_
         pytest.skip("Codex CLI smoke test requires server mode")
 
     base_url = f"{ogx_client.base_url}/v1"
-    prompt = "Reply with exactly OGX_CODEX_OK and nothing else. Do not use tools."
+    prompt = f"Reply with exactly {EXPECTED_CODEX_OUTPUT} and nothing else. Do not use tools."
 
     result = subprocess.run(
         [
@@ -88,4 +95,13 @@ def test_codex_cli_smoke_uses_generated_ogx_profile(ogx_client: Any, text_model_
         f"stdout:\n{result.stdout}\n"
         f"stderr:\n{result.stderr}"
     )
-    assert result.stdout.strip() or result.stderr.strip(), "Codex CLI completed without producing output"
+    combined_output = f"{result.stdout}\n{result.stderr}"
+    assert "ERROR:" not in combined_output, (
+        f"Codex CLI reported an error while running through OGX\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    assert result.stdout.strip() == EXPECTED_CODEX_OUTPUT, (
+        "Codex CLI did not return the expected final answer through OGX\n"
+        f"expected: {EXPECTED_CODEX_OUTPUT}\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
