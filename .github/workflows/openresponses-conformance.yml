@@ -2,9 +2,8 @@ name: OpenResponses Conformance Tests
 
 run-name: Run OpenResponses conformance tests against ogx Responses API
 
-# This job is OPTIONAL and informational — it tracks progress toward full
-# conformance with the OpenResponses spec (https://openresponses.org).
-# Failures are expected while gaps remain in the Responses API implementation.
+# This job is REQUIRED — it enforces conformance with the OpenResponses spec
+# (https://openresponses.org). Any failing conformance test fails the job.
 # See: https://github.com/ogx-ai/ogx/issues/4818
 #
 # Inference calls are replayed from checked-in recordings under
@@ -18,8 +17,10 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/ogx/providers/inline/agents/**'
-      - 'src/ogx/apis/agents/**'
+      - 'src/ogx/providers/inline/responses/**'
+      - 'src/ogx_api/responses/**'
+      - 'src/ogx_api/openai_responses.py'
+      - 'src/ogx/core/server/auth.py'
       - 'tests/integration/openresponses/**'
       - '.github/workflows/openresponses-conformance.yml'
   pull_request:
@@ -27,8 +28,10 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/ogx/providers/inline/agents/**'
-      - 'src/ogx/apis/agents/**'
+      - 'src/ogx/providers/inline/responses/**'
+      - 'src/ogx_api/responses/**'
+      - 'src/ogx_api/openai_responses.py'
+      - 'src/ogx/core/server/auth.py'
       - 'tests/integration/openresponses/**'
       - '.github/workflows/openresponses-conformance.yml'
   merge_group:
@@ -139,9 +142,8 @@ jobs:
           {
             echo "## OpenResponses Conformance Test Results"
             echo ""
-            echo "> **Note:** These tests are **informational only** and track progress toward full"
-            echo "> [OpenResponses](https://www.openresponses.org) API conformance."
-            echo "> Failures are expected while gaps remain in the Responses API implementation."
+            echo "> These tests enforce [OpenResponses](https://www.openresponses.org) API"
+            echo "> conformance. Any failing test fails this job."
             echo "> See [#4818](https://github.com/ogx-ai/ogx/issues/4818)."
             echo ""
             echo "**Model:** \`$INFERENCE_MODEL\`"
@@ -211,6 +213,19 @@ jobs:
               fi
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Enforce conformance
+        run: |
+          if [ ! -f /tmp/openresponses-results.json ] || ! jq -e '.summary' /tmp/openresponses-results.json > /dev/null 2>&1; then
+            echo "::error::No parseable OpenResponses conformance results were produced."
+            exit 1
+          fi
+          FAILED=$(jq -r '.summary.failed' /tmp/openresponses-results.json)
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED OpenResponses conformance test(s) failed."
+            exit 1
+          fi
+          echo "All OpenResponses conformance tests passed."
 
       - name: Upload conformance test results
         if: always()

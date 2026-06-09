@@ -129,7 +129,7 @@ Please avoid picking up too many issues at once. This helps you stay focused and
 
 ### I have a question
 
-1. Open a "discussion-type" issue or use [Slack](https://join.slack.com/t/ogx-ai/shared_invite/zt-3uyw5bxj9-tSEwsNZncgkGEKbd4dXIpw).
+1. Open a "discussion-type" issue or use [Discord](https://discord.gg/bUYRqEvK6).
 
 ### Opening a Pull Request
 
