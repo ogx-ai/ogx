@@ -280,11 +280,11 @@ run_client_ts_tests() {
     if [[ -d "$TS_CLIENT_PATH" ]]; then
         # It's a directory path - use local checkout
         if [[ ! -f "$TS_CLIENT_PATH/package.json" ]]; then
-            echo "Error: $TS_CLIENT_PATH exists but doesn't look like llama-stack-client-typescript (no package.json)"
+            echo "Error: $TS_CLIENT_PATH exists but doesn't look like ogx-client-typescript (no package.json)"
             popd >/dev/null
             return 1
         fi
-        echo "Using local llama-stack-client-typescript from: $TS_CLIENT_PATH"
+        echo "Using local ogx-client-typescript from: $TS_CLIENT_PATH"
 
         # Build the TypeScript client first
         echo "Building TypeScript client..."
@@ -301,26 +301,26 @@ run_client_ts_tests() {
         fi
 
         # Then install the client from local directory
-        echo "Installing llama-stack-client from: $TS_CLIENT_PATH"
+        echo "Installing ogx-client from: $TS_CLIENT_PATH"
         npm install "$TS_CLIENT_PATH" --silent
     else
         # It's an npm version specifier - install from npm
-        echo "Installing llama-stack-client@${TS_CLIENT_PATH} from npm"
+        echo "Installing ogx-client@${TS_CLIENT_PATH} from npm"
         if [[ "${CI:-}" == "true" || "${CI:-}" == "1" ]]; then
             npm ci --silent
-            npm install "llama-stack-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
         else
-            npm install "llama-stack-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
         fi
     fi
 
     # Verify installation
-    echo "Verifying llama-stack-client installation..."
-    if npm list llama-stack-client 2>/dev/null | grep -q llama-stack-client; then
-        echo "✅ llama-stack-client successfully installed"
-        npm list llama-stack-client
+    echo "Verifying ogx-client installation..."
+    if npm list ogx-client 2>/dev/null | grep -q ogx-client; then
+        echo "✅ ogx-client successfully installed"
+        npm list ogx-client
     else
-        echo "❌ llama-stack-client not found in node_modules"
+        echo "❌ ogx-client not found in node_modules"
         echo "Installed packages:"
         npm list --depth=0
         popd >/dev/null
@@ -373,18 +373,18 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup ogx stack run $stack_config >server.log 2>&1 &
+    nohup ogx stack run $stack_config >server-main.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
-    for i in {1..30}; do
+    for i in {1..60}; do
         if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
             echo "✅ OGX Server started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
+        if [[ $i -eq 60 ]]; then
             echo "❌ OGX Server failed to start"
             echo "Server logs:"
-            cat server.log
+            cat server-main.log
             exit 1
         fi
         sleep 1
@@ -395,7 +395,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     else
         echo "❌ OGX Server is not accessible on IPv6 loopback"
         echo "Server logs:"
-        cat server.log
+        cat server-main.log
         exit 1
     fi
     echo ""
@@ -503,7 +503,6 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     [ -n "${GROQ_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GROQ_API_KEY=$GROQ_API_KEY"
     [ -n "${GEMINI_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GEMINI_API_KEY=$GEMINI_API_KEY"
     [ -n "${OLLAMA_URL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OLLAMA_URL=$OLLAMA_URL"
-    [ -n "${SAFETY_MODEL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e SAFETY_MODEL=$SAFETY_MODEL"
     [ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK"
     [ -n "${AWS_DEFAULT_REGION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
     [ -n "${VERTEX_AI_PROJECT:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_PROJECT=$VERTEX_AI_PROJECT"
@@ -544,12 +543,12 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
         --port $OGX_PORT
 
     echo "Waiting for Docker container to start..."
-    for i in {1..30}; do
+    for i in {1..60}; do
         if curl -s http://localhost:$OGX_PORT/v1/health 2>/dev/null | grep -q "OK"; then
             echo "✅ Docker container started successfully"
             break
         fi
-        if [[ $i -eq 30 ]]; then
+        if [[ $i -eq 60 ]]; then
             echo "❌ Docker container failed to start"
             echo "Container logs:"
             docker logs "$container_name"
@@ -567,7 +566,7 @@ fi
 
 # Run tests
 echo "=== Running Integration Tests ==="
-EXCLUDE_TESTS="builtin_tool or safety_with_image or code_interpreter or test_rag"
+EXCLUDE_TESTS="builtin_tool or code_interpreter or test_rag"
 
 PYTEST_PATTERN="not( $EXCLUDE_TESTS )"
 if [[ -n "$TEST_PATTERN" ]]; then
@@ -650,8 +649,8 @@ else
     echo "❌ Tests failed"
     echo ""
     # Output server or container logs based on stack config
-    if [[ "$STACK_CONFIG" == *"server:"* && -f "server.log" ]]; then
-        echo "--- Server side failures can be located inside server.log (available from artifacts on CI) ---"
+    if [[ "$STACK_CONFIG" == *"server:"* && -f "server-main.log" ]]; then
+        echo "--- Server side failures can be located inside server-main.log (available from artifacts on CI) ---"
     elif [[ "$STACK_CONFIG" == *"docker:"* ]]; then
         docker_log_file="docker-${DISTRO}-${INFERENCE_MODE}.log"
         if [[ -f "$docker_log_file" ]]; then

@@ -4,7 +4,6 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import asyncio
 import base64
 import mimetypes
 import re
@@ -60,11 +59,8 @@ from ogx_api import (
     OpenAISystemMessageParam,
     OpenAIToolMessageParam,
     OpenAIUserMessageParam,
-    ResponseGuardrailSpec,
     RetrieveFileContentRequest,
     RetrieveFileRequest,
-    RunModerationRequest,
-    Safety,
 )
 
 
@@ -548,68 +544,71 @@ def is_function_tool_call(
     return False
 
 
-async def run_guardrails(safety_api: Safety | None, messages: str, guardrail_ids: list[str]) -> str | None:
-    """Run guardrails against messages and return violation message if blocked."""
-    if not messages:
+async def run_guardrails(
+    moderation_endpoint: str | None,
+    messages: str,
+    headers: dict[str, str] | None = None,
+) -> str | None:
+    """Run content moderation by calling an external OpenAI-compatible moderation endpoint.
+
+    The endpoint must conform to the OpenAI Moderations API response format:
+    {"id": "...", "model": "...", "results": [{"flagged": bool, "categories": {...}, ...}]}
+
+    This function fails closed: any error communicating with the moderation endpoint
+    or parsing its response returns a blocking message rather than allowing content through.
+    """
+    if not messages or not moderation_endpoint:
         return None
 
-    # If safety API is not available, skip guardrails
-    if safety_api is None:
-        return None
+    import httpx
 
-    # Look up shields to get their provider_resource_id (actual model ID)
-    model_ids = []
-    # TODO: list_shields not in Safety interface but available at runtime via API routing
-    shields_list = await safety_api.routing_table.list_shields()  # type: ignore[attr-defined]
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+        try:
+            resp = await client.post(moderation_endpoint, json={"input": messages}, headers=headers)
+            resp.raise_for_status()
+        except (httpx.HTTPError, httpx.InvalidURL):
+            logger.warning("Failed to call moderation endpoint", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation service unavailable"
 
-    for guardrail_id in guardrail_ids:
-        matching_shields = [shield for shield in shields_list.data if shield.identifier == guardrail_id]
-        if matching_shields:
-            model_id = matching_shields[0].provider_resource_id
-            model_ids.append(model_id)
-        else:
-            raise ValueError(f"No shield found with identifier '{guardrail_id}'")
+    try:
+        data = resp.json()
+    except Exception:
+        logger.warning("Failed to parse moderation response as JSON", endpoint=moderation_endpoint)
+        return "Failed to validate content: moderation service returned invalid response"
 
-    guardrail_tasks = [
-        safety_api.run_moderation(RunModerationRequest(input=messages, model=model_id)) for model_id in model_ids
-    ]
-    responses = await asyncio.gather(*guardrail_tasks)
+    results = data.get("results") if isinstance(data, dict) else None
+    if not isinstance(results, list):
+        logger.warning(
+            "Moderation endpoint returned unexpected format (expected OpenAI-compatible "
+            "response with 'results' array, see https://platform.openai.com/docs/api-reference/moderations)",
+            endpoint=moderation_endpoint,
+            response_keys=list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+        )
+        return "Failed to validate content: moderation response has unexpected format"
+    if not results:
+        logger.warning("Moderation endpoint returned no results", endpoint=moderation_endpoint)
+        return "Failed to validate content: moderation response has unexpected format"
 
-    for response in responses:
-        for result in response.results:
-            if result.flagged:
-                message = result.user_message or "Content blocked by safety guardrails"
-                flagged_categories = (
-                    [cat for cat, flagged in result.categories.items() if flagged] if result.categories else []
-                )
-                violation_type = result.metadata.get("violation_type", []) if result.metadata else []
+    for result in results:
+        if not isinstance(result, dict):
+            logger.warning("Failed to parse moderation result entry", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        flagged = result.get("flagged")
+        if not isinstance(flagged, bool):
+            logger.warning("Failed to parse moderation result flagged field", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        categories = result.get("categories", {})
+        if not isinstance(categories, dict):
+            logger.warning("Failed to parse moderation result categories", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        if flagged:
+            flagged_cats = [c for c, f in categories.items() if f]
+            msg = "Content blocked by safety guardrails"
+            if flagged_cats:
+                msg += f" (flagged for: {', '.join(flagged_cats)})"
+            return msg
 
-                if flagged_categories:
-                    message += f" (flagged for: {', '.join(flagged_categories)})"
-                if violation_type:
-                    message += f" (violation type: {', '.join(violation_type)})"
-
-                return message
-
-    # No violations found
     return None
-
-
-def extract_guardrail_ids(guardrails: list | None) -> list[str]:
-    """Extract guardrail IDs from guardrails parameter, handling both string IDs and ResponseGuardrailSpec objects."""
-    if not guardrails:
-        return []
-
-    guardrail_ids = []
-    for guardrail in guardrails:
-        if isinstance(guardrail, str):
-            guardrail_ids.append(guardrail)
-        elif isinstance(guardrail, ResponseGuardrailSpec):
-            guardrail_ids.append(guardrail.type)
-        else:
-            raise ValueError(f"Unknown guardrail format: {guardrail}, expected str or ResponseGuardrailSpec")
-
-    return guardrail_ids
 
 
 def convert_mcp_tool_choice(
@@ -639,7 +638,7 @@ def convert_mcp_tool_choice(
     return []
 
 
-logger = get_logger("llama_stack.providers.inline.responses.builtin.responses.utils", category="agents::builtin")
+logger = get_logger("ogx.providers.inline.responses.builtin.responses.utils", category="agents::builtin")
 
 
 def should_summarize_reasoning(reasoning: OpenAIResponseReasoning | None) -> bool:

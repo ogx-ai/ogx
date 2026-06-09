@@ -27,9 +27,19 @@ class DoclingFileProcessorConfig(BaseModel):
         description="Default chunk overlap in tokens when chunking_strategy type is 'auto'",
     )
 
+    do_ocr: bool = Field(
+        default=True,
+        description=(
+            "Enable OCR for scanned documents. Set to False for digital PDFs "
+            "(with embedded text) to improve processing speed by ~3x for non-scanned PDFs. "
+            "Note: Setting to False on scanned PDFs will result in minimal text extraction."
+        ),
+    )
+
     @classmethod
     def sample_run_config(cls, **kwargs: Any) -> dict[str, Any]:
         return {
             "default_chunk_size_tokens": 800,
             "default_chunk_overlap_tokens": 400,
+            "do_ocr": True,  # default option for scanned pdfs
         }

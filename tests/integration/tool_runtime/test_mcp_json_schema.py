@@ -10,8 +10,8 @@ via the Responses/Agent API.
 """
 
 import pytest
-from llama_stack_client.lib.agents.agent import Agent
-from llama_stack_client.lib.agents.turn_events import StepCompleted, StepProgress, ToolCallIssuedDelta
+from ogx_client.lib.agents.agent import Agent
+from ogx_client.lib.agents.turn_events import StepCompleted, StepProgress, ToolCallIssuedDelta
 
 from tests.common.mcp import make_mcp_server
 

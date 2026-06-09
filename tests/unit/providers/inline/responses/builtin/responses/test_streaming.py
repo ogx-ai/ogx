@@ -36,17 +36,8 @@ from ogx_api.openai_responses import (
 
 
 @pytest.fixture
-def mock_safety_api():
-    safety_api = AsyncMock()
-    # Mock the routing table and shields list for guardrails lookup
-    safety_api.routing_table = AsyncMock()
-    shield = AsyncMock()
-    shield.identifier = "llama-guard"
-    shield.provider_resource_id = "llama-guard-model"
-    safety_api.routing_table.list_shields.return_value = AsyncMock(data=[shield])
-    # Mock run_moderation to return non-flagged result by default
-    safety_api.run_moderation.return_value = AsyncMock(flagged=False)
-    return safety_api
+def mock_moderation_endpoint():
+    return "http://localhost:8080/v1/moderations"
 
 
 @pytest.fixture
@@ -62,6 +53,8 @@ def mock_context():
     context.tool_context = AsyncMock()
     context.tool_context.previous_tools = {}
     context.messages = []
+    context.tool_choice = None
+    context.available_tools = MagicMock(return_value=[])
     return context
 
 
@@ -139,7 +132,7 @@ def _build_orchestrator(mcp_tool_to_server: dict[str, OpenAIResponseInputToolMCP
         max_infer_iters=1,
         tool_executor=MagicMock(),
         instructions=None,
-        safety_api=None,
+        moderation_endpoint=None,
     )
 
 

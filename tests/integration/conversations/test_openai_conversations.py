@@ -118,11 +118,10 @@ class TestOpenAIConversations:
         )
 
         item_id = created_items.data[0].id
-        deleted = openai_client.conversations.items.delete(item_id, conversation_id=conversation.id)
+        result = openai_client.conversations.items.delete(item_id, conversation_id=conversation.id)
 
-        assert deleted.id == item_id
-        assert deleted.object == "conversation.item.deleted"
-        assert deleted.deleted is True
+        assert result.id == conversation.id
+        assert result.object == "conversation"
 
     def test_full_workflow(self, openai_client):
         conversation = openai_client.conversations.create(

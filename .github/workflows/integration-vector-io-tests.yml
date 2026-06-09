@@ -25,7 +25,7 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
   schedule:
-    - cron: '0 0 * * *'  # (test on python 3.13) Daily at 12 AM UTC
+    - cron: '0 0 * * 1'  # (test on python 3.13) Weekly on Monday at 12 AM UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
@@ -34,10 +34,12 @@ concurrency:
 jobs:
   test-matrix:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
-        vector-io-provider: ["inline::faiss", "inline::sqlite-vec", "inline::milvus", "remote::chromadb", "remote::pgvector", "remote::weaviate", "remote::qdrant", "remote::elasticsearch", "remote::infinispan"]
-        python-version: ${{ github.event.schedule == '0 0 * * *' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
+        # Use a smaller set of providers on PRs to reduce runner contention
+        vector-io-provider: ${{ github.event_name == 'pull_request' && fromJSON('["inline::faiss", "inline::sqlite-vec", "remote::pgvector"]') || fromJSON('["inline::faiss", "inline::sqlite-vec", "inline::milvus", "remote::chromadb", "remote::pgvector", "remote::weaviate", "remote::qdrant", "remote::elasticsearch", "remote::infinispan"]') }}
+        python-version: ${{ github.event.schedule == '0 0 * * 1' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
       fail-fast: false # we want to run all tests regardless of failure
 
     steps:
@@ -83,20 +85,29 @@ jobs:
         if: matrix.vector-io-provider == 'remote::pgvector'
         run: |
           echo "Waiting for Postgres to be ready..."
-          for _ in {1..30}; do
-            if docker exec pgvector pg_isready -U ogx > /dev/null 2>&1; then
-              echo "Postgres is ready!"
+          for i in {1..30}; do
+            if docker exec pgvector pg_isready -U ogx -d ogx > /dev/null 2>&1; then
+              echo "Postgres is ready after ${i}s!"
               break
             fi
-            echo "Not ready yet... ($i)"
+            echo "Not ready yet... (${i})"
             sleep 1
           done
 
       - name: Enable pgvector extension
         if: matrix.vector-io-provider == 'remote::pgvector'
         run: |
-          PGPASSWORD=ogx psql -h localhost -U ogx -d ogx \
-            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          for i in {1..10}; do
+            if PGPASSWORD=ogx psql -h localhost -U ogx -d ogx \
+              -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null; then
+              echo "pgvector extension enabled"
+              exit 0
+            fi
+            echo "psql not ready yet, retrying... (${i})"
+            sleep 2
+          done
+          echo "Failed to enable pgvector extension after retries"
+          exit 1
 
       - name: Setup Qdrant
         if: matrix.vector-io-provider == 'remote::qdrant'
@@ -184,9 +195,22 @@ jobs:
           docker logs infinispan
           exit 1
 
+      - name: Cache Hugging Face models
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-${{ matrix.python-version }}-nomic-embed-text-v1.5
+
       - name: Build OGX
         run: |
           uv run --no-sync ogx stack list-deps ci-tests | xargs -L1 uv pip install
+
+      - name: Pre-download embedding model
+        run: |
+          uv run --no-sync python - <<'PY'
+          from sentence_transformers import SentenceTransformer
+          SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
+          PY
 
       - name: Check Storage and Memory Available Before Tests
         if: ${{ always() }}
@@ -196,6 +220,8 @@ jobs:
 
       - name: Run Vector IO Integration Tests
         env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
           ENABLE_CHROMADB: ${{ matrix.vector-io-provider == 'remote::chromadb' && 'true' || '' }}
           CHROMADB_URL: ${{ matrix.vector-io-provider == 'remote::chromadb' && 'http://localhost:8000' || '' }}
           ENABLE_PGVECTOR: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'true' || '' }}

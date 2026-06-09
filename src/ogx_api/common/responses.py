@@ -67,11 +67,3 @@ class MetricInResponse(BaseModel):
     metric: str
     value: int | float
     unit: str | None = None
-
-
-class MetricResponseMixin(BaseModel):
-    """Mixin class for API responses that can include metrics.
-    :param metrics: (Optional) List of metrics associated with the API response
-    """
-
-    metrics: list[MetricInResponse] | None = None

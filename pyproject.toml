@@ -3,12 +3,32 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-fallback_version = "0.7.2.dev0"
+fallback_version = "1.0.3.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
 constraint-dependencies = [
-    "pyasn1>=0.6.3",  # CVE-2026-30922: DoS via unbounded recursion
+    "aiohttp>=3.13.4",                # CVE-2026-34514 + 9 more: CRLF injection, header leak, DoS
+    "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
+    "cryptography>=46.0.7",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
+    "fonttools>=4.60.2",
+    "gitpython>=3.1.47",               # Command injection via Git options bypass
+    "h11>=0.16.0",
+    "idna>=3.15",
+    "pydantic>=2.11.9,<2.12.0",        # 2.12 breaks int coercion in openai.types.model.Model during test replay
+    "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
+    "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
+    "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
+    "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
+    "python-multipart>=0.0.27",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
+    "python-socketio>=5.14.0",         # CVE-2025-61765: RCE via pickle deserialization
+    "requests>=2.34.2",
+    "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
+    "starlette>=1.0.1",                # CVE-2026-48710
+    "tornado>=6.5.5",
+    "urllib3>=2.7.0",
+    "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
+    "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
 
 [project]
@@ -31,15 +51,12 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",
-    "aiohttp>=3.13.3",
     "fastapi>=0.115.0,<1.0",                          # server
-    "fire",                                           # for MCP in LLS client
     "httpx",
     "jinja2>=3.1.6",
     "jsonschema",
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
     "openai>=2.30.0",
-    "prompt-toolkit",
     "python-dotenv",
     "pyjwt[crypto]>=2.12.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
     "pydantic>=2.11.9",
@@ -47,65 +64,51 @@ dependencies = [
     "structlog>=24.1.0",
     "termcolor",
     "tiktoken",
-    "h11>=0.16.0",
-    "python-multipart>=0.0.22",                       # For fastapi Form
     "uvicorn>=0.34.0",                                # server
-    "opentelemetry-sdk>=1.30.0",                      # server
+    "websockets>=14.0",                               # server - WebSocket transport for the Responses API
+    "opentelemetry-sdk>=1.42.1",                      # server
     "opentelemetry-exporter-otlp-proto-http>=1.30.0", # server
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30.0", # server (auto-instrumentation default)
     "opentelemetry-distro>=0.60b1",                  # optional CLI instrumentation; only pre-releases on PyPI (latest 0.60b1)
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "starlette>=0.49.1",
-    "psycopg2-binary",
-    "tornado>=6.5.5",
-    "urllib3>=2.6.3",
-    "oracledb>=3.4.1",
-    "oci>=2.165.0",
-    "numpy>=2.3.2",
-    "mcp>=1.23.0",                                    # for connectors
+    "mcp>=1.23.0,<2.0",                                # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
+    "models-dev>=1.0.398",
 ]
 
 [project.optional-dependencies]
 client = [
-    "llama-stack-client>=0.7.1", # Optional for library-only usage
+    "ogx-client>=1.0.2", # Optional for library-only usage
 ]
 starter = [
     "aiohttp",
-    "aiosqlite",
-    "anthropic",
-    "asyncpg",
+    "anthropic>=0.105.2",
     "autoevals",
+    "boto3>=1.43.18",
     "chardet",
     "chromadb-client",
-    "codeshield",
     "datasets>=4.0.0",
     "einops",
     "elasticsearch>=8.16.0,<9.0.0",
     "emoji",
     "faiss-cpu",
-    "fastapi",
     "fire",
     "fireworks-ai<=0.17.16",
-    "fonttools>=4.60.2",
-    "google-genai>=1.69.0",
-    "h11>=0.16.0",
-    "httpx",
+    "google-genai>=2.3.0",
     "langdetect",
+    "markitdown[all]",
     "matplotlib",
-    "mcp>=1.23.0",
     "nltk>=3.9.4",
     "numpy",
     "ollama",
-    "opentelemetry-exporter-otlp-proto-http",
-    "opentelemetry-sdk",
     "pandas",
     "pillow",
-    "psycopg2-binary",
+    "pgvector>=0.3.0",
     "pymilvus[milvus-lite]>=2.4.10",
     "pymongo",
-    "pypdf>=6.7.2",
+    "pypdf>=6.10.2",
     "pythainlp",
     "qdrant-client",
     "redis",
@@ -113,34 +116,37 @@ starter = [
     "safetensors",
     "scikit-learn",
     "scipy",
+    "sentence-transformers>=5.5.1",
     "sentencepiece",
     "sqlite-vec",
     "together>=2",
     "tokenizers",
+    "torch",
     "tqdm",
     "tree_sitter",
-    "uvicorn",
     "weaviate-client>=4.16.5",
-    "torch",
-    "sentence-transformers",
 ]
 
 [dependency-groups]
 dev = [
+    {include-group = "unit"},
     "pytest>=8.4",
     "pytest-timeout",
-    "pytest-asyncio>=1.0",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",
     "pytest-json-report",
     "pytest-socket",                 # For blocking network access in unit tests
     "nbval",                         # For notebook testing
     "black",
-    "ruff",
+    "ruff>=0.15.14",
     "mypy",
     "pre-commit>=4.4.0",
     "ruamel.yaml",                   # needed for openapi generator
-    "openapi-spec-validator>=0.7.2",
+    "openapi-spec-validator>=0.9.0",
+    "ogx-client>=1.0.2",
+    "boto3>=1.43.18",
+    "torch>=2.6.0",
 ]
 # Type checking dependencies - includes type stubs and optional runtime dependencies
 # needed for complete mypy coverage across all optional features
@@ -148,20 +154,21 @@ type_checking = [
     "types-requests",
     "types-setuptools",
     "types-jsonschema",
-    "pypdf>=6.7.2",
+    "markitdown[all]",
+    "pypdf>=6.10.2",
     "pandas-stubs",
-    "types-psutil",
+    "types-psutil>=7.2.2.20260518",
     "types-tqdm",
     "boto3-stubs[s3]",
     "chardet",
-    "streamlit",
+    "streamlit>=1.58.0",
     "streamlit-option-menu",
     "pandas",
-    "anthropic",
-    "databricks-sdk",
+    "anthropic>=0.105.2",
+    "databricks-sdk>=0.112.0",
     "fairscale",
     "torchtune",
-    "trl",
+    "trl>=1.5.0",
     "peft",
     "datasets",
     "together",
@@ -171,68 +178,65 @@ type_checking = [
     "sqlite-vec",
     "faiss-cpu",
     "lm-format-enforcer",
-    "mcp>=1.23.0",
+    "mcp>=1.23.0,<2.0",
     "ollama",
-    "langchain-openai",
+    "langchain-openai>=1.2.2",
     "langchain-core",
     "langgraph",
-    "llama-stack-client>=0.7.1",
+    "ogx-client>=1.0.2",
+]
+test-common = [
+    "aiohttp",
+    "aiosqlite",
+    "asyncpg>=0.29.0",
+    "chardet",
+    "mcp>=1.23.0,<2.0",
+    "pgvector>=0.3.0",
+    "psycopg2-binary>=2.9.0",
+    "pypdf>=6.10.2",
+    "sqlalchemy[asyncio]>=2.0.41",
 ]
 # These are the dependencies required for running unit tests.
 unit = [
-    "anthropic",
-    "databricks-sdk",
-    "sqlite-vec",
-    "ollama",
-    "aiosqlite",
-    "aiohttp",
-    "psycopg2-binary>=2.9.0",
-    "pypdf>=6.7.2",
-    "mcp>=1.23.0",
-    "chardet",
-    "sqlalchemy",
-    "sqlalchemy[asyncio]>=2.0.41",
+    {include-group = "test-common"},
+    "anthropic>=0.105.2",
     "blobfile",
-    "faiss-cpu",
-    "litellm",
-    "together",
     "coverage",
+    "databricks-sdk>=0.112.0",
+    "faiss-cpu",
+    "markitdown[all]",
     "moto[s3]>=5.1.10",
+    "ollama",
+    "sqlite-vec",
+    "together",
 ]
 # These are the core dependencies required for running integration tests. They are shared across all
 # providers. If a provider requires additional dependencies, please add them to your environment
 # separately. If you are using "uv" to execute your tests, you can use the "--group" flag to specify extra
 # dependencies.
 test = [
-    "aiosqlite",
-    "aiohttp",
-    "torch>=2.6.0",
-    "torchvision>=0.21.0",
-    "chardet",
-    "psycopg2-binary>=2.9.0",
-    "pypdf>=6.7.2",
-    "mcp>=1.23.0",
-    "datasets>=4.0.0",
+    {include-group = "test-common"},
     "autoevals",
-    "transformers",
-    "sqlalchemy",
-    "sqlalchemy[asyncio]>=2.0.41",
-    "requests",
     "chromadb>=1.0.15",
-    "qdrant-client",
-    "pymilvus>=2.6.2",
-    "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
-    "weaviate-client>=4.16.4",
+    "datasets>=4.0.0",
     "elasticsearch>=8.16.0, <9.0.0",
-    "langchain-openai",
+    "google-genai>=2.3.0",
     "langchain-core",
+    "langchain-openai>=1.2.2",
     "langgraph",
-    "google-genai>=1.69.0",
+    "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
+    "pymilvus>=2.6.2",
+    "qdrant-client",
+    "requests",
+    "torch>=2.6.0",
+    "torchvision>=0.27.0",
+    "transformers",
+    "weaviate-client>=4.16.4",
 ]
 docs = [
     "setuptools",
     "sphinx-autobuild",
-    "myst-parser",
+    "myst-parser>=5.1.0",
     "sphinx",
     "sphinx-rtd-theme",
     "sphinx_rtd_dark_mode",
@@ -299,6 +303,7 @@ select = [
     "F",       # Pyflakes
     "N",       # Naming
     "W",       # Warnings
+    "S",       # flake8-bandit (security)
     "DTZ",     # datetime rules
     "I",       # isort (imports order)
     "RUF001",  # Checks for ambiguous Unicode characters in strings
@@ -323,6 +328,9 @@ ignore = [
 
     # These are the additional ones we started ignoring after moving to ruff. We should look into each one of them later.
     "C901", # Complexity of the function is too high
+
+    # Security rules: assert is used extensively as an internal invariant pattern
+    "S101", # Use of assert detected
 ]
 unfixable = [
     "PLE2515",
@@ -334,29 +342,30 @@ convention = "google"
 # Ignore the following errors for the following files
 # TODO: Fix in follow up PRs
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["DTZ", "D101"] # Ignore datetime and docstring rules for tests
-"benchmarking/**/*.py" = ["D101"] # Ignore docstring rules for benchmarking scripts
-"client-sdks/**/*.py" = ["D101"] # Ignore docstring rules for client SDKs
-"scripts/**/*.py" = ["D101"] # Ignore docstring rules for scripts
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_support.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_core.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_format.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_word_list.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/scoring_fn/fn_defs/regex_parser_multiple_choice_answer.py" = [
-    "RUF001",
-    "PLE2515",
-]
+"tests/**/*.py" = ["DTZ", "D101", "S104", "S105", "S106", "S108", "S110", "S310", "S311", "S603", "S607", "S608"] # Ignore datetime, docstring, and security false positives for tests
+"benchmarking/**/*.py" = ["D101", "S104", "S110", "S311"] # Ignore docstring and security rules for benchmarking scripts
+"client-sdks/**/*.py" = ["D101", "S110", "S112", "S113"] # Ignore docstring and security rules for client SDKs
+"scripts/**/*.py" = ["D101", "S110", "S112", "S603", "S607"] # Ignore docstring and security rules for scripts
 "src/ogx/apis/**/__init__.py" = [
     "F403",
 ] # Using import * is acceptable (or at least tolerated) in an __init__.py of a package API
+# Security rule suppressions for known false positives
+"src/ogx/core/datatypes.py" = ["S105"] # Enum values like OAUTH2_TOKEN are not hardcoded secrets
+"src/ogx/distributions/**/*.py" = ["S106"] # Env var template defaults (e.g. ${env.PGVECTOR_PASSWORD:=})
+"src/ogx/providers/remote/inference/databricks/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/inference/gemini/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/vector_io/pgvector/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/inference/oci/auth.py" = ["S106"] # pass_phrase="none" placeholder
+"src/ogx/cli/**/*.py" = ["S603", "S607"] # CLI tools legitimately invoke subprocesses
+"src/ogx/core/utils/exec.py" = ["S603"] # Command execution utility
+"src/ogx/core/storage/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
+"src/ogx/providers/**/vector_io/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
+"src/ogx/core/library_client.py" = ["S112"] # Intentional try-except-continue for type coercion
+"src/ogx/core/routers/tool_runtime.py" = ["S110"] # Intentional try-except-pass for optional metric context
+"src/ogx/core/routing_tables/models.py" = ["S112"] # Intentional try-except-continue for credential probing
+"src/ogx/providers/inline/messages/impl.py" = ["S110"] # Intentional try-except-pass for optional model lookup
+"src/ogx/providers/utils/memory/openai_vector_store_mixin.py" = ["S112", "S311"] # Intentional retry logic
+"src/ogx/testing/api_recorder.py" = ["S110", "S310"] # Test infrastructure
 
 [tool.mypy]
 mypy_path = ["src"]
@@ -376,17 +385,16 @@ exclude = [
     # All files now have type annotations! 🎉
     #
     # ============================================================================
-    # Section 2: Files that need strict typing issues fixed (109 files)
+    # Section 2: Files that need strict typing issues fixed (91 files)
     # ============================================================================
     # These files have some type hints but fail strict type checking due to
     # incomplete annotations, Any usage, or other strict mode violations.
     #
-    # Core files (4 files)
-    "^src/ogx/core/server/quota\\.py$",
+    # Core files (3 files)
     "^src/ogx/core/server/routes\\.py$",
     "^src/ogx/core/server/server\\.py$",
     "^src/ogx/core/store/registry\\.py$",
-    # CLI files (8 files)
+    # CLI files (7 files)
     "^src/ogx/cli/stack/_list_deps\\.py$",
     "^src/ogx/cli/stack/list_apis\\.py$",
     "^src/ogx/cli/stack/list_deps\\.py$",
@@ -394,12 +402,9 @@ exclude = [
     "^src/ogx/cli/stack/run\\.py$",
     "^src/ogx/cli/stack/utils\\.py$",
     "^src/ogx/cli/subcommand\\.py$",
-    "^src/ogx/cli/utils\\.py$",
-    # Providers - Inline (27 files)
+    # Providers - Inline (22 files)
     "^src/ogx/providers/inline/batches/reference/__init__\\.py$",
     "^src/ogx/providers/inline/batches/reference/batches\\.py$",
-    "^src/ogx/providers/inline/eval/builtin/__init__\\.py$",
-    "^src/ogx/providers/inline/eval/builtin/eval\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/__init__\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/adapter\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/pypdf\\.py$",
@@ -410,9 +415,6 @@ exclude = [
     "^src/ogx/providers/inline/inference/transformers/__init__\\.py$",
     "^src/ogx/providers/inline/inference/transformers/config\\.py$",
     "^src/ogx/providers/inline/inference/transformers/transformers\\.py$",
-    "^src/ogx/providers/inline/safety/prompt_guard/__init__\\.py$",
-    "^src/ogx/providers/inline/safety/prompt_guard/config\\.py$",
-    "^src/ogx/providers/inline/safety/prompt_guard/prompt_guard\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/__init__\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/context_retriever\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/file_search\\.py$",
@@ -423,10 +425,7 @@ exclude = [
     "^src/ogx/providers/inline/vector_io/qdrant/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/sqlite_vec\\.py$",
-    # Providers - Remote (43 files)
-    "^src/ogx/providers/remote/eval/nvidia/__init__\\.py$",
-    "^src/ogx/providers/remote/eval/nvidia/config\\.py$",
-    "^src/ogx/providers/remote/eval/nvidia/eval\\.py$",
+    # Providers - Remote (40 files)
     "^src/ogx/providers/remote/files/openai/__init__\\.py$",
     "^src/ogx/providers/remote/files/s3/__init__\\.py$",
     "^src/ogx/providers/remote/inference/anthropic/__init__\\.py$",
@@ -467,30 +466,19 @@ exclude = [
     "^src/ogx/providers/remote/vector_io/infinispan/infinispan\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/__init__\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/oci26ai\\.py$",
-    # Providers - Utils (26 files)
+    # Providers - Utils (15 files)
     "^src/ogx/providers/utils/bedrock/client\\.py$",
     "^src/ogx/providers/utils/bedrock/config\\.py$",
     "^src/ogx/providers/utils/bedrock/refreshable_boto_session\\.py$",
-    "^src/ogx/providers/utils/common/data_schema_validator\\.py$",
     "^src/ogx/providers/utils/common/data_url\\.py$",
-    "^src/ogx/providers/utils/datasetio/url_utils\\.py$",
     "^src/ogx/providers/utils/inference/embedding_mixin\\.py$",
     "^src/ogx/providers/utils/inference/inference_store\\.py$",
     "^src/ogx/providers/utils/inference/model_registry\\.py$",
     "^src/ogx/providers/utils/inference/openai_compat\\.py$",
     "^src/ogx/providers/utils/inference/openai_mixin\\.py$",
     "^src/ogx/providers/utils/inference/prompt_adapter\\.py$",
-    "^src/ogx/providers/utils/kvstore/kvstore\\.py$",
-    "^src/ogx/providers/utils/kvstore/postgres/postgres\\.py$",
-    "^src/ogx/providers/utils/kvstore/redis/redis\\.py$",
     "^src/ogx/providers/utils/memory/vector_store\\.py$",
     "^src/ogx/providers/utils/responses/responses_store\\.py$",
-    "^src/ogx/providers/utils/scheduler\\.py$",
-    "^src/ogx/providers/utils/scoring/aggregation_utils\\.py$",
-    "^src/ogx/providers/utils/scoring/base_scoring_fn\\.py$",
-    "^src/ogx/providers/utils/telemetry/dataset_mixin\\.py$",
-    "^src/ogx/providers/utils/telemetry/trace_protocol\\.py$",
-    "^src/ogx/providers/utils/telemetry/tracing\\.py$",
     "^src/ogx/providers/utils/tools/mcp\\.py$",
     "^src/ogx/providers/utils/tools/ttl_dict\\.py$",
     "^src/ogx/providers/utils/vector_io/vector_utils\\.py$",
@@ -502,7 +490,7 @@ exclude = [
     "^src/ogx/testing/api_recorder\\.py$",
     #
     # ============================================================================
-    # Directory Excludes (35 directories)
+    # Directory Excludes (19 directories)
     # ============================================================================
     # These are entire directories excluded from type checking. Files within
     # these directories need to be analyzed individually and moved to Section 1
@@ -511,29 +499,13 @@ exclude = [
     # Core directories
     "^src/ogx/core/routers/",
     "^src/ogx/core/routing_tables/",
-    # Provider directories - Inline
-    "^src/ogx/providers/inline/datasetio/localfs/",
-    "^src/ogx/providers/inline/safety/code_scanner/",
-    "^src/ogx/providers/inline/safety/llama_guard/",
-    "^src/ogx/providers/inline/scoring/basic/",
-    "^src/ogx/providers/inline/scoring/braintrust/",
-    "^src/ogx/providers/inline/scoring/llm_as_judge/",
     # Provider directories - Remote
-    "^src/ogx/providers/remote/agents/sample/",
-    "^src/ogx/providers/remote/datasetio/huggingface/",
-    "^src/ogx/providers/remote/datasetio/nvidia/",
     "^src/ogx/providers/remote/inference/bedrock/",
     "^src/ogx/providers/remote/inference/nvidia/",
     "^src/ogx/providers/remote/inference/oci/",
     "^src/ogx/providers/remote/inference/passthrough/",
     "^src/ogx/providers/remote/inference/runpod/",
-
     "^src/ogx/providers/remote/inference/watsonx/",
-    "^src/ogx/providers/remote/post_training/nvidia/",
-    "^src/ogx/providers/remote/safety/bedrock/",
-    "^src/ogx/providers/remote/safety/nvidia/",
-    "^src/ogx/providers/remote/safety/sambanova/",
-    "^src/ogx/providers/remote/safety/sample/",
     "^src/ogx/providers/remote/tool_runtime/bing_search/",
     "^src/ogx/providers/remote/tool_runtime/brave_search/",
     "^src/ogx/providers/remote/tool_runtime/model_context_protocol/",
@@ -553,9 +525,6 @@ module = [
     "yaml",
     "fire",
     "redis.asyncio",
-    "psycopg2",
-    "psycopg2.extras",
-    "psycopg2.extensions",
     "torchtune.*",
     "fairscale.*",
     "torchvision.*",

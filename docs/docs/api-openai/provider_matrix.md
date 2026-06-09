@@ -19,13 +19,13 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 114 | 114 | 0 | 86% |
+| azure | 111 | 111 | 0 | 82% |
 | bedrock | 27 | 27 | 0 | 20% |
 | ollama | 2 | 2 | 0 | 2% |
-| openai | 133 | 133 | 0 | 100% |
-| vertexai | 73 | 73 | 0 | 55% |
+| openai | 136 | 136 | 0 | 100% |
+| vertexai | 70 | 70 | 0 | 52% |
 | vllm | 3 | 3 | 0 | 2% |
-| watsonx | 56 | 56 | 0 | 42% |
+| watsonx | 53 | 53 | 0 | 39% |
 
 ## Provider Details
 
@@ -33,9 +33,9 @@ Models, endpoints, and versions used during test recordings.
 
 | Provider | Model(s) | Endpoint | Version Info |
 |----------|----------|----------|--------------|
-| azure | gpt-4o | lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.30.0 |
+| azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.30.0 |
 | bedrock | openai.gpt-oss-20b-1:0 | bedrock-runtime.us-west-2.amazonaws.com | openai sdk: 2.30.0 |
-| ollama | gpt-oss:20b | — | openai sdk: 2.5.0, vllm server: 0.9.2rc2.dev136+g0b382b53a.d20250924 |
+| ollama | deepseek-r1:1.5b | — | openai sdk: 2.30.0 |
 | openai | gpt-4o, o4-mini, text-embedding-3-small | api.openai.com | openai sdk: 2.5.0 |
 | vertexai | publishers/google/models/gemini-2.0-flash | — | openai sdk: 2.5.0, provider: vertexai |
 | vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.18.1rc1.dev197+g0e9358c11 |
@@ -102,6 +102,7 @@ Models, endpoints, and versions used during test recordings.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | mcp authorization backward compatibility | ✅ | ✅ | — | ✅ | — | — | — |
 | mcp authorization bearer | ✅ | ✅ | — | ✅ | — | — | — |
+| mcp authorization error when header provided | ⏭️ | ⏭️ | — | ✅ | — | — | — |
 
 ## Openai Responses
 
@@ -127,9 +128,6 @@ Models, endpoints, and versions used during test recordings.
 | with prompt cache key | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with prompt cache key and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with prompt cache key streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
-| with safety identifier | ✅ | — | — | ✅ | ✅ | — | ✅ |
-| with safety identifier and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
-| with safety identifier streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with service tier | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
 | with service tier and previous response | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
 | with service tier auto | ⏭️ | — | — | ✅ | ⏭️ | — | ⏭️ |
@@ -169,7 +167,12 @@ Models, endpoints, and versions used during test recordings.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | reasoning basic streaming | ✅ | ✅ | ⏭️ | ✅ | ✅ | ✅ | ✅ |
 | reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
+| reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
 | reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ⏭️ |
+| reasoning summary event ordering | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
+| reasoning summary non streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
+| reasoning summary streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
+| reasoning summary usage included | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ⏭️ |
 
 ## Responses Access Control
 

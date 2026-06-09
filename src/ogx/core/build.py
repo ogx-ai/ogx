@@ -6,7 +6,6 @@
 
 import sys
 
-from pydantic import BaseModel
 from termcolor import cprint
 
 from ogx.core.datatypes import StackConfig
@@ -27,14 +26,8 @@ SERVER_DEPENDENCIES = [
     "uvicorn",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
+    "opentelemetry-exporter-otlp-proto-grpc",
 ]
-
-
-class ApiInput(BaseModel):
-    """Input specification pairing an API with its provider type."""
-
-    api: Api
-    provider: str
 
 
 def get_provider_dependencies(

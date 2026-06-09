@@ -16,7 +16,17 @@ from typing import Any
 import yaml
 from fastapi.openapi.utils import get_openapi
 
-from . import app, code_samples, schema_collection, schema_filtering, schema_transforms, state
+from . import (
+    app,
+    code_samples,
+    multi_sdk,
+    multipart_transforms,
+    responses_transforms,
+    schema_collection,
+    schema_filtering,
+    schema_transforms,
+    state,
+)
 
 
 def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
@@ -68,6 +78,12 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     # FastAPI sometimes infers parameters as query params even when they should be in the request body
     openapi_schema = schema_transforms._remove_query_params_from_body_endpoints(openapi_schema)
 
+    # Normalize multipart binary fields to preserve backward-compatible schema shape.
+    openapi_schema = multipart_transforms.normalize_multipart_binary_fields(openapi_schema)
+
+    # Promote model fields marked with x-extra-body-field to x-ogx-extra-body-params
+    openapi_schema = schema_transforms._promote_model_extra_body_fields(openapi_schema)
+
     # Add x-ogx-extra-body-params extension for ExtraBodyField parameters
     openapi_schema = schema_transforms._add_extra_body_params_extension(openapi_schema)
 
@@ -80,6 +96,9 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     # but strip it from the 6 specific schemas where OpenAI omits it.
     openapi_schema = schema_transforms._remove_type_object_from_openai_schemas(openapi_schema)
 
+    # Align Responses API property schemas with OpenResponses spec structure
+    openapi_schema = responses_transforms._fix_responses_schema_conformance(openapi_schema)
+
     # Extract duplicate union types to shared schema references
     openapi_schema = schema_transforms._extract_duplicate_union_types(openapi_schema)
 
@@ -89,6 +108,9 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
 
     # Add Google GenAI SDK code samples to Interactions API endpoints
     openapi_schema = code_samples._add_google_code_samples(openapi_schema)
+
+    # Add oneOf response schemas and SDK detection headers to multi-SDK endpoints
+    openapi_schema = multi_sdk._add_multi_sdk_response_schemas(openapi_schema)
 
     # Split into stable (v1 only), experimental (v1alpha + v1beta), deprecated, and combined (stainless) specs
     # Each spec needs its own deep copy of the full schema to avoid cross-contamination

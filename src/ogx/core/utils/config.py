@@ -9,7 +9,19 @@ from typing import Any
 
 def redact_sensitive_fields(data: dict[str, Any]) -> dict[str, Any]:
     """Redact sensitive information from config before printing."""
-    sensitive_patterns = ["api_key", "api_token", "password", "secret", "token"]
+    sensitive_patterns = [
+        "api_key",
+        "api-key",
+        "apikey",
+        "api_token",
+        "api-token",
+        "authorization",
+        "credential",
+        "moderation_headers",
+        "password",
+        "secret",
+        "token",
+    ]
 
     # Specific configuration field names that should NOT be redacted despite containing "token"
     safe_token_fields = ["chunk_size_tokens", "max_tokens", "default_chunk_overlap_tokens", "max_document_tokens"]

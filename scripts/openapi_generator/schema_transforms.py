@@ -16,6 +16,7 @@ from ._schema_output import (
     _apply_legacy_sorting,
     _dedupe_create_response_request_input_union_for_stainless,
     _extract_duplicate_union_types,
+    _fix_compact_request_schema,
     _write_yaml_file,
     validate_openapi_schema,
 )
@@ -374,6 +375,7 @@ def _restore_const_enum_defaults(openapi_schema: dict[str, Any]) -> None:
     # These correspond to OpenAI schemas that have explicit defaults on
     # single-value enum fields (verified against openai-spec-2.3.0.yml).
     _defaults_to_restore: dict[str, dict[str, str]] = {
+        "ChatCompletionMessageList": {"object": "list"},
         "Conversation": {"object": "conversation"},
         "ListOpenAIChatCompletionResponse": {"object": "list"},
         "OpenAICompactedResponse": {"object": "response.compaction"},
@@ -519,6 +521,38 @@ def _clean_schema_descriptions(openapi_schema: dict[str, Any]) -> dict[str, Any]
         if isinstance(schema_def, dict) and "description" in schema_def and isinstance(schema_def["description"], str):
             schema_def["description"] = _clean_description(schema_def["description"])
 
+    return openapi_schema
+
+
+def _promote_model_extra_body_fields(openapi_schema: dict[str, Any]) -> dict[str, Any]:
+    """Strip fields marked x-extra-body-field from schemas and add to x-ogx-extra-body-params."""
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    schema_extra: dict[str, dict[str, Any]] = {}
+    for name, defn in schemas.items():
+        if not isinstance(defn, dict) or "properties" not in defn:
+            continue
+        extra: dict[str, Any] = {}
+        for prop, prop_def in list(defn["properties"].items()):
+            if isinstance(prop_def, dict) and prop_def.pop("x-extra-body-field", None):
+                extra[prop] = prop_def
+                del defn["properties"][prop]
+                if "required" in defn and prop in defn["required"]:
+                    defn["required"].remove(prop)
+        if extra:
+            schema_extra[name] = extra
+    for path_item in openapi_schema.get("paths", {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for method in ("post", "put", "patch"):
+            op = path_item.get(method)
+            if not op:
+                continue
+            rb = op.get("requestBody", {})
+            ref = rb.get("content", {}).get("application/json", {}).get("schema", {})
+            if isinstance(ref, dict) and "$ref" in ref:
+                ref_name = ref["$ref"].split("/")[-1]
+                if ref_name in schema_extra:
+                    rb["x-ogx-extra-body-params"] = schema_extra[ref_name]
     return openapi_schema
 
 
@@ -953,5 +987,8 @@ def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         for schema_name, schema_def in openapi_schema["components"]["schemas"].items():
             _fix_schema_recursive(schema_def)
             _add_titles_to_unions(schema_def, schema_name)
+
+    # Run compact transforms AFTER titles are added so the new oneOf wrapper stays title-free.
+    _fix_compact_request_schema(openapi_schema)
 
     return openapi_schema

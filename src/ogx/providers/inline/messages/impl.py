@@ -14,13 +14,17 @@ requests are forwarded directly without translation.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 
+from ogx.core.storage.kvstore import KVStore
 from ogx.log import get_logger
 from ogx_api import (
     Inference,
@@ -33,42 +37,90 @@ from ogx_api.messages import (
 )
 from ogx_api.messages.models import (
     ANTHROPIC_VERSION,
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
     AnthropicCreateMessageRequest,
+    AnthropicCustomToolDef,
     AnthropicImageBlock,
     AnthropicMessage,
     AnthropicMessageResponse,
+    AnthropicRedactedThinkingBlock,
     AnthropicStreamEvent,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
-    AnthropicToolDef,
+    AnthropicTool,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
     AnthropicUsage,
+    CancelMessageBatchRequest,
     ContentBlockDeltaEvent,
     ContentBlockStartEvent,
     ContentBlockStopEvent,
+    CreateMessageBatchRequest,
+    ErrorStreamEvent,
+    ListMessageBatchesRequest,
+    ListMessageBatchesResponse,
+    MessageBatch,
+    MessageBatchCanceledResult,
+    MessageBatchErroredResult,
+    MessageBatchIndividualResponse,
+    MessageBatchRequestCounts,
+    MessageBatchSucceededResult,
     MessageDeltaEvent,
     MessageStartEvent,
     MessageStopEvent,
+    PingEvent,
+    RetrieveMessageBatchRequest,
+    RetrieveMessageBatchResultsRequest,
+    _AnthropicErrorDetail,
     _InputJsonDelta,
     _MessageDelta,
+    _SignatureDelta,
     _TextDelta,
     _ThinkingDelta,
+    _ToolChoiceTool,
 )
 
 from .config import MessagesConfig
 
+_BATCH_PREFIX = "msgbatch:"
+_BATCH_RESULTS_PREFIX = "msgbatch_results:"
+_BATCH_EXPIRY_HOURS = 24
+
 logger = get_logger(name=__name__, category="messages")
 
+
+@dataclass
+class _BatchContext:
+    """Internal bundle of a batch id with its original creation request."""
+
+    batch_id: str
+    request: CreateMessageBatchRequest
+
+
+async def _empty_async_iter() -> AsyncIterator[MessageBatchIndividualResponse]:
+    return
+    yield  # make this an async generator
+
+
+async def _list_to_async_iter(
+    items: list[MessageBatchIndividualResponse],
+) -> AsyncIterator[MessageBatchIndividualResponse]:
+    for item in items:
+        yield item
+
+
 # Maps Anthropic stop_reason -> OpenAI finish_reason
+# Valid stop_reasons: end_turn, stop_sequence, tool_use, max_tokens, pause_turn, refusal
 _STOP_REASON_TO_FINISH = {
     "end_turn": "stop",
     "stop_sequence": "stop",
     "tool_use": "tool_calls",
     "max_tokens": "length",
+    "pause_turn": "stop",
 }
 
 # Maps OpenAI finish_reason -> Anthropic stop_reason
@@ -80,18 +132,36 @@ _FINISH_TO_STOP_REASON = {
 }
 
 
+def _image_source_to_url(source: AnthropicBase64ImageSource | AnthropicURLImageSource) -> str:
+    if isinstance(source, AnthropicBase64ImageSource):
+        return f"data:{source.media_type};base64,{source.data}"
+    return source.url
+
+
 class BuiltinMessagesImpl(Messages):
     """Anthropic Messages API adapter that translates to the inference API."""
 
-    def __init__(self, config: MessagesConfig, inference_api: Inference):
+    def __init__(self, config: MessagesConfig, inference_api: Inference, kvstore: KVStore):
         self.config = config
         self.inference_api = inference_api
+        self.kvstore = kvstore
+        self._processing_tasks: dict[str, asyncio.Task] = {}
+        self._batch_semaphore = asyncio.Semaphore(config.max_concurrent_batches)
+        self._update_lock = asyncio.Lock()
+        # Partial results held in memory so a cancellation can finalize with the
+        # truly-completed outcomes, not "all canceled". Keyed by batch_id.
+        self._partial_results: dict[str, list[dict[str, Any]]] = {}
 
     async def initialize(self) -> None:
-        self._client = httpx.AsyncClient()
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
 
     async def shutdown(self) -> None:
         await self._client.aclose()
+        if self._processing_tasks:
+            logger.info(
+                "Shutdown initiated with active batch processing tasks",
+                active_tasks=len(self._processing_tasks),
+            )
 
     async def create_message(
         self,
@@ -121,6 +191,243 @@ class BuiltinMessagesImpl(Messages):
 
         # Translation mode: use Inference API's count_tokens if available
         raise NotImplementedError("Token counting via translation mode is not yet implemented")
+
+    # -- Message Batches --
+
+    async def create_message_batch(
+        self,
+        request: CreateMessageBatchRequest,
+    ) -> MessageBatch:
+        seen_ids: set[str] = set()
+        for req in request.requests:
+            if req.custom_id in seen_ids:
+                raise ValueError(f"Duplicate custom_id: {req.custom_id}")
+            seen_ids.add(req.custom_id)
+
+        now = datetime.now(UTC)
+        batch_id = f"msgbatch_{uuid.uuid4().hex[:24]}"
+        batch = MessageBatch(
+            id=batch_id,
+            processing_status="in_progress",
+            request_counts=MessageBatchRequestCounts(processing=len(request.requests)),
+            created_at=now.isoformat(),
+            expires_at=(now + timedelta(hours=_BATCH_EXPIRY_HOURS)).isoformat(),
+        )
+
+        await self.kvstore.set(f"{_BATCH_PREFIX}{batch_id}", batch.model_dump_json())
+        logger.info("Created message batch", batch_id=batch_id, request_count=len(request.requests))
+
+        ctx = _BatchContext(batch_id=batch_id, request=request)
+        self._partial_results[batch_id] = []
+        task = asyncio.create_task(self._process_message_batch(ctx))
+        self._processing_tasks[batch_id] = task
+        return batch
+
+    async def _load_batch(self, batch_id: str) -> MessageBatch:
+        data = await self.kvstore.get(f"{_BATCH_PREFIX}{batch_id}")
+        if data is None:
+            raise KeyError(batch_id)
+        return MessageBatch.model_validate_json(data)
+
+    async def retrieve_message_batch(self, request: RetrieveMessageBatchRequest) -> MessageBatch:
+        return await self._load_batch(request.batch_id)
+
+    async def list_message_batches(
+        self,
+        request: ListMessageBatchesRequest,
+    ) -> ListMessageBatchesResponse:
+        batch_values = await self.kvstore.values_in_range(f"{_BATCH_PREFIX}", f"{_BATCH_PREFIX}\xff")
+
+        batches = [MessageBatch.model_validate_json(v) for v in batch_values]
+        batches.sort(key=lambda b: b.created_at, reverse=True)
+
+        if request.after_id:
+            idx = next((i for i, b in enumerate(batches) if b.id == request.after_id), None)
+            if idx is not None:
+                batches = batches[idx + 1 :]
+
+        if request.before_id:
+            idx = next((i for i, b in enumerate(batches) if b.id == request.before_id), None)
+            if idx is not None:
+                batches = batches[:idx]
+
+        has_more = len(batches) > request.limit
+        batches = batches[: request.limit]
+
+        return ListMessageBatchesResponse(
+            data=batches,
+            has_more=has_more,
+            first_id=batches[0].id if batches else None,
+            last_id=batches[-1].id if batches else None,
+        )
+
+    async def cancel_message_batch(self, request: CancelMessageBatchRequest) -> MessageBatch:
+        batch_id = request.batch_id
+        # Acquire the lock before reading so we eliminate the read-check-write
+        # race with concurrent cancel/finalize calls. The task is cancelled
+        # only after the lock is released to avoid awaiting cancellation while
+        # holding the lock (the cancelled task itself needs the lock to finalize).
+        task_to_cancel: asyncio.Task | None = None
+        async with self._update_lock:
+            batch = await self._load_batch(batch_id)
+            if batch.processing_status == "ended":
+                raise ValueError(f"Cannot cancel batch '{batch_id}' that has already ended")
+            if batch.processing_status != "canceling":
+                batch.processing_status = "canceling"
+                batch.cancel_initiated_at = datetime.now(UTC).isoformat()
+                await self.kvstore.set(f"{_BATCH_PREFIX}{batch_id}", batch.model_dump_json())
+                task_to_cancel = self._processing_tasks.get(batch_id)
+
+        if task_to_cancel is not None:
+            task_to_cancel.cancel()
+
+        return await self._load_batch(batch_id)
+
+    async def retrieve_message_batch_results(
+        self,
+        request: RetrieveMessageBatchResultsRequest,
+    ) -> AsyncIterator[MessageBatchIndividualResponse]:
+        batch_id = request.batch_id
+        batch = await self._load_batch(batch_id)
+        if batch.processing_status != "ended":
+            raise ValueError(
+                f"Results are not yet available for batch '{batch_id}' (status: {batch.processing_status})"
+            )
+
+        data = await self.kvstore.get(f"{_BATCH_RESULTS_PREFIX}{batch_id}")
+        if data is None:
+            return _empty_async_iter()
+
+        results = json.loads(data)
+        return _list_to_async_iter([MessageBatchIndividualResponse.model_validate(item) for item in results])
+
+    async def _process_message_batch(self, ctx: _BatchContext) -> None:
+        try:
+            async with self._batch_semaphore:
+                await self._process_message_batch_impl(ctx)
+        except asyncio.CancelledError:
+            await self._finalize_batch_canceled(ctx)
+        except Exception:
+            logger.exception("Failed to process message batch", batch_id=ctx.batch_id)
+            await self._finalize_batch_error(ctx)
+        finally:
+            self._processing_tasks.pop(ctx.batch_id, None)
+            self._partial_results.pop(ctx.batch_id, None)
+
+    async def _process_message_batch_impl(self, ctx: _BatchContext) -> None:
+        semaphore = asyncio.Semaphore(self.config.max_concurrent_requests_per_batch)
+        partial = self._partial_results[ctx.batch_id]
+
+        async def process_one(custom_id: str, params: AnthropicCreateMessageRequest) -> None:
+            async with semaphore:
+                # Force non-streaming for batch requests
+                params.stream = False
+                try:
+                    response = await self.create_message(params)
+                    if isinstance(response, AnthropicMessageResponse):
+                        result_obj = MessageBatchIndividualResponse(
+                            custom_id=custom_id,
+                            result=MessageBatchSucceededResult(message=response),
+                        )
+                    else:
+                        result_obj = MessageBatchIndividualResponse(
+                            custom_id=custom_id,
+                            result=MessageBatchErroredResult(
+                                error=_AnthropicErrorDetail(type="api_error", message="Unexpected streaming response"),
+                            ),
+                        )
+                except Exception as e:
+                    result_obj = MessageBatchIndividualResponse(
+                        custom_id=custom_id,
+                        result=MessageBatchErroredResult(
+                            error=_AnthropicErrorDetail(type="api_error", message=str(e)),
+                        ),
+                    )
+                # Append to the shared partial-results list. Single-threaded
+                # asyncio means the append itself is safe; cancellation that
+                # arrives after this point still sees the completed entry.
+                partial.append(result_obj.model_dump())
+
+        tasks = [process_one(req.custom_id, req.params) for req in ctx.request.requests]
+        await asyncio.gather(*tasks)
+
+        succeeded = sum(1 for r in partial if r["result"]["type"] == "succeeded")
+        errored = len(partial) - succeeded
+
+        await self.kvstore.set(f"{_BATCH_RESULTS_PREFIX}{ctx.batch_id}", json.dumps(partial))
+
+        async with self._update_lock:
+            batch = await self._load_batch(ctx.batch_id)
+            batch.processing_status = "ended"
+            batch.ended_at = datetime.now(UTC).isoformat()
+            batch.request_counts = MessageBatchRequestCounts(
+                processing=0,
+                succeeded=succeeded,
+                errored=errored,
+            )
+            batch.results_url = f"/v1/messages/batches/{ctx.batch_id}/results"
+            await self.kvstore.set(f"{_BATCH_PREFIX}{ctx.batch_id}", batch.model_dump_json())
+
+        logger.info(
+            "Message batch completed",
+            batch_id=ctx.batch_id,
+            succeeded=succeeded,
+            errored=errored,
+        )
+
+    async def _finalize_batch_canceled(self, ctx: _BatchContext) -> None:
+        # Source of truth for completed work is the in-memory partial list,
+        # which is updated as each request finishes. This avoids the race
+        # where _process_message_batch_impl had not yet flushed to kvstore.
+        results: list[dict[str, Any]] = list(self._partial_results.get(ctx.batch_id, []))
+        completed_ids = {r["custom_id"] for r in results}
+        succeeded = sum(1 for r in results if r["result"]["type"] == "succeeded")
+        errored = len(results) - succeeded
+        canceled = 0
+
+        for req in ctx.request.requests:
+            if req.custom_id not in completed_ids:
+                results.append(
+                    MessageBatchIndividualResponse(
+                        custom_id=req.custom_id,
+                        result=MessageBatchCanceledResult(),
+                    ).model_dump()
+                )
+                canceled += 1
+
+        await self.kvstore.set(f"{_BATCH_RESULTS_PREFIX}{ctx.batch_id}", json.dumps(results))
+
+        async with self._update_lock:
+            batch = await self._load_batch(ctx.batch_id)
+            batch.processing_status = "ended"
+            batch.ended_at = datetime.now(UTC).isoformat()
+            batch.request_counts = MessageBatchRequestCounts(
+                processing=0,
+                succeeded=succeeded,
+                errored=errored,
+                canceled=canceled,
+            )
+            batch.results_url = f"/v1/messages/batches/{ctx.batch_id}/results"
+            await self.kvstore.set(f"{_BATCH_PREFIX}{ctx.batch_id}", batch.model_dump_json())
+
+        logger.info(
+            "Message batch canceled",
+            batch_id=ctx.batch_id,
+            succeeded=succeeded,
+            errored=errored,
+            canceled=canceled,
+        )
+
+    async def _finalize_batch_error(self, ctx: _BatchContext) -> None:
+        async with self._update_lock:
+            batch = await self._load_batch(ctx.batch_id)
+            batch.processing_status = "ended"
+            batch.ended_at = datetime.now(UTC).isoformat()
+            batch.request_counts = MessageBatchRequestCounts(
+                processing=0,
+                errored=batch.request_counts.processing,
+            )
+            await self.kvstore.set(f"{_BATCH_PREFIX}{ctx.batch_id}", batch.model_dump_json())
 
     # -- Native passthrough for providers with /v1/messages support --
 
@@ -155,7 +462,7 @@ class BuiltinMessagesImpl(Messages):
                     base_url = base_url[:-3]
                 logger.info("Using native /v1/messages passthrough", model=model, base_url=base_url)
                 return base_url
-        except Exception:
+        except (KeyError, ValueError, AttributeError):
             logger.debug("Failed to resolve passthrough, falling back to translation", model=model)
 
         return None
@@ -170,20 +477,30 @@ class BuiltinMessagesImpl(Messages):
         # Use the provider_resource_id (model name without provider prefix)
         provider_model = request.model
         router = self.inference_api
+        api_key = "no-key-required"
         if hasattr(router, "routing_table"):
             try:
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
-            except Exception:
-                pass
+                    provider_impl = await router.routing_table.get_provider_impl(obj.identifier)
+                    # TODO: this is a sever abstration violation. this all needs to be refactored
+                    #       to use a proper provider interface for messages
+                    if hasattr(provider_impl, "_get_api_key_from_config_or_provider_data"):
+                        key = provider_impl._get_api_key_from_config_or_provider_data()
+                    else:
+                        key = provider_impl.get_api_key() if hasattr(provider_impl, "get_api_key") else None
+                    if key:
+                        api_key = key
+            except (KeyError, ValueError, AttributeError):
+                logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
         body = request.model_dump(exclude_none=True)
         body["model"] = provider_model
         headers = {
             "content-type": "application/json",
             "anthropic-version": ANTHROPIC_VERSION,
-            "x-api-key": "no-key-required",
+            "x-api-key": api_key,
         }
 
         if request.stream:
@@ -200,19 +517,26 @@ class BuiltinMessagesImpl(Messages):
         body: dict[str, Any],
     ) -> AsyncIterator[AnthropicStreamEvent]:
         """Stream SSE events directly from the provider."""
-        async with self._client.stream("POST", url, json=body, headers=headers, timeout=300) as resp:
-            resp.raise_for_status()
-            event_type = None
-            async for line in resp.aiter_lines():
-                line = line.strip()
-                if line.startswith("event: "):
-                    event_type = line[7:]
-                elif line.startswith("data: ") and event_type:
-                    data = json.loads(line[6:])
-                    event = self._parse_sse_event(event_type, data)
-                    if event:
-                        yield event
-                    event_type = None
+        try:
+            async with self._client.stream("POST", url, json=body, headers=headers, timeout=300) as resp:
+                resp.raise_for_status()
+                event_type = None
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if line.startswith("event: "):
+                        event_type = line[7:]
+                    elif line.startswith("data: ") and event_type:
+                        data = json.loads(line[6:])
+                        event = self._parse_sse_event(event_type, data)
+                        if event:
+                            yield event
+                        event_type = None
+        except Exception:
+            logger.exception("Failed to stream passthrough response")
+            yield ErrorStreamEvent(
+                error=_AnthropicErrorDetail(type="api_error", message="Internal server error"),
+            )
+            return
 
     def _parse_sse_event(self, event_type: str, data: dict[str, Any]) -> AnthropicStreamEvent | None:
         """Parse an Anthropic SSE event from its type and data."""
@@ -220,25 +544,31 @@ class BuiltinMessagesImpl(Messages):
             return MessageStartEvent(message=AnthropicMessageResponse(**data["message"]))
         if event_type == "content_block_start":
             block_data = data["content_block"]
-            content_block: AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock
+            content_block: (
+                AnthropicTextBlock | AnthropicToolUseBlock | AnthropicThinkingBlock | AnthropicRedactedThinkingBlock
+            )
             block_type = block_data.get("type")
             if block_type == "tool_use":
                 content_block = AnthropicToolUseBlock(**block_data)
             elif block_type == "thinking":
                 content_block = AnthropicThinkingBlock(**block_data)
+            elif block_type == "redacted_thinking":
+                content_block = AnthropicRedactedThinkingBlock(**block_data)
             else:
                 content_block = AnthropicTextBlock(**block_data)
             return ContentBlockStartEvent(index=data["index"], content_block=content_block)
         if event_type == "content_block_delta":
             delta_data = data["delta"]
             delta_type = delta_data.get("type")
-            delta: _TextDelta | _InputJsonDelta | _ThinkingDelta
+            delta: _TextDelta | _InputJsonDelta | _ThinkingDelta | _SignatureDelta
             if delta_type == "text_delta":
                 delta = _TextDelta(text=delta_data["text"])
             elif delta_type == "input_json_delta":
                 delta = _InputJsonDelta(partial_json=delta_data["partial_json"])
             elif delta_type == "thinking_delta":
                 delta = _ThinkingDelta(thinking=delta_data["thinking"])
+            elif delta_type == "signature_delta":
+                delta = _SignatureDelta(signature=delta_data["signature"])
             else:
                 return None
             return ContentBlockDeltaEvent(index=data["index"], delta=delta)
@@ -251,6 +581,10 @@ class BuiltinMessagesImpl(Messages):
             )
         if event_type == "message_stop":
             return MessageStopEvent()
+        if event_type == "ping":
+            return PingEvent()
+        if event_type == "error":
+            return ErrorStreamEvent(error=_AnthropicErrorDetail(**data["error"]))
         return None
 
     async def _passthrough_count_tokens(
@@ -263,20 +597,30 @@ class BuiltinMessagesImpl(Messages):
         # Use the provider_resource_id (model name without provider prefix)
         provider_model = request.model
         router = self.inference_api
+        api_key = "no-key-required"
         if hasattr(router, "routing_table"):
             try:
                 obj = await router.routing_table.get_object_by_identifier("model", request.model)
                 if obj:
                     provider_model = obj.provider_resource_id
-            except Exception:
-                pass
+                    provider_impl = await router.routing_table.get_provider_impl(obj.identifier)
+                    # TODO: this needs to be rafactored to avoid abstraction violations and remove
+                    #       duplicated logic with _passthrough_request
+                    if hasattr(provider_impl, "_get_api_key_from_config_or_provider_data"):
+                        key = provider_impl._get_api_key_from_config_or_provider_data()
+                    else:
+                        key = provider_impl.get_api_key() if hasattr(provider_impl, "get_api_key") else None
+                    if key:
+                        api_key = key
+            except (KeyError, ValueError, AttributeError):
+                logger.debug("Failed to resolve provider model name, using original", model=request.model)
 
         body = request.model_dump(exclude_none=True)
         body["model"] = provider_model
         headers = {
             "content-type": "application/json",
             "anthropic-version": ANTHROPIC_VERSION,
-            "x-api-key": "no-key-required",
+            "x-api-key": api_key,
         }
 
         resp = await self._client.post(url, json=body, headers=headers, timeout=30)
@@ -286,15 +630,27 @@ class BuiltinMessagesImpl(Messages):
     # -- Request translation --
 
     def _anthropic_to_openai(self, request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
+        if request.thinking and request.thinking.type == "enabled":
+            raise ValueError(
+                "Failed to process thinking request: extended thinking requires a native "
+                "Anthropic-compatible provider; translation mode does not support it"
+            )
+
         messages = self._convert_messages_to_openai(request.system, request.messages)
         tools = self._convert_tools_to_openai(request.tools) if request.tools else None
-        tool_choice = self._convert_tool_choice_to_openai(request.tool_choice) if request.tool_choice else None
+        # tool_choice without tools is an invalid combination for OpenAI-compatible backends.
+        # This happens when request.tools contains only server-side tools, which are all filtered out.
+        tool_choice = (
+            self._convert_tool_choice_to_openai(request.tool_choice) if tools and request.tool_choice else None
+        )
+
+        parallel_tool_calls: bool | None = None
+        if request.tool_choice and getattr(request.tool_choice, "disable_parallel_tool_use", False):
+            parallel_tool_calls = False
 
         extra_body: dict[str, Any] = {}
         if request.top_k is not None:
             extra_body["top_k"] = request.top_k
-        # Note: Anthropic's "thinking" parameter has no equivalent in the OpenAI
-        # chat completions API and is intentionally not forwarded.
 
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=request.model,
@@ -305,6 +661,7 @@ class BuiltinMessagesImpl(Messages):
             stop=request.stop_sequences,
             tools=tools,
             tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
             stream=request.stream or False,
             service_tier=request.service_tier,  # type: ignore[arg-type]
             **(extra_body or {}),
@@ -342,6 +699,11 @@ class BuiltinMessagesImpl(Messages):
         if msg.role == "assistant":
             return [self._convert_assistant_message(msg.content)]
 
+        if msg.role == "system":
+            # System content blocks are text-only; concatenate to a single string.
+            system_text = "\n".join(block.text for block in msg.content if isinstance(block, AnthropicTextBlock))
+            return [{"role": "system", "content": system_text}]
+
         # User message: may contain text and/or tool_result blocks
         result: list[dict[str, Any]] = []
         text_parts: list[dict[str, Any]] = []
@@ -356,10 +718,21 @@ class BuiltinMessagesImpl(Messages):
                         flush_content = text_parts
                     result.append({"role": "user", "content": flush_content})
                     text_parts = []
-                # Tool results become separate tool messages
+                # Tool results become separate tool messages.
+                # OpenAI tool messages only support text content, so image blocks
+                # from tool results are promoted to a follow-up user message.
                 tool_content = block.content
+                image_parts: list[dict[str, Any]] = []
                 if isinstance(tool_content, list):
-                    tool_content = "\n".join(b.text for b in tool_content if isinstance(b, AnthropicTextBlock))
+                    text_pieces = []
+                    for b in tool_content:
+                        if isinstance(b, AnthropicTextBlock):
+                            text_pieces.append(b.text)
+                        elif isinstance(b, AnthropicImageBlock):
+                            image_parts.append(
+                                {"type": "image_url", "image_url": {"url": _image_source_to_url(b.source)}}
+                            )
+                    tool_content = "\n".join(text_pieces)
                 result.append(
                     {
                         "role": "tool",
@@ -367,17 +740,12 @@ class BuiltinMessagesImpl(Messages):
                         "content": tool_content,
                     }
                 )
+                if image_parts:
+                    result.append({"role": "user", "content": image_parts})
             elif isinstance(block, AnthropicTextBlock):
                 text_parts.append({"type": "text", "text": block.text})
             elif isinstance(block, AnthropicImageBlock):
-                text_parts.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{block.source.media_type};base64,{block.source.data}",
-                        },
-                    }
-                )
+                text_parts.append({"type": "image_url", "image_url": {"url": _image_source_to_url(block.source)}})
 
         if text_parts:
             # OpenAI content must be a string or a list, never a single dict
@@ -417,37 +785,33 @@ class BuiltinMessagesImpl(Messages):
 
         return msg
 
-    def _convert_tools_to_openai(self, tools: list[AnthropicToolDef]) -> list[dict[str, Any]]:
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "parameters": tool.input_schema,
-                },
-            }
-            for tool in tools
-        ]
+    def _convert_tools_to_openai(self, tools: list[AnthropicTool]) -> list[dict[str, Any]] | None:
+        result = []
+        for tool in tools:
+            if not isinstance(tool, AnthropicCustomToolDef):
+                logger.debug("Dropping server-side tool in translation mode", tool_type=tool.type)
+                continue
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": tool.input_schema,
+                    },
+                }
+            )
+        return result or None
 
     def _convert_tool_choice_to_openai(self, tool_choice: Any) -> Any:
-        if isinstance(tool_choice, str):
-            if tool_choice == "any":
-                return "required"
-            if tool_choice == "none":
-                return "none"
-            return "auto"
+        if isinstance(tool_choice, _ToolChoiceTool):
+            return {"type": "function", "function": {"name": tool_choice.name}}
 
-        if isinstance(tool_choice, dict):
-            tc_type = tool_choice.get("type")
-            if tc_type == "tool":
-                return {"type": "function", "function": {"name": tool_choice["name"]}}
-            if tc_type == "any":
-                return "required"
-            if tc_type == "none":
-                return "none"
-            return "auto"
-
+        tc_type = tool_choice.type if hasattr(tool_choice, "type") else str(tool_choice)
+        if tc_type == "any":
+            return "required"
+        if tc_type == "none":
+            return "none"
         return "auto"
 
     # -- Response translation --
@@ -523,6 +887,7 @@ class BuiltinMessagesImpl(Messages):
                 usage=AnthropicUsage(input_tokens=0, output_tokens=0),
             ),
         )
+        yield PingEvent()
 
         content_block_index = 0
         in_text_block = False
@@ -533,9 +898,71 @@ class BuiltinMessagesImpl(Messages):
         cache_read_tokens: int | None = None
         stop_reason = "end_turn"
 
-        async for chunk in openai_stream:
-            if not chunk.choices:
-                # Usage-only chunk
+        try:
+            async for chunk in openai_stream:
+                if not chunk.choices:
+                    # Usage-only chunk
+                    if chunk.usage:
+                        input_tokens = chunk.usage.prompt_tokens or 0
+                        output_tokens = chunk.usage.completion_tokens or 0
+                        if chunk.usage.prompt_tokens_details and hasattr(
+                            chunk.usage.prompt_tokens_details, "cached_tokens"
+                        ):
+                            cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+                    continue
+
+                choice = chunk.choices[0]
+                delta = choice.delta
+
+                if delta and delta.content:
+                    if not in_text_block:
+                        yield ContentBlockStartEvent(
+                            index=content_block_index,
+                            content_block=AnthropicTextBlock(text=""),
+                        )
+                        in_text_block = True
+
+                    yield ContentBlockDeltaEvent(
+                        index=content_block_index,
+                        delta=_TextDelta(text=delta.content),
+                    )
+
+                if delta and delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        tc_idx = tc_delta.index if tc_delta.index is not None else 0
+
+                        if tc_idx not in in_tool_blocks:
+                            # Close text block if open
+                            if in_text_block:
+                                yield ContentBlockStopEvent(index=content_block_index)
+                                yield PingEvent()
+                                content_block_index += 1
+                                in_text_block = False
+
+                            # Start new tool_use block
+                            in_tool_blocks[tc_idx] = True
+                            tool_call_index_to_block_index[tc_idx] = content_block_index
+
+                            yield ContentBlockStartEvent(
+                                index=content_block_index,
+                                content_block=AnthropicToolUseBlock(
+                                    id=tc_delta.id or f"toolu_{uuid.uuid4().hex[:24]}",
+                                    name=tc_delta.function.name if tc_delta.function and tc_delta.function.name else "",
+                                    input={},
+                                ),
+                            )
+                            content_block_index += 1
+
+                        if tc_delta.function and tc_delta.function.arguments:
+                            block_idx = tool_call_index_to_block_index[tc_idx]
+                            yield ContentBlockDeltaEvent(
+                                index=block_idx,
+                                delta=_InputJsonDelta(partial_json=tc_delta.function.arguments),
+                            )
+
+                if choice.finish_reason:
+                    stop_reason = _FINISH_TO_STOP_REASON.get(choice.finish_reason, "end_turn")
+
                 if chunk.usage:
                     input_tokens = chunk.usage.prompt_tokens or 0
                     output_tokens = chunk.usage.completion_tokens or 0
@@ -543,71 +970,21 @@ class BuiltinMessagesImpl(Messages):
                         chunk.usage.prompt_tokens_details, "cached_tokens"
                     ):
                         cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
-                continue
-
-            choice = chunk.choices[0]
-            delta = choice.delta
-
-            if delta and delta.content:
-                if not in_text_block:
-                    yield ContentBlockStartEvent(
-                        index=content_block_index,
-                        content_block=AnthropicTextBlock(text=""),
-                    )
-                    in_text_block = True
-
-                yield ContentBlockDeltaEvent(
-                    index=content_block_index,
-                    delta=_TextDelta(text=delta.content),
-                )
-
-            if delta and delta.tool_calls:
-                for tc_delta in delta.tool_calls:
-                    tc_idx = tc_delta.index if tc_delta.index is not None else 0
-
-                    if tc_idx not in in_tool_blocks:
-                        # Close text block if open
-                        if in_text_block:
-                            yield ContentBlockStopEvent(index=content_block_index)
-                            content_block_index += 1
-                            in_text_block = False
-
-                        # Start new tool_use block
-                        in_tool_blocks[tc_idx] = True
-                        tool_call_index_to_block_index[tc_idx] = content_block_index
-
-                        yield ContentBlockStartEvent(
-                            index=content_block_index,
-                            content_block=AnthropicToolUseBlock(
-                                id=tc_delta.id or f"toolu_{uuid.uuid4().hex[:24]}",
-                                name=tc_delta.function.name if tc_delta.function and tc_delta.function.name else "",
-                                input={},
-                            ),
-                        )
-                        content_block_index += 1
-
-                    if tc_delta.function and tc_delta.function.arguments:
-                        block_idx = tool_call_index_to_block_index[tc_idx]
-                        yield ContentBlockDeltaEvent(
-                            index=block_idx,
-                            delta=_InputJsonDelta(partial_json=tc_delta.function.arguments),
-                        )
-
-            if choice.finish_reason:
-                stop_reason = _FINISH_TO_STOP_REASON.get(choice.finish_reason, "end_turn")
-
-            if chunk.usage:
-                input_tokens = chunk.usage.prompt_tokens or 0
-                output_tokens = chunk.usage.completion_tokens or 0
-                if chunk.usage.prompt_tokens_details and hasattr(chunk.usage.prompt_tokens_details, "cached_tokens"):
-                    cache_read_tokens = chunk.usage.prompt_tokens_details.cached_tokens
+        except Exception:
+            logger.exception("Failed to stream translation response")
+            yield ErrorStreamEvent(
+                error=_AnthropicErrorDetail(type="api_error", message="Internal server error"),
+            )
+            return
 
         # Close any open blocks
         if in_text_block:
             yield ContentBlockStopEvent(index=content_block_index)
+            yield PingEvent()
 
         for _tc_idx, block_idx in tool_call_index_to_block_index.items():
             yield ContentBlockStopEvent(index=block_idx)
+            yield PingEvent()
 
         # Final events
         yield MessageDeltaEvent(

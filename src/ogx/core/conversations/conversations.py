@@ -13,8 +13,7 @@ from pydantic import BaseModel, TypeAdapter
 from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
 from ogx.core.datatypes import StackConfig
-from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
-from ogx.core.storage.sqlstore.sqlstore import sqlstore_impl
+from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx.log import get_logger
 from ogx_api import (
     Api,
@@ -28,7 +27,6 @@ from ogx_api.conversations import (
     Conversation,
     ConversationDeletedResource,
     ConversationItem,
-    ConversationItemDeletedResource,
     ConversationItemList,
     Conversations,
     CreateConversationRequest,
@@ -75,11 +73,11 @@ class ConversationServiceImpl(Conversations):
         if not conversations_ref:
             raise ServiceNotEnabledError("storage.stores.conversations")
 
-        base_sql_store = sqlstore_impl(conversations_ref)
-        self.sql_store = AuthorizedSqlStore(base_sql_store, self.policy)
+        self._conversations_ref = conversations_ref
 
     async def initialize(self) -> None:
         """Initialize the store and create tables."""
+        self.sql_store = await authorized_sqlstore(self._conversations_ref, self.policy)
         await self.sql_store.create_table(
             "openai_conversations",
             {
@@ -96,9 +94,12 @@ class ConversationServiceImpl(Conversations):
                 "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
                 "conversation_id": ColumnType.STRING,
                 "created_at": ColumnType.INTEGER,
+                "sort_order": ColumnType.INTEGER,
                 "item_data": ColumnType.JSON,
             },
         )
+        # Migration for existing databases that lack the sort_order column
+        await self.sql_store.sql_store.add_column_if_not_exists("conversation_items", "sort_order", ColumnType.INTEGER)
 
     async def create_conversation(self, request: CreateConversationRequest) -> Conversation:
         """Create a conversation."""
@@ -119,14 +120,16 @@ class ConversationServiceImpl(Conversations):
 
         if request.items:
             item_records = []
-            for item in request.items:
+            base_time = created_at
+            for i, item in enumerate(request.items):
                 item_dict = item.model_dump()
                 item_id = self._get_or_generate_item_id(item, item_dict)
 
                 item_record = {
                     "id": item_id,
                     "conversation_id": conversation_id,
-                    "created_at": created_at,
+                    "created_at": base_time,
+                    "sort_order": i,
                     "item_data": item_dict,
                 }
 
@@ -209,24 +212,35 @@ class ConversationServiceImpl(Conversations):
         """Validate conversation ID format and return the conversation if it exists."""
         return await self.get_conversation(GetConversationRequest(conversation_id=conversation_id))
 
+    async def _next_sort_order(self, conversation_id: str) -> int:
+        result = await self.sql_store.fetch_all(
+            table="conversation_items",
+            where={"conversation_id": conversation_id},
+            order_by=[("sort_order", "desc")],
+            limit=1,
+        )
+        if result.data:
+            current_max = result.data[0].get("sort_order")
+            return (current_max + 1) if current_max is not None else 0
+        return 0
+
     async def add_items(self, conversation_id: str, request: AddItemsRequest) -> ConversationItemList:
         """Create (add) items to a conversation."""
         await self._get_validated_conversation(conversation_id)
 
         created_items = []
         base_time = int(time.time())
+        base_sort_order = await self._next_sort_order(conversation_id)
 
         for i, item in enumerate(request.items):
             item_dict = item.model_dump()
             item_id = self._get_or_generate_item_id(item, item_dict)
 
-            # make each timestamp unique to maintain order
-            created_at = base_time + i
-
             item_record = {
                 "id": item_id,
                 "conversation_id": conversation_id,
-                "created_at": created_at,
+                "created_at": base_time,
+                "sort_order": base_sort_order + i,
                 "item_data": item_dict,
             }
 
@@ -248,8 +262,8 @@ class ConversationServiceImpl(Conversations):
 
         return ConversationItemList(
             data=response_items,
-            first_id=created_items[0]["id"] if created_items else None,
-            last_id=created_items[-1]["id"] if created_items else None,
+            first_id=created_items[0]["id"] if created_items else "",
+            last_id=created_items[-1]["id"] if created_items else "",
             has_more=False,
         )
 
@@ -271,45 +285,49 @@ class ConversationServiceImpl(Conversations):
         return adapter.validate_python(record["item_data"])
 
     async def list_items(self, request: ListItemsRequest) -> ConversationItemList:
-        """List items in the conversation."""
-        # get_conversation validates the ID format and checks existence
+        """List items in the conversation with cursor pagination."""
         await self.get_conversation(GetConversationRequest(conversation_id=request.conversation_id))
 
+        order = request.order if request.order is not None else "desc"
+        limit = request.limit or 20
+
+        if request.after:
+            cursor_record = await self.sql_store.fetch_one(
+                table="conversation_items",
+                where={"id": request.after, "conversation_id": request.conversation_id},
+            )
+            if cursor_record is None:
+                raise ConversationItemNotFoundError(request.after, request.conversation_id)
+
         result = await self.sql_store.fetch_all(
-            table="conversation_items", where={"conversation_id": request.conversation_id}
+            table="conversation_items",
+            where={"conversation_id": request.conversation_id},
+            order_by=[("sort_order", order)],
+            cursor=("id", request.after) if request.after else None,
+            limit=limit,
         )
-        records = result.data
-
-        if request.order is not None and request.order == "asc":
-            records.sort(key=lambda x: x["created_at"])
-        else:
-            records.sort(key=lambda x: x["created_at"], reverse=True)
-
-        actual_limit = request.limit or 20
-
-        records = records[:actual_limit]
-        items = [record["item_data"] for record in records]
 
         adapter: TypeAdapter[ConversationItem] = TypeAdapter(ConversationItem)
-        response_items: list[ConversationItem] = [adapter.validate_python(item) for item in items]
+        response_items: list[ConversationItem] = [
+            adapter.validate_python(record["item_data"]) for record in result.data
+        ]
 
-        first_id = response_items[0].id if response_items else None
-        last_id = response_items[-1].id if response_items else None
+        first_id = response_items[0].id if response_items else ""
+        last_id = response_items[-1].id if response_items else ""
 
         return ConversationItemList(
             data=response_items,
             first_id=first_id,
             last_id=last_id,
-            has_more=False,
+            has_more=result.has_more,
         )
 
-    async def openai_delete_conversation_item(self, request: DeleteItemRequest) -> ConversationItemDeletedResource:
-        """Delete a conversation item."""
+    async def openai_delete_conversation_item(self, request: DeleteItemRequest) -> Conversation:
+        """Delete a conversation item and return the parent conversation."""
         if not request.item_id:
             raise InvalidParameterError("item_id", request.item_id, "Must be a non-empty string.")
 
-        # _get_validated_conversation validates ID format and checks existence
-        _ = await self._get_validated_conversation(request.conversation_id)
+        conversation = await self._get_validated_conversation(request.conversation_id)
 
         record = await self.sql_store.fetch_one(
             table="conversation_items", where={"id": request.item_id, "conversation_id": request.conversation_id}
@@ -323,7 +341,7 @@ class ConversationServiceImpl(Conversations):
         )
 
         logger.debug("Deleted item from conversation", item_id=request.item_id, conversation_id=request.conversation_id)
-        return ConversationItemDeletedResource(id=request.item_id)
+        return conversation
 
     async def shutdown(self) -> None:
         pass

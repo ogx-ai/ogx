@@ -10,7 +10,7 @@ import logging  # allow-direct-logging
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from ogx.core.datatypes import (
@@ -94,6 +94,32 @@ def http_app(mock_auth_endpoint):
 @pytest.fixture
 def http_client(http_app):
     return TestClient(http_app)
+
+
+@pytest.fixture
+def ws_app(mock_auth_endpoint):
+    app = FastAPI()
+    auth_config = AuthenticationConfig(
+        provider_config=CustomAuthConfig(
+            type=AuthProviderType.CUSTOM,
+            endpoint=mock_auth_endpoint,
+        ),
+        access_policy=[],
+    )
+    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+
+    @app.websocket("/ws")
+    async def ws_endpoint(websocket: WebSocket):
+        await websocket.accept()
+        await websocket.send_text("authenticated")
+        await websocket.close()
+
+    return app
+
+
+@pytest.fixture
+def ws_client(ws_app):
+    return TestClient(ws_app)
 
 
 @pytest.fixture
@@ -224,6 +250,26 @@ def test_http_auth_service_error(http_client, valid_api_key, suppress_auth_error
     response = http_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 401
     assert "Authentication service error" in response.json()["error"]["message"]
+
+
+# WebSocket Endpoint Tests
+def test_websocket_missing_auth_header_rejected(ws_client, suppress_auth_errors):
+    with pytest.raises(WebSocketDisconnect):
+        with ws_client.websocket_connect("/ws") as websocket:
+            websocket.receive_text()
+
+
+@patch("httpx.AsyncClient.post", new=mock_post_failure)
+def test_websocket_invalid_authentication_rejected(ws_client, invalid_api_key, suppress_auth_errors):
+    with pytest.raises(WebSocketDisconnect):
+        with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {invalid_api_key}"}) as websocket:
+            websocket.receive_text()
+
+
+@patch("httpx.AsyncClient.post", new=mock_post_success)
+def test_websocket_valid_authentication_accepted(ws_client, valid_api_key):
+    with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {valid_api_key}"}) as websocket:
+        assert websocket.receive_text() == "authenticated"
 
 
 def test_http_auth_request_payload(http_client, valid_api_key, mock_auth_endpoint, suppress_auth_errors):
@@ -459,7 +505,8 @@ def test_oauth2_with_jwks_token_expected(
     oauth2_client, jwt_token_valid, mock_jwks_urlopen_with_auth_required, suppress_auth_errors
 ):
     response = oauth2_client.get("/test", headers={"Authorization": f"Bearer {jwt_token_valid}"})
-    assert response.status_code == 401
+    assert response.status_code == 503
+    assert "Authentication service unavailable" in response.json()["error"]["message"]
 
 
 def test_oauth2_with_jwks_token_configured(oauth2_client_with_jwks_token, jwt_token_valid, mock_jwks_urlopen):
@@ -583,6 +630,34 @@ def test_get_attributes_from_claims():
     assert attributes["app2_roles"] == ["role3"]
     assert attributes["tenant"] == ["tenant1"]
     assert attributes["region"] == ["us-west"]
+
+    # Test escaped dots for keys with literal dots (e.g., Kubernetes "kubernetes.io")
+    claims = {
+        "kubernetes.io": {
+            "namespace": "ogx",
+            "serviceaccount": {"name": "tenant-a", "uid": "abc-123"},
+        },
+        "sub": "system:serviceaccount:ogx:tenant-a",
+    }
+    attributes = get_attributes_from_claims(
+        claims, {"kubernetes\\.io.serviceaccount.name": "teams", "sub": "principal"}
+    )
+    assert attributes["teams"] == ["tenant-a"]
+    assert attributes["principal"] == ["system:serviceaccount:ogx:tenant-a"]
+
+    # Test fully escaped literal key (all dots escaped)
+    claims = {
+        "my.dotted.key": "literal-value",
+    }
+    attributes = get_attributes_from_claims(claims, {"my\\.dotted\\.key": "test"})
+    assert attributes["test"] == ["literal-value"]
+
+    # Test mixing escaped and unescaped dots
+    claims = {
+        "resource.access": {"ogx": {"roles": ["admin", "user"]}},
+    }
+    attributes = get_attributes_from_claims(claims, {"resource\\.access.ogx.roles": "roles"})
+    assert set(attributes["roles"]) == {"admin", "user"}
 
 
 # TODO: add more tests for oauth2 token provider

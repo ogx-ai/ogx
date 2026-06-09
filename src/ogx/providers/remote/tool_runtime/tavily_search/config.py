@@ -6,15 +6,17 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field, SecretStr
+
+from ogx.providers.utils.common.http import BaseToolRuntimeConfig
 
 
-class TavilySearchToolConfig(BaseModel):
+class TavilySearchToolConfig(BaseToolRuntimeConfig):
     """Configuration for the Tavily Search tool runtime."""
 
-    api_key: str | None = Field(
+    api_key: SecretStr | None = Field(
         default=None,
-        description="The Tavily Search API Key",
+        description="The Tavily Search API Key. Can be overridden per-request via X-OGX-Provider-Data header.",
     )
     max_results: int = Field(
         default=3,

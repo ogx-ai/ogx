@@ -373,7 +373,7 @@ See [Chroma's documentation](https://docs.trychroma.com/docs/overview/introducti
             api=Api.vector_io,
             adapter_type="pgvector",
             provider_type="remote::pgvector",
-            pip_packages=["psycopg2-binary"] + DEFAULT_VECTOR_IO_DEPS,
+            pip_packages=["asyncpg", "pgvector>=0.3.0"] + DEFAULT_VECTOR_IO_DEPS,
             module="ogx.providers.remote.vector_io.pgvector",
             config_class="ogx.providers.remote.vector_io.pgvector.PGVectorVectorIOConfig",
             api_dependencies=[Api.inference],
@@ -665,7 +665,7 @@ vector_io:
   - provider_id: milvus
     provider_type: inline::milvus
     config:
-      db_path: ~/.llama/distributions/together/milvus_store.db
+      db_path: ~/.ogx/distributions/together/milvus_store.db
 ```
 
 ### Remote Configuration

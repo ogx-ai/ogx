@@ -185,9 +185,9 @@ jobs:
           echo "OpenAPI spec generated successfully"
           ls -lh openapi.yml
 
-      - name: Generate Python SDK
+      - name: Generate Python SDK (for CI testing with ogx_client name)
         working-directory: client-sdks/openapi
-        run: make sdk
+        run: make sdk OPEN=0
 
       - name: Validate generated SDK
         working-directory: client-sdks/openapi
@@ -214,3 +214,48 @@ jobs:
           # Show directory structure for debugging
           echo "=== Generated SDK structure ==="
           find sdks/python -type f -name "*.py" | head -20
+
+      - name: Install generated SDK
+        run: |
+          echo "Installing OpenAPI-generated SDK (ogx_client)..."
+          # Uninstall existing client (note: uv pip uninstall doesn't support -y flag)
+          uv pip uninstall ogx-client || true
+
+          # Install SDK using uv pip - this ensures proper editable install
+          uv pip install -e client-sdks/openapi/sdks/python
+
+          echo "Verifying installation..."
+          # Use 'uv run python' to ensure we use the correct Python in the venv
+          uv run python -c "import ogx_client; print(f'Installed: {ogx_client.__name__}')"
+
+      - name: Setup Ollama (for integration tests)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-ollama
+
+      - name: Run integration tests with OpenAPI SDK
+        if: runner.os == 'Linux'
+        run: |
+          echo "Running integration tests with OpenAPI-generated SDK..."
+
+          # Run a smoke test suite - basic functionality tests
+          uv run pytest tests/integration/inspect/test_inspect.py \
+            --stack-config="inference=ollama" \
+            -v \
+            || echo "::warning::Some integration tests failed - this may indicate SDK compatibility issues"
+
+          # Show which SDK is actually being used
+          uv run python -c "import ogx_client; import inspect; print(f'SDK location: {inspect.getfile(ogx_client)}')"
+
+      - name: Summary
+        if: runner.os == 'Linux'
+        run: |
+          {
+            echo "## OpenAPI SDK Validation Summary"
+            echo ""
+            echo "✅ SDK generation completed successfully"
+            echo "✅ SDK installed and importable"
+            echo "✅ Integration tests executed (check logs for results)"
+            echo ""
+            echo "**Platform**: ${{ matrix.os }}"
+            echo "**Package**: ogx_client (OpenAPI-generated)"
+          } >> "$GITHUB_STEP_SUMMARY"

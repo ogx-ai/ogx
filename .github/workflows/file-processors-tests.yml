@@ -70,6 +70,24 @@ jobs:
             sleep 2
           done
 
+      - name: Warm up docling processor
+        run: |
+          uv run --no-sync python - <<'PY'
+          from pathlib import Path
+
+          import requests
+
+          pdf_path = Path("tests/integration/responses/fixtures/pdfs/ogx_and_models.pdf")
+          response = requests.post(
+              "http://localhost:8321/v1alpha/file-processors/process",
+              files={"file": (pdf_path.name, pdf_path.read_bytes(), "application/pdf")},
+              timeout=300,
+          )
+          response.raise_for_status()
+          payload = response.json()
+          print(f"Warmup complete: {len(payload.get('chunks', []))} chunks")
+          PY
+
       - name: Run file processors integration tests
         run: |
           uv run --no-sync pytest -s -v \

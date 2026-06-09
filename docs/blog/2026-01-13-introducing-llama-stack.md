@@ -47,7 +47,7 @@ Distributions are pre-configured bundles of provider implementations that make i
 OGX supports various developer interfaces:
 
 - **CLI**: Command-line tools for server management
-- **Python SDK**: [`ogx-client-python`](https://github.com/meta-llama/llama-stack-client-python)
+- **Python SDK**: [`ogx-client-python`](https://github.com/ogx-ai/ogx-client-python)
 - **TypeScript SDK**: [`ogx-client-typescript`](https://github.com/ogx-ai/ogx-client-typescript)
 
 ## Why OGX?
@@ -103,7 +103,7 @@ See the [OGX Office Hours Content Calendar](https://docs.google.com/document/d/1
 We'd love to have you join our growing community:
 
 - [Star us on GitHub](https://github.com/ogx-ai/ogx)
-- [Join our Discord](https://discord.gg/ZAFjsrcw)
+- [Join our Discord](https://discord.gg/bUYRqEvK6)
 - [Read the Documentation](/docs)
 - [Report Issues](https://github.com/ogx-ai/ogx/issues)
 

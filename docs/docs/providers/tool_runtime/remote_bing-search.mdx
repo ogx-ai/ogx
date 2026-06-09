@@ -14,11 +14,13 @@ Bing Search tool for web search capabilities using Microsoft's search engine.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `api_key` | `str \| None` | No |  |  |
+| `timeout` | `float` | No | 30.0 | Overall HTTP timeout in seconds for requests to external services. |
+| `connect_timeout` | `float` | No | 10.0 | TCP connect timeout in seconds. Shorter than the overall timeout to fail fast on unreachable hosts. |
+| `api_key` | `SecretStr \| None` | No |  | The Bing Search API Key. Can be overridden per-request via X-OGX-Provider-Data header. |
 | `top_k` | `int` | No | 3 |  |
 
 ## Sample Configuration
 
 ```yaml
-api_key: ${env.BING_API_KEY:}
+api_key: ${env.BING_API_KEY:=}
 ```

@@ -4,8 +4,6 @@ apis:
 - agents
 - files
 - inference
-- files
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -27,7 +25,7 @@ providers:
   - provider_id: builtin-files
     provider_type: inline::localfs
     config:
-      storage_dir: ${env.FILES_STORAGE_DIR:=~/.llama/distributions/starter/files}
+      storage_dir: ${env.FILES_STORAGE_DIR:=~/.ogx/distributions/starter/files}
       metadata_store:
         table_name: files_metadata
         backend: sql_default
@@ -39,11 +37,6 @@ providers:
       persistence:
         namespace: vector_io::chroma_remote
         backend: kv_default
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
   agents:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -120,8 +113,6 @@ registered_resources:
   - model_id: ${env.INFERENCE_MODEL}
     provider_id: vllm-inference
     model_type: llm
-  shields:
-  - shield_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
   vector_dbs: []
   datasets: []
   scoring_fns: []

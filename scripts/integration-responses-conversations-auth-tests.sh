@@ -32,6 +32,30 @@ uv run pytest tests/integration/conversations/test_openai_conversations.py \
 echo ""
 echo "✓ Conversations isolation tests completed successfully!"
 
+echo ""
+echo "Running prompts isolation tests..."
+
+uv run pytest tests/integration/responses/test_prompts_access_control.py \
+    -k "TestPromptsAccessControl" \
+    --stack-config="$OGX_SERVER_URL" \
+    -v -s \
+    --color=yes || exit 1
+
+echo ""
+echo "✓ Prompts isolation tests completed successfully!"
+
+echo ""
+echo "Running vector stores isolation tests..."
+
+uv run pytest tests/integration/vector_io/test_vector_stores_access_control.py \
+    -k "TestVectorStoresAccessControl" \
+    --stack-config="$OGX_SERVER_URL" \
+    -v -s \
+    --color=yes || exit 1
+
+echo ""
+echo "✓ Vector stores isolation tests completed successfully!"
+
 # Run responses access control tests if INFERENCE_MODEL is set
 # Uses record-if-missing mode: replays from recordings if available, records if API key is set
 if [ -n "${INFERENCE_MODEL:-}" ]; then

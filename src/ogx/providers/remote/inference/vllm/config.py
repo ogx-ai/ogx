@@ -40,6 +40,14 @@ class VLLMInferenceAdapterConfig(RemoteInferenceProviderConfig):
         "/v1/chat/completions. Provides proper reasoning token retention and "
         "structured token accounting. Requires vLLM with Responses API support.",
     )
+    fairness_header_attribute: str | None = Field(
+        default=None,
+        description=(
+            "User attribute category whose value is injected as the "
+            "x-gateway-inference-fairness-id header on outgoing requests. "
+            "Used by llm-d EPP Flow Control for per-tenant fair scheduling."
+        ),
+    )
     tls_verify: bool | str | None = Field(
         default=None,
         deprecated=True,

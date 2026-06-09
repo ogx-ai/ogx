@@ -4,6 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv]
 required-version = ">=0.7.0"
+constraint-dependencies = [
+    "protobuf>=6.33.5",                # CVE-2026-0994: JSON recursion depth bypass
+    "requests>=2.33.0",                # CVE-2026-25645: insecure temp file reuse in extract_zipped_paths()
+    "urllib3>=2.6.3",                   # CVE-2026-21441 + CVE-2025-66471 + CVE-2025-66418: decompression bomb, streaming, chain bypass
+]
 
 [project]
 name = "ogx-api"
@@ -24,12 +29,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
-    "openai>=2.30.0",
-    "fastapi>=0.115.0,<1.0",
+    "openai>=2.38.0",
+    "fastapi>=0.136.3,<1.0",
     "pydantic>=2.11.9",
-    "jsonschema",
-    "opentelemetry-sdk>=1.30.0",
-    "opentelemetry-exporter-otlp-proto-http>=1.30.0",
+    "jsonschema>=4.26.0",
+    "opentelemetry-sdk>=1.42.1",
+    "opentelemetry-exporter-otlp-proto-http>=1.42.1",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.42.1",
 ]
 
 [project.urls]
@@ -58,12 +64,12 @@ packages = [
     "ogx_api.models",
 
     "ogx_api.providers",
-    "ogx_api.shields",
     "ogx_api.prompts",
-    "ogx_api.safety",
     "ogx_api.tools",
     "ogx_api.vector_io",
     "ogx_api.connectors",
+    "ogx_api.provider",
+    "ogx_api.types",
 ]
 
 # 3. List every root-level .py file as a module.
@@ -87,7 +93,7 @@ ogx_api = ["py.typed", "**/*.json", "**/*.yaml"]
 
 [tool.setuptools_scm]
 root = "../.."
-fallback_version = "0.7.2.dev0"
+fallback_version = "1.0.3.dev0"
 
 [tool.ruff]
 line-length = 120

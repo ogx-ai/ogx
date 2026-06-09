@@ -11,7 +11,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from sqlalchemy.engine import URL
 
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
@@ -88,10 +89,13 @@ class PostgresKVStoreConfig(CommonConfig):
     port: int | str = 5432
     db: str = "ogx"
     user: str
-    password: str | None = None
+    password: SecretStr | None = None
     ssl_mode: str | None = None
     ca_cert_path: str | None = None
     table_name: str = "ogx_kvstore"
+    pool_size: int = Field(default=5, ge=1, description="Number of persistent connections in the pool")
+    max_overflow: int = Field(default=10, ge=0, description="Max additional connections beyond pool_size")
+    command_timeout: float = Field(default=30.0, gt=0, description="Timeout in seconds for individual SQL statements")
 
     @classmethod
     def sample_run_config(cls, table_name: str = "ogx_kvstore", **kwargs: object) -> dict[str, str]:
@@ -123,7 +127,7 @@ class PostgresKVStoreConfig(CommonConfig):
 
     @classmethod
     def pip_packages(cls) -> list[str]:
-        return ["psycopg2-binary"]
+        return ["asyncpg"]
 
 
 class MongoDBKVStoreConfig(CommonConfig):
@@ -161,7 +165,7 @@ class SqlAlchemySqlStoreConfig(BaseModel):
 
     @property
     @abstractmethod
-    def engine_str(self) -> str: ...
+    def engine_str(self) -> str | URL: ...
 
     # TODO: move this when we have a better way to specify dependencies with internal APIs
     @classmethod
@@ -201,14 +205,21 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     port: int | str = 5432
     db: str = "ogx"
     user: str
-    password: str | None = None
+    password: SecretStr | None = None
     pool_size: int = Field(default=10, ge=1, description="Number of persistent connections in the pool")
     max_overflow: int = Field(default=20, ge=0, description="Max additional connections beyond pool_size")
-    pool_recycle: int = Field(default=-1, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
+    pool_recycle: int = Field(default=3600, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
 
     @property
-    def engine_str(self) -> str:
-        return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
+    def engine_str(self) -> URL:
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.user,
+            password=self.password.get_secret_value() if self.password else None,
+            host=self.host,
+            port=int(self.port),
+            database=self.db,
+        )
 
     @classmethod
     def pip_packages(cls) -> list[str]:
@@ -225,7 +236,7 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
             "password": "${env.POSTGRES_PASSWORD:=ogx}",
             "pool_size": "${env.POSTGRES_POOL_SIZE:=10}",
             "max_overflow": "${env.POSTGRES_MAX_OVERFLOW:=20}",
-            "pool_recycle": "${env.POSTGRES_POOL_RECYCLE:=-1}",
+            "pool_recycle": "${env.POSTGRES_POOL_RECYCLE:=3600}",
             "pool_pre_ping": "${env.POSTGRES_POOL_PRE_PING:=true}",
         }
 
@@ -317,14 +328,33 @@ class ServerStoresConfig(BaseModel):
         default=None,
         description="Responses store configuration (uses SQL backend)",
     )
-    prompts: KVStoreReference | None = Field(
-        default=KVStoreReference(backend="kv_default", namespace="prompts"),
-        description="Prompts store configuration (uses KV backend)",
+    prompts: SqlStoreReference | None = Field(
+        default=SqlStoreReference(backend="sql_default", table_name="prompts"),
+        description="Prompts store configuration (uses SQL backend)",
     )
-    connectors: KVStoreReference | None = Field(
-        default=KVStoreReference(backend="kv_default", namespace="connectors"),
-        description="Connectors store configuration (uses KV backend)",
+    connectors: SqlStoreReference | None = Field(
+        default=SqlStoreReference(backend="sql_default", table_name="connectors"),
+        description="Connectors store configuration (uses SQL backend)",
     )
+    vector_stores: SqlStoreReference | None = Field(
+        default=None,
+        description="Vector store metadata configuration (uses SQL backend)",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_kv_to_sql(cls, data: dict) -> dict:
+        """Auto-migrate prompts/connectors from legacy KVStoreReference to SqlStoreReference."""
+        if not isinstance(data, dict):
+            return data
+        for store_name in ("prompts", "connectors"):
+            ref = data.get(store_name)
+            if isinstance(ref, dict) and "namespace" in ref and "table_name" not in ref:
+                data[store_name] = {
+                    "backend": ref.get("backend", "sql_default").replace("kv_", "sql_"),
+                    "table_name": ref["namespace"],
+                }
+        return data
 
 
 def _default_backends() -> dict[str, StorageBackendConfig]:

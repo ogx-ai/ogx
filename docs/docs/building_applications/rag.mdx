@@ -33,11 +33,11 @@ OGX supports various approaches for building RAG applications. The server provid
 The **Agent class** is a high-level client wrapper around the Responses API with automatic tool execution and session management. Best for conversational agents and multi-turn RAG.
 
 ```python
-from llama_stack_client import Agent, AgentEventLogger, LlamaStackClient
+from ogx_client import Agent, AgentEventLogger, OgxClient
 import requests
 from io import BytesIO
 
-client = LlamaStackClient(base_url="http://localhost:8321")
+client = OgxClient(base_url="http://localhost:8321")
 
 # Create vector store
 vs = client.vector_stores.create(name="my_vector_db")

@@ -12,22 +12,17 @@ import pytest
 
 from ogx.core.datatypes import RegistryEntrySource
 from ogx.core.routing_tables.models import ModelsRoutingTable
-from ogx.core.routing_tables.shields import ShieldsRoutingTable
 from ogx.core.routing_tables.toolgroups import ToolGroupsRoutingTable
 from ogx_api import (
     URL,
     Api,
-    GetShieldRequest,
     ListToolDefsResponse,
     ListToolsRequest,
     Model,
     ModelNotFoundError,
     ModelType,
-    RegisterShieldRequest,
-    Shield,
     ToolDef,
     ToolGroup,
-    UnregisterShieldRequest,
 )
 
 
@@ -75,17 +70,6 @@ class InferenceImpl(Impl):
 
     async def shutdown(self):
         pass
-
-
-class SafetyImpl(Impl):
-    def __init__(self):
-        super().__init__(Api.safety)
-
-    async def register_shield(self, shield: Shield):
-        return shield
-
-    async def unregister_shield(self, shield_id: str):
-        return shield_id
 
 
 class ToolGroupsImpl(Impl):
@@ -168,51 +152,6 @@ async def test_models_routing_table(cached_disk_dist_registry):
     assert len(openai_models.data) == 0
 
 
-async def test_shields_routing_table(cached_disk_dist_registry):
-    table = ShieldsRoutingTable({"test_provider": SafetyImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register multiple shields and verify listing
-    await table.register_shield(RegisterShieldRequest(shield_id="test-shield", provider_id="test_provider"))
-    await table.register_shield(RegisterShieldRequest(shield_id="test-shield-2", provider_id="test_provider"))
-    shields = await table.list_shields()
-    assert len(shields.data) == 2
-
-    shield_ids = {s.identifier for s in shields.data}
-    assert "test-shield" in shield_ids
-    assert "test-shield-2" in shield_ids
-
-    # Test get specific shield
-    test_shield = await table.get_shield(GetShieldRequest(identifier="test-shield"))
-    assert test_shield is not None
-    assert test_shield.identifier == "test-shield"
-    assert test_shield.provider_id == "test_provider"
-    assert test_shield.provider_resource_id == "test-shield"
-    assert test_shield.params == {}
-
-    # Test get non-existent shield - should raise ValueError with specific message
-    with pytest.raises(ValueError, match="Shield 'non-existent' not found"):
-        await table.get_shield(GetShieldRequest(identifier="non-existent"))
-
-    # Test unregistering shields
-    await table.unregister_shield(UnregisterShieldRequest(identifier="test-shield"))
-    shields = await table.list_shields()
-
-    assert len(shields.data) == 1
-    shield_ids = {s.identifier for s in shields.data}
-    assert "test-shield" not in shield_ids
-    assert "test-shield-2" in shield_ids
-
-    # Unregister the remaining shield
-    await table.unregister_shield(UnregisterShieldRequest(identifier="test-shield-2"))
-    shields = await table.list_shields()
-    assert len(shields.data) == 0
-
-    # Test unregistering non-existent shield - should raise ValueError with specific message
-    with pytest.raises(ValueError, match="Shield 'non-existent' not found"):
-        await table.unregister_shield(UnregisterShieldRequest(identifier="non-existent"))
-
-
 async def test_double_registration_models_positive(cached_disk_dist_registry):
     """Test that registering the same model twice with identical data succeeds."""
     table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
@@ -274,6 +213,45 @@ async def test_openai_list_models_has_object_field(cached_disk_dist_registry):
     openai_models = await table.openai_list_models()
     assert openai_models.object == "list"
     assert len(openai_models.data) == 1
+
+
+async def test_anthropic_list_models_supports_pagination(cached_disk_dist_registry):
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
+    await table.initialize()
+
+    await table.register_model(model_id="test-model-a", provider_id="test_provider")
+    await table.register_model(model_id="test-model-b", provider_id="test_provider")
+    await table.register_model(model_id="test-model-c", provider_id="test_provider")
+
+    first_page = await table.anthropic_list_models(limit=2)
+    first_page_ids = [model.id for model in first_page.data]
+    assert first_page_ids == ["test_provider/test-model-a", "test_provider/test-model-b"]
+    assert first_page.has_more
+    assert first_page.first_id == "test_provider/test-model-a"
+    assert first_page.last_id == "test_provider/test-model-b"
+
+    second_page = await table.anthropic_list_models(after_id=first_page.last_id, limit=2)
+    second_page_ids = [model.id for model in second_page.data]
+    assert second_page_ids == ["test_provider/test-model-c"]
+    assert not second_page.has_more
+    assert second_page.first_id == "test_provider/test-model-c"
+    assert second_page.last_id == "test_provider/test-model-c"
+
+
+async def test_anthropic_list_models_rejects_invalid_pagination_inputs(cached_disk_dist_registry):
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
+    await table.initialize()
+
+    await table.register_model(model_id="test-model", provider_id="test_provider")
+
+    with pytest.raises(ValueError, match="Failed to list models: before_id and after_id are mutually exclusive."):
+        await table.anthropic_list_models(before_id="test_provider/test-model", after_id="test_provider/test-model")
+
+    with pytest.raises(ValueError, match="Failed to list models: before_id was not found."):
+        await table.anthropic_list_models(before_id="test_provider/unknown-model")
+
+    with pytest.raises(ValueError, match="Failed to list models: limit must be at least 1."):
+        await table.anthropic_list_models(limit=0)
 
 
 async def test_model_has_openai_compatible_fields(cached_disk_dist_registry):

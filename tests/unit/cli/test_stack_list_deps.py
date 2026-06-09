@@ -38,8 +38,8 @@ class TestArguments:
         assert args.providers is None
 
     def test_providers_accepts_multiple_pairs(self, stack_list_deps: StackListDeps):
-        args = stack_list_deps.parser.parse_args(["--providers", "inference=fireworks,safety=llama-guard"])
-        assert args.providers == "inference=fireworks,safety=llama-guard"
+        args = stack_list_deps.parser.parse_args(["--providers", "inference=fireworks,vector_io=faiss"])
+        assert args.providers == "inference=fireworks,vector_io=faiss"
 
     def test_config_and_providers_are_independent(self, stack_list_deps: StackListDeps):
         # --providers with no positional config
@@ -55,7 +55,6 @@ class TestDelegation:
 
         return {
             Api.inference: {"fireworks": MagicMock()},
-            Api.safety: {"llama-guard": MagicMock()},
         }
 
     def test_providers_calls_dynamic_config_spec(self, stack_list_deps: StackListDeps):
@@ -109,10 +108,10 @@ class TestDelegation:
             ),
             patch("builtins.print"),
         ):
-            args = stack_list_deps.parser.parse_args(["--providers", "inference=fireworks;safety=llama-guard"])
+            args = stack_list_deps.parser.parse_args(["--providers", "inference=fireworks;vector_io=faiss"])
             stack_list_deps._run_stack_list_deps_command(args)
 
-        mock_fn.assert_called_once_with("inference=fireworks;safety=llama-guard")
+        mock_fn.assert_called_once_with("inference=fireworks;vector_io=faiss")
 
 
 class TestErrorPropagation:
