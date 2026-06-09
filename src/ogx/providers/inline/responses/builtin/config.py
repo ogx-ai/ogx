@@ -134,6 +134,14 @@ class BuiltinResponsesImplConfig(BaseModel):
         '{"results": [{"flagged": bool, "categories": {...}}]}.',
     )
 
+    moderation_headers: dict[str, str] | None = Field(
+        default=None,
+        description="HTTP headers to send with moderation endpoint requests. "
+        "Use this to provide authentication for hosted moderation services "
+        "(e.g., {'Authorization': 'Bearer sk-...'}). These headers are server-side only "
+        "and never exposed to clients.",
+    )
+
     @classmethod
     def sample_run_config(cls, __distro_dir__: str) -> dict[str, Any]:
         return {

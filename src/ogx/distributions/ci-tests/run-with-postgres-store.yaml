@@ -227,6 +227,12 @@ providers:
     config:
       api_key: ${env.TAVILY_SEARCH_API_KEY:=}
       max_results: 3
+  - provider_id: nimble-search
+    provider_type: remote::nimble-search
+    config:
+      api_key: ${env.NIMBLE_API_KEY:=}
+      max_results: 3
+      search_depth: lite
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
@@ -314,7 +320,7 @@ registered_resources:
     provider_id: ${env.AWS_DEFAULT_REGION:+bedrock}
     provider_model_id: openai.gpt-oss-20b-1:0
     model_type: llm
-  vector_dbs: []
+  vector_stores: []
 server:
   port: 8321
   auth:
