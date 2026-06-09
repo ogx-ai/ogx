@@ -202,6 +202,29 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 exc_info=True,
             )
 
+    def _reset_client(self) -> None:
+        """Reset cached client and HTTP options after a temporary event loop exits.
+
+        When StackApp.__init__ runs stack.initialize() inside a temporary event
+        loop (via ThreadPoolExecutor), model listing may trigger lazy client
+        creation via _get_client().  The Google genai Client eagerly creates an
+        internal httpx.AsyncClient bound to the temporary loop.  After the
+        temporary loop is closed, the cached client holds connections tied to
+        the dead loop, causing ``RuntimeError: Event loop is closed`` on the
+        first inference request.
+
+        This method clears the cached client without awaiting async close
+        (the temporary loop is already terminated) so that a fresh client is
+        created on the next _get_client() call — this time on uvicorn's
+        request-handling event loop.
+
+        Compare ``reset_sqlstore_engines()`` which serves the same purpose for
+        SQL engines.
+        """
+        self._default_client = None
+        self._http_options = None
+        self._http_options_initialized = False
+
     async def shutdown(self) -> None:
         await self._close_managed_httpx_client()
         self._http_options = None
@@ -315,7 +338,30 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 access_token = self.config.auth_credential.get_secret_value() if self.config.auth_credential else None
                 return self._create_client(project=project, location=location, access_token=access_token)
 
-        # Lazily create the default client on first use
+        # Lazily create the default client on first use.
+        # If we already have a cached client, verify it is still usable before
+        # returning it — a previous request may have left connections tied to an
+        # event loop that is now closed (e.g., after a temporary startup loop).
+        if self._default_client is not None:
+            try:
+                # Touch the underlying httpx client to detect event loop binding
+                # issues.  If the client was created in a now-closed loop,
+                # accessing its transport raises RuntimeError.
+                if self._http_options is not None:
+                    _client = getattr(self._http_options, "httpx_async_client", None)
+                    if _client is not None and _client.is_closed:
+                        logger.info(
+                            "VertexAI default client transport is closed; recreating",
+                            project=self.config.project,
+                        )
+                        self._default_client = None
+            except RuntimeError:
+                logger.warning(
+                    "VertexAI default client is bound to a closed event loop; recreating",
+                    project=self.config.project,
+                )
+                self._default_client = None
+
         if self._default_client is None:
             access_token = self.config.auth_credential.get_secret_value() if self.config.auth_credential else None
             try:
