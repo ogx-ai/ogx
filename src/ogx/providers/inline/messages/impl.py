@@ -79,6 +79,7 @@ from ogx_api.messages.models import (
     _SignatureDelta,
     _TextDelta,
     _ThinkingDelta,
+    _ToolChoiceTool,
 )
 
 from .config import MessagesConfig
@@ -111,11 +112,13 @@ async def _list_to_async_iter(
 
 
 # Maps Anthropic stop_reason -> OpenAI finish_reason
+# Valid stop_reasons: end_turn, stop_sequence, tool_use, max_tokens, pause_turn, refusal
 _STOP_REASON_TO_FINISH = {
     "end_turn": "stop",
     "stop_sequence": "stop",
     "tool_use": "tool_calls",
     "max_tokens": "length",
+    "pause_turn": "stop",
 }
 
 # Maps OpenAI finish_reason -> Anthropic stop_reason
@@ -628,6 +631,10 @@ class BuiltinMessagesImpl(Messages):
             self._convert_tool_choice_to_openai(request.tool_choice) if tools and request.tool_choice else None
         )
 
+        parallel_tool_calls: bool | None = None
+        if request.tool_choice and getattr(request.tool_choice, "disable_parallel_tool_use", False):
+            parallel_tool_calls = False
+
         extra_body: dict[str, Any] = {}
         if request.top_k is not None:
             extra_body["top_k"] = request.top_k
@@ -641,6 +648,7 @@ class BuiltinMessagesImpl(Messages):
             stop=request.stop_sequences,
             tools=tools,
             tool_choice=tool_choice,
+            parallel_tool_calls=parallel_tool_calls,
             stream=request.stream or False,
             service_tier=request.service_tier,  # type: ignore[arg-type]
             **(extra_body or {}),
@@ -783,23 +791,14 @@ class BuiltinMessagesImpl(Messages):
         return result or None
 
     def _convert_tool_choice_to_openai(self, tool_choice: Any) -> Any:
-        if isinstance(tool_choice, str):
-            if tool_choice == "any":
-                return "required"
-            if tool_choice == "none":
-                return "none"
-            return "auto"
+        if isinstance(tool_choice, _ToolChoiceTool):
+            return {"type": "function", "function": {"name": tool_choice.name}}
 
-        if isinstance(tool_choice, dict):
-            tc_type = tool_choice.get("type")
-            if tc_type == "tool":
-                return {"type": "function", "function": {"name": tool_choice["name"]}}
-            if tc_type == "any":
-                return "required"
-            if tc_type == "none":
-                return "none"
-            return "auto"
-
+        tc_type = tool_choice.type if hasattr(tool_choice, "type") else str(tool_choice)
+        if tc_type == "any":
+            return "required"
+        if tc_type == "none":
+            return "none"
         return "auto"
 
     # -- Response translation --

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ogx_api.schema_utils import remove_null_from_anyof
 
@@ -202,6 +202,35 @@ def _normalize_tool_types(tools: list[Any]) -> list[Any]:
     return [{**t, "type": "custom"} if isinstance(t, dict) and "type" not in t else t for t in tools]
 
 
+# -- Tool choice --
+
+
+class _ToolChoiceAuto(BaseModel):
+    type: Literal["auto"] = "auto"
+    disable_parallel_tool_use: bool | None = None
+
+
+class _ToolChoiceAny(BaseModel):
+    type: Literal["any"] = "any"
+    disable_parallel_tool_use: bool | None = None
+
+
+class _ToolChoiceNone(BaseModel):
+    type: Literal["none"] = "none"
+
+
+class _ToolChoiceTool(BaseModel):
+    type: Literal["tool"] = "tool"
+    name: str
+    disable_parallel_tool_use: bool | None = None
+
+
+AnthropicToolChoice = Annotated[
+    _ToolChoiceAuto | _ToolChoiceAny | _ToolChoiceNone | _ToolChoiceTool,
+    Field(discriminator="type"),
+]
+
+
 # -- Thinking config --
 
 
@@ -231,11 +260,21 @@ class AnthropicCreateMessageRequest(BaseModel):
     tools: list[AnthropicTool] | None = Field(
         default=None, json_schema_extra=remove_null_from_anyof, description="Tools available to the model."
     )
-    tool_choice: Any | None = Field(
+    tool_choice: AnthropicToolChoice | None = Field(
         default=None,
         json_schema_extra=remove_null_from_anyof,
         description="How the model should select tools. One of: 'auto', 'any', 'none', or {type: 'tool', name: '...'}.",
     )
+
+    @field_validator("tool_choice", mode="before")
+    @classmethod
+    def _coerce_tool_choice(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            if v in ("auto", "any", "none"):
+                return {"type": v}
+            return {"type": "auto"}
+        return v
+
     stream: bool | None = Field(
         default=False, json_schema_extra=remove_null_from_anyof, description="Whether to stream the response."
     )

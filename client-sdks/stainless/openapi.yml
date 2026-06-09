@@ -10518,8 +10518,24 @@ components:
           title: Tools
           description: Tools available to the model.
         tool_choice:
-          title: Tool Choice
+          oneOf:
+          - $ref: '#/components/schemas/_ToolChoiceAuto'
+            title: _ToolChoiceAuto
+          - $ref: '#/components/schemas/_ToolChoiceAny'
+            title: _ToolChoiceAny
+          - $ref: '#/components/schemas/_ToolChoiceNone'
+            title: _ToolChoiceNone
+          - $ref: '#/components/schemas/_ToolChoiceTool'
+            title: _ToolChoiceTool
+          title: _ToolChoiceAuto | ... (4 variants)
           description: "How the model should select tools. One of: 'auto', 'any', 'none', or {type: 'tool', name: '...'}."
+          discriminator:
+            propertyName: type
+            mapping:
+              any: '#/components/schemas/_ToolChoiceAny'
+              auto: '#/components/schemas/_ToolChoiceAuto'
+              none: '#/components/schemas/_ToolChoiceNone'
+              tool: '#/components/schemas/_ToolChoiceTool'
         stream:
           type: boolean
           title: Stream
@@ -11314,52 +11330,55 @@ components:
     CompactResponseRequest:
       properties:
         model:
-          type: string
-          title: Model
+          anyOf:
+          - $ref: '#/components/schemas/ModelIdsResponses'
+          - type: string
+          - type: 'null'
           description: The model to use for generating the compacted summary.
         input:
           anyOf:
-          - type: string
-          - items:
-              anyOf:
-              - oneOf:
-                - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
-                  title: OpenAIResponseMessage-Input
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-                  title: OpenAIResponseOutputMessageWebSearchToolCall-Input
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
-                  title: OpenAIResponseOutputMessageFileSearchToolCall
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
-                  title: OpenAIResponseOutputMessageFunctionToolCall
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
-                  title: OpenAIResponseOutputMessageMCPCall
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                  title: OpenAIResponseOutputMessageMCPListTools
-                - $ref: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
-                  title: OpenAIResponseMCPApprovalRequest
-                - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                  title: OpenAIResponseOutputMessageReasoningItem
-                discriminator:
-                  propertyName: type
-                  mapping:
-                    file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
-                    function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
-                    mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
-                    mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
-                    mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                    message: '#/components/schemas/OpenAIResponseMessage-Input'
-                    reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                    web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-                title: OpenAIResponseMessage-Input | ... (8 variants)
-              - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
-                title: OpenAIResponseInputFunctionToolCallOutput
-              - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
-                title: OpenAIResponseMCPApprovalResponse
-              - $ref: '#/components/schemas/OpenAIResponseCompaction'
-                title: OpenAIResponseCompaction
-              title: OpenAIResponseInputFunctionToolCallOutput | OpenAIResponseMCPApprovalResponse | OpenAIResponseCompaction
-            type: array
-            title: list[OpenAIResponseMessageUnion | OpenAIResponseInputFunctionToolCallOutput | ...]
+          - oneOf:
+            - type: string
+            - items:
+                anyOf:
+                - oneOf:
+                  - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
+                    title: OpenAIResponseMessage-Input
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
+                    title: OpenAIResponseOutputMessageWebSearchToolCall-Input
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
+                    title: OpenAIResponseOutputMessageFileSearchToolCall
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
+                    title: OpenAIResponseOutputMessageFunctionToolCall
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
+                    title: OpenAIResponseOutputMessageMCPCall
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
+                    title: OpenAIResponseOutputMessageMCPListTools
+                  - $ref: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
+                    title: OpenAIResponseMCPApprovalRequest
+                  - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+                    title: OpenAIResponseOutputMessageReasoningItem
+                  discriminator:
+                    propertyName: type
+                    mapping:
+                      file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
+                      function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
+                      mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
+                      mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
+                      mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
+                      message: '#/components/schemas/OpenAIResponseMessage-Input'
+                      reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+                      web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
+                  title: OpenAIResponseMessage-Input | ... (8 variants)
+                - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
+                  title: OpenAIResponseInputFunctionToolCallOutput
+                - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
+                  title: OpenAIResponseMCPApprovalResponse
+                - $ref: '#/components/schemas/OpenAIResponseCompaction'
+                  title: OpenAIResponseCompaction
+                title: OpenAIResponseInputFunctionToolCallOutput | OpenAIResponseMCPApprovalResponse | OpenAIResponseCompaction
+              type: array
+              title: list[OpenAIResponseMessageUnion | OpenAIResponseInputFunctionToolCallOutput | ...]
           - type: 'null'
           title: string | list[OpenAIResponseMessageUnion | OpenAIResponseInputFunctionToolCallOutput | ...]
           description: Input message(s) to compact.
@@ -13986,6 +14005,59 @@ components:
       type: object
       title: WebSearchUserLocation
       description: Approximate user location to refine web search results.
+    _ToolChoiceAny:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - any
+        disable_parallel_tool_use:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+      type: object
+      title: _ToolChoiceAny
+    _ToolChoiceAuto:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - auto
+        disable_parallel_tool_use:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+      type: object
+      title: _ToolChoiceAuto
+    _ToolChoiceNone:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - none
+      type: object
+      title: _ToolChoiceNone
+    _ToolChoiceTool:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - tool
+        name:
+          type: string
+          title: Name
+        disable_parallel_tool_use:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+      type: object
+      required:
+      - name
+      title: _ToolChoiceTool
     _URLOrData:
       properties:
         url:
@@ -16450,6 +16522,9 @@ components:
       - type
       - custom
       description: A call to a custom tool created by the model.
+    ModelIdsResponses:
+      type: string
+      description: Model identifier.
   responses:
     BadRequest400:
       description: The request was invalid or malformed

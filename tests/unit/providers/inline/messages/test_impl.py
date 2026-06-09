@@ -32,6 +32,10 @@ from ogx_api.messages.models import (
     AnthropicToolUseBlock,
     AnthropicURLImageSource,
     AnthropicWebSearchTool,
+    _ToolChoiceAny,
+    _ToolChoiceAuto,
+    _ToolChoiceNone,
+    _ToolChoiceTool,
 )
 
 
@@ -157,17 +161,63 @@ class TestRequestTranslation:
         assert tool["function"]["parameters"]["type"] == "object"
 
     def test_tool_choice_any(self, impl):
-        assert impl._convert_tool_choice_to_openai("any") == "required"
+        assert impl._convert_tool_choice_to_openai(_ToolChoiceAny()) == "required"
 
     def test_tool_choice_none(self, impl):
-        assert impl._convert_tool_choice_to_openai("none") == "none"
+        assert impl._convert_tool_choice_to_openai(_ToolChoiceNone()) == "none"
 
     def test_tool_choice_auto(self, impl):
-        assert impl._convert_tool_choice_to_openai("auto") == "auto"
+        assert impl._convert_tool_choice_to_openai(_ToolChoiceAuto()) == "auto"
 
     def test_tool_choice_specific(self, impl):
-        result = impl._convert_tool_choice_to_openai({"type": "tool", "name": "get_weather"})
+        result = impl._convert_tool_choice_to_openai(_ToolChoiceTool(name="get_weather"))
         assert result == {"type": "function", "function": {"name": "get_weather"}}
+
+    def test_tool_choice_string_coerced_to_model(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tool_choice="auto",
+        )
+        assert isinstance(request.tool_choice, _ToolChoiceAuto)
+
+    def test_tool_choice_dict_parsed_to_model(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+        )
+        assert isinstance(request.tool_choice, _ToolChoiceAuto)
+        assert request.tool_choice.disable_parallel_tool_use is True
+
+    def test_disable_parallel_tool_use_translated(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tools=[
+                AnthropicToolDef(
+                    name="search",
+                    description="Search",
+                    input_schema={"type": "object", "properties": {}},
+                ),
+            ],
+            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.parallel_tool_calls is False
+
+    def test_parallel_tool_calls_default_when_not_disabled(self, impl):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            max_tokens=100,
+            tool_choice={"type": "auto"},
+        )
+        result = impl._anthropic_to_openai(request)
+        assert result.parallel_tool_calls is None
 
     def test_stop_sequences(self, impl):
         request = AnthropicCreateMessageRequest(
@@ -670,6 +720,18 @@ class TestSSEParsing:
         assert event.type == "content_block_start"
         assert event.content_block.type == "redacted_thinking"
         assert event.content_block.data == "opaque-redacted-data-string"
+
+    def test_pause_turn_stop_reason_passthrough(self, impl):
+        event = impl._parse_sse_event(
+            "message_delta",
+            {
+                "delta": {"stop_reason": "pause_turn"},
+                "usage": {"output_tokens": 10},
+            },
+        )
+        assert event is not None
+        assert event.type == "message_delta"
+        assert event.delta.stop_reason == "pause_turn"
 
 
 class TestThinkingConfig:

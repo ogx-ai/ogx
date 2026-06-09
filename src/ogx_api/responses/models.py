@@ -265,7 +265,7 @@ class CompactResponseRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    model: str = Field(..., description="The model to use for generating the compacted summary.")
+    model: str | None = Field(..., description="The model to use for generating the compacted summary.")
     input: str | list[OpenAIResponseInput] | None = Field(default=None, description="Input message(s) to compact.")
     instructions: str | None = Field(default=None, description="Instructions to guide the compaction.")
     previous_response_id: str | None = Field(
