@@ -1,0 +1,240 @@
+# =============================================================================
+# Nightly Distribution Images
+# =============================================================================
+#
+# Builds distribution container images from the current main source tree
+# (INSTALL_MODE=editable) every night, smoke-tests each image on a native
+# runner, and publishes a multi-arch manifest to DockerHub so users can pull a
+# trustworthy "latest main" image.
+#
+# Why build from source instead of test.pypi:
+#   The package-publish nightly (pypi.yml) builds its images from test.pypi and
+#   must wait for package propagation, which is the main flake source. This
+#   workflow builds straight from the checked-out commit, so it has no external
+#   package dependency and reflects exactly that night's main.
+#
+# Image naming:
+#   ogxai/distribution-<distro>:nightly        (most recent successful nightly)
+#   ogxai/distribution-<distro>:<YYYYMMDD>     (dated, immutable-ish)
+#   ogxai/distribution-<distro>:<short-sha>    (traceable to a commit)
+#
+# Note: ":latest" is intentionally NOT published here. It is owned by the
+# release pipeline (pypi.yml) and means "latest stable release". Pull ":nightly"
+# to track main.
+#
+# Each architecture is built and smoke-tested on its own native runner (no QEMU
+# at runtime), pushed by a per-arch tag, then combined into a single manifest.
+#
+# REQUIRED SECRETS: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN (Read & Write).
+# =============================================================================
+
+name: Nightly Distribution Images
+
+on:
+  schedule:
+    # 02:00 UTC — after the package nightly, but independent of it.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      distributions:
+        description: 'Comma-separated distributions to build (empty = curated default set)'
+        required: false
+        type: string
+      push:
+        description: 'Push images to DockerHub (false = build + smoke test only)'
+        required: false
+        type: boolean
+        default: true
+  pull_request:
+    # On PRs touching build-relevant code, build + boot-smoke the starter distro
+    # (amd64 only, no push) so a change that breaks server startup is caught
+    # before merge instead of at the next nightly. The full multi-distro,
+    # multi-arch, publishing run stays schedule-only.
+    paths:
+      - '.github/workflows/nightly-distro.yml'
+      - 'scripts/smoke-test-distro.sh'
+      - 'containers/Containerfile'
+      - 'src/ogx/**'
+      - 'src/ogx_api/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_PREFIX: ogxai/distribution
+  # Curated default set built on a schedule. Override via workflow_dispatch.
+  DEFAULT_DISTROS: 'starter,postgres-demo'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      distros: ${{ steps.set.outputs.distros }}
+      arches: ${{ steps.set.outputs.arches }}
+      date_tag: ${{ steps.set.outputs.date_tag }}
+      sha_tag: ${{ steps.set.outputs.sha_tag }}
+      push: ${{ steps.set.outputs.push }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Resolve matrix and tags
+        id: set
+        run: |
+          # On PRs this is a pre-merge gate: build + smoke only starter on amd64,
+          # never push. Schedule/dispatch get the full distro set and both arches.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REQUESTED="starter"
+            arches='["amd64"]'
+            push="false"
+          else
+            REQUESTED="${{ inputs.distributions }}"
+            [ -z "$REQUESTED" ] && REQUESTED="$DEFAULT_DISTROS"
+            arches='["amd64","arm64"]'
+            push="${{ inputs.push == false && 'false' || 'true' }}"
+          fi
+
+          # Validate each requested distro exists before fanning out the matrix.
+          IFS=',' read -ra REQUESTED_ARR <<< "$REQUESTED"
+          valid=()
+          for d in "${REQUESTED_ARR[@]}"; do
+            d="$(echo "$d" | xargs)"  # trim surrounding whitespace
+            [ -z "$d" ] && continue
+            if [ ! -f "src/ogx/distributions/${d}/config.yaml" ]; then
+              echo "::error::Unknown distribution: ${d} (no src/ogx/distributions/${d}/config.yaml)"
+              exit 1
+            fi
+            valid+=("$d")
+          done
+          json=$(printf '%s\n' "${valid[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          {
+            echo "distros=$json"
+            echo "arches=$arches"
+            echo "date_tag=$(date -u +%Y%m%d)"
+            echo "sha_tag=$(git rev-parse --short HEAD)"
+            echo "push=$push"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Distributions: $json"
+          echo "Arches: $arches"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        # distro x arch cross-product. The include entries match on the existing
+        # "arch" axis to attach the right runner (they do NOT add new jobs).
+        distro: ${{ fromJson(needs.prepare.outputs.distros) }}
+        arch: ${{ fromJson(needs.prepare.outputs.arches) }}
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          docker system prune -af --volumes || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install dependencies
+        uses: ./.github/actions/setup-runner
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
+
+      - name: Build image (native ${{ matrix.arch }})
+        env:
+          DISTRO_NAME: ${{ matrix.distro }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          LOCAL_TAG="${IMAGE_PREFIX}-${DISTRO_NAME}:smoke-${ARCH}"
+          echo "LOCAL_TAG=${LOCAL_TAG}" >> "$GITHUB_ENV"
+
+          CONFIG_LABELS=$(bash scripts/generate-config-labels.sh "$DISTRO_NAME" "${{ needs.prepare.outputs.date_tag }}")
+          mapfile -t LABEL_ARGS <<< "$CONFIG_LABELS"
+
+          # Build natively for this runner's architecture and load into the
+          # local docker so the smoke test can run it directly.
+          docker buildx build \
+            --load \
+            -f containers/Containerfile \
+            --build-arg "INSTALL_MODE=editable" \
+            --build-arg "DISTRO_NAME=${DISTRO_NAME}" \
+            "${LABEL_ARGS[@]}" \
+            --tag "${LOCAL_TAG}" \
+            .
+
+      - name: Smoke test image
+        run: bash scripts/smoke-test-distro.sh "${LOCAL_TAG}"
+
+      - name: Log in to DockerHub
+        if: needs.prepare.outputs.push == 'true'
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push per-arch tag
+        id: push
+        if: needs.prepare.outputs.push == 'true'
+        env:
+          DISTRO_NAME: ${{ matrix.distro }}
+          ARCH: ${{ matrix.arch }}
+          DATE_TAG: ${{ needs.prepare.outputs.date_tag }}
+        run: |
+          ARCH_TAG="${IMAGE_PREFIX}-${DISTRO_NAME}:${DATE_TAG}-${ARCH}"
+          docker tag "${LOCAL_TAG}" "${ARCH_TAG}"
+          docker push "${ARCH_TAG}"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+          echo "Pushed ${ARCH_TAG}"
+
+  manifest:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.push == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: ${{ fromJson(needs.prepare.outputs.distros) }}
+    steps:
+      - name: Log in to DockerHub
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        env:
+          DISTRO_NAME: ${{ matrix.distro }}
+          DATE_TAG: ${{ needs.prepare.outputs.date_tag }}
+          SHA_TAG: ${{ needs.prepare.outputs.sha_tag }}
+        run: |
+          IMAGE="${IMAGE_PREFIX}-${DISTRO_NAME}"
+          AMD64="${IMAGE}:${DATE_TAG}-amd64"
+          ARM64="${IMAGE}:${DATE_TAG}-arm64"
+
+          # ":latest" is owned by the release pipeline (pypi.yml). Nightly
+          # tracks main via ":nightly".
+          for TAG in "${DATE_TAG}" "${SHA_TAG}" "nightly"; do
+            echo "Creating manifest ${IMAGE}:${TAG}"
+            docker buildx imagetools create \
+              --tag "${IMAGE}:${TAG}" \
+              "${AMD64}" "${ARM64}"
+          done
+
+          echo "Published ${IMAGE}: nightly, ${DATE_TAG}, ${SHA_TAG} (linux/amd64, linux/arm64)"
