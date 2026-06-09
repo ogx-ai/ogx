@@ -125,4 +125,4 @@ OGX already supports the core API surfaces. The work ahead is deepening that sup
 
 The goal is straightforward: any agent, any framework, any model, any infrastructure. One server.
 
-If your team is building agents and doesn't want to bet on a single vendor's API contract, [get started with OGX](https://ogx-ai.github.io/docs) or join the conversation on [Discord](https://discord.gg/ZAFjsrcw).
+If your team is building agents and doesn't want to bet on a single vendor's API contract, [get started with OGX](https://ogx-ai.github.io/docs) or join the conversation on [Discord](https://discord.gg/bUYRqEvK6).
