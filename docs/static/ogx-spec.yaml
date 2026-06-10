@@ -11572,6 +11572,72 @@ components:
       - has_more
       title: ListMessageBatchesResponse
       description: Response from GET /v1/messages/batches.
+    ListSkillVersionsResponse:
+      properties:
+        object:
+          type: string
+          title: Object
+          enum:
+          - list
+        data:
+          items:
+            $ref: '#/components/schemas/SkillVersion'
+          type: array
+          title: Data
+          description: List of skill version objects
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether there are more results
+          default: false
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the first item in the list
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the last item in the list
+      type: object
+      required:
+      - data
+      title: ListSkillVersionsResponse
+      description: Response from listing skill versions.
+    ListSkillsResponse:
+      properties:
+        object:
+          type: string
+          title: Object
+          enum:
+          - list
+        data:
+          items:
+            $ref: '#/components/schemas/Skill'
+          type: array
+          title: Data
+          description: List of skill objects
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether there are more results
+          default: false
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the first item in the list
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the last item in the list
+      type: object
+      required:
+      - data
+      title: ListSkillsResponse
+      description: Response from listing skills.
     ListToolsResponse:
       properties:
         data:
@@ -12893,6 +12959,146 @@ components:
       - version
       title: SetDefaultVersionBodyRequest
       description: Request body model for setting the default version of a prompt.
+    Skill:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique identifier for the skill
+        created_at:
+          type: integer
+          title: Created At
+          description: Unix timestamp when the skill was created
+        default_version:
+          type: string
+          title: Default Version
+          description: Version used when no version is specified
+          default: '1'
+        description:
+          type: string
+          title: Description
+          description: Description of what the skill does
+        latest_version:
+          type: string
+          title: Latest Version
+          description: Most recently uploaded version number
+          default: '1'
+        name:
+          type: string
+          title: Name
+          description: Human-readable name from SKILL.md frontmatter
+        object:
+          type: string
+          title: Object
+          enum:
+          - skill
+      type: object
+      required:
+      - id
+      - created_at
+      - description
+      - name
+      title: Skill
+      description: A skill resource. Matches OpenAI Skill wire format.
+    SkillDeleteResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: ID of the deleted skill
+        deleted:
+          type: boolean
+          title: Deleted
+          description: Whether the skill was successfully deleted
+          default: true
+        object:
+          type: string
+          title: Object
+          enum:
+          - skill.deleted
+      type: object
+      required:
+      - id
+      title: SkillDeleteResponse
+      description: Response from deleting a skill. Matches OpenAI DeletedSkill wire format.
+    SkillUpdateRequest:
+      properties:
+        default_version:
+          type: string
+          title: Default Version
+          description: Version number to set as the default
+      type: object
+      required:
+      - default_version
+      title: SkillUpdateRequest
+      description: Request to update a skill's default version.
+    SkillVersion:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique identifier for this version
+        created_at:
+          type: integer
+          title: Created At
+          description: Unix timestamp when this version was created
+        description:
+          type: string
+          title: Description
+          description: Description of the skill version
+        name:
+          type: string
+          title: Name
+          description: Name of the skill version
+        object:
+          type: string
+          title: Object
+          enum:
+          - skill.version
+        skill_id:
+          type: string
+          title: Skill Id
+          description: ID of the parent skill
+        version:
+          type: string
+          title: Version
+          description: Version number as a string
+      type: object
+      required:
+      - id
+      - created_at
+      - description
+      - name
+      - skill_id
+      - version
+      title: SkillVersion
+      description: A specific version of a skill. Matches OpenAI SkillVersion wire format.
+    SkillVersionDeleteResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: ID of the deleted skill
+        deleted:
+          type: boolean
+          title: Deleted
+          description: Whether the version was successfully deleted
+          default: true
+        object:
+          type: string
+          title: Object
+          enum:
+          - skill.version.deleted
+        version:
+          type: string
+          title: Version
+          description: Version that was deleted
+      type: object
+      required:
+      - id
+      - version
+      title: SkillVersionDeleteResponse
+      description: Response from deleting a skill version. Matches OpenAI DeletedSkillVersion wire format.
     UpdatePromptBodyRequest:
       properties:
         prompt:
@@ -15266,135 +15472,6 @@ components:
       - prompt_id
       title: DeletePromptRequest
       type: object
-    SkillVersion:
-      description: A specific version of a skill. Matches OpenAI SkillVersion wire format.
-      properties:
-        id:
-          description: Unique identifier for this version
-          title: Id
-          type: string
-        created_at:
-          description: Unix timestamp when this version was created
-          title: Created At
-          type: integer
-        description:
-          description: Description of the skill version
-          title: Description
-          type: string
-        name:
-          description: Name of the skill version
-          title: Name
-          type: string
-        object:
-          title: Object
-          type: string
-          enum:
-          - skill.version
-        skill_id:
-          description: ID of the parent skill
-          title: Skill Id
-          type: string
-        version:
-          description: Version number as a string
-          title: Version
-          type: string
-      required:
-      - id
-      - created_at
-      - description
-      - name
-      - skill_id
-      - version
-      title: SkillVersion
-      type: object
-    Skill:
-      description: A skill resource. Matches OpenAI Skill wire format.
-      properties:
-        id:
-          description: Unique identifier for the skill
-          title: Id
-          type: string
-        created_at:
-          description: Unix timestamp when the skill was created
-          title: Created At
-          type: integer
-        default_version:
-          default: '1'
-          description: Version used when no version is specified
-          title: Default Version
-          type: string
-        description:
-          description: Description of what the skill does
-          title: Description
-          type: string
-        latest_version:
-          default: '1'
-          description: Most recently uploaded version number
-          title: Latest Version
-          type: string
-        name:
-          description: Human-readable name from SKILL.md frontmatter
-          title: Name
-          type: string
-        object:
-          title: Object
-          type: string
-          enum:
-          - skill
-      required:
-      - id
-      - created_at
-      - description
-      - name
-      title: Skill
-      type: object
-    SkillDeleteResponse:
-      description: Response from deleting a skill. Matches OpenAI DeletedSkill wire format.
-      properties:
-        id:
-          description: ID of the deleted skill
-          title: Id
-          type: string
-        deleted:
-          default: true
-          description: Whether the skill was successfully deleted
-          title: Deleted
-          type: boolean
-        object:
-          title: Object
-          type: string
-          enum:
-          - skill.deleted
-      required:
-      - id
-      title: SkillDeleteResponse
-      type: object
-    SkillVersionDeleteResponse:
-      description: Response from deleting a skill version. Matches OpenAI DeletedSkillVersion wire format.
-      properties:
-        id:
-          description: ID of the deleted skill
-          title: Id
-          type: string
-        deleted:
-          default: true
-          description: Whether the version was successfully deleted
-          title: Deleted
-          type: boolean
-        object:
-          title: Object
-          type: string
-          enum:
-          - skill.version.deleted
-        version:
-          description: Version that was deleted
-          title: Version
-          type: string
-      required:
-      - id
-      - version
-      title: SkillVersionDeleteResponse
-      type: object
     SkillVersionCreateRequest:
       description: Request to create a new skill version. Matches OpenAI VersionCreateParams.
       properties:
@@ -15404,17 +15481,6 @@ components:
           description: Whether to set this version as the default
           title: Default
       title: SkillVersionCreateRequest
-      type: object
-    SkillUpdateRequest:
-      description: Request to update a skill's default version.
-      properties:
-        default_version:
-          description: Version number to set as the default
-          title: Default Version
-          type: string
-      required:
-      - default_version
-      title: SkillUpdateRequest
       type: object
     ListSkillsRequest:
       description: Request parameters for listing skills.
@@ -15442,41 +15508,6 @@ components:
           type: string
       title: ListSkillsRequest
       type: object
-    ListSkillsResponse:
-      description: Response from listing skills.
-      properties:
-        object:
-          title: Object
-          type: string
-          enum:
-          - list
-        data:
-          description: List of skill objects
-          items:
-            $ref: '#/components/schemas/Skill'
-          title: Data
-          type: array
-        has_more:
-          default: false
-          description: Whether there are more results
-          title: Has More
-          type: boolean
-        first_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of the first item in the list
-          nullable: true
-        last_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of the last item in the list
-          nullable: true
-      required:
-      - data
-      title: ListSkillsResponse
-      type: object
     ListSkillVersionsRequest:
       description: Request parameters for listing skill versions.
       properties:
@@ -15502,41 +15533,6 @@ components:
           title: Order
           type: string
       title: ListSkillVersionsRequest
-      type: object
-    ListSkillVersionsResponse:
-      description: Response from listing skill versions.
-      properties:
-        object:
-          title: Object
-          type: string
-          enum:
-          - list
-        data:
-          description: List of skill version objects
-          items:
-            $ref: '#/components/schemas/SkillVersion'
-          title: Data
-          type: array
-        has_more:
-          default: false
-          description: Whether there are more results
-          title: Has More
-          type: boolean
-        first_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of the first item in the list
-          nullable: true
-        last_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of the last item in the list
-          nullable: true
-      required:
-      - data
-      title: ListSkillVersionsResponse
       type: object
     OpenAIResponseMessageOutputUnion:
       anyOf:
