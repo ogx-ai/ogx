@@ -47,5 +47,5 @@ class AutoFileProcessorConfig(BaseModel):
     @classmethod
     def sample_run_config(cls, **kwargs: Any) -> dict[str, Any]:
         return {
-            "unstructured_api_key": "${env.UNSTRUCTURED_API_KEY}",
+            "unstructured_api_key": "${env.UNSTRUCTURED_API_KEY:=}",
         }

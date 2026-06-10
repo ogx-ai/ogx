@@ -85,7 +85,7 @@ class AutoFileProcessor:
 
         # Initialize Unstructured if API key is provided
         self.unstructured = None
-        if config.unstructured_api_key:
+        if config.unstructured_api_key and config.unstructured_api_key.get_secret_value().strip():
             unstructured_config = UnstructuredApiFileProcessorConfig(
                 api_key=config.unstructured_api_key,
                 default_chunk_size_tokens=config.default_chunk_size_tokens,
