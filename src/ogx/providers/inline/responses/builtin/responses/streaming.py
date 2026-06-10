@@ -572,7 +572,6 @@ class StreamingResponseOrchestrator:
                         logprobs=logprobs,
                         parallel_tool_calls=effective_parallel_tool_calls,
                         reasoning_effort=self.reasoning.effort if self.reasoning else None,
-                        safety_identifier=self.safety_identifier,
                         service_tier=ServiceTier(self.service_tier) if self.service_tier else None,
                         max_completion_tokens=remaining_output_tokens,
                         prompt_cache_key=self.prompt_cache_key,
