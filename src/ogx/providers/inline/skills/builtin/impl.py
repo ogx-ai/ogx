@@ -41,6 +41,7 @@ logger = get_logger(__name__)
 
 _SKILL_PREFIX = "skill:"
 _VERSION_PREFIX = "skill_version:"
+_FILE_IDS_PREFIX = "skill_files:"
 
 
 def _skill_key(skill_id: str) -> str:
@@ -49,6 +50,10 @@ def _skill_key(skill_id: str) -> str:
 
 def _version_key(skill_id: str, version: str) -> str:
     return f"{_VERSION_PREFIX}{skill_id}:{version}"
+
+
+def _file_ids_key(skill_id: str) -> str:
+    return f"{_FILE_IDS_PREFIX}{skill_id}"
 
 
 def _version_range_start(skill_id: str) -> str:
@@ -99,6 +104,16 @@ class BuiltinSkillsImpl(Skills):
         except Exception:
             logger.warning("Failed to delete file from storage", file_id=file_id)
 
+    async def _get_file_ids(self, skill_id: str) -> dict[str, str]:
+        data = await self.kvstore.get(_file_ids_key(skill_id))
+        if data is None:
+            return {}
+        result: dict[str, str] = json.loads(data)
+        return result
+
+    async def _set_file_ids(self, skill_id: str, file_ids: dict[str, str]) -> None:
+        await self.kvstore.set(_file_ids_key(skill_id), json.dumps(file_ids))
+
     async def create_skill(self, file: UploadFile) -> Skill:
         content = await file.read()
         manifest, _ = validate_skill_zip(content)
@@ -126,12 +141,8 @@ class BuiltinSkillsImpl(Skills):
             latest_version="1",
             name=manifest.name or "",
         )
-
-        # Store file_id alongside skill metadata for content retrieval
-        skill_data = skill.model_dump()
-        skill_data["_file_ids"] = {"1": file_id}
-
-        await self.kvstore.set(_skill_key(skill_id), json.dumps(skill_data))
+        await self.kvstore.set(_skill_key(skill_id), skill.model_dump_json())
+        await self._set_file_ids(skill_id, {"1": file_id})
 
         logger.info("Created skill", skill_id=skill_id, name=manifest.name)
         return skill
@@ -139,14 +150,13 @@ class BuiltinSkillsImpl(Skills):
     async def list_skills(self, request: ListSkillsRequest) -> ListSkillsResponse:
         values = await self.kvstore.values_in_range(_SKILL_PREFIX, f"{_SKILL_PREFIX}\xff")
 
-        skills = [Skill(**{k: v for k, v in json.loads(v).items() if not k.startswith("_")}) for v in values]
+        skills = [Skill.model_validate_json(v) for v in values]
 
         if request.order == "asc":
             skills.sort(key=lambda s: s.created_at)
         else:
             skills.sort(key=lambda s: s.created_at, reverse=True)
 
-        # Apply cursor pagination
         start_idx = 0
         if request.after:
             for i, s in enumerate(skills):
@@ -168,46 +178,33 @@ class BuiltinSkillsImpl(Skills):
         data = await self.kvstore.get(_skill_key(skill_id))
         if data is None:
             raise ValueError(f"Failed to find skill: '{skill_id}' does not exist")
-
-        raw = json.loads(data)
-        return Skill(**{k: v for k, v in raw.items() if not k.startswith("_")})
+        return Skill.model_validate_json(data)
 
     async def update_skill(self, skill_id: str, request: SkillUpdateRequest) -> Skill:
-        data = await self.kvstore.get(_skill_key(skill_id))
-        if data is None:
-            raise ValueError(f"Failed to find skill: '{skill_id}' does not exist")
-
-        raw = json.loads(data)
+        skill = await self.get_skill(skill_id)
 
         version_data = await self.kvstore.get(_version_key(skill_id, request.default_version))
         if version_data is None:
             raise ValueError(f"Failed to update skill: version '{request.default_version}' does not exist")
 
-        raw["default_version"] = request.default_version
-        await self.kvstore.set(_skill_key(skill_id), json.dumps(raw))
+        skill.default_version = request.default_version
+        await self.kvstore.set(_skill_key(skill_id), skill.model_dump_json())
 
         logger.info("Updated skill default version", skill_id=skill_id, version=request.default_version)
-        return Skill(**{k: v for k, v in raw.items() if not k.startswith("_")})
+        return skill
 
     async def delete_skill(self, skill_id: str) -> SkillDeleteResponse:
-        data = await self.kvstore.get(_skill_key(skill_id))
-        if data is None:
-            raise ValueError(f"Failed to find skill: '{skill_id}' does not exist")
+        await self.get_skill(skill_id)
 
-        raw = json.loads(data)
-        file_ids: dict[str, str] = raw.get("_file_ids", {})
-
-        # Delete all version bundles and metadata
+        file_ids = await self._get_file_ids(skill_id)
         for fid in file_ids.values():
             await self._delete_bundle(fid)
 
-        version_values = await self.kvstore.values_in_range(
-            _version_range_start(skill_id), _version_range_end(skill_id)
-        )
-        for v_data in version_values:
-            ver = SkillVersion.model_validate_json(v_data)
-            await self.kvstore.delete(_version_key(skill_id, ver.version))
+        version_keys = await self.kvstore.keys_in_range(_version_range_start(skill_id), _version_range_end(skill_id))
+        for key in version_keys:
+            await self.kvstore.delete(key)
 
+        await self.kvstore.delete(_file_ids_key(skill_id))
         await self.kvstore.delete(_skill_key(skill_id))
 
         logger.info("Deleted skill", skill_id=skill_id)
@@ -220,15 +217,11 @@ class BuiltinSkillsImpl(Skills):
     async def create_skill_version(
         self, skill_id: str, request: SkillVersionCreateRequest, file: UploadFile
     ) -> SkillVersion:
-        data = await self.kvstore.get(_skill_key(skill_id))
-        if data is None:
-            raise ValueError(f"Failed to find skill: '{skill_id}' does not exist")
-
-        raw = json.loads(data)
+        skill = await self.get_skill(skill_id)
         content = await file.read()
         manifest, _ = validate_skill_zip(content)
 
-        next_version = str(int(raw["latest_version"]) + 1)
+        next_version = str(int(skill.latest_version) + 1)
         now = int(time.time())
 
         file_id = await self._store_bundle(content, f"{skill_id}_v{next_version}.zip")
@@ -243,15 +236,14 @@ class BuiltinSkillsImpl(Skills):
         )
         await self.kvstore.set(_version_key(skill_id, next_version), version.model_dump_json())
 
-        raw["latest_version"] = next_version
-        file_ids: dict[str, str] = raw.get("_file_ids", {})
+        file_ids = await self._get_file_ids(skill_id)
         file_ids[next_version] = file_id
-        raw["_file_ids"] = file_ids
+        await self._set_file_ids(skill_id, file_ids)
 
+        skill.latest_version = next_version
         if request.default:
-            raw["default_version"] = next_version
-
-        await self.kvstore.set(_skill_key(skill_id), json.dumps(raw))
+            skill.default_version = next_version
+        await self.kvstore.set(_skill_key(skill_id), skill.model_dump_json())
 
         logger.info("Created skill version", skill_id=skill_id, version=next_version)
         return version
@@ -293,12 +285,9 @@ class BuiltinSkillsImpl(Skills):
         return SkillVersion.model_validate_json(data)
 
     async def get_skill_version_content(self, skill_id: str, version: str) -> Response:
-        data = await self.kvstore.get(_skill_key(skill_id))
-        if data is None:
-            raise ValueError(f"Failed to find skill: '{skill_id}' does not exist")
+        await self.get_skill(skill_id)
 
-        raw = json.loads(data)
-        file_ids: dict[str, str] = raw.get("_file_ids", {})
+        file_ids = await self._get_file_ids(skill_id)
         file_id = file_ids.get(version)
         if file_id is None:
             raise ValueError(f"Failed to retrieve skill content: no bundle stored for '{skill_id}' version '{version}'")
@@ -311,35 +300,43 @@ class BuiltinSkillsImpl(Skills):
         )
 
     async def delete_skill_version(self, skill_id: str, version: str) -> SkillVersionDeleteResponse:
-        data = await self.kvstore.get(_skill_key(skill_id))
-        if data is None:
-            raise ValueError(f"Failed to find skill: '{skill_id}' does not exist")
-
-        raw = json.loads(data)
+        skill = await self.get_skill(skill_id)
 
         version_data = await self.kvstore.get(_version_key(skill_id, version))
         if version_data is None:
             raise ValueError(f"Failed to find skill version: '{skill_id}' version '{version}' does not exist")
 
-        if raw["default_version"] == version and raw["latest_version"] == version:
-            # Check if this is the only version
-            all_versions = await self.kvstore.values_in_range(
-                _version_range_start(skill_id), _version_range_end(skill_id)
+        all_version_keys = await self.kvstore.keys_in_range(
+            _version_range_start(skill_id), _version_range_end(skill_id)
+        )
+        if len(all_version_keys) <= 1:
+            raise ValueError(
+                "Failed to delete skill version: cannot delete the only version. Delete the skill instead."
             )
-            if len(all_versions) <= 1:
-                raise ValueError(
-                    "Failed to delete skill version: cannot delete the only version. Delete the skill instead."
-                )
 
-        file_ids: dict[str, str] = raw.get("_file_ids", {})
+        file_ids = await self._get_file_ids(skill_id)
         file_id = file_ids.pop(version, None)
         if file_id:
             await self._delete_bundle(file_id)
+        await self._set_file_ids(skill_id, file_ids)
 
         await self.kvstore.delete(_version_key(skill_id, version))
 
-        raw["_file_ids"] = file_ids
-        await self.kvstore.set(_skill_key(skill_id), json.dumps(raw))
+        # Update default_version if the deleted version was the default
+        if skill.default_version == version:
+            remaining = await self.kvstore.values_in_range(_version_range_start(skill_id), _version_range_end(skill_id))
+            remaining_versions = [SkillVersion.model_validate_json(v) for v in remaining]
+            remaining_versions.sort(key=lambda v: int(v.version), reverse=True)
+            skill.default_version = remaining_versions[0].version
+
+        # Update latest_version if the deleted version was the latest
+        if skill.latest_version == version:
+            remaining = await self.kvstore.values_in_range(_version_range_start(skill_id), _version_range_end(skill_id))
+            remaining_versions = [SkillVersion.model_validate_json(v) for v in remaining]
+            remaining_versions.sort(key=lambda v: int(v.version), reverse=True)
+            skill.latest_version = remaining_versions[0].version
+
+        await self.kvstore.set(_skill_key(skill_id), skill.model_dump_json())
 
         logger.info("Deleted skill version", skill_id=skill_id, version=version)
         return SkillVersionDeleteResponse(id=skill_id, version=version)

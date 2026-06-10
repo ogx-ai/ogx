@@ -21,17 +21,22 @@ def parse_skill_manifest(content: str) -> SkillManifest:
         ---
         Instructions for the model go here.
     """
-    stripped = content.strip()
-    if not stripped.startswith(_FENCE):
-        return SkillManifest(instructions=stripped)
+    lines = content.split("\n")
 
-    after_first_fence = stripped[len(_FENCE) :]
-    end_idx = after_first_fence.find(_FENCE)
-    if end_idx == -1:
-        return SkillManifest(instructions=stripped)
+    if not lines or lines[0].strip() != _FENCE:
+        return SkillManifest(instructions=content.strip())
 
-    frontmatter_text = after_first_fence[:end_idx]
-    instructions = after_first_fence[end_idx + len(_FENCE) :].strip()
+    closing_idx = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == _FENCE:
+            closing_idx = i
+            break
+
+    if closing_idx is None:
+        return SkillManifest(instructions=content.strip())
+
+    frontmatter_text = "\n".join(lines[1:closing_idx])
+    instructions = "\n".join(lines[closing_idx + 1 :]).strip()
 
     frontmatter = yaml.safe_load(frontmatter_text)
     if not isinstance(frontmatter, dict):

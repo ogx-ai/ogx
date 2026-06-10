@@ -70,10 +70,10 @@ class _FakeKVStore:
         self._data.pop(key, None)
 
     async def keys_in_range(self, start_key: str, end_key: str) -> list[str]:
-        return [k for k in sorted(self._data.keys()) if start_key <= k <= end_key]
+        return [k for k in sorted(self._data.keys()) if start_key <= k < end_key]
 
     async def values_in_range(self, start_key: str, end_key: str) -> list[str]:
-        return [self._data[k] for k in sorted(self._data.keys()) if start_key <= k <= end_key]
+        return [self._data[k] for k in sorted(self._data.keys()) if start_key <= k < end_key]
 
 
 @pytest.fixture
@@ -254,6 +254,29 @@ class TestDeleteSkillVersion:
         assert result.deleted is True
         assert result.version == "1"
         assert result.object == "skill.version.deleted"
+
+    async def test_delete_default_version_updates_default(self, impl):
+        content = _make_zip({"SKILL.md": SKILL_MD})
+        skill = await impl.create_skill(_make_upload_file(content))
+        await impl.create_skill_version(skill.id, SkillVersionCreateRequest(), _make_upload_file(content))
+        await impl.create_skill_version(skill.id, SkillVersionCreateRequest(), _make_upload_file(content))
+
+        await impl.update_skill(skill.id, SkillUpdateRequest(default_version="2"))
+        await impl.delete_skill_version(skill.id, "2")
+
+        updated = await impl.get_skill(skill.id)
+        assert updated.default_version != "2"
+        assert updated.default_version in ("1", "3")
+
+    async def test_delete_latest_version_updates_latest(self, impl):
+        content = _make_zip({"SKILL.md": SKILL_MD})
+        skill = await impl.create_skill(_make_upload_file(content))
+        await impl.create_skill_version(skill.id, SkillVersionCreateRequest(), _make_upload_file(content))
+
+        await impl.delete_skill_version(skill.id, "2")
+
+        updated = await impl.get_skill(skill.id)
+        assert updated.latest_version == "1"
 
     async def test_delete_only_version(self, impl):
         content = _make_zip({"SKILL.md": SKILL_MD})

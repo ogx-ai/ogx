@@ -6,6 +6,7 @@
 
 import zipfile
 from io import BytesIO
+from pathlib import PurePosixPath
 
 from ogx_api.skills.models import (
     MAX_FILES_PER_VERSION,
@@ -17,6 +18,13 @@ from ogx_api.skills.models import (
 from .manifest import parse_skill_manifest
 
 _SKILL_MD = "SKILL.md"
+
+
+def _has_path_traversal(filename: str) -> bool:
+    """Check if a zip entry filename attempts path traversal."""
+    if filename.startswith("/"):
+        return True
+    return ".." in PurePosixPath(filename).parts
 
 
 def validate_skill_zip(content: bytes) -> tuple[SkillManifest, list[str]]:
@@ -39,32 +47,33 @@ def validate_skill_zip(content: bytes) -> tuple[SkillManifest, list[str]]:
     except zipfile.BadZipFile as e:
         raise ValueError("Failed to validate skill bundle: file is not a valid zip archive") from e
 
-    entries = zf.infolist()
+    with zf:
+        entries = zf.infolist()
 
-    if len(entries) > MAX_FILES_PER_VERSION:
-        raise ValueError(
-            f"Failed to validate skill bundle: archive contains {len(entries)} files, "
-            f"maximum is {MAX_FILES_PER_VERSION}"
-        )
-
-    file_paths: list[str] = []
-    skill_md_content: str | None = None
-
-    for entry in entries:
-        if ".." in entry.filename or entry.filename.startswith("/"):
-            raise ValueError(f"Failed to validate skill bundle: path traversal detected in '{entry.filename}'")
-
-        if entry.file_size > MAX_UNCOMPRESSED_FILE_SIZE_BYTES:
+        if len(entries) > MAX_FILES_PER_VERSION:
             raise ValueError(
-                f"Failed to validate skill bundle: '{entry.filename}' uncompressed size "
-                f"{entry.file_size} bytes exceeds maximum of {MAX_UNCOMPRESSED_FILE_SIZE_BYTES} bytes"
+                f"Failed to validate skill bundle: archive contains {len(entries)} files, "
+                f"maximum is {MAX_FILES_PER_VERSION}"
             )
 
-        if not entry.is_dir():
-            file_paths.append(entry.filename)
+        file_paths: list[str] = []
+        skill_md_content: str | None = None
 
-        if entry.filename == _SKILL_MD:
-            skill_md_content = zf.read(entry.filename).decode("utf-8")
+        for entry in entries:
+            if _has_path_traversal(entry.filename):
+                raise ValueError(f"Failed to validate skill bundle: path traversal detected in '{entry.filename}'")
+
+            if entry.file_size > MAX_UNCOMPRESSED_FILE_SIZE_BYTES:
+                raise ValueError(
+                    f"Failed to validate skill bundle: '{entry.filename}' uncompressed size "
+                    f"{entry.file_size} bytes exceeds maximum of {MAX_UNCOMPRESSED_FILE_SIZE_BYTES} bytes"
+                )
+
+            if not entry.is_dir():
+                file_paths.append(entry.filename)
+
+            if entry.filename == _SKILL_MD:
+                skill_md_content = zf.read(entry.filename).decode("utf-8")
 
     if skill_md_content is None:
         raise ValueError("Failed to validate skill bundle: SKILL.md not found at archive root")
