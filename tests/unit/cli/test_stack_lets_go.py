@@ -547,4 +547,178 @@ class TestClaudeCodeAliases:
     def test_priority_list_covers_expected_providers(self):
         assert "anthropic" in _CLAUDE_CODE_PROVIDER_PRIORITY
         assert "ollama" in _CLAUDE_CODE_PROVIDER_PRIORITY
+
+
+class TestAddFileSearchAndResponses:
+    def test_uses_brave_when_brave_key_is_set(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
+        monkeypatch.delenv("TAVILY_SEARCH_API_KEY", raising=False)
+        monkeypatch.delenv("BING_API_KEY", raising=False)
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        web_search_providers = [
+            p
+            for p in ["brave-search", "tavily-search", "bing-search"]
+            if any(p in str(call) for call in mock_cprint.call_args_list)
+        ]
+        # Only brave should be added (env var set)
+        assert "brave-search" in web_search_providers
+        assert "tavily-search" not in web_search_providers
+        assert "bing-search" not in web_search_providers
+
+    def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
+        monkeypatch.setenv("TAVILY_SEARCH_API_KEY", "tavily-key")
+        monkeypatch.delenv("BING_API_KEY", raising=False)
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        provider_ids_in_calls = set()
+        for call in mock_cprint.call_args_list:
+            if "brave-search" in str(call):
+                provider_ids_in_calls.add("brave-search")
+            if "tavily-search" in str(call):
+                provider_ids_in_calls.add("tavily-search")
+            if "bing-search" in str(call):
+                provider_ids_in_calls.add("bing-search")
+
+        # Only tavily is added since only its env var is set
+        assert provider_ids_in_calls == {"tavily-search"}
+
+    def test_selects_first_with_api_key(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
+        monkeypatch.setenv("TAVILY_SEARCH_API_KEY", "tavily-key")
+        monkeypatch.setenv("BING_API_KEY", "bing-key")
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        provider_ids_in_calls = set()
+        for call in mock_cprint.call_args_list:
+            if "brave-search" in str(call):
+                provider_ids_in_calls.add("brave-search")
+            if "tavily-search" in str(call):
+                provider_ids_in_calls.add("tavily-search")
+            if "bing-search" in str(call):
+                provider_ids_in_calls.add("bing-search")
+
+        # All three have keys, all three should be added
+        assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search"}
+
+    def test_no_web_search_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        # Clear env vars to ensure no keys are set
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        # Should show disabled message, not provider names
+        has_disabled = any("web search disabled" in str(call) for call in mock_cprint.call_args_list)
+        assert has_disabled
+
+    def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import Provider, StackConfig
+
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
+
+        initial_providers = [
+            Provider(provider_id="brave-search", provider_type="remote::brave-search"),
+        ]
+
+        config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": initial_providers.copy(),
+                "responses": [],
+            },
+        )
+
+        with patch("ogx.cli.stack.lets_go.cprint"):
+            _add_file_search_and_responses(config)
+
+        web_search_types = {
+            "remote::brave-search",
+            "remote::tavily-search",
+            "remote::bing-search",
+        }
+        web_search_providers = [p for p in config.providers["tool_runtime"] if p.provider_type in web_search_types]
+        assert len(web_search_providers) == 1
+
+    def test_existing_provider_keeps_no_api_key_config(self):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import Provider, StackConfig
+
+        config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": [
+                    Provider(
+                        provider_id="brave-search",
+                        provider_type="remote::brave-search",
+                        config={"api_key": "existing-key", "max_results": 5},
+                    ),
+                ],
+                "responses": [],
+            },
+        )
+
+        with patch("ogx.cli.stack.lets_go.cprint"):
+            _add_file_search_and_responses(config)
+
+        web_search_providers = [
+            p for p in config.providers["tool_runtime"] if p.provider_type == "remote::brave-search"
+        ]
+        assert len(web_search_providers) == 1
+        assert web_search_providers[0].config["api_key"] == "existing-key"
+        assert web_search_providers[0].config["max_results"] == 5
         assert _CLAUDE_CODE_PROVIDER_PRIORITY.index("anthropic") < _CLAUDE_CODE_PROVIDER_PRIORITY.index("ollama")

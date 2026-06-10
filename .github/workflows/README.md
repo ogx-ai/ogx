@@ -17,6 +17,7 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | Integration Auth Tests | [integration-auth-tests.yml](integration-auth-tests.yml) | Run the integration test suite with Kubernetes authentication |
 | Integration Responses, Conversations & Prompts Auth Tests | [integration-responses-conversations-auth-tests.yml](integration-responses-conversations-auth-tests.yml) | Run responses, conversations, and prompts auth tests with Kubernetes authentication |
 | SqlStore Integration Tests | [integration-sql-store-tests.yml](integration-sql-store-tests.yml) | Run the integration test suite with SqlStore |
+| Responses API - Codex CLI Smoke Test | [integration-tests-codex-cli.yml](integration-tests-codex-cli.yml) | Manually drive the real Codex CLI against /v1/responses |
 | Messages API - Claude Code Client Smoke Tests | [integration-tests-messages-clients.yml](integration-tests-messages-clients.yml) | Drive the Claude Code CLI and Agent SDK against /v1/messages (live, Ollama) |
 | Integration Tests (Replay) | [integration-tests.yml](integration-tests.yml) | Run the integration test suites from tests/integration in replay mode |
 | Vector IO Integration Tests | [integration-vector-io-tests.yml](integration-vector-io-tests.yml) | Run the integration test suite with various VectorIO providers |

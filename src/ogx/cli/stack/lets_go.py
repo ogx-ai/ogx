@@ -29,7 +29,7 @@ from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
 from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
-from ogx.core.stack import replace_env_vars, run_config_from_dynamic_config_spec
+from ogx.core.stack import extract_env_var_references, replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
@@ -242,6 +242,72 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     # Add responses to APIs if not already present
     if "responses" not in run_config.apis:
         run_config.apis.append("responses")
+
+    # Add web search providers in priority order: brave -> tavily -> bing
+    _web_search_order = [
+        ("remote::brave-search", "brave-search"),
+        ("remote::tavily-search", "tavily-search"),
+        ("remote::bing-search", "bing-search"),
+    ]
+    tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
+    existing_web_search: set[str] = {
+        p.provider_type
+        for p in run_config.providers["tool_runtime"]
+        if p.provider_type in {pt for pt, _ in _web_search_order}
+    }
+
+    added = False
+    all_env_vars: list[str] = []
+
+    for provider_type, provider_id in _web_search_order:
+        if provider_type in existing_web_search:
+            cprint(f"  ✓ {provider_id} (web search)", color="green")
+            added = True
+            continue
+
+        spec = tool_runtime_registry.get(provider_type)
+        if spec is None:
+            continue
+
+        try:
+            config_class = instantiate_class_type(spec.config_class)
+            config_template = config_class.sample_run_config(__distro_dir__=tempfile.gettempdir())
+        except Exception:
+            cprint(f"  ✗ {provider_id} (web search) — failed to construct config template", color="yellow")
+            continue
+
+        env_vars_in_template = extract_env_var_references(config_template)
+        all_env_vars.extend(env_vars_in_template)
+
+        if not any(os.environ.get(v) for v in env_vars_in_template):
+            continue
+
+        try:
+            resolved_config = replace_env_vars(config_template)
+            config_class(**resolved_config)  # validate construction
+        except Exception:
+            cprint(f"  ✗ {provider_id} (web search) — failed to construct config with env vars", color="yellow")
+            continue  # noqa S112 -- exception is reported to the user via cprint before continuing
+
+        run_config.providers["tool_runtime"].append(
+            Provider(
+                provider_id=provider_id,
+                provider_type=provider_type,
+                config=resolved_config,
+            )
+        )
+        cprint(f"  ✓ {provider_id} (web search)", color="green")
+        added = True
+
+    if not added:
+        if all_env_vars:
+            vars_str = ", ".join(dict.fromkeys(all_env_vars))
+            cprint(
+                f"  ✗ web search disabled (no API key set — set {vars_str})",
+                color="yellow",
+            )
+        else:
+            cprint("  ✗ web search disabled", color="yellow")
 
     cprint("  ✓ inline::file-search (built-in)", color="green")
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
@@ -507,18 +573,7 @@ def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedMode
                 cprint(f"  ✗ {provider_type} — unreachable", color="yellow")
 
         if status in (_ProbeStatus.OK, _ProbeStatus.NEEDS_KEY) and detected_embedding is None:
-            for model in models:
-                model_type = getattr(model, "model_type", None)
-                identifier = getattr(model, "identifier", None)
-                if model_type == ModelType.embedding or (identifier and "embed" in str(identifier).lower()):
-                    dimension: int | None = None
-                    if hasattr(model, "metadata") and isinstance(model.metadata, dict):
-                        dimension = model.metadata.get("embedding_dimension")
-                    detected_embedding = (
-                        QualifiedModel(provider_id=provider_type.split("::")[-1], model_id=str(identifier)),
-                        dimension,
-                    )
-                    break
+            detected_embedding = _pick_embedding_from_models(models, provider_type.split("::")[-1])
 
     # Inline providers require no external service — always include them.
     # Note: file-search and responses require an embedding model, so they are added later
@@ -607,6 +662,24 @@ async def _list_models_from_provider(provider: Any) -> list[Any]:
     return models or []
 
 
+def _pick_embedding_from_models(models: list[Any], provider_id: str) -> tuple[QualifiedModel, int | None] | None:
+    """Return the best embedding model from a list, preferring one with dimension metadata."""
+    best: tuple[QualifiedModel, int | None] | None = None
+    for model in models:
+        if getattr(model, "model_type", None) != ModelType.embedding:
+            continue
+        identifier = getattr(model, "identifier", None)
+        if not identifier:
+            continue
+        dimension: int | None = None
+        if hasattr(model, "metadata") and isinstance(model.metadata, dict):
+            dimension = model.metadata.get("embedding_dimension")
+        best = (QualifiedModel(provider_id=provider_id, model_id=str(identifier)), dimension)
+        if dimension is not None:
+            break
+    return best
+
+
 def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, int | None] | None:
     """Find an embedding model by instantiating each inference provider and calling list_models().
 
@@ -616,35 +689,12 @@ def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, in
 
     async def _detect_async() -> tuple[QualifiedModel, int | None] | None:
         for provider in run_config.providers.get("inference", []):
+            if not provider.provider_id:
+                continue
             models = await _list_models_from_provider(provider)
-            for model in models:
-                model_type = model.model_type
-                identifier = model.identifier
-                if model_type == ModelType.embedding or (identifier and "embed" in identifier.lower()):
-                    provider_id = provider.provider_id
-                    if provider_id is None:
-                        cprint(
-                            "  ✗ Could not infer embedding model: provider has no provider_id",
-                            color="yellow",
-                        )
-                        continue
-                    if not identifier:
-                        cprint(
-                            f"  ✗ Could not infer embedding model id from provider '{provider_id}'",
-                            color="yellow",
-                        )
-                        continue
-                    # Extract dimension from model metadata; do not guess
-                    dimension: int | None = None
-                    if hasattr(model, "metadata") and isinstance(model.metadata, dict):
-                        dimension = model.metadata.get("embedding_dimension", None)
-                    return (
-                        QualifiedModel(
-                            provider_id=provider_id,
-                            model_id=str(identifier),
-                        ),
-                        dimension,
-                    )
+            result = _pick_embedding_from_models(models, provider.provider_id)
+            if result is not None:
+                return result
         return None
 
     return asyncio.run(_detect_async())
