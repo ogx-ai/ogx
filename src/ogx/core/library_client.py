@@ -468,12 +468,28 @@ class OGXAsLibraryClient(OgxClient):
                         else:
                             request_body[k] = v
 
-            # Parse query params and merge into body
+            # Parse query params and merge into body.
+            # In a normal HTTP framework, query params and body fields occupy
+            # separate namespaces. Here we flatten them into a single dict so
+            # we can call the route handler directly. A collision should never
+            # happen with the current API design, but we log a warning if it
+            # does so it doesn't silently go unnoticed.
             if query_string:
                 from urllib.parse import parse_qs
 
                 query_params = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(query_string).items()}
-                request_body.update(query_params)
+                if isinstance(request_body, dict):
+                    collisions = set(query_params.keys()) & set(request_body.keys())
+                    if collisions:
+                        logger.warning(
+                            "Query params collide with body fields, body takes precedence",
+                            colliding_keys=collisions,
+                            path=path,
+                        )
+                    query_params.update(request_body)
+                    request_body = query_params
+                else:
+                    request_body.update(query_params)
 
             # Find the matching route handler
             matched_func, path_params, route_path, _ = find_matching_route(method, path, async_client.route_impls)
