@@ -7,9 +7,9 @@ sidebar_position: 7
 
 # Native Responses
 
-When Llama Stack receives a Responses API request, it normally decomposes it into one or more Chat Completions calls to the inference provider. This works across all providers but loses information in the translation — reasoning tokens, structured token accounting, and native streaming events are either approximated or unavailable.
+When OGX receives a Responses API request, it normally decomposes it into one or more Chat Completions calls to the inference provider. This works across all providers but loses information in the translation — reasoning tokens, structured token accounting, and native streaming events are either approximated or unavailable.
 
-**Native responses** is an opt-in mode that tells Llama Stack to call vLLM's `/v1/responses` endpoint directly for inference, skipping the Chat Completions translation layer. Everything else — tool calling, state management, persistence, guardrails, RAG, MCP — stays in Llama Stack.
+**Native responses** is an opt-in mode that tells OGX to call vLLM's `/v1/responses` endpoint directly for inference, skipping the Chat Completions translation layer. Everything else — tool calling, state management, persistence, guardrails, RAG, MCP — stays in OGX.
 
 :::info Provider support
 Native responses is currently supported only for the `remote::vllm` inference provider. All other providers use the standard Chat Completions path. Requires vLLM with Responses API support (v0.8+).
@@ -58,13 +58,13 @@ export VLLM_NATIVE_RESPONSES=true
 
 ## What stays the same
 
-Native responses changes only the wire format between Llama Stack and vLLM for each inference call. Everything else is identical:
+Native responses changes only the wire format between OGX and vLLM for each inference call. Everything else is identical:
 
-- **Tool calling** — Llama Stack orchestrates the tool loop, executes tools, appends results, and calls inference again
-- **MCP tools** — Llama Stack's MCP client handles discovery, approval, and execution
-- **RAG / file_search** — Llama Stack queries vector stores and injects context before calling inference
+- **Tool calling** — OGX orchestrates the tool loop, executes tools, appends results, and calls inference again
+- **MCP tools** — OGX's MCP client handles discovery, approval, and execution
+- **RAG / file_search** — OGX queries vector stores and injects context before calling inference
 - **Guardrails** — Input and output safety checks run on every turn
-- **Persistence** — `previous_response_id`, response storage, and conversations are managed by Llama Stack
+- **Persistence** — `previous_response_id`, response storage, and conversations are managed by OGX
 - **State** — vLLM is treated as a stateless inference endpoint; `store` is always set to `false` in requests to vLLM
 
 ## How it works
@@ -72,7 +72,7 @@ Native responses changes only the wire format between Llama Stack and vLLM for e
 Without native responses (default):
 
 ```
-Client → POST /v1/responses → Llama Stack orchestrator
+Client → POST /v1/responses → OGX orchestrator
   → Convert to CC messages
   → POST /v1/chat/completions → vLLM
   ← CC chunks
@@ -83,7 +83,7 @@ Client → POST /v1/responses → Llama Stack orchestrator
 With native responses enabled:
 
 ```
-Client → POST /v1/responses → Llama Stack orchestrator
+Client → POST /v1/responses → OGX orchestrator
   → POST /v1/responses → vLLM
   ← Responses events (native format)
   → Parse tool calls, reasoning, content
@@ -94,7 +94,7 @@ The orchestrator's tool-calling loop is identical in both modes — only the inf
 
 ## Verifying it works
 
-Start your Llama Stack server with the vLLM config, then make a request with reasoning enabled:
+Start your OGX server with the vLLM config, then make a request with reasoning enabled:
 
 ```python
 from openai import OpenAI
