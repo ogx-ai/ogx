@@ -12,6 +12,8 @@ from ogx.providers.inline.file_processor.markitdown.config import MarkItDownFile
 from ogx.providers.inline.file_processor.markitdown.markitdown_processor import MarkItDownFileProcessor
 from ogx.providers.inline.file_processor.pypdf.config import PyPDFFileProcessorConfig
 from ogx.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
+from ogx.providers.remote.file_processor.unstructured_api.config import UnstructuredApiFileProcessorConfig
+from ogx.providers.remote.file_processor.unstructured_api.unstructured_api import UnstructuredApiFileProcessor
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
 from ogx_api.files import RetrieveFileRequest
 
@@ -50,7 +52,8 @@ MARKITDOWN_MIME_TYPES = {
 SUPPORTED_DESCRIPTION = (
     "PDF, text (txt, csv, md, json, xml, html, code), "
     "office (DOCX, PPTX, XLSX, XLS, DOC, PPT, RTF), "
-    "EPUB, RSS, ZIP, images, and audio"
+    "EPUB, RSS, ZIP, images, audio, "
+    "and additional formats via Unstructured.io (if user API key provided)"
 )
 
 
@@ -80,6 +83,15 @@ class AutoFileProcessor:
         )
         self.markitdown = MarkItDownFileProcessor(markitdown_config, files_api)
 
+        # Initialize Unstructured if API key is provided
+        self.unstructured = None
+        if config.unstructured_api_key:
+            unstructured_config = UnstructuredApiFileProcessorConfig(
+                api_key=config.unstructured_api_key,
+                default_chunk_size_tokens=config.default_chunk_size_tokens,
+            )
+            self.unstructured = UnstructuredApiFileProcessor(unstructured_config, files_api)
+
     async def process_file(
         self,
         request: ProcessFileRequest,
@@ -99,6 +111,10 @@ class AutoFileProcessor:
 
         if mime_type in MARKITDOWN_MIME_TYPES:
             return await self.markitdown.process_file(request=request, file=file)
+
+        # Try Unstructured as fallback for unsupported types
+        if self.unstructured:
+            return await self.unstructured.process_file(request=request, file=file)
 
         raise HTTPException(
             status_code=422,
