@@ -22,7 +22,7 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::auto",
-            pip_packages=["pypdf>=6.7.2", "markitdown[all]"],
+            pip_packages=["chardet", "pypdf>=6.7.2", "markitdown[all]"],
             module="ogx.providers.inline.file_processor.auto",
             config_class="ogx.providers.inline.file_processor.auto.AutoFileProcessorConfig",
             api_dependencies=[Api.files],
@@ -36,7 +36,7 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::pypdf",
-            pip_packages=["pypdf>=6.7.2"],
+            pip_packages=["chardet", "pypdf>=6.7.2"],
             module="ogx.providers.inline.file_processor.pypdf",
             config_class="ogx.providers.inline.file_processor.pypdf.PyPDFFileProcessorConfig",
             api_dependencies=[Api.files],

@@ -282,6 +282,7 @@ from .interactions import (
 )
 from .messages import (
     Messages,
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
@@ -290,6 +291,7 @@ from .messages import (
     AnthropicImageBlock,
     AnthropicImageSource,
     AnthropicMessage,
+    AnthropicURLImageSource,
     AnthropicMessageResponse,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
@@ -357,6 +359,8 @@ from .openai_responses import (
     OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
     OpenAIResponseInputToolWebSearch,
+    WebSearchFilters,
+    WebSearchUserLocation,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMCPApprovalResponse,
     OpenAIResponseMessage,
@@ -412,6 +416,10 @@ from .openai_responses import (
     OpenAIResponseOutputMessageReasoningItem,
     OpenAIResponseOutputMessageReasoningSummary,
     OpenAIResponseOutputMessageWebSearchToolCall,
+    WebSearchActionFind,
+    WebSearchActionOpenPage,
+    WebSearchActionSearch,
+    WebSearchSource,
     OpenAIResponsePrompt,
     OpenAIResponseReasoning,
     OpenAIResponseText,
@@ -437,6 +445,9 @@ from .prompts import (
     UpdatePromptRequest,
 )
 from .providers import Providers
+from .skills import (
+    Skills,
+)
 from .rag_tool import (
     DefaultRAGQueryGeneratorConfig,
     LLMRAGQueryGeneratorConfig,
@@ -530,6 +541,7 @@ __all__ = [
     "OGX_API_V1BETA",
     # API Symbols
     "Responses",
+    "Skills",
     # Responses Request Models
     "CancelResponseRequest",
     "CompactResponseRequest",
@@ -767,6 +779,8 @@ __all__ = [
     "OpenAIResponseInputToolFunction",
     "OpenAIResponseInputToolMCP",
     "OpenAIResponseInputToolWebSearch",
+    "WebSearchFilters",
+    "WebSearchUserLocation",
     "OpenAIResponseInputToolChoice",
     "OpenAIResponseInputToolChoiceAllowedTools",
     "OpenAIResponseInputToolChoiceFileSearch",
@@ -956,6 +970,11 @@ __all__ = [
     "VectorStoreNotFoundError",
     "VectorStoresProtocolPrivate",
     "VersionInfo",
+    "ViolationLevel",
+    "WebSearchActionFind",
+    "WebSearchActionOpenPage",
+    "WebSearchActionSearch",
+    "WebSearchSource",
     "WebSearchToolTypes",
     "WeightedRanker",
     # Interactions API
@@ -965,6 +984,7 @@ __all__ = [
     "GoogleUsage",
     # Messages API
     "Messages",
+    "AnthropicBase64ImageSource",
     "AnthropicContentBlock",
     "AnthropicCountTokensRequest",
     "AnthropicCountTokensResponse",
@@ -973,6 +993,7 @@ __all__ = [
     "AnthropicImageBlock",
     "AnthropicImageSource",
     "AnthropicMessage",
+    "AnthropicURLImageSource",
     "AnthropicMessageResponse",
     "AnthropicTextBlock",
     "AnthropicThinkingBlock",

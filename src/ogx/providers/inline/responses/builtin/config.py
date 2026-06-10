@@ -117,8 +117,8 @@ class BuiltinResponsesImplConfig(BaseModel):
 
     persistence: ResponsesPersistenceConfig
 
-    vector_stores_config: VectorStoresConfig | None = Field(
-        default=None,
+    vector_stores_config: VectorStoresConfig = Field(
+        default_factory=VectorStoresConfig,
         description="Configuration for vector store prompt templates and behavior",
     )
 
@@ -132,6 +132,14 @@ class BuiltinResponsesImplConfig(BaseModel):
         description="URL of an OpenAI-compatible /v1/moderations endpoint for guardrails. "
         'The endpoint must accept POST {"input": "text"} and return '
         '{"results": [{"flagged": bool, "categories": {...}}]}.',
+    )
+
+    moderation_headers: dict[str, str] | None = Field(
+        default=None,
+        description="HTTP headers to send with moderation endpoint requests. "
+        "Use this to provide authentication for hosted moderation services "
+        "(e.g., {'Authorization': 'Bearer sk-...'}). These headers are server-side only "
+        "and never exposed to clients.",
     )
 
     @classmethod

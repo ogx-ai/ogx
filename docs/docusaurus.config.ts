@@ -208,7 +208,7 @@ const config: Config = {
           items: [
             {
               label: 'Discord',
-              href: 'https://discord.gg/ZAFjsrcw',
+              href: 'https://discord.gg/bUYRqEvK6',
             },
             {
               label: 'Issues',
@@ -277,8 +277,21 @@ const config: Config = {
     languageTabs: [
       {
         highlight: "python",
-        language: "python",
+        language: "OpenAI",
         logoClass: "python",
+        codeSampleLanguage: "OpenAI",
+      },
+      {
+        highlight: "python",
+        language: "Anthropic",
+        logoClass: "python",
+        codeSampleLanguage: "Anthropic",
+      },
+      {
+        highlight: "python",
+        language: "Google",
+        logoClass: "python",
+        codeSampleLanguage: "Google",
       },
       {
         highlight: "bash",

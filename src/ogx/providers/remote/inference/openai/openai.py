@@ -4,7 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from collections.abc import AsyncIterator
+import warnings
+from collections.abc import AsyncIterator, Iterable
 
 from ogx.log import get_logger
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
@@ -57,6 +58,7 @@ class OpenAIInferenceAdapter(OpenAIMixin):
     supports_tokenized_embeddings_input: bool = True
 
     embedding_model_metadata: dict[str, dict[str, int]] = {
+        "text-embedding-ada-002": {"embedding_dimension": 1536, "context_length": 8192},
         "text-embedding-3-small": {"embedding_dimension": 1536, "context_length": 8192},
         "text-embedding-3-large": {"embedding_dimension": 3072, "context_length": 8192},
     }
@@ -82,33 +84,50 @@ class OpenAIInferenceAdapter(OpenAIMixin):
             )
         return None
 
+    async def list_provider_model_ids(self) -> Iterable[str]:
+        """
+        Filter out realtime & audio models.
+        """
+        ids = []
+        for m in await super().list_provider_model_ids():
+            for excluded in {"whisper", "tts", "realtime", "audio"}:
+                if excluded in m:
+                    break
+            else:
+                ids.append(m)
+        return ids
+
     def construct_model_from_identifier(self, identifier: str) -> Model:
-        if metadata := self.embedding_model_metadata.get(identifier):
-            return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.embedding,
-                metadata=metadata,
-            )
+        model = super().construct_model_from_identifier(identifier)
 
-        metadata = {}
-        max_output_tokens = self._get_max_output_tokens(identifier)
-        if max_output_tokens is not None:
-            metadata["max_output_tokens"] = max_output_tokens
+        # Add max_output_tokens metadata for LLM models
+        if model.model_type == ModelType.llm:
+            max_output_tokens = self._get_max_output_tokens(identifier)
+            if max_output_tokens is not None:
+                metadata = dict(model.metadata or {})
+                metadata["max_output_tokens"] = max_output_tokens
+                model = model.model_copy(update={"metadata": metadata})
 
-        return Model(
-            provider_id=self.__provider_id__,  # type: ignore[attr-defined]
-            provider_resource_id=identifier,
-            identifier=identifier,
-            model_type=ModelType.llm,
-            metadata=metadata,
-        )
+        return model
 
     async def openai_chat_completion(
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
+        # OpenAI is deprecating max_tokens in favor of max_completion_tokens.
+        # Reasoning models (o1/o3/o4) and gpt-5+ reject max_tokens outright.
+        # Translate unconditionally since all OpenAI models accept max_completion_tokens.
+        if params.max_tokens is not None and params.max_completion_tokens is None:
+            warnings.warn(
+                "max_tokens is deprecated by OpenAI and will be removed in a future release. "
+                "Use max_completion_tokens instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            params = params.model_copy()
+            params.max_completion_tokens = params.max_tokens
+            params.max_tokens = None
+
         max_output_tokens = self._get_max_output_tokens(params.model)
         if max_output_tokens is not None:
             updated_params = params

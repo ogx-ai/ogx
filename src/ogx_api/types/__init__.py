@@ -247,6 +247,7 @@ from ogx_api.interactions import (
 
 # Messages
 from ogx_api.messages import (
+    AnthropicBase64ImageSource,
     AnthropicContentBlock,
     AnthropicCountTokensRequest,
     AnthropicCountTokensResponse,
@@ -262,6 +263,7 @@ from ogx_api.messages import (
     AnthropicToolDef,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
+    AnthropicURLImageSource,
     AnthropicUsage,
 )
 
@@ -385,7 +387,13 @@ from ogx_api.openai_responses import (
     OpenAIResponseUsage,
     OpenAIResponseUsageInputTokensDetails,
     OpenAIResponseUsageOutputTokensDetails,
+    WebSearchActionFind,
+    WebSearchActionOpenPage,
+    WebSearchActionSearch,
+    WebSearchFilters,
+    WebSearchSource,
     WebSearchToolTypes,
+    WebSearchUserLocation,
 )
 
 # Prompts
@@ -691,6 +699,7 @@ __all__ = [
     "GoogleInteractionResponse",
     "GoogleUsage",
     # Messages (Anthropic)
+    "AnthropicBase64ImageSource",
     "AnthropicContentBlock",
     "AnthropicCountTokensRequest",
     "AnthropicCountTokensResponse",
@@ -699,6 +708,7 @@ __all__ = [
     "AnthropicImageBlock",
     "AnthropicImageSource",
     "AnthropicMessage",
+    "AnthropicURLImageSource",
     "AnthropicMessageResponse",
     "AnthropicTextBlock",
     "AnthropicThinkingBlock",
@@ -759,6 +769,8 @@ __all__ = [
     "OpenAIResponseInputToolFunction",
     "OpenAIResponseInputToolMCP",
     "OpenAIResponseInputToolWebSearch",
+    "WebSearchFilters",
+    "WebSearchUserLocation",
     "OpenAIResponseMCPApprovalRequest",
     "OpenAIResponseMCPApprovalResponse",
     "OpenAIResponseMessage",
@@ -823,6 +835,10 @@ __all__ = [
     "OpenAIResponseUsage",
     "OpenAIResponseUsageInputTokensDetails",
     "OpenAIResponseUsageOutputTokensDetails",
+    "WebSearchActionFind",
+    "WebSearchActionOpenPage",
+    "WebSearchActionSearch",
+    "WebSearchSource",
     "WebSearchToolTypes",
     # Prompts
     "CreatePromptRequest",

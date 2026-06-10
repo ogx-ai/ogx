@@ -191,6 +191,8 @@ def extract_openai_error(exc: Exception) -> tuple[str, str]:
 
     if raw_code and isinstance(raw_code, str):
         final_code: str = _RESPONSES_API_ERROR_CODES[raw_code] if raw_code in _RESPONSES_API_ERROR_CODES else raw_code
+    elif isinstance(raw_code, int) and 400 <= raw_code < 500:
+        final_code = "invalid_prompt"
     else:
         final_code = "server_error"
 
@@ -233,6 +235,7 @@ class StreamingResponseOrchestrator:
         tool_executor,  # Will be the tool execution logic from the main class
         instructions: str | None,
         moderation_endpoint: str | None,
+        moderation_headers: dict[str, str] | None = None,
         enable_guardrails: bool = False,
         connectors_api: Connectors | None = None,
         prompt: OpenAIResponsePrompt | None = None,
@@ -244,6 +247,7 @@ class StreamingResponseOrchestrator:
         max_output_tokens: int | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
         include: list[ResponseItemInclude] | None = None,
         store: bool | None = True,
         truncation: ResponseTruncation | None = None,
@@ -260,6 +264,7 @@ class StreamingResponseOrchestrator:
         self.max_infer_iters = max_infer_iters
         self.tool_executor = tool_executor
         self.moderation_endpoint = moderation_endpoint
+        self.moderation_headers = moderation_headers
         self.connectors_api = connectors_api
         self.enable_guardrails = enable_guardrails
         self.prompt = prompt
@@ -278,6 +283,7 @@ class StreamingResponseOrchestrator:
         # This allows us to update it with the actual tier returned by the provider
         self.service_tier = service_tier.value if service_tier is not None else None
         self.metadata = metadata
+        self.safety_identifier = safety_identifier
         self.truncation = truncation
         self.top_logprobs = top_logprobs
         self.stream_options = stream_options
@@ -328,10 +334,11 @@ class StreamingResponseOrchestrator:
             top_logprobs=self.top_logprobs if self.top_logprobs is not None else 0,
             tools=self.ctx.available_tools(),
             tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
-            truncation=self.truncation or "disabled",
+            truncation=self.truncation or ResponseTruncation.disabled,
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
+            safety_identifier=self.safety_identifier,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
@@ -382,13 +389,14 @@ class StreamingResponseOrchestrator:
             usage=self.accumulated_usage,
             instructions=self.instructions,
             prompt=self.prompt,
-            parallel_tool_calls=self.parallel_tool_calls,
+            parallel_tool_calls=self.parallel_tool_calls if self.parallel_tool_calls is not None else True,
             max_tool_calls=self.max_tool_calls,
             reasoning=self.reasoning,
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
-            truncation=self.truncation or "disabled",
+            safety_identifier=self.safety_identifier,
+            truncation=self.truncation or ResponseTruncation.disabled,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
@@ -416,6 +424,7 @@ class StreamingResponseOrchestrator:
             input_violation_message = await run_guardrails(
                 self.moderation_endpoint,
                 combined_text,
+                headers=self.moderation_headers,
             )
             if input_violation_message:
                 logger.info("Input guardrail violation", input_violation_message=input_violation_message)
@@ -526,7 +535,7 @@ class StreamingResponseOrchestrator:
                 # Merge user stream_options with default include_usage
                 effective_stream_options = {"include_usage": True}
                 if self.stream_options:
-                    effective_stream_options.update(self.stream_options)
+                    effective_stream_options.update({k: v for k, v in self.stream_options if v is not None})
 
                 params = OpenAIChatCompletionRequestWithExtraBody(
                     model=self.ctx.model,
@@ -1146,6 +1155,7 @@ class StreamingResponseOrchestrator:
                             yield event
                     reasoning_part_emitted = True
                     reasoning_text_accumulated.append(reasoning_content)
+                    chars_since_last_check += len(reasoning_content)
 
                 # Handle refusal content if present
                 if chunk_choice.delta.refusal:
@@ -1236,17 +1246,18 @@ class StreamingResponseOrchestrator:
                                     response_tool_call.function.arguments or ""
                                 ) + tool_call.function.arguments
 
-            # Batched output safety validation. If we have only buffered reasoning events and
-            # no assistant text yet, flush per chunk so reasoning can stream in real time.
+            # Batched output safety validation — reasoning text is included in moderation
+            # checks because reasoning events are user-visible in the stream.
             guardrail_check_due = chars_since_last_check >= _GUARDRAIL_BATCH_CHARS
             if pending_guardrail_events and not any(chat_response_content):
                 guardrail_check_due = True
 
             if self.enable_guardrails and guardrail_check_due:
-                accumulated_text = "".join(chat_response_content)
+                accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
                 violation_message = await run_guardrails(
                     self.moderation_endpoint,
                     accumulated_text,
+                    headers=self.moderation_headers,
                 )
                 if violation_message:
                     logger.info("Output guardrail violation", violation_message=violation_message)
@@ -1261,10 +1272,11 @@ class StreamingResponseOrchestrator:
 
         # Final guardrail check on remaining buffered content
         if self.enable_guardrails and pending_guardrail_events:
-            accumulated_text = "".join(chat_response_content)
+            accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
             violation_message = await run_guardrails(
                 self.moderation_endpoint,
                 accumulated_text,
+                headers=self.moderation_headers,
             )
             if violation_message:
                 logger.info("Output guardrail violation", violation_message=violation_message)

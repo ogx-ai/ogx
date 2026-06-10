@@ -18,6 +18,33 @@ import yaml
 from openapi_spec_validator import validate_spec
 from openapi_spec_validator.exceptions import OpenAPISpecValidatorError
 
+
+def _fix_compact_request_schema(openapi_schema: dict[str, Any]) -> None:
+    """Align CompactResponseRequest with OpenAI's CompactResponseMethodPublicBody.
+
+    Fixes two structural mismatches:
+    1. model: inject a ModelIdsResponses $ref so the anyOf variant count matches
+    2. input: nest string + array variants inside a oneOf wrapper
+    """
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    props = schemas.get("CompactResponseRequest", {}).get("properties", {})
+    if not props:
+        return
+
+    model_prop = props.get("model")
+    if isinstance(model_prop, dict) and "anyOf" in model_prop:
+        if not any(isinstance(v, dict) and "ModelIdsResponses" in v.get("$ref", "") for v in model_prop["anyOf"]):
+            schemas.setdefault("ModelIdsResponses", {"type": "string", "description": "Model identifier."})
+            model_prop["anyOf"].insert(0, {"$ref": "#/components/schemas/ModelIdsResponses"})
+
+    input_prop = props.get("input")
+    if isinstance(input_prop, dict) and "anyOf" in input_prop:
+        non_null = [v for v in input_prop["anyOf"] if not (isinstance(v, dict) and v.get("type") == "null")]
+        null_items = [v for v in input_prop["anyOf"] if isinstance(v, dict) and v.get("type") == "null"]
+        if len(non_null) >= 2 and null_items:
+            input_prop["anyOf"] = [{"oneOf": non_null}] + null_items
+
+
 from ._legacy_order import (
     LEGACY_OPERATION_KEYS,
     LEGACY_PATH_ORDER,

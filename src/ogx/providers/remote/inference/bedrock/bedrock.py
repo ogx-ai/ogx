@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 from collections.abc import AsyncIterator, Iterable
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -47,12 +48,14 @@ class BedrockInferenceAdapter(OpenAIMixin):
     Supports Llama models across regions and GPT-OSS models (us-west-2 only).
 
     Authentication modes:
-    1. Bearer token (legacy): Set AWS_BEARER_TOKEN_BEDROCK or api_key in config
-    2. AWS credential chain (enterprise): Leave api_key unset, configure AWS creds
+    1. AWS credential chain (recommended): Leave aws_bedrock_bearer_token unset
+       and configure AWS credentials for the server environment
        - Web Identity Federation (IRSA, GitHub Actions OIDC)
        - IAM roles (EC2, ECS, Lambda)
        - AWS profiles
        - Static credentials
+    2. Bearer token (optional compatibility mode): Set aws_bedrock_bearer_token in
+       config or pass it per request in x-ogx-provider-data
 
     When using AWS credential chain, requests are signed using SigV4 with the
     "bedrock" signing name (note: the endpoint hostname uses "bedrock-runtime",
@@ -87,7 +90,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
     for dynamic model discovery. Models must be pre-registered in the config.
     """
 
-    provider_data_api_key_field: str | None = "aws_bearer_token_bedrock"
+    provider_data_api_key_field: str | None = "aws_bedrock_bearer_token"
 
     # built once in initialize() so get_extra_client_params() can stay sync;
     # reusing one client also avoids opening a new socket per request
@@ -111,8 +114,8 @@ class BedrockInferenceAdapter(OpenAIMixin):
             return False
 
         provider_data = self.get_request_provider_data()
-        if provider_data and provider_data.aws_bearer_token_bedrock is not None:
-            val = provider_data.aws_bearer_token_bedrock.get_secret_value()
+        if provider_data and provider_data.aws_bedrock_bearer_token is not None:
+            val = provider_data.aws_bedrock_bearer_token.get_secret_value()
             if val and val.strip():
                 return False
 
@@ -175,8 +178,9 @@ class BedrockInferenceAdapter(OpenAIMixin):
 
     async def shutdown(self) -> None:
         if self._sigv4_http_client is not None:
-            await self._sigv4_http_client.aclose()
+            await asyncio.shield(self._sigv4_http_client.aclose())
             self._sigv4_http_client = None
+        await super().shutdown()
 
     async def openai_embeddings(
         self,

@@ -52,7 +52,7 @@ jobs:
           cache-dependency-path: 'src/ogx_ui/'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 
       - name: Install npm dependencies
         run: npm ci
@@ -163,7 +163,7 @@ jobs:
           # Install specific client version after sync if needed
           if [ "${{ steps.client-config.outputs.install-after-sync }}" = "true" ]; then
             echo "Installing ogx-client from: ${{ steps.client-config.outputs.install-source }}"
-            uv pip install ${{ steps.client-config.outputs.install-source }}
+            uv pip install --upgrade ${{ steps.client-config.outputs.install-source }}
           fi
 
       - name: Run mypy (full type_checking)

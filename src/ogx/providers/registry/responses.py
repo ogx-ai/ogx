@@ -29,7 +29,7 @@ def available_providers() -> list[ProviderSpec]:
                 "pillow",
                 "pandas",
                 "scikit-learn",
-                "mcp>=1.23.0",
+                "mcp>=1.23.0,<2.0",
             ]
             + kvstore_dependencies(),  # TODO make this dynamic based on the kvstore config
             module="ogx.providers.inline.responses.builtin",

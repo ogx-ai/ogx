@@ -237,12 +237,21 @@ class CachedDiskDistributionRegistry(DiskDistributionRegistry):
 
     async def register(self, obj: RoutableObjectWithProvider) -> bool:
         await self._ensure_initialized()
+        # Use super().get() (DB read) rather than self.get_cached() so that in
+        # multi-worker deployments, where each process has its own in-memory
+        # cache, we always read the authoritative stored object regardless of
+        # whether this worker's cache was warmed by _ensure_initialized().
+        existing_obj = await super().get(obj.type, obj.identifier)
         success = await super().register(obj)
 
         if success:
             cache_key = (obj.type, obj.identifier)
             async with self._locked_cache() as cache:
-                cache[cache_key] = obj
+                # On subset re-registration the DB object is unchanged; cache the
+                # existing full object rather than the incoming partial one so that
+                # mutable fields (e.g. owner) set during initial registration are
+                # not silently dropped from the cache on every server restart.
+                cache[cache_key] = existing_obj if existing_obj is not None else obj
 
         return success
 
