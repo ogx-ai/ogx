@@ -59,6 +59,7 @@ from ogx_api import (
     OpenAIResponseInputToolChoiceMCPTool,
     OpenAIResponseInputToolChoiceMode,
     OpenAIResponseInputToolChoiceWebSearch,
+    OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMessage,
@@ -689,6 +690,14 @@ class StreamingResponseOrchestrator:
                         sequence_number=self.sequence_number,
                     )
 
+                # Native /v1/responses path: surface server-executed tool call
+                # items (file_search_call, mcp_call, web_search_call,
+                # code_interpreter_call) into the response output. These were
+                # already streamed to the client as raw events; we add them
+                # here so non-streaming clients also see them in resp.output.
+                for passthrough_item in completion_result_data.passthrough_output_items:
+                    output_messages.append(passthrough_item)
+
                 for choice in current_response.choices:
                     has_tool_calls = choice.message.tool_calls and self.ctx.response_tools
                     if not has_tool_calls:
@@ -1100,6 +1109,38 @@ class StreamingResponseOrchestrator:
                 converted.append(dumped)
         return converted
 
+    def _native_tools_from_chat_tools(
+        self,
+    ) -> list[OpenAIResponseInputTool] | None:
+        """Build the tools list for the native /v1/responses request.
+
+        self.ctx.chat_tools holds every requested tool (function tools, MCP tools,
+        and OGX server-side builtins like file_search/web_search) already flattened
+        into chat-completions function form by _process_tools. vLLM's native
+        Responses endpoint only accepts `function`/`mcp` tool types, so we forward
+        those function definitions and let the orchestrator's tool loop execute any
+        builtins itself once the model emits the matching function_call.
+        """
+        if not self.ctx.chat_tools:
+            return None
+
+        native_tools: list[OpenAIResponseInputTool] = []
+        for chat_tool in self.ctx.chat_tools:
+            # chat_tool is a ChatCompletionToolParam dict:
+            # {"type": "function", "function": {"name", "description", "parameters"}}
+            fn = chat_tool.get("function") if isinstance(chat_tool, dict) else None
+            if not fn or not fn.get("name"):
+                continue
+            native_tools.append(
+                OpenAIResponseInputToolFunction(
+                    type="function",
+                    name=fn["name"],
+                    description=fn.get("description"),
+                    parameters=fn.get("parameters"),
+                )
+            )
+        return native_tools or None
+
     async def _native_response_inference(
         self,
         messages: list[OpenAIMessageParam],
@@ -1115,11 +1156,20 @@ class StreamingResponseOrchestrator:
         """
         converted_input = self._convert_cc_messages_to_responses_input(messages)
 
+        # vLLM's native /v1/responses only accepts `function` and `mcp` tool types;
+        # it rejects OGX server-side builtins (file_search, web_search,
+        # knowledge_search). OGX owns execution of those builtins via the vector
+        # store / tool_groups, so expose them to the model as plain function tools.
+        # self.ctx.chat_tools is already populated by _process_tools with every
+        # tool (builtins included) in function form, so reuse it as the source of
+        # truth and convert to the Responses function-tool shape.
+        native_tools = self._native_tools_from_chat_tools()
+
         native_request = CreateResponseRequest(
             model=self.ctx.model,
             input=converted_input,  # type: ignore[arg-type]
             instructions=self.instructions,
-            tools=self.ctx.response_tools,
+            tools=native_tools,
             tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
             stream=True,
             store=False,
@@ -1168,6 +1218,12 @@ class StreamingResponseOrchestrator:
         tool_call_idx = 0
         pending_arguments: dict[str, str] = {}
         chunk_events: list[OpenAIResponseObjectStream] = []
+        # Server-executed tool call items (file_search_call, mcp_call,
+        # web_search_call, code_interpreter_call, etc.) returned by the
+        # native /v1/responses endpoint. We forward the streaming events
+        # to the client AND preserve the items so they land in the final
+        # response.output array.
+        passthrough_output_items: list = []
 
         _lifecycle_types = (
             OpenAIResponseObjectStreamResponseCreated,
@@ -1193,7 +1249,8 @@ class StreamingResponseOrchestrator:
                 chunk_events.append(event)
             elif isinstance(event, OpenAIResponseObjectStreamResponseOutputItemDone):
                 item = event.item
-                if hasattr(item, "type") and item.type == "function_call":
+                item_type = getattr(item, "type", None)
+                if item_type == "function_call":
                     item_id = getattr(item, "id", "")
                     call_id = getattr(item, "call_id", f"call_{uuid.uuid4().hex[:24]}")
                     name = getattr(item, "name", "")
@@ -1209,6 +1266,14 @@ class StreamingResponseOrchestrator:
                     tool_call_item_ids[tool_call_idx] = item_id or f"fc_{uuid.uuid4().hex[:24]}"
                     tool_call_idx += 1
                 else:
+                    # Server-executed tool calls (file_search_call,
+                    # mcp_call, web_search_call, code_interpreter_call) and
+                    # any non-message non-reasoning items: keep the item so
+                    # it lands in the final response.output array. The text
+                    # message item is built by the orchestrator from
+                    # content_parts, and reasoning is built from reasoning_parts.
+                    if item_type not in (None, "message", "reasoning"):
+                        passthrough_output_items.append(item)
                     chunk_events.append(event)
             elif isinstance(event, _terminal_types):
                 if hasattr(event, "response") and event.response:
@@ -1228,9 +1293,13 @@ class StreamingResponseOrchestrator:
             else:
                 chunk_events.append(event)
 
-            if self.guardrail_ids and chunk_events:
+            if self.enable_guardrails and chunk_events:
                 accumulated_text = "".join(content_parts)
-                violation_message = await run_guardrails(self.safety_api, accumulated_text, self.guardrail_ids)
+                violation_message = await run_guardrails(
+                    self.moderation_endpoint,
+                    accumulated_text,
+                    headers=self.moderation_headers,
+                )
                 if violation_message:
                     logger.info("Output guardrail violation", violation_message=violation_message)
                     chunk_events.clear()
@@ -1240,7 +1309,7 @@ class StreamingResponseOrchestrator:
                 for evt in chunk_events:
                     yield evt
                 chunk_events.clear()
-            elif not self.guardrail_ids and chunk_events:
+            elif not self.enable_guardrails and chunk_events:
                 for evt in chunk_events:
                     yield evt
                 chunk_events.clear()
@@ -1259,6 +1328,7 @@ class StreamingResponseOrchestrator:
             content_part_emitted=bool(content_parts),
             service_tier=service_tier,
             reasoning_content=reasoning_content,
+            passthrough_output_items=passthrough_output_items,
         )
 
     async def _process_streaming_chunks(

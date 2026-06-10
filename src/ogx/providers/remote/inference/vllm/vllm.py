@@ -46,6 +46,18 @@ from .config import VLLMInferenceAdapterConfig
 
 log = get_logger(name=__name__, category="inference::vllm")
 
+# OGX's internal stream event types require a `response_id` on these events, but
+# the OpenAI Responses streaming spec (which vLLM follows) does not emit it there.
+# The adapter backfills it from the captured response id before validation.
+_EVENTS_REQUIRING_RESPONSE_ID = frozenset(
+    {
+        "response.output_item.added",
+        "response.output_item.done",
+        "response.content_part.added",
+        "response.content_part.done",
+    }
+)
+
 
 def _is_embedding_model(model_id: str, model: _models_dev.Model) -> bool:
     return (model.family is not None and "embed" in model.family) or "embed" in model_id.lower()
@@ -313,6 +325,20 @@ class VLLMInferenceAdapter(OpenAIMixin):
 
     _response_stream_adapter: TypeAdapter[OpenAIResponseObjectStream] = TypeAdapter(OpenAIResponseObjectStream)
 
+    @staticmethod
+    def _normalize_response_object(response_obj: dict[str, Any]) -> None:
+        """Reconcile vLLM's response object with OGX's stricter internal type.
+
+        vLLM follows the OpenAI Responses spec, which lets `text` be null and does
+        not always include `store`; OGX's OpenAIResponseObject rejects a null `text`
+        and requires `store`. Without this, the terminal `response.completed` event
+        fails validation and gets dropped, so its usage block never reaches the
+        orchestrator and token accounting is lost. Mutates in place.
+        """
+        if response_obj.get("text") is None:
+            response_obj.pop("text", None)
+        response_obj.setdefault("store", False)
+
     async def _stream_response(
         self, endpoint: str, headers: dict[str, str], payload: dict[str, Any]
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
@@ -330,6 +356,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
                             raise RuntimeError(
                                 f"Failed to get response from vLLM: {response.status_code}: {body.decode()}"
                             )
+                        response_id: str | None = None
                         async for line in response.aiter_lines():
                             if not line.startswith("data: "):
                                 continue
@@ -338,6 +365,23 @@ class VLLMInferenceAdapter(OpenAIMixin):
                                 break
                             try:
                                 event_data = json.loads(data)
+                                # Capture the response id from any event that carries the
+                                # full response object (created/in_progress/completed/...).
+                                response_obj = event_data.get("response")
+                                if isinstance(response_obj, dict):
+                                    if response_obj.get("id"):
+                                        response_id = response_obj["id"]
+                                    self._normalize_response_object(response_obj)
+                                # vLLM follows the OpenAI streaming spec, which omits
+                                # `response_id` on output_item/content_part events, but
+                                # OGX's internal stream types require it for routing.
+                                # Backfill it from the captured response id.
+                                if (
+                                    event_data.get("type") in _EVENTS_REQUIRING_RESPONSE_ID
+                                    and event_data.get("response_id") is None
+                                    and response_id is not None
+                                ):
+                                    event_data["response_id"] = response_id
                                 yield self._response_stream_adapter.validate_python(event_data)
                             except (json.JSONDecodeError, ValidationError) as e:
                                 log.warning("Failed to parse SSE event from vLLM", error=str(e), data=data[:200])

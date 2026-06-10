@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 
 from openai.types.chat import ChatCompletionToolParam
@@ -83,6 +83,9 @@ class ChatCompletionResult:
     logprobs: list[OpenAITokenLogProb] | None = None
     service_tier: str | None = None  # The actual service tier used (may differ from input)
     reasoning_content: str | None = None
+    # Native-only: server-executed tool call items (file_search, mcp_call, etc.)
+    # that the client did not need to dispatch — relayed straight into output.
+    passthrough_output_items: list = field(default_factory=list)
 
     @property
     def content_text(self) -> str:

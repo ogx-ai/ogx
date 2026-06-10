@@ -736,6 +736,17 @@ async def _patched_file_processor_method(original_method, self, request, file=No
     return await original_method(self, request, file)
 
 
+# HTTP passthrough endpoints recorded at the httpx layer. These are provider-native
+# wire formats that OGX forwards verbatim (rather than going through the OpenAI SDK
+# client): the Anthropic Messages API, the interactions passthrough, and vLLM's
+# native /v1/responses endpoint used by the inline responses native passthrough.
+_HTTPX_PASSTHROUGH_PATHS = ("/v1/messages", "/interactions", "/v1/responses")
+
+
+def _is_httpx_passthrough(url_str: str) -> bool:
+    return any(path in url_str for path in _HTTPX_PASSTHROUGH_PATHS)
+
+
 def _patched_aiohttp_post(original_post, session_self, url: str, **kwargs):
     """Patched version of aiohttp ClientSession.post for recording/replay of rerank requests.
 
@@ -848,7 +859,7 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
+    is_passthrough = _is_httpx_passthrough(url_str)
 
     if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return await original_post(self, url, **kwargs)
@@ -907,7 +918,7 @@ def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
+    is_passthrough = _is_httpx_passthrough(url_str)
 
     if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return original_stream(self, method, url, **kwargs)
