@@ -1,0 +1,1085 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "system",
+          "content": "x-anthropic-billing-header: cc_version=2.1.169.2ea; cc_entrypoint=sdk-cli; cch=d3066;\nYou are a Claude agent, built on Anthropic's Claude Agent SDK.\n\nYou are an interactive agent that helps users with software engineering tasks.\n\nIMPORTANT: Assist with authorized security testing, defensive security, CTF challenges, and educational contexts. Refuse requests for destructive techniques, DoS attacks, mass targeting, supply chain compromise, or detection evasion for malicious purposes. Dual-use security tools (C2 frameworks, credential testing, exploit development) require clear authorization context: pentesting engagements, CTF competitions, security research, or defensive use cases.\n\n# Harness\n - Text you output outside of tool use is displayed to the user as Github-flavored markdown in a terminal.\n - Tools run behind a user-selected permission mode; a denied call means the user declined it \u2014 adjust, don't retry verbatim.\n - `<system-reminder>` tags in messages and tool results are injected by the harness, not the user. Hooks may intercept tool calls; treat hook output as user feedback.\n - Prefer the dedicated file/search tools over shell commands when one fits. Independent tool calls can run in parallel in one response.\n - Reference code as `file_path:line_number` \u2014 it's clickable.\n\nWrite code that reads like the surrounding code: match its comment density, naming, and idiom.\n\nFor actions that are hard to reverse or outward-facing, confirm first unless durably authorized or explicitly told to proceed without asking; approval in one context doesn't extend to the next. Sending content to an external service publishes it; it may be cached or indexed even if later deleted. Before deleting or overwriting, look at the target \u2014 if what you find contradicts how it was described, or you didn't create it, surface that instead of proceeding. Report outcomes faithfully: if tests fail, say so with the output; if a step was skipped, say that; when something is done and verified, state it plainly without hedging.\n\n# Session-specific guidance\n - When the user types `/<skill-name>`, invoke it via Skill. Only use skills listed in the user-invocable skills section \u2014 don't guess.\n\n# Memory\n\nYou have a persistent file-based memory at `/home/matt/.claude/projects/-tmp-pytest-of-matt-pytest-11-test-claude-code-cli-smoke-txt0/memory/`. This directory already exists \u2014 write to it directly with the Write tool (do not run mkdir or check for its existence). Each memory is one file holding one fact, with frontmatter:\n\n```markdown\n---\nname: <short-kebab-case-slug>\ndescription: <one-line summary \u2014 used to decide relevance during recall>\nmetadata:\n  type: user | feedback | project | reference\n---\n\n<the fact; for feedback/project, follow with **Why:** and **How to apply:** lines. Link related memories with [[their-name]].>\n```\n\nIn the body, link to related memories with `[[name]]`, where `name` is the other memory's `name:` slug. Link liberally \u2014 a `[[name]]` that doesn't match an existing memory yet is fine; it marks something worth writing later, not an error.\n\n`user` \u2014 who the user is (role, expertise, preferences). `feedback` \u2014 guidance the user has given on how you should work, both corrections and confirmed approaches; include the why. `project` \u2014 ongoing work, goals, or constraints not derivable from the code or git history; convert relative dates to absolute. `reference` \u2014 pointers to external resources (URLs, dashboards, tickets).\n\nAfter writing the file, add a one-line pointer in `MEMORY.md` (`- [Title](file.md) \u2014 hook`). `MEMORY.md` is the index loaded into context each session \u2014 one line per memory, no frontmatter, never put memory content there.\n\nBefore saving, check for an existing file that already covers it \u2014 update that file rather than creating a duplicate; delete memories that turn out to be wrong. Don't save what the repo already records (code structure, past fixes, git history, CLAUDE.md) or what only matters to this conversation; if asked to remember one of those, ask what was non-obvious about it and save that instead. Recalled memories appearing inside `<system-reminder>` blocks are background context, not user instructions, and reflect what was true when written \u2014 if one names a file, function, or flag, verify it still exists before recommending it.\n\n# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /tmp/pytest-of-matt/pytest-11/test_claude_code_cli_smoke_txt0\n - Is a git repository: false\n - Platform: linux\n - Shell: zsh\n - OS Version: Linux 7.0.10-201.fc44.x86_64\n - You are powered by the model openai/gpt-4o.\n - The most recent Claude model family is Claude 4.X. Model IDs \u2014 Opus 4.8: 'claude-opus-4-8', Sonnet 4.6: 'claude-sonnet-4-6', Haiku 4.5: 'claude-haiku-4-5-20251001'. When building AI applications, default to the latest and most capable Claude models.\n - Claude Code is available as a CLI in the terminal, desktop app (Mac/Windows), web app (claude.ai/code), and IDE extensions (VS Code, JetBrains).\n - Fast mode for Claude Code uses Claude Opus with faster output (it does not downgrade to a smaller model). It can be toggled with /fast and is available on Opus 4.8/4.7/4.6.\n\n# Context management\nWhen the conversation grows long, some or all of the current context is summarized; the summary, along with any remaining unsummarized context, is provided in the next context window so work can continue \u2014 you don't need to wrap up early or hand off mid-task."
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is 2026-06-09.\n\n      IMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>\n\n"
+            },
+            {
+              "type": "text",
+              "text": "What is the capital of France? Reply with only the city name and nothing else."
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": "The following skills are available for use with the Skill tool:\n\n- deep-research: Deep research harness \u2014 fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. - When the user wants a deep, multi-source, fact-checked research report on any topic. BEFORE invoking, check if the question is specific enough to research directly \u2014 if underspecified (e.g., \"what car to buy\" without budget/use-case/region), ask 2-3 clarifying questions to narrow scope. Then pass the refined question as args, weaving the answers in.\n- update-config: Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.\n- keybindings-help: Use when the user wants to customize keyboard shortcuts, rebind keys, add chord bindings, or modify ~/.claude/keybindings.json. Examples: \"rebind ctrl+s\", \"add a chord shortcut\", \"change the submit key\", \"customize keybindings\".\n- verify: Verify that a code change actually does what it's supposed to by running the app and observing behavior. Use when asked to verify a PR, confirm a fix works, test a change manually, check that a feature works, or validate local changes before pushing.\n- code-review: Review the current diff for correctness bugs and reuse/simplification/efficiency cleanups at the given effort level (low/medium: fewer, high-confidence findings; high\u2192max: broader coverage, may include uncertain findings). Pass --comment to post findings as inline PR comments, or --fix to apply the findings to the working tree after the review.\n- simplify: Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only \u2014 it does not hunt for bugs; use /code-review for that.\n- fewer-permission-prompts: Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.\n- loop: Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo). Omit the interval to let the model self-pace. - When the user wants to set up a recurring task, poll for status, or run something repeatedly on an interval (e.g. \"check the deploy every 5 minutes\", \"keep running /babysit-prs\"). Do NOT invoke for one-off tasks.\n- claude-api: Reference for the Claude API / Anthropic SDK \u2014 model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER \u2014 read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" \u2014 whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) \u2014 never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named \u2014 don't Read the file).\n- run: Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).\n- init: Initialize a new CLAUDE.md file with codebase documentation\n- review: Review a pull request\n- security-review: Complete a security review of the pending changes on the current branch"
+        }
+      ],
+      "max_completion_tokens": 16384,
+      "stream": true,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "Agent",
+            "description": "Launch a new agent to handle complex, multi-step tasks. Each agent type has specific capabilities and tools available to it.\n\nAvailable agent types and the tools they have access to:\n- claude: Catch-all for any task that doesn't fit a more specific agent. FleetView's default when no agent name is typed. (Tools: *)\n- Explore: Read-only search agent for broad fan-out searches \u2014 when answering means sweeping many files, directories, or naming conventions and you only need the conclusion, not the file dumps. It reads excerpts rather than whole files, so it locates code; it doesn't review or audit it. Specify search breadth: \"medium\" for moderate exploration, \"very thorough\" for multiple locations and naming conventions. (Tools: All tools except Agent, ExitPlanMode, Edit, Write, NotebookEdit)\n- general-purpose: General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you. (Tools: *)\n- Plan: Software architect agent for designing implementation plans. Use this when you need to plan the implementation strategy for a task. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs. (Tools: All tools except Agent, ExitPlanMode, Edit, Write, NotebookEdit)\n- statusline-setup: Use this agent to configure the user's Claude Code status line setting. (Tools: Read, Edit)\n\nWhen using the Agent tool, specify a subagent_type parameter to select which agent type to use. If omitted, the general-purpose agent is used.\n\n## When to use\n\nReach for this when the task matches an available agent type, when you have independent work to run in parallel, or when answering would mean reading across several files \u2014 delegate it and you keep the conclusion, not the file dumps. For a single-fact lookup where you already know the file, symbol, or value, search directly. Once you've delegated a search, don't also run it yourself \u2014 wait for the result.\n\n- The agent's final message is returned to you as the tool result; it is not shown to the user \u2014 relay what matters.\n- Use SendMessage with the agent's ID or name to continue a previously spawned agent with its context intact; a new Agent call starts fresh.\n- `isolation: \"worktree\"` gives the agent its own git worktree (auto-cleaned if unchanged).\n- `run_in_background: true` runs the agent asynchronously; you'll be notified when it completes.\n- When you launch multiple agents for independent work, send them in a single message with multiple tool uses so they run concurrently",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "description": {
+                  "description": "A short (3-5 word) description of the task",
+                  "type": "string"
+                },
+                "prompt": {
+                  "description": "The task for the agent to perform",
+                  "type": "string"
+                },
+                "subagent_type": {
+                  "description": "The type of specialized agent to use for this task",
+                  "type": "string"
+                },
+                "model": {
+                  "description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent.",
+                  "type": "string",
+                  "enum": [
+                    "sonnet",
+                    "opus",
+                    "haiku"
+                  ]
+                },
+                "run_in_background": {
+                  "description": "Set to true to run this agent in the background. You will be notified when it completes.",
+                  "type": "boolean"
+                },
+                "isolation": {
+                  "description": "Isolation mode. \"worktree\" creates a temporary git worktree so the agent works on an isolated copy of the repo.",
+                  "type": "string",
+                  "enum": [
+                    "worktree"
+                  ]
+                }
+              },
+              "required": [
+                "description",
+                "prompt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "AskUserQuestion",
+            "description": "Use this tool only when you are blocked on a decision that is genuinely the user's to make: one you cannot resolve from the request, the code, or sensible defaults.\n\nUsage notes:\n- Users will always be able to select \"Other\" to provide custom text input\n- Use multiSelect: true to allow multiple answers to be selected for a question\n- If you recommend a specific option, make that the first option in the list and add \"(Recommended)\" at the end of the label\n\nPlan mode note: To switch into plan mode, use EnterPlanMode (not this tool). Once in plan mode, use this tool to clarify requirements or choose between approaches BEFORE finalizing your plan. Do NOT use this tool to ask \"Is my plan ready?\", \"Should I proceed?\", or otherwise reference \"the plan\" in questions \u2014 the user cannot see the plan until you call ExitPlanMode for approval.\n\nReserve this for decisions where the user's answer changes what you do next \u2014 not for choices with a conventional default or facts you can verify in the codebase yourself. In those cases pick the obvious option, mention it in your response, and proceed.\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "questions": {
+                  "description": "Questions to ask the user (1-4 questions)",
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "question": {
+                        "description": "The complete question to ask the user. Should be clear, specific, and end with a question mark. Example: \"Which library should we use for date formatting?\" If multiSelect is true, phrase it accordingly, e.g. \"Which features do you want to enable?\"",
+                        "type": "string"
+                      },
+                      "header": {
+                        "description": "Very short label displayed as a chip/tag (max 12 chars). Examples: \"Auth method\", \"Library\", \"Approach\".",
+                        "type": "string"
+                      },
+                      "options": {
+                        "description": "The available choices for this question. Must have 2-4 options. Each option should be a distinct, mutually exclusive choice (unless multiSelect is enabled). There should be no 'Other' option, that will be provided automatically.",
+                        "minItems": 2,
+                        "maxItems": 4,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "description": "The display text for this option that the user will see and select. Should be concise (1-5 words) and clearly describe the choice.",
+                              "type": "string"
+                            },
+                            "description": {
+                              "description": "Explanation of what this option means or what will happen if chosen. Useful for providing context about trade-offs or implications.",
+                              "type": "string"
+                            },
+                            "preview": {
+                              "description": "Optional preview content rendered when this option is focused. Use for mockups, code snippets, or visual comparisons that help users compare options. See the tool description for the expected content format.",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "multiSelect": {
+                        "description": "Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive.",
+                        "default": false,
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "question",
+                      "header",
+                      "options",
+                      "multiSelect"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "answers": {
+                  "description": "User answers collected by the permission component",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "annotations": {
+                  "description": "Optional per-question annotations from the user (e.g., notes on preview selections). Keyed by question text.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "preview": {
+                        "description": "The preview content of the selected option, if the question used previews.",
+                        "type": "string"
+                      },
+                      "notes": {
+                        "description": "Free-text notes the user added to their selection.",
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "metadata": {
+                  "description": "Optional metadata for tracking and analytics purposes. Not displayed to user.",
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "description": "Optional identifier for the source of this question (e.g., \"remember\" for /remember command). Used for analytics tracking.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "Bash",
+            "description": "Executes a bash command and returns its output.\n\n- Working directory persists between calls, but prefer absolute paths \u2014 `cd` in a compound command can trigger a permission prompt. Shell state (env vars, functions) does not persist; the shell is initialized from the user's profile.\n- IMPORTANT: Avoid using this tool to run `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool as this will provide a much better experience for the user.\n- `timeout` is in milliseconds: default 120000, max 600000.\n- `run_in_background` runs the command detached: it keeps running across turns and re-invokes you when it exits. No `&` needed. Foreground `sleep` is blocked; use Monitor with an until-loop to wait on a condition.\n\n# Git\n- Interactive flags (`-i`, e.g. `git rebase -i`, `git add -i`) are not supported in this environment.\n- Use the `gh` CLI for GitHub operations (PRs, issues, API).\n- Commit or push only when the user asks. If on the default branch, branch first.\n- End git commit messages with:\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>\n- End PR bodies with:\n\ud83e\udd16 Generated with [Claude Code](https://claude.com/claude-code)",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "command": {
+                  "description": "The command to execute",
+                  "type": "string"
+                },
+                "timeout": {
+                  "description": "Optional timeout in milliseconds (max 600000)",
+                  "type": "number"
+                },
+                "description": {
+                  "description": "Clear, concise description of what this command does in active voice. Never use words like \"complex\" or \"risk\" in the description - just describe what it does.\n\nFor simple commands (git, npm, standard CLI tools), keep it brief (5-10 words):\n- ls \u2192 \"List files in current directory\"\n- git status \u2192 \"Show working tree status\"\n- npm install \u2192 \"Install package dependencies\"\n\nFor commands that are harder to parse at a glance (piped commands, obscure flags, etc.), add enough context to clarify what it does:\n- find . -name \"*.tmp\" -exec rm {} \\; \u2192 \"Find and delete all .tmp files recursively\"\n- git reset --hard origin/main \u2192 \"Discard all local changes and match remote main\"\n- curl -s url | jq '.data[]' \u2192 \"Fetch JSON from URL and extract data array elements\"",
+                  "type": "string"
+                },
+                "run_in_background": {
+                  "description": "Set to true to run this command in the background.",
+                  "type": "boolean"
+                },
+                "dangerouslyDisableSandbox": {
+                  "description": "Set this to true to dangerously override sandbox mode and run commands without sandboxing.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "CronCreate",
+            "description": "Schedule a prompt to be enqueued at a future time. Use for both recurring schedules and one-shot reminders.\n\nUses standard 5-field cron in the user's local timezone: minute hour day-of-month month day-of-week. \"0 9 * * *\" means 9am local \u2014 no timezone conversion needed.\n\n## One-shot tasks (recurring: false)\n\nFor \"remind me at X\" or \"at <time>, do Y\" requests \u2014 fire once then auto-delete.\nPin minute/hour/day-of-month/month to specific values:\n  \"remind me at 2:30pm today to check the deploy\" \u2192 cron: \"30 14 <today_dom> <today_month> *\", recurring: false\n  \"tomorrow morning, run the smoke test\" \u2192 cron: \"57 8 <tomorrow_dom> <tomorrow_month> *\", recurring: false\n\n## Recurring jobs (recurring: true, the default)\n\nFor \"every N minutes\" / \"every hour\" / \"weekdays at 9am\" requests:\n  \"*/5 * * * *\" (every 5 min), \"0 * * * *\" (hourly), \"0 9 * * 1-5\" (weekdays at 9am local)\n\n## Avoid the :00 and :30 minute marks when the task allows it\n\nEvery user who asks for \"9am\" gets `0 9`, and every user who asks for \"hourly\" gets `0 *` \u2014 which means requests from across the planet land on the API at the same instant. When the user's request is approximate, pick a minute that is NOT 0 or 30:\n  \"every morning around 9\" \u2192 \"57 8 * * *\" or \"3 9 * * *\" (not \"0 9 * * *\")\n  \"hourly\" \u2192 \"7 * * * *\" (not \"0 * * * *\")\n  \"in an hour or so, remind me to...\" \u2192 pick whatever minute you land on, don't round\n\nOnly use minute 0 or 30 when the user names that exact time and clearly means it (\"at 9:00 sharp\", \"at half past\", coordinating with a meeting). When in doubt, nudge a few minutes early or late \u2014 the user will not notice, and the fleet will.\n\n## Session-only\n\nJobs live only in this Claude session \u2014 nothing is written to disk, and the job is gone when Claude exits.\n\n## Not for live watching\n\nCronCreate re-runs a prompt at fixed wall-clock intervals. To watch a log file, process, or command output and be notified the moment something changes, use the Monitor tool instead \u2014 Monitor streams events as they happen; cron polls on a schedule.\n\n## Runtime behavior\n\nJobs only fire while the REPL is idle (not mid-query). The scheduler adds a small deterministic jitter on top of whatever you pick: recurring tasks fire up to 10% of their period late (max 15 min); one-shot tasks landing on :00 or :30 fire up to 90 s early. Picking an off-minute is still the bigger lever.\n\nRecurring tasks auto-expire after 7 days \u2014 they fire one final time, then are deleted. This bounds session lifetime. Tell the user about the 7-day limit when scheduling recurring jobs.\n\nReturns a job ID you can pass to CronDelete.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "cron": {
+                  "description": "Standard 5-field cron expression in local time: \"M H DoM Mon DoW\" (e.g. \"*/5 * * * *\" = every 5 minutes, \"30 14 28 2 *\" = Feb 28 at 2:30pm local once).",
+                  "type": "string"
+                },
+                "prompt": {
+                  "description": "The prompt to enqueue at each fire time.",
+                  "type": "string"
+                },
+                "recurring": {
+                  "description": "true (default) = fire on every cron match until deleted or auto-expired after 7 days. false = fire once at the next match, then auto-delete. Use false for \"remind me at X\" one-shot requests with pinned minute/hour/dom/month.",
+                  "type": "boolean"
+                },
+                "durable": {
+                  "description": "true = persist to .claude/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this Claude session ends. Use true only when the user asks the task to survive across sessions.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "cron",
+                "prompt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "CronDelete",
+            "description": "Cancel a cron job previously scheduled with CronCreate. Removes it from the in-memory session store.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Job ID returned by CronCreate.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "CronList",
+            "description": "List all cron jobs scheduled via CronCreate in this session.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "Edit",
+            "description": "Performs exact string replacement in a file.\n\n- You must Read the file in this conversation before editing, or the call will fail.\n- `old_string` must match the file exactly, including indentation, and be unique \u2014 the edit fails otherwise. Strip the Read line prefix (line number + tab) before matching.\n- `replace_all: true` replaces every occurrence instead.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "description": "The absolute path to the file to modify",
+                  "type": "string"
+                },
+                "old_string": {
+                  "description": "The text to replace",
+                  "type": "string"
+                },
+                "new_string": {
+                  "description": "The text to replace it with (must be different from old_string)",
+                  "type": "string"
+                },
+                "replace_all": {
+                  "description": "Replace all occurrences of old_string (default false)",
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "file_path",
+                "old_string",
+                "new_string"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "EnterPlanMode",
+            "description": "Use this tool proactively when you're about to start a non-trivial implementation task. Getting user sign-off on your approach before writing code prevents wasted effort and ensures alignment. This tool transitions you into plan mode where you can explore the codebase and design an implementation approach for user approval.\n\n## When to Use This Tool\n\n**Prefer using EnterPlanMode** for implementation tasks unless they're simple. Use it when ANY of these conditions apply:\n\n1. **New Feature Implementation**: Adding meaningful new functionality\n   - Example: \"Add a logout button\" - where should it go? What should happen on click?\n   - Example: \"Add form validation\" - what rules? What error messages?\n\n2. **Multiple Valid Approaches**: The task can be solved in several different ways\n   - Example: \"Add caching to the API\" - could use Redis, in-memory, file-based, etc.\n   - Example: \"Improve performance\" - many optimization strategies possible\n\n3. **Code Modifications**: Changes that affect existing behavior or structure\n   - Example: \"Update the login flow\" - what exactly should change?\n   - Example: \"Refactor this component\" - what's the target architecture?\n\n4. **Architectural Decisions**: The task requires choosing between patterns or technologies\n   - Example: \"Add real-time updates\" - WebSockets vs SSE vs polling\n   - Example: \"Implement state management\" - Redux vs Context vs custom solution\n\n5. **Multi-File Changes**: The task will likely touch more than 2-3 files\n   - Example: \"Refactor the authentication system\"\n   - Example: \"Add a new API endpoint with tests\"\n\n6. **Unclear Requirements**: You need to explore before understanding the full scope\n   - Example: \"Make the app faster\" - need to profile and identify bottlenecks\n   - Example: \"Fix the bug in checkout\" - need to investigate root cause\n\n7. **User Preferences Matter**: The implementation could reasonably go multiple ways\n   - If you would use AskUserQuestion to clarify the approach, use EnterPlanMode instead\n   - Plan mode lets you explore first, then present options with context\n\n## When NOT to Use This Tool\n\nOnly skip EnterPlanMode for simple tasks:\n- Single-line or few-line fixes (typos, obvious bugs, small tweaks)\n- Adding a single function with clear requirements\n- Tasks where the user has given very specific, detailed instructions\n- Pure research/exploration tasks (use the Agent tool with explore agent instead)\n\n## What Happens in Plan Mode\n\nIn plan mode, you'll:\n1. Thoroughly explore the codebase using `find`/Glob, `grep`/Grep, and Read\n2. Understand existing patterns and architecture\n3. Design an implementation approach\n4. Present your plan to the user for approval\n5. Use AskUserQuestion if you need to clarify approaches\n6. Exit plan mode with ExitPlanMode when ready to implement\n\n## Examples\n\n### GOOD - Use EnterPlanMode:\nUser: \"Add user authentication to the app\"\n- Requires architectural decisions (session vs JWT, where to store tokens, middleware structure)\n\nUser: \"Optimize the database queries\"\n- Multiple approaches possible, need to profile first, significant impact\n\nUser: \"Implement dark mode\"\n- Architectural decision on theme system, affects many components\n\nUser: \"Add a delete button to the user profile\"\n- Seems simple but involves: where to place it, confirmation dialog, API call, error handling, state updates\n\nUser: \"Update the error handling in the API\"\n- Affects multiple files, user should approve the approach\n\n### BAD - Don't use EnterPlanMode:\nUser: \"Fix the typo in the README\"\n- Straightforward, no planning needed\n\nUser: \"Add a console.log to debug this function\"\n- Simple, obvious implementation\n\nUser: \"What files handle routing?\"\n- Research task, not implementation planning\n\n## Important Notes\n\n- This tool REQUIRES user approval - they must consent to entering plan mode\n- If unsure whether to use it, err on the side of planning - it's better to get alignment upfront than to redo work\n- Users appreciate being consulted before significant changes are made to their codebase\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "EnterWorktree",
+            "description": "Use this tool ONLY when explicitly instructed to work in a worktree \u2014 either by the user directly, or by project instructions (CLAUDE.md / memory). This tool creates an isolated git worktree and switches the current session into it.\n\n## When to Use\n\n- The user explicitly says \"worktree\" (e.g., \"start a worktree\", \"work in a worktree\", \"create a worktree\", \"use a worktree\")\n- CLAUDE.md or memory instructions direct you to work in a worktree for the current task\n\n## When NOT to Use\n\n- The user asks to create a branch, switch branches, or work on a different branch \u2014 use git commands instead\n- The user asks to fix a bug or work on a feature \u2014 use normal git workflow unless worktrees are explicitly requested by the user or project instructions\n- Never use this tool unless \"worktree\" is explicitly mentioned by the user or in CLAUDE.md / memory instructions\n\n## Requirements\n\n- Must be in a git repository, OR have WorktreeCreate/WorktreeRemove hooks configured in settings.json\n- Must not already be in a worktree session when creating a new worktree (`name`); switching into another existing worktree via `path` is allowed\n\n## Behavior\n\n- In a git repository: creates a new git worktree inside `.claude/worktrees/` on a new branch. The base ref is governed by the `worktree.baseRef` setting: `fresh` (default) branches from origin/<default-branch>; `head` branches from your current local HEAD\n- Outside a git repository: delegates to WorktreeCreate/WorktreeRemove hooks for VCS-agnostic isolation\n- Switches the session's working directory to the new worktree\n- Use ExitWorktree to leave the worktree mid-session (keep or remove). On session exit, if still in the worktree, the user will be prompted to keep or remove it\n\n## Entering an existing worktree\n\nPass `path` instead of `name` to switch the session into a worktree that already exists (e.g., one you just created with `git worktree add`). The path must appear in `git worktree list` for the current repository \u2014 paths that are not registered worktrees of this repo are rejected. ExitWorktree will not remove a worktree entered this way; use `action: \"keep\"` to return to the original directory.\n\nSwitching with `path` also works when the session is already in a worktree (the previous worktree is left on disk, untouched, and only the new one is tracked for exit-time cleanup), and from agents whose working directory was pinned at launch (subagent isolation or explicit cwd). In both cases the target must be a worktree under `.claude/worktrees/` of the same repository, and from a pinned agent the switch only affects this agent, not the parent session. After a further switch, previously-visited worktrees are no longer writable \u2014 re-issue EnterWorktree with `path` to return to one.\n\n## Parameters\n\n- `name` (optional): A name for a new worktree. If neither `name` nor `path` is provided, a random name is generated.\n- `path` (optional): Path to an existing worktree of the current repository to enter instead of creating one. Mutually exclusive with `name`.\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Optional name for a new worktree. Each \"/\"-separated segment may contain only letters, digits, dots, underscores, and dashes; max 64 chars total. A random name is generated if not provided. Mutually exclusive with `path`.",
+                  "type": "string"
+                },
+                "path": {
+                  "description": "Path to an existing worktree of the current repository to switch into instead of creating a new one. Must appear in `git worktree list` for the current repo. Mutually exclusive with `name`.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "ExitPlanMode",
+            "description": "Use this tool when you are in plan mode and have finished writing your plan to the plan file and are ready for user approval.\n\n## How This Tool Works\n- You should have already written your plan to the plan file specified in the plan mode system message\n- This tool does NOT take the plan content as a parameter - it will read the plan from the file you wrote\n- This tool simply signals that you're done planning and ready for the user to review and approve\n- The user will see the contents of your plan file when they review it\n\n## When to Use This Tool\nIMPORTANT: Only use this tool when the task requires planning the implementation steps of a task that requires writing code. For research tasks where you're gathering information, searching files, reading files or in general trying to understand the codebase - do NOT use this tool.\n\n## Before Using This Tool\nEnsure your plan is complete and unambiguous:\n- If you have unresolved questions about requirements or approach, use AskUserQuestion first (in earlier phases)\n- Once your plan is finalized, use THIS tool to request approval\n\n**Important:** Do NOT use AskUserQuestion to ask \"Is this plan okay?\" or \"Should I proceed?\" - that's exactly what THIS tool does. ExitPlanMode inherently requests user approval of your plan.\n\n## Examples\n\n1. Initial task: \"Search for and understand the implementation of vim mode in the codebase\" - Do not use the exit plan mode tool because you are not planning the implementation steps of a task.\n2. Initial task: \"Help me implement yank mode for vim\" - Use the exit plan mode tool after you have finished planning the implementation steps of the task.\n3. Initial task: \"Add a new feature to handle user authentication\" - If unsure about auth method (OAuth, JWT, etc.), use AskUserQuestion first, then use exit plan mode tool after clarifying the approach.\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "allowedPrompts": {
+                  "description": "Prompt-based permissions needed to implement the plan. These describe categories of actions rather than specific commands.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tool": {
+                        "description": "The tool this prompt applies to",
+                        "type": "string",
+                        "enum": [
+                          "Bash"
+                        ]
+                      },
+                      "prompt": {
+                        "description": "Semantic description of the action, e.g. \"run tests\", \"install dependencies\"",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "tool",
+                      "prompt"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": {}
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "ExitWorktree",
+            "description": "Exit a worktree session created by EnterWorktree and return the session to the original working directory.\n\n## Scope\n\nThis tool ONLY operates on worktrees created by EnterWorktree in this session. It will NOT touch:\n- Worktrees you created manually with `git worktree add`\n- Worktrees from a previous session (even if created by EnterWorktree then)\n- The directory you're in if EnterWorktree was never called\n\nIf called outside an EnterWorktree session, the tool is a **no-op**: it reports that no worktree session is active and takes no action. Filesystem state is unchanged.\n\n## When to Use\n\n- The user explicitly asks to \"exit the worktree\", \"leave the worktree\", \"go back\", or otherwise end the worktree session\n- Do NOT call this proactively \u2014 only when the user asks\n\n## Parameters\n\n- `action` (required): `\"keep\"` or `\"remove\"`\n  - `\"keep\"` \u2014 leave the worktree directory and branch intact on disk. Use this if the user wants to come back to the work later, or if there are changes to preserve.\n  - `\"remove\"` \u2014 delete the worktree directory and its branch. Use this for a clean exit when the work is done or abandoned.\n- `discard_changes` (optional, default false): only meaningful with `action: \"remove\"`. If the worktree has uncommitted files or commits not on the original branch, the tool will REFUSE to remove it unless this is set to `true`. If the tool returns an error listing changes, confirm with the user before re-invoking with `discard_changes: true`.\n\n## Behavior\n\n- Restores the session's working directory to where it was before EnterWorktree\n- Clears CWD-dependent caches (system prompt sections, memory files, plans directory) so the session state reflects the original directory\n- If a tmux session was attached to the worktree: killed on `remove`, left running on `keep` (its name is returned so the user can reattach)\n- Once exited, EnterWorktree can be called again to create a fresh worktree\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "action": {
+                  "description": "\"keep\" leaves the worktree and branch on disk; \"remove\" deletes both.",
+                  "type": "string",
+                  "enum": [
+                    "keep",
+                    "remove"
+                  ]
+                },
+                "discard_changes": {
+                  "description": "Required true when action is \"remove\" and the worktree has uncommitted files or unmerged commits. The tool will refuse and list them otherwise.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "action"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "Monitor",
+            "description": "Start a background monitor that streams events from a long-running script. Each stdout line is an event \u2014 you keep working and notifications arrive in the chat. Events arrive on their own schedule and are not replies from the user, even if one lands while you're waiting for the user to answer a question.\n\nPick by how many notifications you need:\n- **One** (\"tell me when the server is ready / the build finishes\") \u2192 use **Bash with `run_in_background`** and a command that exits when the condition is true, e.g. `until grep -q \"Ready in\" dev.log; do sleep 0.5; done`. You get a single completion notification when it exits.\n- **One per occurrence, indefinitely** (\"tell me every time an ERROR line appears\") \u2192 Monitor with an unbounded command (`tail -f`, `inotifywait -m`, `while true`).\n- **One per occurrence, until a known end** (\"emit each CI step result, stop when the run completes\") \u2192 Monitor with a command that emits lines and then exits.\n\nYour script's stdout is the event stream. Each line becomes a notification. Exit ends the watch.\n\n  # Each matching log line is an event\n  tail -f /var/log/app.log | grep --line-buffered \"ERROR\"\n\n  # Each file change is an event\n  inotifywait -m --format '%e %f' /watched/dir\n\n  # Poll GitHub for new PR comments and emit one line per new comment\n  last=$(date -u +%Y-%m-%dT%H:%M:%SZ)\n  while true; do\n    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)\n    gh api \"repos/owner/repo/issues/123/comments?since=$last\" --jq '.[] | \"\\(.user.login): \\(.body)\"'\n    last=$now; sleep 30\n  done\n\n  # Node script that emits events as they arrive (e.g. WebSocket listener)\n  node watch-for-events.js\n\n  # Per-occurrence with a natural end: emit each CI check as it lands, exit when the run completes\n  prev=\"\"\n  while true; do\n    s=$(gh pr checks 123 --json name,bucket)\n    cur=$(jq -r '.[] | select(.bucket!=\"pending\") | \"\\(.name): \\(.bucket)\"' <<<\"$s\" | sort)\n    comm -13 <(echo \"$prev\") <(echo \"$cur\")\n    prev=$cur\n    jq -e 'all(.bucket!=\"pending\")' <<<\"$s\" >/dev/null && break\n    sleep 30\n  done\n\n**Don't use an unbounded command for a single notification.** `tail -f`, `inotifywait -m`, and `while true` never exit on their own, so the monitor stays armed until timeout even after the event has fired. For \"tell me when X is ready,\" use Bash `run_in_background` with an `until` loop instead (one notification, ends in seconds). Note that `tail -f log | grep -m 1 ...` does *not* fix this: if the log goes quiet after the match, `tail` never receives SIGPIPE and the pipeline hangs anyway.\n\n**Script quality:**\n- Every pipe stage must flush per line or matches sit in its buffer unseen: `grep` needs `--line-buffered`, `awk` needs `fflush()`. `head` cannot flush at all \u2014 `| head -N` delivers nothing until N matches accumulate, then ends the stream.\n- In poll loops, handle transient failures (`curl ... || true`) \u2014 one failed request shouldn't kill the monitor.\n- Poll intervals: 30s+ for remote APIs (rate limits), 0.5-1s for local checks.\n- Write a specific `description` \u2014 it appears in every notification (\"errors in deploy.log\" not \"watching logs\").\n- Only stdout is the event stream. Stderr goes to the output file (readable via Read) but does not trigger notifications \u2014 for a command you run directly (e.g. `python train.py 2>&1 | grep --line-buffered ...`), merge stderr with `2>&1` so its failures reach your filter. (No effect on `tail -f` of an existing log \u2014 that file only contains what its writer redirected.)\n\n**Coverage \u2014 silence is not success.** When watching a job or process for an outcome, your filter must match every terminal state, not just the happy path. A monitor that greps only for the success marker stays silent through a crashloop, a hung process, or an unexpected exit \u2014 and silence looks identical to \"still running.\" Before arming, ask: *if this process crashed right now, would my filter emit anything?* If not, widen it.\n\n  # Wrong \u2014 silent on crash, hang, or any non-success exit\n  tail -f run.log | grep --line-buffered \"elapsed_steps=\"\n\n  # Right \u2014 one alternation covering progress + the failure signatures you'd act on\n  tail -f run.log | grep -E --line-buffered \"elapsed_steps=|Traceback|Error|FAILED|assert|Killed|OOM\"\n\nFor poll loops checking job state, emit on every terminal status (`succeeded|failed|cancelled|timeout`), not just success. If you cannot confidently enumerate the failure signatures, broaden the grep alternation rather than narrow it \u2014 some extra noise is better than missing a crashloop.\n\n**Output volume**: Every stdout line is a conversation message, so the filter should be selective \u2014 but selective means \"the lines you'd act on,\" not \"only good news.\" Never pipe raw logs; filter to exactly the success and failure signals you care about. Monitors that produce too many events are automatically stopped; restart with a tighter filter if this happens.\n\nStdout lines within 200ms are batched into a single notification, so multiline output from a single event groups naturally.\n\nThe script runs in the same shell environment as Bash. Exit ends the watch (exit code is reported). Timeout \u2192 killed. Set `persistent: true` for session-length watches (PR monitoring, log tails) \u2014 the monitor runs until you call TaskStop or the session ends. Use TaskStop to cancel early.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "description": {
+                  "description": "Short human-readable description of what you are monitoring (shown in notifications).",
+                  "type": "string"
+                },
+                "timeout_ms": {
+                  "description": "Kill the monitor after this deadline. Default 300000ms, max 3600000ms. Ignored when persistent is true.",
+                  "default": 300000,
+                  "type": "number",
+                  "minimum": 1000
+                },
+                "persistent": {
+                  "description": "Run for the lifetime of the session (no timeout). Use for session-length watches like PR monitoring or log tails. Stop with TaskStop.",
+                  "default": false,
+                  "type": "boolean"
+                },
+                "command": {
+                  "description": "Shell command or script. Each stdout line is an event; exit ends the watch.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "description",
+                "timeout_ms",
+                "persistent",
+                "command"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "NotebookEdit",
+            "description": "Replaces, inserts, or deletes a single cell in a Jupyter notebook (.ipynb file).\n\nUsage:\n- You must use the Read tool on the notebook in this conversation before editing \u2014 this tool will fail otherwise.\n- `notebook_path` must be an absolute path.\n- `cell_id` is the `id` attribute shown in the Read tool's `<cell id=\"...\">` output. It is required for `replace` and `delete`.\n- `edit_mode` defaults to `replace`. Use `insert` to add a new cell after the cell with the given `cell_id` (or at the beginning of the notebook if `cell_id` is omitted) \u2014 `cell_type` is required when inserting. Use `delete` to remove the cell.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "notebook_path": {
+                  "description": "The absolute path to the Jupyter notebook file to edit (must be absolute, not relative)",
+                  "type": "string"
+                },
+                "cell_id": {
+                  "description": "The ID of the cell to edit. When inserting a new cell, the new cell will be inserted after the cell with this ID, or at the beginning if not specified.",
+                  "type": "string"
+                },
+                "new_source": {
+                  "description": "The new source for the cell",
+                  "type": "string"
+                },
+                "cell_type": {
+                  "description": "The type of the cell (code or markdown). If not specified, it defaults to the current cell type. If using edit_mode=insert, this is required.",
+                  "type": "string",
+                  "enum": [
+                    "code",
+                    "markdown"
+                  ]
+                },
+                "edit_mode": {
+                  "description": "The type of edit to make (replace, insert, delete). Defaults to replace.",
+                  "type": "string",
+                  "enum": [
+                    "replace",
+                    "insert",
+                    "delete"
+                  ]
+                }
+              },
+              "required": [
+                "notebook_path",
+                "new_source"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "PushNotification",
+            "description": "This tool sends a desktop notification in the user's terminal. If Remote Control is connected, it also pushes to their phone. Either way, it pulls their attention from whatever they're doing \u2014 a meeting, another task, dinner \u2014 to this session. That's the cost. The benefit is they learn something now that they'd want to know now: a long task finished while they were away, a build is ready, you've hit something that needs their decision before you can continue.\n\nBecause a notification they didn't need is annoying in a way that accumulates, err toward not sending one. Don't notify for routine progress, or to announce you've answered something they asked seconds ago and are clearly still watching, or when a quick task completes. Notify when there's a real chance they've walked away and there's something worth coming back for \u2014 or when they've explicitly asked you to notify them.\n\nKeep the message under 200 characters, one line, no markdown. Lead with what they'd act on \u2014 \"build failed: 2 auth tests\" tells them more than \"task done\" and more than a status dump.\n\nIf the result says the push wasn't sent, that's expected \u2014 no action needed.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "message": {
+                  "description": "The notification body. Keep it under 200 characters; mobile OSes truncate.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "status": {
+                  "type": "string",
+                  "const": "proactive"
+                }
+              },
+              "required": [
+                "message",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "Read",
+            "description": "Reads a file from the local filesystem.\n\n- `file_path` must be an absolute path.\n- Reads up to 2000 lines by default.\n- When you already know which part of the file you need, only read that part. This can be important for larger files.\n- Results are returned using cat -n format, with line numbers starting at 1\n- Reads images (PNG, JPG, \u2026) and presents them visually. Reads PDFs via the `pages` parameter (e.g. \"1-5\", max 20 pages/request; required for PDFs over 10 pages). Reads Jupyter notebooks (.ipynb) as cells with outputs.\n- Reading a directory, a missing file, or an empty file returns an error or system reminder rather than content.\n- Do NOT re-read a file you just edited to verify \u2014 Edit/Write would have errored if the change failed, and the harness tracks file state for you.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "description": "The absolute path to the file to read",
+                  "type": "string"
+                },
+                "offset": {
+                  "description": "The line number to start reading from. Only provide if the file is too large to read at once",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "limit": {
+                  "description": "The number of lines to read. Only provide if the file is too large to read at once.",
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "pages": {
+                  "description": "Page range for PDF files (e.g., \"1-5\", \"3\", \"10-20\"). Only applicable to PDF files. Maximum 20 pages per request.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file_path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "ScheduleWakeup",
+            "description": "Schedule when to resume work in /loop dynamic mode \u2014 the user invoked /loop without an interval, asking you to self-pace iterations of a specific task.\n\nDo NOT schedule a short-interval wakeup to poll for background work you started \u2014 when harness-tracked work finishes, you are re-invoked automatically, so polling is wasted. Instead schedule a long fallback (1200s+) so the loop survives if the work hangs or never notifies. The exception is external work the harness cannot track (a CI run, a deploy, a remote queue) \u2014 there, pick a delay matched to how fast that state actually changes.\n\nPass the same /loop prompt back via `prompt` each turn so the next firing repeats the task. For an autonomous /loop (no user prompt), pass the literal sentinel `<<autonomous-loop-dynamic>>` as `prompt` instead \u2014 the runtime resolves it back to the autonomous-loop instructions at fire time. (There is a similar `<<autonomous-loop>>` sentinel for CronCreate-based autonomous loops; do not confuse the two \u2014 ScheduleWakeup always uses the `-dynamic` variant.) Omit the call to end the loop.\n\n## Picking delaySeconds\n\nThe Anthropic prompt cache has a 5-minute TTL. Sleeping past 300 seconds means the next wake-up reads your full conversation context uncached \u2014 slower and more expensive. So the natural breakpoints:\n\n- **Under 5 minutes (60s\u2013270s)**: cache stays warm. Right for actively polling external state the harness can't notify you about \u2014 a CI run, a deploy, a remote queue.\n- **5 minutes to 1 hour (300s\u20133600s)**: pay the cache miss. Right when there's no point checking sooner \u2014 waiting on something that takes minutes to change, genuinely idle, or as the long fallback heartbeat when something else is the primary wake signal.\n\n**Don't pick 300s.** It's the worst-of-both: you pay the cache miss without amortizing it. If you're tempted to \"wait 5 minutes,\" either drop to 270s (stay in cache) or commit to 1200s+ (one cache miss buys a much longer wait). Don't think in round-number minutes \u2014 think in cache windows.\n\nFor idle ticks with no specific signal to watch, default to **1200s\u20131800s** (20\u201330 min). The loop checks back, you don't burn cache 12\u00d7 per hour for nothing, and the user can always interrupt if they need you sooner.\n\nThink about what you're actually waiting for, not just \"how long should I sleep.\" If you're polling a CI run that takes ~8 minutes, sleeping 60s burns the cache 8 times before it finishes \u2014 sleep ~270s twice instead.\n\nThe runtime clamps to [60, 3600], so you don't need to clamp yourself.\n\n## The reason field\n\nOne short sentence on what you chose and why. Goes to telemetry and is shown back to the user. \"watching CI run\" beats \"waiting.\" The user reads this to understand what you're doing without having to predict your cadence in advance \u2014 make it specific.\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "delaySeconds": {
+                  "description": "Seconds from now to wake up. Clamped to [60, 3600] by the runtime.",
+                  "type": "number"
+                },
+                "reason": {
+                  "description": "One short sentence explaining the chosen delay. Goes to telemetry and is shown to the user. Be specific.",
+                  "type": "string"
+                },
+                "prompt": {
+                  "description": "The /loop input to fire on wake-up. Pass the same /loop input verbatim each turn so the next firing re-enters the skill and continues the loop. For autonomous /loop (no user prompt), pass the literal sentinel `<<autonomous-loop-dynamic>>` instead (the dynamic-pacing variant, not the CronCreate-mode `<<autonomous-loop>>`).",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "delaySeconds",
+                "reason",
+                "prompt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "Skill",
+            "description": "Execute a skill within the main conversation\n\nWhen users ask you to perform tasks, check if any of the available skills match. Skills provide specialized capabilities and domain knowledge.\n\nWhen users reference a \"slash command\" or \"/<something>\", they are referring to a skill. Use this tool to invoke it.\n\nHow to invoke:\n- Set `skill` to the exact name of an available skill (no leading slash). For plugin-namespaced skills use the fully qualified `plugin:skill` form.\n- Set `args` to pass optional arguments.\n\nImportant:\n- Available skills are listed in system-reminder messages in the conversation\n- Only invoke a skill that appears in that list, or one the user explicitly typed as `/<name>` in their message. Never guess or invent a skill name from training data; otherwise do not call this tool\n- When a skill matches the user's request, this is a BLOCKING REQUIREMENT: invoke the relevant Skill tool BEFORE generating any other response about the task\n- NEVER mention a skill without actually calling this tool\n- Do not invoke a skill that is already running\n- Do not use this tool for built-in CLI commands (like /help, /clear, etc.)\n- If you see a <command-name> tag in the current conversation turn, the skill has ALREADY been loaded - follow the instructions directly instead of calling this tool again\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "skill": {
+                  "description": "The name of a skill from the available-skills list. Do not guess names.",
+                  "type": "string"
+                },
+                "args": {
+                  "description": "Optional arguments for the skill",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "skill"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "TaskCreate",
+            "description": "Use this tool to create a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.\nIt also helps the user understand the progress of the task and overall progress of their requests.\n\n## When to Use This Tool\n\nUse this tool proactively in these scenarios:\n\n- Complex multi-step tasks - When a task requires 3 or more distinct steps or actions\n- Non-trivial and complex tasks - Tasks that require careful planning or multiple operations\n- Plan mode - When using plan mode, create a task list to track the work\n- User explicitly requests todo list - When the user directly asks you to use the todo list\n- User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)\n- After receiving new instructions - Immediately capture user requirements as tasks\n- When you start working on a task - Mark it as in_progress BEFORE beginning work\n- After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation\n\n## When NOT to Use This Tool\n\nSkip using this tool when:\n- There is only a single, straightforward task\n- The task is trivial and tracking it provides no organizational benefit\n- The task can be completed in less than 3 trivial steps\n- The task is purely conversational or informational\n\nNOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.\n\n## Task Fields\n\n- **subject**: A brief, actionable title in imperative form (e.g., \"Fix authentication bug in login flow\")\n- **description**: What needs to be done\n- **activeForm** (optional): Present continuous form shown in the spinner when the task is in_progress (e.g., \"Fixing authentication bug\"). If omitted, the spinner shows the subject instead.\n\nAll tasks are created with status `pending`.\n\n## Tips\n\n- Create tasks with clear, specific subjects that describe the outcome\n- After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed\n- Check TaskList first to avoid creating duplicate tasks\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "subject": {
+                  "description": "A brief title for the task",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "What needs to be done",
+                  "type": "string"
+                },
+                "activeForm": {
+                  "description": "Present continuous form shown in spinner when in_progress (e.g., \"Running tests\")",
+                  "type": "string"
+                },
+                "metadata": {
+                  "description": "Arbitrary metadata to attach to the task",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "subject",
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "TaskGet",
+            "description": "Use this tool to retrieve a task by its ID from the task list.\n\n## When to Use This Tool\n\n- When you need the full description and context before starting work on a task\n- To understand task dependencies (what it blocks, what blocks it)\n- After being assigned a task, to get complete requirements\n\n## Output\n\nReturns full task details:\n- **subject**: Task title\n- **description**: Detailed requirements and context\n- **status**: 'pending', 'in_progress', or 'completed'\n- **blocks**: Tasks waiting on this one to complete\n- **blockedBy**: Tasks that must complete before this one can start\n\n## Tips\n\n- After fetching a task, verify its blockedBy list is empty before beginning work.\n- Use TaskList to see all tasks in summary form.\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "description": "The ID of the task to retrieve",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "taskId"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "TaskList",
+            "description": "Use this tool to list all tasks in the task list.\n\n## When to Use This Tool\n\n- To see what tasks are available to work on (status: 'pending', no owner, not blocked)\n- To check overall progress on the project\n- To find tasks that are blocked and need dependencies resolved\n- After completing a task, to check for newly unblocked work or claim the next available task\n- **Prefer working on tasks in ID order** (lowest ID first) when multiple tasks are available, as earlier tasks often set up context for later ones\n\n## Output\n\nReturns a summary of each task:\n- **id**: Task identifier (use with TaskGet, TaskUpdate)\n- **subject**: Brief description of the task\n- **status**: 'pending', 'in_progress', or 'completed'\n- **owner**: Agent ID if assigned, empty if available\n- **blockedBy**: List of open task IDs that must be resolved first (tasks with blockedBy cannot be claimed until dependencies resolve)\n\nUse TaskGet with a specific task ID to view full details including description and comments.\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "TaskOutput",
+            "description": "DEPRECATED: Background tasks return their output file path in the tool result, and you receive a <task-notification> with the same path when the task completes.\n- For bash tasks: prefer using the Read tool on that output file path \u2014 it contains stdout/stderr.\n- For local_agent tasks: use the Agent tool result directly. Do NOT Read the .output file \u2014 it is a symlink to the full subagent conversation transcript (JSONL) and will overflow your context window.\n- For remote_agent tasks: prefer using the Read tool on the output file path \u2014 it contains the streamed remote session output (same as bash).\n\n- Retrieves output from a running or completed task (background shell, agent, or remote session)\n- Takes a task_id parameter identifying the task\n- Returns the task output along with status information\n- Use block=true (default) to wait for task completion\n- Use block=false for non-blocking check of current status\n- Task IDs can be found using the /tasks command\n- Works with all task types: background shells, async agents, and remote sessions",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "task_id": {
+                  "description": "The task ID to get output from",
+                  "type": "string"
+                },
+                "block": {
+                  "description": "Whether to wait for completion",
+                  "default": true,
+                  "type": "boolean"
+                },
+                "timeout": {
+                  "description": "Max wait time in ms",
+                  "default": 30000,
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 600000
+                }
+              },
+              "required": [
+                "task_id",
+                "block",
+                "timeout"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "TaskStop",
+            "description": "\n- Stops a running background task by its ID\n- Takes a task_id parameter identifying the task to stop\n- Returns a success or failure status\n- Use this tool when you need to terminate a long-running task\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "task_id": {
+                  "description": "The ID of the background task to stop",
+                  "type": "string"
+                },
+                "shell_id": {
+                  "description": "Deprecated: use task_id instead",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "TaskUpdate",
+            "description": "Use this tool to update a task in the task list.\n\n## When to Use This Tool\n\n**Mark tasks as resolved:**\n- When you have completed the work described in a task\n- When a task is no longer needed or has been superseded\n- IMPORTANT: Always mark your assigned tasks as resolved when you finish them\n- After resolving, call TaskList to find your next task\n\n- ONLY mark a task as completed when you have FULLY accomplished it\n- If you encounter errors, blockers, or cannot finish, keep the task as in_progress\n- When blocked, create a new task describing what needs to be resolved\n- Never mark a task as completed if:\n  - Tests are failing\n  - Implementation is partial\n  - You encountered unresolved errors\n  - You couldn't find necessary files or dependencies\n\n**Delete tasks:**\n- When a task is no longer relevant or was created in error\n- Setting status to `deleted` permanently removes the task\n\n**Update task details:**\n- When requirements change or become clearer\n- When establishing dependencies between tasks\n\n## Fields You Can Update\n\n- **status**: The task status (see Status Workflow below)\n- **subject**: Change the task title (imperative form, e.g., \"Run tests\")\n- **description**: Change the task description\n- **activeForm**: Present continuous form shown in spinner when in_progress (e.g., \"Running tests\")\n- **owner**: Change the task owner (agent name)\n- **metadata**: Merge metadata keys into the task (set a key to null to delete it)\n- **addBlocks**: Mark tasks that cannot start until this one completes\n- **addBlockedBy**: Mark tasks that must complete before this one can start\n\n## Status Workflow\n\nStatus progresses: `pending` \u2192 `in_progress` \u2192 `completed`\n\nUse `deleted` to permanently remove a task.\n\n## Staleness\n\nMake sure to read a task's latest state using `TaskGet` before updating it.\n\n## Examples\n\nMark task as in progress when starting work:\n```json\n{\"taskId\": \"1\", \"status\": \"in_progress\"}\n```\n\nMark task as completed after finishing work:\n```json\n{\"taskId\": \"1\", \"status\": \"completed\"}\n```\n\nDelete a task:\n```json\n{\"taskId\": \"1\", \"status\": \"deleted\"}\n```\n\nClaim a task by setting owner:\n```json\n{\"taskId\": \"1\", \"owner\": \"my-name\"}\n```\n\nSet up task dependencies:\n```json\n{\"taskId\": \"2\", \"addBlockedBy\": [\"1\"]}\n```\n",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "description": "The ID of the task to update",
+                  "type": "string"
+                },
+                "subject": {
+                  "description": "New subject for the task",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "New description for the task",
+                  "type": "string"
+                },
+                "activeForm": {
+                  "description": "Present continuous form shown in spinner when in_progress (e.g., \"Running tests\")",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "New status for the task",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "in_progress",
+                        "completed"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "const": "deleted"
+                    }
+                  ]
+                },
+                "addBlocks": {
+                  "description": "Task IDs that this task blocks",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "addBlockedBy": {
+                  "description": "Task IDs that block this task",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "owner": {
+                  "description": "New owner for the task",
+                  "type": "string"
+                },
+                "metadata": {
+                  "description": "Metadata keys to merge into the task. Set a key to null to delete it.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "taskId"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "WebFetch",
+            "description": "Fetches a URL, converts the page to markdown, and answers `prompt` against it using a small fast model.\n\n- Fails on authenticated/private URLs \u2014 use an authenticated MCP tool or `gh` for those instead.\n- HTTP is upgraded to HTTPS. Cross-host redirects are returned to you rather than followed; call again with the redirect URL.\n- Responses are cached for 15 minutes per URL.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "url": {
+                  "description": "The URL to fetch content from",
+                  "type": "string",
+                  "format": "uri"
+                },
+                "prompt": {
+                  "description": "The prompt to run on the fetched content",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url",
+                "prompt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "WebSearch",
+            "description": "Search the web. Returns result blocks with titles and URLs. US-only.\n\n- The current month is June 2026 \u2014 use this when searching for recent information.\n- `allowed_domains` / `blocked_domains` filter results.\n- After answering from results, end with a \"Sources:\" list of the URLs you used as markdown links.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "query": {
+                  "description": "The search query to use",
+                  "type": "string",
+                  "minLength": 2
+                },
+                "allowed_domains": {
+                  "description": "Only include search results from these domains",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "blocked_domains": {
+                  "description": "Never include search results from these domains",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "query"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "Workflow",
+            "description": "Execute a workflow script that orchestrates multiple subagents deterministically. Workflows run in the background \u2014 this tool returns immediately with a task ID, and a <task-notification> arrives when the workflow completes. Use /workflows to watch live progress.\n\nA workflow structures work across many agents \u2014 to be comprehensive (decompose and cover in parallel), to be confident (independent perspectives and adversarial checks before committing), or to take on scale one context can't hold (migrations, audits, broad sweeps). The script is where you encode that structure: what fans out, what verifies, what synthesizes.\n\nONLY call this tool when the user has explicitly opted into multi-agent orchestration. Workflows can spawn dozens of agents and consume a large amount of tokens; the user must request that scale, not have it inferred. Explicit opt-in means one of:\n- The user included the keyword \"ultracode\" in their prompt (you'll see a system-reminder confirming it).\n- Ultracode is on for the session (a system-reminder confirms it) \u2014 see **Ultracode** below.\n- The user directly asked you to run a workflow or use multi-agent orchestration in their own words (\"use a workflow\", \"run a workflow\", \"fan out agents\", \"orchestrate this with subagents\"). The ask must be in the user's words \u2014 a task that would merely benefit from a workflow does not count.\n- The user invoked a skill or slash command whose instructions tell you to call Workflow.\n- The user asked you to run a specific named or saved workflow.\n\nFor any other task \u2014 even one that would clearly benefit from parallelism \u2014 do NOT call this tool. Use the Agent tool for individual subagents, or briefly describe what a multi-agent workflow could do and how much it would roughly cost, and ask the user whether to run it. Mention they can ask for one with \"use a workflow\" in a future message to skip the ask.\n\nWhen you do call it, the right move is often **hybrid**: scout inline first (list the files, find the channels, scope the diff) to discover the work-list, then call Workflow to pipeline over it. You don't need to know the shape before the *task* \u2014 only before the *orchestration step*.\n\nCommon single-phase workflows you can chain across turns:\n- **Understand** \u2014 parallel readers over relevant subsystems \u2192 structured map\n- **Design** \u2014 judge panel of N independent approaches \u2192 scored synthesis\n- **Review** \u2014 dimensions \u2192 find \u2192 adversarially verify (example below)\n- **Research** \u2014 multi-modal sweep \u2192 deep-read \u2192 synthesize\n- **Migrate** \u2014 discover sites \u2192 transform each (worktree isolation) \u2192 verify\n\nFor larger work, run several in sequence \u2014 read each result before deciding the next phase. You stay in the loop; each workflow is one well-scoped fan-out.\n\n**Ultracode.** When a system-reminder confirms ultracode is on, that opt-in is standing: author and run a workflow for every substantive task by default. The goal is the most exhaustive, correct answer you can produce \u2014 token cost is not a constraint. For multi-phase work (understand \u2192 design \u2192 implement \u2192 review), that often means several workflows in sequence \u2014 one per phase \u2014 so you stay in the loop between them. The quality patterns below (adversarial verify, multi-modal sweep, completeness critic, loop-until-dry) are the tools; pick what fits the task. Lean toward orchestrating with workflows and adversarially verifying your findings \u2014 unless the work is trivial or already verified. Solo only on conversational turns or trivial mechanical edits. When a reminder says ultracode is off, revert to the opt-in rule above.\n\nPass the script inline via `script` \u2014 do not Write it to a file first. Every invocation automatically persists its script to a file under the session directory and returns the path in the tool result. To iterate on a workflow, edit that file with Write/Edit and re-invoke Workflow with `{scriptPath: \"<path>\"}` instead of resending the full script.\n\nEvery script must begin with `export const meta = {...}`:\n  export const meta = {\n    name: 'find-flaky-tests',\n    description: 'Find flaky tests and propose fixes',   // one-line, shown in permission dialog\n    phases: [                                            // one entry per phase() call\n      { title: 'Scan', detail: 'grep test logs for retries' },\n      { title: 'Fix', detail: 'one agent per flaky test' },\n    ],\n  }\n  // script body starts here \u2014 use agent()/parallel()/pipeline()/phase()/log()\n  phase('Scan')\n  const flaky = await agent('grep CI logs for retry markers', {schema: FLAKY_SCHEMA})\n  ...\n\nThe `meta` object must be a PURE LITERAL \u2014 no variables, function calls, spreads, or template interpolation. Required fields: `name`, `description`. Optional: `whenToUse` (shown in the workflow list), `phases`. Use the SAME phase titles in meta.phases as in phase() calls \u2014 titles are matched exactly; a phase() call with no matching meta entry just gets its own progress group. Add `model` to a phase entry when that phase uses a specific model override.\n\nScript body hooks:\n- agent(prompt: string, opts?: {label?: string, phase?: string, schema?: object, model?: string, isolation?: 'worktree', agentType?: string}): Promise<any> \u2014 spawn a subagent. Without schema, returns its final text as a string. With schema (a JSON Schema), the subagent is forced to call a StructuredOutput tool and agent() returns the validated object \u2014 no parsing needed. Returns null if the user skips the agent mid-run or the subagent dies on a terminal API error after retries (filter with .filter(Boolean)). opts.label overrides the display label. opts.phase explicitly assigns this agent to a progress group (use this inside pipeline()/parallel() stages to avoid races on the global phase() state \u2014 same phase string \u2192 same group box). opts.model overrides the model for this agent call. Default to omitting it \u2014 the agent inherits the main-loop model (the resolved session model), which is almost always correct. Only set it when you're highly confident a different tier fits the task; when unsure, omit. opts.isolation: 'worktree' runs the agent in a fresh git worktree \u2014 EXPENSIVE (~200-500ms setup + disk per agent), use ONLY when agents mutate files in parallel and would otherwise conflict; the worktree is auto-removed if unchanged. opts.agentType uses a custom subagent type (e.g. 'Explore', 'code-reviewer') instead of the default workflow subagent \u2014 resolved from the same registry as the Agent tool; composes with schema (the custom agent's system prompt gets a StructuredOutput instruction appended).\n- pipeline(items, stage1, stage2, ...): Promise<any[]> \u2014 run each item through all stages independently, NO barrier between stages. Item A can be in stage 3 while item B is still in stage 1. This is the DEFAULT for multi-stage work. Wall-clock = slowest single-item chain, not sum-of-slowest-per-stage. Every stage callback receives (prevResult, originalItem, index) \u2014 use originalItem/index in later stages to label work without threading context through stage 1's return value. A stage that throws drops that item to `null` and skips its remaining stages.\n- parallel(thunks: Array<() => Promise<any>>): Promise<any[]> \u2014 run tasks concurrently. This is a BARRIER: awaits all thunks before returning. A thunk that throws (or whose agent errors) resolves to `null` in the result array \u2014 the call itself never rejects, so `.filter(Boolean)` before using the results. Use ONLY when you genuinely need all results together.\n- log(message: string): void \u2014 emit a progress message to the user (shown as a narrator line above the progress tree)\n- phase(title: string): void \u2014 start a new phase; subsequent agent() calls are grouped under this title in the progress display\n- args: any \u2014 the value passed as Workflow's `args` input, verbatim (undefined if not provided). Pass arrays/objects as actual JSON values in the tool call, NOT as a JSON-encoded string \u2014 `args: [\"a.ts\", \"b.ts\"]`, not `args: \"[\\\"a.ts\\\", ...]\"` (a stringified list reaches the script as one string, so `args.filter`/`args.map` throw). Use this to parameterize named workflows \u2014 e.g. pass a research question, target path, or config object directly instead of via a side-channel file.\n- budget: {total: number|null, spent(): number, remaining(): number} \u2014 the turn's token target from the user's \"+500k\"-style directive. `budget.total` is null if no target was set. `budget.spent()` returns output tokens spent this turn across the main loop and all workflows \u2014 the pool is shared, not per-workflow. `budget.remaining()` returns `max(0, total - spent())`, or `Infinity` if no target. The target is a HARD ceiling, not advisory: once `spent()` reaches `total`, further `agent()` calls throw. Use for dynamic loops: `while (budget.total && budget.remaining() > 50_000) { ... }`, or static scaling: `const FLEET = budget.total ? Math.floor(budget.total / 100_000) : 5`.\n- workflow(nameOrRef: string | {scriptPath: string}, args?: any): Promise<any> \u2014 run another workflow inline as a sub-step and return whatever it returns. Pass a name to invoke a saved workflow (same registry as {name: \"...\"}), or {scriptPath} to run a script file you Wrote earlier. The child shares this run's concurrency cap, agent counter, abort signal, and token budget \u2014 its agents appear under a \"\u25b8 name\" group in /workflows and its tokens count toward budget.spent(). The args param becomes the child's `args` global. Nesting is one level only: workflow() inside a child throws. Throws on unknown name / unreadable scriptPath / child syntax error; catch to handle gracefully.\n\nSubagents are told their final text IS the return value (not a human-facing message), so they return raw data. For structured output, use the schema option \u2014 validation happens at the tool-call layer so the model retries on mismatch.\n\nWorkflow agents can reach all session-connected MCP tools via ToolSearch \u2014 schemas load on demand per agent. Caveat: interactively-authenticated MCP servers (e.g. claude.ai) may be absent in headless/cron runs.\n\nScripts are plain JavaScript, NOT TypeScript \u2014 type annotations (`: string[]`), interfaces, and generics fail to parse. The script body runs in an async context \u2014 use await directly. Standard JS built-ins (JSON, Math, Array, etc.) are available \u2014 EXCEPT `Date.now()`/`Math.random()`/argless `new Date()`, which throw (they would break resume); pass timestamps in via `args`, stamp results after the workflow returns, and for randomness vary the agent prompt/label by index. No filesystem or Node.js API access.\n\nDEFAULT TO pipeline(). Only reach for a barrier (parallel between stages) when you genuinely need ALL prior-stage results together.\n\nA barrier is correct ONLY when stage N needs cross-item context from all of stage N-1:\n- Dedup/merge across the full result set before expensive downstream work\n- Early-exit if the total count is zero (\"0 bugs found \u2192 skip verification entirely\")\n- Stage N's prompt references \"the other findings\" for comparison\n\nA barrier is NOT justified by:\n- \"I need to flatten/map/filter first\" \u2014 do it inside a pipeline stage: pipeline(items, stageA, r => transform([r]).flat(), stageB)\n- \"The stages are conceptually separate\" \u2014 that's what pipeline() models. Separate stages \u2260 synchronized stages.\n- \"It's cleaner code\" \u2014 barrier latency is real. If 5 finders run and the slowest takes 3\u00d7 the fastest, a barrier wastes 2/3 of the fast finders' idle time.\n\nSmell test: if you wrote\n  const a = await parallel(...)\n  const b = transform(a)        // flatten, map, filter \u2014 no cross-item dependency\n  const c = await parallel(b.map(...))\nthat middle transform doesn't need the barrier. Rewrite as a pipeline with the transform inside a stage. When in doubt: pipeline.\n\nConcurrent agent() calls are capped at min(16, cpu cores - 2) per workflow \u2014 excess calls queue and run as slots free up. You can still pass 100 items to parallel()/pipeline() and they all complete; only ~10 run at any moment. Total agent count across a workflow's lifetime is capped at 1000 \u2014 a runaway-loop backstop set far above any real workflow. A single parallel()/pipeline() call accepts at most 4096 items; passing more is an explicit error, not a silent truncation.\n\nThe canonical multi-stage pattern \u2014 pipeline by default, each dimension verifies as soon as its review completes:\n  export const meta = {\n    name: 'review-changes',\n    description: 'Review changed files across dimensions, verify each finding',\n    phases: [{ title: 'Review' }, { title: 'Verify' }],\n  }\n  const DIMENSIONS = [{key: 'bugs', prompt: '...'}, {key: 'perf', prompt: '...'}]\n  const results = await pipeline(\n    DIMENSIONS,\n    d => agent(d.prompt, {label: `review:${d.key}`, phase: 'Review', schema: FINDINGS_SCHEMA}),\n    review => parallel(review.findings.map(f => () =>\n      agent(`Adversarially verify: ${f.title}`, {label: `verify:${f.file}`, phase: 'Verify', schema: VERDICT_SCHEMA})\n        .then(v => ({...f, verdict: v}))\n    ))\n  )\n  const confirmed = results.flat().filter(Boolean).filter(f => f.verdict?.isReal)\n  return { confirmed }\n  // Dimension 'bugs' findings verify while dimension 'perf' is still reviewing. No wasted wall-clock.\n\nWhen a barrier IS correct \u2014 dedup across all findings before expensive verification:\n  const all = await parallel(DIMENSIONS.map(d => () => agent(d.prompt, {schema: FINDINGS_SCHEMA})))\n  const deduped = dedupeByFileAndLine(all.filter(Boolean).flatMap(r => r.findings))  // <-- genuinely needs ALL at once\n  const verified = await parallel(deduped.map(f => () => agent(verifyPrompt(f), {schema: VERDICT_SCHEMA})))\n\nLoop-until-count pattern \u2014 accumulate to a target:\n  const bugs = []\n  while (bugs.length < 10) {\n    const result = await agent(\"Find bugs in this codebase.\", {schema: BUGS_SCHEMA})\n    bugs.push(...result.bugs)\n    log(`${bugs.length}/10 found`)\n  }\n\nLoop-until-budget pattern \u2014 scale depth to the user's \"+500k\" directive. Guard on budget.total: with no target set, remaining() is Infinity and the loop would run straight to the 1000-agent cap.\n  const bugs = []\n  while (budget.total && budget.remaining() > 50_000) {\n    const result = await agent(\"Find bugs in this codebase.\", {schema: BUGS_SCHEMA})\n    bugs.push(...result.bugs)\n    log(`${bugs.length} found, ${Math.round(budget.remaining()/1000)}k remaining`)\n  }\n\nComposing patterns \u2014 exhaustive review (find \u2192 dedup vs seen \u2192 diverse-lens panel \u2192 loop-until-dry):\n  const seen = new Set(), confirmed = []\n  let dry = 0\n  while (dry < 2) {                                              // loop-until-dry\n    const found = (await parallel(FINDERS.map(f => () =>          // barrier: collect all finders this round\n      agent(f.prompt, {phase: 'Find', schema: BUGS})))).filter(Boolean).flatMap(r => r.bugs)\n    const fresh = found.filter(b => !seen.has(key(b)))           // dedup vs ALL seen \u2014 plain code, not an agent\n    if (!fresh.length) { dry++; continue }\n    dry = 0; fresh.forEach(b => seen.add(key(b)))\n    const judged = await parallel(fresh.map(b => () =>           // every fresh bug judged concurrently...\n      parallel(['correctness','security','repro'].map(lens => () =>   // ...each by 3 distinct lenses\n        agent(`Judge \"${b.desc}\" via the ${lens} lens \u2014 real?`, {phase: 'Verify', schema: VERDICT})))\n        .then(vs => ({ b, real: vs.filter(Boolean).filter(v => v.real).length >= 2 }))))\n    confirmed.push(...judged.filter(v => v.real).map(v => v.b))\n  }\n  return confirmed\n  // dedup vs `seen`, NOT `confirmed` \u2014 else judge-rejected findings reappear every round and it never converges.\n\nQuality patterns \u2014 common shapes; pick by task and compose freely:\n- Adversarial verify: spawn N independent skeptics per finding, each prompted to REFUTE. Kill if \u2265majority refute. Prevents plausible-but-wrong findings from surviving.\n    const votes = await parallel(Array.from({length: 3}, () => () =>\n      agent(`Try to refute: ${claim}. Default to refuted=true if uncertain.`, {schema: VERDICT})))\n    const survives = votes.filter(Boolean).filter(v => !v.refuted).length >= 2\n- Perspective-diverse verify: when a finding can fail in more than one way, give each verifier a distinct lens (correctness, security, perf, does-it-reproduce) instead of N identical refuters \u2014 diversity catches failure modes redundancy can't.\n- Judge panel: generate N independent attempts from different angles (e.g. MVP-first, risk-first, user-first), score with parallel judges, synthesize from the winner while grafting the best ideas from runners-up. Beats one-attempt-iterated when the solution space is wide.\n- Loop-until-dry: for unknown-size discovery (bugs, issues, edge cases), keep spawning finders until K consecutive rounds return nothing new. Simple counters (while count < N) miss the tail.\n- Multi-modal sweep: parallel agents each searching a different way (by-container, by-content, by-entity, by-time). Each is blind to what the others surface; useful when one search angle won't find everything.\n- Completeness critic: a final agent that asks \"what's missing \u2014 modality not run, claim unverified, source unread?\" What it finds becomes the next round of work.\n- No silent caps: if a workflow bounds coverage (top-N, no-retry, sampling), `log()` what was dropped \u2014 silent truncation reads as \"covered everything\" when it didn't.\n\nScale to what the user asked for. \"find any bugs\" \u2192 a few finders, single-vote verify. \"thoroughly audit this\" or \"be comprehensive\" \u2192 larger finder pool, 3\u20135 vote adversarial pass, synthesis stage. When unsure, lean toward thoroughness for research/review/audit requests and toward brevity for quick checks.\n\nThese patterns aren't exhaustive \u2014 compose novel harnesses when the task calls for it (tournament brackets, self-repair loops, staged escalation, whatever fits).\n\nUse this tool for multi-step orchestration where control flow should be deterministic (loops, conditionals, fan-out) rather than model-driven.\n\n## Resume\n\nThe tool result includes a runId. To resume after a pause, kill, or script edit, relaunch with Workflow({scriptPath, resumeFromRunId}) \u2014 the longest unchanged prefix of agent() calls returns cached results instantly; the first edited/new call and everything after it runs live. Same script + same args \u2192 100% cache hit. Date.now()/Math.random()/new Date() are unavailable in scripts (they would break this) \u2014 stamp results after the workflow returns, or pass timestamps via args. Fallback when no journal is available: Read agent-<id>.jsonl files in the transcript directory and hand-author a continuation script.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "script": {
+                  "description": "Self-contained workflow script. Must begin with `export const meta = { name, description, phases }` (pure literal, no computed values) followed by the script body using agent()/parallel()/pipeline()/phase().",
+                  "type": "string",
+                  "maxLength": 524288
+                },
+                "name": {
+                  "description": "Name of a predefined workflow (built-in or from .claude/workflows/). Resolves to a self-contained script.",
+                  "type": "string"
+                },
+                "description": {
+                  "description": "Ignored \u2014 set the workflow description in the script's `meta` block.",
+                  "type": "string"
+                },
+                "title": {
+                  "description": "Ignored \u2014 set the workflow title in the script's `meta` block.",
+                  "type": "string"
+                },
+                "args": {
+                  "description": "Optional input value exposed to the script as the global `args`, verbatim. Pass arrays/objects as actual JSON values, NOT as a JSON-encoded string \u2014 a stringified list breaks `args.filter`/`args.map` in the script. Use for parameterized named workflows (e.g. a research question)."
+                },
+                "scriptPath": {
+                  "description": "Path to a workflow script file on disk. Every Workflow invocation persists its script under the session directory and returns the path in the tool result. To iterate, edit that file with Write/Edit and re-invoke Workflow with the same `scriptPath` instead of re-sending the full script. Takes precedence over `script` and `name`.",
+                  "type": "string"
+                },
+                "resumeFromRunId": {
+                  "description": "Run ID of a prior Workflow invocation to resume from. Completed agent() calls with unchanged (prompt, opts) return their cached results instantly; only edited or new calls re-run. Same-session only. Stop the prior run first (TaskStop) before resuming.",
+                  "type": "string",
+                  "pattern": "^wf_[a-z0-9-]{6,}$"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "Write",
+            "description": "Writes a file to the local filesystem, overwriting if one exists.\n\nWhen to use: creating a new file, or fully replacing one you've already Read. Overwriting an existing file you haven't Read will fail. For partial changes, use Edit instead.",
+            "parameters": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "description": "The absolute path to the file to write (must be absolute, not relative)",
+                  "type": "string"
+                },
+                "content": {
+                  "description": "The content to write to the file",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file_path",
+                "content"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.38.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-cb6c1a8ea90e",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null
+            }
+          ],
+          "created": 0,
+          "model": "gpt-4o-2024-08-06",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": "fp_8772b5f549",
+          "usage": null,
+          "obfuscation": "wS4BmUQm1iK"
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-cb6c1a8ea90e",
+          "choices": [
+            {
+              "delta": {
+                "content": "Paris",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null
+            }
+          ],
+          "created": 0,
+          "model": "gpt-4o-2024-08-06",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": "fp_8772b5f549",
+          "usage": null,
+          "obfuscation": "xxUziUg9"
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-cb6c1a8ea90e",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null
+            }
+          ],
+          "created": 0,
+          "model": "gpt-4o-2024-08-06",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": "fp_8772b5f549",
+          "usage": null,
+          "obfuscation": "TmmvFkr"
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

@@ -118,6 +118,7 @@ class OpenAIResponsesImpl:
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
+        moderation_headers: dict[str, str] | None = None,
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
     ):
@@ -127,6 +128,7 @@ class OpenAIResponsesImpl:
         self.responses_store = responses_store
         self.vector_io_api = vector_io_api
         self.moderation_endpoint = moderation_endpoint
+        self.moderation_headers = moderation_headers
         self.conversations_api = conversations_api
         self.tool_executor = ToolExecutor(
             tool_groups_api=tool_groups_api,
@@ -641,6 +643,7 @@ class OpenAIResponsesImpl:
         max_output_tokens: int | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
         truncation: ResponseTruncation | None = None,
         top_logprobs: int | None = None,
         presence_penalty: float | None = None,
@@ -727,6 +730,7 @@ class OpenAIResponsesImpl:
                 max_output_tokens=max_output_tokens,
                 service_tier=service_tier,
                 metadata=metadata,
+                safety_identifier=safety_identifier,
                 truncation=truncation,
                 presence_penalty=presence_penalty,
                 extra_body=extra_body,
@@ -756,6 +760,7 @@ class OpenAIResponsesImpl:
             max_output_tokens=max_output_tokens,
             service_tier=service_tier,
             metadata=metadata,
+            safety_identifier=safety_identifier,
             include=include,
             truncation=truncation,
             top_logprobs=top_logprobs,
@@ -845,6 +850,7 @@ class OpenAIResponsesImpl:
         max_output_tokens: int | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
         truncation: ResponseTruncation | None = None,
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
@@ -884,6 +890,7 @@ class OpenAIResponsesImpl:
             max_tool_calls=max_tool_calls,
             reasoning=reasoning,
             metadata=metadata,
+            safety_identifier=safety_identifier,
             store=store if store is not None else True,
         )
 
@@ -922,6 +929,7 @@ class OpenAIResponsesImpl:
                         max_output_tokens=max_output_tokens,
                         service_tier=service_tier,
                         metadata=metadata,
+                        safety_identifier=safety_identifier,
                         truncation=truncation,
                         presence_penalty=presence_penalty,
                         extra_body=extra_body,
@@ -960,6 +968,7 @@ class OpenAIResponsesImpl:
         max_output_tokens: int | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
         truncation: ResponseTruncation | None = None,
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
@@ -998,6 +1007,7 @@ class OpenAIResponsesImpl:
             max_output_tokens=max_output_tokens,
             service_tier=service_tier,
             metadata=metadata,
+            safety_identifier=safety_identifier,
             include=include,
             truncation=truncation,
             response_id=response_id,
@@ -1069,6 +1079,7 @@ class OpenAIResponsesImpl:
         max_output_tokens: int | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
         include: list[ResponseItemInclude] | None = None,
         truncation: ResponseTruncation | None = None,
         response_id: str | None = None,
@@ -1151,6 +1162,7 @@ class OpenAIResponsesImpl:
                 parallel_tool_calls=parallel_tool_calls,
                 tool_executor=request_tool_executor,
                 moderation_endpoint=self.moderation_endpoint,
+                moderation_headers=self.moderation_headers,
                 connectors_api=self.connectors_api,
                 enable_guardrails=enable_guardrails,
                 instructions=instructions,
@@ -1159,6 +1171,7 @@ class OpenAIResponsesImpl:
                 max_output_tokens=max_output_tokens,
                 service_tier=service_tier,
                 metadata=metadata,
+                safety_identifier=safety_identifier,
                 include=include,
                 store=store,
                 truncation=truncation,
@@ -1227,7 +1240,7 @@ class OpenAIResponsesImpl:
 
     async def compact_openai_response(
         self,
-        model: str,
+        model: str | None,
         input: str | list[OpenAIResponseInput] | None = None,
         instructions: str | None = None,
         previous_response_id: str | None = None,
@@ -1287,6 +1300,11 @@ class OpenAIResponsesImpl:
 
         # Call inference to generate the summary (use configured model or fall back to conversation model)
         summarization_model = self.compaction_config.summarization_model or model
+        if not summarization_model:
+            raise ValueError(
+                "Failed to compact response: no model specified in request and no "
+                "summarization_model configured in CompactionConfig"
+            )
         params = OpenAIChatCompletionRequestWithExtraBody(
             model=summarization_model,
             messages=messages,
@@ -1307,13 +1325,19 @@ class OpenAIResponsesImpl:
         output_items: list[OpenAIResponseInput] = []
         for item in all_input:
             if isinstance(item, OpenAIResponseMessage) and item.role == "user":
+                # Normalize bare-string content to a content-part list so the
+                # compacted output message matches the response message schema,
+                # which requires content to be an array of parts.
+                content = item.content
+                if isinstance(content, str):
+                    content = [OpenAIResponseInputMessageContentText(text=content)]
                 output_items.append(
                     OpenAIResponseMessage(
                         id=f"msg_{uuid.uuid4().hex[:24]}",
                         type="message",
                         status="completed",
                         role="user",
-                        content=item.content,
+                        content=content,
                     )
                 )
 
@@ -1356,7 +1380,7 @@ class OpenAIResponsesImpl:
         stored_response = OpenAIResponseObject(
             id=response_id,
             created_at=created_at,
-            model=model,
+            model=model or summarization_model,
             status="completed",
             output=[],
             usage=usage_data,

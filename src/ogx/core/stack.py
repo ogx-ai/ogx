@@ -460,6 +460,28 @@ class EnvVarError(Exception):
         )
 
 
+_ENV_VAR_PATTERN = re.compile(r"\${env\.([A-Z0-9_]+)(?::([=+]?)?([^}]*)?)?}")
+
+
+def extract_env_var_references(config: Any) -> list[str]:
+    """Return the list of environment variable names referenced in a config object."""
+
+    def _collect(obj: Any, acc: list[str]) -> None:
+        if isinstance(obj, str):
+            for m in _ENV_VAR_PATTERN.finditer(obj):
+                acc.append(m.group(1))
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                _collect(v, acc)
+        elif isinstance(obj, list):
+            for v in obj:
+                _collect(v, acc)
+
+    result: list[str] = []
+    _collect(config, result)
+    return result
+
+
 def replace_env_vars(config: Any, path: str = "") -> Any:
     """Recursively replace environment variable references in a configuration object."""
     if isinstance(config, dict):
