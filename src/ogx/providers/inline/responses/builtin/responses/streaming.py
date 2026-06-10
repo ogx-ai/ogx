@@ -549,6 +549,8 @@ class StreamingResponseOrchestrator:
                         messages=messages,
                         remaining_output_tokens=remaining_output_tokens,
                         output_messages=output_messages,
+                        chat_tool_choice=chat_tool_choice,
+                        allowed_tool_names=allowed_tool_names,
                     ):
                         if isinstance(stream_event_or_result, ChatCompletionResult):
                             completion_result_data = stream_event_or_result
@@ -929,19 +931,24 @@ class StreamingResponseOrchestrator:
         if self.accumulated_usage is None:
             self.accumulated_usage = usage
         else:
+
+            def _cached(u: OpenAIResponseUsage) -> int:
+                return u.input_tokens_details.cached_tokens if u.input_tokens_details else 0
+
+            def _reasoning(u: OpenAIResponseUsage) -> int:
+                return u.output_tokens_details.reasoning_tokens if u.output_tokens_details else 0
+
             self.accumulated_usage = OpenAIResponseUsage(
                 input_tokens=self.accumulated_usage.input_tokens + usage.input_tokens,
                 output_tokens=self.accumulated_usage.output_tokens + usage.output_tokens,
                 total_tokens=self.accumulated_usage.total_tokens + usage.total_tokens,
+                # Detailed counters must accumulate across tool-loop turns too;
+                # replacing them with the latest turn drops earlier reasoning/cached tokens.
                 input_tokens_details=OpenAIResponseUsageInputTokensDetails(
-                    cached_tokens=usage.input_tokens_details.cached_tokens
-                    if usage.input_tokens_details
-                    else self.accumulated_usage.input_tokens_details.cached_tokens
+                    cached_tokens=_cached(self.accumulated_usage) + _cached(usage)
                 ),
                 output_tokens_details=OpenAIResponseUsageOutputTokensDetails(
-                    reasoning_tokens=usage.output_tokens_details.reasoning_tokens
-                    if usage.output_tokens_details
-                    else self.accumulated_usage.output_tokens_details.reasoning_tokens
+                    reasoning_tokens=_reasoning(self.accumulated_usage) + _reasoning(usage)
                 ),
             )
 
@@ -1110,6 +1117,7 @@ class StreamingResponseOrchestrator:
 
     def _native_tools_from_chat_tools(
         self,
+        allowed_tool_names: set[str] | None = None,
     ) -> list[OpenAIResponseInputTool] | None:
         """Build the tools list for the native /v1/responses request.
 
@@ -1119,6 +1127,9 @@ class StreamingResponseOrchestrator:
         Responses endpoint only accepts `function`/`mcp` tool types, so we forward
         those function definitions and let the orchestrator's tool loop execute any
         builtins itself once the model emits the matching function_call.
+
+        When tool_choice constrained the set via `allowed_tools`, restrict the
+        forwarded tools to that allow-list (mirrors the chat-completions path).
         """
         if not self.ctx.chat_tools:
             return None
@@ -1130,6 +1141,8 @@ class StreamingResponseOrchestrator:
             fn = chat_tool.get("function") if isinstance(chat_tool, dict) else None
             if not fn or not fn.get("name"):
                 continue
+            if allowed_tool_names is not None and fn["name"] not in allowed_tool_names:
+                continue
             native_tools.append(
                 OpenAIResponseInputToolFunction(
                     type="function",
@@ -1140,11 +1153,37 @@ class StreamingResponseOrchestrator:
             )
         return native_tools or None
 
+    @staticmethod
+    def _native_tool_choice(
+        chat_tool_choice: str | dict[str, Any] | None,
+    ) -> OpenAIResponseInputToolChoice:
+        """Map the already-processed chat-completions tool_choice back to the
+        Responses shape vLLM expects.
+
+        Because the native path converts every server-side builtin (file_search,
+        web_search, ...) into a function tool, a forced builtin tool_choice like
+        {"type": "file_search"} would no longer match any tool. Reusing the value
+        produced by _process_tool_choice keeps tools and tool_choice consistent:
+        a forced function becomes {"type": "function", "name": ...} and the
+        auto/required/none modes pass straight through.
+        """
+        if chat_tool_choice is None:
+            return OpenAIResponseInputToolChoiceMode.auto
+        if isinstance(chat_tool_choice, str):
+            return OpenAIResponseInputToolChoiceMode(chat_tool_choice)
+        # CC function tool_choice: {"type": "function", "function": {"name": ...}}
+        fn = chat_tool_choice.get("function") if isinstance(chat_tool_choice, dict) else None
+        if fn and fn.get("name"):
+            return OpenAIResponseInputToolChoiceFunctionTool(type="function", name=fn["name"])
+        return OpenAIResponseInputToolChoiceMode.auto
+
     async def _native_response_inference(
         self,
         messages: list[OpenAIMessageParam],
         remaining_output_tokens: int | None,
         output_messages: list[OpenAIResponseOutput],
+        chat_tool_choice: str | dict[str, Any] | None = None,
+        allowed_tool_names: set[str] | None = None,
     ) -> AsyncIterator[OpenAIResponseObjectStream | ChatCompletionResult]:
         """Use the provider's native /v1/responses endpoint for inference.
 
@@ -1161,15 +1200,17 @@ class StreamingResponseOrchestrator:
         # store / tool_groups, so expose them to the model as plain function tools.
         # self.ctx.chat_tools is already populated by _process_tools with every
         # tool (builtins included) in function form, so reuse it as the source of
-        # truth and convert to the Responses function-tool shape.
-        native_tools = self._native_tools_from_chat_tools()
+        # truth and convert to the Responses function-tool shape. tool_choice is
+        # remapped to stay consistent with that conversion.
+        native_tools = self._native_tools_from_chat_tools(allowed_tool_names)
+        native_tool_choice = self._native_tool_choice(chat_tool_choice)
 
         native_request = CreateResponseRequest(
             model=self.ctx.model,
             input=converted_input,  # type: ignore[arg-type]
             instructions=self.instructions,
             tools=native_tools,
-            tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
+            tool_choice=native_tool_choice,
             stream=True,
             store=False,
             temperature=self.ctx.temperature,
