@@ -885,7 +885,7 @@ async def test_native_path_preserves_file_search_calls(openai_responses_impl, mo
     assert fs_items[0].id == "fs_1"
 
 
-# --- Native tool_choice mapping and usage accumulation (PR review fixes) ---
+# --- Native tool_choice gating and usage accumulation (PR review fixes) ---
 
 
 def test_native_usage_accumulates_detailed_token_counters():
@@ -917,27 +917,49 @@ def test_native_usage_accumulates_detailed_token_counters():
     assert usage.output_tokens_details.reasoning_tokens == 8
 
 
-def test_native_tool_choice_maps_forced_builtin_to_function():
-    """Forced tool_choice must follow the builtin->function conversion: modes pass
-    through, a forced function/builtin becomes a function tool_choice."""
+def test_native_supports_tool_choice_gates_forced_choices():
+    """vLLM's Harmony Responses API only honors auto/none; forced/required/specific
+    choices must report unsupported so the orchestrator falls back to chat completions."""
+    from types import SimpleNamespace
+
     from ogx.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
     from ogx_api import (
         OpenAIResponseInputToolChoiceFunctionTool,
         OpenAIResponseInputToolChoiceMode,
     )
 
-    native_tool_choice = StreamingResponseOrchestrator._native_tool_choice
-    assert native_tool_choice(None) == OpenAIResponseInputToolChoiceMode.auto
-    assert native_tool_choice("required") == OpenAIResponseInputToolChoiceMode.required
-    assert native_tool_choice("none") == OpenAIResponseInputToolChoiceMode.none
+    def _supports(tool_choice):
+        orch = StreamingResponseOrchestrator.__new__(StreamingResponseOrchestrator)
+        orch.ctx = SimpleNamespace(tool_choice=tool_choice)
+        return orch._native_supports_tool_choice()
 
-    forced = native_tool_choice({"type": "function", "function": {"name": "file_search"}})
-    assert isinstance(forced, OpenAIResponseInputToolChoiceFunctionTool)
-    assert forced.name == "file_search"
+    assert _supports(None) is True
+    assert _supports(OpenAIResponseInputToolChoiceMode.auto) is True
+    assert _supports(OpenAIResponseInputToolChoiceMode.none) is True
+    # Forced choices vLLM rejects -> fall back to chat completions.
+    assert _supports(OpenAIResponseInputToolChoiceMode.required) is False
+    assert _supports(OpenAIResponseInputToolChoiceFunctionTool(type="function", name="file_search")) is False
 
 
-def test_native_tools_respects_allowed_tool_names():
-    """allowed_tools constraints must filter the function tools forwarded to vLLM."""
+def test_native_tool_choice_only_emits_auto_or_none():
+    """When native is entered (auto/none requests only), forward that mode verbatim."""
+    from types import SimpleNamespace
+
+    from ogx.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
+    from ogx_api import OpenAIResponseInputToolChoiceMode
+
+    def _choice(tool_choice):
+        orch = StreamingResponseOrchestrator.__new__(StreamingResponseOrchestrator)
+        orch.ctx = SimpleNamespace(tool_choice=tool_choice)
+        return orch._native_tool_choice()
+
+    assert _choice(None) == OpenAIResponseInputToolChoiceMode.auto
+    assert _choice(OpenAIResponseInputToolChoiceMode.auto) == OpenAIResponseInputToolChoiceMode.auto
+    assert _choice(OpenAIResponseInputToolChoiceMode.none) == OpenAIResponseInputToolChoiceMode.none
+
+
+def test_native_tools_converts_chat_tools_to_functions():
+    """Server-side builtins flattened into chat_tools are forwarded as function tools."""
     from types import SimpleNamespace
 
     from ogx.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
@@ -950,6 +972,6 @@ def test_native_tools_respects_allowed_tool_names():
         ]
     )
 
-    tools = orch._native_tools_from_chat_tools({"file_search"})
-    assert [t.name for t in tools] == ["file_search"]
-    assert [t.name for t in orch._native_tools_from_chat_tools()] == ["file_search", "get_weather"]
+    tools = orch._native_tools_from_chat_tools()
+    assert [t.name for t in tools] == ["file_search", "get_weather"]
+    assert all(t.type == "function" for t in tools)

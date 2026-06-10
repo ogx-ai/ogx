@@ -58,6 +58,15 @@ _EVENTS_REQUIRING_RESPONSE_ID = frozenset(
     }
 )
 
+# vLLM stream events OGX does not model. Their payload is already conveyed by
+# other events (reasoning text / output items), so they are dropped silently.
+_SKIPPED_NATIVE_EVENT_TYPES = frozenset(
+    {
+        "response.reasoning_part.added",
+        "response.reasoning_part.done",
+    }
+)
+
 
 def _is_embedding_model(model_id: str, model: _models_dev.Model) -> bool:
     return (model.family is not None and "embed" in model.family) or "embed" in model_id.lower()
@@ -319,7 +328,11 @@ class VLLMInferenceAdapter(OpenAIMixin):
                     )
                 if response.status_code != 200:
                     raise RuntimeError(f"Failed to get response from vLLM: {response.status_code}: {response.text}")
-                return OpenAIResponseObject(**response.json())
+                data = response.json()
+                # Same reconciliation as the streaming path: vLLM sends spec-compliant
+                # `text: null` / omits `store`, which OGX's OpenAIResponseObject rejects.
+                self._normalize_response_object(data)
+                return OpenAIResponseObject(**data)
         except httpx.HTTPError as e:
             raise ConnectionError(f"Failed to connect to vLLM responses API at {endpoint}: {e}") from e
 
@@ -365,6 +378,13 @@ class VLLMInferenceAdapter(OpenAIMixin):
                                 break
                             try:
                                 event_data = json.loads(data)
+                                # vLLM emits some lifecycle events (e.g. the gpt-oss
+                                # reasoning part boundaries) that OGX's stream union
+                                # does not model. Their content is already delivered
+                                # via reasoning_text/output_item events, so skip them
+                                # quietly rather than logging a parse failure.
+                                if event_data.get("type") in _SKIPPED_NATIVE_EVENT_TYPES:
+                                    continue
                                 # Capture the response id from any event that carries the
                                 # full response object (created/in_progress/completed/...).
                                 response_obj = event_data.get("response")

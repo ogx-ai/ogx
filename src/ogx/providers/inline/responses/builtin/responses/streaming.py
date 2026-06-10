@@ -544,13 +544,15 @@ class StreamingResponseOrchestrator:
 
                 # --- Inference call: native responses or chat completions ---
                 completion_result_data: ChatCompletionResult | None = None
-                if self.use_native_responses:
+                # vLLM's Harmony Responses API only honors auto/none tool_choice;
+                # forced/required/allowed-tools choices must use chat completions,
+                # which OGX fully controls, instead of failing in native mode.
+                use_native = self.use_native_responses and self._native_supports_tool_choice()
+                if use_native:
                     async for stream_event_or_result in self._native_response_inference(
                         messages=messages,
                         remaining_output_tokens=remaining_output_tokens,
                         output_messages=output_messages,
-                        chat_tool_choice=chat_tool_choice,
-                        allowed_tool_names=allowed_tool_names,
                     ):
                         if isinstance(stream_event_or_result, ChatCompletionResult):
                             completion_result_data = stream_event_or_result
@@ -1115,10 +1117,23 @@ class StreamingResponseOrchestrator:
                 converted.append(dumped)
         return converted
 
-    def _native_tools_from_chat_tools(
-        self,
-        allowed_tool_names: set[str] | None = None,
-    ) -> list[OpenAIResponseInputTool] | None:
+    def _native_supports_tool_choice(self) -> bool:
+        """vLLM's Harmony Responses API only honors `auto`/`none` tool_choice and
+        returns 501 for forced (`required`, a specific function, a specific
+        builtin, or `allowed_tools`) choices. Such requests must fall back to the
+        chat-completions path, which OGX fully controls.
+        """
+        tool_choice = self.ctx.tool_choice
+        if tool_choice is None:
+            return True
+        if isinstance(tool_choice, OpenAIResponseInputToolChoiceMode):
+            return tool_choice != OpenAIResponseInputToolChoiceMode.required
+        if isinstance(tool_choice, str):
+            return tool_choice in ("auto", "none")
+        # Any specific forced tool / allowed_tools object.
+        return False
+
+    def _native_tools_from_chat_tools(self) -> list[OpenAIResponseInputTool] | None:
         """Build the tools list for the native /v1/responses request.
 
         self.ctx.chat_tools holds every requested tool (function tools, MCP tools,
@@ -1127,9 +1142,6 @@ class StreamingResponseOrchestrator:
         Responses endpoint only accepts `function`/`mcp` tool types, so we forward
         those function definitions and let the orchestrator's tool loop execute any
         builtins itself once the model emits the matching function_call.
-
-        When tool_choice constrained the set via `allowed_tools`, restrict the
-        forwarded tools to that allow-list (mirrors the chat-completions path).
         """
         if not self.ctx.chat_tools:
             return None
@@ -1141,8 +1153,6 @@ class StreamingResponseOrchestrator:
             fn = chat_tool.get("function") if isinstance(chat_tool, dict) else None
             if not fn or not fn.get("name"):
                 continue
-            if allowed_tool_names is not None and fn["name"] not in allowed_tool_names:
-                continue
             native_tools.append(
                 OpenAIResponseInputToolFunction(
                     type="function",
@@ -1153,28 +1163,13 @@ class StreamingResponseOrchestrator:
             )
         return native_tools or None
 
-    @staticmethod
-    def _native_tool_choice(
-        chat_tool_choice: str | dict[str, Any] | None,
-    ) -> OpenAIResponseInputToolChoice:
-        """Map the already-processed chat-completions tool_choice back to the
-        Responses shape vLLM expects.
-
-        Because the native path converts every server-side builtin (file_search,
-        web_search, ...) into a function tool, a forced builtin tool_choice like
-        {"type": "file_search"} would no longer match any tool. Reusing the value
-        produced by _process_tool_choice keeps tools and tool_choice consistent:
-        a forced function becomes {"type": "function", "name": ...} and the
-        auto/required/none modes pass straight through.
-        """
-        if chat_tool_choice is None:
-            return OpenAIResponseInputToolChoiceMode.auto
-        if isinstance(chat_tool_choice, str):
-            return OpenAIResponseInputToolChoiceMode(chat_tool_choice)
-        # CC function tool_choice: {"type": "function", "function": {"name": ...}}
-        fn = chat_tool_choice.get("function") if isinstance(chat_tool_choice, dict) else None
-        if fn and fn.get("name"):
-            return OpenAIResponseInputToolChoiceFunctionTool(type="function", name=fn["name"])
+    def _native_tool_choice(self) -> OpenAIResponseInputToolChoice:
+        """Native is only entered when _native_supports_tool_choice() passed, so the
+        request asks for auto/none (or nothing). Forward that mode; vLLM rejects
+        anything else."""
+        tool_choice = self.ctx.tool_choice
+        if tool_choice == OpenAIResponseInputToolChoiceMode.none or tool_choice == "none":
+            return OpenAIResponseInputToolChoiceMode.none
         return OpenAIResponseInputToolChoiceMode.auto
 
     async def _native_response_inference(
@@ -1182,8 +1177,6 @@ class StreamingResponseOrchestrator:
         messages: list[OpenAIMessageParam],
         remaining_output_tokens: int | None,
         output_messages: list[OpenAIResponseOutput],
-        chat_tool_choice: str | dict[str, Any] | None = None,
-        allowed_tool_names: set[str] | None = None,
     ) -> AsyncIterator[OpenAIResponseObjectStream | ChatCompletionResult]:
         """Use the provider's native /v1/responses endpoint for inference.
 
@@ -1200,10 +1193,9 @@ class StreamingResponseOrchestrator:
         # store / tool_groups, so expose them to the model as plain function tools.
         # self.ctx.chat_tools is already populated by _process_tools with every
         # tool (builtins included) in function form, so reuse it as the source of
-        # truth and convert to the Responses function-tool shape. tool_choice is
-        # remapped to stay consistent with that conversion.
-        native_tools = self._native_tools_from_chat_tools(allowed_tool_names)
-        native_tool_choice = self._native_tool_choice(chat_tool_choice)
+        # truth and convert to the Responses function-tool shape.
+        native_tools = self._native_tools_from_chat_tools()
+        native_tool_choice = self._native_tool_choice()
 
         native_request = CreateResponseRequest(
             model=self.ctx.model,

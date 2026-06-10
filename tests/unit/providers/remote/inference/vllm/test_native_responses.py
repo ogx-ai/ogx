@@ -389,3 +389,73 @@ async def test_endpoint_uses_base_url(adapter_native):
 
         call_args = mock_client.post.call_args
         assert call_args[0][0] == "http://vllm-server:8000/v1/responses"
+
+
+# --- vLLM response-object reconciliation (PR review fixes) ---
+
+
+async def test_fetch_response_normalizes_vllm_response_object(adapter_native):
+    """vLLM sends spec-compliant text:null and omits store; the non-streaming
+    path must normalize so OpenAIResponseObject validates (regression: it
+    constructed the object without the streaming path's normalization)."""
+    response_json = {
+        "id": "resp_norm",
+        "created_at": 1000,
+        "model": "test-model",
+        "object": "response",
+        "output": [],
+        "status": "completed",
+        "text": None,  # vLLM emits null; OGX requires an object or omission
+        # "store" intentionally omitted; vLLM does not always send it
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_json
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_cls.return_value = mock_client
+
+        result = await adapter_native._fetch_response("http://test/v1/responses", {}, {"model": "m"})
+        assert isinstance(result, OpenAIResponseObject)
+        assert result.id == "resp_norm"
+        assert result.store is False
+
+
+async def test_stream_response_skips_unmodeled_events(adapter_native):
+    """vLLM emits response.reasoning_part.added/.done events that OGX does not
+    model; the adapter must skip them silently rather than failing to parse."""
+    sse_lines = [
+        'data: {"type":"response.created","response":{"id":"resp_1","created_at":1,"model":"m","object":"response","output":[],"status":"in_progress","store":true},"sequence_number":0}',
+        'data: {"type":"response.reasoning_part.added","item_id":"rs_1","output_index":0,"summary_index":0,"part":{"type":"reasoning_text","text":""},"sequence_number":1}',
+        'data: {"type":"response.reasoning_part.done","item_id":"rs_1","output_index":0,"summary_index":0,"part":{"type":"reasoning_text","text":"thinking"},"sequence_number":2}',
+        'data: {"type":"response.completed","response":{"id":"resp_1","created_at":1,"model":"m","object":"response","output":[],"status":"completed","store":true},"sequence_number":3}',
+        "data: [DONE]",
+    ]
+
+    async def mock_aiter_lines():
+        for line in sse_lines:
+            yield line
+
+    mock_stream_response = AsyncMock()
+    mock_stream_response.status_code = 200
+    mock_stream_response.aiter_lines = mock_aiter_lines
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        stream_ctx = AsyncMock()
+        stream_ctx.__aenter__ = AsyncMock(return_value=mock_stream_response)
+        stream_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_client.stream = MagicMock(return_value=stream_ctx)
+        mock_client_cls.return_value = mock_client
+
+        result = await adapter_native._stream_response("http://test/v1/responses", {}, {"model": "m"})
+        events = [event async for event in result]
+
+        assert [e.type for e in events] == ["response.created", "response.completed"]
