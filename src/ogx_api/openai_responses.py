@@ -480,7 +480,9 @@ class OpenAIResponseText(BaseModel):
     """
 
     format: OpenAIResponseTextFormat | None = None
-    verbosity: Literal["low", "medium", "high"] | None = None
+    # Defaults to "medium" to match OpenAI: the OpenResponses schema types verbosity as an
+    # optional enum that rejects an explicit null, so the response must not serialize it as null.
+    verbosity: Literal["low", "medium", "high"] | None = "medium"
 
 
 @json_schema_type
@@ -848,6 +850,7 @@ class OpenAIResponseObject(BaseModel):
     :param max_output_tokens: (Optional) An upper bound for the number of tokens that can be generated for a response, including visible output tokens.
     :param service_tier: (Optional) The service tier to use for this response.
     :param metadata: (Optional) Dictionary of metadata key-value pairs
+    :param safety_identifier: (Optional) Stable identifier used to associate the request with an end user for safety monitoring
     """
 
     background: bool | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
@@ -884,6 +887,7 @@ class OpenAIResponseObject(BaseModel):
     metadata: dict[str, str] | None = None
     presence_penalty: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     store: bool
+    safety_identifier: str | None = None
 
 
 @json_schema_type

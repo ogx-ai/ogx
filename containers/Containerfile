@@ -27,6 +27,14 @@ ARG PYPI_VERSION=""
 ARG TEST_PYPI_VERSION=""
 ARG KEEP_WORKSPACE=""
 ARG DISTRO_NAME="starter"
+# PyPI package to install (e.g. "ogx", or "llama-stack" for pre-rename releases).
+ARG PACKAGE_NAME="ogx"
+# CLI binary the package provides (e.g. "ogx", or "llama" for llama-stack).
+ARG CLI_NAME="ogx"
+# Tolerate failures of the OpenTelemetry per-library bootstrap. Used when
+# backfilling older releases whose pinned deps conflict with the latest
+# auto-instrumentation packages. The default ("") keeps the bootstrap strict.
+ARG OTEL_BEST_EFFORT=""
 ARG RUN_CONFIG_PATH=""
 ARG UV_HTTP_TIMEOUT=500
 ARG UV_EXTRA_INDEX_URL=""
@@ -68,6 +76,8 @@ ENV PYPI_VERSION=${PYPI_VERSION}
 ENV TEST_PYPI_VERSION=${TEST_PYPI_VERSION}
 ENV KEEP_WORKSPACE=${KEEP_WORKSPACE}
 ENV DISTRO_NAME=${DISTRO_NAME}
+ENV PACKAGE_NAME=${PACKAGE_NAME}
+ENV CLI_NAME=${CLI_NAME}
 ENV RUN_CONFIG_PATH=${RUN_CONFIG_PATH}
 
 # Copy the repository so editable installs and run configurations are available.
@@ -88,6 +98,13 @@ RUN set -eux; \
 
 # Install ogx
 # Use UV_EXTRA_INDEX_URL inline only for editable install with RC dependencies
+# When a version is pinned, also pin the matching API package. The meta package
+# depends on "<package>-api" without a version constraint, so an unpinned install
+# would resolve to the latest API package, which is incompatible with older
+# meta-package releases (e.g. llama-stack 0.5.2 + llama-stack-api 0.7.x).
+# The API package is installed first and best-effort: very old releases
+# (e.g. llama-stack < 0.4.0) bundled the API in the meta package and have no
+# separate "<package>-api" distribution, so a missing pin is not an error.
 RUN set -eux; \
     SAVED_UV_EXTRA_INDEX_URL="${UV_EXTRA_INDEX_URL:-}"; \
     SAVED_UV_INDEX_STRATEGY="${UV_INDEX_STRATEGY:-}"; \
@@ -106,15 +123,21 @@ RUN set -eux; \
     elif [ "$INSTALL_MODE" = "test-pypi" ]; then \
         uv pip install --no-cache fastapi libcst; \
         if [ -n "$TEST_PYPI_VERSION" ]; then \
-            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "ogx==$TEST_PYPI_VERSION"; \
+            if ! uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "${PACKAGE_NAME}-api==$TEST_PYPI_VERSION"; then \
+                echo "No ${PACKAGE_NAME}-api==$TEST_PYPI_VERSION found; assuming the API is bundled in ${PACKAGE_NAME}"; \
+            fi; \
+            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "${PACKAGE_NAME}==$TEST_PYPI_VERSION"; \
         else \
-            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match ogx; \
+            uv pip install --no-cache --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match "$PACKAGE_NAME"; \
         fi; \
     else \
         if [ -n "$PYPI_VERSION" ]; then \
-            uv pip install --no-cache "ogx==$PYPI_VERSION"; \
+            if ! uv pip install --no-cache "${PACKAGE_NAME}-api==$PYPI_VERSION"; then \
+                echo "No ${PACKAGE_NAME}-api==$PYPI_VERSION found; assuming the API is bundled in ${PACKAGE_NAME}"; \
+            fi; \
+            uv pip install --no-cache "${PACKAGE_NAME}==$PYPI_VERSION"; \
         else \
-            uv pip install --no-cache ogx; \
+            uv pip install --no-cache "$PACKAGE_NAME"; \
         fi; \
     fi;
 
@@ -129,15 +152,27 @@ RUN set -eux; \
         echo "DISTRO_NAME must be provided" >&2; \
         exit 1; \
     fi; \
-    deps="$(ogx stack list-deps "$DISTRO_NAME")"; \
+    deps="$("$CLI_NAME" stack list-deps "$DISTRO_NAME")"; \
     if [ -n "$deps" ]; then \
         printf '%s\n' "$deps" | xargs -L1 uv pip install --no-cache; \
     fi
 
-# Install OpenTelemetry auto-instrumentation support
+# Install OpenTelemetry auto-instrumentation support.
+# The base distro/exporter install is required. The per-library bootstrap
+# (opentelemetry-bootstrap -a install) selects the latest instrumentation
+# packages, which can conflict with the pinned dependencies of older releases
+# being backfilled. With OTEL_BEST_EFFORT=1 a bootstrap failure is logged and
+# tolerated instead of failing the build.
 RUN set -eux; \
     pip install --no-cache opentelemetry-distro opentelemetry-exporter-otlp; \
-    opentelemetry-bootstrap -a install
+    if ! opentelemetry-bootstrap -a install; then \
+        if [ "$OTEL_BEST_EFFORT" = "1" ]; then \
+            echo "opentelemetry-bootstrap failed; continuing without full auto-instrumentation (OTEL_BEST_EFFORT=1)" >&2; \
+        else \
+            echo "opentelemetry-bootstrap failed" >&2; \
+            exit 1; \
+        fi; \
+    fi
 
 # Pre-cache tiktoken cl100k_base encoding at build time so the server never
 # attempts a runtime download to openaipublic.blob.core.windows.net.
@@ -171,18 +206,20 @@ if env | grep -q '^OTEL_'; then
   export OTEL_PYTHON_DISABLED_INSTRUMENTATIONS="${OTEL_PYTHON_DISABLED_INSTRUMENTATIONS:+$OTEL_PYTHON_DISABLED_INSTRUMENTATIONS,}asyncpg,sqlite3"
 fi
 
+CLI_NAME="${CLI_NAME:-ogx}"
+
 if [ -n "$RUN_CONFIG_PATH" ] && [ -f "$RUN_CONFIG_PATH" ]; then
-  exec $CMD_PREFIX ogx stack run "$RUN_CONFIG_PATH" "$@"
+  exec $CMD_PREFIX "$CLI_NAME" stack run "$RUN_CONFIG_PATH" "$@"
 fi
 
 if [ -n "$DISTRO_NAME" ]; then
-  exec $CMD_PREFIX ogx stack run "$DISTRO_NAME" "$@"
+  exec $CMD_PREFIX "$CLI_NAME" stack run "$DISTRO_NAME" "$@"
 fi
 
-exec $CMD_PREFIX ogx stack run "$@"
+exec $CMD_PREFIX "$CLI_NAME" stack run "$@"
 EOF
 RUN chmod +x /usr/local/bin/ogx-entrypoint.sh
 
-RUN mkdir -p /.ogx /.cache && chmod -R g+rw /app /.ogx /.cache
+RUN mkdir -p "/.${CLI_NAME}" /.cache && chmod -R g+rw /app "/.${CLI_NAME}" /.cache
 
 ENTRYPOINT ["/usr/local/bin/ogx-entrypoint.sh"]

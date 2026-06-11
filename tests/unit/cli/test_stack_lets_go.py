@@ -20,6 +20,8 @@ from ogx.cli.stack.lets_go import (
     _build_claude_code_aliases,
     _ProbeStatus,
 )
+from ogx.core.datatypes import QualifiedModel
+from ogx_api import ModelType
 
 
 @pytest.fixture
@@ -104,43 +106,39 @@ class TestTopLevelLetsGoArguments:
 class TestAutodetect:
     @patch(
         "ogx.cli.stack.lets_go._probe_provider_availability",
-        return_value=(_ProbeStatus.UNREACHABLE, 0, "", "default", None),
+        return_value=(_ProbeStatus.UNREACHABLE, [], "", "default", None),
     )
     def test_autodetect_no_providers(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "files=inline::localfs" in parts
         assert "vector_io=inline::faiss" in parts
-        assert "tool_runtime=inline::file-search" in parts
-        assert "responses=inline::builtin" in parts
 
     @patch(
-        "ogx.cli.stack.lets_go._probe_provider_availability", return_value=(_ProbeStatus.NO_KEY, 0, "", "default", None)
+        "ogx.cli.stack.lets_go._probe_provider_availability",
+        return_value=(_ProbeStatus.NO_KEY, [], "", "default", None),
     )
     def test_no_key_providers_excluded(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "files=inline::localfs" in parts
         assert "vector_io=inline::faiss" in parts
-        assert "tool_runtime=inline::file-search" in parts
-        assert "responses=inline::builtin" in parts
 
     @patch(
         "ogx.cli.stack.lets_go._probe_provider_availability",
-        return_value=(_ProbeStatus.OK, 3, "http://test", "default", None),
+        return_value=(_ProbeStatus.OK, [], "http://test", "default", None),
     )
     def test_autodetect_all_ok(self, mock_probe: MagicMock):
         from ogx.cli.stack.lets_go import _autodetect_providers
 
-        result = _autodetect_providers()
-        parts = result.split(",")
+        spec, _ = _autodetect_providers()
+        parts = spec.split(",")
         assert "inference=remote::ollama" in parts
         assert "inference=remote::anthropic" in parts
         assert "files=inline::localfs" in parts
-        assert "responses=inline::builtin" in parts
-        assert len(parts) == 14  # 8 probed + 6 inline
+        assert len(parts) == 13  # 8 probed + 5 inline
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_only_ollama(self, mock_probe: MagicMock):
@@ -152,17 +150,17 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type == "remote::ollama":
-                return (_ProbeStatus.OK, 3, "http://localhost:11434/v1", "default", None)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+                return (_ProbeStatus.OK, [], "http://localhost:11434/v1", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "inference=remote::ollama" in parts
         assert "files=inline::localfs" in parts
-        assert "responses=inline::builtin" in parts
-        assert len(parts) == 7  # 1 inference + 6 inline
+        assert len(parts) == 6  # 1 inference + 5 inline
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
     def test_autodetect_uses_env_var_name(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
@@ -177,10 +175,11 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type == "remote::ollama":
                 captured.append(base_url_env)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
         _autodetect_providers()
@@ -200,13 +199,14 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type in ("remote::ollama", "remote::openai"):
-                return (_ProbeStatus.OK, 3, "http://test", "default", None)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+                return (_ProbeStatus.OK, [], "http://test", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert parts.index("inference=remote::ollama") < parts.index("inference=remote::openai")
 
     @patch("ogx.cli.stack.lets_go._probe_provider_availability")
@@ -221,13 +221,14 @@ class TestAutodetect:
             default_base_url: str,
             required_api_key_env: object,
             optional_api_key_env: object = None,
+            debug: bool = False,
         ) -> tuple:
             if provider_type == "remote::vllm":
-                return (_ProbeStatus.NEEDS_KEY, 3, "http://localhost:8000/v1", "default", None)
-            return (_ProbeStatus.UNREACHABLE, 0, "", "default", None)
+                return (_ProbeStatus.NEEDS_KEY, [], "http://localhost:8000/v1", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
         mock_probe.side_effect = side_effect
-        parts = _autodetect_providers().split(",")
+        parts = _autodetect_providers()[0].split(",")
         assert "inference=remote::vllm" in parts
 
 
@@ -237,7 +238,10 @@ class TestRunCommand:
         with (
             patch(
                 "ogx.cli.stack.lets_go._autodetect_providers",
-                return_value="files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
+                return_value=(
+                    "files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
+                    None,
+                ),
             ),
             warnings.catch_warnings(),
             pytest.raises(SystemExit),
@@ -248,7 +252,7 @@ class TestRunCommand:
     def test_empty_spec_exits(self, lets_go: StackLetsGo):
         args = lets_go.parser.parse_args([])
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=""),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("", None)),
             warnings.catch_warnings(),
             pytest.raises(SystemExit),
         ):
@@ -296,7 +300,7 @@ class TestRunCommand:
         mock_build_config.return_value = mock_cfg
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::ollama"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
@@ -326,7 +330,7 @@ class TestRunCommand:
         mock_subprocess.return_value = MagicMock(returncode=0)
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::ollama"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
@@ -357,7 +361,7 @@ class TestRunCommand:
         mock_build_config.return_value = mock_cfg
 
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value="inference=remote::ollama"),
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
@@ -366,6 +370,90 @@ class TestRunCommand:
             lets_go._run_stack_lets_go_cmd(args)
 
         mock_subprocess.assert_not_called()
+
+    @patch("ogx.cli.stack.lets_go._uvicorn_run")
+    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
+    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
+    @patch("ogx.cli.stack.lets_go._detect_embedding_model")
+    def test_autodetected_embedding_model_is_registered_as_embedding(
+        self,
+        mock_detect_embedding_model: MagicMock,
+        mock_build_config: MagicMock,
+        mock_get_deps: MagicMock,
+        mock_uvicorn_run: MagicMock,
+        lets_go: StackLetsGo,
+    ):
+        args = lets_go.parser.parse_args([])
+        mock_cfg = MagicMock()
+        mock_cfg.providers = {"inference": [MagicMock()], "vector_io": [MagicMock()]}
+        mock_cfg.vector_stores = None
+        mock_cfg.registered_resources.models = []
+        mock_cfg.model_dump.return_value = {}
+        mock_build_config.return_value = mock_cfg
+        mock_detect_embedding_model.return_value = (
+            QualifiedModel(provider_id="openai", model_id="Qwen/Qwen3-Embedding-0.6B"),
+            512,
+        )
+
+        with (
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::openai", None)),
+            patch("builtins.open", MagicMock()),
+            patch("ogx.cli.stack.lets_go.yaml.dump"),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("ignore", FutureWarning)
+            lets_go._run_stack_lets_go_cmd(args)
+
+        matches = [
+            model
+            for model in mock_cfg.registered_resources.models
+            if model.provider_id == "openai"
+            and model.model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.provider_model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.model_type == ModelType.embedding
+            and model.metadata.get("embedding_dimension") == 512
+        ]
+        assert len(matches) == 1
+
+    @patch("ogx.cli.stack.lets_go._uvicorn_run")
+    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
+    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
+    def test_default_embedding_model_sets_temp_embedding_dimension_metadata(
+        self,
+        mock_build_config: MagicMock,
+        mock_get_deps: MagicMock,
+        mock_uvicorn_run: MagicMock,
+        lets_go: StackLetsGo,
+    ):
+        args = lets_go.parser.parse_args(
+            ["--default-embedding-model", "openai/Qwen/Qwen3-Embedding-0.6B", "--default-embedding-dimension", "512"]
+        )
+        mock_cfg = MagicMock()
+        mock_cfg.providers = {"inference": [MagicMock()], "vector_io": [MagicMock()]}
+        mock_cfg.vector_stores = None
+        mock_cfg.registered_resources.models = []
+        mock_cfg.model_dump.return_value = {}
+        mock_build_config.return_value = mock_cfg
+
+        with (
+            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::openai", None)),
+            patch("builtins.open", MagicMock()),
+            patch("ogx.cli.stack.lets_go.yaml.dump"),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("ignore", FutureWarning)
+            lets_go._run_stack_lets_go_cmd(args)
+
+        matches = [
+            model
+            for model in mock_cfg.registered_resources.models
+            if model.provider_id == "openai"
+            and model.model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.provider_model_id == "Qwen/Qwen3-Embedding-0.6B"
+            and model.model_type == ModelType.embedding
+            and model.metadata.get("embedding_dimension") == 512
+        ]
+        assert len(matches) == 1
 
 
 class TestDeprecation:
@@ -459,4 +547,187 @@ class TestClaudeCodeAliases:
     def test_priority_list_covers_expected_providers(self):
         assert "anthropic" in _CLAUDE_CODE_PROVIDER_PRIORITY
         assert "ollama" in _CLAUDE_CODE_PROVIDER_PRIORITY
+
+
+class TestAddFileSearchAndResponses:
+    def test_uses_brave_when_brave_key_is_set(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
+        monkeypatch.delenv("TAVILY_SEARCH_API_KEY", raising=False)
+        monkeypatch.delenv("BING_API_KEY", raising=False)
+        monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        web_search_providers = [
+            p
+            for p in ["brave-search", "tavily-search", "bing-search", "nimble-search"]
+            if any(p in str(call) for call in mock_cprint.call_args_list)
+        ]
+        # Only brave should be added (env var set)
+        assert "brave-search" in web_search_providers
+        assert "tavily-search" not in web_search_providers
+        assert "bing-search" not in web_search_providers
+        assert "nimble-search" not in web_search_providers
+
+    def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
+        monkeypatch.setenv("TAVILY_SEARCH_API_KEY", "tavily-key")
+        monkeypatch.delenv("BING_API_KEY", raising=False)
+        monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        provider_ids_in_calls = set()
+        for call in mock_cprint.call_args_list:
+            if "brave-search" in str(call):
+                provider_ids_in_calls.add("brave-search")
+            if "tavily-search" in str(call):
+                provider_ids_in_calls.add("tavily-search")
+            if "bing-search" in str(call):
+                provider_ids_in_calls.add("bing-search")
+            if "nimble-search" in str(call):
+                provider_ids_in_calls.add("nimble-search")
+
+        # Only tavily is added since only its env var is set
+        assert provider_ids_in_calls == {"tavily-search"}
+
+    def test_selects_first_with_api_key(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
+        monkeypatch.setenv("TAVILY_SEARCH_API_KEY", "tavily-key")
+        monkeypatch.setenv("BING_API_KEY", "bing-key")
+        monkeypatch.setenv("NIMBLE_API_KEY", "nimble-key")
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        provider_ids_in_calls = set()
+        for call in mock_cprint.call_args_list:
+            if "brave-search" in str(call):
+                provider_ids_in_calls.add("brave-search")
+            if "tavily-search" in str(call):
+                provider_ids_in_calls.add("tavily-search")
+            if "bing-search" in str(call):
+                provider_ids_in_calls.add("bing-search")
+            if "nimble-search" in str(call):
+                provider_ids_in_calls.add("nimble-search")
+
+        # All four have keys, all four should be added
+        assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search", "nimble-search"}
+
+    def test_no_web_search_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import StackConfig
+
+        # Clear env vars to ensure no keys are set
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
+
+        with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
+            _add_file_search_and_responses(
+                StackConfig(
+                    distro_name="test",
+                    providers={
+                        "tool_runtime": [],
+                        "responses": [],
+                    },
+                )
+            )
+
+        # Should show disabled message, not provider names
+        has_disabled = any("web search disabled" in str(call) for call in mock_cprint.call_args_list)
+        assert has_disabled
+
+    def test_duplicate_providers_when_already_configured(self, monkeypatch: pytest.MonkeyPatch):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import Provider, StackConfig
+
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
+
+        initial_providers = [
+            Provider(provider_id="brave-search", provider_type="remote::brave-search"),
+        ]
+
+        config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": initial_providers.copy(),
+                "responses": [],
+            },
+        )
+
+        with patch("ogx.cli.stack.lets_go.cprint"):
+            _add_file_search_and_responses(config)
+
+        web_search_types = {
+            "remote::brave-search",
+            "remote::tavily-search",
+            "remote::bing-search",
+            "remote::nimble-search",
+        }
+        web_search_providers = [p for p in config.providers["tool_runtime"] if p.provider_type in web_search_types]
+        assert len(web_search_providers) == 1
+
+    def test_existing_provider_keeps_no_api_key_config(self):
+        from ogx.cli.stack.lets_go import _add_file_search_and_responses
+        from ogx.core.datatypes import Provider, StackConfig
+
+        config = StackConfig(
+            distro_name="test",
+            providers={
+                "tool_runtime": [
+                    Provider(
+                        provider_id="brave-search",
+                        provider_type="remote::brave-search",
+                        config={"api_key": "existing-key", "max_results": 5},
+                    ),
+                ],
+                "responses": [],
+            },
+        )
+
+        with patch("ogx.cli.stack.lets_go.cprint"):
+            _add_file_search_and_responses(config)
+
+        web_search_providers = [
+            p for p in config.providers["tool_runtime"] if p.provider_type == "remote::brave-search"
+        ]
+        assert len(web_search_providers) == 1
+        assert web_search_providers[0].config["api_key"] == "existing-key"
+        assert web_search_providers[0].config["max_results"] == 5
         assert _CLAUDE_CODE_PROVIDER_PRIORITY.index("anthropic") < _CLAUDE_CODE_PROVIDER_PRIORITY.index("ollama")

@@ -10,7 +10,7 @@ import logging  # allow-direct-logging
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from ogx.core.datatypes import (
@@ -94,6 +94,32 @@ def http_app(mock_auth_endpoint):
 @pytest.fixture
 def http_client(http_app):
     return TestClient(http_app)
+
+
+@pytest.fixture
+def ws_app(mock_auth_endpoint):
+    app = FastAPI()
+    auth_config = AuthenticationConfig(
+        provider_config=CustomAuthConfig(
+            type=AuthProviderType.CUSTOM,
+            endpoint=mock_auth_endpoint,
+        ),
+        access_policy=[],
+    )
+    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+
+    @app.websocket("/ws")
+    async def ws_endpoint(websocket: WebSocket):
+        await websocket.accept()
+        await websocket.send_text("authenticated")
+        await websocket.close()
+
+    return app
+
+
+@pytest.fixture
+def ws_client(ws_app):
+    return TestClient(ws_app)
 
 
 @pytest.fixture
@@ -224,6 +250,26 @@ def test_http_auth_service_error(http_client, valid_api_key, suppress_auth_error
     response = http_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 401
     assert "Authentication service error" in response.json()["error"]["message"]
+
+
+# WebSocket Endpoint Tests
+def test_websocket_missing_auth_header_rejected(ws_client, suppress_auth_errors):
+    with pytest.raises(WebSocketDisconnect):
+        with ws_client.websocket_connect("/ws") as websocket:
+            websocket.receive_text()
+
+
+@patch("httpx.AsyncClient.post", new=mock_post_failure)
+def test_websocket_invalid_authentication_rejected(ws_client, invalid_api_key, suppress_auth_errors):
+    with pytest.raises(WebSocketDisconnect):
+        with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {invalid_api_key}"}) as websocket:
+            websocket.receive_text()
+
+
+@patch("httpx.AsyncClient.post", new=mock_post_success)
+def test_websocket_valid_authentication_accepted(ws_client, valid_api_key):
+    with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {valid_api_key}"}) as websocket:
+        assert websocket.receive_text() == "authenticated"
 
 
 def test_http_auth_request_payload(http_client, valid_api_key, mock_auth_endpoint, suppress_auth_errors):

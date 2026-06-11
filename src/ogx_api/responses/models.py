@@ -188,6 +188,10 @@ class CreateResponseRequest(BaseModel):
         default=None,
         description="Dictionary of metadata key-value pairs to attach to the response.",
     )
+    safety_identifier: str | None = Field(
+        default=None,
+        description="A stable identifier used to associate the request with an end user, for safety monitoring. Echoed back on the response.",
+    )
     truncation: ResponseTruncation | None = Field(
         default=None,
         description="Controls how the service truncates input when it exceeds the model context window.",
@@ -261,7 +265,7 @@ class CompactResponseRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    model: str = Field(..., description="The model to use for generating the compacted summary.")
+    model: str | None = Field(..., description="The model to use for generating the compacted summary.")
     input: str | list[OpenAIResponseInput] | None = Field(default=None, description="Input message(s) to compact.")
     instructions: str | None = Field(default=None, description="Instructions to guide the compaction.")
     previous_response_id: str | None = Field(

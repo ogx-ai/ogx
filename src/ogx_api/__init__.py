@@ -445,6 +445,9 @@ from .prompts import (
     UpdatePromptRequest,
 )
 from .providers import Providers
+from .skills import (
+    Skills,
+)
 from .rag_tool import (
     DefaultRAGQueryGeneratorConfig,
     LLMRAGQueryGeneratorConfig,
@@ -538,6 +541,7 @@ __all__ = [
     "OGX_API_V1BETA",
     # API Symbols
     "Responses",
+    "Skills",
     # Responses Request Models
     "CancelResponseRequest",
     "CompactResponseRequest",

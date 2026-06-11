@@ -61,6 +61,7 @@ class TestOpenAIMaxTokensClamping:
             mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
             mock_client_prop.return_value = mock_client
 
+            # max_tokens is translated to max_completion_tokens, then clamped
             params = OpenAIChatCompletionRequestWithExtraBody(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": "hi"}],
@@ -70,7 +71,8 @@ class TestOpenAIMaxTokensClamping:
             await adapter.openai_chat_completion(params)
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-            assert call_kwargs["max_tokens"] == 16384
+            assert call_kwargs.get("max_tokens") is None
+            assert call_kwargs["max_completion_tokens"] == 16384
 
     async def test_keeps_lower_request_value(self, mock_openai_response):
         adapter = _make_adapter()
@@ -89,7 +91,8 @@ class TestOpenAIMaxTokensClamping:
             await adapter.openai_chat_completion(params)
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-            assert call_kwargs["max_tokens"] == 1000
+            assert call_kwargs.get("max_tokens") is None
+            assert call_kwargs["max_completion_tokens"] == 1000
 
     async def test_no_clamping_when_max_tokens_is_none(self, mock_openai_response):
         adapter = _make_adapter()
@@ -135,7 +138,6 @@ class TestOpenAIMaxTokensClamping:
             mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
             mock_client_prop.return_value = mock_client
 
-            # gpt-4-turbo has a 4096 limit
             params = OpenAIChatCompletionRequestWithExtraBody(
                 model="gpt-4-turbo",
                 messages=[{"role": "user", "content": "hi"}],
@@ -145,7 +147,8 @@ class TestOpenAIMaxTokensClamping:
             await adapter.openai_chat_completion(params)
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-            assert call_kwargs["max_tokens"] == 4096
+            assert call_kwargs.get("max_tokens") is None
+            assert call_kwargs["max_completion_tokens"] == 4096
 
     async def test_no_clamping_for_unknown_model(self, mock_openai_response):
         adapter = _make_adapter()
@@ -164,7 +167,8 @@ class TestOpenAIMaxTokensClamping:
             await adapter.openai_chat_completion(params)
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-            assert call_kwargs["max_tokens"] == 32000
+            assert call_kwargs.get("max_tokens") is None
+            assert call_kwargs["max_completion_tokens"] == 32000
 
     async def test_dated_snapshot_model_uses_base_limit(self, mock_openai_response):
         adapter = _make_adapter()
@@ -183,7 +187,8 @@ class TestOpenAIMaxTokensClamping:
             await adapter.openai_chat_completion(params)
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-            assert call_kwargs["max_tokens"] == 16384
+            assert call_kwargs.get("max_tokens") is None
+            assert call_kwargs["max_completion_tokens"] == 16384
 
     async def test_clamps_max_completion_tokens_when_request_exceeds_model_limit(self, mock_openai_response):
         adapter = _make_adapter()
@@ -204,7 +209,7 @@ class TestOpenAIMaxTokensClamping:
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
             assert call_kwargs["max_completion_tokens"] == 16384
 
-    async def test_clamps_both_max_token_fields_when_both_exceed_model_limit(self, mock_openai_response):
+    async def test_clamps_translated_and_explicit_max_completion_tokens(self, mock_openai_response):
         adapter = _make_adapter()
 
         with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
@@ -212,6 +217,7 @@ class TestOpenAIMaxTokensClamping:
             mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
             mock_client_prop.return_value = mock_client
 
+            # When both are set, max_completion_tokens takes precedence (no translation)
             params = OpenAIChatCompletionRequestWithExtraBody(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": "hi"}],
@@ -224,6 +230,71 @@ class TestOpenAIMaxTokensClamping:
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
             assert call_kwargs["max_tokens"] == 16384
             assert call_kwargs["max_completion_tokens"] == 16384
+
+
+class TestOpenAIMaxTokensTranslation:
+    """max_tokens is deprecated by OpenAI; always translate to max_completion_tokens."""
+
+    @pytest.mark.parametrize("model", ["gpt-4o-mini", "gpt-4.1", "o3", "gpt-5", "gpt-5.4-nano-2026-03-17"])
+    async def test_translates_max_tokens_for_all_models(self, mock_openai_response, model):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model=model,
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+                max_tokens=20,
+            )
+            await adapter.openai_chat_completion(params)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs.get("max_tokens") is None
+            assert call_kwargs["max_completion_tokens"] == 20
+
+    async def test_preserves_explicit_max_completion_tokens(self, mock_openai_response):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+                max_tokens=20,
+                max_completion_tokens=50,
+            )
+            await adapter.openai_chat_completion(params)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["max_tokens"] == 20
+            assert call_kwargs["max_completion_tokens"] == 50
+
+    async def test_does_not_mutate_original_params(self, mock_openai_response):
+        adapter = _make_adapter()
+
+        with patch.object(OpenAIInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_openai_response)
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+                max_tokens=20,
+            )
+            await adapter.openai_chat_completion(params)
+
+            assert params.max_tokens == 20
+            assert params.max_completion_tokens is None
 
 
 class TestOpenAIModelMetadata:
