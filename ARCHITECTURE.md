@@ -115,7 +115,7 @@ The full list of auto-routed pairs is defined in `builtin_automatically_routed_a
 
 The `ogx_api` package defines all public-facing types and protocols:
 
-- **Protocols** -- Python `Protocol` classes like `Inference`, `Responses` that define the API contract. HTTP routes are defined via FastAPI routers in `fastapi_routes.py` modules.
+- **Protocols** -- Python `Protocol` classes like `Inference`, `Responses`, `Skills` that define the API contract. HTTP routes are defined via FastAPI routers in `fastapi_routes.py` modules.
 - **Data Types** -- Pydantic models for requests, responses, and resources (e.g., `Model`, `VectorStore`, `ChatCompletionRequest`).
 - **Provider Specs** -- `InlineProviderSpec`, `RemoteProviderSpec`, and related types that define how providers are declared.
 - **Internal utilities** -- KVStore and SqlStore abstract interfaces live here so third-party providers can use them without depending on the full server.
@@ -152,7 +152,7 @@ storage:
 | PostgreSQL| `PostgresKVStoreConfig`  | Production deployments |
 | MongoDB   | `MongoDBKVStoreConfig`   | Document-oriented      |
 
-Used by: distribution registry, quota tracking, provider state.
+Used by: distribution registry, quota tracking, provider state, skills metadata.
 
 ### SqlStore
 

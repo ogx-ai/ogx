@@ -17,7 +17,7 @@ from ogx_api import InternalServerError, OpenAIChatCompletionRequestWithExtraBod
 
 
 def test_adapter_initialization():
-    config = BedrockConfig(api_key="test-key", region_name="us-east-1")
+    config = BedrockConfig(aws_bedrock_bearer_token="test-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
 
     assert adapter.config.auth_credential.get_secret_value() == "test-key"
@@ -25,25 +25,25 @@ def test_adapter_initialization():
 
 
 def test_client_url_construction():
-    config = BedrockConfig(api_key="test-key", region_name="us-west-2")
+    config = BedrockConfig(aws_bedrock_bearer_token="test-key", region_name="us-west-2")
     adapter = BedrockInferenceAdapter(config=config)
 
     assert adapter.get_base_url() == "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
 
 
 def test_api_key_from_config():
-    config = BedrockConfig(api_key="config-key", region_name="us-east-1")
+    config = BedrockConfig(aws_bedrock_bearer_token="config-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
     assert adapter.config.auth_credential.get_secret_value() == "config-key"
 
 
 def test_api_key_from_header_overrides_config():
     """Test API key from request header overrides config via client property"""
-    config = BedrockConfig(api_key="config-key", region_name="us-east-1")
+    config = BedrockConfig(aws_bedrock_bearer_token="config-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
-    adapter.provider_data_api_key_field = "aws_bearer_token_bedrock"
+    adapter.provider_data_api_key_field = "aws_bedrock_bearer_token"
     adapter.get_request_provider_data = MagicMock(
-        return_value=SimpleNamespace(aws_bearer_token_bedrock=SecretStr("header-key"))
+        return_value=SimpleNamespace(aws_bedrock_bearer_token=SecretStr("header-key"))
     )
 
     # The client property is where header override happens (in OpenAIMixin)
@@ -52,7 +52,7 @@ def test_api_key_from_header_overrides_config():
 
 async def test_authentication_error_handling():
     """Authentication failures should surface as a sanitized InternalServerError."""
-    config = BedrockConfig(api_key="invalid-key", region_name="us-east-1")
+    config = BedrockConfig(aws_bedrock_bearer_token="invalid-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
 
     # Mock the parent class method to raise AuthenticationError

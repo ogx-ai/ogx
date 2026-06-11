@@ -17,7 +17,7 @@ from {{packageName}}.configuration import Configuration
 {{/apis}}{{/apiInfo}}
 
 
-class LlamaStackClient:
+class OgxClient:
     """
     OGX unified client that provides access to all API endpoints.
 
@@ -25,10 +25,10 @@ class LlamaStackClient:
     them as attributes for easy access.
 
     Example:
-        >>> from {{packageName}} import Configuration, LlamaStackClient
+        >>> from {{packageName}} import Configuration, OgxClient
         >>>
         >>> config = Configuration(host="http://localhost:8000")
-        >>> client = LlamaStackClient(config)
+        >>> client = OgxClient(config)
         >>>
         >>> # Access specific APIs through the client
         {{#apiInfo}}{{#apis}}{{#-first}}>>> client.{{baseName}}  # Access {{classname}}
@@ -46,7 +46,7 @@ class LlamaStackClient:
         **kwargs,
     ) -> None:
         """
-        Initialize the LlamaStackClient.
+        Initialize the OgxClient.
 
         Args:
             configuration: Configuration object or string URL. If string, creates Configuration with that host.
@@ -113,7 +113,7 @@ class LlamaStackClient:
         return None
 
 
-class AsyncLlamaStackClient:
+class AsyncOgxClient:
     """
     Async OGX unified client that provides access to all API endpoints.
 
@@ -121,10 +121,10 @@ class AsyncLlamaStackClient:
     them as attributes for easy access with async/await support.
 
     Example:
-        >>> from {{packageName}} import Configuration, AsyncLlamaStackClient
+        >>> from {{packageName}} import Configuration, AsyncOgxClient
         >>>
         >>> config = Configuration(host="http://localhost:8000")
-        >>> async with AsyncLlamaStackClient(config) as client:
+        >>> async with AsyncOgxClient(config) as client:
         >>>     # Access specific APIs through the client
         {{#apiInfo}}{{#apis}}{{#-first}}>>>     await client.{{baseName}}.some_method()  # Access {{classname}}
         {{/-first}}{{/apis}}{{/apiInfo}}
@@ -139,7 +139,7 @@ class AsyncLlamaStackClient:
         **kwargs,
     ) -> None:
         """
-        Initialize the AsyncLlamaStackClient.
+        Initialize the AsyncOgxClient.
 
         Args:
             configuration: Configuration object or string URL. If string, creates Configuration with that host.

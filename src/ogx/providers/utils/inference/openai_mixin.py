@@ -119,6 +119,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
     _cached_client: AsyncOpenAI | None = PrivateAttr(default=None)
     _cached_client_key: tuple[str, str] | None = PrivateAttr(default=None)
+    _superseded_clients: list[AsyncOpenAI] = PrivateAttr(default_factory=list)
 
     def get_api_key(self) -> str | None:
         """
@@ -214,7 +215,10 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         pass
 
     async def shutdown(self) -> None:
-        """Shutdown the OpenAI mixin, closing the cached HTTP client."""
+        """Shutdown the OpenAI mixin, closing all cached HTTP clients."""
+        for old_client in self._superseded_clients:
+            await old_client.close()
+        self._superseded_clients.clear()
         if self._cached_client is not None:
             await self._cached_client.close()
             self._cached_client = None
@@ -242,6 +246,9 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
         if self._cached_client is not None and self._cached_client_key == cache_key:
             return self._cached_client
+
+        if self._cached_client is not None:
+            self._superseded_clients.append(self._cached_client)
 
         extra_params = self.get_extra_client_params()
         network_kwargs = build_network_client_kwargs(self.config.network)

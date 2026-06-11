@@ -42,6 +42,7 @@ from ogx_api import (
     ProviderSpec,
     RemoteProviderSpec,
     Responses,
+    Skills,
     ToolGroups,
     ToolGroupsProtocolPrivate,
     ToolRuntime,
@@ -89,6 +90,7 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.connectors: Connectors,
         Api.messages: Messages,
         Api.interactions: Interactions,
+        Api.skills: Skills,
     }
 
     if external_apis:

@@ -3,7 +3,7 @@ orphan: true
 ---
 # OCI Distribution
 
-The `ogx/distribution-{{ name }}` distribution consists of the following provider configurations.
+The `ogxai/distribution-{{ name }}` distribution consists of the following provider configurations.
 
 {{ providers_table }}{% if run_config_env_vars %}
 

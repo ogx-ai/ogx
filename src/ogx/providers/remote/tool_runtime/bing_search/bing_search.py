@@ -26,6 +26,8 @@ from .config import BingSearchToolConfig
 class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequestProviderData):
     """Tool runtime for performing web searches using the Bing Search API."""
 
+    _CONTEXT_SIZE_TO_COUNT = {"low": 3, "medium": 5, "high": 10}
+
     def __init__(self, config: BingSearchToolConfig):
         self.config = config
         self.url = "https://api.bing.microsoft.com/v7.0/search"
@@ -45,16 +47,14 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
     async def unregister_toolgroup(self, toolgroup_id: str) -> None:
         return
 
-    def _get_api_key(self) -> str:
-        if self.config.api_key:
-            return self.config.api_key
+    def _get_api_key(self) -> str | None:
+        api_key = self.config.api_key.get_secret_value() if self.config.api_key else None
 
         provider_data = self.get_request_provider_data()
-        if provider_data is None or not provider_data.bing_search_api_key:
-            raise ValueError(
-                'Pass Bing Search API Key in the header X-OGX-Provider-Data as { "bing_search_api_key": <your api key>}'
-            )
-        return provider_data.bing_search_api_key.get_secret_value()
+        if provider_data and provider_data.bing_search_api_key:
+            api_key = provider_data.bing_search_api_key.get_secret_value()
+
+        return api_key
 
     async def list_runtime_tools(
         self,
@@ -85,15 +85,31 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
         self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
     ) -> ToolInvocationResult:
         api_key = self._get_api_key()
-        headers = {
-            "Ocp-Apim-Subscription-Key": api_key,
-        }
-        params = {
+        headers: dict[str, str] = {}
+        if api_key:
+            headers["Ocp-Apim-Subscription-Key"] = api_key
+
+        query = kwargs["query"]
+
+        allowed_domains = kwargs.get("allowed_domains")
+        if allowed_domains:
+            site_filter = " OR ".join(f"site:{domain}" for domain in allowed_domains)
+            query = f"{query} ({site_filter})"
+
+        params: dict[str, Any] = {
             "count": self.config.top_k,
             "textDecorations": True,
             "textFormat": "HTML",
-            "q": kwargs["query"],
+            "q": query,
         }
+
+        user_location = kwargs.get("user_location")
+        if user_location and user_location.get("country"):
+            params["cc"] = user_location["country"]
+
+        search_context_size = kwargs.get("search_context_size")
+        if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
+            params["count"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
 
         if self._client is None:
             raise RuntimeError("Failed to invoke tool: provider not initialized")
@@ -104,7 +120,16 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
         )
         response.raise_for_status()
 
-        return ToolInvocationResult(content=json.dumps(self._clean_response(response.json())))
+        response_json = response.json()
+        sources = []
+        if "webPages" in response_json:
+            for page in response_json["webPages"]["value"]:
+                if "url" in page:
+                    sources.append({"url": page["url"]})
+        return ToolInvocationResult(
+            content=json.dumps(self._clean_response(response_json)),
+            metadata={"query": kwargs["query"], "sources": sources},
+        )
 
     def _clean_response(self, search_response):
         clean_response = []

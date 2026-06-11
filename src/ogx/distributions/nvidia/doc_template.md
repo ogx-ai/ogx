@@ -3,7 +3,7 @@ orphan: true
 ---
 # NVIDIA Distribution
 
-The `ogx/distribution-{{ name }}` distribution consists of the following provider configurations.
+The `ogxai/distribution-{{ name }}` distribution consists of the following provider configurations.
 
 {{ providers_table }}{% if run_config_env_vars %}
 
@@ -118,7 +118,7 @@ docker run \
   -p $OGX_PORT:$OGX_PORT \
   -v ~/.ogx:/root/.ogx \
   -e NVIDIA_API_KEY=$NVIDIA_API_KEY \
-  ogx/distribution-{{ name }} \
+  ogxai/distribution-{{ name }} \
   --port $OGX_PORT
 ```
 
@@ -139,7 +139,7 @@ docker run \
   -v $CUSTOM_RUN_CONFIG:/app/custom-config.yaml \
   -e RUN_CONFIG_PATH=/app/custom-config.yaml \
   -e NVIDIA_API_KEY=$NVIDIA_API_KEY \
-  ogx/distribution-{{ name }} \
+  ogxai/distribution-{{ name }} \
   --port $OGX_PORT
 ```
 
