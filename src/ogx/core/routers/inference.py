@@ -304,9 +304,15 @@ class InferenceRouter(Inference):
     ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
         """Route a native Responses API inference call to the provider for the given model."""
         provider, provider_resource_id = await self._get_model_provider(request.model, ModelType.llm)
+        # Not every inference provider implements native /v1/responses. Surface that
+        # as NotImplementedError (the Responses orchestrator's fallback signal) so a
+        # provider without the method doesn't raise an opaque AttributeError.
+        provider_openai_response = getattr(provider, "openai_response", None)
+        if provider_openai_response is None:
+            raise NotImplementedError(f"{type(provider).__name__} does not support native responses API")
         request = request.model_copy()
         request.model = provider_resource_id
-        return await provider.openai_response(request)
+        return await provider_openai_response(request)
 
     async def openai_embeddings(
         self,

@@ -91,3 +91,26 @@ async def test_rerank_calls_provider_correctly(mock_routing_table):
     assert called_request.max_num_results == 1
 
     assert result == expected_response
+
+
+async def test_openai_response_without_provider_method_raises_not_implemented(mock_routing_table):
+    """A provider that doesn't implement openai_response (e.g. a non-OpenAIMixin
+    adapter like VertexAI) must surface NotImplementedError — the Responses
+    orchestrator's fallback signal — not an opaque AttributeError."""
+    from ogx_api import CreateResponseRequest
+
+    routing_table, _ = mock_routing_table
+
+    class _ProviderWithoutNativeResponses:
+        pass
+
+    model = MagicMock()
+    model.identifier = "test-llm"
+    model.model_type = ModelType.llm
+    model.provider_resource_id = "provider-llm"
+    routing_table.get_object_by_identifier = AsyncMock(return_value=model)
+    routing_table.get_provider_impl = AsyncMock(return_value=_ProviderWithoutNativeResponses())
+
+    router = InferenceRouter(routing_table=routing_table)
+    with pytest.raises(NotImplementedError):
+        await router.openai_response(CreateResponseRequest(model="test-llm", input="hi", stream=False))
