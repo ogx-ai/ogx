@@ -11,7 +11,9 @@ import uuid
 from typing import Any
 
 from docling.chunking import HybridChunker
-from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from fastapi import UploadFile
 
@@ -39,6 +41,14 @@ class DoclingFileProcessor:
     def __init__(self, config: DoclingFileProcessorConfig, files_api=None) -> None:
         self.config = config
         self.files_api = files_api
+
+        pipeline_options = PdfPipelineOptions(
+            do_ocr=config.do_ocr,
+        )
+
+        self.converter = DocumentConverter(
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+        )
 
     async def process_file(
         self,
@@ -76,8 +86,7 @@ class DoclingFileProcessor:
             tmp.write(content)
             tmp.flush()
 
-            converter = DocumentConverter()
-            result = converter.convert(tmp.name)
+            result = self.converter.convert(tmp.name)
 
         doc = result.document
         page_count = doc.num_pages()

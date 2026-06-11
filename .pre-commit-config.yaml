@@ -217,6 +217,15 @@ repos:
         pass_filenames: false
         require_serial: true
         files: ^.github/workflows/.*$
+      - id: target-model-matrix
+        name: Generate target model matrix
+        additional_dependencies:
+          - *uv-dependency
+        entry: ./scripts/uv-run-with-index.sh run ./scripts/generate_target_models_docs.py
+        language: python
+        pass_filenames: false
+        require_serial: true
+        files: ^tests/integration/(suites\.py|ci_matrix\.json|TARGET_MODELS\.md)$|^tests/integration/responses/recordings/.*\.json$|^scripts/(generate_target_models_docs|provider_compat_matrix)\.py$
       - id: ui-linter
         name: Format & Lint UI
         entry: bash ./scripts/run-ui-linter.sh

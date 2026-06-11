@@ -217,6 +217,14 @@ jobs:
             cp constraint-update/uv.lock uv.lock
             echo "Copied updated uv.lock"
           fi
+          if [ -f constraint-update/src/ogx_api/pyproject.toml ]; then
+            cp constraint-update/src/ogx_api/pyproject.toml src/ogx_api/pyproject.toml
+            echo "Copied updated src/ogx_api/pyproject.toml"
+          fi
+          if [ -f constraint-update/src/ogx_api/uv.lock ]; then
+            cp constraint-update/src/ogx_api/uv.lock src/ogx_api/uv.lock
+            echo "Copied updated src/ogx_api/uv.lock"
+          fi
 
       - name: Commit and push constraint updates
         id: commit
@@ -233,13 +241,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if [[ -z $(git status --porcelain pyproject.toml uv.lock) ]]; then
+          if [[ -z $(git status --porcelain pyproject.toml uv.lock src/ogx_api/pyproject.toml src/ogx_api/uv.lock) ]]; then
             echo "No changes to commit"
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          git add pyproject.toml uv.lock
+          git add pyproject.toml uv.lock src/ogx_api/pyproject.toml src/ogx_api/uv.lock
           git commit -s -m "fix(deps): update constraint-dependencies for ${DEP_NAME}"
 
           if [ "$IS_FORK_PR" = "true" ]; then

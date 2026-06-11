@@ -8,6 +8,7 @@ apis:
 - interactions
 - messages
 - responses
+- skills
 - tool_runtime
 - vector_io
 providers:
@@ -43,7 +44,7 @@ providers:
   - provider_id: bedrock
     provider_type: remote::bedrock
     config:
-      api_key: ${env.AWS_BEARER_TOKEN_BEDROCK:=}
+      aws_bedrock_bearer_token: ${env.AWS_BEDROCK_BEARER_TOKEN:=}
       region_name: ${env.AWS_DEFAULT_REGION:=us-east-2}
       aws_role_arn: ${env.AWS_ROLE_ARN:=}
       aws_web_identity_token_file: ${env.AWS_WEB_IDENTITY_TOKEN_FILE:=}
@@ -216,6 +217,13 @@ providers:
           backend: sql_default
           max_write_queue_size: 10000
           num_writers: 4
+  skills:
+  - provider_id: builtin
+    provider_type: inline::builtin
+    config:
+      persistence:
+        namespace: skills
+        backend: kv_default
   tool_runtime:
   - provider_id: brave-search
     provider_type: remote::brave-search
@@ -227,6 +235,12 @@ providers:
     config:
       api_key: ${env.TAVILY_SEARCH_API_KEY:=}
       max_results: 3
+  - provider_id: nimble-search
+    provider_type: remote::nimble-search
+    config:
+      api_key: ${env.NIMBLE_API_KEY:=}
+      max_results: 3
+      search_depth: lite
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
@@ -314,7 +328,7 @@ registered_resources:
     provider_id: ${env.AWS_DEFAULT_REGION:+bedrock}
     provider_model_id: openai.gpt-oss-20b-1:0
     model_type: llm
-  vector_dbs: []
+  vector_stores: []
 server:
   port: 8321
   auth:
