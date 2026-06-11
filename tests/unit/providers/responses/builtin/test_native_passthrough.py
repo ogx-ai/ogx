@@ -64,6 +64,31 @@ async def test_fallback_to_cc_when_native_not_supported(openai_responses_impl, m
     assert any(c.type == "response.completed" for c in chunks)
 
 
+def test_convert_cc_messages_maps_image_content_to_input_image():
+    """Image content must convert to the Responses input_image shape so the native
+    request builds (instead of failing and forcing a chat-completions downgrade)."""
+    from ogx.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
+    from ogx_api import (
+        CreateResponseRequest,
+        OpenAIChatCompletionContentPartImageParam,
+        OpenAIChatCompletionContentPartTextParam,
+        OpenAIUserMessageParam,
+    )
+
+    msg = OpenAIUserMessageParam(
+        content=[
+            OpenAIChatCompletionContentPartTextParam(text="what is this?"),
+            OpenAIChatCompletionContentPartImageParam(image_url={"url": "https://example.com/x.png", "detail": "high"}),
+        ]
+    )
+    converted = StreamingResponseOrchestrator._convert_cc_messages_to_responses_input([msg])
+    parts = converted[0]["content"]
+    assert parts[0] == {"type": "input_text", "text": "what is this?"}
+    assert parts[1] == {"type": "input_image", "image_url": "https://example.com/x.png", "detail": "high"}
+    # The whole point: the native request now validates.
+    CreateResponseRequest(model="m", input=converted, stream=True)
+
+
 async def test_native_path_used_when_supported(openai_responses_impl, mock_inference_api):
     """When openai_response returns a native stream, CC should not be called."""
     response_obj = OpenAIResponseObject(

@@ -546,11 +546,11 @@ class StreamingResponseOrchestrator:
 
                 # --- Inference call: native responses, else chat completions ---
                 completion_result_data: ChatCompletionResult | None = None
-                # Prefer the provider's native /v1/responses endpoint (preserves
-                # reasoning tokens and structured token accounting). A
-                # NotImplementedError raised before any event means the provider
-                # has no native support, so fall back to chat completions for this
-                # turn and remember it for the rest of the loop.
+                # Optimistically prefer the provider's native /v1/responses endpoint
+                # (preserves reasoning tokens and structured token accounting). It is
+                # a fast-path: if it can't even start streaming we fall back to the
+                # proven chat-completions path rather than fail the response.
+                native_succeeded = False
                 if not self._native_responses_unavailable:
                     native_started = False
                     try:
@@ -566,14 +566,19 @@ class StreamingResponseOrchestrator:
                                 yield stream_event_or_result
                         if self.violation_detected:
                             return
+                        native_succeeded = True
                     except NotImplementedError:
-                        # Only a clean (pre-stream) NotImplementedError is a
-                        # fallback signal; a failure mid-stream is a real error.
+                        # The provider has no native /v1/responses at all — fall
+                        # back to chat completions and remember it for the rest of
+                        # the loop. (A failure after streaming started is a real
+                        # error, so re-raise. Any non-NotImplementedError is a real
+                        # bug — e.g. an unconvertible request — and must surface,
+                        # not silently downgrade to chat completions.)
                         if native_started:
                             raise
                         self._native_responses_unavailable = True
 
-                if self._native_responses_unavailable:
+                if not native_succeeded:
                     # Fall back to chat completions path
                     params = OpenAIChatCompletionRequestWithExtraBody(
                         model=self.ctx.model,
@@ -1132,20 +1137,34 @@ class StreamingResponseOrchestrator:
 
     @staticmethod
     def _responses_message(role: str | None, content: Any) -> dict[str, Any]:
-        """Build a Responses-API input message, mapping Chat Completions text
-        content parts to the role-appropriate Responses content type
-        (input_text for user/system/developer, output_text for assistant).
-        String content passes through unchanged.
+        """Build a Responses-API input message, mapping Chat Completions content
+        parts to the role-appropriate Responses content types: text ->
+        input_text/output_text, image_url -> input_image. String content passes
+        through unchanged.
         """
         if isinstance(content, list):
             text_type = "output_text" if role == "assistant" else "input_text"
-            content = [
-                {"type": text_type, "text": part.get("text", "")}
-                if isinstance(part, dict) and part.get("type") in ("text", "input_text", "output_text")
-                else part
-                for part in content
-            ]
+            content = [StreamingResponseOrchestrator._responses_content_part(part, text_type) for part in content]
         return {"role": role, "content": content}
+
+    @staticmethod
+    def _responses_content_part(part: Any, text_type: str) -> Any:
+        if not isinstance(part, dict):
+            return part
+        ptype = part.get("type")
+        if ptype in ("text", "input_text", "output_text"):
+            return {"type": text_type, "text": part.get("text", "")}
+        if ptype == "image_url":
+            # CC: {"type": "image_url", "image_url": {"url": ..., "detail": ...}}
+            # Responses: {"type": "input_image", "image_url": <url str>, "detail": ...}
+            image_url = part.get("image_url") or {}
+            if isinstance(image_url, dict):
+                converted = {"type": "input_image", "image_url": image_url.get("url")}
+                if image_url.get("detail"):
+                    converted["detail"] = image_url["detail"]
+                return converted
+            return {"type": "input_image", "image_url": image_url}
+        return part
 
     def _native_tools_from_chat_tools(self) -> list[OpenAIResponseInputTool] | None:
         """Build the tools list for the native /v1/responses request.

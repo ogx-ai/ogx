@@ -706,6 +706,16 @@ class OpenAIResponsesImpl:
         if max_tool_calls is not None and max_tool_calls < 1:
             raise ValueError(f"Invalid {max_tool_calls=}; should be >= 1")
 
+        # Validate at the boundary (matches the CreateResponseRequest ge=16
+        # constraint) so an invalid value is a clean parameter error rather than
+        # surfacing later from request construction.
+        if max_output_tokens is not None and max_output_tokens < 16:
+            raise InvalidParameterError(
+                "max_output_tokens",
+                max_output_tokens,
+                "max_output_tokens must be >= 16",
+            )
+
         # Handle background mode
         if background:
             return await self._create_background_response(
