@@ -47,7 +47,7 @@ Some providers support per-request credentials via `provider_data_validator`. Th
 
 ## Native Responses Support
 
-Providers can optionally support native `/v1/responses` inference by implementing the `openai_response()` method and setting the `supports_native_responses` property to `True`. When enabled, the Responses API orchestrator calls the provider's responses endpoint directly instead of decomposing through chat completions, preserving reasoning tokens and structured token accounting. Currently only `vllm/` implements this, gated by a `native_responses` config flag.
+Providers can optionally support native `/v1/responses` inference by overriding the `openai_response()` method. The Responses API orchestrator always tries `openai_response()` first and falls back to chat completions when it raises `NotImplementedError` (the default for providers without native support). When a provider does implement it, the orchestrator calls its responses endpoint directly instead of decomposing through chat completions, preserving reasoning tokens and structured token accounting. All provider-specific quirks (e.g. tool_choice limits, event-shape reconciliation) live in the provider adapter, not the orchestrator. Currently only `vllm/` implements this, gated by a `native_responses` config flag.
 
 ## Adding a New Inference Provider
 

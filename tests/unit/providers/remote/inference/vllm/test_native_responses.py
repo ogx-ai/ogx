@@ -216,7 +216,9 @@ async def test_auth_headers_without_token(adapter_native):
 # --- Non-streaming fetch ---
 
 
-async def test_fetch_response_404_raises_not_implemented(adapter_native):
+async def test_fetch_response_404_blows_up(adapter_native):
+    """native_responses is opt-in, so a 404 from a too-old vLLM is a hard error,
+    not a NotImplementedError that would silently degrade to chat completions."""
     mock_response = MagicMock()
     mock_response.status_code = 404
 
@@ -227,7 +229,7 @@ async def test_fetch_response_404_raises_not_implemented(adapter_native):
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client_cls.return_value = mock_client
 
-        with pytest.raises(NotImplementedError, match="does not support"):
+        with pytest.raises(RuntimeError, match="does not expose"):
             await adapter_native._fetch_response("http://test/v1/responses", {}, {"model": "m"})
 
 
@@ -332,7 +334,9 @@ async def test_stream_response_parses_sse_events(adapter_native):
         assert events[2].type == "response.completed"
 
 
-async def test_stream_response_404_raises_not_implemented(adapter_native):
+async def test_stream_response_404_blows_up(adapter_native):
+    """A 404 on the streaming path is a hard error (operator opted into native),
+    not a NotImplementedError that would silently degrade to chat completions."""
     mock_stream_response = AsyncMock()
     mock_stream_response.status_code = 404
 
@@ -350,7 +354,7 @@ async def test_stream_response_404_raises_not_implemented(adapter_native):
 
         result = await adapter_native._stream_response("http://test/v1/responses", {}, {"model": "m"})
 
-        with pytest.raises(NotImplementedError, match="does not support"):
+        with pytest.raises(RuntimeError, match="does not expose"):
             async for _ in result:
                 pass
 
@@ -459,3 +463,38 @@ async def test_stream_response_skips_unmodeled_events(adapter_native):
         events = [event async for event in result]
 
         assert [e.type for e in events] == ["response.created", "response.completed"]
+
+
+# --- tool_choice coercion (vLLM only supports auto/none) ---
+
+
+def test_coerce_tool_choice_maps_forced_to_auto():
+    """vLLM 501s on any forced tool_choice; the adapter coerces everything except
+    'none' to 'auto' (OGX still owns tool execution)."""
+    from ogx_api import (
+        OpenAIResponseInputToolChoiceFunctionTool,
+        OpenAIResponseInputToolChoiceMode,
+    )
+
+    coerce = VLLMInferenceAdapter._coerce_tool_choice
+    assert coerce(None) == "auto"
+    assert coerce(OpenAIResponseInputToolChoiceMode.auto) == "auto"
+    assert coerce(OpenAIResponseInputToolChoiceMode.none) == "none"
+    assert coerce("none") == "none"
+    # Forced choices vLLM would reject -> coerced to auto.
+    assert coerce(OpenAIResponseInputToolChoiceMode.required) == "auto"
+    assert coerce(OpenAIResponseInputToolChoiceFunctionTool(type="function", name="file_search")) == "auto"
+
+
+async def test_payload_coerces_forced_tool_choice(adapter_native):
+    """The built payload never carries a forced tool_choice to vLLM."""
+    from ogx_api import CreateResponseRequest, OpenAIResponseInputToolChoiceMode
+
+    request = CreateResponseRequest(
+        model="m",
+        input="hi",
+        tool_choice=OpenAIResponseInputToolChoiceMode.required,
+        stream=True,
+    )
+    payload = adapter_native._build_response_payload(request)
+    assert payload["tool_choice"] == "auto"

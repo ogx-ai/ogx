@@ -258,10 +258,12 @@ class StreamingResponseOrchestrator:
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         stream_options: ResponseStreamOptions | None = None,
-        use_native_responses: bool = False,
     ):
         self.inference_api = inference_api
-        self.use_native_responses = use_native_responses
+        # Set once the provider signals (via NotImplementedError from
+        # openai_response) that it has no native /v1/responses support, so the
+        # remaining tool-loop turns go straight to chat completions.
+        self._native_responses_unavailable = False
         self.ctx = ctx
         self.response_id = response_id
         self.created_at = created_at
@@ -542,25 +544,36 @@ class StreamingResponseOrchestrator:
                 if self.stream_options:
                     effective_stream_options.update({k: v for k, v in self.stream_options if v is not None})
 
-                # --- Inference call: native responses or chat completions ---
+                # --- Inference call: native responses, else chat completions ---
                 completion_result_data: ChatCompletionResult | None = None
-                # vLLM's Harmony Responses API only honors auto/none tool_choice;
-                # forced/required/allowed-tools choices must use chat completions,
-                # which OGX fully controls, instead of failing in native mode.
-                use_native = self.use_native_responses and self._native_supports_tool_choice()
-                if use_native:
-                    async for stream_event_or_result in self._native_response_inference(
-                        messages=messages,
-                        remaining_output_tokens=remaining_output_tokens,
-                        output_messages=output_messages,
-                    ):
-                        if isinstance(stream_event_or_result, ChatCompletionResult):
-                            completion_result_data = stream_event_or_result
-                        else:
-                            yield stream_event_or_result
-                    if self.violation_detected:
-                        return
-                else:
+                # Prefer the provider's native /v1/responses endpoint (preserves
+                # reasoning tokens and structured token accounting). A
+                # NotImplementedError raised before any event means the provider
+                # has no native support, so fall back to chat completions for this
+                # turn and remember it for the rest of the loop.
+                if not self._native_responses_unavailable:
+                    native_started = False
+                    try:
+                        async for stream_event_or_result in self._native_response_inference(
+                            messages=messages,
+                            remaining_output_tokens=remaining_output_tokens,
+                            output_messages=output_messages,
+                        ):
+                            native_started = True
+                            if isinstance(stream_event_or_result, ChatCompletionResult):
+                                completion_result_data = stream_event_or_result
+                            else:
+                                yield stream_event_or_result
+                        if self.violation_detected:
+                            return
+                    except NotImplementedError:
+                        # Only a clean (pre-stream) NotImplementedError is a
+                        # fallback signal; a failure mid-stream is a real error.
+                        if native_started:
+                            raise
+                        self._native_responses_unavailable = True
+
+                if self._native_responses_unavailable:
                     # Fall back to chat completions path
                     params = OpenAIChatCompletionRequestWithExtraBody(
                         model=self.ctx.model,
@@ -1091,7 +1104,7 @@ class StreamingResponseOrchestrator:
             role = dumped.get("role")
             if role == "assistant" and dumped.get("tool_calls"):
                 if dumped.get("content"):
-                    converted.append({"role": "assistant", "content": dumped["content"]})
+                    converted.append(StreamingResponseOrchestrator._responses_message("assistant", dumped["content"]))
                 for tc in dumped["tool_calls"]:
                     fn = tc.get("function", {})
                     converted.append(
@@ -1114,34 +1127,36 @@ class StreamingResponseOrchestrator:
                     }
                 )
             else:
-                converted.append(dumped)
+                converted.append(StreamingResponseOrchestrator._responses_message(role, dumped.get("content")))
         return converted
 
-    def _native_supports_tool_choice(self) -> bool:
-        """vLLM's Harmony Responses API only honors `auto`/`none` tool_choice and
-        returns 501 for forced (`required`, a specific function, a specific
-        builtin, or `allowed_tools`) choices. Such requests must fall back to the
-        chat-completions path, which OGX fully controls.
+    @staticmethod
+    def _responses_message(role: str | None, content: Any) -> dict[str, Any]:
+        """Build a Responses-API input message, mapping Chat Completions text
+        content parts to the role-appropriate Responses content type
+        (input_text for user/system/developer, output_text for assistant).
+        String content passes through unchanged.
         """
-        tool_choice = self.ctx.tool_choice
-        if tool_choice is None:
-            return True
-        if isinstance(tool_choice, OpenAIResponseInputToolChoiceMode):
-            return tool_choice != OpenAIResponseInputToolChoiceMode.required
-        if isinstance(tool_choice, str):
-            return tool_choice in ("auto", "none")
-        # Any specific forced tool / allowed_tools object.
-        return False
+        if isinstance(content, list):
+            text_type = "output_text" if role == "assistant" else "input_text"
+            content = [
+                {"type": text_type, "text": part.get("text", "")}
+                if isinstance(part, dict) and part.get("type") in ("text", "input_text", "output_text")
+                else part
+                for part in content
+            ]
+        return {"role": role, "content": content}
 
     def _native_tools_from_chat_tools(self) -> list[OpenAIResponseInputTool] | None:
         """Build the tools list for the native /v1/responses request.
 
-        self.ctx.chat_tools holds every requested tool (function tools, MCP tools,
-        and OGX server-side builtins like file_search/web_search) already flattened
-        into chat-completions function form by _process_tools. vLLM's native
-        Responses endpoint only accepts `function`/`mcp` tool types, so we forward
-        those function definitions and let the orchestrator's tool loop execute any
-        builtins itself once the model emits the matching function_call.
+        OGX owns execution of server-side builtins (file_search, web_search,
+        knowledge_search), so the backend must only ever see plain `function`
+        tools and emit call *requests* for them — never execute them. The model
+        decides to call a tool; the orchestrator's loop runs it and feeds the
+        result back. self.ctx.chat_tools is already populated by _process_tools
+        with every tool (builtins included) in function form, so reuse it as the
+        source of truth and convert to the Responses function-tool shape.
         """
         if not self.ctx.chat_tools:
             return None
@@ -1163,46 +1178,30 @@ class StreamingResponseOrchestrator:
             )
         return native_tools or None
 
-    def _native_tool_choice(self) -> OpenAIResponseInputToolChoice:
-        """Native is only entered when _native_supports_tool_choice() passed, so the
-        request asks for auto/none (or nothing). Forward that mode; vLLM rejects
-        anything else."""
-        tool_choice = self.ctx.tool_choice
-        if tool_choice == OpenAIResponseInputToolChoiceMode.none or tool_choice == "none":
-            return OpenAIResponseInputToolChoiceMode.none
-        return OpenAIResponseInputToolChoiceMode.auto
-
     async def _native_response_inference(
         self,
         messages: list[OpenAIMessageParam],
         remaining_output_tokens: int | None,
         output_messages: list[OpenAIResponseOutput],
     ) -> AsyncIterator[OpenAIResponseObjectStream | ChatCompletionResult]:
-        """Use the provider's native /v1/responses endpoint for inference.
+        """Run one inference turn against the provider's native /v1/responses.
 
-        Yields streaming events incrementally and a final ChatCompletionResult sentinel,
-        matching the same pattern as _process_streaming_chunks for the CC path.
-
-        Only called when self.use_native_responses is True.
+        Yields streaming events incrementally and a final ChatCompletionResult
+        sentinel, matching _process_streaming_chunks for the CC path. Raises
+        NotImplementedError (before yielding anything) when the provider has no
+        native responses support, which the caller uses to fall back to chat
+        completions. Any provider-specific quirks (e.g. vLLM only honoring
+        auto/none tool_choice) are handled inside the provider's openai_response.
         """
         converted_input = self._convert_cc_messages_to_responses_input(messages)
-
-        # vLLM's native /v1/responses only accepts `function` and `mcp` tool types;
-        # it rejects OGX server-side builtins (file_search, web_search,
-        # knowledge_search). OGX owns execution of those builtins via the vector
-        # store / tool_groups, so expose them to the model as plain function tools.
-        # self.ctx.chat_tools is already populated by _process_tools with every
-        # tool (builtins included) in function form, so reuse it as the source of
-        # truth and convert to the Responses function-tool shape.
         native_tools = self._native_tools_from_chat_tools()
-        native_tool_choice = self._native_tool_choice()
 
         native_request = CreateResponseRequest(
             model=self.ctx.model,
             input=converted_input,  # type: ignore[arg-type]
             instructions=self.instructions,
             tools=native_tools,
-            tool_choice=native_tool_choice,
+            tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
             stream=True,
             store=False,
             temperature=self.ctx.temperature,

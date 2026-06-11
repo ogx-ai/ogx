@@ -298,11 +298,6 @@ class InferenceRouter(Inference):
         # with a warning.
         return await provider.openai_chat_completions_with_reasoning(params)
 
-    async def check_native_responses_support(self, model: str) -> bool:
-        """Check if the provider for a given model supports native responses."""
-        provider, _ = await self._get_model_provider(model, ModelType.llm)
-        return getattr(provider, "supports_native_responses", False)
-
     async def openai_response(
         self,
         request: CreateResponseRequest,

@@ -1149,10 +1149,6 @@ class OpenAIResponsesImpl:
                 mcp_session_manager=mcp_session_manager,
             )
 
-            use_native_responses = False
-            if hasattr(self.inference_api, "check_native_responses_support"):
-                use_native_responses = await self.inference_api.check_native_responses_support(model)
-
             orchestrator = StreamingResponseOrchestrator(
                 inference_api=self.inference_api,
                 ctx=ctx,
@@ -1183,7 +1179,6 @@ class OpenAIResponsesImpl:
                 presence_penalty=presence_penalty,
                 extra_body=extra_body,
                 stream_options=stream_options,
-                use_native_responses=use_native_responses,
             )
 
             final_response = None

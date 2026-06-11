@@ -97,10 +97,6 @@ class VLLMInferenceAdapter(OpenAIMixin):
 
     provider_data_api_key_field: str = "vllm_api_token"
 
-    @property
-    def supports_native_responses(self) -> bool:
-        return self.config.native_responses
-
     def get_api_key(self) -> str | None:
         if self.config.auth_credential:
             return self.config.auth_credential.get_secret_value()
@@ -275,12 +271,11 @@ class VLLMInferenceAdapter(OpenAIMixin):
             payload["tools"] = [
                 tool.model_dump(exclude_none=True) if hasattr(tool, "model_dump") else tool for tool in request.tools
             ]
-        if request.tool_choice is not None:
-            payload["tool_choice"] = (
-                request.tool_choice.model_dump(exclude_none=True)
-                if hasattr(request.tool_choice, "model_dump")
-                else request.tool_choice
-            )
+        # vLLM's Harmony Responses API only accepts auto/none tool_choice and 501s
+        # on any forced choice (required, or a specific tool). The OGX orchestrator
+        # owns tool execution, so coerce forced choices to "auto" — the model still
+        # calls the requested tool, and OGX runs it.
+        payload["tool_choice"] = self._coerce_tool_choice(request.tool_choice)
         if request.text is not None:
             payload["text"] = (
                 request.text.model_dump(exclude_none=True) if hasattr(request.text, "model_dump") else request.text
@@ -322,9 +317,12 @@ class VLLMInferenceAdapter(OpenAIMixin):
             async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.post(endpoint, headers=headers, json=payload, timeout=None)
                 if response.status_code == 404:
-                    raise NotImplementedError(
-                        "vLLM server does not support /v1/responses endpoint. "
-                        "Upgrade vLLM or set native_responses: false."
+                    # native_responses is enabled (checked in openai_response) but this
+                    # vLLM has no /v1/responses. The operator opted in, so fail loudly
+                    # rather than silently degrading to chat completions.
+                    raise RuntimeError(
+                        "native_responses is enabled but this vLLM server does not expose "
+                        "/v1/responses (404). Upgrade vLLM or set native_responses: false."
                     )
                 if response.status_code != 200:
                     raise RuntimeError(f"Failed to get response from vLLM: {response.status_code}: {response.text}")
@@ -337,6 +335,17 @@ class VLLMInferenceAdapter(OpenAIMixin):
             raise ConnectionError(f"Failed to connect to vLLM responses API at {endpoint}: {e}") from e
 
     _response_stream_adapter: TypeAdapter[OpenAIResponseObjectStream] = TypeAdapter(OpenAIResponseObjectStream)
+
+    @staticmethod
+    def _coerce_tool_choice(tool_choice: Any) -> str:
+        """vLLM only honors auto/none; map everything else (required, a specific
+        forced tool, allowed_tools) to "auto"."""
+        value = tool_choice
+        if hasattr(value, "value"):  # enum
+            value = value.value
+        if value == "none":
+            return "none"
+        return "auto"
 
     @staticmethod
     def _normalize_response_object(response_obj: dict[str, Any]) -> None:
@@ -360,9 +369,12 @@ class VLLMInferenceAdapter(OpenAIMixin):
                 async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                     async with client.stream("POST", endpoint, headers=headers, json=payload, timeout=None) as response:
                         if response.status_code == 404:
-                            raise NotImplementedError(
-                                "vLLM server does not support /v1/responses endpoint. "
-                                "Upgrade vLLM or set native_responses: false."
+                            # native_responses is enabled but this vLLM has no
+                            # /v1/responses; the operator opted in, so fail loudly
+                            # rather than silently degrading to chat completions.
+                            raise RuntimeError(
+                                "native_responses is enabled but this vLLM server does not expose "
+                                "/v1/responses (404). Upgrade vLLM or set native_responses: false."
                             )
                         if response.status_code != 200:
                             body = await response.aread()

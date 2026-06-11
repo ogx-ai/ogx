@@ -44,11 +44,11 @@ from ogx_api.openai_responses import (
 
 
 async def test_fallback_to_cc_when_native_not_supported(openai_responses_impl, mock_inference_api):
-    """When check_native_responses_support returns False, the orchestrator
-    should use openai_chat_completion instead of openai_response."""
+    """When openai_response raises NotImplementedError, the orchestrator falls
+    back to openai_chat_completion."""
     from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
-    mock_inference_api.check_native_responses_support = AsyncMock(return_value=False)
+    # conftest default: openai_response raises NotImplementedError.
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
     result = await openai_responses_impl.create_openai_response(
@@ -58,14 +58,14 @@ async def test_fallback_to_cc_when_native_not_supported(openai_responses_impl, m
     )
     chunks = [chunk async for chunk in result]
 
+    # Native is attempted (the fallback signal) and then chat completions runs.
+    mock_inference_api.openai_response.assert_called_once()
     mock_inference_api.openai_chat_completion.assert_called_once()
-    mock_inference_api.openai_response.assert_not_called()
     assert any(c.type == "response.completed" for c in chunks)
 
 
 async def test_native_path_used_when_supported(openai_responses_impl, mock_inference_api):
-    """When check_native_responses_support returns True, CC should not be called."""
-    mock_inference_api.check_native_responses_support = AsyncMock(return_value=True)
+    """When openai_response returns a native stream, CC should not be called."""
     response_obj = OpenAIResponseObject(
         id="resp_native",
         created_at=1000,
@@ -112,7 +112,6 @@ async def test_native_path_used_when_supported(openai_responses_impl, mock_infer
 
 async def test_native_path_extracts_text_content(openai_responses_impl, mock_inference_api):
     """The native path should extract text deltas into the response output."""
-    mock_inference_api.check_native_responses_support = AsyncMock(return_value=True)
     response_obj = OpenAIResponseObject(
         id="resp_text",
         created_at=1000,
@@ -225,7 +224,6 @@ async def test_native_path_extracts_tool_calls(openai_responses_impl, mock_infer
 
 async def test_native_path_extracts_reasoning(openai_responses_impl, mock_inference_api):
     """The native path should extract reasoning text deltas."""
-    mock_inference_api.check_native_responses_support = AsyncMock(return_value=True)
     response_obj = OpenAIResponseObject(
         id="resp_reasoning",
         created_at=1000,
@@ -818,7 +816,6 @@ async def test_native_path_preserves_file_search_calls(openai_responses_impl, mo
     final response.output array (regression: previously dropped because
     _process_native_response_events only captured function_call items).
     """
-    mock_inference_api.check_native_responses_support = AsyncMock(return_value=True)
     response_obj = OpenAIResponseObject(
         id="resp_fs",
         created_at=1000,
@@ -915,47 +912,6 @@ def test_native_usage_accumulates_detailed_token_counters():
     assert usage.total_tokens == 42
     assert usage.input_tokens_details.cached_tokens == 4
     assert usage.output_tokens_details.reasoning_tokens == 8
-
-
-def test_native_supports_tool_choice_gates_forced_choices():
-    """vLLM's Harmony Responses API only honors auto/none; forced/required/specific
-    choices must report unsupported so the orchestrator falls back to chat completions."""
-    from types import SimpleNamespace
-
-    from ogx.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
-    from ogx_api import (
-        OpenAIResponseInputToolChoiceFunctionTool,
-        OpenAIResponseInputToolChoiceMode,
-    )
-
-    def _supports(tool_choice):
-        orch = StreamingResponseOrchestrator.__new__(StreamingResponseOrchestrator)
-        orch.ctx = SimpleNamespace(tool_choice=tool_choice)
-        return orch._native_supports_tool_choice()
-
-    assert _supports(None) is True
-    assert _supports(OpenAIResponseInputToolChoiceMode.auto) is True
-    assert _supports(OpenAIResponseInputToolChoiceMode.none) is True
-    # Forced choices vLLM rejects -> fall back to chat completions.
-    assert _supports(OpenAIResponseInputToolChoiceMode.required) is False
-    assert _supports(OpenAIResponseInputToolChoiceFunctionTool(type="function", name="file_search")) is False
-
-
-def test_native_tool_choice_only_emits_auto_or_none():
-    """When native is entered (auto/none requests only), forward that mode verbatim."""
-    from types import SimpleNamespace
-
-    from ogx.providers.inline.responses.builtin.responses.streaming import StreamingResponseOrchestrator
-    from ogx_api import OpenAIResponseInputToolChoiceMode
-
-    def _choice(tool_choice):
-        orch = StreamingResponseOrchestrator.__new__(StreamingResponseOrchestrator)
-        orch.ctx = SimpleNamespace(tool_choice=tool_choice)
-        return orch._native_tool_choice()
-
-    assert _choice(None) == OpenAIResponseInputToolChoiceMode.auto
-    assert _choice(OpenAIResponseInputToolChoiceMode.auto) == OpenAIResponseInputToolChoiceMode.auto
-    assert _choice(OpenAIResponseInputToolChoiceMode.none) == OpenAIResponseInputToolChoiceMode.none
 
 
 def test_native_tools_converts_chat_tools_to_functions():

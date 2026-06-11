@@ -21,7 +21,10 @@ from ogx_api.tools import ToolGroups, ToolRuntime
 @pytest.fixture
 def mock_inference_api():
     inference_api = AsyncMock()
-    inference_api.check_native_responses_support = AsyncMock(return_value=False)
+    # By default the provider has no native /v1/responses support, so the
+    # orchestrator falls back to chat completions. Native tests override
+    # openai_response with a stream.
+    inference_api.openai_response = AsyncMock(side_effect=NotImplementedError("no native responses"))
     return inference_api
 
 

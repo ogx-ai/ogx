@@ -30,6 +30,7 @@ from ogx.providers.utils.inference.openai_compat import (
 )
 from ogx.providers.utils.inference.prompt_adapter import localize_image_content
 from ogx_api import (
+    CreateResponseRequest,
     Model,
     ModelType,
     OpenAIChatCompletion,
@@ -42,6 +43,8 @@ from ogx_api import (
     OpenAIEmbeddingsResponse,
     OpenAIEmbeddingUsage,
     OpenAIMessageParam,
+    OpenAIResponseObject,
+    OpenAIResponseObjectStream,
     validate_embeddings_input_is_text,
 )
 
@@ -396,6 +399,19 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         resp = await self.client.completions.create(**completion_kwargs)
 
         return await self._postprocess_chunk(resp, params.stream)  # type: ignore[no-any-return]
+
+    async def openai_response(
+        self,
+        request: CreateResponseRequest,
+    ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
+        """Native /v1/responses inference.
+
+        Default for OpenAI-compatible providers is "unsupported": raising
+        NotImplementedError is the signal the Responses orchestrator uses to fall
+        back to openai_chat_completion. Providers with a native /v1/responses
+        endpoint (e.g. vLLM) override this.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support native responses API")
 
     async def openai_chat_completion(
         self,

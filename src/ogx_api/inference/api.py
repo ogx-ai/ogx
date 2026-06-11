@@ -95,16 +95,6 @@ class InferenceProvider(Protocol):
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support reasoning in chat completions")
 
-    @property
-    def supports_native_responses(self) -> bool:
-        """Whether this provider supports native /v1/responses inference.
-
-        Providers that return True must implement openai_response().
-        The orchestrator checks this flag to decide the inference path
-        rather than relying on try/except NotImplementedError.
-        """
-        return False
-
     async def openai_response(
         self,
         request: CreateResponseRequest,
@@ -116,7 +106,9 @@ class InferenceProvider(Protocol):
         endpoint (e.g., vLLM) implement this to preserve reasoning tokens,
         structured token accounting, and native streaming events.
 
-        Only called when supports_native_responses is True.
+        Providers that do not implement this raise NotImplementedError, which
+        the Responses orchestrator uses as the signal to fall back to
+        openai_chat_completion.
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support native responses API")
         return  # mypy safe-super rule
