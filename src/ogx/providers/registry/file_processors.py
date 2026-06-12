@@ -197,7 +197,7 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
             api=Api.file_processors,
             provider_type="remote::unstructured-api",
             adapter_type="unstructured-api",
-            pip_packages=["unstructured-client>=0.44.0"],
+            pip_packages=["unstructured-client>=0.25.0,<0.44.0"],
             module="ogx.providers.remote.file_processor.unstructured_api",
             config_class="ogx.providers.remote.file_processor.unstructured_api.UnstructuredApiFileProcessorConfig",
             api_dependencies=[Api.files],
