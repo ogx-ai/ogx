@@ -293,17 +293,17 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
     "gpt-reasoning": Suite(
         name="gpt-reasoning",
         roots=[
-            "tests/integration/responses/test_openai_responses.py::test_openai_response",
-            "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning",
+            "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort",
+            "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort_streaming",
         ],
         default_setup="gpt-reasoning",
     ),
     "ollama-reasoning": Suite(
         name="ollama-reasoning",
         roots=[
-            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion",
+            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
             "tests/integration/responses/test_reasoning.py::test_reasoning_non_streaming",
-            "tests/integration/responses/test_reasoning.py::test_reasoning_multi",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_passthrough",
         ],
         default_setup="ollama-reasoning",
     ),
@@ -331,8 +331,8 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
     "bedrock": Suite(
         name="bedrock",
         roots=[
-            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion",
-            "tests/integration/inference/test_openai_completion.py::test_openai_chat",
+            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming",
+            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming",
             "tests/integration/inference/test_openai_completion.py::test_inference_store",
         ],
         default_setup="bedrock",
