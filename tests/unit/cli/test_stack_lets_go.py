@@ -557,6 +557,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
         monkeypatch.delenv("TAVILY_SEARCH_API_KEY", raising=False)
         monkeypatch.delenv("BING_API_KEY", raising=False)
+        monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
             _add_file_search_and_responses(
@@ -571,13 +572,14 @@ class TestAddFileSearchAndResponses:
 
         web_search_providers = [
             p
-            for p in ["brave-search", "tavily-search", "bing-search"]
+            for p in ["brave-search", "tavily-search", "bing-search", "nimble-search"]
             if any(p in str(call) for call in mock_cprint.call_args_list)
         ]
         # Only brave should be added (env var set)
         assert "brave-search" in web_search_providers
         assert "tavily-search" not in web_search_providers
         assert "bing-search" not in web_search_providers
+        assert "nimble-search" not in web_search_providers
 
     def test_falls_back_to_tavily_when_only_tavily_key_set(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
@@ -586,6 +588,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.delenv("BRAVE_SEARCH_API_KEY", raising=False)
         monkeypatch.setenv("TAVILY_SEARCH_API_KEY", "tavily-key")
         monkeypatch.delenv("BING_API_KEY", raising=False)
+        monkeypatch.delenv("NIMBLE_API_KEY", raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
             _add_file_search_and_responses(
@@ -606,6 +609,8 @@ class TestAddFileSearchAndResponses:
                 provider_ids_in_calls.add("tavily-search")
             if "bing-search" in str(call):
                 provider_ids_in_calls.add("bing-search")
+            if "nimble-search" in str(call):
+                provider_ids_in_calls.add("nimble-search")
 
         # Only tavily is added since only its env var is set
         assert provider_ids_in_calls == {"tavily-search"}
@@ -617,6 +622,7 @@ class TestAddFileSearchAndResponses:
         monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "brave-key")
         monkeypatch.setenv("TAVILY_SEARCH_API_KEY", "tavily-key")
         monkeypatch.setenv("BING_API_KEY", "bing-key")
+        monkeypatch.setenv("NIMBLE_API_KEY", "nimble-key")
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
             _add_file_search_and_responses(
@@ -637,16 +643,18 @@ class TestAddFileSearchAndResponses:
                 provider_ids_in_calls.add("tavily-search")
             if "bing-search" in str(call):
                 provider_ids_in_calls.add("bing-search")
+            if "nimble-search" in str(call):
+                provider_ids_in_calls.add("nimble-search")
 
-        # All three have keys, all three should be added
-        assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search"}
+        # All four have keys, all four should be added
+        assert provider_ids_in_calls == {"brave-search", "tavily-search", "bing-search", "nimble-search"}
 
     def test_no_web_search_when_no_key_set(self, monkeypatch: pytest.MonkeyPatch):
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import StackConfig
 
         # Clear env vars to ensure no keys are set
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
@@ -668,7 +676,7 @@ class TestAddFileSearchAndResponses:
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import Provider, StackConfig
 
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
         initial_providers = [
@@ -690,6 +698,7 @@ class TestAddFileSearchAndResponses:
             "remote::brave-search",
             "remote::tavily-search",
             "remote::bing-search",
+            "remote::nimble-search",
         }
         web_search_providers = [p for p in config.providers["tool_runtime"] if p.provider_type in web_search_types]
         assert len(web_search_providers) == 1

@@ -192,9 +192,9 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             # Don't create the client here - it will be created lazily on first use
             # This avoids calling _ensure_http_options() in the temporary startup event loop
             logger.info(
-                "VertexAI provider initialized for project=%s location=%s (client will be created on first use)",
-                self.config.project,
-                self.config.location,
+                "VertexAI provider initialized (client will be created on first use)",
+                project=self.config.project,
+                location=self.config.location,
             )
         except Exception:
             logger.warning(
@@ -265,8 +265,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             await self.list_models()
         except Exception:
             logger.warning(
-                "Failed to list VertexAI models for availability check; accepting model '%s' without validation.",
-                model,
+                "Failed to list VertexAI models for availability check; accepting model without validation.",
+                model=model,
                 exc_info=True,
             )
             return True
@@ -386,8 +386,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             provider_model_ids = await self.list_provider_model_ids()
         except Exception:
             logger.error(
-                "%s.list_provider_model_ids() failed",
-                self.__class__.__name__,
+                "Failed to list provider model IDs",
+                provider=self.__class__.__name__,
                 exc_info=True,
             )
             raise
@@ -907,8 +907,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         # passthrough. Log and ignore extra body parameters rather than silently dropping.
         if params.model_extra:
             logger.debug(
-                "VertexAI embeddings does not support extra body parameters; model_extra will be ignored: %s",
-                list(params.model_extra.keys()),
+                "VertexAI embeddings does not support extra body parameters; model_extra will be ignored",
+                ignored_keys=list(params.model_extra.keys()),
             )
 
         provider_model_id = await self._get_provider_model_id(params.model)
