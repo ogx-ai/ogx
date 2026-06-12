@@ -97,16 +97,6 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
-    "vllm-gpu-gpt-oss": Setup(
-        name="vllm-gpu",
-        description="vLLM GPU provider with gpt-oss:20b reasoning model",
-        env={
-            "VLLM_URL": "http://localhost:8000/v1",
-        },
-        defaults={
-            "text_model": "vllm/gpt-oss:20b",
-        },
-    ),
     "ollama-reasoning": Setup(
         name="ollama",
         description="Local Ollama provider with a reasoning-capable model (deepseek-r1)",
@@ -303,17 +293,17 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
     "gpt-reasoning": Suite(
         name="gpt-reasoning",
         roots=[
-            "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort",
-            "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning_effort_streaming",
+            "tests/integration/responses/test_openai_responses.py::test_openai_response",
+            "tests/integration/responses/test_openai_responses.py::test_openai_response_reasoning",
         ],
         default_setup="gpt-reasoning",
     ),
     "ollama-reasoning": Suite(
         name="ollama-reasoning",
         roots=[
-            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
+            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion",
             "tests/integration/responses/test_reasoning.py::test_reasoning_non_streaming",
-            "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_passthrough",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_multi",
         ],
         default_setup="ollama-reasoning",
     ),
@@ -341,8 +331,8 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
     "bedrock": Suite(
         name="bedrock",
         roots=[
-            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming",
-            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_streaming",
+            "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion",
+            "tests/integration/inference/test_openai_completion.py::test_openai_chat",
             "tests/integration/inference/test_openai_completion.py::test_inference_store",
         ],
         default_setup="bedrock",

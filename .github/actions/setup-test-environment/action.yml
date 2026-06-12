@@ -74,7 +74,7 @@ runs:
         setup: ${{ inputs.setup }}
 
     - name: Setup vllm
-      if: ${{ startsWith(inputs.setup, 'vllm') && !startsWith(inputs.setup, 'vllm-gpu-') && inputs.inference-mode != 'replay' }}
+      if: ${{ startsWith(inputs.setup, 'vllm') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-vllm
 
     - name: Start Postgres service
