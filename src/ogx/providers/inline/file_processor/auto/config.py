@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
 from ogx_api.vector_io import VectorStoreChunkingStrategyStaticConfig
 
@@ -39,13 +39,6 @@ class AutoFileProcessorConfig(BaseModel):
         default=True, description="Whether to clean extracted text (remove extra whitespace, normalize line breaks)"
     )
 
-    unstructured_api_key: SecretStr | None = Field(
-        default=None,
-        description="Optional Unstructured.io API key. If provided, uses Unstructured as fallback for unsupported file types.",
-    )
-
     @classmethod
     def sample_run_config(cls, **kwargs: Any) -> dict[str, Any]:
-        return {
-            "unstructured_api_key": "${env.UNSTRUCTURED_API_KEY:=}",
-        }
+        return {}
