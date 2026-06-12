@@ -261,6 +261,26 @@ class TestEdgeCases:
         assert result["function"]["parameters"]["type"] == "object"
         assert result["function"]["parameters"]["properties"] == {}
 
+    def test_empty_dict_input_schema(self):
+        """Test tool with bare empty dict as parameters."""
+        result = convert_tooldef_to_openai_tool(
+            tool_name="no_params",
+            input_schema={},
+        )
+
+        assert "parameters" in result["function"]
+        assert result["function"]["parameters"]["type"] == "object"
+
+    def test_schema_missing_type_field(self):
+        """Test tool with properties but no type field."""
+        result = convert_tooldef_to_openai_tool(
+            tool_name="partial_schema",
+            input_schema={"properties": {"tz": {"type": "string"}}},
+        )
+
+        assert result["function"]["parameters"]["type"] == "object"
+        assert "tz" in result["function"]["parameters"]["properties"]
+
     def test_schema_with_additional_properties(self):
         """Test that additionalProperties is preserved."""
         result = convert_tooldef_to_openai_tool(
