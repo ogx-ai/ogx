@@ -360,7 +360,7 @@ class VectorStoreWithIndex:
             reranker_params["neural_weights"] = params["neural_weights"]
 
         query_string = interleaved_content_as_str(request.query)
-        log.info(f"query_chunks(): query={query_string!r}, mode={mode}, k={k}, reranker_type={reranker_type}")
+        log.debug("query_chunks", query=query_string, mode=mode, k=k, reranker_type=reranker_type)
 
         if mode == "keyword":
             response = await self.index.query_keyword(query_string, k, score_threshold, filters)
@@ -386,11 +386,15 @@ class VectorStoreWithIndex:
             else:
                 response = await self.index.query_vector(query_vector, k, score_threshold, filters)
 
-        log.info(f"query_chunks(): retrieved {len(response.chunks)} chunks before neural reranking")
+        log.debug("query_chunks retrieved chunks before neural reranking", chunks_count=len(response.chunks))
         for i, (chunk, score) in enumerate(zip(response.chunks, response.scores, strict=False)):
             preview = chunk.content[:120] if isinstance(chunk.content, str) else str(chunk.content)[:120]
-            log.info(
-                f"Chunk {i}: score={score:.4f} doc_id={chunk.metadata.get('document_id', 'N/A')} content={preview!r}"
+            log.debug(
+                "Retrieved chunk preview",
+                chunk_index=i,
+                score=f"{score:.4f}",
+                document_id=chunk.metadata.get("document_id", "N/A"),
+                content=preview,
             )
 
         # Apply neural reranking if enabled
@@ -445,7 +449,7 @@ class VectorStoreWithIndex:
             log.error(f"Neural reranking failed: {e}. Returning original results.")
             return response
 
-        log.info(f"Rerank Response: {rerank_response.data}")
+        log.debug("Rerank response", data=rerank_response.data)
 
         # Reorder chunks and scores based on neural rerank results
         reranked_chunks = []
@@ -458,8 +462,12 @@ class VectorStoreWithIndex:
         log.info(f"Neural rerank: reranked {len(reranked_chunks)} chunks using model={reranker_model}")
         for i, (chunk, score) in enumerate(zip(reranked_chunks, reranked_scores, strict=False)):
             preview = chunk.content[:120] if isinstance(chunk.content, str) else str(chunk.content)[:120]
-            log.info(
-                f"Chunk {i}: relevance_score={score:.4f} doc_id={chunk.metadata.get('document_id', 'N/A')} content={preview!r}"
+            log.debug(
+                "Reranked chunk preview",
+                chunk_index=i,
+                relevance_score=f"{score:.4f}",
+                document_id=chunk.metadata.get("document_id", "N/A"),
+                content=preview,
             )
 
         return QueryChunksResponse(chunks=reranked_chunks, scores=reranked_scores)

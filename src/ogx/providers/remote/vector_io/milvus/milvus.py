@@ -238,7 +238,7 @@ class MilvusIndex(EmbeddingIndex):
             "data": [embedding],
             "anns_field": "vector",
             "limit": k,
-            "output_fields": ["*"],
+            "output_fields": ["chunk_content"],
         }
 
         # Only apply radius threshold if score_threshold is meaningful

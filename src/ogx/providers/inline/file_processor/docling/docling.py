@@ -4,8 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import os
 import tempfile
+import threading
 import time
 import uuid
 from typing import Any
@@ -49,6 +51,7 @@ class DoclingFileProcessor:
         self.converter = DocumentConverter(
             format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
         )
+        self._converter_lock = threading.Lock()
 
     async def process_file(
         self,
@@ -80,13 +83,25 @@ class DoclingFileProcessor:
             )
             content = content_response.body
 
+        return await asyncio.to_thread(self._process_content, content, filename, file_id, chunking_strategy, start_time)
+
+    def _process_content(
+        self,
+        content: bytes,
+        filename: str,
+        file_id: str | None,
+        chunking_strategy: VectorStoreChunkingStrategy | None,
+        start_time: float,
+    ) -> ProcessFileResponse:
+        """Convert and chunk file content. Runs in a thread."""
         # Preserve original file extension so DocumentConverter can detect the format
         suffix = os.path.splitext(filename)[1] or ".bin"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
             tmp.write(content)
             tmp.flush()
 
-            result = self.converter.convert(tmp.name)
+            with self._converter_lock:
+                result = self.converter.convert(tmp.name)
 
         doc = result.document
         page_count = doc.num_pages()

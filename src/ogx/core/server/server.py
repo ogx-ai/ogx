@@ -147,6 +147,17 @@ class StackApp(FastAPI):
 
         reset_sqlstore_engines()
 
+        # Reset VertexAI provider clients that may have been created in the
+        # temporary event loop during model listing (refresh_registry_once).
+        # Like SQL engines, the Google genai Client eagerly binds an internal
+        # httpx.AsyncClient to the current event loop, and the cached client
+        # becomes unusable after the temporary loop is terminated.
+        if self.stack.impls:
+            for impl in self.stack.impls.values():
+                reset_fn = getattr(impl, "_reset_client", None)
+                if reset_fn is not None:
+                    reset_fn()
+
 
 @asynccontextmanager
 async def lifespan(app: StackApp) -> AsyncIterator[None]:
