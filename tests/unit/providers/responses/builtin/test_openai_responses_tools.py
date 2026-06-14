@@ -156,7 +156,8 @@ async def test_create_openai_response_with_tool_call_type_none(openai_responses_
                     name="get_weather",
                     description="Get current temperature for a given location.",
                     parameters={
-                        "location": "string",
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
                     },
                 )
             ],
@@ -281,7 +282,7 @@ async def test_create_openai_response_with_tool_call_function_arguments_none(ope
                 OpenAIResponseInputToolFunction(
                     name="get_current_time",
                     description="Get current time for system's timezone",
-                    parameters={"timezone": "string"},
+                    parameters={"type": "object", "properties": {"timezone": {"type": "string"}}},
                 )
             ],
         )
@@ -309,7 +310,10 @@ async def test_create_openai_response_with_tool_call_function_arguments_none(ope
                 OpenAIResponseInputToolFunction(
                     name="get_current_time",
                     description="Get current time for system's timezone",
-                    parameters={"timezone": "string", "location": "string"},
+                    parameters={
+                        "type": "object",
+                        "properties": {"timezone": {"type": "string"}, "location": {"type": "string"}},
+                    },
                 )
             ],
         )

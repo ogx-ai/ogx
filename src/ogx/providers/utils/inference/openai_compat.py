@@ -51,9 +51,7 @@ def convert_tooldef_to_openai_tool(
     if description:
         function["description"] = description
 
-    if input_schema is not None:
-        if "type" not in input_schema:
-            input_schema = {"type": "object", **input_schema}
+    if input_schema:
         function["parameters"] = input_schema
 
     return out
