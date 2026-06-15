@@ -197,7 +197,9 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
             api=Api.file_processors,
             provider_type="remote::unstructured-api",
             adapter_type="unstructured-api",
-            pip_packages=["unstructured-client>=0.25.0,<0.44.0"],
+            pip_packages=[
+                "unstructured-client>=0.25.0,<0.44.0",  # >=0.25.0: supports full unstructured client feature set (chunking + split_pdf_page_range) for future config expansion. <0.44.0: pydantic compat (0.44.0+ requires >=2.12.5, OGX uses <2.12.0)
+            ],
             module="ogx.providers.remote.file_processor.unstructured_api",
             config_class="ogx.providers.remote.file_processor.unstructured_api.UnstructuredApiFileProcessorConfig",
             api_dependencies=[Api.files],
