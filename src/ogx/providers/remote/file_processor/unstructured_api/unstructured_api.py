@@ -70,15 +70,7 @@ class UnstructuredApiFileProcessor:
             document_metadata["file_id"] = file_id
 
         # Call Unstructured.io API
-        try:
-            elements = await self._partition_via_api(content, filename)
-        except Exception as e:
-            log.error(
-                "Failed to process file with Unstructured.io API",
-                filename=filename,
-                error=str(e),
-            )
-            raise RuntimeError(f"Failed to process file with Unstructured.io API: {e}") from e
+        elements = await self._partition_via_api(content, filename)
 
         # Convert elements to chunks
         chunks = self._elements_to_chunks(elements, document_id, document_metadata)
