@@ -1,6 +1,7 @@
 name: Trivy Security Scan
 
 on:
+  merge_group:
   pull_request:
     branches:
       - main
@@ -83,6 +84,7 @@ jobs:
           output: 'trivy-misconfig.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
           exit-code: '0'
+          trivy-config: 'trivy.yaml'
 
       - name: Upload misconfiguration results to GitHub Security
         uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v3
@@ -107,6 +109,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-secret.sarif'
           exit-code: '0'
+          trivy-config: 'trivy.yaml'
 
       - name: Upload secret detection results to GitHub Security
         uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v3
