@@ -327,13 +327,6 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert and chunk file using async endpoints with AsyncDoclingServiceClient."""
-        if chunking_strategy.type == "auto":
-            max_tokens = self.config.default_chunk_size_tokens
-        elif chunking_strategy.type == "static":
-            max_tokens = chunking_strategy.static.max_chunk_size_tokens
-        else:
-            max_tokens = self.config.default_chunk_size_tokens
-
         # AsyncDoclingServiceClient requires a file path, not bytes
         # Write to temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
