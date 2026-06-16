@@ -197,6 +197,9 @@ def _client_for_user(ogx_client, user: User):
 
 def test_files_authentication_isolation(ogx_client):
     """Test that users can only access their own files."""
+    if isinstance(ogx_client, OGXAsLibraryClient):
+        pytest.skip("Library mode does not propagate per-request user identity")
+
     from ogx_client import NotFoundError
 
     # Create two test users
@@ -296,6 +299,9 @@ def test_files_authentication_isolation(ogx_client):
 
 def test_files_authentication_shared_attributes(ogx_client, provider_type_is_openai):
     """Test access control with users having identical attributes."""
+    if isinstance(ogx_client, OGXAsLibraryClient):
+        pytest.skip("Library mode does not propagate per-request user identity")
+
     user_a = User("user-a", {"roles": ["user"], "teams": ["shared-team"]})
     user_b = User("user-b", {"roles": ["user"], "teams": ["shared-team"]})
     user_a_client = _client_for_user(ogx_client, user_a)
