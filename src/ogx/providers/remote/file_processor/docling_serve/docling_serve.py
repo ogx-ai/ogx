@@ -208,7 +208,7 @@ class DoclingServeFileProcessor:
         try:
             async with AsyncDoclingServiceClient(
                 url=self.config.base_url,
-                api_key=self.config.api_key.get_secret_value() if self.config.api_key else None,
+                api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
                 job_timeout=300.0,
             ) as client:
                 job = await client.submit(
@@ -343,15 +343,13 @@ class DoclingServeFileProcessor:
         try:
             async with AsyncDoclingServiceClient(
                 url=self.config.base_url,
-                api_key=self.config.api_key.get_secret_value() if self.config.api_key else None,
+                api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
                 job_timeout=300.0,
             ) as client:
                 job = await client.submit_chunk(
                     source=tmp_path,
                     chunker=ChunkerKind.HYBRID,
-                    options=ConvertDocumentsOptions(
-                        chunking_max_tokens=max_tokens,
-                    ),
+                    options=ConvertDocumentsOptions(),
                 )
                 response = await job.result()
 
@@ -365,8 +363,8 @@ class DoclingServeFileProcessor:
 
         chunks: list[Chunk] = []
         for i, raw_chunk in enumerate(raw_chunks):
-            # Handle both object and dict responses
-            text = raw_chunk.text if hasattr(raw_chunk, "text") else raw_chunk.get("text", "")
+            # AsyncDoclingServiceClient returns ChunkedDocumentResultItem objects
+            text = raw_chunk.text if hasattr(raw_chunk, "text") else ""
             if not text or not text.strip():
                 continue
 
@@ -378,13 +376,10 @@ class DoclingServeFileProcessor:
                 **document_metadata,
             }
 
-            # Extract headings (handle both object and dict)
+            # Extract headings from meta object
+            headings = None
             if hasattr(raw_chunk, "meta") and hasattr(raw_chunk.meta, "headings"):
                 headings = raw_chunk.meta.headings
-            elif isinstance(raw_chunk, dict):
-                headings = raw_chunk.get("meta", {}).get("headings", None)
-            else:
-                headings = None
 
             if headings:
                 meta["headings"] = headings
