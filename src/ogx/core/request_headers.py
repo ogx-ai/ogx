@@ -104,6 +104,12 @@ def parse_request_provider_data(headers: dict[str, str]) -> dict[str, Any] | Non
         log.error("Provider data must be encoded as a JSON object")
         return None
 
+    reserved_keys = {"__authenticated_user"}
+    for key in reserved_keys:
+        if key in parsed:
+            log.warning("Stripping reserved key from provider data", key=key)
+            del parsed[key]
+
     return cast(dict[str, Any], parsed)
 
 
@@ -130,4 +136,5 @@ def user_from_scope(scope: Scope) -> User | None:
     if not principal and not user_attributes:
         return None
 
-    return User(principal=principal, attributes=user_attributes)
+    tenant_id = scope.get("tenant_id")
+    return User(principal=principal, attributes=user_attributes, tenant_id=tenant_id)

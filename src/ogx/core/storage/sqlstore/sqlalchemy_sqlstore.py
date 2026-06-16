@@ -47,6 +47,19 @@ TYPE_MAPPING: dict[ColumnType, Any] = {
 }
 
 
+def _sqlalchemy_column(
+    column_name: str,
+    column_type: ColumnType,
+    primary_key: bool = False,
+    nullable: bool = True,
+) -> Column[Any]:
+    sqlalchemy_type = TYPE_MAPPING.get(column_type)
+    if not sqlalchemy_type:
+        raise ValueError(f"Unsupported column type '{column_type}' for column '{column_name}'.")
+
+    return Column(column_name, sqlalchemy_type, primary_key=primary_key, nullable=nullable)
+
+
 def _build_where_expr(column: ColumnElement[Any], value: Any) -> ColumnElement[Any]:
     """Return a SQLAlchemy expression for a where condition.
 
@@ -184,12 +197,8 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 is_primary_key = col_props.primary_key
                 is_nullable = col_props.nullable
 
-            sqlalchemy_type = TYPE_MAPPING.get(col_type)
-            if not sqlalchemy_type:
-                raise ValueError(f"Unsupported column type '{col_type}' for column '{col_name}'.")
-
             sqlalchemy_columns.append(
-                Column(col_name, sqlalchemy_type, primary_key=is_primary_key, nullable=is_nullable)
+                _sqlalchemy_column(col_name, col_type, primary_key=is_primary_key, nullable=is_nullable)
             )
 
         # Register table in metadata - actual creation happens in _ensure_engine()
@@ -216,6 +225,8 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         data: Mapping[str, Any],
         conflict_columns: list[str],
         update_columns: list[str] | None = None,
+        update_where_sql: str | None = None,
+        update_where_sql_params: Mapping[str, Any] | None = None,
     ) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
         assert self.async_session is not None  # _ensure_engine guarantees this
@@ -229,7 +240,17 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         update_mapping = {col: getattr(insert_stmt.excluded, col) for col in update_columns}
         conflict_cols = [table_obj.c[col] for col in conflict_columns]
 
-        stmt = insert_stmt.on_conflict_do_update(index_elements=conflict_cols, set_=update_mapping)
+        update_where = None
+        if update_where_sql:
+            update_where = text(update_where_sql)
+            if update_where_sql_params:
+                update_where = update_where.bindparams(**update_where_sql_params)
+
+        stmt = insert_stmt.on_conflict_do_update(
+            index_elements=conflict_cols,
+            set_=update_mapping,
+            where=update_where,
+        )
 
         async with self.async_session() as session:
             await session.execute(stmt)
@@ -284,8 +305,14 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 if cursor_key_column not in table_obj.c:
                     raise ValueError(f"Cursor key column '{cursor_key_column}' not found in table '{table}'")
 
-                # Get cursor value for the order column
+                # Get cursor value for the order column, scoped by the same
+                # access filters as the main query to prevent cross-tenant leaks
                 cursor_query = select(table_obj.c[order_column]).where(table_obj.c[cursor_key_column] == cursor_id)
+                if where_sql:
+                    cursor_clause = text(where_sql)
+                    if where_sql_params:
+                        cursor_clause = cursor_clause.bindparams(**where_sql_params)
+                    cursor_query = cursor_query.where(cursor_clause)
                 cursor_result = await session.execute(cursor_query)
                 cursor_row = cursor_result.fetchone()
 
@@ -411,6 +438,7 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         nullable: bool = True,
     ) -> None:
         """Queue a column to be added when engine is created, or add it now if engine exists."""
+        self._add_column_to_metadata(table, column_name, column_type, nullable)
         if self._engine is None:
             # Engine not created yet - queue this column addition for later
             if table not in self._pending_columns:
@@ -419,6 +447,16 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         else:
             # Engine already exists - add column immediately
             await self._add_column_now(table, column_name, column_type, nullable)
+
+    def _add_column_to_metadata(
+        self,
+        table: str,
+        column_name: str,
+        column_type: ColumnType,
+        nullable: bool = True,
+    ) -> None:
+        if table in self.metadata.tables and column_name not in self.metadata.tables[table].c:
+            self.metadata.tables[table].append_column(_sqlalchemy_column(column_name, column_type, nullable=nullable))
 
     async def _add_column_now(
         self,
@@ -448,14 +486,10 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 if not table_exists or column_exists:
                     return
 
-                sqlalchemy_type = TYPE_MAPPING.get(column_type)
-                if not sqlalchemy_type:
-                    raise ValueError(f"Unsupported column type '{column_type}' for column '{column_name}'.")
-
                 # Create the ALTER TABLE statement
                 # Note: We need to get the dialect-specific type name
                 dialect = self._engine.dialect
-                type_impl = sqlalchemy_type()
+                type_impl = TYPE_MAPPING[column_type]()
                 compiled_type = type_impl.compile(dialect=dialect)
 
                 nullable_clause = "" if nullable else " NOT NULL"

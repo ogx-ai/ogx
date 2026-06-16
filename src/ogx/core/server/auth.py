@@ -13,7 +13,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from ogx.core.access_control.conditions import User as ProtocolUser
 from ogx.core.access_control.conditions import parse_conditions
 from ogx.core.access_control.datatypes import RouteAccessRule
-from ogx.core.datatypes import AuthenticationConfig, User
+from ogx.core.datatypes import AuthenticationConfig, TenancyConfig, TenancyMode, User
 from ogx.core.request_headers import user_from_scope
 from ogx.core.server.auth_providers import create_auth_provider
 from ogx.core.server.routes import find_matching_route, initialize_route_impls
@@ -173,10 +173,13 @@ class AuthenticationMiddleware:
             scope["principal"] = validation_result.principal
             if validation_result.attributes:
                 scope["user_attributes"] = validation_result.attributes
+            if validation_result.tenant_id:
+                scope["tenant_id"] = validation_result.tenant_id
             logger.debug(
                 "Authentication successful: with attributes",
                 principal=validation_result.principal,
                 attributes_count=len(validation_result.attributes) if validation_result.attributes else 0,
+                tenant_id=validation_result.tenant_id,
             )
 
         return await self.app(scope, receive, send)
@@ -401,6 +404,71 @@ class RouteAuthorizationMiddleware:
             {
                 "type": "http.response.start",
                 "status": status,
+                "headers": [[b"content-type", b"application/json"]],
+            }
+        )
+        error_msg = OpenAIErrorResponse.from_message(message).to_bytes()
+        await send({"type": "http.response.body", "body": error_msg})
+
+
+class TenancyMiddleware:
+    """Middleware that enforces tenancy mode after authentication.
+
+    In disabled mode, this is a no-op passthrough.
+    In single mode, overrides tenant_id to default_tenant_id on every request.
+    In multi mode, rejects requests that have no tenant_id after auth resolution.
+    """
+
+    def __init__(self, app: ASGIApp, tenancy_config: TenancyConfig, impls: dict[Api, Any] | None = None) -> None:
+        self.app = app
+        self.tenancy_config = tenancy_config
+        self.impls = impls or {}
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
+        if scope["type"] not in ("http", "websocket"):
+            return await self.app(scope, receive, send)
+
+        if self.tenancy_config.mode == TenancyMode.DISABLED:
+            return await self.app(scope, receive, send)
+
+        is_websocket = scope["type"] == "websocket"
+        if not is_websocket and self._is_public_route(scope):
+            return await self.app(scope, receive, send)
+
+        if self.tenancy_config.mode == TenancyMode.SINGLE:
+            scope["tenant_id"] = self.tenancy_config.default_tenant_id
+            if not scope.get("principal"):
+                scope["principal"] = "system"
+        elif self.tenancy_config.mode == TenancyMode.MULTI:
+            if not scope.get("tenant_id"):
+                return await self._send_error(
+                    send,
+                    "Tenant context required but not resolved from authentication",
+                    is_websocket=is_websocket,
+                )
+
+        return await self.app(scope, receive, send)
+
+    def _is_public_route(self, scope: Scope) -> bool:
+        if not hasattr(self, "route_impls"):
+            self.route_impls = initialize_route_impls(self.impls)
+
+        path = scope.get("path", "")
+        method = scope.get("method", "GET")
+        try:
+            _, _, _, webmethod = find_matching_route(method, path, self.route_impls)
+        except ValueError:
+            return False
+        return webmethod.require_authentication is False
+
+    async def _send_error(self, send: Send, message: str, is_websocket: bool = False) -> None:
+        if is_websocket:
+            await send({"type": "websocket.close", "code": 4401})
+            return
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 401,
                 "headers": [[b"content-type", b"application/json"]],
             }
         )

@@ -47,6 +47,8 @@ class SqlStore(Protocol):
         data: Mapping[str, Any],
         conflict_columns: list[str],
         update_columns: list[str] | None = None,
+        update_where_sql: str | None = None,
+        update_where_sql_params: Mapping[str, Any] | None = None,
     ) -> None: ...
 
     async def fetch_all(
