@@ -38,7 +38,7 @@ try:
     )
 except ImportError:
     try:
-        from ogx_client import (  # type: ignore[assignment,no-redef]
+        from ogx_client import (  # type: ignore[import-not-found,assignment,no-redef]
             NOT_GIVEN,
             APIResponse,
             AsyncAPIResponse,
@@ -418,7 +418,7 @@ class OGXAsLibraryClient(OgxClient):
         try:
             from ogx_open_client.rest import RESTResponse
         except ImportError:
-            from ogx_client.rest import RESTResponse  # type: ignore[assignment]
+            from ogx_client.rest import RESTResponse  # type: ignore[import-not-found,assignment,no-redef]
 
         async_client = self.async_client
         assert async_client.route_impls is not None, "Client not initialized"
