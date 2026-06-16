@@ -7,7 +7,7 @@
 import os
 
 import pytest
-from openai import OpenAI
+from openai import NotFoundError, OpenAI
 
 
 def get_auth_token(env_var: str, default: str) -> str:
@@ -55,6 +55,25 @@ class TestOpenAIConversations:
         assert deleted.id == conversation.id
         assert deleted.object == "conversation.deleted"
         assert deleted.deleted is True
+
+    def test_deleted_conversation_items_are_not_accessible(self, openai_client):
+        conversation = openai_client.conversations.create()
+
+        created_items = openai_client.conversations.items.create(
+            conversation.id,
+            items=[{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hello!"}]}],
+        )
+        item_id = created_items.data[0].id
+
+        openai_client.conversations.delete(conversation.id)
+
+        with pytest.raises(NotFoundError) as exc_info:
+            openai_client.conversations.items.list(conversation.id)
+        assert exc_info.value.status_code == 404
+
+        with pytest.raises(NotFoundError) as exc_info:
+            openai_client.conversations.items.retrieve(item_id, conversation_id=conversation.id)
+        assert exc_info.value.status_code == 404
 
     def test_conversation_items_create(self, openai_client):
         conversation = openai_client.conversations.create()

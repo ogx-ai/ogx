@@ -1056,3 +1056,54 @@ jobs:
             CLI_NAME=${{ steps.meta.outputs.cli_name }}
             OTEL_BEST_EFFORT=${{ steps.meta.outputs.otel_best_effort }}
             ${{ steps.meta.outputs.version_arg }}
+
+  scan-docker-images:
+    name: Scan Docker ${{ matrix.distro }}
+    if: |
+      always() &&
+      needs.publish-docker-images.result == 'success'
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-latest
+    needs: [publish-docker-images, compute-version]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: starter
+          - distro: postgres-demo
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          VERSION="${{ needs.compute-version.outputs.version }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
+            echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=test-${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scan published image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'ogxai/distribution-${{ matrix.distro }}:${{ steps.tag.outputs.tag }}'
+          scan-type: 'image'
+          scanners: 'vuln'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          format: 'sarif'
+          output: 'trivy-image-${{ matrix.distro }}.sarif'
+          trivy-config: 'trivy.yaml'
+
+      - name: Upload Trivy image scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image-${{ matrix.distro }}.sarif'
+          category: 'trivy-image-${{ matrix.distro }}'
