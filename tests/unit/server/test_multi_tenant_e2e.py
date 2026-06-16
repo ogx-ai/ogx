@@ -142,7 +142,7 @@ def _create_conv_impl(tmp: str) -> ConversationServiceImpl:
     )
     conv_config = ConversationServiceConfig(config=stack_config, policy=default_policy())
     impl = ConversationServiceImpl(conv_config, deps={})
-    asyncio.get_event_loop().run_until_complete(impl.initialize())
+    asyncio.run(impl.initialize())
     return impl
 
 
@@ -240,7 +240,7 @@ def test_single_mode_stamps_default_tenant(monkeypatch):
 
             conv_id = _create_conversation(client, "alice", "any-tenant")
 
-            raw = asyncio.get_event_loop().run_until_complete(
+            raw = asyncio.run(
                 conv_impl.sql_store.sql_store.fetch_all("openai_conversations", where={"id": conv_id})
             )
             assert raw.data[0]["tenant_id"] == "default-org"
@@ -261,7 +261,7 @@ def test_disabled_mode_no_tenant_filtering(monkeypatch):
             _create_conversation(client, "alice", "tenant-a")
             _create_conversation(client, "alice", "tenant-b")
 
-            raw = asyncio.get_event_loop().run_until_complete(
+            raw = asyncio.run(
                 conv_impl.sql_store.sql_store.fetch_all("openai_conversations")
             )
             assert len(raw.data) == 2
@@ -289,7 +289,7 @@ def test_same_tenant_different_users_see_only_own(multi_tenant_setup):
     bob_cross = client.get(f"/v1/conversations/{alice_id}", headers=_headers("bob", "tenant-a"))
     assert bob_cross.status_code == 404
 
-    raw = asyncio.get_event_loop().run_until_complete(
+    raw = asyncio.run(
         conv_impl.sql_store.sql_store.fetch_all("openai_conversations", where={"tenant_id": "tenant-a"})
     )
     assert len(raw.data) == 2
