@@ -20,6 +20,7 @@ from fastapi import Body, HTTPException
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.id_generation import generate_object_id
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.inference.prompt_adapter import (
     interleaved_content_as_str,
 )
@@ -1313,7 +1314,7 @@ class OpenAIVectorStoreMixin(ABC):
                 content_response = await self.files_api.openai_retrieve_file_content(
                     RetrieveFileContentRequest(file_id=file_id)
                 )
-                full_content = content_from_data_and_mime_type(bytes(content_response.body), mime_type)
+                full_content = content_from_data_and_mime_type(await response_body_bytes(content_response), mime_type)
                 await self._execute_contextual_chunk_transformation(chunks, full_content, chunking_strategy.contextual)
             if not chunks:
                 vector_store_file_object.status = "failed"

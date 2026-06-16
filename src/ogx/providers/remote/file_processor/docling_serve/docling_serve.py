@@ -13,6 +13,7 @@ import httpx
 from fastapi import UploadFile
 
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
 from ogx_api.files import Files, RetrieveFileContentRequest, RetrieveFileRequest
@@ -70,8 +71,7 @@ class DoclingServeFileProcessor:
             content_response = await self.files_api.openai_retrieve_file_content(
                 RetrieveFileContentRequest(file_id=file_id)
             )
-            # Normalize bytes/memoryview payloads to bytes for downstream file handling.
-            content = bytes(content_response.body)
+            content = await response_body_bytes(content_response)
 
         document_id = file_id if file_id else str(uuid.uuid4())
         document_metadata: dict[str, Any] = {"filename": filename}

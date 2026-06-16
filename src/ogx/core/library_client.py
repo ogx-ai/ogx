@@ -53,6 +53,7 @@ from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.context import preserve_contexts_async_generator
 from ogx.core.utils.exec import in_notebook
 from ogx.log import get_logger, setup_logging
+from ogx.providers.utils.files.response import response_body_bytes
 
 logger = get_logger(name=__name__, category="core")
 
@@ -154,13 +155,8 @@ class LibraryClientUploadFile:
 class LibraryClientHttpxResponse:
     """LibraryClient httpx Response object for FastAPI Response conversion."""
 
-    def __init__(self, response: FastAPIResponse) -> None:
-        if isinstance(response.body, bytes):
-            self.content = response.body
-        elif isinstance(response.body, memoryview):
-            self.content = bytes(response.body)
-        else:
-            self.content = response.body.encode()
+    def __init__(self, response: FastAPIResponse, content: bytes) -> None:
+        self.content = content
         self.status_code = response.status_code
         self.headers = response.headers
 
@@ -614,7 +610,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
 
         # Handle FastAPI Response objects (e.g., from file content retrieval)
         if isinstance(result, FastAPIResponse):
-            return LibraryClientHttpxResponse(result)
+            return LibraryClientHttpxResponse(result, await response_body_bytes(result))
 
         json_content = json.dumps(convert_pydantic_to_json_value(result))
 

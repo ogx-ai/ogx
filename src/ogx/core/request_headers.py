@@ -6,6 +6,7 @@
 
 import contextvars
 import json
+import os
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any, cast
 
@@ -110,7 +111,29 @@ def parse_request_provider_data(headers: dict[str, str]) -> dict[str, Any] | Non
 def request_provider_data_context(headers: dict[str, str], user: User | None = None) -> AbstractContextManager[None]:
     """Context manager that sets request provider data from headers and user for the duration of the context"""
     provider_data = parse_request_provider_data(headers)
+    if user is None and provider_data is not None:
+        user = _test_authenticated_user_from_provider_data(provider_data)
     return RequestProviderDataContext(provider_data, user)
+
+
+def _test_authenticated_user_from_provider_data(provider_data: dict[str, Any]) -> User | None:
+    if not os.environ.get("OGX_TEST_INFERENCE_MODE"):
+        return None
+
+    raw_user = provider_data.get("__test_authenticated_user")
+    if raw_user is None:
+        return None
+    if isinstance(raw_user, User):
+        return raw_user
+    if not isinstance(raw_user, dict):
+        log.warning("Ignoring invalid test authenticated user provider data")
+        return None
+
+    try:
+        return User(raw_user["principal"], raw_user.get("attributes"))
+    except (KeyError, TypeError, ValueError) as e:
+        log.warning("Ignoring invalid test authenticated user provider data", error=str(e))
+        return None
 
 
 def get_authenticated_user() -> User | None:
