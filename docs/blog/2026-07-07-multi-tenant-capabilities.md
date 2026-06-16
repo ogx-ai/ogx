@@ -128,6 +128,7 @@ ABAC governs what individual users can do **within their tenant**. It is the sec
 OGX implements ABAC with a policy language inspired by [Cedar](https://www.cedarpolicy.com/). Policies are ordered lists of rules. The first matching rule wins.
 
 Each rule has:
+
 - A **scope**: `permit` or `forbid`, with the actions it covers (`create`, `read`, `update`, `delete`).
 - A **resource pattern**: exact match (`model::llama-3`), wildcard (`vector_store::*`), or regex.
 - A **condition**: natural-language-style predicates evaluated against the user and resource.
@@ -273,10 +274,7 @@ From the application side, nothing changes. Clients still use the OpenAI SDK:
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="http://ogx.internal:8321/v1",
-    api_key="<tenant-jwt-token>"
-)
+client = OpenAI(base_url="http://ogx.internal:8321/v1", api_key="<tenant-jwt-token>")
 
 response = client.chat.completions.create(
     model="llama-3-70b",
