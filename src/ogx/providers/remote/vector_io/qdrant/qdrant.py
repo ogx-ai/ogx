@@ -133,6 +133,12 @@ class QdrantIndex(EmbeddingIndex):
         if filters is not None:
             raise NotImplementedError("Qdrant provider does not yet support native filtering")
 
+        # Collections are created lazily on first insert, so a search against a
+        # store that has never had chunks added has no collection yet. Treat that
+        # as an empty result rather than letting Qdrant raise a 404.
+        if not await self.client.collection_exists(self.collection_name):
+            return QueryChunksResponse(chunks=[], scores=[])
+
         results = (
             await self.client.query_points(
                 collection_name=self.collection_name,
@@ -183,6 +189,12 @@ class QdrantIndex(EmbeddingIndex):
         # Qdrant provider does not yet support native filtering
         if filters is not None:
             raise NotImplementedError("Qdrant provider does not yet support native filtering")
+
+        # Collections are created lazily on first insert, so a search against a
+        # store that has never had chunks added has no collection yet. Treat that
+        # as an empty result rather than letting Qdrant raise a 404.
+        if not await self.client.collection_exists(self.collection_name):
+            return QueryChunksResponse(chunks=[], scores=[])
 
         try:
             # Use scroll for keyword-only search since query_points requires a query vector
@@ -263,6 +275,12 @@ class QdrantIndex(EmbeddingIndex):
         # Qdrant provider does not yet support native filtering
         if filters is not None:
             raise NotImplementedError("Qdrant provider does not yet support native filtering")
+
+        # Collections are created lazily on first insert, so a search against a
+        # store that has never had chunks added has no collection yet. Treat that
+        # as an empty result rather than letting Qdrant raise a 404.
+        if not await self.client.collection_exists(self.collection_name):
+            return QueryChunksResponse(chunks=[], scores=[])
 
         try:
             query_words = query_string.lower().split()

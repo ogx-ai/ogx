@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-fallback_version = "1.1.1.dev0"
+fallback_version = "1.1.2.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
@@ -58,7 +58,7 @@ dependencies = [
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
     "openai>=2.41.0",
     "python-dotenv",
-    "pyjwt[crypto]>=2.12.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
+    "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
     "pydantic>=2.11.9",
     "rich",
     "structlog>=24.1.0",
@@ -80,7 +80,7 @@ dependencies = [
 
 [project.optional-dependencies]
 client = [
-    "ogx-client>=1.1.0", # Optional for library-only usage
+    "ogx-client>=1.1.1", # Optional for library-only usage
 ]
 openclient = [
     "ogx-open-client>=1.0.2",
@@ -139,7 +139,7 @@ dev = [
     "pytest-cov",
     "pytest-html",
     "pytest-json-report",
-    "pytest-socket",                 # For blocking network access in unit tests
+    "pytest-socket>=0.8.0",                 # For blocking network access in unit tests
     "nbval",                         # For notebook testing
     "black>=26.5.1",
     "ruff>=0.15.14",

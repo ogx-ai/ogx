@@ -1121,14 +1121,8 @@ class OpenAIVectorStoreMixin(ABC):
             )
 
         except Exception as e:
-            # Log the error and return empty results
-            logger.error("Error searching vector store", vector_store_id=vector_store_id, error=str(e))
-            return VectorStoreSearchResponsePage(
-                search_query=request.query if isinstance(request.query, list) else [request.query],
-                data=[],
-                has_more=False,
-                next_page=None,
-            )
+            logger.error("Failed to search vector store", vector_store_id=vector_store_id, error=str(e))
+            raise
 
     def _build_reranker_params(
         self,
