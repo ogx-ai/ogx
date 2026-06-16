@@ -4,13 +4,20 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import asyncio
 import os
+import tempfile
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 import httpx
+from docling.datamodel.base_models import OutputFormat
+from docling.datamodel.service.options import ConvertDocumentsOptions
+
+# TODO: Switch to PyPI once docling-slim[service-client] is released (expected ~2026-06-18)
+# Currently using: git+https://github.com/docling-project/docling.git
+from docling.service_client import AsyncDoclingServiceClient, ChunkerKind
 from fastapi import UploadFile
 
 from ogx.log import get_logger
@@ -45,56 +52,6 @@ class DoclingServeFileProcessor:
         if self.config.api_key:
             headers["X-Api-Key"] = self.config.api_key.get_secret_value()
         return headers
-
-    async def _poll_until_complete(self, task_id: str, client: httpx.AsyncClient) -> None:
-        """Adds polling for task status until it completes or fails.
-
-        Args:
-            task_id: The task ID to poll
-            client: The httpx client to use for requests
-
-        Raises:
-            RuntimeError: If the task fails
-        """
-        while True:
-            response = await client.get(
-                f"{self.config.base_url}/status/poll/{task_id}",
-                headers=self._get_headers(),
-            )
-            response.raise_for_status()
-            task = response.json()
-
-            if task["task_status"] == "success":
-                return
-            elif task["task_status"] == "failure":
-                error_msg = task.get("error_message", "Unknown error")
-                raise RuntimeError(f"Task {task_id} failed: {error_msg}")
-
-            await asyncio.sleep(5)
-
-    async def _supports_async(self) -> bool:
-        """Detect if the server supports async endpoints. Used to handle 'auto' mode.
-
-        Returns:
-            True if async endpoints are available, False otherwise
-        """
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                # Try hitting the status poll endpoint with a test task_id
-                await client.get(
-                    f"{self.config.base_url}/status/poll/test",
-                    headers=self._get_headers(),
-                )
-                # If we get any response, async is supported
-                return True
-        except httpx.HTTPStatusError as e:
-            # 404 on the endpoint means async not supported
-            if e.response.status_code == 404:
-                return False
-            return True
-        except Exception:
-            # Connection errors or timeouts suggest async not enabled
-            return False
 
     async def process_file(
         self,
@@ -132,20 +89,13 @@ class DoclingServeFileProcessor:
         suffix = os.path.splitext(filename)[1] or ".bin"
         mime_type = _get_mime_type(suffix)
 
-        # Determine whether to use async endpoints
-        use_async = False
-        if self.config.mode == "sync":
-            use_async = False
-        elif self.config.mode == "async":
-            use_async = True
-        elif self.config.mode == "auto":
-            use_async = await self._supports_async()
-
-        # Try async first with automatic fallback to sync on failure
+        # Try AsyncDoclingServiceClient first (async endpoints with WebSocket)
         chunks = None
+        conversion_method = None
 
-        if use_async:
+        if self.config.mode in ("async", "auto"):
             try:
+                log.info("Converting with async endpoints", mode=self.config.mode)
                 if chunking_strategy:
                     chunks = await self._convert_and_chunk_async(
                         content, filename, mime_type, document_id, chunking_strategy, document_metadata
@@ -154,23 +104,30 @@ class DoclingServeFileProcessor:
                     chunks = await self._convert_no_chunk_async(
                         content, filename, mime_type, document_id, document_metadata
                     )
-            except (httpx.HTTPStatusError, httpx.RequestError, RuntimeError) as e:
+                log.info("Successfully converted with async endpoints")
+                conversion_method = "async"
+            except Exception as e:
                 log.warning(
-                    "Async API request failed, falling back to sync endpoints",
+                    "Async conversion failed, falling back to sync endpoints",
                     error=str(e),
+                    error_type=type(e).__name__,
                     mode=self.config.mode,
                 )
-                # Fall through to sync attempt below
+                import traceback
+
+                log.debug("Full traceback", traceback=traceback.format_exc())
                 chunks = None
 
-        # Use sync endpoints if: mode is sync, async wasn't tried, or async failed
+        # Fallback to sync endpoints if async failed or mode is sync
         if chunks is None:
+            log.info("Using sync endpoints", mode=self.config.mode)
             if chunking_strategy:
                 chunks = await self._convert_and_chunk(
                     content, filename, mime_type, document_id, chunking_strategy, document_metadata
                 )
             else:
                 chunks = await self._convert_no_chunk(content, filename, mime_type, document_id, document_metadata)
+            conversion_method = "sync"
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
@@ -179,6 +136,7 @@ class DoclingServeFileProcessor:
             "processing_time_ms": processing_time_ms,
             "extraction_method": "docling-serve",
             "file_size_bytes": len(content),
+            "conversion_method": conversion_method,
         }
 
         return ProcessFileResponse(chunks=chunks, metadata=response_metadata)
@@ -192,7 +150,7 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert a file via Docling Serve without chunking and return a single chunk."""
-        url = f"{self.config.base_url}/convert/file"
+        url = f"{self.config.base_url}/v1/convert/file"
         headers = self._get_headers()
 
         options = {
@@ -240,37 +198,29 @@ class DoclingServeFileProcessor:
         document_id: str,
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
-        """Convert a file via Docling Serve async endpoint without chunking."""
-        url = f"{self.config.base_url}/convert/file/async"
-        headers = self._get_headers()
+        """Convert file using async endpoints with AsyncDoclingServiceClient."""
+        # AsyncDoclingServiceClient requires a file path, not bytes
+        # Write to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
 
-        options = {
-            "to_formats": ["md"],
-        }
+        try:
+            async with AsyncDoclingServiceClient(
+                url=self.config.base_url,
+                api_key=self.config.api_key.get_secret_value() if self.config.api_key else None,
+                job_timeout=300.0,
+            ) as client:
+                job = await client.submit(
+                    source=tmp_path,
+                    options=ConvertDocumentsOptions(to_formats=[OutputFormat.MARKDOWN]),
+                )
+                result = await job.result()
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            response = await client.post(
-                url,
-                files={"files": (filename, content, mime_type)},
-                data=options,
-                headers=headers,
-            )
-            response.raise_for_status()
-
-            task_data = response.json()
-            task_id = task_data["task_id"]
-
-            # poll and get result when complete from endpoint
-            await self._poll_until_complete(task_id, client)
-
-            result_response = await client.get(
-                f"{self.config.base_url}/result/{task_id}",
-                headers=headers,
-            )
-            result_response.raise_for_status()
-
-        result = result_response.json()
-        md_content = result.get("document", {}).get("md_content", "")
+            md_content = result.document.export_to_markdown() if result.document else ""
+        finally:
+            # Clean up temp file
+            tmp_path.unlink(missing_ok=True)
 
         if not md_content or not md_content.strip():
             return []
@@ -303,7 +253,7 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert and chunk a file via Docling Serve's hybrid chunker endpoint."""
-        url = f"{self.config.base_url}/chunk/hybrid/file"
+        url = f"{self.config.base_url}/v1/chunk/hybrid/file"
         headers = self._get_headers()
 
         if chunking_strategy.type == "auto":
@@ -376,10 +326,7 @@ class DoclingServeFileProcessor:
         chunking_strategy: VectorStoreChunkingStrategy,
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
-        """Convert and chunk a file via Docling Serve's async hybrid chunker endpoint."""
-        url = f"{self.config.base_url}/chunk/hybrid/file/async"
-        headers = self._get_headers()
-
+        """Convert and chunk file using async endpoints with AsyncDoclingServiceClient."""
         if chunking_strategy.type == "auto":
             max_tokens = self.config.default_chunk_size_tokens
         elif chunking_strategy.type == "static":
@@ -387,40 +334,39 @@ class DoclingServeFileProcessor:
         else:
             max_tokens = self.config.default_chunk_size_tokens
 
-        options: dict[str, str] = {
-            "chunking_max_tokens": str(max_tokens),
-        }
+        # AsyncDoclingServiceClient requires a file path, not bytes
+        # Write to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            response = await client.post(
-                url,
-                files={"files": (filename, content, mime_type)},
-                data=options,
-                headers=headers,
-            )
-            response.raise_for_status()
+        try:
+            async with AsyncDoclingServiceClient(
+                url=self.config.base_url,
+                api_key=self.config.api_key.get_secret_value() if self.config.api_key else None,
+                job_timeout=300.0,
+            ) as client:
+                job = await client.submit_chunk(
+                    source=tmp_path,
+                    chunker=ChunkerKind.HYBRID,
+                    options=ConvertDocumentsOptions(
+                        chunking_max_tokens=max_tokens,
+                    ),
+                )
+                response = await job.result()
 
-            task_data = response.json()
-            task_id = task_data["task_id"]
-
-            # poll and get result when complete from endpoint
-            await self._poll_until_complete(task_id, client)
-
-            result_response = await client.get(
-                f"{self.config.base_url}/result/{task_id}",
-                headers=headers,
-            )
-            result_response.raise_for_status()
-
-        result = result_response.json()
-        raw_chunks = result.get("chunks", [])
+            raw_chunks = response.chunks if response.chunks else []
+        finally:
+            # Clean up temp file
+            tmp_path.unlink(missing_ok=True)
 
         if not raw_chunks:
             return []
 
         chunks: list[Chunk] = []
         for i, raw_chunk in enumerate(raw_chunks):
-            text = raw_chunk.get("text", "")
+            # Handle both object and dict responses
+            text = raw_chunk.text if hasattr(raw_chunk, "text") else raw_chunk.get("text", "")
             if not text or not text.strip():
                 continue
 
@@ -432,7 +378,14 @@ class DoclingServeFileProcessor:
                 **document_metadata,
             }
 
-            headings = raw_chunk.get("meta", {}).get("headings", None)
+            # Extract headings (handle both object and dict)
+            if hasattr(raw_chunk, "meta") and hasattr(raw_chunk.meta, "headings"):
+                headings = raw_chunk.meta.headings
+            elif isinstance(raw_chunk, dict):
+                headings = raw_chunk.get("meta", {}).get("headings", None)
+            else:
+                headings = None
+
             if headings:
                 meta["headings"] = headings
 

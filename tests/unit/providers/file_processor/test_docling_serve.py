@@ -52,15 +52,23 @@ class TestDoclingServeFileProcessor:
     @pytest.fixture
     def config(self) -> DoclingServeFileProcessorConfig:
         return DoclingServeFileProcessorConfig(
-            base_url="http://localhost:5001/v1",
+            base_url="http://localhost:5001",
             default_chunk_size_tokens=512,
             mode="sync",
         )
 
     @pytest.fixture
+    def config_async(self) -> DoclingServeFileProcessorConfig:
+        return DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            default_chunk_size_tokens=512,
+            mode="async",
+        )
+
+    @pytest.fixture
     def config_with_api_key(self) -> DoclingServeFileProcessorConfig:
         return DoclingServeFileProcessorConfig(
-            base_url="http://localhost:5001/v1",
+            base_url="http://localhost:5001",
             api_key=SecretStr("test-secret-key"),
             mode="sync",
         )
@@ -89,7 +97,7 @@ class TestDoclingServeFileProcessor:
         with pytest.raises(ValueError, match="Cannot provide both file and file_id"):
             await processor.process_file(request, file=upload_file)
 
-    # -- convert (no chunking) --
+    # -- convert (no chunking) - sync mode --
 
     async def test_process_file_no_chunking(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest()
@@ -100,13 +108,14 @@ class TestDoclingServeFileProcessor:
 
         mock_post.assert_called_once()
         call_kwargs = mock_post.call_args
-        assert "/convert/file" in call_kwargs.args[0]
+        assert "/v1/convert/file" in call_kwargs.args[0]
         assert call_kwargs.kwargs["files"]["files"][0] == "test.pdf"
 
         assert len(response.chunks) == 1
         assert response.chunks[0].content == CONVERT_RESPONSE["document"]["md_content"]
         assert response.metadata["processor"] == "docling-serve"
         assert response.metadata["extraction_method"] == "docling-serve"
+        assert response.metadata["conversion_method"] == "sync"
         assert "processing_time_ms" in response.metadata
         assert response.metadata["file_size_bytes"] == len(b"%PDF-fake-content")
 
@@ -122,7 +131,7 @@ class TestDoclingServeFileProcessor:
         assert len(response.chunks) == 0
         assert response.metadata["processor"] == "docling-serve"
 
-    # -- chunk (with chunking strategy) --
+    # -- chunk (with chunking strategy) - sync mode --
 
     async def test_process_file_auto_chunking(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
@@ -132,7 +141,7 @@ class TestDoclingServeFileProcessor:
             response = await processor.process_file(request, file=upload_file)
 
         call_kwargs = mock_post.call_args
-        assert "/chunk/hybrid/file" in call_kwargs.args[0]
+        assert "/v1/chunk/hybrid/file" in call_kwargs.args[0]
         assert call_kwargs.kwargs["data"]["chunking_max_tokens"] == "512"
 
         assert len(response.chunks) == 3
@@ -149,7 +158,7 @@ class TestDoclingServeFileProcessor:
             response = await processor.process_file(request, file=upload_file)
 
         call_kwargs = mock_post.call_args
-        assert "/chunk/hybrid/file" in call_kwargs.args[0]
+        assert "/v1/chunk/hybrid/file" in call_kwargs.args[0]
         assert call_kwargs.kwargs["data"]["chunking_max_tokens"] == "256"
         assert len(response.chunks) == 3
 
@@ -288,119 +297,189 @@ class TestDoclingServeFileProcessor:
 
     # -- async mode tests --
 
-    async def test_async_mode_calls_async_endpoint(self, files_api: AsyncMock, upload_file: UploadFile):
-        """Test that mode='async' uses async endpoints."""
-        config = DoclingServeFileProcessorConfig(
-            base_url="http://localhost:5001/v1",
-            mode="async",
-        )
-        processor = DoclingServeFileProcessor(config, files_api=files_api)
+    async def test_async_mode_uses_sdk(
+        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
+    ):
+        """Test that mode='async' uses AsyncDoclingServiceClient."""
+        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
         request = ProcessFileRequest()
 
-        # Mock async workflow: submit → poll → result
-        submit_response = _make_httpx_response({"task_id": "test-123", "task_status": "pending"})
-        poll_response = _make_httpx_response({"task_status": "success"})
-        result_response = _make_httpx_response(CONVERT_RESPONSE)
+        # Mock SDK job and result
+        mock_job = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.document = AsyncMock()
+        mock_result.document.export_to_markdown = lambda: "# Hello World\n\nThis is a test document with some content."
+        mock_job.result = AsyncMock(return_value=mock_result)
 
-        with (
-            patch("httpx.AsyncClient.post", return_value=submit_response) as mock_post,
-            patch("httpx.AsyncClient.get", side_effect=[poll_response, result_response]) as mock_get,
+        mock_client = AsyncMock()
+        mock_client.submit = AsyncMock(return_value=mock_job)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
+            return_value=mock_client,
         ):
             response = await processor.process_file(request, file=upload_file)
 
-        # Verify async endpoint was called
-        mock_post.assert_called_once()
-        assert "/convert/file/async" in mock_post.call_args.args[0]
-
-        # Verify poll was called
-        assert mock_get.call_count == 2
-        poll_call = mock_get.call_args_list[0]
-        assert "/status/poll/test-123" in poll_call.args[0]
-
-        # Verify result was called
-        result_call = mock_get.call_args_list[1]
-        assert "/result/test-123" in result_call.args[0]
+        # Verify SDK was called
+        mock_client.submit.assert_called_once()
+        mock_job.result.assert_called_once()
 
         # Verify we got content
         assert len(response.chunks) == 1
-        assert response.chunks[0].content == CONVERT_RESPONSE["document"]["md_content"]
+        assert response.chunks[0].content == "# Hello World\n\nThis is a test document with some content."
+        assert response.metadata["conversion_method"] == "async"
 
-    async def test_fallback_from_async_to_sync(self, files_api: AsyncMock, upload_file: UploadFile):
-        """Test that async failure falls back to sync successfully."""
-        config = DoclingServeFileProcessorConfig(
-            base_url="http://localhost:5001/v1",
-            mode="async",
-        )
-        processor = DoclingServeFileProcessor(config, files_api=files_api)
-        request = ProcessFileRequest()
+    async def test_async_mode_with_chunking_uses_sdk(
+        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
+    ):
+        """Test that mode='async' with chunking uses AsyncDoclingServiceClient.submit_chunk."""
+        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        sync_response = _make_httpx_response(CONVERT_RESPONSE)
+        # Mock SDK job and chunking result
+        mock_job = AsyncMock()
+        mock_result = AsyncMock()
 
-        # Mock: async POST fails, sync POST succeeds
-        call_count = {"post": 0}
+        # Mock chunks as objects with .text and .meta attributes
+        mock_chunk1 = AsyncMock()
+        mock_chunk1.text = "First chunk of text."
+        mock_chunk1.meta = AsyncMock()
+        mock_chunk1.meta.headings = ["Introduction"]
 
-        def mock_post_side_effect(*args, **kwargs):
-            url = args[0] if args else ""
-            call_count["post"] += 1
-            if "/async" in url:
-                # First call: async fails with 404
-                raise httpx.HTTPStatusError(
-                    "404 Not Found",
-                    request=httpx.Request("POST", url),
-                    response=httpx.Response(404, request=httpx.Request("POST", url)),
-                )
-            else:
-                # Second call: sync succeeds
-                return sync_response
+        mock_chunk2 = AsyncMock()
+        mock_chunk2.text = "Second chunk of text."
+        mock_chunk2.meta = AsyncMock()
+        mock_chunk2.meta.headings = None
 
-        with (
-            patch("httpx.AsyncClient.post", side_effect=mock_post_side_effect),
-            patch("httpx.AsyncClient.get"),
+        mock_result.chunks = [mock_chunk1, mock_chunk2]
+        mock_job.result = AsyncMock(return_value=mock_result)
+
+        mock_client = AsyncMock()
+        mock_client.submit_chunk = AsyncMock(return_value=mock_job)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
+            return_value=mock_client,
         ):
             response = await processor.process_file(request, file=upload_file)
 
-        # Verify both async and sync were attempted
-        assert call_count["post"] == 2
+        # Verify SDK was called with chunking
+        mock_client.submit_chunk.assert_called_once()
+        call_kwargs = mock_client.submit_chunk.call_args.kwargs
+        assert call_kwargs["chunker"].name == "HYBRID"
+        # options is a ConvertDocumentsOptions object passed to submit_chunk
+
+        # Verify chunks
+        assert len(response.chunks) == 2
+        assert response.chunks[0].content == "First chunk of text."
+        assert response.chunks[1].content == "Second chunk of text."
+        assert response.chunks[0].metadata["headings"] == ["Introduction"]
+        assert "headings" not in response.chunks[1].metadata
+        assert response.metadata["conversion_method"] == "async"
+
+    async def test_fallback_from_async_to_sync(
+        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
+    ):
+        """Test that async failure falls back to sync successfully."""
+        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
+        request = ProcessFileRequest()
+
+        # Mock SDK to raise exception
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(side_effect=Exception("SDK connection failed"))
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        sync_response = _make_httpx_response(CONVERT_RESPONSE)
+
+        with (
+            patch(
+                "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
+                return_value=mock_client,
+            ),
+            patch("httpx.AsyncClient.post", return_value=sync_response) as mock_post,
+        ):
+            response = await processor.process_file(request, file=upload_file)
+
+        # Verify sync endpoint was called after async failed
+        mock_post.assert_called_once()
+        assert "/v1/convert/file" in mock_post.call_args.args[0]
 
         # Verify we got content from sync fallback
         assert len(response.chunks) == 1
         assert response.chunks[0].content == CONVERT_RESPONSE["document"]["md_content"]
+        assert response.metadata["conversion_method"] == "sync"
 
-    async def test_auto_mode_detects_async_support(self, files_api: AsyncMock, upload_file: UploadFile):
-        """Test that mode='auto' detects async support and uses it."""
-        config = DoclingServeFileProcessorConfig(
-            base_url="http://localhost:5001/v1",
-            mode="auto",
-        )
-        processor = DoclingServeFileProcessor(config, files_api=files_api)
+    async def test_temp_file_cleanup_on_success(
+        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
+    ):
+        """Test that temp files are cleaned up after successful async processing."""
+        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
         request = ProcessFileRequest()
 
-        # Mock detection GET succeeds (async is supported)
-        detection_response = _make_httpx_response({"task_status": "success"})
-        submit_response = _make_httpx_response({"task_id": "test-456", "task_status": "pending"})
-        poll_response = _make_httpx_response({"task_status": "success"})
-        result_response = _make_httpx_response(CONVERT_RESPONSE)
+        # Mock SDK
+        mock_job = AsyncMock()
+        mock_result = AsyncMock()
+        mock_result.document = AsyncMock()
+        mock_result.document.export_to_markdown = lambda: "# Test"
+        mock_job.result = AsyncMock(return_value=mock_result)
 
-        get_calls = [detection_response, poll_response, result_response]
+        mock_client = AsyncMock()
+        mock_client.submit = AsyncMock(return_value=mock_job)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
 
         with (
-            patch("httpx.AsyncClient.post", return_value=submit_response) as mock_post,
-            patch("httpx.AsyncClient.get", side_effect=get_calls),
+            patch(
+                "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
+                return_value=mock_client,
+            ),
+            patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            response = await processor.process_file(request, file=upload_file)
+            await processor.process_file(request, file=upload_file)
 
-        # Verify async endpoint was used (detection succeeded)
-        mock_post.assert_called_once()
-        assert "/convert/file/async" in mock_post.call_args.args[0]
+        # Verify temp file was deleted
+        mock_unlink.assert_called_once()
 
-        # Verify we got content
-        assert len(response.chunks) == 1
+    async def test_temp_file_cleanup_on_exception(
+        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
+    ):
+        """Test that temp files are cleaned up even when async processing fails."""
+        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
+        request = ProcessFileRequest()
+
+        # Mock SDK to fail after submit
+        mock_job = AsyncMock()
+        mock_job.result = AsyncMock(side_effect=Exception("Processing failed"))
+
+        mock_client = AsyncMock()
+        mock_client.submit = AsyncMock(return_value=mock_job)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        sync_response = _make_httpx_response(CONVERT_RESPONSE)
+
+        with (
+            patch(
+                "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
+                return_value=mock_client,
+            ),
+            patch("pathlib.Path.unlink") as mock_unlink,
+            patch("httpx.AsyncClient.post", return_value=sync_response),
+        ):
+            await processor.process_file(request, file=upload_file)
+
+        # Verify temp file was deleted even though async failed
+        mock_unlink.assert_called_once()
 
 
 class TestDoclingServeFileProcessorConfig:
     def test_default_values(self):
         config = DoclingServeFileProcessorConfig()
-        assert config.base_url == "http://localhost:5001/v1"
+        assert config.base_url == "http://localhost:5001"
         assert config.api_key is None
         assert config.default_chunk_size_tokens >= 100
         assert config.mode == "async"

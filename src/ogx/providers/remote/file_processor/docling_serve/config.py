@@ -15,8 +15,8 @@ class DoclingServeFileProcessorConfig(BaseModel):
     """Configuration for remote Docling Serve file processor."""
 
     base_url: str = Field(
-        default="http://localhost:5001/v1",
-        description="Base URL of the Docling Serve instance",
+        default="http://localhost:5001",
+        description="Base URL of the Docling Serve instance (do not include /v1 suffix)",
     )
     api_key: SecretStr | None = Field(
         default=None,
@@ -39,7 +39,7 @@ class DoclingServeFileProcessorConfig(BaseModel):
     @classmethod
     def sample_run_config(cls, **kwargs: Any) -> dict[str, Any]:
         return {
-            "base_url": "${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}",
+            "base_url": "${env.DOCLING_SERVE_URL:=http://localhost:5001}",
             "api_key": "${env.DOCLING_SERVE_API_KEY:=}",
             "mode": "${env.DOCLING_SERVE_MODE:=async}",
         }

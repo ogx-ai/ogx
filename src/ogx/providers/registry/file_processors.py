@@ -172,7 +172,7 @@ docker run -p 5001:5001 quay.io/docling-project/docling-serve
 Then start OGX with the remote Docling Serve provider:
 
 ```bash
-DOCLING_SERVE_URL=http://localhost:5001/v1 ogx stack run \\
+DOCLING_SERVE_URL=http://localhost:5001 ogx stack run \\
   --providers "file_processors=remote::docling-serve,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \\
   --port 8321
 ```
@@ -184,7 +184,7 @@ file_processors:
   - provider_id: docling-serve
     provider_type: remote::docling-serve
     config:
-      base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}
+      base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001}
       api_key: ${env.DOCLING_SERVE_API_KEY:=}
 ```
 
