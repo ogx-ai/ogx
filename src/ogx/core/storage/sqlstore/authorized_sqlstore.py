@@ -25,7 +25,7 @@ from ogx.core.storage.datatypes import SqlStoreReference, StorageBackendType
 from ogx.core.storage.sqlstore.sqlstore import _sqlstore_impl
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation, SqlStore
 
 logger = get_logger(name=__name__, category="providers::utils")
 
@@ -330,6 +330,33 @@ class AuthorizedSqlStore:
             return
 
         await self.sql_store.delete(table, where)
+
+    async def delete_many(self, operations: Sequence[DeleteOperation]) -> None:
+        """Delete multiple row sets atomically with access control enforcement."""
+        if not operations:
+            return
+
+        current_user = get_authenticated_user()
+        for operation in operations:
+            await self._check_access_for_rows(operation.table, operation.where, Action.DELETE, current_user)
+
+        if self._can_apply_sql_policy_filter_for_mutations(current_user):
+            access_where, access_params = self._build_access_control_where_clause(self.policy)
+            filtered_operations = [
+                DeleteOperation(
+                    table=operation.table,
+                    where=operation.where,
+                    where_sql=(
+                        access_where if operation.where_sql is None else f"({operation.where_sql}) AND ({access_where})"
+                    ),
+                    where_sql_params={**(operation.where_sql_params or {}), **access_params},
+                )
+                for operation in operations
+            ]
+            await self.sql_store.delete_many(filtered_operations)
+            return
+
+        await self.sql_store.delete_many(operations)
 
     async def _check_access_for_rows(
         self,

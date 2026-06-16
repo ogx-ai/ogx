@@ -32,7 +32,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from ogx.core.storage.datatypes import PostgresSqlStoreConfig, SqlAlchemySqlStoreConfig, SqliteSqlStoreConfig
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation, SqlStore
 
 logger = get_logger(name=__name__, category="providers::utils")
 
@@ -379,6 +379,26 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             await session.execute(stmt, data)
             await session.commit()
 
+    def _build_delete_statement(
+        self,
+        table: str,
+        where: Mapping[str, Any],
+        where_sql: str | None = None,
+        where_sql_params: Mapping[str, Any] | None = None,
+    ) -> tuple[Any, Mapping[str, Any] | None]:
+        if not where:
+            raise ValueError("where is required for delete")
+
+        stmt = self.metadata.tables[table].delete()
+        for key, value in where.items():
+            stmt = stmt.where(_build_where_expr(self.metadata.tables[table].c[key], value))
+        if where_sql:
+            clause = text(where_sql)
+            if where_sql_params:
+                clause = clause.bindparams(**where_sql_params)
+            stmt = stmt.where(clause)
+        return stmt, where_sql_params
+
     async def delete(
         self,
         table: str,
@@ -388,20 +408,27 @@ class SqlAlchemySqlStoreImpl(SqlStore):
     ) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
         assert self.async_session is not None  # _ensure_engine guarantees this
-        if not where:
-            raise ValueError("where is required for delete")
+        async with self.async_session() as session:
+            stmt, params = self._build_delete_statement(table, where, where_sql, where_sql_params)
+            await session.execute(stmt, params)
+            await session.commit()
+
+    async def delete_many(self, operations: Sequence[DeleteOperation]) -> None:
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self.async_session is not None  # _ensure_engine guarantees this
+        if not operations:
+            return
 
         async with self.async_session() as session:
-            stmt = self.metadata.tables[table].delete()
-            for key, value in where.items():
-                stmt = stmt.where(_build_where_expr(self.metadata.tables[table].c[key], value))
-            if where_sql:
-                clause = text(where_sql)
-                if where_sql_params:
-                    clause = clause.bindparams(**where_sql_params)
-                stmt = stmt.where(clause)
-            await session.execute(stmt)
-            await session.commit()
+            async with session.begin():
+                for operation in operations:
+                    stmt, params = self._build_delete_statement(
+                        operation.table,
+                        operation.where,
+                        operation.where_sql,
+                        operation.where_sql_params,
+                    )
+                    await session.execute(stmt, params)
 
     async def add_column_if_not_exists(
         self,
