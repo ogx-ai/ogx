@@ -1025,6 +1025,21 @@ jobs:
           echo "::error::${PACKAGE_NAME}==${VERSION} did not appear on test PyPI after 10 minutes"
           exit 1
 
+      - name: Generate config labels
+        id: labels
+        run: |
+          # Embed distribution configs as OCI labels (see scripts/generate-config-labels.sh).
+          # generate-config-labels.sh emits alternating "--label"/"key=value" lines for
+          # docker CLI; build-push-action wants bare "key=value" lines, so drop the flags.
+          LABELS=$(bash scripts/generate-config-labels.sh \
+            "${{ matrix.distro }}" "${{ needs.compute-version.outputs.version }}" \
+            | grep -v '^--label$')
+          {
+            echo "labels<<EOF"
+            echo "$LABELS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
@@ -1033,6 +1048,7 @@ jobs:
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.labels.outputs.labels }}
           build-args: |
             DISTRO_NAME=${{ matrix.distro }}
             INSTALL_MODE=${{ steps.meta.outputs.install_mode }}

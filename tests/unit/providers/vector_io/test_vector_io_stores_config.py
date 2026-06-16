@@ -213,6 +213,32 @@ async def test_search_vector_store_ignores_rewrite_query(vector_io_adapter):
     assert result.search_query == ["test query"]  # Original query preserved
 
 
+async def test_search_vector_store_propagates_backend_errors(vector_io_adapter):
+    """Test that exceptions from the vector store backend propagate to the caller."""
+    vector_store_id = "test_store_error"
+    vector_io_adapter.openai_vector_stores[vector_store_id] = {
+        "id": vector_store_id,
+        "name": "Test Store",
+        "description": "",
+        "vector_store_id": "test_db",
+        "embedding_model": "test/embedding",
+    }
+
+    async def mock_query_chunks(*args, **kwargs):
+        raise KeyError("chunk_content")
+
+    vector_io_adapter.query_chunks = mock_query_chunks
+
+    from ogx_api import OpenAISearchVectorStoreRequest
+
+    request = OpenAISearchVectorStoreRequest(query="test query", max_num_results=5)
+    with pytest.raises(KeyError, match="chunk_content"):
+        await vector_io_adapter.openai_search_vector_store(
+            vector_store_id=vector_store_id,
+            request=request,
+        )
+
+
 async def test_create_gin_index_executes_correct_sql():
     from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex
     from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex

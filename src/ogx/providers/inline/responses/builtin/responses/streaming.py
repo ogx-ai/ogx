@@ -427,7 +427,7 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if input_violation_message:
-                logger.info("Input guardrail violation", input_violation_message=input_violation_message)
+                logger.debug("Input guardrail violation", input_violation_message=input_violation_message)
                 yield await self._create_refusal_response(input_violation_message)
                 return
 
@@ -1260,7 +1260,7 @@ class StreamingResponseOrchestrator:
                     headers=self.moderation_headers,
                 )
                 if violation_message:
-                    logger.info("Output guardrail violation", violation_message=violation_message)
+                    logger.debug("Output guardrail violation", violation_message=violation_message)
                     pending_guardrail_events.clear()
                     yield await self._create_refusal_response(violation_message)
                     self.violation_detected = True
@@ -1279,7 +1279,7 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if violation_message:
-                logger.info("Output guardrail violation", violation_message=violation_message)
+                logger.debug("Output guardrail violation", violation_message=violation_message)
                 pending_guardrail_events.clear()
                 yield await self._create_refusal_response(violation_message)
                 self.violation_detected = True

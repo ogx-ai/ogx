@@ -21,6 +21,7 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | Messages API - Claude Code Client Smoke Tests | [integration-tests-messages-clients.yml](integration-tests-messages-clients.yml) | Drive the Claude Code CLI and Agent SDK against /v1/messages (live, Ollama) |
 | Integration Tests (Replay) | [integration-tests.yml](integration-tests.yml) | Run the integration test suites from tests/integration in replay mode |
 | Vector IO Integration Tests | [integration-vector-io-tests.yml](integration-vector-io-tests.yml) | Run the integration test suite with various VectorIO providers |
+| Launch GPU EC2 Runner | [launch-gpu-ec2-runner.yml](launch-gpu-ec2-runner.yml) | Launch GPU EC2 Runner |
 | OpenAPI Generator SDK Validation | [openapi-generator-validation.yml](openapi-generator-validation.yml) | Validate OpenAPI Generator SDK generation |
 | OpenResponses Conformance Tests | [openresponses-conformance.yml](openresponses-conformance.yml) | Run OpenResponses conformance tests against ogx Responses API |
 | Post-release automation | [post-release.yml](post-release.yml) | Post-release automation |

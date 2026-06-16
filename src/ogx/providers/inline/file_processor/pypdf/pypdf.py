@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import io
 import mimetypes
 import time
@@ -74,9 +75,11 @@ class PyPDFFileProcessor:
         mime_category = mime_type.split("/")[0] if (mime_type and "/" in mime_type) else None
 
         if mime_type == "application/pdf":
-            return self._process_pdf(content, filename, file_id, chunking_strategy, start_time)
+            return await asyncio.to_thread(self._process_pdf, content, filename, file_id, chunking_strategy, start_time)
         elif mime_category == "text":
-            return self._process_text(content, filename, file_id, chunking_strategy, start_time)
+            return await asyncio.to_thread(
+                self._process_text, content, filename, file_id, chunking_strategy, start_time
+            )
         else:
             raise HTTPException(
                 status_code=422,
