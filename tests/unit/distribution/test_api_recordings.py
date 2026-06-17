@@ -135,7 +135,9 @@ class TestInferenceRecording:
             == "64a2277c90f0f42576f60c1030e3a020403d34a95f56931b792d5939f4cebc57"
         )
         assert (
-            normalize_inference_request("POST", "https://generativelanguage.googleapis.com/v1beta/openai/v1/models", {}, {})
+            normalize_inference_request(
+                "POST", "https://generativelanguage.googleapis.com/v1beta/openai/v1/models", {}, {}
+            )
             == "d98e7566147f9d534bc0461f2efe61e3f525c18360a07bb3dda397579e25c27b"
         )
         assert (
