@@ -16,11 +16,8 @@ from fastapi import HTTPException, UploadFile
 from markitdown import MarkItDown
 
 from ogx.log import get_logger
-<<<<<<< HEAD
-=======
 from ogx.providers.inline.file_processor.zip_utils import validate_zip_content
 from ogx.providers.utils.files.response import response_body_bytes
->>>>>>> f2b5451f (fix(file_processor): add ZIP decompression limits to MarkItDown processor (#6100))
 from ogx.providers.utils.memory.vector_store import make_overlapped_chunks
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
 from ogx_api.files import RetrieveFileContentRequest, RetrieveFileRequest
