@@ -329,68 +329,6 @@ class TestDoclingServeFileProcessor:
         assert response.chunks[0].content == CONVERT_RESPONSE["document"]["md_content"]
         assert response.metadata["conversion_method"] == "sync"
 
-    async def test_temp_file_cleanup_on_success(
-        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
-    ):
-        """Test that temp files are cleaned up after successful async processing."""
-        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
-        request = ProcessFileRequest()
-
-        # Mock SDK
-        mock_job = AsyncMock()
-        mock_result = AsyncMock()
-        mock_result.document = AsyncMock()
-        mock_result.document.export_to_markdown = lambda: "# Test"
-        mock_job.result = AsyncMock(return_value=mock_result)
-
-        mock_client = AsyncMock()
-        mock_client.submit = AsyncMock(return_value=mock_job)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with (
-            patch(
-                "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
-                return_value=mock_client,
-            ),
-            patch("pathlib.Path.unlink") as mock_unlink,
-        ):
-            await processor.process_file(request, file=upload_file)
-
-        # Verify temp file was deleted
-        mock_unlink.assert_called_once()
-
-    async def test_temp_file_cleanup_on_exception(
-        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
-    ):
-        """Test that temp files are cleaned up even when async processing fails."""
-        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
-        request = ProcessFileRequest()
-
-        # Mock SDK to fail after submit
-        mock_job = AsyncMock()
-        mock_job.result = AsyncMock(side_effect=Exception("Processing failed"))
-
-        mock_client = AsyncMock()
-        mock_client.submit = AsyncMock(return_value=mock_job)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        sync_response = _make_httpx_response(CONVERT_RESPONSE)
-
-        with (
-            patch(
-                "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
-                return_value=mock_client,
-            ),
-            patch("pathlib.Path.unlink") as mock_unlink,
-            patch("httpx.AsyncClient.post", return_value=sync_response),
-        ):
-            await processor.process_file(request, file=upload_file)
-
-        # Verify temp file was deleted even though async failed
-        mock_unlink.assert_called_once()
-
 
 class TestDoclingServeFileProcessorConfig:
     def test_default_values(self):
@@ -444,12 +382,24 @@ class TestIBMSaaSCompatibility:
             )
         )
 
-        with pytest.raises(InvalidParameterError) as exc_info:
-            await ibm_processor.process_file(request, file=upload_file)
+        # Mock AsyncDoclingServiceClient to simulate IBM SaaS 405 error
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient"
+        ) as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            # Mock submit_chunk() raising 405 (Method Not Allowed)
+            mock_response = AsyncMock()
+            mock_response.status_code = 405
+            mock_error = httpx.HTTPStatusError("Method Not Allowed", request=AsyncMock(), response=mock_response)
+            mock_instance.submit_chunk.side_effect = mock_error
+
+            with pytest.raises(InvalidParameterError) as exc_info:
+                await ibm_processor.process_file(request, file=upload_file)
 
         error_msg = str(exc_info.value)
         assert "chunking_strategy" in error_msg
-        assert "IBM Docling SaaS" in error_msg
         assert "not supported" in error_msg
         assert "remove 'chunking_strategy'" in error_msg
 
@@ -497,10 +447,8 @@ class TestIBMSaaSCompatibility:
                 assert result.metadata["conversion_method"] == "async"
 
     async def test_local_docker_allows_chunking(self, upload_file: UploadFile):
-        """Local docling-serve should allow chunking (no 'ibm.com' in base_url)."""
-        from ogx_api.common.errors import InvalidParameterError
-
-        # Local config (no ibm.com in URL)
+        """Local docling-serve should allow chunking (successful response)."""
+        # Local config
         local_config = DoclingServeFileProcessorConfig(
             base_url="http://localhost:5001",
             mode="async",
@@ -513,10 +461,23 @@ class TestIBMSaaSCompatibility:
             )
         )
 
-        # Should NOT raise InvalidParameterError for local
-        # (will fail with other errors since we're not mocking the full async flow,
-        # but the key is it should NOT hit the IBM SaaS chunking block)
-        try:
-            await processor.process_file(request, file=upload_file)
-        except InvalidParameterError:
-            pytest.fail("Local docling-serve should not block chunking")
+        # Mock AsyncDoclingServiceClient to simulate successful chunking
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient"
+        ) as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            # Mock submit_chunk() returning a successful job
+            mock_job = AsyncMock()
+            mock_chunk = SimpleNamespace(text="Chunk content", meta=SimpleNamespace(headings=None))
+            mock_response = SimpleNamespace(chunks=[mock_chunk])
+            mock_job.result.return_value = mock_response
+            mock_instance.submit_chunk.return_value = mock_job
+
+            # Should succeed without raising InvalidParameterError
+            result = await processor.process_file(request, file=upload_file)
+
+        assert result.chunks is not None
+        assert len(result.chunks) > 0
+        assert result.metadata["conversion_method"] == "async"

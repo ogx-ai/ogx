@@ -87,19 +87,6 @@ class DoclingServeFileProcessor:
         suffix = os.path.splitext(filename)[1] or ".bin"
         mime_type = _get_mime_type(suffix)
 
-        # Check if IBM SaaS is being used with chunking (not supported)
-        if chunking_strategy and "ibm.com" in self.config.base_url.lower():
-            raise InvalidParameterError(
-                param_name="chunking_strategy",
-                value=chunking_strategy.model_dump() if chunking_strategy else None,
-                constraint=(
-                    "Chunking is not supported with IBM Docling SaaS. "
-                    "IBM SaaS only supports document conversion without chunking. "
-                    "Either remove 'chunking_strategy' from your request, "
-                    "or configure OGX to use local docling-serve for chunking support."
-                ),
-            )
-
         # Try AsyncDoclingServiceClient first (async endpoints with WebSocket)
         chunks = None
         conversion_method = None
@@ -301,13 +288,28 @@ class DoclingServeFileProcessor:
         }
 
         async with httpx.AsyncClient(timeout=300.0) as client:
-            response = await client.post(
-                url,
-                files={"files": (filename, content, mime_type)},
-                data=options,
-                headers=headers,
-            )
-            response.raise_for_status()
+            try:
+                response = await client.post(
+                    url,
+                    files={"files": (filename, content, mime_type)},
+                    data=options,
+                    headers=headers,
+                )
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                # Chunking endpoint not supported (e.g., IBM Docling SaaS)
+                if e.response.status_code in (404, 405):
+                    raise InvalidParameterError(
+                        param_name="chunking_strategy",
+                        value=chunking_strategy.model_dump() if chunking_strategy else None,
+                        constraint=(
+                            "Chunking is not supported by this Docling instance. "
+                            "This is a known limitation of IBM Docling SaaS. "
+                            "Either remove 'chunking_strategy' from your request, "
+                            "or configure OGX to use local docling-serve for chunking support."
+                        ),
+                    ) from e
+                raise
 
         result = response.json()
         raw_chunks = result.get("chunks", [])
@@ -372,12 +374,27 @@ class DoclingServeFileProcessor:
                 api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
                 job_timeout=300.0,
             ) as client:
-                job = await client.submit_chunk(
-                    source=tmp_path,
-                    chunker=ChunkerKind.HYBRID,
-                    options=ConvertDocumentsOptions(),
-                )
-                response = await job.result()
+                try:
+                    job = await client.submit_chunk(
+                        source=tmp_path,
+                        chunker=ChunkerKind.HYBRID,
+                        options=ConvertDocumentsOptions(),
+                    )
+                    response = await job.result()
+                except httpx.HTTPStatusError as e:
+                    # Chunking endpoint not supported (e.g., IBM Docling SaaS)
+                    if e.response.status_code in (404, 405):
+                        raise InvalidParameterError(
+                            param_name="chunking_strategy",
+                            value=chunking_strategy.model_dump() if chunking_strategy else None,
+                            constraint=(
+                                "Chunking is not supported by this Docling instance. "
+                                "This is a known limitation of IBM Docling SaaS. "
+                                "Either remove 'chunking_strategy' from your request, "
+                                "or configure OGX to use local docling-serve for chunking support."
+                            ),
+                        ) from e
+                    raise
 
             raw_chunks = response.chunks if response.chunks else []
         finally:
