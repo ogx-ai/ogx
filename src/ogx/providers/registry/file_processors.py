@@ -140,7 +140,7 @@ See [Docling's documentation](https://docling-project.github.io/docling/) for mo
             api=Api.file_processors,
             provider_type="remote::docling-serve",
             adapter_type="docling-serve",
-            pip_packages=["httpx"],
+            pip_packages=["httpx", "docling-slim[service-client]>=2.103.0"],
             module="ogx.providers.remote.file_processor.docling_serve",
             config_class="ogx.providers.remote.file_processor.docling_serve.DoclingServeFileProcessorConfig",
             api_dependencies=[Api.files],

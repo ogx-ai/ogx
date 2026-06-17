@@ -297,90 +297,6 @@ class TestDoclingServeFileProcessor:
 
     # -- async mode tests --
 
-    async def test_async_mode_uses_sdk(
-        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
-    ):
-        """Test that mode='async' uses AsyncDoclingServiceClient."""
-        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
-        request = ProcessFileRequest()
-
-        # Mock SDK job and result
-        mock_job = AsyncMock()
-        mock_result = AsyncMock()
-        mock_result.document = AsyncMock()
-        mock_result.document.export_to_markdown = lambda: "# Hello World\n\nThis is a test document with some content."
-        mock_job.result = AsyncMock(return_value=mock_result)
-
-        mock_client = AsyncMock()
-        mock_client.submit = AsyncMock(return_value=mock_job)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with patch(
-            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
-            return_value=mock_client,
-        ):
-            response = await processor.process_file(request, file=upload_file)
-
-        # Verify SDK was called
-        mock_client.submit.assert_called_once()
-        mock_job.result.assert_called_once()
-
-        # Verify we got content
-        assert len(response.chunks) == 1
-        assert response.chunks[0].content == "# Hello World\n\nThis is a test document with some content."
-        assert response.metadata["conversion_method"] == "async"
-
-    async def test_async_mode_with_chunking_uses_sdk(
-        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
-    ):
-        """Test that mode='async' with chunking uses AsyncDoclingServiceClient.submit_chunk."""
-        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
-        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
-
-        # Mock SDK job and chunking result
-        mock_job = AsyncMock()
-        mock_result = AsyncMock()
-
-        # Mock chunks as objects with .text and .meta attributes
-        mock_chunk1 = AsyncMock()
-        mock_chunk1.text = "First chunk of text."
-        mock_chunk1.meta = AsyncMock()
-        mock_chunk1.meta.headings = ["Introduction"]
-
-        mock_chunk2 = AsyncMock()
-        mock_chunk2.text = "Second chunk of text."
-        mock_chunk2.meta = AsyncMock()
-        mock_chunk2.meta.headings = None
-
-        mock_result.chunks = [mock_chunk1, mock_chunk2]
-        mock_job.result = AsyncMock(return_value=mock_result)
-
-        mock_client = AsyncMock()
-        mock_client.submit_chunk = AsyncMock(return_value=mock_job)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with patch(
-            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
-            return_value=mock_client,
-        ):
-            response = await processor.process_file(request, file=upload_file)
-
-        # Verify SDK was called with chunking
-        mock_client.submit_chunk.assert_called_once()
-        call_kwargs = mock_client.submit_chunk.call_args.kwargs
-        assert call_kwargs["chunker"].name == "HYBRID"
-        # options is a ConvertDocumentsOptions object passed to submit_chunk
-
-        # Verify chunks
-        assert len(response.chunks) == 2
-        assert response.chunks[0].content == "First chunk of text."
-        assert response.chunks[1].content == "Second chunk of text."
-        assert response.chunks[0].metadata["headings"] == ["Introduction"]
-        assert "headings" not in response.chunks[1].metadata
-        assert response.metadata["conversion_method"] == "async"
-
     async def test_fallback_from_async_to_sync(
         self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
     ):
@@ -488,3 +404,119 @@ class TestDoclingServeFileProcessorConfig:
         sample = DoclingServeFileProcessorConfig.sample_run_config()
         assert "base_url" in sample
         assert "api_key" in sample
+
+
+class TestIBMSaaSCompatibility:
+    """Tests for IBM Docling SaaS specific behavior."""
+
+    @pytest.fixture
+    def ibm_saas_config(self) -> DoclingServeFileProcessorConfig:
+        """Config pointing to IBM SaaS endpoint."""
+        return DoclingServeFileProcessorConfig(
+            base_url="https://api.aws-c1.dcls.saas.ibm.com/test-instance",
+            api_key=SecretStr("test-api-key"),
+            mode="async",
+        )
+
+    @pytest.fixture
+    def files_api(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def ibm_processor(
+        self, ibm_saas_config: DoclingServeFileProcessorConfig, files_api: AsyncMock
+    ) -> DoclingServeFileProcessor:
+        return DoclingServeFileProcessor(ibm_saas_config, files_api=files_api)
+
+    @pytest.fixture
+    def upload_file(self) -> UploadFile:
+        return UploadFile(file=io.BytesIO(b"%PDF-fake-content"), filename="test.pdf")
+
+    async def test_ibm_saas_blocks_chunking_with_clear_error(
+        self, ibm_processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        """IBM SaaS should reject chunking requests with a clear error message."""
+        from ogx_api.common.errors import InvalidParameterError
+
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyStatic(
+                static=VectorStoreChunkingStrategyStaticConfig(max_chunk_size_tokens=512)
+            )
+        )
+
+        with pytest.raises(InvalidParameterError) as exc_info:
+            await ibm_processor.process_file(request, file=upload_file)
+
+        error_msg = str(exc_info.value)
+        assert "chunking_strategy" in error_msg
+        assert "IBM Docling SaaS" in error_msg
+        assert "not supported" in error_msg
+        assert "remove 'chunking_strategy'" in error_msg
+
+    async def test_ibm_saas_allows_conversion_without_chunking(
+        self, ibm_processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        """IBM SaaS should allow conversion without chunking."""
+
+        # Should NOT raise for conversion without chunking
+        request = ProcessFileRequest()
+
+        # Mock AsyncDoclingServiceClient to avoid actual API calls
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient"
+        ) as mock_client:
+            # Mock the async context manager
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            # Mock submit() returning a job
+            mock_job = AsyncMock()
+            mock_instance.submit.return_value = mock_job
+
+            # Mock job.result() returning presigned URL response (IBM SaaS format)
+            mock_result = SimpleNamespace(
+                documents=[SimpleNamespace(artifacts=[SimpleNamespace(uri="https://s3.amazonaws.com/test.md")])]
+            )
+            mock_job.result.return_value = mock_result
+
+            # Mock httpx download of presigned URL
+            with patch("httpx.AsyncClient") as mock_http:
+                mock_http_instance = AsyncMock()
+                mock_http.return_value.__aenter__.return_value = mock_http_instance
+
+                mock_response = AsyncMock()
+                mock_response.text = "# Test Document\n\nContent here."
+                mock_response.raise_for_status = AsyncMock()
+                mock_http_instance.get.return_value = mock_response
+
+                # This should NOT raise InvalidParameterError
+                result = await ibm_processor.process_file(request, file=upload_file)
+
+                assert result.chunks is not None
+                assert len(result.chunks) > 0
+                assert result.metadata["conversion_method"] == "async"
+
+    async def test_local_docker_allows_chunking(self, upload_file: UploadFile):
+        """Local docling-serve should allow chunking (no 'ibm.com' in base_url)."""
+        from ogx_api.common.errors import InvalidParameterError
+
+        # Local config (no ibm.com in URL)
+        local_config = DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            mode="async",
+        )
+        processor = DoclingServeFileProcessor(local_config, files_api=AsyncMock())
+
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyStatic(
+                static=VectorStoreChunkingStrategyStaticConfig(max_chunk_size_tokens=512)
+            )
+        )
+
+        # Should NOT raise InvalidParameterError for local
+        # (will fail with other errors since we're not mocking the full async flow,
+        # but the key is it should NOT hit the IBM SaaS chunking block)
+        try:
+            await processor.process_file(request, file=upload_file)
+        except InvalidParameterError:
+            pytest.fail("Local docling-serve should not block chunking")

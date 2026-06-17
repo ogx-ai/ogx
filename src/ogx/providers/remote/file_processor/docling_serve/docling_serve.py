@@ -14,15 +14,13 @@ from typing import Any
 import httpx
 from docling.datamodel.base_models import OutputFormat
 from docling.datamodel.service.options import ConvertDocumentsOptions
-
-# TODO: Switch to PyPI once docling-slim[service-client] is released (expected ~2026-06-18)
-# Currently using: git+https://github.com/docling-project/docling.git
 from docling.service_client import AsyncDoclingServiceClient, ChunkerKind
 from fastapi import UploadFile
 
 from ogx.log import get_logger
 from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
+from ogx_api.common.errors import InvalidParameterError
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
 from ogx_api.files import Files, RetrieveFileContentRequest, RetrieveFileRequest
 from ogx_api.vector_io import (
@@ -89,13 +87,30 @@ class DoclingServeFileProcessor:
         suffix = os.path.splitext(filename)[1] or ".bin"
         mime_type = _get_mime_type(suffix)
 
+        # Check if IBM SaaS is being used with chunking (not supported)
+        if chunking_strategy and "ibm.com" in self.config.base_url.lower():
+            raise InvalidParameterError(
+                param_name="chunking_strategy",
+                value=chunking_strategy.model_dump() if chunking_strategy else None,
+                constraint=(
+                    "Chunking is not supported with IBM Docling SaaS. "
+                    "IBM SaaS only supports document conversion without chunking. "
+                    "Either remove 'chunking_strategy' from your request, "
+                    "or configure OGX to use local docling-serve for chunking support."
+                ),
+            )
+
         # Try AsyncDoclingServiceClient first (async endpoints with WebSocket)
         chunks = None
         conversion_method = None
 
         if self.config.mode in ("async", "auto"):
             try:
-                log.info("Converting with async endpoints", mode=self.config.mode)
+                log.info(
+                    "Converting with async endpoints using AsyncDoclingServiceClient from docling-slim",
+                    mode=self.config.mode,
+                    sdk_version="docling-slim>=2.95.0",
+                )
                 if chunking_strategy:
                     chunks = await self._convert_and_chunk_async(
                         content, filename, mime_type, document_id, chunking_strategy, document_metadata
@@ -104,7 +119,11 @@ class DoclingServeFileProcessor:
                     chunks = await self._convert_no_chunk_async(
                         content, filename, mime_type, document_id, document_metadata
                     )
-                log.info("Successfully converted with async endpoints")
+                log.info(
+                    "Successfully converted with async endpoints using AsyncDoclingServiceClient",
+                    client_class="AsyncDoclingServiceClient",
+                    sdk_module="docling.service_client",
+                )
                 conversion_method = "async"
             except Exception as e:
                 log.warning(
@@ -217,7 +236,21 @@ class DoclingServeFileProcessor:
                 )
                 result = await job.result()
 
-            md_content = result.document.export_to_markdown() if result.document else ""
+            # Handle both local docling-serve (ConversionResult with .document)
+            # and IBM SaaS (PresignedUrlConvertResponse with .documents and presigned URLs)
+            md_content = ""
+            if hasattr(result, "documents"):
+                # IBM SaaS: PresignedUrlConvertResponse with presigned URLs
+                if result.documents and result.documents[0].artifacts:
+                    artifact = result.documents[0].artifacts[0]
+                    # Download markdown from presigned URL
+                    async with httpx.AsyncClient() as http_client:
+                        response = await http_client.get(str(artifact.uri))
+                        response.raise_for_status()
+                        md_content = response.text
+            elif hasattr(result, "document"):
+                # Local docling-serve: ConversionResult with direct document
+                md_content = result.document.export_to_markdown() if result.document else ""
         finally:
             # Clean up temp file
             tmp_path.unlink(missing_ok=True)
