@@ -43,7 +43,6 @@ from .models import (
     VectorStoreSearchResponsePage,
 )
 
-
 VECTOR_IO_TAG = "VectorIO"
 VECTOR_STORES_TAG = "Vector Stores"
 
