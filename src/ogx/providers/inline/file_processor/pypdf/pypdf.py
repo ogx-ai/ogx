@@ -16,6 +16,7 @@ from fastapi import HTTPException, UploadFile
 from pypdf import PdfReader
 
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.memory.vector_store import make_overlapped_chunks
 from ogx_api.file_processors import ProcessFileResponse
 from ogx_api.files import RetrieveFileContentRequest, RetrieveFileRequest
@@ -69,7 +70,7 @@ class PyPDFFileProcessor:
             content_response = await self.files_api.openai_retrieve_file_content(
                 RetrieveFileContentRequest(file_id=file_id)
             )
-            content = content_response.body
+            content = await response_body_bytes(content_response)
 
         mime_type, _ = mimetypes.guess_type(filename)
         mime_category = mime_type.split("/")[0] if (mime_type and "/" in mime_type) else None

@@ -512,10 +512,17 @@ class ResponsesStore:
         parent_response_id = parent_response.id
 
         # Use the underlying SQL store so children hidden by READ policy are still
-        # materialized before parent deletion.
+        # materialized before parent deletion. Tenant filter is still applied to
+        # prevent cross-tenant data leakage.
+        from ogx.core.request_headers import get_authenticated_user
+
+        current_user = get_authenticated_user()
+        tenant_where, tenant_params = self.sql_store._build_tenant_filter(current_user)
         rows = await self.sql_store.sql_store.fetch_all(
             table=self.reference.table_name,
             where={"previous_response_id": parent_response_id},
+            where_sql=tenant_where if tenant_where != "1=1" else None,
+            where_sql_params=tenant_params if tenant_params else None,
         )
 
         for row in rows.data:
@@ -544,7 +551,8 @@ class ResponsesStore:
                 child_data.pop("input_storage_mode", None)
 
             # This write is an internal side effect of deleting the parent response.
-            # It must not require UPDATE permission on child rows.
+            # It must not require UPDATE permission on child rows but is still
+            # scoped to the current tenant.
             await self.sql_store.sql_store.update(
                 self.reference.table_name,
                 data={
@@ -555,6 +563,8 @@ class ResponsesStore:
                     "response_object": child_data,
                 },
                 where={"id": child_response.id},
+                where_sql=tenant_where if tenant_where != "1=1" else None,
+                where_sql_params=tenant_params if tenant_params else None,
             )
 
     async def delete_response_object(self, response_id: str) -> OpenAIDeleteResponseObject:

@@ -20,6 +20,8 @@ from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTok
 from fastapi import UploadFile
 
 from ogx.log import get_logger
+from ogx.providers.inline.file_processor.zip_utils import validate_zip_content
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
 from ogx_api.files import RetrieveFileContentRequest, RetrieveFileRequest
@@ -81,7 +83,7 @@ class DoclingFileProcessor:
             content_response = await self.files_api.openai_retrieve_file_content(
                 RetrieveFileContentRequest(file_id=file_id)
             )
-            content = content_response.body
+            content = await response_body_bytes(content_response)
 
         return await asyncio.to_thread(self._process_content, content, filename, file_id, chunking_strategy, start_time)
 
@@ -94,6 +96,8 @@ class DoclingFileProcessor:
         start_time: float,
     ) -> ProcessFileResponse:
         """Convert and chunk file content. Runs in a thread."""
+        validate_zip_content(content, filename)
+
         # Preserve original file extension so DocumentConverter can detect the format
         suffix = os.path.splitext(filename)[1] or ".bin"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
