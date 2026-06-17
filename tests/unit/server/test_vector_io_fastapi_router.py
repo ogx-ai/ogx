@@ -75,9 +75,32 @@ def test_vector_io_router_openapi_tags_vector_stores_separately() -> None:
     app.include_router(router)
 
     schema = app.openapi()
+    expected_tags = {
+        ("post", "/v1/vector-io/insert"): ["VectorIO"],
+        ("post", "/v1/vector-io/query"): ["VectorIO"],
+        ("get", "/v1/vector_stores"): ["Vector Stores"],
+        ("post", "/v1/vector_stores"): ["Vector Stores"],
+        ("delete", "/v1/vector_stores/{vector_store_id}"): ["Vector Stores"],
+        ("get", "/v1/vector_stores/{vector_store_id}"): ["Vector Stores"],
+        ("post", "/v1/vector_stores/{vector_store_id}"): ["Vector Stores"],
+        ("post", "/v1/vector_stores/{vector_store_id}/file_batches"): ["Vector Stores"],
+        ("get", "/v1/vector_stores/{vector_store_id}/file_batches/{batch_id}"): ["Vector Stores"],
+        ("post", "/v1/vector_stores/{vector_store_id}/file_batches/{batch_id}/cancel"): ["Vector Stores"],
+        ("get", "/v1/vector_stores/{vector_store_id}/file_batches/{batch_id}/files"): ["Vector Stores"],
+        ("get", "/v1/vector_stores/{vector_store_id}/files"): ["Vector Stores"],
+        ("post", "/v1/vector_stores/{vector_store_id}/files"): ["Vector Stores"],
+        ("delete", "/v1/vector_stores/{vector_store_id}/files/{file_id}"): ["Vector Stores"],
+        ("get", "/v1/vector_stores/{vector_store_id}/files/{file_id}"): ["Vector Stores"],
+        ("post", "/v1/vector_stores/{vector_store_id}/files/{file_id}"): ["Vector Stores"],
+        ("get", "/v1/vector_stores/{vector_store_id}/files/{file_id}/content"): ["Vector Stores"],
+        ("post", "/v1/vector_stores/{vector_store_id}/search"): ["Vector Stores"],
+    }
 
-    assert schema["paths"]["/v1/vector-io/insert"]["post"]["tags"] == ["VectorIO"]
-    assert schema["paths"]["/v1/vector-io/query"]["post"]["tags"] == ["VectorIO"]
-    assert schema["paths"]["/v1/vector_stores"]["get"]["tags"] == ["Vector Stores"]
-    assert schema["paths"]["/v1/vector_stores"]["post"]["tags"] == ["Vector Stores"]
-    assert schema["paths"]["/v1/vector_stores/{vector_store_id}/files"]["post"]["tags"] == ["Vector Stores"]
+    actual_tags = {
+        (method, path): operation["tags"]
+        for path, methods in schema["paths"].items()
+        if path.startswith("/v1/vector")
+        for method, operation in methods.items()
+    }
+
+    assert actual_tags == expected_tags

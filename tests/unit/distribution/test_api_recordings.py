@@ -128,6 +128,26 @@ class TestInferenceRecording:
 
         assert hash1 == hash2
 
+    def test_provider_model_list_normalization_matches_existing_recordings(self):
+        """Shared model-list hashes preserve compatibility with existing files."""
+        assert (
+            normalize_inference_request("POST", "https://api.openai.com/v1/v1/models", {}, {})
+            == "64a2277c90f0f42576f60c1030e3a020403d34a95f56931b792d5939f4cebc57"
+        )
+        assert (
+            normalize_inference_request("POST", "https://generativelanguage.googleapis.com/v1beta/openai/v1/models", {}, {})
+            == "d98e7566147f9d534bc0461f2efe61e3f525c18360a07bb3dda397579e25c27b"
+        )
+        assert (
+            normalize_inference_request(
+                "POST",
+                "https://us-south.ml.cloud.ibm.com/ml/v1/v1/models",
+                {},
+                {"extra_query": {"project_id": "replay-mode-dummy-project"}},
+            )
+            == "83953d70762b611d7b1e6ff232b53374ee7c35538fb0392cf9d92f27815c4fc6"
+        )
+
     def test_local_provider_model_list_normalization_keeps_test_context(self):
         """Local provider model-list calls return raw provider IDs and stay scoped."""
         url = "http://0.0.0.0:11434/v1/v1/models"
