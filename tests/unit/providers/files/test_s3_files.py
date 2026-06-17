@@ -77,7 +77,10 @@ class TestS3FilesImpl:
             request=RetrieveFileContentRequest(file_id=uploaded.id)
         )
 
-        assert response.body == sample_text_file.content
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+        assert body == sample_text_file.content
         assert response.headers["Content-Disposition"] == f'attachment; filename="{sample_text_file.filename}"'
 
     async def test_delete_file(self, s3_provider, sample_text_file, s3_config, s3_client):

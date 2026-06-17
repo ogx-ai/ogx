@@ -3499,25 +3499,25 @@ components:
       title: OpenAIFileObject
       description: OpenAI File object as defined in the OpenAI Files API.
     ExpiresAfter:
+      description: Control expiration of uploaded files.
       properties:
         anchor:
-          type: string
-          title: Anchor
           description: The anchor point for expiration, must be 'created_at'.
+          title: Anchor
+          type: string
           enum:
           - created_at
         seconds:
-          type: integer
-          maximum: 2592000.0
-          minimum: 3600.0
-          title: Seconds
           description: Seconds until expiration, between 3600 (1 hour) and 2592000 (30 days).
-      type: object
+          maximum: 2592000
+          minimum: 3600
+          title: Seconds
+          type: integer
       required:
       - anchor
       - seconds
       title: ExpiresAfter
-      description: Control expiration of uploaded files.
+      type: object
     OpenAIFileDeleteResponse:
       properties:
         id:

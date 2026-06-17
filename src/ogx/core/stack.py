@@ -728,10 +728,12 @@ def _initialize_storage(run_config: StackConfig):
             raise ValueError(f"Unknown storage backend type: {type}")
 
     from ogx.core.storage.kvstore.kvstore import register_kvstore_backends
+    from ogx.core.storage.sqlstore.authorized_sqlstore import set_default_tenancy_config
     from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
 
     register_kvstore_backends(kv_backends)
     register_sqlstore_backends(sql_backends)
+    set_default_tenancy_config(run_config.server.tenancy)
 
 
 class Stack:

@@ -484,6 +484,119 @@ def test_is_owner():
     assert not is_action_allowed(policy, "read", model, User("user-4", None))
 
 
+def test_is_owner_denies_mismatched_tenants_when_both_present():
+    config = """
+    - permit:
+        actions: [read]
+      when: user is owner
+    """
+    policy = TypeAdapter(list[AccessRule]).validate_python(yaml.safe_load(config))
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["foo"]}, tenant_id="tenant-a"),
+    )
+    assert is_action_allowed(policy, "read", model, User("alice", {"namespaces": ["bar"]}, tenant_id="tenant-a"))
+    assert not is_action_allowed(policy, "read", model, User("alice", {"namespaces": ["foo"]}, tenant_id="tenant-b"))
+    assert is_action_allowed(policy, "read", model, User("alice", {"namespaces": ["foo"]}))
+
+    untagged_model = model.model_copy(update={"owner": User("alice", {"namespaces": ["foo"]})})
+    assert is_action_allowed(
+        policy, "read", untagged_model, User("alice", {"namespaces": ["foo"]}, tenant_id="tenant-a")
+    )
+
+
+def test_user_in_owner_attributes_denies_mismatched_tenants_when_both_present():
+    config = """
+    - permit:
+        actions: [read]
+      when: user in owners namespaces
+    """
+    policy = TypeAdapter(list[AccessRule]).validate_python(yaml.safe_load(config))
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["shared"]}, tenant_id="tenant-a"),
+    )
+    assert is_action_allowed(policy, "read", model, User("bob", {"namespaces": ["shared"]}, tenant_id="tenant-a"))
+    assert not is_action_allowed(policy, "read", model, User("bob", {"namespaces": ["shared"]}, tenant_id="tenant-b"))
+    assert is_action_allowed(policy, "read", model, User("bob", {"namespaces": ["shared"]}))
+
+    untagged_model = model.model_copy(update={"owner": User("alice", {"namespaces": ["shared"]})})
+    assert is_action_allowed(
+        policy, "read", untagged_model, User("bob", {"namespaces": ["shared"]}, tenant_id="tenant-a")
+    )
+
+
+def test_negative_owner_conditions_do_not_permit_cross_tenant_resources():
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["shared"]}, tenant_id="tenant-a"),
+    )
+
+    not_in_policy = TypeAdapter(list[AccessRule]).validate_python(
+        yaml.safe_load(
+            """
+            - permit:
+                actions: [read]
+              when: user not in owners namespaces
+            """
+        )
+    )
+    assert not is_action_allowed(
+        not_in_policy,
+        "read",
+        model,
+        User("bob", {"namespaces": ["other"]}, tenant_id="tenant-b"),
+    )
+    assert is_action_allowed(
+        not_in_policy,
+        "read",
+        model,
+        User("bob", {"namespaces": ["other"]}, tenant_id="tenant-a"),
+    )
+
+    not_owner_policy = TypeAdapter(list[AccessRule]).validate_python(
+        yaml.safe_load(
+            """
+            - permit:
+                actions: [read]
+              when: user is not owner
+            """
+        )
+    )
+    assert not is_action_allowed(not_owner_policy, "read", model, User("bob", None, tenant_id="tenant-b"))
+    assert is_action_allowed(not_owner_policy, "read", model, User("bob", None, tenant_id="tenant-a"))
+
+
+def test_owner_only_unless_policy_does_not_permit_cross_tenant_resources():
+    policy = TypeAdapter(list[AccessRule]).validate_python(
+        yaml.safe_load(
+            """
+            - permit:
+                actions: [read]
+              unless: user is not owner
+            """
+        )
+    )
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["shared"]}, tenant_id="tenant-a"),
+    )
+
+    assert is_action_allowed(policy, "read", model, User("alice", None, tenant_id="tenant-a"))
+    assert not is_action_allowed(policy, "read", model, User("alice", None, tenant_id="tenant-b"))
+
+    legacy_model = model.model_copy(update={"owner": User("alice", {"namespaces": ["shared"]})})
+    assert is_action_allowed(policy, "read", legacy_model, User("alice", None, tenant_id="tenant-a"))
+
+
 def test_is_not_owner():
     config = """
     - permit:

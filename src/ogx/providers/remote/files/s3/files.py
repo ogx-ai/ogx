@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from fastapi import Response, UploadFile
+from fastapi.responses import StreamingResponse
 
 if TYPE_CHECKING:
     from mypy_boto3_s3.client import S3Client
@@ -325,25 +326,29 @@ class S3FilesImpl(Files):
         row = await self._get_file(file_id)
 
         try:
-
-            def _download_from_s3() -> bytes:
-                response = self.client.get_object(
-                    Bucket=self._config.bucket_name,
-                    Key=row["id"],
-                )
-                # TODO: can we stream this instead of loading it into memory
-                body: bytes = response["Body"].read()
-                return body
-
-            content = await asyncio.to_thread(_download_from_s3)
+            s3_response = await asyncio.to_thread(
+                self.client.get_object,
+                Bucket=self._config.bucket_name,
+                Key=row["id"],
+            )
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":
                 await self._delete_file(file_id)
                 raise OpenAIFileObjectNotFoundError(file_id) from e
             raise RuntimeError(f"Failed to download file from S3: {e}") from e
 
-        return Response(
-            content=content,
+        chunk_size = 1024 * 1024
+
+        def _stream_body():
+            body = s3_response["Body"]
+            try:
+                while chunk := body.read(chunk_size):
+                    yield chunk
+            finally:
+                body.close()
+
+        return StreamingResponse(
+            content=_stream_body(),
             media_type="application/octet-stream",
             headers={
                 "Content-Disposition": f'attachment; filename="{sanitize_content_disposition_filename(row["filename"])}"'
