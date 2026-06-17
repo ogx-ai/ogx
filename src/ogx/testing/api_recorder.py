@@ -66,7 +66,8 @@ _ID_KIND_PREFIXES: dict[str, str] = {
     "tool_call": "call_",
 }
 
-_SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags"}
+_SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags", "/v1/models", "/v1/openai/v1/models"}
+_LOCAL_MODEL_LIST_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost"}  # noqa: S104
 
 
 _FLOAT_IN_STRING_PATTERN = re.compile(r"(-?\d+\.\d{4,})")
@@ -165,7 +166,22 @@ def _allocate_test_scoped_id(kind: str) -> str | None:
 
 
 def _is_model_list_endpoint(endpoint: str) -> bool:
-    return endpoint in _SHARED_MODEL_LIST_ENDPOINTS or endpoint.endswith("/models")
+    return endpoint in _SHARED_MODEL_LIST_ENDPOINTS
+
+
+def _is_shared_model_list_request(path: str, hostname: str | None) -> bool:
+    """Return whether a model-list request should be shared across tests.
+
+    Remote provider model-list calls happen during session setup and test
+    execution, so they need a shared hash. Local OpenAI-compatible backends like
+    Ollama return raw provider IDs, which must stay scoped so they do not replace
+    OGX-prefixed model IDs used by integration fixtures.
+    """
+    if path in _SHARED_MODEL_LIST_ENDPOINTS:
+        return True
+    if path.endswith("/models") and hostname not in _LOCAL_MODEL_LIST_HOSTS:
+        return True
+    return False
 
 
 def _deterministic_id_override(kind: str, factory: Callable[[], str]) -> str:
@@ -203,7 +219,7 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
     }
 
     # Include test_id for isolation, except for shared infrastructure endpoints
-    if not _is_model_list_endpoint(parsed.path):
+    if not _is_shared_model_list_request(parsed.path, parsed.hostname):
         normalized["test_id"] = test_id
 
     normalized_json = json.dumps(normalized, sort_keys=True)

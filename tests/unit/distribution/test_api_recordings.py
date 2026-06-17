@@ -127,6 +127,24 @@ class TestInferenceRecording:
 
         assert hash1 == hash2
 
+    def test_local_provider_model_list_normalization_keeps_test_context(self):
+        """Local provider model-list calls return raw provider IDs and stay scoped."""
+        url = "http://0.0.0.0:11434/v1/v1/models"
+
+        first_token = set_test_context("tests/integration/inference/test_a.py::test_one")
+        try:
+            hash1 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(first_token)
+
+        second_token = set_test_context("tests/integration/inference/test_b.py::test_two")
+        try:
+            hash2 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(second_token)
+
+        assert hash1 != hash2
+
     def test_request_normalization_edge_cases(self):
         """Test request normalization is precise about request content."""
         # Test that different whitespace produces different hashes (no normalization)
