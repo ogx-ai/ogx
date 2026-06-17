@@ -97,7 +97,9 @@ def test_rerank_text(client_with_models, rerank_model_id, query, items, inferenc
     skip_if_provider_doesnt_support_rerank(inference_provider_type)
 
     response = client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
-    assert len(response) >= 0, f"Expected a list-like response, got {type(response)}"
+    assert hasattr(response, "__len__") and callable(response.__len__), (
+        f"Expected a list-like response, got {type(response)}"
+    )
     assert len(response) <= len(items)
     _validate_rerank_response(response, items)
 

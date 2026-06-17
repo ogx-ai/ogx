@@ -9,7 +9,7 @@ from io import BytesIO
 
 import pytest
 import requests
-from ogx_client import OgxClient
+from ogx_open_client import OgxClient
 
 from ogx.core.datatypes import User
 from ogx.core.library_client import OGXAsLibraryClient

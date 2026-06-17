@@ -540,7 +540,7 @@ class OGXAsLibraryClient(OgxClient):
 
             # Handle FastAPI Response objects
             if isinstance(result, FastAPIResponse):
-                resp = LibraryClientHttpxResponse(result)
+                resp = LibraryClientHttpxResponse(result, await response_body_bytes(result))
                 return RESTResponse(
                     httpx.Response(
                         status_code=resp.status_code,
