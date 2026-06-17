@@ -66,6 +66,8 @@ _ID_KIND_PREFIXES: dict[str, str] = {
     "tool_call": "call_",
 }
 
+_SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags"}
+
 
 _FLOAT_IN_STRING_PATTERN = re.compile(r"(-?\d+\.\d{4,})")
 
@@ -162,6 +164,10 @@ def _allocate_test_scoped_id(kind: str) -> str | None:
     return f"{prefix}{counter}"
 
 
+def _is_model_list_endpoint(endpoint: str) -> bool:
+    return endpoint in _SHARED_MODEL_LIST_ENDPOINTS or endpoint.endswith("/models")
+
+
 def _deterministic_id_override(kind: str, factory: Callable[[], str]) -> str:
     deterministic_id = _allocate_test_scoped_id(kind)
     if deterministic_id is not None:
@@ -197,7 +203,7 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
     }
 
     # Include test_id for isolation, except for shared infrastructure endpoints
-    if parsed.path not in ("/api/tags", "/v1/models", "/v1/openai/v1/models"):
+    if not _is_model_list_endpoint(parsed.path):
         normalized["test_id"] = test_id
 
     normalized_json = json.dumps(normalized, sort_keys=True)
@@ -501,8 +507,8 @@ class ResponseStorage:
                 serialized_response["body"] = _serialize_response(serialized_response["body"], request_hash)
 
         # For model-list endpoints, include digest in filename to distinguish different model sets
-        endpoint = request.get("endpoint")
-        if endpoint in ("/api/tags", "/v1/models", "/v1/openai/v1/models"):
+        endpoint = str(request.get("endpoint") or "")
+        if _is_model_list_endpoint(endpoint):
             digest = _model_identifiers_digest(endpoint, response)
             response_file = f"models-{request_hash}-{digest}.json"
 
@@ -655,7 +661,7 @@ def _combine_model_list_responses(endpoint: str, records: list[dict[str, Any]]) 
     seen: dict[str, dict[str, Any]] = {}
     for rec in records:
         body = rec["response"]["body"]
-        if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+        if endpoint.endswith("/models"):
             for m in body:
                 key = m.id
                 seen[key] = m
@@ -1101,7 +1107,7 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
         logger.info(f"  Test context: {get_test_context()}")
 
     if mode == APIRecordingMode.LIVE or storage is None:
-        if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+        if _is_model_list_endpoint(endpoint):
             return original_method(self, *args, **kwargs)
         else:
             return await original_method(self, *args, **kwargs)
@@ -1135,7 +1141,7 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     recording = None
     if mode == APIRecordingMode.REPLAY or mode == APIRecordingMode.RECORD_IF_MISSING:
         # Special handling for model-list endpoints: merge all recordings with this hash
-        if endpoint in ("/api/tags", "/v1/models", "/v1/openai/v1/models"):
+        if _is_model_list_endpoint(endpoint):
             records = storage._model_list_responses(request_hash)
             recording = _combine_model_list_responses(endpoint, records)
         else:

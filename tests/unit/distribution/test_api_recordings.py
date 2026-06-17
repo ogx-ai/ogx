@@ -13,6 +13,7 @@ import httpx
 import pytest
 from openai import AsyncOpenAI, NotFoundError
 
+from ogx.core.testing_context import reset_test_context, set_test_context
 from ogx.testing.api_recorder import (
     APIRecordingMode,
     ResponseStorage,
@@ -107,6 +108,24 @@ class TestInferenceRecording:
         )
 
         assert hash1 != hash3
+
+    def test_provider_model_list_normalization_ignores_test_context(self):
+        """Provider model-list calls are shared infrastructure across tests."""
+        url = "https://generativelanguage.googleapis.com/v1beta/openai/v1/models"
+
+        first_token = set_test_context("tests/integration/inference/test_a.py::test_one")
+        try:
+            hash1 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(first_token)
+
+        second_token = set_test_context("tests/integration/inference/test_b.py::test_two")
+        try:
+            hash2 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(second_token)
+
+        assert hash1 == hash2
 
     def test_request_normalization_edge_cases(self):
         """Test request normalization is precise about request content."""
