@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, cast
+from urllib.parse import urlparse
 
 from openai import NOT_GIVEN, OpenAI
 
@@ -68,6 +69,7 @@ _ID_KIND_PREFIXES: dict[str, str] = {
 
 _SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags", "/v1/models", "/v1/openai/v1/models"}
 _LOCAL_MODEL_LIST_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost"}  # noqa: S104
+_DEFAULT_TEST_SERVER_PORT = 8321
 
 
 _FLOAT_IN_STRING_PATTERN = re.compile(r"(-?\d+\.\d{4,})")
@@ -184,6 +186,20 @@ def _is_shared_model_list_request(path: str, hostname: str | None) -> bool:
     return False
 
 
+def _is_ogx_test_server_model_list_url(url: str) -> bool:
+    """Return whether this is model discovery against the local OGX test server."""
+    parsed = urlparse(url)
+    if not parsed.path.endswith("/models") or parsed.hostname not in _LOCAL_MODEL_LIST_HOSTS:
+        return False
+
+    test_base_url = os.environ.get("TEST_API_BASE_URL")
+    if test_base_url:
+        test_base = urlparse(test_base_url)
+        return parsed.hostname == test_base.hostname and parsed.port == test_base.port
+
+    return parsed.port == int(os.environ.get("OGX_PORT", _DEFAULT_TEST_SERVER_PORT))
+
+
 def _deterministic_id_override(kind: str, factory: Callable[[], str]) -> str:
     deterministic_id = _allocate_test_scoped_id(kind)
     if deterministic_id is not None:
@@ -201,9 +217,6 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
     they are infrastructure/shared and need to work across session setup and tests.
     """
 
-    # Extract just the endpoint path
-    from urllib.parse import urlparse
-
     parsed = urlparse(url)
 
     # Bedrock's OpenAI-compatible endpoint includes stream_options that vary between
@@ -218,9 +231,10 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
         "body": body_for_hash,
     }
 
-    # Include test_id for isolation, except for shared infrastructure endpoints
-    if not _is_shared_model_list_request(parsed.path, parsed.hostname):
-        normalized["test_id"] = test_id
+    # Include test_id for isolation. Shared model-list endpoints normalize their
+    # context to None so session setup and test-scoped provider refreshes use the
+    # same existing recording hash.
+    normalized["test_id"] = None if _is_shared_model_list_request(parsed.path, parsed.hostname) else test_id
 
     normalized_json = json.dumps(normalized, sort_keys=True)
     request_hash = hashlib.sha256(normalized_json.encode()).hexdigest()
@@ -1150,6 +1164,10 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     method = "POST"
     headers = {}
     body = kwargs
+
+    if client_type == "openai" and _is_ogx_test_server_model_list_url(url):
+        response = original_method(self, *args, **kwargs)
+        return [m async for m in response]
 
     request_hash = normalize_inference_request(method, url, headers, body)
 

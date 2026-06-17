@@ -17,6 +17,7 @@ from ogx.core.testing_context import reset_test_context, set_test_context
 from ogx.testing.api_recorder import (
     APIRecordingMode,
     ResponseStorage,
+    _is_ogx_test_server_model_list_url,
     api_recording,
     normalize_inference_request,
 )
@@ -144,6 +145,14 @@ class TestInferenceRecording:
             reset_test_context(second_token)
 
         assert hash1 != hash2
+
+    def test_ogx_test_server_model_list_detection(self, monkeypatch):
+        """Only OGX test server model-list calls bypass recording."""
+        monkeypatch.setenv("TEST_API_BASE_URL", "http://localhost:8322")
+
+        assert _is_ogx_test_server_model_list_url("http://localhost:8322/v1/v1/models")
+        assert not _is_ogx_test_server_model_list_url("http://0.0.0.0:11434/v1/v1/models")
+        assert not _is_ogx_test_server_model_list_url("https://api.openai.com/v1/v1/models")
 
     def test_request_normalization_edge_cases(self):
         """Test request normalization is precise about request content."""
