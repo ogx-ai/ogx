@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, cast
+from urllib.parse import urlparse
 
 from openai import NOT_GIVEN, OpenAI
 
@@ -65,6 +66,10 @@ _ID_KIND_PREFIXES: dict[str, str] = {
     "vector_store_file_batch": "batch_",
     "tool_call": "call_",
 }
+
+_SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags", "/v1/models", "/v1/openai/v1/models"}
+_LOCAL_MODEL_LIST_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost"}  # noqa: S104
+_DEFAULT_TEST_SERVER_PORT = 8321
 
 
 _FLOAT_IN_STRING_PATTERN = re.compile(r"(-?\d+\.\d{4,})")
@@ -162,6 +167,39 @@ def _allocate_test_scoped_id(kind: str) -> str | None:
     return f"{prefix}{counter}"
 
 
+def _is_model_list_endpoint(endpoint: str) -> bool:
+    return endpoint in _SHARED_MODEL_LIST_ENDPOINTS
+
+
+def _is_shared_model_list_request(path: str, hostname: str | None) -> bool:
+    """Return whether a model-list request should be shared across tests.
+
+    Remote provider model-list calls happen during session setup and test
+    execution, so they need a shared hash. Local OpenAI-compatible backends like
+    Ollama return raw provider IDs, which must stay scoped so they do not replace
+    OGX-prefixed model IDs used by integration fixtures.
+    """
+    if path in _SHARED_MODEL_LIST_ENDPOINTS:
+        return True
+    if path.endswith("/models") and hostname not in _LOCAL_MODEL_LIST_HOSTS:
+        return True
+    return False
+
+
+def _is_ogx_test_server_model_list_url(url: str) -> bool:
+    """Return whether this is model discovery against the local OGX test server."""
+    parsed = urlparse(url)
+    if not parsed.path.endswith("/models") or parsed.hostname not in _LOCAL_MODEL_LIST_HOSTS:
+        return False
+
+    test_base_url = os.environ.get("TEST_API_BASE_URL")
+    if test_base_url:
+        test_base = urlparse(test_base_url)
+        return parsed.hostname == test_base.hostname and parsed.port == test_base.port
+
+    return parsed.port == int(os.environ.get("OGX_PORT", _DEFAULT_TEST_SERVER_PORT))
+
+
 def _deterministic_id_override(kind: str, factory: Callable[[], str]) -> str:
     deterministic_id = _allocate_test_scoped_id(kind)
     if deterministic_id is not None:
@@ -179,9 +217,6 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
     they are infrastructure/shared and need to work across session setup and tests.
     """
 
-    # Extract just the endpoint path
-    from urllib.parse import urlparse
-
     parsed = urlparse(url)
 
     # Bedrock's OpenAI-compatible endpoint includes stream_options that vary between
@@ -196,9 +231,10 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
         "body": body_for_hash,
     }
 
-    # Include test_id for isolation, except for shared infrastructure endpoints
-    if parsed.path not in ("/api/tags", "/v1/models", "/v1/openai/v1/models"):
-        normalized["test_id"] = test_id
+    # Include test_id for isolation. Shared model-list endpoints normalize their
+    # context to None so session setup and test-scoped provider refreshes use the
+    # same existing recording hash.
+    normalized["test_id"] = None if _is_shared_model_list_request(parsed.path, parsed.hostname) else test_id
 
     normalized_json = json.dumps(normalized, sort_keys=True)
     request_hash = hashlib.sha256(normalized_json.encode()).hexdigest()
@@ -501,8 +537,8 @@ class ResponseStorage:
                 serialized_response["body"] = _serialize_response(serialized_response["body"], request_hash)
 
         # For model-list endpoints, include digest in filename to distinguish different model sets
-        endpoint = request.get("endpoint")
-        if endpoint in ("/api/tags", "/v1/models", "/v1/openai/v1/models"):
+        endpoint = str(request.get("endpoint") or "")
+        if _is_model_list_endpoint(endpoint):
             digest = _model_identifiers_digest(endpoint, response)
             response_file = f"models-{request_hash}-{digest}.json"
 
@@ -655,7 +691,7 @@ def _combine_model_list_responses(endpoint: str, records: list[dict[str, Any]]) 
     seen: dict[str, dict[str, Any]] = {}
     for rec in records:
         body = rec["response"]["body"]
-        if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+        if endpoint.endswith("/models"):
             for m in body:
                 key = m.id
                 seen[key] = m
@@ -1101,7 +1137,7 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
         logger.info(f"  Test context: {get_test_context()}")
 
     if mode == APIRecordingMode.LIVE or storage is None:
-        if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+        if _is_model_list_endpoint(endpoint):
             return original_method(self, *args, **kwargs)
         else:
             return await original_method(self, *args, **kwargs)
@@ -1129,13 +1165,17 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     headers = {}
     body = kwargs
 
+    if client_type == "openai" and _is_ogx_test_server_model_list_url(url):
+        response = original_method(self, *args, **kwargs)
+        return [m async for m in response]
+
     request_hash = normalize_inference_request(method, url, headers, body)
 
     # Try to find existing recording for REPLAY or RECORD_IF_MISSING modes
     recording = None
     if mode == APIRecordingMode.REPLAY or mode == APIRecordingMode.RECORD_IF_MISSING:
         # Special handling for model-list endpoints: merge all recordings with this hash
-        if endpoint in ("/api/tags", "/v1/models", "/v1/openai/v1/models"):
+        if _is_model_list_endpoint(endpoint):
             records = storage._model_list_responses(request_hash)
             recording = _combine_model_list_responses(endpoint, records)
         else:
