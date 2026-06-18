@@ -51,7 +51,7 @@ on:
         required: false
         type: string
         default: 'default'
-        description: 'Matrix configuration key from ci_matrix.json (e.g., "default", "stainless")'
+        description: 'Matrix configuration key from ci_matrix.json (e.g., "default")'
       matrix_json:
         required: false
         type: string
@@ -87,8 +87,7 @@ concurrency:
 
 # Limit permissions of the GITHUB_TOKEN to the minimum required.
 # Default mode is 'replay' which only needs read access.
-# When called via workflow_call (e.g., from stainless-builds.yml with record-if-missing),
-# the caller's permissions apply.
+# When called via workflow_call, the caller's permissions apply.
 permissions:
   contents: read
 
