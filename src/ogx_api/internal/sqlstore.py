@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Literal, Protocol
 
@@ -34,6 +35,16 @@ class ColumnDefinition(BaseModel):
     default: Any = None
 
 
+@dataclass(frozen=True)
+class DeleteOperation:
+    """A single SQL delete operation."""
+
+    table: str
+    where: Mapping[str, Any]
+    where_sql: str | None = None
+    where_sql_params: Mapping[str, Any] | None = None
+
+
 class SqlStore(Protocol):
     """Protocol for common SQL-store functionality."""
 
@@ -47,6 +58,8 @@ class SqlStore(Protocol):
         data: Mapping[str, Any],
         conflict_columns: list[str],
         update_columns: list[str] | None = None,
+        update_where_sql: str | None = None,
+        update_where_sql_params: Mapping[str, Any] | None = None,
     ) -> None: ...
 
     async def fetch_all(
@@ -86,6 +99,8 @@ class SqlStore(Protocol):
         where_sql_params: Mapping[str, Any] | None = None,
     ) -> None: ...
 
+    async def delete_many(self, operations: Sequence[DeleteOperation]) -> None: ...
+
     async def add_column_if_not_exists(
         self,
         table: str,
@@ -97,4 +112,4 @@ class SqlStore(Protocol):
     async def shutdown(self) -> None: ...
 
 
-__all__ = ["ColumnDefinition", "ColumnType", "SqlStore"]
+__all__ = ["ColumnDefinition", "ColumnType", "DeleteOperation", "SqlStore"]

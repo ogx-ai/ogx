@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from ogx.core.request_headers import RequestProviderDataContext
+from ogx.core.request_headers import RequestProviderDataContext, request_provider_data_context
 from ogx.providers.remote.inference.passthrough import PassthroughProviderDataValidator
 from ogx.providers.remote.inference.passthrough.config import PassthroughImplConfig
 from ogx.providers.remote.inference.passthrough.passthrough import PassthroughInferenceAdapter
@@ -290,6 +290,42 @@ class TestPassthroughForwardHeaders:
         headers = call_kwargs.get("default_headers") or {}
         assert "Authorization" not in headers
         assert headers.get("X-Tenant-ID") == "acme"
+
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    def test_tenant_provider_data_survives_request_header_parsing(self, mock_openai: MagicMock):
+        config = PassthroughImplConfig(
+            base_url="http://downstream.example.com",  # type: ignore[arg-type]
+            forward_headers={"tenant_id": "X-Tenant-ID"},
+        )
+        adapter = PassthroughInferenceAdapter(config)
+        spec = MagicMock()
+        spec.provider_data_validator = _PROVIDER_VALIDATOR_PATH
+        object.__setattr__(adapter, "__provider_spec__", spec)
+
+        with request_provider_data_context({"X-OGX-Provider-Data": '{"tenant_id": "acme"}'}):
+            adapter._get_openai_client()
+
+        call_kwargs = mock_openai.call_args[1]
+        headers = call_kwargs.get("default_headers") or {}
+        assert headers.get("X-Tenant-ID") == "acme"
+
+    @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
+    def test_principal_provider_data_survives_request_header_parsing(self, mock_openai: MagicMock):
+        config = PassthroughImplConfig(
+            base_url="http://downstream.example.com",  # type: ignore[arg-type]
+            forward_headers={"principal": "X-User"},
+        )
+        adapter = PassthroughInferenceAdapter(config)
+        spec = MagicMock()
+        spec.provider_data_validator = _PROVIDER_VALIDATOR_PATH
+        object.__setattr__(adapter, "__provider_spec__", spec)
+
+        with request_provider_data_context({"X-OGX-Provider-Data": '{"principal": "alice"}'}):
+            adapter._get_openai_client()
+
+        call_kwargs = mock_openai.call_args[1]
+        headers = call_kwargs.get("default_headers") or {}
+        assert headers.get("X-User") == "alice"
 
     @patch("ogx.providers.remote.inference.passthrough.passthrough.AsyncOpenAI")
     def test_static_key_takes_priority_over_forwarded_auth(self, mock_openai: MagicMock):

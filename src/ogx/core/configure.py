@@ -150,6 +150,13 @@ def _migrate_prompts_kv_to_sql(config_dict: dict[str, Any]) -> None:
             prompts_cfg["backend"] = sql_backend
 
 
+def _ensure_tenancy_defaults(config_dict: dict[str, Any]) -> None:
+    """Ensure tenancy config exists with mode=disabled if not specified."""
+    server = config_dict.setdefault("server", {})
+    if "tenancy" not in server:
+        server["tenancy"] = {"mode": "disabled"}
+
+
 def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
     """Parse a configuration dictionary into a StackConfig, upgrading from legacy format if needed.
 
@@ -164,6 +171,7 @@ def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
         config_dict = upgrade_from_routing_table(config_dict)
 
     _migrate_prompts_kv_to_sql(config_dict)
+    _ensure_tenancy_defaults(config_dict)
 
     config_dict["version"] = OGX_RUN_CONFIG_VERSION
 

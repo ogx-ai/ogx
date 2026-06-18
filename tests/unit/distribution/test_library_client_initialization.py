@@ -16,13 +16,17 @@ import time
 import warnings
 
 import pytest
+from fastapi import Response
+from fastapi.responses import StreamingResponse
 from ogx_client import NOT_GIVEN, Omit
 
 from ogx.core.library_client import (
     AsyncOGXAsLibraryClient,
+    LibraryClientHttpxResponse,
     OGXAsLibraryClient,
 )
 from ogx.core.server.routes import RouteImpls
+from ogx.providers.utils.files.response import response_body_bytes
 
 
 class TestOGXAsLibraryClientAutoInitialization:
@@ -571,6 +575,30 @@ class TestOGXAsLibraryClientSyncOnAsync:
                 result = client.request(options="whatever", cast_to=str, stream=stream)
                 if stream:
                     list(result)  # To actually trigger the code inside the generator
+
+
+class TestLibraryClientHttpxResponse:
+    async def test_wraps_regular_fastapi_response(self):
+        response = Response(content=b"hello", media_type="application/octet-stream")
+
+        wrapped = LibraryClientHttpxResponse(response, await response_body_bytes(response))
+
+        assert wrapped.content == b"hello"
+        assert wrapped.status_code == 200
+        assert wrapped.headers["content-type"] == "application/octet-stream"
+
+    async def test_wraps_streaming_fastapi_response(self):
+        async def chunks():
+            yield b"hel"
+            yield b"lo"
+
+        response = StreamingResponse(chunks(), media_type="application/octet-stream")
+
+        wrapped = LibraryClientHttpxResponse(response, await response_body_bytes(response))
+
+        assert wrapped.content == b"hello"
+        assert wrapped.status_code == 200
+        assert wrapped.headers["content-type"] == "application/octet-stream"
 
 
 class TestAsyncOGXAsLibraryClientHeaderSanitization:

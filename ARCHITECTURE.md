@@ -20,7 +20,9 @@ Client (ogx-client SDK or raw HTTP)
   v
 FastAPI Server  (src/ogx/core/server/server.py)
   |
-  |-- AuthenticationMiddleware  (token validation, user extraction)
+  |-- AuthenticationMiddleware  (token validation, user + tenant_id extraction)
+  |-- TenancyMiddleware         (enforces tenancy mode: disabled/single/multi)
+  |-- RouteAuthorizationMiddleware  (route-level access policies)
   |
   v
 Route Dispatch
@@ -164,6 +166,16 @@ Used by: distribution registry, quota tracking, provider state, skills metadata.
 | PostgreSQL | `PostgresSqlStoreConfig` | Production deployments |
 
 Used by: inference store (chat completion logs), conversations, prompts.
+
+### AuthorizedSqlStore and Tenant Isolation
+
+`AuthorizedSqlStore` wraps a `SqlStore` and adds two independent enforcement layers:
+
+1. **Tenant isolation** -- a non-bypassable `WHERE tenant_id = ?` filter applied before any access control check. When tenancy is enabled (`single` or `multi` mode), every table gets a `tenant_id` column. Writes stamp the authenticated user's tenant_id; reads and mutations are scoped to it. Missing tenant context in `multi` mode produces a `1=0` clause (default deny -- see nothing).
+
+2. **ABAC (Attribute-Based Access Control)** -- `owner_principal` and `access_attributes` columns enable policy-based rules like `user is owner`. This operates within a tenant, not across tenants.
+
+Tenancy mode is set process-wide during `Stack.initialize()` via `set_default_tenancy_mode()`, so existing call sites using the `authorized_sqlstore()` factory work without changes.
 
 ### Distribution Registry
 

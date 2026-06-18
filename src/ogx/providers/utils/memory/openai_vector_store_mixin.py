@@ -17,9 +17,12 @@ from typing import Annotated, Any, cast
 
 from fastapi import Body, HTTPException
 
-from ogx.core.datatypes import VectorStoresConfig
+from ogx.core.access_control.datatypes import Action
+from ogx.core.datatypes import TenancyMode, VectorStoresConfig
 from ogx.core.id_generation import generate_object_id
+from ogx.core.storage.sqlstore.authorized_sqlstore import get_default_tenancy_config
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.inference.prompt_adapter import (
     interleaved_content_as_str,
 )
@@ -221,6 +224,17 @@ class OpenAIVectorStoreMixin(ABC):
         rows = await self._fetch_all_metadata_rows_unfiltered(table=table, limit=1, **kwargs)
         return rows[0] if rows else None
 
+    def _migration_tenant_data(self) -> tuple[dict[str, Any], list[str]]:
+        tenancy_config = get_default_tenancy_config()
+        if tenancy_config.mode == TenancyMode.DISABLED:
+            return {}, []
+        if tenancy_config.default_tenant_id:
+            return {"tenant_id": tenancy_config.default_tenant_id}, ["tenant_id"]
+        raise ValueError(
+            "Failed to migrate vector store metadata: server.tenancy.default_tenant_id is required when "
+            f"migrating legacy KVStore data with tenancy mode '{tenancy_config.mode.value}'"
+        )
+
     async def _migrate_kvstore_to_sql(self) -> None:
         """Migrate vector store metadata from KVStore to SQL on first run after upgrade.
 
@@ -251,6 +265,7 @@ class OpenAIVectorStoreMixin(ABC):
         if not stores_data:
             await self.kvstore.set(key=OPENAI_VECTOR_STORES_SQL_MIGRATION_KEY, value="1")
             return
+        tenant_data, tenant_update_columns = self._migration_tenant_data()
 
         migrated_stores = 0
         migrated_files = 0
@@ -272,9 +287,10 @@ class OpenAIVectorStoreMixin(ABC):
                     "store_data": info,
                     "owner_principal": "",
                     "access_attributes": None,
+                    **tenant_data,
                 },
                 conflict_columns=["id"],
-                update_columns=["store_data"],
+                update_columns=["store_data", *tenant_update_columns],
             )
             migrated_stores += 1
 
@@ -298,9 +314,10 @@ class OpenAIVectorStoreMixin(ABC):
                         "file_data": file_info,
                         "owner_principal": "",
                         "access_attributes": None,
+                        **tenant_data,
                     },
                     conflict_columns=["id"],
-                    update_columns=["store_id", "file_id", "file_data"],
+                    update_columns=["store_id", "file_id", "file_data", *tenant_update_columns],
                 )
                 migrated_files += 1
 
@@ -318,9 +335,10 @@ class OpenAIVectorStoreMixin(ABC):
                             "chunk_data": chunk,
                             "owner_principal": "",
                             "access_attributes": None,
+                            **tenant_data,
                         },
                         conflict_columns=["id"],
-                        update_columns=["store_id", "file_id", "chunk_index", "chunk_data"],
+                        update_columns=["store_id", "file_id", "chunk_index", "chunk_data", *tenant_update_columns],
                     )
                     migrated_chunks += 1
 
@@ -339,9 +357,10 @@ class OpenAIVectorStoreMixin(ABC):
                     "expires_at": batch_info.get("expires_at", 0),
                     "owner_principal": "",
                     "access_attributes": None,
+                    **tenant_data,
                 },
                 conflict_columns=["id"],
-                update_columns=["store_id", "batch_data", "expires_at"],
+                update_columns=["store_id", "batch_data", "expires_at", *tenant_update_columns],
             )
             migrated_batches += 1
 
@@ -423,6 +442,38 @@ class OpenAIVectorStoreMixin(ABC):
                 info = json.loads(item)
                 stores[info["id"]] = info
             return stores
+
+    async def _get_authorized_openai_vector_store(
+        self,
+        vector_store_id: str,
+        action: Action = Action.READ,
+    ) -> dict[str, Any]:
+        """Return vector store metadata visible to the current request user."""
+        if self.metadata_store:
+            row = await self.metadata_store.fetch_one(
+                table=TABLE_VECTOR_STORES,
+                where={"id": vector_store_id},
+                action=action,
+            )
+            if not row:
+                raise VectorStoreNotFoundError(vector_store_id)
+            store_info = cast(dict[str, Any], row["store_data"])
+            self.openai_vector_stores[vector_store_id] = store_info
+            return store_info
+
+        if vector_store_id not in self.openai_vector_stores:
+            raise VectorStoreNotFoundError(vector_store_id)
+        return self.openai_vector_stores[vector_store_id]
+
+    async def _list_authorized_openai_vector_stores(self) -> list[dict[str, Any]]:
+        if self.metadata_store:
+            rows = await self.metadata_store.fetch_all(table=TABLE_VECTOR_STORES)
+            stores = [row["store_data"] for row in rows.data]
+            for store_info in stores:
+                self.openai_vector_stores[store_info["id"]] = store_info
+            return stores
+
+        return list(self.openai_vector_stores.values())
 
     async def _update_openai_vector_store(self, store_id: str, store_info: dict[str, Any]) -> None:
         """Update vector store metadata in persistent storage."""
@@ -727,6 +778,11 @@ class OpenAIVectorStoreMixin(ABC):
                 "Ensure a 'files' provider is configured if file operations are needed."
             )
         policy = getattr(self, "_policy", [])
+        if get_default_tenancy_config().mode == TenancyMode.MULTI and not self.metadata_store:
+            raise ValueError(
+                "Failed to initialize vector store provider: metadata_store is required when tenancy mode is 'multi'. "
+                "Configure storage.stores.vector_stores in your server config."
+            )
         if policy and not self.metadata_store:
             raise ValueError(
                 "Failed to initialize vector store provider: metadata_store is required when access control "
@@ -922,8 +978,8 @@ class OpenAIVectorStoreMixin(ABC):
         limit = min(limit or 20, MAX_PAGINATION_LIMIT)
         order = order or "desc"
 
-        # Get all vector stores
-        all_stores = list(self.openai_vector_stores.values())
+        # Get all vector stores visible to the current request user.
+        all_stores = await self._list_authorized_openai_vector_stores()
 
         # Sort by created_at
         reverse_order = order == "desc"
@@ -964,10 +1020,7 @@ class OpenAIVectorStoreMixin(ABC):
         vector_store_id: str,
     ) -> VectorStoreObject:
         """Retrieves a vector store."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
-
-        store_info = self.openai_vector_stores[vector_store_id]
+        store_info = await self._get_authorized_openai_vector_store(vector_store_id)
         return VectorStoreObject(**store_info)
 
     async def openai_update_vector_store(
@@ -976,10 +1029,7 @@ class OpenAIVectorStoreMixin(ABC):
         request: OpenAIUpdateVectorStoreRequest,
     ) -> VectorStoreObject:
         """Modifies a vector store."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
-
-        store_info = self.openai_vector_stores[vector_store_id].copy()
+        store_info = (await self._get_authorized_openai_vector_store(vector_store_id, Action.UPDATE)).copy()
 
         # Update fields if provided
         if request.name is not None:
@@ -1009,8 +1059,7 @@ class OpenAIVectorStoreMixin(ABC):
         vector_store_id: str,
     ) -> VectorStoreDeleteResponse:
         """Delete a vector store."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        await self._get_authorized_openai_vector_store(vector_store_id, Action.DELETE)
 
         # Delete from persistent storage (provider-specific)
         await self._delete_openai_vector_store_from_storage(vector_store_id)
@@ -1046,8 +1095,7 @@ class OpenAIVectorStoreMixin(ABC):
         if request.search_mode not in valid_modes:
             raise ValueError(f"search_mode must be one of {valid_modes}, got {request.search_mode}")
 
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        await self._get_authorized_openai_vector_store(vector_store_id)
 
         if isinstance(request.query, list):
             search_query = " ".join(request.query)
@@ -1217,11 +1265,8 @@ class OpenAIVectorStoreMixin(ABC):
         request: OpenAIAttachFileRequest,
     ) -> VectorStoreFileObject:
         file_id = request.file_id
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
-
         # Check if file is already attached to this vector store
-        store_info = self.openai_vector_stores[vector_store_id]
+        store_info = await self._get_authorized_openai_vector_store(vector_store_id, Action.UPDATE)
         if file_id in store_info["file_ids"]:
             logger.warning(
                 "File is already attached to vector store, skipping", file_id=file_id, vector_store_id=vector_store_id
@@ -1313,7 +1358,7 @@ class OpenAIVectorStoreMixin(ABC):
                 content_response = await self.files_api.openai_retrieve_file_content(
                     RetrieveFileContentRequest(file_id=file_id)
                 )
-                full_content = content_from_data_and_mime_type(bytes(content_response.body), mime_type)
+                full_content = content_from_data_and_mime_type(await response_body_bytes(content_response), mime_type)
                 await self._execute_contextual_chunk_transformation(chunks, full_content, chunking_strategy.contextual)
             if not chunks:
                 vector_store_file_object.status = "failed"
@@ -1423,10 +1468,7 @@ class OpenAIVectorStoreMixin(ABC):
         limit = min(limit or 20, MAX_PAGINATION_LIMIT)
         order = order or "desc"
 
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
-
-        store_info = self.openai_vector_stores[vector_store_id]
+        store_info = await self._get_authorized_openai_vector_store(vector_store_id)
 
         file_objects: list[VectorStoreFileObject] = []
         for file_id in store_info["file_ids"]:
@@ -1474,10 +1516,7 @@ class OpenAIVectorStoreMixin(ABC):
         file_id: str,
     ) -> VectorStoreFileObject:
         """Retrieves a vector store file."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
-
-        store_info = self.openai_vector_stores[vector_store_id]
+        store_info = await self._get_authorized_openai_vector_store(vector_store_id)
         if file_id not in store_info["file_ids"]:
             raise ValueError(f"File {file_id} not found in vector store {vector_store_id}")
 
@@ -1492,8 +1531,7 @@ class OpenAIVectorStoreMixin(ABC):
         include_metadata: bool | None = False,
     ) -> VectorStoreFileContentResponse:
         """Retrieves the contents of a vector store file."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        await self._get_authorized_openai_vector_store(vector_store_id)
 
         # Parameters are already provided directly
         # include_embeddings and include_metadata are now function parameters
@@ -1519,10 +1557,7 @@ class OpenAIVectorStoreMixin(ABC):
         request: OpenAIUpdateVectorStoreFileRequest,
     ) -> VectorStoreFileObject:
         """Updates a vector store file."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
-
-        store_info = self.openai_vector_stores[vector_store_id]
+        store_info = await self._get_authorized_openai_vector_store(vector_store_id, Action.UPDATE)
         if file_id not in store_info["file_ids"]:
             raise ValueError(f"File {file_id} not found in vector store {vector_store_id}")
 
@@ -1537,8 +1572,12 @@ class OpenAIVectorStoreMixin(ABC):
         file_id: str,
     ) -> VectorStoreFileDeleteResponse:
         """Deletes a vector store file."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        store_info = (await self._get_authorized_openai_vector_store(vector_store_id, Action.DELETE)).copy()
+        if file_id not in store_info["file_ids"]:
+            raise ValueError(f"File {file_id} not found in vector store {vector_store_id}")
+
+        file_info = await self._load_openai_vector_store_file(vector_store_id, file_id)
+        file = VectorStoreFileObject(**file_info)
 
         dict_chunks = await self._load_openai_vector_store_file_contents(vector_store_id, file_id)
         chunks = [Chunk.model_validate(c) for c in dict_chunks]
@@ -1563,9 +1602,6 @@ class OpenAIVectorStoreMixin(ABC):
                 )
             )
 
-        store_info = self.openai_vector_stores[vector_store_id].copy()
-
-        file = await self.openai_retrieve_vector_store_file(vector_store_id, file_id)
         await self._delete_openai_vector_store_file_from_storage(vector_store_id, file_id)
 
         # Update in-memory cache
@@ -1588,8 +1624,7 @@ class OpenAIVectorStoreMixin(ABC):
         params: Annotated[OpenAICreateVectorStoreFileBatchRequestWithExtraBody, Body(...)],
     ) -> VectorStoreFileBatchObject:
         """Create a vector store file batch."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        await self._get_authorized_openai_vector_store(vector_store_id, Action.UPDATE)
 
         chunking_strategy = params.chunking_strategy or VectorStoreChunkingStrategyAuto()
 
@@ -1751,8 +1786,7 @@ class OpenAIVectorStoreMixin(ABC):
         vector_store_id: str,
     ) -> VectorStoreFileBatchObject:
         """Retrieve a vector store file batch."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        await self._get_authorized_openai_vector_store(vector_store_id)
 
         if batch_id not in self.openai_file_batches:
             raise ValueError(f"File batch {batch_id} not found")
@@ -1787,8 +1821,7 @@ class OpenAIVectorStoreMixin(ABC):
         limit = min(limit or 20, MAX_PAGINATION_LIMIT)
         order = order or "desc"
 
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        await self._get_authorized_openai_vector_store(vector_store_id)
 
         if batch_id not in self.openai_file_batches:
             raise ValueError(f"File batch {batch_id} not found")
@@ -1855,8 +1888,7 @@ class OpenAIVectorStoreMixin(ABC):
         vector_store_id: str,
     ) -> VectorStoreFileBatchObject:
         """Cancels a vector store file batch."""
-        if vector_store_id not in self.openai_vector_stores:
-            raise VectorStoreNotFoundError(vector_store_id)
+        await self._get_authorized_openai_vector_store(vector_store_id, Action.UPDATE)
 
         if batch_id not in self.openai_file_batches:
             raise ValueError(f"File batch {batch_id} not found")
