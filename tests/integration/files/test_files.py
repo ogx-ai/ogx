@@ -4,13 +4,17 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 from io import BytesIO
-from unittest.mock import patch
 
 import pytest
 import requests
+from ogx_client import OgxClient
 
 from ogx.core.datatypes import User
+from ogx.core.library_client import OGXAsLibraryClient
+from ogx.core.request_headers import RequestProviderDataContext
+from ogx.core.testing_context import get_test_context
 from ogx_api import OpenAIFilePurpose
 
 purpose = OpenAIFilePurpose.ASSISTANTS
@@ -28,6 +32,13 @@ def provider_type_is_openai(ogx_client):
 def skip_if_no_files_provider(ogx_client):
     if not [provider for provider in ogx_client.providers.list() if provider.api == "files"]:
         pytest.skip("No files providers found")
+
+
+def _test_context_headers() -> dict[str, str]:
+    test_id = get_test_context()
+    if not test_id:
+        return {}
+    return {"X-OGX-Provider-Data": json.dumps({"__test_id": test_id})}
 
 
 def test_openai_client_basic_operations(openai_client, provider_type_is_openai):
@@ -92,7 +103,6 @@ def test_openai_client_basic_operations(openai_client, provider_type_is_openai):
                 pass  # ignore 404
 
 
-@pytest.mark.xfail(message="expires_after not available on all providers")
 def test_expires_after(openai_client):
     """Test uploading a file with expires_after parameter."""
     client = openai_client
@@ -125,7 +135,6 @@ def test_expires_after(openai_client):
                 pass
 
 
-@pytest.mark.xfail(message="expires_after not available on all providers")
 def test_expires_after_requests(openai_client):
     """Upload a file using requests multipart/form-data and bracketed expires_after fields.
 
@@ -144,7 +153,8 @@ def test_expires_after_requests(openai_client):
         }
 
         session = requests.Session()
-        request = requests.Request("POST", base_url, files=files, data=data)
+        headers = _test_context_headers()
+        request = requests.Request("POST", base_url, files=files, data=data, headers=headers)
         prepared = session.prepare_request(request)
         resp = session.send(prepared, timeout=30)
         resp.raise_for_status()
@@ -155,13 +165,13 @@ def test_expires_after_requests(openai_client):
         assert result.get("created_at") is not None
         assert result.get("expires_at") == result["created_at"] + 4545
 
-        list_resp = requests.get(base_url, timeout=30)
+        list_resp = requests.get(base_url, headers=headers, timeout=30)
         list_resp.raise_for_status()
         listed = list_resp.json()
         ids = [f["id"] for f in listed.get("data", [])]
         assert uploaded_id in ids
 
-        retrieve_resp = requests.get(f"{base_url}/{uploaded_id}", timeout=30)
+        retrieve_resp = requests.get(f"{base_url}/{uploaded_id}", headers=headers, timeout=30)
         retrieve_resp.raise_for_status()
         retrieved = retrieve_resp.json()
         assert retrieved["id"] == uploaded_id
@@ -169,67 +179,79 @@ def test_expires_after_requests(openai_client):
     finally:
         if uploaded_id:
             try:
-                requests.delete(f"{base_url}/{uploaded_id}", timeout=30)
+                requests.delete(f"{base_url}/{uploaded_id}", headers=_test_context_headers(), timeout=30)
             except Exception:
                 pass
 
 
-@pytest.mark.xfail(message="User isolation broken for current providers, must be fixed.")
-@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
-def test_files_authentication_isolation(mock_get_authenticated_user, ogx_client):
+def _client_for_user(ogx_client, user: User):
+    if isinstance(ogx_client, OGXAsLibraryClient):
+        return ogx_client
+    provider_data = {"__test_authenticated_user": user.model_dump()}
+    return OgxClient(
+        base_url=ogx_client.base_url,
+        default_headers={"X-OGX-Provider-Data": json.dumps(provider_data)},
+        timeout=30,
+    )
+
+
+def test_files_authentication_isolation(ogx_client):
     """Test that users can only access their own files."""
+    if isinstance(ogx_client, OGXAsLibraryClient):
+        pytest.skip("Library mode does not propagate per-request user identity")
+
     from ogx_client import NotFoundError
 
-    client = ogx_client
-
     # Create two test users
-    user1 = User("user1", {"roles": ["user"], "teams": ["team-a"]})
-    user2 = User("user2", {"roles": ["user"], "teams": ["team-b"]})
+    user1 = User("user1", {"roles": ["role-a"], "teams": ["team-a"]})
+    user2 = User("user2", {"roles": ["role-b"], "teams": ["team-b"]})
+    user1_client = _client_for_user(ogx_client, user1)
+    user2_client = _client_for_user(ogx_client, user2)
 
     # User 1 uploads a file
-    mock_get_authenticated_user.return_value = user1
     test_content_1 = b"User 1's private file content"
 
-    with BytesIO(test_content_1) as file_buffer:
-        file_buffer.name = "user1_file.txt"
-        user1_file = client.files.create(file=file_buffer, purpose=purpose)
+    with RequestProviderDataContext(user=user1):
+        with BytesIO(test_content_1) as file_buffer:
+            file_buffer.name = "user1_file.txt"
+            user1_file = user1_client.files.create(file=file_buffer, purpose=purpose)
 
     # User 2 uploads a file
-    mock_get_authenticated_user.return_value = user2
     test_content_2 = b"User 2's private file content"
 
-    with BytesIO(test_content_2) as file_buffer:
-        file_buffer.name = "user2_file.txt"
-        user2_file = client.files.create(file=file_buffer, purpose=purpose)
+    with RequestProviderDataContext(user=user2):
+        with BytesIO(test_content_2) as file_buffer:
+            file_buffer.name = "user2_file.txt"
+            user2_file = user2_client.files.create(file=file_buffer, purpose=purpose)
 
     try:
         # User 1 can see their own file
-        mock_get_authenticated_user.return_value = user1
-        user1_files = client.files.list()
+        with RequestProviderDataContext(user=user1):
+            user1_files = user1_client.files.list()
         user1_file_ids = [f.id for f in user1_files.data]
         assert user1_file.id in user1_file_ids
         assert user2_file.id not in user1_file_ids  # Cannot see user2's file
 
         # User 2 can see their own file
-        mock_get_authenticated_user.return_value = user2
-        user2_files = client.files.list()
+        with RequestProviderDataContext(user=user2):
+            user2_files = user2_client.files.list()
         user2_file_ids = [f.id for f in user2_files.data]
         assert user2_file.id in user2_file_ids
         assert user1_file.id not in user2_file_ids  # Cannot see user1's file
 
         # User 1 can retrieve their own file
-        mock_get_authenticated_user.return_value = user1
-        retrieved_file = client.files.retrieve(user1_file.id)
+        with RequestProviderDataContext(user=user1):
+            retrieved_file = user1_client.files.retrieve(user1_file.id)
         assert retrieved_file.id == user1_file.id
 
         # User 1 cannot retrieve user2's file
-        mock_get_authenticated_user.return_value = user1
-        with pytest.raises(NotFoundError, match="not found"):
-            client.files.retrieve(user2_file.id)
+        with RequestProviderDataContext(user=user1):
+            with pytest.raises(NotFoundError, match="not found"):
+                user1_client.files.retrieve(user2_file.id)
 
         # User 1 can access their file content
-        mock_get_authenticated_user.return_value = user1
-        content_response = client.files.content(user1_file.id)
+        with RequestProviderDataContext(user=user1):
+            content_response = user1_client.files.content(user1_file.id)
         if isinstance(content_response, str):
             content = bytes(content_response, "utf-8")
         else:
@@ -237,108 +259,95 @@ def test_files_authentication_isolation(mock_get_authenticated_user, ogx_client)
         assert content == test_content_1
 
         # User 1 cannot access user2's file content
-        mock_get_authenticated_user.return_value = user1
-        with pytest.raises(NotFoundError, match="not found"):
-            client.files.content(user2_file.id)
+        with RequestProviderDataContext(user=user1):
+            with pytest.raises(NotFoundError, match="not found"):
+                user1_client.files.content(user2_file.id)
 
         # User 1 can delete their own file
-        mock_get_authenticated_user.return_value = user1
-        delete_response = client.files.delete(user1_file.id)
+        with RequestProviderDataContext(user=user1):
+            delete_response = user1_client.files.delete(user1_file.id)
         assert delete_response.deleted is True
 
         # User 1 cannot delete user2's file
-        mock_get_authenticated_user.return_value = user1
-        with pytest.raises(NotFoundError, match="not found"):
-            client.files.delete(user2_file.id)
+        with RequestProviderDataContext(user=user1):
+            with pytest.raises(NotFoundError, match="not found"):
+                user1_client.files.delete(user2_file.id)
 
         # User 2 can still access their file after user1's file is deleted
-        mock_get_authenticated_user.return_value = user2
-        retrieved_file = client.files.retrieve(user2_file.id)
+        with RequestProviderDataContext(user=user2):
+            retrieved_file = user2_client.files.retrieve(user2_file.id)
         assert retrieved_file.id == user2_file.id
 
         # Cleanup user2's file
-        mock_get_authenticated_user.return_value = user2
-        client.files.delete(user2_file.id)
+        with RequestProviderDataContext(user=user2):
+            user2_client.files.delete(user2_file.id)
 
     except Exception as e:
         # Cleanup in case of failure
         try:
-            mock_get_authenticated_user.return_value = user1
-            client.files.delete(user1_file.id)
+            with RequestProviderDataContext(user=user1):
+                user1_client.files.delete(user1_file.id)
         except Exception:
             pass
         try:
-            mock_get_authenticated_user.return_value = user2
-            client.files.delete(user2_file.id)
+            with RequestProviderDataContext(user=user2):
+                user2_client.files.delete(user2_file.id)
         except Exception:
             pass
         raise e
 
 
-@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
-def test_files_authentication_shared_attributes(mock_get_authenticated_user, ogx_client, provider_type_is_openai):
+def test_files_authentication_shared_attributes(ogx_client, provider_type_is_openai):
     """Test access control with users having identical attributes."""
-    client = ogx_client
+    if isinstance(ogx_client, OGXAsLibraryClient):
+        pytest.skip("Library mode does not propagate per-request user identity")
 
-    # Create users with identical attributes (required for default policy)
     user_a = User("user-a", {"roles": ["user"], "teams": ["shared-team"]})
     user_b = User("user-b", {"roles": ["user"], "teams": ["shared-team"]})
+    user_a_client = _client_for_user(ogx_client, user_a)
+    user_b_client = _client_for_user(ogx_client, user_b)
 
-    # User A uploads a file
-    mock_get_authenticated_user.return_value = user_a
     test_content = b"Shared attributes file content"
 
-    with BytesIO(test_content) as file_buffer:
-        file_buffer.name = "shared_attributes_file.txt"
-        shared_file = client.files.create(file=file_buffer, purpose=purpose)
+    with RequestProviderDataContext(user=user_a):
+        with BytesIO(test_content) as file_buffer:
+            file_buffer.name = "shared_attributes_file.txt"
+            shared_file = user_a_client.files.create(file=file_buffer, purpose=purpose)
 
     try:
-        # User B with identical attributes can access the file
-        mock_get_authenticated_user.return_value = user_b
-        files_list = client.files.list()
+        with RequestProviderDataContext(user=user_b):
+            files_list = user_b_client.files.list()
         file_ids = [f.id for f in files_list.data]
 
-        # User B should be able to see the file due to identical attributes
         assert shared_file.id in file_ids
 
-        # User B can retrieve file info
-        retrieved_file = client.files.retrieve(shared_file.id)
+        with RequestProviderDataContext(user=user_b):
+            retrieved_file = user_b_client.files.retrieve(shared_file.id)
         assert retrieved_file.id == shared_file.id
 
-        # User B can access file content
         if not provider_type_is_openai:
-            content_response = client.files.content(shared_file.id)
+            with RequestProviderDataContext(user=user_b):
+                content_response = user_b_client.files.content(shared_file.id)
             if isinstance(content_response, str):
                 content = bytes(content_response, "utf-8")
             else:
                 content = content_response.content
             assert content == test_content
 
-        # Cleanup
-        mock_get_authenticated_user.return_value = user_a
-        client.files.delete(shared_file.id)
+        with RequestProviderDataContext(user=user_a):
+            user_a_client.files.delete(shared_file.id)
 
     except Exception as e:
-        # Cleanup in case of failure
         try:
-            mock_get_authenticated_user.return_value = user_a
-            client.files.delete(shared_file.id)
-        except Exception:
-            pass
-        try:
-            mock_get_authenticated_user.return_value = user_b
-            client.files.delete(shared_file.id)
+            with RequestProviderDataContext(user=user_a):
+                user_a_client.files.delete(shared_file.id)
         except Exception:
             pass
         raise e
 
 
-@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
-def test_files_authentication_anonymous_access(mock_get_authenticated_user, ogx_client, provider_type_is_openai):
+def test_files_authentication_anonymous_access(ogx_client, provider_type_is_openai):
     client = ogx_client
-
-    # Simulate anonymous user (no authentication)
-    mock_get_authenticated_user.return_value = None
 
     test_content = b"Anonymous file content"
 

@@ -3585,7 +3585,7 @@ def test_openai_vector_store_with_chunks(
     filtered_search = compat_client.vector_stores.search(
         vector_store_id=vector_store.id,
         query="artificial intelligence",
-        filters={"topic": "ai"},
+        filters={"type": "eq", "key": "topic", "value": "ai"},
         max_num_results=5,
     )
 

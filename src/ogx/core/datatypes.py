@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import re
 import warnings
 from enum import StrEnum
 from pathlib import Path
@@ -50,14 +51,14 @@ class RegistryEntrySource(StrEnum):
 
 
 class User(BaseModel):
-    """An authenticated user with a principal identity and optional access control attributes."""
+    """An authenticated user with a principal identity, optional tenant, and access control attributes."""
 
     principal: str
-    # further attributes that may be used for access control decisions
+    tenant_id: str | None = None
     attributes: dict[str, list[str]] | None = None
 
-    def __init__(self, principal: str, attributes: dict[str, list[str]] | None):
-        super().__init__(principal=principal, attributes=attributes)
+    def __init__(self, principal: str, attributes: dict[str, list[str]] | None, *, tenant_id: str | None = None):
+        super().__init__(principal=principal, tenant_id=tenant_id, attributes=attributes)
 
 
 class ResourceWithOwner(Resource):
@@ -207,6 +208,41 @@ class AuthProviderType(StrEnum):
     UPSTREAM_HEADER = "upstream_header"
 
 
+_TENANT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-_]{0,127}$")
+
+
+def _validate_tenant_id(value: str) -> str:
+    normalized = value.strip().lower()
+    if not normalized:
+        raise ValueError("tenant_id must not be empty or blank")
+    if not _TENANT_ID_RE.match(normalized):
+        raise ValueError(f"tenant_id must match [a-z0-9][a-z0-9-_]{{0,127}}: {value!r}")
+    return normalized
+
+
+class TenancyMode(StrEnum):
+    """Multi-tenancy deployment modes."""
+
+    DISABLED = "disabled"
+    SINGLE = "single"
+    MULTI = "multi"
+
+
+class TenancyConfig(BaseModel):
+    """Multi-tenancy isolation configuration."""
+
+    mode: TenancyMode = Field(default=TenancyMode.DISABLED, description="Tenancy mode: disabled, single, or multi")
+    default_tenant_id: str | None = Field(default=None, description="Tenant ID for single-tenant mode")
+
+    @model_validator(mode="after")
+    def validate_tenancy(self) -> Self:
+        if self.mode == TenancyMode.SINGLE and not self.default_tenant_id:
+            raise ValueError("default_tenant_id is required when tenancy mode is 'single'")
+        if self.default_tenant_id:
+            self.default_tenant_id = _validate_tenant_id(self.default_tenant_id)
+        return self
+
+
 class OAuth2TokenAuthConfig(BaseModel):
     """Configuration for OAuth2 token authentication."""
 
@@ -225,6 +261,10 @@ class OAuth2TokenAuthConfig(BaseModel):
             "tenant": "namespaces",
             "namespace": "namespaces",
         },
+    )
+    tenant_claim: str | None = Field(
+        default=None,
+        description="JWT claim to extract as tenant_id (e.g. 'tenant', 'org'). When set, the claim value is used as the tenant partition key.",
     )
     jwks: OAuth2JWKSConfig | None = Field(default=None, description="JWKS configuration")
     introspection: OAuth2IntrospectionConfig | None = Field(
@@ -255,6 +295,10 @@ class CustomAuthConfig(BaseModel):
     endpoint: str = Field(
         ...,
         description="Custom authentication endpoint URL",
+    )
+    tenant_field: str | None = Field(
+        default=None,
+        description="Field name in the auth endpoint response to extract as tenant_id",
     )
 
 
@@ -292,6 +336,10 @@ class KubernetesAuthProviderConfig(BaseModel):
         },
         description="Mapping of Kubernetes user claims to access attributes",
     )
+    tenant_claim: str | None = Field(
+        default=None,
+        description="Kubernetes claim to extract as tenant_id (resolved via claims_mapping path syntax)",
+    )
 
     @field_validator("api_server_url")
     @classmethod
@@ -323,6 +371,10 @@ class UpstreamHeaderAuthConfig(BaseModel):
     type: Literal[AuthProviderType.UPSTREAM_HEADER] = AuthProviderType.UPSTREAM_HEADER
     principal_header: str = Field(
         description="HTTP header containing the authenticated user's identity (e.g. x-auth-user-id)",
+    )
+    tenant_header: str | None = Field(
+        default=None,
+        description="HTTP header containing the tenant ID (e.g. x-tenant-id). Used as the hard partition key for tenant isolation.",
     )
     attributes_header: str | None = Field(
         default=None,
@@ -769,6 +821,10 @@ class ServerConfig(BaseModel):
     auth: AuthenticationConfig | None = Field(
         default=None,
         description="Authentication configuration for the server",
+    )
+    tenancy: TenancyConfig = Field(
+        default_factory=TenancyConfig,
+        description="Multi-tenancy isolation configuration",
     )
     host: str | None = Field(
         default=None,

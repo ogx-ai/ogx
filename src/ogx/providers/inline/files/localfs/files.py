@@ -23,9 +23,10 @@ Security boundaries
 
 import asyncio
 import re
-import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import Response, UploadFile
 
@@ -37,6 +38,7 @@ from ogx.log import get_logger
 from ogx.providers.utils.files.sanitize import sanitize_content_disposition_filename
 from ogx_api import (
     DeleteFileRequest,
+    ExpiresAfter,
     Files,
     InvalidParameterError,
     ListFilesRequest,
@@ -50,11 +52,35 @@ from ogx_api import (
     RetrieveFileRequest,
     UploadFileRequest,
 )
+from ogx_api.files.models import OpenAIFileUploadPurpose
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 from .config import LocalfsFilesImplConfig
 
 logger = get_logger(name=__name__, category="files")
+
+
+def _make_file_object(
+    *,
+    id: str,
+    filename: str,
+    purpose: str,
+    bytes: int,
+    created_at: int,
+    expires_at: int,
+    **kwargs: Any,
+) -> OpenAIFileObject:
+    """Construct an OpenAIFileObject while ignoring storage-only fields."""
+    return OpenAIFileObject(
+        id=id,
+        filename=filename,
+        purpose=OpenAIFilePurpose(purpose),
+        bytes=bytes,
+        created_at=created_at,
+        expires_at=expires_at,
+        status="processed",
+        status_details="",
+    )
 
 
 class LocalfsFilesImpl(Files):
@@ -88,6 +114,33 @@ class LocalfsFilesImpl(Files):
 
     async def shutdown(self) -> None:
         pass
+
+    def _now(self) -> int:
+        """Return current UTC timestamp as int seconds."""
+        return int(datetime.now(UTC).timestamp())
+
+    async def _delete_if_expired(self, file_id: str) -> None:
+        """If the file exists and is expired, delete it from storage and metadata."""
+        self._validate_file_id(file_id)
+        if not self.sql_store:
+            return
+
+        row = await self.sql_store.fetch_one("openai_files", where={"id": file_id})
+        if row:
+            expires_at = row.get("expires_at")
+            if expires_at and expires_at <= self._now():
+                file_path = Path(row["file_path"])
+                try:
+                    resolved = self._validate_path_containment(file_path)
+
+                    def _delete() -> None:
+                        if resolved.exists():
+                            resolved.unlink()
+
+                    await asyncio.to_thread(_delete)
+                except InvalidParameterError:
+                    pass
+                await self.sql_store.delete("openai_files", where={"id": file_id})
 
     _FILE_ID_PATTERN = re.compile(r"^file-[0-9a-f]{1,64}$")
 
@@ -132,13 +185,14 @@ class LocalfsFilesImpl(Files):
         if not self.sql_store:
             raise RuntimeError("Files provider not initialized")
 
-        row = await self.sql_store.fetch_one("openai_files", where={"id": file_id}, action=action)
+        where: dict[str, str | dict] = {"id": file_id, "expires_at": {">": self._now()}}
+        row = await self.sql_store.fetch_one("openai_files", where=where, action=action)
         if not row:
             raise OpenAIFileObjectNotFoundError(file_id)
 
         file_path = Path(row.pop("file_path"))
         file_path = self._validate_path_containment(file_path)
-        return OpenAIFileObject(**row, status="processed", status_details=""), file_path
+        return _make_file_object(**row), file_path
 
     # OpenAI Files API Implementation
     async def openai_upload_file(
@@ -153,12 +207,6 @@ class LocalfsFilesImpl(Files):
         purpose = request.purpose
         expires_after = request.expires_after
 
-        if expires_after is not None:
-            logger.warning(
-                "File expiration is not supported by this provider, ignoring expires_after",
-                expires_after=expires_after,
-            )
-
         file_id = self._generate_file_id()
         file_path = self._get_file_path(file_id)
         sanitized_name = sanitize_content_disposition_filename(file.filename or "uploaded_file")
@@ -172,32 +220,28 @@ class LocalfsFilesImpl(Files):
 
         await asyncio.to_thread(_write_file)
 
-        created_at = int(time.time())
+        created_at = self._now()
+
         expires_at = created_at + self.config.ttl_secs
+        if purpose == OpenAIFileUploadPurpose.BATCH:
+            expires_at = created_at + ExpiresAfter.MAX
 
-        await self.sql_store.insert(
-            "openai_files",
-            {
-                "id": file_id,
-                "filename": sanitized_name,
-                "purpose": purpose.value,
-                "bytes": file_size,
-                "created_at": created_at,
-                "expires_at": expires_at,
-                "file_path": file_path.as_posix(),
-            },
-        )
+        if expires_after is not None:
+            expires_at = created_at + expires_after.seconds
 
-        return OpenAIFileObject(
-            id=file_id,
-            filename=sanitized_name,
-            purpose=OpenAIFilePurpose(purpose.value),
-            bytes=file_size,
-            created_at=created_at,
-            expires_at=expires_at,
-            status="processed",
-            status_details="",
-        )
+        entry: dict[str, Any] = {
+            "id": file_id,
+            "filename": sanitized_name,
+            "purpose": purpose.value,
+            "bytes": file_size,
+            "created_at": created_at,
+            "expires_at": expires_at,
+            "file_path": file_path.as_posix(),
+        }
+
+        await self.sql_store.insert("openai_files", entry)
+
+        return _make_file_object(**entry)
 
     async def openai_list_files(
         self,
@@ -215,31 +259,19 @@ class LocalfsFilesImpl(Files):
         if not order:
             order = Order.desc
 
-        where_conditions = {}
+        where_conditions: dict[str, Any] = {"expires_at": {">": self._now()}}
         if purpose:
             where_conditions["purpose"] = purpose.value
 
         paginated_result = await self.sql_store.fetch_all(
             table="openai_files",
-            where=where_conditions if where_conditions else None,
+            where=where_conditions,
             order_by=[("created_at", order.value)],
             cursor=("id", after) if after else None,
             limit=limit,
         )
 
-        files = [
-            OpenAIFileObject(
-                id=row["id"],
-                filename=row["filename"],
-                purpose=OpenAIFilePurpose(row["purpose"]),
-                bytes=row["bytes"],
-                created_at=row["created_at"],
-                expires_at=row["expires_at"],
-                status="processed",
-                status_details="",
-            )
-            for row in paginated_result.data
-        ]
+        files = [_make_file_object(**row) for row in paginated_result.data]
 
         return ListOpenAIFileResponse(
             data=files,
@@ -250,6 +282,7 @@ class LocalfsFilesImpl(Files):
 
     async def openai_retrieve_file(self, request: RetrieveFileRequest) -> OpenAIFileObject:
         """Returns information about a specific file."""
+        await self._delete_if_expired(request.file_id)
         file_obj, _ = await self._lookup_file_id(request.file_id)
 
         return file_obj
@@ -257,6 +290,7 @@ class LocalfsFilesImpl(Files):
     async def openai_delete_file(self, request: DeleteFileRequest) -> OpenAIFileDeleteResponse:
         """Delete a file."""
         file_id = request.file_id
+        await self._delete_if_expired(file_id)
         # Delete physical file
         _, file_path = await self._lookup_file_id(file_id, action=Action.DELETE)
 
@@ -278,6 +312,7 @@ class LocalfsFilesImpl(Files):
     async def openai_retrieve_file_content(self, request: RetrieveFileContentRequest) -> Response:
         """Returns the contents of the specified file."""
         file_id = request.file_id
+        await self._delete_if_expired(file_id)
         # Read file content
         file_obj, file_path = await self._lookup_file_id(file_id)
 

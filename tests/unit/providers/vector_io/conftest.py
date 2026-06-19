@@ -20,7 +20,8 @@ from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import SQLiteVecIndex,
 from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex, PGVectorVectorIOConfig
 from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex, PGVectorVectorIOAdapter
 from ogx.providers.remote.vector_io.qdrant.qdrant import QdrantIndex, QdrantVectorIOAdapter
-from ogx_api import Chunk, ChunkMetadata, QueryChunksResponse, VectorStore, VectorStoreNotFoundError
+from ogx_api import Chunk, ChunkMetadata, QueryChunksResponse, VectorStoreNotFoundError
+from ogx_api.vector_stores import VectorStore
 
 EMBEDDING_DIMENSION = 768
 COLLECTION_PREFIX = "test_collection"
@@ -370,7 +371,13 @@ async def qdrant_vec_index(embedding_dimension):
     mock_client.delete_collection = AsyncMock()
 
     collection_name = f"test-qdrant-collection-{random.randint(1, 1000000)}"
-    index = QdrantIndex(mock_client, collection_name)
+    test_vector_store = VectorStore(
+        identifier=collection_name,
+        provider_id="test_provider",
+        embedding_model="test_model",
+        embedding_dimension=embedding_dimension,
+    )
+    index = QdrantIndex(mock_client, test_vector_store)
     index._test_chunks = []
 
     async def mock_add_chunks(embedded_chunks):

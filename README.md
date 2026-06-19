@@ -41,6 +41,7 @@ response = client.chat.completions.create(
 - **Responses API** — server-side agentic orchestration with tool calling, MCP server integration, and built-in file search (RAG) in a single API call ([learn more](https://ogx-ai.github.io/docs/api-openai))
 - **Vector Stores & Files** — `/v1/vector_stores` and `/v1/files` for managed document storage and search
 - **Batches** — `/v1/batches` for offline batch processing
+- **Skills** — `/v1alpha/skills` for managing versioned skill bundles (zip archives with SKILL.md manifests) that agents can invoke
 - **[Open Responses](https://www.openresponses.org/) conformant** — the Responses API implementation passes the Open Responses conformance test suite
 - **Multi-SDK support** — use the [Anthropic SDK](https://docs.anthropic.com/en/api/messages) (`/v1/messages`) or [Google GenAI SDK](https://ai.google.dev/gemini-api/docs/interactions) (`/v1alpha/interactions`) natively alongside the OpenAI API
 
