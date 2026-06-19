@@ -6898,6 +6898,12 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
         max_tool_calls:
           anyOf:
           - type: integer
@@ -7320,6 +7326,12 @@ components:
         instructions:
           anyOf:
           - type: string
+          - type: 'null'
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
           - type: 'null'
         max_tool_calls:
           anyOf:
@@ -11086,6 +11098,13 @@ components:
           - type: string
           - type: 'null'
           description: Instructions to guide the model's behavior.
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          description: List of skill IDs whose SKILL.md instructions are injected into the model's context.
         parallel_tool_calls:
           anyOf:
           - type: boolean

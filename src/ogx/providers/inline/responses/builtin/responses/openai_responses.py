@@ -10,6 +10,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from typing import Any
 
 import tiktoken
 from pydantic import TypeAdapter
@@ -129,6 +130,7 @@ class OpenAIResponsesImpl:
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
+        skills_api: Any = None,
         moderation_headers: dict[str, str] | None = None,
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
@@ -142,6 +144,7 @@ class OpenAIResponsesImpl:
         self.moderation_endpoint = moderation_endpoint
         self.moderation_headers = moderation_headers
         self.conversations_api = conversations_api
+        self.skills_api = skills_api
         self.tool_executor = ToolExecutor(
             tool_groups_api=tool_groups_api,
             tool_runtime_api=tool_runtime_api,
@@ -529,6 +532,18 @@ class OpenAIResponsesImpl:
                 response_id=response_id,
                 error=str(exc),
             )
+    async def _resolve_skill_instructions(self, skill_ids: list[str]) -> list[OpenAISystemMessageParam]:
+        """Resolve skill IDs and return system messages with their instructions."""
+        parts: list[str] = []
+        for skill_id in skill_ids:
+            try:
+                skill = await self.skills_api.get_skill(skill_id)
+                parts.append(f"## Skill: {skill.name}\n{skill.description}")
+            except Exception:
+                logger.warning("Failed to resolve skill instructions", skill_id=skill_id)
+        if not parts:
+            return []
+        return [OpenAISystemMessageParam(content="\n\n".join(parts))]
 
     async def _prepend_prompt(
         self,
@@ -870,6 +885,7 @@ class OpenAIResponsesImpl:
         background: bool | None = False,
         prompt: OpenAIResponsePrompt | None = None,
         instructions: str | None = None,
+        skills: list[str] | None = None,
         previous_response_id: str | None = None,
         prompt_cache_key: str | None = None,
         conversation: str | None = None,
@@ -961,6 +977,7 @@ class OpenAIResponsesImpl:
                 model=model,
                 prompt=prompt,
                 instructions=instructions,
+                skills=skills,
                 previous_response_id=previous_response_id,
                 conversation=conversation,
                 store=store,
@@ -992,6 +1009,7 @@ class OpenAIResponsesImpl:
             model=model,
             prompt=prompt,
             instructions=instructions,
+            skills=skills,
             previous_response_id=previous_response_id,
             prompt_cache_key=prompt_cache_key,
             store=store,
@@ -1083,6 +1101,7 @@ class OpenAIResponsesImpl:
         model: str,
         prompt: OpenAIResponsePrompt | None = None,
         instructions: str | None = None,
+        skills: list[str] | None = None,
         previous_response_id: str | None = None,
         conversation: str | None = None,
         store: bool | None = True,
@@ -1203,6 +1222,7 @@ class OpenAIResponsesImpl:
         model: str,
         prompt: OpenAIResponsePrompt | None = None,
         instructions: str | None = None,
+        skills: list[str] | None = None,
         previous_response_id: str | None = None,
         conversation: str | None = None,
         store: bool | None = True,
@@ -1246,6 +1266,7 @@ class OpenAIResponsesImpl:
             model=model,
             prompt=prompt,
             instructions=instructions,
+            skills=skills,
             previous_response_id=previous_response_id,
             store=store,
             temperature=temperature,
@@ -1318,6 +1339,7 @@ class OpenAIResponsesImpl:
         input: str | list[OpenAIResponseInput],
         model: str,
         instructions: str | None = None,
+        skills: list[str] | None = None,
         previous_response_id: str | None = None,
         prompt_cache_key: str | None = None,
         conversation: str | None = None,
@@ -1359,6 +1381,12 @@ class OpenAIResponsesImpl:
             input, tools, previous_response_id, conversation
         )
 
+        # Inherit skills from previous response if not explicitly provided
+        if skills is None and previous_response_id:
+            previous_response = await self.responses_store.get_response_object(previous_response_id)
+            if previous_response.skills:
+                skills = previous_response.skills
+
         # Auto-compact if context_management is configured (runs on resolved history, not just new input)
         compacted_history_applied = False
         if context_management:
@@ -1372,6 +1400,13 @@ class OpenAIResponsesImpl:
 
         if instructions:
             messages.insert(0, OpenAISystemMessageParam(content=instructions))
+
+        # Inject skill instructions after user instructions
+        if skills and self.skills_api:
+            skill_messages = await self._resolve_skill_instructions(skills)
+            insert_idx = 1 if instructions else 0
+            for i, msg in enumerate(skill_messages):
+                messages.insert(insert_idx + i, msg)
 
         # Prepend reusable prompt (if provided)
         await self._prepend_prompt(messages, prompt)
@@ -1428,6 +1463,7 @@ class OpenAIResponsesImpl:
                 prompt=prompt,
                 prompt_cache_key=prompt_cache_key,
                 previous_response_id=previous_response_id,
+                skills=skills,
                 text=text,
                 max_infer_iters=max_infer_iters,
                 parallel_tool_calls=parallel_tool_calls,
@@ -1524,6 +1560,7 @@ class OpenAIResponsesImpl:
         model: str | None,
         input: str | list[OpenAIResponseInput] | None = None,
         instructions: str | None = None,
+        skills: list[str] | None = None,
         previous_response_id: str | None = None,
         prompt_cache_key: str | None = None,
         extra_body: dict | None = None,
