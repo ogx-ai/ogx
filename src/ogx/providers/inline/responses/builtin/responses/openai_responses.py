@@ -321,14 +321,21 @@ class OpenAIResponsesImpl:
         tools: list[OpenAIResponseInputTool] | None,
         previous_response_id: str | None,
         conversation: str | None,
-    ) -> tuple[str | list[OpenAIResponseInput], list[OpenAIMessageParam], ToolContext, OpenAIResponseUsage | None]:
+    ) -> tuple[
+        str | list[OpenAIResponseInput],
+        list[OpenAIMessageParam],
+        ToolContext,
+        OpenAIResponseUsage | None,
+        list[str] | None,
+    ]:
         """Process input with optional previous response context.
 
         Returns:
-            tuple: (all_input for storage, messages for chat completion, tool context, previous usage)
+            tuple: (all_input, messages, tool context, previous usage, inherited skills)
         """
         tool_context = ToolContext(tools)
         previous_usage: OpenAIResponseUsage | None = None
+        inherited_skills: list[str] | None = None
         if previous_response_id:
             previous_response: _OpenAIResponseObjectWithInputAndMessages = (
                 await self.responses_store.get_response_object(previous_response_id)
@@ -339,6 +346,7 @@ class OpenAIResponsesImpl:
                     "Cannot use an incomplete background response as previous_response_id."
                 )
             previous_usage = previous_response.usage
+            inherited_skills = previous_response.skills
             all_input = await self._prepend_previous_response(input, previous_response)
 
             if previous_response.messages:
@@ -390,7 +398,7 @@ class OpenAIResponsesImpl:
             all_input = input
             messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
 
-        return all_input, messages, tool_context, previous_usage
+        return all_input, messages, tool_context, previous_usage, inherited_skills
 
     @staticmethod
     def _insert_memory_context(messages: list[OpenAIMessageParam], memory_context: str) -> None:
@@ -533,14 +541,18 @@ class OpenAIResponsesImpl:
                 error=str(exc),
             )
     async def _resolve_skill_instructions(self, skill_ids: list[str]) -> list[OpenAISystemMessageParam]:
-        """Resolve skill IDs and return system messages with their instructions."""
+        """Resolve skill IDs and return system messages with their instructions.
+
+        Fetches each skill's metadata and builds a system message from
+        the skill name and description (from SKILL.md frontmatter).
+        """
         parts: list[str] = []
         for skill_id in skill_ids:
-            try:
-                skill = await self.skills_api.get_skill(skill_id)
-                parts.append(f"## Skill: {skill.name}\n{skill.description}")
-            except Exception:
-                logger.warning("Failed to resolve skill instructions", skill_id=skill_id)
+            skill = await self.skills_api.get_skill(skill_id)
+            section = f"## Skill: {skill.name}"
+            if skill.description:
+                section += f"\n{skill.description}"
+            parts.append(section)
         if not parts:
             return []
         return [OpenAISystemMessageParam(content="\n\n".join(parts))]
@@ -1182,6 +1194,7 @@ class OpenAIResponsesImpl:
                         model=model,
                         prompt=prompt,
                         instructions=instructions,
+                        skills=skills,
                         previous_response_id=previous_response_id,
                         conversation=conversation,
                         store=store,
@@ -1377,15 +1390,17 @@ class OpenAIResponsesImpl:
         assert max_infer_iters is not None, "max_infer_iters must not be None"
 
         # Input preprocessing
-        all_input, messages, tool_context, previous_usage = await self._process_input_with_previous_response(
-            input, tools, previous_response_id, conversation
-        )
+        (
+            all_input,
+            messages,
+            tool_context,
+            previous_usage,
+            inherited_skills,
+        ) = await self._process_input_with_previous_response(input, tools, previous_response_id, conversation)
 
         # Inherit skills from previous response if not explicitly provided
-        if skills is None and previous_response_id:
-            previous_response = await self.responses_store.get_response_object(previous_response_id)
-            if previous_response.skills:
-                skills = previous_response.skills
+        if skills is None and inherited_skills:
+            skills = inherited_skills
 
         # Auto-compact if context_management is configured (runs on resolved history, not just new input)
         compacted_history_applied = False
