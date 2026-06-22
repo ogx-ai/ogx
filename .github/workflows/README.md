@@ -33,7 +33,6 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | Integration Tests (Record) | [record-integration-tests.yml](record-integration-tests.yml) | Auto-record missing test recordings for PR |
 | Release Branch Scheduled CI | [release-branch-scheduled-ci.yml](release-branch-scheduled-ci.yml) | Scheduled CI checks for active release branches |
 | Check semantic PR titles | [semantic-pr.yml](semantic-pr.yml) | Ensure that PR titles follow the conventional commit spec |
-| Stainless SDK Builds | [stainless-builds.yml](stainless-builds.yml) | Build Stainless SDK from OpenAPI spec changes |
 | Close stale issues and PRs | [stale_bot.yml](stale_bot.yml) | Run the Stale Bot action |
 | Test External Providers Installed via Module | [test-external-provider-module.yml](test-external-provider-module.yml) | Test External Provider installation via Python module |
 | Test External API and Providers | [test-external.yml](test-external.yml) | Test the External API and Provider mechanisms |

@@ -4014,6 +4014,9 @@ dependencies = [
 client = [
     { name = "ogx-client" },
 ]
+openclient = [
+    { name = "ogx-open-client" },
+]
 starter = [
     { name = "aiohttp" },
     { name = "anthropic" },
@@ -4086,7 +4089,7 @@ dev = [
     { name = "moto", extra = ["s3"] },
     { name = "mypy" },
     { name = "nbval" },
-    { name = "ogx-client" },
+    { name = "ogx-open-client" },
     { name = "ollama" },
     { name = "openapi-spec-validator" },
     { name = "pgvector" },
@@ -4182,7 +4185,7 @@ type-checking = [
     { name = "markitdown", extra = ["all"] },
     { name = "mcp" },
     { name = "nest-asyncio" },
-    { name = "ogx-client" },
+    { name = "ogx-open-client" },
     { name = "ollama" },
     { name = "pandas" },
     { name = "pandas-stubs" },
@@ -4256,6 +4259,7 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'starter'" },
     { name = "ogx-api", editable = "src/ogx_api" },
     { name = "ogx-client", marker = "extra == 'client'", specifier = ">=1.1.2" },
+    { name = "ogx-open-client", marker = "extra == 'openclient'", specifier = ">=1.0.2" },
     { name = "ollama", marker = "extra == 'starter'" },
     { name = "openai", specifier = ">=2.41.0" },
     { name = "opentelemetry-distro", specifier = ">=0.60b1" },
@@ -4297,7 +4301,7 @@ requires-dist = [
     { name = "websockets", specifier = ">=14.0" },
     { name = "zstandard", specifier = ">=0.23.0" },
 ]
-provides-extras = ["client", "starter"]
+provides-extras = ["client", "openclient", "starter"]
 
 [package.metadata.requires-dev]
 benchmark = [{ name = "locust", specifier = ">=2.39.1" }]
@@ -4323,7 +4327,7 @@ dev = [
     { name = "moto", extras = ["s3"], specifier = ">=5.1.10" },
     { name = "mypy" },
     { name = "nbval" },
-    { name = "ogx-client", specifier = ">=1.1.2" },
+    { name = "ogx-open-client", specifier = ">=1.0.2" },
     { name = "ollama" },
     { name = "openapi-spec-validator", specifier = ">=0.9.0" },
     { name = "pgvector", specifier = ">=0.3.0" },
@@ -4416,7 +4420,7 @@ type-checking = [
     { name = "markitdown", extras = ["all"] },
     { name = "mcp", specifier = ">=1.23.0,<2.0" },
     { name = "nest-asyncio" },
-    { name = "ogx-client", specifier = ">=1.1.2" },
+    { name = "ogx-open-client", specifier = ">=1.0.2" },
     { name = "ollama" },
     { name = "pandas" },
     { name = "pandas-stubs" },
@@ -4506,6 +4510,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/72/15/5f02de6eba355443a5687abfc8474beec4ac0aae3357629dc889547f62cb/ogx_client-1.1.2.tar.gz", hash = "sha256:2bb2e7d9100e6332d45dc003777027f9a2f7e9ec82d77cfa6c08ccb670172657", size = 440847, upload-time = "2026-06-17T14:11:44.312Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/24/4f/c17e5520c0fc282b4b1654bdd5432c7c5e393ce1c5a5b305b34e5ce3ea14/ogx_client-1.1.2-py3-none-any.whl", hash = "sha256:c8b0a0657231da8151ed7267261d3dd7713482ef7d19d97adc13bb42ca25a5da", size = 314013, upload-time = "2026-06-17T14:11:42.51Z" },
+]
+
+[[package]]
+name = "ogx-open-client"
+version = "1.1.0.dev0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fire" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6c/bd/1388d29eecccd86aed91269c7d98d8b32443bf1516a7f08f7e1b7d240e17/ogx_open_client-1.1.0.dev0.tar.gz", hash = "sha256:593733e85b8da855b1cb065877e5d7151b9095796b6193ae478a481a4002828c", size = 607373, upload-time = "2026-06-14T07:54:00.131Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/63/65/3f6f149802d08572232821042c8566d62ae0fd55e8e34acc2f8666ff6c0a/ogx_open_client-1.1.0.dev0-py3-none-any.whl", hash = "sha256:49c543b8c3a3e384cf972515aa5ed0fc297c9f3be35308f013b23d135c7df869", size = 1577984, upload-time = "2026-06-14T07:53:58.34Z" },
 ]
 
 [[package]]
