@@ -31,7 +31,7 @@ from ogx_api.schema_utils import json_schema_type
 
 
 @json_schema_type
-class ExpiresAfter(BaseModel):
+class ContainerExpiresAfter(BaseModel):
     """Control expiration of a container.
 
     Anchored on ``last_active_at`` (each shell execution or file operation
@@ -154,7 +154,9 @@ class Container(BaseModel):
         ..., description="Unix timestamp (in seconds) of the last operation performed against this container."
     )
     name: str | None = Field(default=None, description="Human-readable name for the container.")
-    expires_after: ExpiresAfter | None = Field(default=None, description="Inactivity-based expiration settings.")
+    expires_after: ContainerExpiresAfter | None = Field(
+        default=None, description="Inactivity-based expiration settings."
+    )
     image: str | None = Field(
         default=None,
         description="Container image used to run the sandbox. May be operator-locked.",
@@ -174,7 +176,9 @@ class ContainerCreateRequest(BaseModel):
         default_factory=list,
         description="Files (from the Files API) to seed into the container at /mnt/data/.",
     )
-    expires_after: ExpiresAfter | None = Field(default=None, description="Inactivity-based expiration settings.")
+    expires_after: ContainerExpiresAfter | None = Field(
+        default=None, description="Inactivity-based expiration settings."
+    )
     image: str | None = Field(
         default=None,
         description="Requested container image. The operator policy may pin or reject this value.",
@@ -326,7 +330,7 @@ class ShellEnvironmentContainerAuto(BaseModel):
 
     type: Literal["container_auto"] = Field(default="container_auto", description="Discriminator.")
     image: str | None = Field(default=None, description="Optional preferred container image.")
-    expires_after: ExpiresAfter | None = Field(
+    expires_after: ContainerExpiresAfter | None = Field(
         default=None, description="Inactivity-based expiration for the auto-created container."
     )
 
@@ -405,4 +409,36 @@ class ShellCallOutput(BaseModel):
     container_id: str | None = Field(
         default=None,
         description="ID of the container the call executed in, when applicable. Null for local mode.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# ContainerRuntime request models
+#
+# These describe the internal ContainerRuntime call surface, which is not
+# exposed over HTTP. They are deliberately NOT decorated with
+# ``@json_schema_type`` so they stay out of the public OpenAPI spec.
+# ---------------------------------------------------------------------------
+
+
+class ExecuteShellRequest(BaseModel):
+    """Internal request to run a shell command inside a container."""
+
+    container_id: str = Field(..., description="The ID of the container to execute inside.")
+    command: list[str] = Field(..., description="Command argv to execute. Passed without shell expansion.")
+    timeout_seconds: float | None = Field(
+        default=None, description="Optional wall-clock timeout for the command in seconds."
+    )
+
+
+class MountSkillsRequest(BaseModel):
+    """Internal request to mount skill bundles into a container."""
+
+    container_id: str = Field(..., description="The ID of the container to mount skills into.")
+    skill_bundles: list[tuple[str, bytes]] = Field(
+        ...,
+        description=(
+            "Skill bundles as (skill_name, zip_bytes) pairs. Each archive is "
+            "extracted into /mnt/skills/{skill_name}/ inside the container."
+        ),
     )

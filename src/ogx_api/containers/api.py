@@ -31,6 +31,7 @@ from .models import (
     ContainerFileDeleteResponse,
     DeleteContainerFileRequest,
     DeleteContainerRequest,
+    ExecuteShellRequest,
     GetContainerFileContentRequest,
     GetContainerFileRequest,
     GetContainerRequest,
@@ -38,6 +39,7 @@ from .models import (
     ListContainerFilesResponse,
     ListContainersRequest,
     ListContainersResponse,
+    MountSkillsRequest,
     ShellCallOutput,
     UploadContainerFileRequest,
 )
@@ -121,7 +123,7 @@ class ContainerRuntime(Protocol):
         """Create and start a container. Raises if resource limits are exceeded."""
         ...
 
-    async def get_container(self, container_id: str) -> Container:
+    async def get_container(self, request: GetContainerRequest) -> Container:
         """Fetch the current state of a container, including ``last_active_at``."""
         ...
 
@@ -132,7 +134,7 @@ class ContainerRuntime(Protocol):
         """List containers known to this runtime."""
         ...
 
-    async def delete_container(self, container_id: str) -> ContainerDeleteResponse:
+    async def delete_container(self, request: DeleteContainerRequest) -> ContainerDeleteResponse:
         """Stop and remove a container along with its filesystem."""
         ...
 
@@ -140,7 +142,7 @@ class ContainerRuntime(Protocol):
 
     async def upload_file(
         self,
-        container_id: str,
+        request: UploadContainerFileRequest,
         file: UploadFile,
     ) -> ContainerFile:
         """Copy an uploaded file into the container at the runtime-chosen path."""
@@ -155,24 +157,21 @@ class ContainerRuntime(Protocol):
 
     async def get_file(
         self,
-        container_id: str,
-        file_id: str,
+        request: GetContainerFileRequest,
     ) -> ContainerFile:
         """Get metadata for a single file inside a container."""
         ...
 
     async def get_file_content(
         self,
-        container_id: str,
-        file_id: str,
+        request: GetContainerFileContentRequest,
     ) -> Response:
         """Stream the bytes of a file inside a container."""
         ...
 
     async def delete_file(
         self,
-        container_id: str,
-        file_id: str,
+        request: DeleteContainerFileRequest,
     ) -> ContainerFileDeleteResponse:
         """Remove a file from a container's filesystem."""
         ...
@@ -181,14 +180,12 @@ class ContainerRuntime(Protocol):
 
     async def execute_shell(
         self,
-        container_id: str,
-        command: list[str],
-        timeout_seconds: float | None = None,
+        request: ExecuteShellRequest,
     ) -> ShellCallOutput:
         """Run a shell command inside the container and capture its output.
 
-        ``command`` is passed as ``argv`` (no shell expansion) to keep the
-        interface uniform across backends. Implementations are expected to
+        ``request.command`` is passed as ``argv`` (no shell expansion) to keep
+        the interface uniform across backends. Implementations are expected to
         update ``last_active_at`` on the container as a side effect.
         """
         ...
@@ -197,13 +194,12 @@ class ContainerRuntime(Protocol):
 
     async def mount_skills(
         self,
-        container_id: str,
-        skill_bundles: list[tuple[str, bytes]],
+        request: MountSkillsRequest,
     ) -> None:
         """Mount skill bundles into ``/mnt/skills/{skill_name}/`` inside the container.
 
-        Each entry of ``skill_bundles`` is ``(skill_name, zip_bytes)`` — the
-        zip archive is extracted into the named directory. Calling this
+        Each entry of ``request.skill_bundles`` is ``(skill_name, zip_bytes)``
+        — the zip archive is extracted into the named directory. Calling this
         method multiple times with overlapping names overwrites the previous
         contents.
         """

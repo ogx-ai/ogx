@@ -10545,6 +10545,30 @@ components:
           type: string
       title: ListSkillVersionsRequest
       type: object
+    ContainerExpiresAfter:
+      description: |-
+        Control expiration of a container.
+
+        Anchored on ``last_active_at`` (each shell execution or file operation
+        refreshes the anchor). Operator-set bounds protect the host from
+        long-lived sandboxes.
+      properties:
+        anchor:
+          description: The anchor point for expiration. Must be 'last_active_at'.
+          title: Anchor
+          type: string
+          enum:
+          - last_active_at
+        minutes:
+          description: Minutes of inactivity after the anchor before the container expires.
+          maximum: 1440
+          minimum: 1
+          title: Minutes
+          type: integer
+      required:
+      - minutes
+      title: ContainerExpiresAfter
+      type: object
     NetworkCredential:
       description: |-
         A named credential available to outbound network calls.
@@ -10688,12 +10712,12 @@ components:
           nullable: true
         expires_after:
           anyOf:
-          - $ref: '#/components/schemas/ExpiresAfter'
-            title: ExpiresAfter
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
           - type: 'null'
           description: Inactivity-based expiration settings.
           nullable: true
-          title: ExpiresAfter
+          title: ContainerExpiresAfter
         image:
           anyOf:
           - type: string
@@ -10732,12 +10756,12 @@ components:
           type: array
         expires_after:
           anyOf:
-          - $ref: '#/components/schemas/ExpiresAfter'
-            title: ExpiresAfter
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
           - type: 'null'
           description: Inactivity-based expiration settings.
           nullable: true
-          title: ExpiresAfter
+          title: ContainerExpiresAfter
         image:
           anyOf:
           - type: string
@@ -11077,12 +11101,12 @@ components:
           nullable: true
         expires_after:
           anyOf:
-          - $ref: '#/components/schemas/ExpiresAfter'
-            title: ExpiresAfter
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
           - type: 'null'
           description: Inactivity-based expiration for the auto-created container.
           nullable: true
-          title: ExpiresAfter
+          title: ContainerExpiresAfter
       title: ShellEnvironmentContainerAuto
       type: object
     ShellEnvironmentContainerReference:
