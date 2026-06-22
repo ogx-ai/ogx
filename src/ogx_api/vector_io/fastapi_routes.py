@@ -43,16 +43,19 @@ from .models import (
     VectorStoreSearchResponsePage,
 )
 
+VECTOR_IO_TAG = "VectorIO"
+VECTOR_STORES_TAG = "Vector Stores"
+
 
 def create_router(impl: VectorIO) -> APIRouter:
     router = APIRouter(
         prefix=f"/{OGX_API_V1}",
-        tags=["VectorIO"],
         responses=standard_responses,
     )
 
     @router.post(
         "/vector-io/insert",
+        tags=[VECTOR_IO_TAG],
         status_code=status.HTTP_204_NO_CONTENT,
         response_class=Response,
         summary="Insert embedded chunks into a vector database.",
@@ -65,6 +68,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector-io/query",
+        tags=[VECTOR_IO_TAG],
         response_model=QueryChunksResponse,
         summary="Query chunks from a vector database.",
         description="Query chunks from a vector database.",
@@ -75,6 +79,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector_stores",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreObject,
         summary="Create a vector store (OpenAI-compatible).",
         description="Create a vector store (OpenAI-compatible).",
@@ -87,6 +92,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.get(
         "/vector_stores",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreListResponse,
         summary="List vector stores (OpenAI-compatible).",
         description="List vector stores (OpenAI-compatible).",
@@ -114,6 +120,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.get(
         "/vector_stores/{vector_store_id}",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreObject,
         summary="Retrieve a vector store (OpenAI-compatible).",
         description="Retrieve a vector store (OpenAI-compatible).",
@@ -126,6 +133,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector_stores/{vector_store_id}",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreObject,
         summary="Update a vector store (OpenAI-compatible).",
         description="Update a vector store (OpenAI-compatible).",
@@ -142,6 +150,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.delete(
         "/vector_stores/{vector_store_id}",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreDeleteResponse,
         summary="Delete a vector store (OpenAI-compatible).",
         description="Delete a vector store (OpenAI-compatible).",
@@ -154,6 +163,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector_stores/{vector_store_id}/search",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreSearchResponsePage,
         summary="Search a vector store (OpenAI-compatible).",
         description="Search a vector store (OpenAI-compatible).",
@@ -170,6 +180,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector_stores/{vector_store_id}/files",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileObject,
         summary="Attach a file to a vector store (OpenAI-compatible).",
         description="Attach a file to a vector store (OpenAI-compatible).",
@@ -186,6 +197,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.get(
         "/vector_stores/{vector_store_id}/files",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreListFilesResponse,
         summary="List files in a vector store (OpenAI-compatible).",
         description="List files in a vector store (OpenAI-compatible).",
@@ -220,6 +232,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.get(
         "/vector_stores/{vector_store_id}/files/{file_id}",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileObject,
         summary="Retrieve a vector store file (OpenAI-compatible).",
         description="Retrieve a vector store file (OpenAI-compatible).",
@@ -233,6 +246,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.get(
         "/vector_stores/{vector_store_id}/files/{file_id}/content",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileContentResponse,
         summary="Retrieve vector store file contents (OpenAI-compatible).",
         description="Retrieve vector store file contents (OpenAI-compatible).",
@@ -253,6 +267,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector_stores/{vector_store_id}/files/{file_id}",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileObject,
         summary="Update a vector store file (OpenAI-compatible).",
         description="Update a vector store file (OpenAI-compatible).",
@@ -271,6 +286,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.delete(
         "/vector_stores/{vector_store_id}/files/{file_id}",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileDeleteResponse,
         summary="Delete a vector store file (OpenAI-compatible).",
         description="Delete a vector store file (OpenAI-compatible).",
@@ -284,6 +300,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector_stores/{vector_store_id}/file_batches",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileBatchObject,
         summary="Create a vector store file batch (OpenAI-compatible).",
         description="Create a vector store file batch (OpenAI-compatible).",
@@ -301,6 +318,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.get(
         "/vector_stores/{vector_store_id}/file_batches/{batch_id}",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileBatchObject,
         summary="Retrieve a vector store file batch (OpenAI-compatible).",
         description="Retrieve a vector store file batch (OpenAI-compatible).",
@@ -320,6 +338,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.get(
         "/vector_stores/{vector_store_id}/file_batches/{batch_id}/files",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFilesListInBatchResponse,
         summary="List files in a vector store file batch (OpenAI-compatible).",
         description="List files in a vector store file batch (OpenAI-compatible).",
@@ -356,6 +375,7 @@ def create_router(impl: VectorIO) -> APIRouter:
 
     @router.post(
         "/vector_stores/{vector_store_id}/file_batches/{batch_id}/cancel",
+        tags=[VECTOR_STORES_TAG],
         response_model=VectorStoreFileBatchObject,
         summary="Cancel a vector store file batch (OpenAI-compatible).",
         description="Cancel a vector store file batch (OpenAI-compatible).",
