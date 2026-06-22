@@ -42,9 +42,7 @@ def update_pip_packages_line(line: str, pkg_name: str, new_version: str) -> tupl
     Returns (new_line, changed, reason).
     """
     pkg_pattern = normalize_pkg_pattern(pkg_name)
-    lower_bound_re = re.compile(
-        rf'("(?:{pkg_pattern})(?:\[[^\]]*\])?>=)([\d]+(?:\.[\d]+)*)', re.IGNORECASE
-    )
+    lower_bound_re = re.compile(rf'("(?:{pkg_pattern})(?:\[[^\]]*\])?>=)([\d]+(?:\.[\d]+)*)', re.IGNORECASE)
 
     match = lower_bound_re.search(line)
     if not match:
@@ -54,16 +52,12 @@ def update_pip_packages_line(line: str, pkg_name: str, new_version: str) -> tupl
     if parse_version(new_version) <= parse_version(old_version):
         return line, False, f"{pkg_name}: new version {new_version} <= current floor {old_version}"
 
-    upper_bound_re = re.compile(
-        rf'"(?:{pkg_pattern})(?:\[[^\]]*\])?>=(?:[^"]*),<([\d]+(?:\.[\d]+)*)"', re.IGNORECASE
-    )
+    upper_bound_re = re.compile(rf'"(?:{pkg_pattern})(?:\[[^\]]*\])?>=(?:[^"]*),<([\d]+(?:\.[\d]+)*)"', re.IGNORECASE)
     upper_match = upper_bound_re.search(line)
     if upper_match:
         upper_version = upper_match.group(1)
         if parse_version(new_version) >= parse_version(upper_version):
-            return line, False, (
-                f"{pkg_name}: new version {new_version} >= upper bound <{upper_version}, skipping"
-            )
+            return line, False, (f"{pkg_name}: new version {new_version} >= upper bound <{upper_version}, skipping")
 
     new_line = lower_bound_re.sub(lambda m: m.group(1) + new_version, line)
     return new_line, True, f"{pkg_name}: updated >= floor from {old_version} to {new_version}"
@@ -106,9 +100,7 @@ def update_file(filepath: Path, pkg_name: str, new_version: str) -> tuple[bool, 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Update pip_packages version floors in provider registry files"
-    )
+    parser = argparse.ArgumentParser(description="Update pip_packages version floors in provider registry files")
     parser.add_argument("--dependency-name", required=True)
     parser.add_argument("--dependency-version", required=True)
     parser.add_argument(
