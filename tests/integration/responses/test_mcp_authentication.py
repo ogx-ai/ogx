@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 
-import ogx_client
+import ogx_open_client
 import openai
 import pytest
 
@@ -76,7 +76,9 @@ def test_mcp_authorization_error_when_header_provided(responses_client, client_w
         )
 
         # Create response - should raise BadRequestError for security reasons
-        with pytest.raises((ogx_client.BadRequestError, openai.BadRequestError), match="'authorization' parameter"):
+        with pytest.raises(
+            (ogx_open_client.BadRequestError, openai.BadRequestError), match="'authorization' parameter"
+        ):
             responses_client.responses.create(
                 model=text_model_id,
                 input="What is the boiling point of myawesomeliquid?",

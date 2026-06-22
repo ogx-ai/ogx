@@ -51,7 +51,7 @@ on:
         required: false
         type: string
         default: 'default'
-        description: 'Matrix configuration key from ci_matrix.json (e.g., "default", "stainless")'
+        description: 'Matrix configuration key from ci_matrix.json (e.g., "default")'
       matrix_json:
         required: false
         type: string
@@ -87,8 +87,7 @@ concurrency:
 
 # Limit permissions of the GITHUB_TOKEN to the minimum required.
 # Default mode is 'replay' which only needs read access.
-# When called via workflow_call (e.g., from stainless-builds.yml with record-if-missing),
-# the caller's permissions apply.
+# When called via workflow_call, the caller's permissions apply.
 permissions:
   contents: read
 
@@ -204,7 +203,7 @@ jobs:
           WATSONX_PROJECT_ID: replay-mode-dummy-project
           VERTEX_AI_PROJECT: ${{ matrix.config.setup == 'vertexai' && 'replay-mode-dummy-project' || '' }}
           VERTEX_AI_LOCATION: ${{ matrix.config.setup == 'vertexai' && 'global' || '' }}
-          AWS_BEARER_TOKEN_BEDROCK: replay-mode-dummy-key
+          AWS_BEDROCK_BEARER_TOKEN: replay-mode-dummy-key
           AWS_DEFAULT_REGION: us-west-2
           GEMINI_API_KEY: replay-mode-dummy-key
           TAVILY_SEARCH_API_KEY: ${{ secrets.TAVILY_SEARCH_API_KEY || 'replay-mode-dummy-key' }}

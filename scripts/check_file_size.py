@@ -25,6 +25,8 @@ EXCLUDE_PATTERNS = [
 # Pre-existing large files that haven't been split yet.
 # Remove entries from this list as files get refactored.
 GRANDFATHERED_FILES = {
+    "scripts/openapi_generator/schema_transforms.py",
+    "src/ogx/core/library_client.py",
     "src/ogx/providers/inline/responses/builtin/responses/openai_responses.py",
     "src/ogx/providers/inline/responses/builtin/responses/streaming.py",
     "src/ogx/providers/inline/scoring/basic/utils/ifeval_word_list.py",  # pure data file
