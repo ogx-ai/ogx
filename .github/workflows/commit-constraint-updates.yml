@@ -103,11 +103,13 @@ jobs:
           CHANGED=$(jq -r '.changed' constraint-update/change-info.json)
           DEP_NAME=$(jq -r '.dep_name' constraint-update/change-info.json)
           DEP_VERSION=$(jq -r '.dep_version' constraint-update/change-info.json)
+          REGISTRY_CHANGED=$(jq -r '.registry_changed // "false"' constraint-update/change-info.json)
 
           {
             echo "changed=$CHANGED"
             echo "dep_name=$DEP_NAME"
             echo "dep_version=$DEP_VERSION"
+            echo "registry_changed=$REGISTRY_CHANGED"
           } >> "$GITHUB_OUTPUT"
 
           if [ "$CHANGED" != "true" ]; then
@@ -226,24 +228,15 @@ jobs:
             echo "Copied updated src/ogx_api/uv.lock"
           fi
 
-      - name: Update pip_packages version floors in provider registry
+      - name: Copy updated registry files to repo
         if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true'
-        id: registry
-        env:
-          DEP_NAME: ${{ steps.changes.outputs.dep_name }}
-          DEP_VERSION: ${{ steps.changes.outputs.dep_version }}
         run: |
-          output=$(python3 .github/scripts/update_registry_deps.py \
-            --dependency-name "$DEP_NAME" \
-            --dependency-version "$DEP_VERSION")
-
-          echo "$output"
-
-          if echo "$output" | grep -q "updated=true"; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
+          for f in constraint-update/src/ogx/providers/registry/*.py; do
+            [ -f "$f" ] || continue
+            target="src/ogx/providers/registry/$(basename "$f")"
+            cp "$f" "$target"
+            echo "Copied updated $target"
+          done
 
       - name: Commit and push constraint updates
         id: commit
@@ -303,7 +296,7 @@ jobs:
           PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
           DEP_NAME: ${{ steps.changes.outputs.dep_name }}
           DEP_VERSION: ${{ steps.changes.outputs.dep_version }}
-          REGISTRY_CHANGED: ${{ steps.registry.outputs.changed }}
+          REGISTRY_CHANGED: ${{ steps.changes.outputs.registry_changed }}
         with:
           script: |
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
