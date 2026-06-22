@@ -15078,462 +15078,6 @@ components:
           - dialog
       title: DialogType
       type: object
-    ConversationMessage:
-      description: OpenAI-compatible message item for conversations.
-      properties:
-        id:
-          description: unique identifier for this message
-          title: Id
-          type: string
-        content:
-          description: message content
-          items:
-            additionalProperties: true
-            type: object
-          title: Content
-          type: array
-        role:
-          description: message role
-          title: Role
-          type: string
-        status:
-          description: message status
-          title: Status
-          type: string
-        type:
-          title: Type
-          type: string
-          enum:
-          - message
-        object:
-          title: Object
-          type: string
-          enum:
-          - message
-      required:
-      - id
-      - content
-      - role
-      - status
-      title: ConversationMessage
-      type: object
-    ConversationItemCreateRequest:
-      description: Request body for creating conversation items.
-      properties:
-        items:
-          description: Items to include in the conversation context. You may add up to 20 items at a time.
-          items:
-            discriminator:
-              mapping:
-                compaction: '#/components/schemas/OpenAIResponseCompaction'
-                file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
-                function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
-                function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
-                mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
-                mcp_approval_response: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
-                mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
-                mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                message: '#/components/schemas/OpenAIResponseMessage'
-                reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-              propertyName: type
-            oneOf:
-            - $ref: '#/components/schemas/OpenAIResponseMessage'
-              title: OpenAIResponseMessage
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
-              title: OpenAIResponseOutputMessageWebSearchToolCall
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
-              title: OpenAIResponseOutputMessageFileSearchToolCall
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
-              title: OpenAIResponseOutputMessageFunctionToolCall
-            - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
-              title: OpenAIResponseInputFunctionToolCallOutput
-            - $ref: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
-              title: OpenAIResponseMCPApprovalRequest
-            - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
-              title: OpenAIResponseMCPApprovalResponse
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
-              title: OpenAIResponseOutputMessageMCPCall
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-              title: OpenAIResponseOutputMessageMCPListTools
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-              title: OpenAIResponseOutputMessageReasoningItem
-            - $ref: '#/components/schemas/OpenAIResponseCompaction'
-              title: OpenAIResponseCompaction
-            title: OpenAIResponseMessage | ... (11 variants)
-          maxItems: 20
-          title: Items
-          type: array
-      required:
-      - items
-      title: ConversationItemCreateRequest
-      type: object
-    GetConversationRequest:
-      description: Request model for getting a conversation by ID.
-      properties:
-        conversation_id:
-          description: The conversation identifier.
-          title: Conversation Id
-          type: string
-      required:
-      - conversation_id
-      title: GetConversationRequest
-      type: object
-    DeleteConversationRequest:
-      description: Request model for deleting a conversation.
-      properties:
-        conversation_id:
-          description: The conversation identifier.
-          title: Conversation Id
-          type: string
-      required:
-      - conversation_id
-      title: DeleteConversationRequest
-      type: object
-    RetrieveItemRequest:
-      description: Request model for retrieving a conversation item.
-      properties:
-        conversation_id:
-          description: The conversation identifier.
-          title: Conversation Id
-          type: string
-        item_id:
-          description: The item identifier.
-          title: Item Id
-          type: string
-      required:
-      - conversation_id
-      - item_id
-      title: RetrieveItemRequest
-      type: object
-    ListItemsRequest:
-      description: Request model for listing items in a conversation.
-      properties:
-        conversation_id:
-          description: The conversation identifier.
-          title: Conversation Id
-          type: string
-        after:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: An item ID to list items after, used in pagination.
-          nullable: true
-        include:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/ConversationItemInclude'
-            type: array
-          - type: 'null'
-          description: Specify additional output data to include in the response.
-          nullable: true
-        limit:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          description: A limit on the number of objects to be returned (1-100, default 20).
-          nullable: true
-        order:
-          anyOf:
-          - enum:
-            - asc
-            - desc
-            type: string
-          - type: 'null'
-          description: The order to return items in (asc or desc, default desc).
-          nullable: true
-      required:
-      - conversation_id
-      title: ListItemsRequest
-      type: object
-    DeleteItemRequest:
-      description: Request model for deleting a conversation item.
-      properties:
-        conversation_id:
-          description: The conversation identifier.
-          title: Conversation Id
-          type: string
-        item_id:
-          description: The item identifier.
-          title: Item Id
-          type: string
-      required:
-      - conversation_id
-      - item_id
-      title: DeleteItemRequest
-      type: object
-    ProcessFileRequest:
-      description: |-
-        Request model for file processing operation.
-
-        Wraps the serializable parameters for process_file. The UploadFile parameter
-        is kept separate (not serializable), following the same pattern as
-        UploadFileRequest in the Files API.
-      properties:
-        file_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of file already uploaded to file storage. Mutually exclusive with file.
-          nullable: true
-        options:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Optional processing options. Provider-specific parameters (e.g., OCR settings, output format).
-          nullable: true
-        chunking_strategy:
-          anyOf:
-          - discriminator:
-              mapping:
-                auto: '#/components/schemas/VectorStoreChunkingStrategyAuto'
-                contextual: '#/components/schemas/VectorStoreChunkingStrategyContextual'
-                static: '#/components/schemas/VectorStoreChunkingStrategyStatic'
-              propertyName: type
-            oneOf:
-            - $ref: '#/components/schemas/VectorStoreChunkingStrategyAuto'
-              title: VectorStoreChunkingStrategyAuto
-            - $ref: '#/components/schemas/VectorStoreChunkingStrategyStatic'
-              title: VectorStoreChunkingStrategyStatic
-            - $ref: '#/components/schemas/VectorStoreChunkingStrategyContextual'
-              title: VectorStoreChunkingStrategyContextual
-            title: VectorStoreChunkingStrategyAuto | VectorStoreChunkingStrategyStatic | VectorStoreChunkingStrategyContextual
-          - type: 'null'
-          description: Optional chunking strategy for splitting content into chunks.
-          title: Chunking Strategy
-          nullable: true
-      title: ProcessFileRequest
-      type: object
-    ComparisonFilter:
-      description: A filter that compares a metadata field against a value.
-      properties:
-        type:
-          enum:
-          - eq
-          - ne
-          - gt
-          - gte
-          - lt
-          - lte
-          - in
-          - nin
-          title: Type
-          type: string
-        key:
-          title: Key
-          type: string
-        value:
-          title: Value
-      required:
-      - type
-      - key
-      - value
-      title: ComparisonFilter
-      type: object
-    CompoundFilter:
-      description: A filter that combines multiple filters with a logical operator.
-      properties:
-        type:
-          enum:
-          - and
-          - or
-          title: Type
-          type: string
-        filters:
-          items: {}
-          title: Filters
-          type: array
-      required:
-      - type
-      - filters
-      title: CompoundFilter
-      type: object
-    ListFilesRequest:
-      description: Request model for listing files.
-      properties:
-        after:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: A cursor for pagination. Returns files after this ID.
-          nullable: true
-        limit:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          default: 10000
-          description: Maximum number of files to return (1-10,000).
-        order:
-          anyOf:
-          - $ref: '#/components/schemas/Order'
-            title: Order
-          - type: 'null'
-          default: desc
-          description: Sort order by created_at timestamp ('asc' or 'desc').
-          title: Order
-        purpose:
-          anyOf:
-          - $ref: '#/components/schemas/OpenAIFilePurpose'
-            title: OpenAIFilePurpose
-          - type: 'null'
-          description: Filter files by purpose.
-          nullable: true
-          title: OpenAIFilePurpose
-      title: ListFilesRequest
-      type: object
-    RetrieveFileRequest:
-      description: Request model for retrieving a file.
-      properties:
-        file_id:
-          description: The ID of the file to retrieve.
-          title: File Id
-          type: string
-      required:
-      - file_id
-      title: RetrieveFileRequest
-      type: object
-    DeleteFileRequest:
-      description: Request model for deleting a file.
-      properties:
-        file_id:
-          description: The ID of the file to delete.
-          title: File Id
-          type: string
-      required:
-      - file_id
-      title: DeleteFileRequest
-      type: object
-    RetrieveFileContentRequest:
-      description: Request model for retrieving file content.
-      properties:
-        file_id:
-          description: The ID of the file to retrieve content from.
-          title: File Id
-          type: string
-      required:
-      - file_id
-      title: RetrieveFileContentRequest
-      type: object
-    UploadFileRequest:
-      description: Request model for uploading a file.
-      properties:
-        purpose:
-          $ref: '#/components/schemas/OpenAIFileUploadPurpose'
-          description: The intended purpose of the uploaded file.
-        expires_after:
-          anyOf:
-          - $ref: '#/components/schemas/ExpiresAfter'
-            title: ExpiresAfter
-          - type: 'null'
-          description: Optional expiration settings for the file.
-          nullable: true
-          title: ExpiresAfter
-      required:
-      - purpose
-      title: UploadFileRequest
-      type: object
-    ListPromptVersionsRequest:
-      description: Request model for listing all versions of a prompt.
-      properties:
-        prompt_id:
-          description: The identifier of the prompt to list versions for.
-          title: Prompt Id
-          type: string
-      required:
-      - prompt_id
-      title: ListPromptVersionsRequest
-      type: object
-    GetPromptRequest:
-      description: Request model for getting a prompt by ID and optional version.
-      properties:
-        prompt_id:
-          description: The identifier of the prompt to get.
-          title: Prompt Id
-          type: string
-        version:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          description: The version of the prompt to get (defaults to latest).
-          nullable: true
-      required:
-      - prompt_id
-      title: GetPromptRequest
-      type: object
-    DeletePromptRequest:
-      description: Request model for deleting a prompt.
-      properties:
-        prompt_id:
-          description: The identifier of the prompt to delete.
-          title: Prompt Id
-          type: string
-      required:
-      - prompt_id
-      title: DeletePromptRequest
-      type: object
-    SkillVersionCreateRequest:
-      description: Request to create a new skill version. Matches OpenAI VersionCreateParams.
-      properties:
-        default:
-          type: boolean
-          default: false
-          description: Whether to set this version as the default
-          title: Default
-      title: SkillVersionCreateRequest
-      type: object
-    ListSkillsRequest:
-      description: Request parameters for listing skills.
-      properties:
-        after:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Cursor for pagination
-          nullable: true
-        limit:
-          default: 20
-          description: Maximum number of results
-          maximum: 100
-          minimum: 1
-          title: Limit
-          type: integer
-        order:
-          default: desc
-          description: Sort order by created_at
-          enum:
-          - asc
-          - desc
-          title: Order
-          type: string
-      title: ListSkillsRequest
-      type: object
-    ListSkillVersionsRequest:
-      description: Request parameters for listing skill versions.
-      properties:
-        after:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Cursor for pagination
-          nullable: true
-        limit:
-          default: 20
-          description: Maximum number of results
-          maximum: 100
-          minimum: 1
-          title: Limit
-          type: integer
-        order:
-          default: desc
-          description: Sort order by version
-          enum:
-          - asc
-          - desc
-          title: Order
-          type: string
-      title: ListSkillVersionsRequest
-      type: object
     ContainerExpiresAfter:
       description: |-
         Control expiration of a container.
@@ -15571,8 +15115,10 @@ components:
           type: string
         value:
           description: Secret reference or literal value to be injected into the container.
+          format: password
           title: Value
           type: string
+          writeOnly: true
       required:
       - name
       - value
@@ -16241,6 +15787,462 @@ components:
       - outcome
       - duration_ms
       title: ShellCallOutput
+      type: object
+    ConversationMessage:
+      description: OpenAI-compatible message item for conversations.
+      properties:
+        id:
+          description: unique identifier for this message
+          title: Id
+          type: string
+        content:
+          description: message content
+          items:
+            additionalProperties: true
+            type: object
+          title: Content
+          type: array
+        role:
+          description: message role
+          title: Role
+          type: string
+        status:
+          description: message status
+          title: Status
+          type: string
+        type:
+          title: Type
+          type: string
+          enum:
+          - message
+        object:
+          title: Object
+          type: string
+          enum:
+          - message
+      required:
+      - id
+      - content
+      - role
+      - status
+      title: ConversationMessage
+      type: object
+    ConversationItemCreateRequest:
+      description: Request body for creating conversation items.
+      properties:
+        items:
+          description: Items to include in the conversation context. You may add up to 20 items at a time.
+          items:
+            discriminator:
+              mapping:
+                compaction: '#/components/schemas/OpenAIResponseCompaction'
+                file_search_call: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
+                function_call: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
+                function_call_output: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
+                mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
+                mcp_approval_response: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
+                mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
+                mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
+                message: '#/components/schemas/OpenAIResponseMessage'
+                reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+              propertyName: type
+            oneOf:
+            - $ref: '#/components/schemas/OpenAIResponseMessage'
+              title: OpenAIResponseMessage
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+              title: OpenAIResponseOutputMessageWebSearchToolCall
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
+              title: OpenAIResponseOutputMessageFileSearchToolCall
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
+              title: OpenAIResponseOutputMessageFunctionToolCall
+            - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
+              title: OpenAIResponseInputFunctionToolCallOutput
+            - $ref: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
+              title: OpenAIResponseMCPApprovalRequest
+            - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
+              title: OpenAIResponseMCPApprovalResponse
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
+              title: OpenAIResponseOutputMessageMCPCall
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
+              title: OpenAIResponseOutputMessageMCPListTools
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
+              title: OpenAIResponseOutputMessageReasoningItem
+            - $ref: '#/components/schemas/OpenAIResponseCompaction'
+              title: OpenAIResponseCompaction
+            title: OpenAIResponseMessage | ... (11 variants)
+          maxItems: 20
+          title: Items
+          type: array
+      required:
+      - items
+      title: ConversationItemCreateRequest
+      type: object
+    GetConversationRequest:
+      description: Request model for getting a conversation by ID.
+      properties:
+        conversation_id:
+          description: The conversation identifier.
+          title: Conversation Id
+          type: string
+      required:
+      - conversation_id
+      title: GetConversationRequest
+      type: object
+    DeleteConversationRequest:
+      description: Request model for deleting a conversation.
+      properties:
+        conversation_id:
+          description: The conversation identifier.
+          title: Conversation Id
+          type: string
+      required:
+      - conversation_id
+      title: DeleteConversationRequest
+      type: object
+    RetrieveItemRequest:
+      description: Request model for retrieving a conversation item.
+      properties:
+        conversation_id:
+          description: The conversation identifier.
+          title: Conversation Id
+          type: string
+        item_id:
+          description: The item identifier.
+          title: Item Id
+          type: string
+      required:
+      - conversation_id
+      - item_id
+      title: RetrieveItemRequest
+      type: object
+    ListItemsRequest:
+      description: Request model for listing items in a conversation.
+      properties:
+        conversation_id:
+          description: The conversation identifier.
+          title: Conversation Id
+          type: string
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: An item ID to list items after, used in pagination.
+          nullable: true
+        include:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ConversationItemInclude'
+            type: array
+          - type: 'null'
+          description: Specify additional output data to include in the response.
+          nullable: true
+        limit:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: A limit on the number of objects to be returned (1-100, default 20).
+          nullable: true
+        order:
+          anyOf:
+          - enum:
+            - asc
+            - desc
+            type: string
+          - type: 'null'
+          description: The order to return items in (asc or desc, default desc).
+          nullable: true
+      required:
+      - conversation_id
+      title: ListItemsRequest
+      type: object
+    DeleteItemRequest:
+      description: Request model for deleting a conversation item.
+      properties:
+        conversation_id:
+          description: The conversation identifier.
+          title: Conversation Id
+          type: string
+        item_id:
+          description: The item identifier.
+          title: Item Id
+          type: string
+      required:
+      - conversation_id
+      - item_id
+      title: DeleteItemRequest
+      type: object
+    ProcessFileRequest:
+      description: |-
+        Request model for file processing operation.
+
+        Wraps the serializable parameters for process_file. The UploadFile parameter
+        is kept separate (not serializable), following the same pattern as
+        UploadFileRequest in the Files API.
+      properties:
+        file_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of file already uploaded to file storage. Mutually exclusive with file.
+          nullable: true
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional processing options. Provider-specific parameters (e.g., OCR settings, output format).
+          nullable: true
+        chunking_strategy:
+          anyOf:
+          - discriminator:
+              mapping:
+                auto: '#/components/schemas/VectorStoreChunkingStrategyAuto'
+                contextual: '#/components/schemas/VectorStoreChunkingStrategyContextual'
+                static: '#/components/schemas/VectorStoreChunkingStrategyStatic'
+              propertyName: type
+            oneOf:
+            - $ref: '#/components/schemas/VectorStoreChunkingStrategyAuto'
+              title: VectorStoreChunkingStrategyAuto
+            - $ref: '#/components/schemas/VectorStoreChunkingStrategyStatic'
+              title: VectorStoreChunkingStrategyStatic
+            - $ref: '#/components/schemas/VectorStoreChunkingStrategyContextual'
+              title: VectorStoreChunkingStrategyContextual
+            title: VectorStoreChunkingStrategyAuto | VectorStoreChunkingStrategyStatic | VectorStoreChunkingStrategyContextual
+          - type: 'null'
+          description: Optional chunking strategy for splitting content into chunks.
+          title: Chunking Strategy
+          nullable: true
+      title: ProcessFileRequest
+      type: object
+    ComparisonFilter:
+      description: A filter that compares a metadata field against a value.
+      properties:
+        type:
+          enum:
+          - eq
+          - ne
+          - gt
+          - gte
+          - lt
+          - lte
+          - in
+          - nin
+          title: Type
+          type: string
+        key:
+          title: Key
+          type: string
+        value:
+          title: Value
+      required:
+      - type
+      - key
+      - value
+      title: ComparisonFilter
+      type: object
+    CompoundFilter:
+      description: A filter that combines multiple filters with a logical operator.
+      properties:
+        type:
+          enum:
+          - and
+          - or
+          title: Type
+          type: string
+        filters:
+          items: {}
+          title: Filters
+          type: array
+      required:
+      - type
+      - filters
+      title: CompoundFilter
+      type: object
+    ListFilesRequest:
+      description: Request model for listing files.
+      properties:
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: A cursor for pagination. Returns files after this ID.
+          nullable: true
+        limit:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: 10000
+          description: Maximum number of files to return (1-10,000).
+        order:
+          anyOf:
+          - $ref: '#/components/schemas/Order'
+            title: Order
+          - type: 'null'
+          default: desc
+          description: Sort order by created_at timestamp ('asc' or 'desc').
+          title: Order
+        purpose:
+          anyOf:
+          - $ref: '#/components/schemas/OpenAIFilePurpose'
+            title: OpenAIFilePurpose
+          - type: 'null'
+          description: Filter files by purpose.
+          nullable: true
+          title: OpenAIFilePurpose
+      title: ListFilesRequest
+      type: object
+    RetrieveFileRequest:
+      description: Request model for retrieving a file.
+      properties:
+        file_id:
+          description: The ID of the file to retrieve.
+          title: File Id
+          type: string
+      required:
+      - file_id
+      title: RetrieveFileRequest
+      type: object
+    DeleteFileRequest:
+      description: Request model for deleting a file.
+      properties:
+        file_id:
+          description: The ID of the file to delete.
+          title: File Id
+          type: string
+      required:
+      - file_id
+      title: DeleteFileRequest
+      type: object
+    RetrieveFileContentRequest:
+      description: Request model for retrieving file content.
+      properties:
+        file_id:
+          description: The ID of the file to retrieve content from.
+          title: File Id
+          type: string
+      required:
+      - file_id
+      title: RetrieveFileContentRequest
+      type: object
+    UploadFileRequest:
+      description: Request model for uploading a file.
+      properties:
+        purpose:
+          $ref: '#/components/schemas/OpenAIFileUploadPurpose'
+          description: The intended purpose of the uploaded file.
+        expires_after:
+          anyOf:
+          - $ref: '#/components/schemas/ExpiresAfter'
+            title: ExpiresAfter
+          - type: 'null'
+          description: Optional expiration settings for the file.
+          nullable: true
+          title: ExpiresAfter
+      required:
+      - purpose
+      title: UploadFileRequest
+      type: object
+    ListPromptVersionsRequest:
+      description: Request model for listing all versions of a prompt.
+      properties:
+        prompt_id:
+          description: The identifier of the prompt to list versions for.
+          title: Prompt Id
+          type: string
+      required:
+      - prompt_id
+      title: ListPromptVersionsRequest
+      type: object
+    GetPromptRequest:
+      description: Request model for getting a prompt by ID and optional version.
+      properties:
+        prompt_id:
+          description: The identifier of the prompt to get.
+          title: Prompt Id
+          type: string
+        version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: The version of the prompt to get (defaults to latest).
+          nullable: true
+      required:
+      - prompt_id
+      title: GetPromptRequest
+      type: object
+    DeletePromptRequest:
+      description: Request model for deleting a prompt.
+      properties:
+        prompt_id:
+          description: The identifier of the prompt to delete.
+          title: Prompt Id
+          type: string
+      required:
+      - prompt_id
+      title: DeletePromptRequest
+      type: object
+    SkillVersionCreateRequest:
+      description: Request to create a new skill version. Matches OpenAI VersionCreateParams.
+      properties:
+        default:
+          type: boolean
+          default: false
+          description: Whether to set this version as the default
+          title: Default
+      title: SkillVersionCreateRequest
+      type: object
+    ListSkillsRequest:
+      description: Request parameters for listing skills.
+      properties:
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Cursor for pagination
+          nullable: true
+        limit:
+          default: 20
+          description: Maximum number of results
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+        order:
+          default: desc
+          description: Sort order by created_at
+          enum:
+          - asc
+          - desc
+          title: Order
+          type: string
+      title: ListSkillsRequest
+      type: object
+    ListSkillVersionsRequest:
+      description: Request parameters for listing skill versions.
+      properties:
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Cursor for pagination
+          nullable: true
+        limit:
+          default: 20
+          description: Maximum number of results
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+        order:
+          default: desc
+          description: Sort order by version
+          enum:
+          - asc
+          - desc
+          title: Order
+          type: string
+      title: ListSkillVersionsRequest
       type: object
     OpenAIResponseMessageOutputUnion:
       anyOf:

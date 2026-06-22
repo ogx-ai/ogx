@@ -20,7 +20,7 @@ cover three concerns:
 from enum import StrEnum
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from ogx_api.common.responses import Order
 from ogx_api.schema_utils import json_schema_type
@@ -76,7 +76,7 @@ class NetworkCredential(BaseModel):
     """
 
     name: str = Field(..., description="Logical name used by the container to look up the credential.")
-    value: str = Field(..., description="Secret reference or literal value to be injected into the container.")
+    value: SecretStr = Field(..., description="Secret reference or literal value to be injected into the container.")
 
 
 @json_schema_type
