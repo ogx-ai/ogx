@@ -6,13 +6,13 @@
 import concurrent.futures
 
 import pytest
-from ogx_client import BadRequestError as OGXBadRequestError
-from ogx_client.types.alpha import InferenceRerankResponse
-from ogx_client.types.shared.interleaved_content import (
+from ogx_open_client import BadRequestError as OGXBadRequestError
+from ogx_open_client.models import (
+    URL,
     ImageContentItem,
-    ImageContentItemImage,
-    ImageContentItemImageURL,
+    RerankResponse,
     TextContentItem,
+    URLOrData,
 )
 
 from ogx.core.library_client import OGXAsLibraryClient
@@ -22,10 +22,8 @@ DUMMY_STRING = "string_1"
 DUMMY_STRING2 = "string_2"
 DUMMY_TEXT = TextContentItem(text=DUMMY_STRING, type="text")
 DUMMY_TEXT2 = TextContentItem(text=DUMMY_STRING2, type="text")
-DUMMY_IMAGE_URL = ImageContentItem(
-    image=ImageContentItemImage(url=ImageContentItemImageURL(uri="https://example.com/image.jpg")), type="image"
-)
-DUMMY_IMAGE_BASE64 = ImageContentItem(image=ImageContentItemImage(data="base64string"), type="image")
+DUMMY_IMAGE_URL = ImageContentItem(image=URLOrData(url=URL(uri="https://example.com/image.jpg")), type="image")
+DUMMY_IMAGE_BASE64 = ImageContentItem(image=URLOrData(data="base64string"), type="image")
 
 PROVIDERS_SUPPORTING_MEDIA = {}  # Providers that support media input for rerank models
 
@@ -36,12 +34,12 @@ def skip_if_provider_doesnt_support_rerank(inference_provider_type):
         pytest.skip(f"{inference_provider_type} doesn't support rerank models")
 
 
-def _validate_rerank_response(response: InferenceRerankResponse, items: list) -> None:
+def _validate_rerank_response(response: RerankResponse, items: list) -> None:
     """
     Validate that a rerank response has the correct structure and ordering.
 
     Args:
-        response: The InferenceRerankResponse to validate
+        response: The RerankResponse to validate
         items: The original items list that was ranked
 
     Raises:
@@ -58,12 +56,12 @@ def _validate_rerank_response(response: InferenceRerankResponse, items: list) ->
         last_score = d.relevance_score
 
 
-def _validate_semantic_ranking(response: InferenceRerankResponse, items: list, expected_first_item: str) -> None:
+def _validate_semantic_ranking(response: RerankResponse, items: list, expected_first_item: str) -> None:
     """
     Validate that the expected most relevant item ranks first.
 
     Args:
-        response: The InferenceRerankResponse to validate
+        response: The RerankResponse to validate
         items: The original items list that was ranked
         expected_first_item: The expected first item in the ranking
 
@@ -99,8 +97,9 @@ def test_rerank_text(client_with_models, rerank_model_id, query, items, inferenc
     skip_if_provider_doesnt_support_rerank(inference_provider_type)
 
     response = client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
-    assert isinstance(response, list)
-    # TODO: Add type validation for response items once InferenceRerankResponseItem is exported from ogx client.
+    assert hasattr(response, "__len__") and callable(response.__len__), (
+        f"Expected a list-like response, got {type(response)}"
+    )
     assert len(response) <= len(items)
     _validate_rerank_response(response, items)
 
@@ -128,7 +127,7 @@ def test_rerank_text_parallel(client_with_models, rerank_model_id, inference_pro
             # .result() will raise the 500 Error as RuntimeError here if the Rust borrower bug is present
             response = future.result()
 
-            assert isinstance(response, list)
+            assert len(response) >= 0, f"Expected a list-like response, got {type(response)}"
             assert len(response) <= len(original_items)
             _validate_rerank_response(response, original_items)
 
@@ -160,7 +159,7 @@ def test_rerank_image(client_with_models, rerank_model_id, query, items, inferen
     else:
         response = client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
 
-        assert isinstance(response, list)
+        assert len(response) >= 0, f"Expected a list-like response, got {type(response)}"
         assert len(response) <= len(items)
         _validate_rerank_response(response, items)
 
@@ -178,7 +177,7 @@ def test_rerank_max_results(client_with_models, rerank_model_id, inference_provi
         max_num_results=max_num_results,
     )
 
-    assert isinstance(response, list)
+    assert len(response) >= 0, f"Expected a list-like response, got {type(response)}"
     assert len(response) == max_num_results
     _validate_rerank_response(response, items)
 
@@ -194,7 +193,7 @@ def test_rerank_max_results_larger_than_items(client_with_models, rerank_model_i
         max_num_results=10,  # Larger than items length
     )
 
-    assert isinstance(response, list)
+    assert len(response) >= 0, f"Expected a list-like response, got {type(response)}"
     assert len(response) <= len(items)  # Should return at most len(items)
 
 

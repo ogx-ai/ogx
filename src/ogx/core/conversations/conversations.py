@@ -37,7 +37,7 @@ from ogx_api.conversations import (
     RetrieveItemRequest,
     UpdateConversationRequest,
 )
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation
 
 logger = get_logger(name=__name__, category="openai_conversations")
 
@@ -182,7 +182,18 @@ class ConversationServiceImpl(Conversations):
         if record is None:
             raise ConversationNotFoundError(request.conversation_id)
 
-        await self.sql_store.delete(table="openai_conversations", where={"id": request.conversation_id})
+        await self.sql_store.delete_many(
+            [
+                DeleteOperation(
+                    table="conversation_items",
+                    where={"conversation_id": request.conversation_id},
+                ),
+                DeleteOperation(
+                    table="openai_conversations",
+                    where={"id": request.conversation_id},
+                ),
+            ]
+        )
 
         logger.debug("Deleted conversation", conversation_id=request.conversation_id)
         return ConversationDeletedResource(id=request.conversation_id)
@@ -273,6 +284,8 @@ class ConversationServiceImpl(Conversations):
         if not request.item_id:
             raise InvalidParameterError("item_id", request.item_id, "Must be a non-empty string.")
 
+        await self._get_validated_conversation(request.conversation_id)
+
         # Get item from conversation_items table
         record = await self.sql_store.fetch_one(
             table="conversation_items", where={"id": request.item_id, "conversation_id": request.conversation_id}
@@ -286,7 +299,7 @@ class ConversationServiceImpl(Conversations):
 
     async def list_items(self, request: ListItemsRequest) -> ConversationItemList:
         """List items in the conversation with cursor pagination."""
-        await self.get_conversation(GetConversationRequest(conversation_id=request.conversation_id))
+        await self._get_validated_conversation(request.conversation_id)
 
         order = request.order if request.order is not None else "desc"
         limit = request.limit or 20

@@ -39,6 +39,16 @@ Backends: SQLite (default), PostgreSQL.
 
 Used by: inference store (chat completion logs), conversations, prompts.
 
+### AuthorizedSqlStore
+
+`authorized_sqlstore.py` wraps a `SqlStore` with two enforcement layers applied to every operation:
+
+1. **Tenant isolation** -- when tenancy is enabled (`single` or `multi` mode), a `tenant_id` column is added to every table. Writes stamp the current user's `tenant_id`; all reads and mutations include a non-bypassable `WHERE tenant_id = ?` filter. In `multi` mode, missing tenant context results in default deny (empty results). Client-supplied `tenant_id` in data payloads is stripped and replaced with the authenticated value.
+
+2. **ABAC access control** -- `owner_principal` and `access_attributes` columns support policy-based rules (e.g., `user is owner`). These operate within a tenant boundary.
+
+The tenancy mode is set process-wide during startup via `set_default_tenancy_mode()` in `stack.py`.
+
 ## Configuration
 
 Storage is configured in `StackConfig.storage` via `StorageConfig`. The `stores` field contains typed references (`KVStoreReference`, `SqlStoreReference`, `InferenceStoreReference`) that point to specific backend configurations.

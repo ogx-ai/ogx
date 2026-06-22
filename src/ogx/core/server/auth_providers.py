@@ -25,11 +25,26 @@ from ogx.core.datatypes import (
     OAuth2TokenAuthConfig,
     UpstreamHeaderAuthConfig,
     User,
+    _validate_tenant_id,
 )
 from ogx.log import get_logger
 from ogx_api import AuthServiceUnavailableError, TokenValidationError
 
 logger = get_logger(name=__name__, category="core::auth")
+
+
+def _resolve_tenant_id(raw_value: str | None) -> str | None:
+    """Validate and normalize a raw tenant value from a claim/header/field.
+
+    Returns None if the value is missing or blank (callers decide whether
+    that is an error based on tenancy mode).
+    """
+    if raw_value is None:
+        return None
+    stripped = raw_value.strip()
+    if not stripped:
+        return None
+    return _validate_tenant_id(stripped)
 
 
 class AuthResponse(BaseModel):
@@ -216,9 +231,17 @@ class OAuth2TokenAuthProvider(AuthProvider):
         # We should incorporate these into the access attributes.
         principal = claims["sub"]
         access_attributes = get_attributes_from_claims(claims, self.config.claims_mapping)
+
+        tenant_id: str | None = None
+        if self.config.tenant_claim:
+            raw = claims.get(self.config.tenant_claim)
+            if isinstance(raw, str):
+                tenant_id = _resolve_tenant_id(raw)
+
         return User(
             principal=principal,
             attributes=access_attributes,
+            tenant_id=tenant_id,
         )
 
     async def introspect_token(self, token: str, scope: Scope | None = None) -> User:
@@ -266,9 +289,17 @@ class OAuth2TokenAuthProvider(AuthProvider):
                     raise ValueError("Token not active")
                 principal = fields["sub"] or fields["username"]
                 access_attributes = get_attributes_from_claims(fields, self.config.claims_mapping)
+
+                tenant_id: str | None = None
+                if self.config.tenant_claim:
+                    raw = fields.get(self.config.tenant_claim)
+                    if isinstance(raw, str):
+                        tenant_id = _resolve_tenant_id(raw)
+
                 return User(
                     principal=principal,
                     attributes=access_attributes,
+                    tenant_id=tenant_id,
                 )
         except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
             logger.warning("Failed to reach token introspection endpoint", error=str(exc))
@@ -341,7 +372,18 @@ class CustomAuthProvider(AuthProvider):
             try:
                 response_data = response.json()
                 auth_response = AuthResponse(**response_data)
-                return User(principal=auth_response.principal, attributes=auth_response.attributes)
+
+                tenant_id: str | None = None
+                if self.config.tenant_field:
+                    raw = response_data.get(self.config.tenant_field)
+                    if isinstance(raw, str):
+                        tenant_id = _resolve_tenant_id(raw)
+
+                return User(
+                    principal=auth_response.principal,
+                    attributes=auth_response.attributes,
+                    tenant_id=tenant_id,
+                )
             except Exception as e:
                 logger.exception("Error parsing authentication response")
                 raise ValueError("Invalid authentication response format") from e
@@ -550,9 +592,17 @@ class KubernetesAuthProvider(AuthProvider):
                 # Build user attributes from Kubernetes user info
                 user_attributes = get_attributes_from_claims(user_info, self.config.claims_mapping)
 
+                tenant_id: str | None = None
+                if self.config.tenant_claim:
+                    tenant_claims = get_attributes_from_claims(user_info, {self.config.tenant_claim: "__tenant__"})
+                    raw_values = tenant_claims.get("__tenant__")
+                    if raw_values:
+                        tenant_id = _resolve_tenant_id(raw_values[0])
+
                 return User(
                     principal=username,
                     attributes=user_attributes,
+                    tenant_id=tenant_id,
                 )
 
         except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
@@ -648,7 +698,14 @@ class UpstreamHeaderAuthProvider(AuthProvider):
                     else:
                         attributes[attr_category] = values
 
-        return User(principal=principal, attributes=attributes)
+        tenant_id: str | None = None
+        if self.config.tenant_header:
+            tenant_key = self.config.tenant_header.lower().encode()
+            tenant_value = headers.get(tenant_key)
+            if tenant_value:
+                tenant_id = _resolve_tenant_id(tenant_value.decode())
+
+        return User(principal=principal, attributes=attributes, tenant_id=tenant_id)
 
     async def close(self) -> None:
         pass

@@ -29,6 +29,7 @@ from ogx.core.access_control.access_control import AccessDeniedError
 from ogx.core.datatypes import (
     AuthenticationRequiredError,
     StackConfig,
+    TenancyMode,
 )
 from ogx.core.distribution import builtin_automatically_routed_apis
 from ogx.core.exceptions import translate_exception
@@ -52,7 +53,7 @@ from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
 from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
 
-from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware
+from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
 from .metrics import RequestMetricsMiddleware, build_route_to_api_map
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
@@ -147,6 +148,17 @@ class StackApp(FastAPI):
 
         reset_sqlstore_engines()
 
+        # Reset VertexAI provider clients that may have been created in the
+        # temporary event loop during model listing (refresh_registry_once).
+        # Like SQL engines, the Google genai Client eagerly binds an internal
+        # httpx.AsyncClient to the current event loop, and the cached client
+        # becomes unusable after the temporary loop is terminated.
+        if self.stack.impls:
+            for impl in self.stack.impls.values():
+                reset_fn = getattr(impl, "_reset_client", None)
+                if reset_fn is not None:
+                    reset_fn()
+
 
 @asynccontextmanager
 async def lifespan(app: StackApp) -> AsyncIterator[None]:
@@ -218,7 +230,7 @@ class ProviderDataMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
-        if scope["type"] == "http":
+        if scope["type"] in ("http", "websocket"):
             headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
             user = user_from_scope(dict(scope))
 
@@ -301,16 +313,26 @@ def create_app() -> StackApp:
         # Add route authorization middleware if route_policy is configured
         # This can work independently of authentication
         # NOTE: Add this FIRST because middleware wraps in reverse order (last added runs first)
-        # We want: Request → Auth → RouteAuth → App
+        # We want: Request → Auth → Tenancy → RouteAuth → App
         if config.server.auth.route_policy:
             logger.info("Enabling route-level authorization", rule_count=len(config.server.auth.route_policy))
             app.add_middleware(RouteAuthorizationMiddleware, route_policy=config.server.auth.route_policy)
+
+        # Tenancy middleware applies tenant mode enforcement after auth resolution
+        if config.server.tenancy.mode != TenancyMode.DISABLED:
+            logger.info("Enabling tenancy enforcement", mode=config.server.tenancy.mode.value)
+            app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy, impls=impls)
 
         # Add authentication middleware only if provider is configured
         # This runs FIRST in the middleware chain (last added = first to run)
         if config.server.auth.provider_config:
             logger.info("Enabling authentication", provider=config.server.auth.provider_config.type.value)
             app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth, impls=impls)
+
+    elif config.server.tenancy.mode != TenancyMode.DISABLED:
+        # Tenancy without auth: single mode injects default tenant on every request
+        logger.info("Enabling tenancy enforcement (no auth)", mode=config.server.tenancy.mode.value)
+        app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy, impls=impls)
 
     # Load and register external API routers if configured
     external_apis = load_external_apis(config)

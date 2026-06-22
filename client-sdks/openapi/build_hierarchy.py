@@ -162,6 +162,47 @@ def mark_unwrappable_list_responses(spec: dict[str, Any]) -> int:
     return count
 
 
+def reorder_data_field_first(spec: dict[str, Any]) -> int:
+    """Ensure 'data' is the first property in list/page response schemas.
+
+    The model_generic.mustache template emits __iter__/__getitem__/__len__ methods
+    only for the first array field in a model (using the {{#-first}} guard). If a
+    non-array field like 'object' comes before 'data', the iteration methods are
+    skipped, making the model non-iterable and breaking code that does
+    `for item in response`.
+
+    Returns the number of schemas reordered.
+    """
+    schemas = spec.get("components", {}).get("schemas", {})
+    count = 0
+
+    for schema_def in schemas.values():
+        if not isinstance(schema_def, dict):
+            continue
+        props = schema_def.get("properties")
+        if not isinstance(props, dict) or "data" not in props:
+            continue
+        data_prop = props.get("data", {})
+        if not isinstance(data_prop, dict):
+            continue
+        # Only reorder if data is an array type and not already first
+        is_array = data_prop.get("type") == "array" or "items" in data_prop
+        if not is_array:
+            continue
+        keys = list(props.keys())
+        if keys[0] == "data":
+            continue
+        # Reorder: data first, then everything else in original order
+        reordered = {"data": props["data"]}
+        for key in keys:
+            if key != "data":
+                reordered[key] = props[key]
+        schema_def["properties"] = reordered
+        count += 1
+
+    return count
+
+
 def mark_streaming_operations(spec: dict[str, Any]) -> int:
     """Add x-streaming vendor extensions for operations with text/event-stream responses.
 
@@ -337,6 +378,10 @@ def process_openapi(input_file: str, output_file: str, hierarchy_file: str) -> N
     streaming = mark_streaming_operations(spec)
     if streaming:
         print(f"  Marked {streaming} endpoints with streaming type metadata")
+
+    reordered = reorder_data_field_first(spec)
+    if reordered:
+        print(f"  Reordered 'data' to first property in {reordered} schemas")
 
     # --- Write output ---
     with open(output_file, "w") as f:

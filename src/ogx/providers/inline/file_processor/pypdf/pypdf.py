@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import io
 import mimetypes
 import time
@@ -15,6 +16,7 @@ from fastapi import HTTPException, UploadFile
 from pypdf import PdfReader
 
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.memory.vector_store import make_overlapped_chunks
 from ogx_api.file_processors import ProcessFileResponse
 from ogx_api.files import RetrieveFileContentRequest, RetrieveFileRequest
@@ -68,15 +70,17 @@ class PyPDFFileProcessor:
             content_response = await self.files_api.openai_retrieve_file_content(
                 RetrieveFileContentRequest(file_id=file_id)
             )
-            content = content_response.body
+            content = await response_body_bytes(content_response)
 
         mime_type, _ = mimetypes.guess_type(filename)
         mime_category = mime_type.split("/")[0] if (mime_type and "/" in mime_type) else None
 
         if mime_type == "application/pdf":
-            return self._process_pdf(content, filename, file_id, chunking_strategy, start_time)
+            return await asyncio.to_thread(self._process_pdf, content, filename, file_id, chunking_strategy, start_time)
         elif mime_category == "text":
-            return self._process_text(content, filename, file_id, chunking_strategy, start_time)
+            return await asyncio.to_thread(
+                self._process_text, content, filename, file_id, chunking_strategy, start_time
+            )
         else:
             raise HTTPException(
                 status_code=422,

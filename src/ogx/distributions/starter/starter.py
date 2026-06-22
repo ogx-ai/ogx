@@ -25,6 +25,7 @@ from ogx.providers.inline.files.localfs.config import LocalfsFilesImplConfig
 from ogx.providers.inline.inference.sentence_transformers import (
     SentenceTransformersInferenceConfig,
 )
+from ogx.providers.inline.skills.builtin.config import BuiltinSkillsConfig
 from ogx.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
 from ogx.providers.inline.vector_io.milvus.config import MilvusVectorIOConfig
 from ogx.providers.inline.vector_io.sqlite_vec.config import (
@@ -147,6 +148,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "interactions": [BuildProvider(provider_type="inline::builtin")],
         "messages": [BuildProvider(provider_type="inline::builtin")],
         "responses": [BuildProvider(provider_type="inline::builtin")],
+        "skills": [BuildProvider(provider_type="inline::builtin")],
         "tool_runtime": [
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
@@ -239,6 +241,13 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
             ),
         ],
         "files": [files_provider],
+        "skills": [
+            Provider(
+                provider_id="builtin",
+                provider_type="inline::builtin",
+                config=BuiltinSkillsConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+        ],
         "file_processors": [
             Provider(
                 provider_id="auto",

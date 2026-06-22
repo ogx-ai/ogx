@@ -248,6 +248,7 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),
+        ("remote::nimble-search", "nimble-search"),
     ]
     tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
     existing_web_search: set[str] = {

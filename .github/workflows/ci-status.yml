@@ -19,7 +19,7 @@ concurrency:
 jobs:
   ci-status:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     permissions:
       checks: read
     steps:
@@ -92,10 +92,12 @@ jobs:
 
               if (failed.length > 0) {
                 for (const cr of failed) {
-                  core.error(`${cr.name} concluded with: ${cr.conclusion}`);
+                  core.warning(`${cr.name} concluded with: ${cr.conclusion} — waiting for re-run`);
                 }
-                core.setFailed(`${failed.length} CI check(s) failed.`);
-                return;
+                core.info(`${failed.length} check(s) failed. Waiting 30s for re-runs before giving up...`);
+                core.info('Re-run the failed job(s) and ci-status will pick up the result automatically.');
+                await new Promise(r => setTimeout(r, 30000));
+                continue;
               }
 
               const succeeded = completed.filter(cr => successConclusions.has(cr.conclusion));

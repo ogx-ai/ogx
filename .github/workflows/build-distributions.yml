@@ -20,6 +20,7 @@ on:
 permissions:
   contents: read
   actions: write
+  security-events: write
 
 env:
   IMAGE_PREFIX: ogx/distribution
@@ -138,3 +139,23 @@ jobs:
         run: |
           LOCAL_IMAGE_NAME="${IMAGE_PREFIX}-${DISTRO_NAME}:${IMAGE_TAG}"
           bash scripts/verify-config-labels.sh "${LOCAL_IMAGE_NAME}"
+
+      - name: Scan container image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          DISTRO_NAME: ${{ matrix.distro }}
+          IMAGE_TAG: ${{ needs.generate-matrix.outputs.version }}
+        with:
+          image-ref: '${{ env.IMAGE_PREFIX }}-${{ matrix.distro }}:${{ needs.generate-matrix.outputs.version }}'
+          scan-type: 'image'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          format: 'sarif'
+          output: 'trivy-container-${{ matrix.distro }}.sarif'
+
+      - name: Upload container scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-container-${{ matrix.distro }}.sarif'
+          category: 'trivy-container-${{ matrix.distro }}'
