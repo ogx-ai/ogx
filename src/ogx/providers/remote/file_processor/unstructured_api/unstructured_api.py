@@ -17,6 +17,7 @@ from ogx_api.files import Files, RetrieveFileContentRequest, RetrieveFileRequest
 from ogx_api.vector_io import (
     Chunk,
     ChunkMetadata,
+    VectorStoreChunkingStrategy,
 )
 
 from .config import UnstructuredApiFileProcessorConfig
@@ -43,6 +44,7 @@ class UnstructuredApiFileProcessor:
     ) -> ProcessFileResponse:
         """Process a file using Unstructured.io API and return chunks."""
         file_id = request.file_id
+        chunking_strategy = request.chunking_strategy
 
         if not file and not file_id:
             raise ValueError("Either file or file_id must be provided")
@@ -70,7 +72,12 @@ class UnstructuredApiFileProcessor:
             document_metadata["file_id"] = file_id
 
         # Call Unstructured.io API
-        elements = await self._partition_via_api(content, filename)
+        if chunking_strategy:
+            log.info("Using chunking strategy", strategy_type=chunking_strategy.type)
+            elements = await self._partition_and_chunk(content, filename, chunking_strategy)
+        else:
+            log.info("No chunking strategy - using element-level chunks")
+            elements = await self._partition_no_chunk(content, filename)
 
         # Convert elements to chunks
         chunks = self._elements_to_chunks(elements, document_id, document_metadata)
@@ -87,8 +94,8 @@ class UnstructuredApiFileProcessor:
 
         return ProcessFileResponse(chunks=chunks, metadata=response_metadata)
 
-    async def _partition_via_api(self, content: bytes, filename: str) -> list[dict[str, Any]]:
-        """Call Unstructured.io API to partition the document.
+    async def _partition_no_chunk(self, content: bytes, filename: str) -> list[dict[str, Any]]:
+        """Call Unstructured.io API to partition the document without chunking.
 
         Args:
             content: File content as bytes
@@ -134,6 +141,74 @@ class UnstructuredApiFileProcessor:
         )
 
         # Convert response elements to list of dicts
+        return [dict(elem) for elem in resp.elements]
+
+    async def _partition_and_chunk(
+        self,
+        content: bytes,
+        filename: str,
+        chunking_strategy: VectorStoreChunkingStrategy,
+    ) -> list[dict[str, Any]]:
+        """Call Unstructured.io API to partition and chunk the document.
+
+        Args:
+            content: File content as bytes
+            filename: Original filename (used for format detection)
+            chunking_strategy: Chunking configuration from request
+
+        Returns:
+            List of element dictionaries from Unstructured API (pre-chunked)
+
+        Raises:
+            Exception: If API call fails
+        """
+        from unstructured_client import UnstructuredClient
+        from unstructured_client.models import operations, shared
+
+        client = UnstructuredClient(api_key_auth=self.config.api_key.get_secret_value())
+
+        # Determine max_tokens based on strategy
+        if chunking_strategy.type == "auto":
+            max_tokens = self.config.default_chunk_size_tokens
+        elif chunking_strategy.type == "static":
+            max_tokens = chunking_strategy.static.max_chunk_size_tokens
+        else:
+            max_tokens = self.config.default_chunk_size_tokens
+
+        # Convert tokens to characters (rough estimate: 1 token ≈ 4 characters)
+        max_characters = max_tokens * 4
+
+        req = operations.PartitionRequest(
+            partition_parameters=shared.PartitionParameters(
+                files=shared.Files(
+                    content=content,
+                    file_name=filename,
+                ),
+                strategy=shared.Strategy.AUTO,
+                chunking_strategy="by_title",
+                max_characters=max_characters,
+            )
+        )
+
+        log.info(
+            "Calling Unstructured.io API with chunking",
+            filename=filename,
+            size_bytes=len(content),
+            max_characters=max_characters,
+        )
+
+        resp = client.general.partition(request=req)
+
+        if not resp.elements:
+            log.warning("Unstructured.io API returned no elements", filename=filename)
+            return []
+
+        log.info(
+            "Unstructured.io API returned chunked elements",
+            filename=filename,
+            element_count=len(resp.elements),
+        )
+
         return [dict(elem) for elem in resp.elements]
 
     # element mapping to chunk with metadata, including generating chunk_id and calculating token count
