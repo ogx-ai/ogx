@@ -22,6 +22,7 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::auto",
+            execution_mode="worker",
             pip_packages=["chardet", "pypdf>=6.13.0", "markitdown[all]"],
             module="ogx.providers.inline.file_processor.auto",
             config_class="ogx.providers.inline.file_processor.auto.AutoFileProcessorConfig",
@@ -37,6 +38,7 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::pypdf",
+            execution_mode="worker",
             pip_packages=["chardet", "pypdf>=6.13.0"],
             module="ogx.providers.inline.file_processor.pypdf",
             config_class="ogx.providers.inline.file_processor.pypdf.PyPDFFileProcessorConfig",
@@ -46,6 +48,7 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::markitdown",
+            execution_mode="worker",
             pip_packages=["markitdown[all]"],
             module="ogx.providers.inline.file_processor.markitdown",
             config_class="ogx.providers.inline.file_processor.markitdown.MarkItDownFileProcessorConfig",
@@ -90,6 +93,7 @@ or `remote::docling-serve` instead.
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::docling",
+            execution_mode="worker",
             pip_packages=["docling"],
             module="ogx.providers.inline.file_processor.docling",
             config_class="ogx.providers.inline.file_processor.docling.DoclingFileProcessorConfig",
@@ -161,6 +165,7 @@ See [Docling's documentation](https://docling-project.github.io/docling/) for mo
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::unstructured",
+            execution_mode="worker",
             pip_packages=["unstructured[all-docs]>=0.21.0"],  # Security fix in 0.21.0
             module="ogx.providers.inline.file_processor.unstructured",
             config_class="ogx.providers.inline.file_processor.unstructured.UnstructuredFileProcessorConfig",

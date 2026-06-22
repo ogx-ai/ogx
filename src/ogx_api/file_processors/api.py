@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from fastapi import UploadFile
 
-from .models import ProcessFileRequest, ProcessFileResponse
+from .models import ListProcessFileJobsResponse, ProcessFileJob, ProcessFileRequest, ProcessFileResponse
 
 
 @runtime_checkable
@@ -54,5 +54,49 @@ class FileProcessors(Protocol):
         :param request: The request containing file_id, options, and chunking_strategy.
         :param file: The uploaded file object containing content and metadata (filename, content_type, etc.). Mutually exclusive with request.file_id.
         :returns: ProcessFileResponse with chunks ready for vector database storage.
+        """
+        ...
+
+    async def create_process_file_job(
+        self,
+        request: ProcessFileRequest,
+        file: UploadFile | None = None,
+    ) -> ProcessFileJob:
+        """
+        Submit a file for asynchronous processing and return immediately.
+
+        Unlike process_file, this does not block until processing finishes. The
+        work runs out-of-process; poll retrieve_process_file_job with the returned
+        job_id until the status is terminal.
+
+        :param request: The request containing file_id, options, and chunking_strategy.
+        :param file: The uploaded file object. Mutually exclusive with request.file_id.
+        :returns: A ProcessFileJob in the 'scheduled' state.
+        """
+        ...
+
+    async def retrieve_process_file_job(self, job_id: str) -> ProcessFileJob:
+        """
+        Retrieve the current state of a file-processing job.
+
+        :param job_id: The id of the job to retrieve.
+        :returns: The ProcessFileJob, including the result once completed.
+        """
+        ...
+
+    async def cancel_process_file_job(self, job_id: str) -> ProcessFileJob:
+        """
+        Cancel a scheduled or in-progress file-processing job.
+
+        :param job_id: The id of the job to cancel.
+        :returns: The ProcessFileJob in its post-cancellation state.
+        """
+        ...
+
+    async def list_process_file_jobs(self) -> ListProcessFileJobsResponse:
+        """
+        List file-processing jobs, most recent first.
+
+        :returns: The list of ProcessFileJob records.
         """
         ...
