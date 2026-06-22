@@ -18,7 +18,7 @@ import warnings
 import pytest
 from fastapi import Response
 from fastapi.responses import StreamingResponse
-from ogx_client import NOT_GIVEN, Omit
+from ogx_open_client import NOT_GIVEN, Omit
 
 from ogx.core.library_client import (
     AsyncOGXAsLibraryClient,

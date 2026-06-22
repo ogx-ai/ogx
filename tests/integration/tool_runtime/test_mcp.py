@@ -5,8 +5,8 @@
 # the root directory of this source tree.
 
 import pytest
-from ogx_client.lib.agents.agent import Agent
-from ogx_client.lib.agents.turn_events import StepCompleted, StepProgress, ToolCallIssuedDelta
+from ogx_open_client.lib.agents.agent import Agent
+from ogx_open_client.lib.agents.turn_events import StepCompleted, StepProgress, ToolCallIssuedDelta
 
 AUTH_TOKEN = "test-token"
 

@@ -151,15 +151,18 @@ class {{classname}}({{#parent}}{{{.}}}{{/parent}}{{^parent}}BaseModel{{/parent}}
             return value.actual_instance
 
         # If the value is a dict, unwrap any OneOf instances in its values
+        # Only create a new dict if unwrapping is actually needed, to preserve
+        # mutability of the original (e.g. additional_properties)
         if isinstance(value, dict):
-            unwrapped = {}
-            for k, v in value.items():
-                # Check if this is a OneOf wrapper with actual_instance
-                if hasattr(v, 'actual_instance') and v.actual_instance is not None:
-                    unwrapped[k] = v.actual_instance
-                else:
-                    unwrapped[k] = v
-            return unwrapped
+            needs_unwrap = any(
+                hasattr(v, 'actual_instance') and v.actual_instance is not None
+                for v in value.values()
+            )
+            if needs_unwrap:
+                return {
+                    k: v.actual_instance if hasattr(v, 'actual_instance') and v.actual_instance is not None else v
+                    for k, v in value.items()
+                }
 
         return value
 
