@@ -16,6 +16,7 @@ from ._schema_output import (
     _apply_legacy_sorting,
     _dedupe_create_response_request_input_union_for_stainless,
     _extract_duplicate_union_types,
+    _fix_compact_request_schema,
     _write_yaml_file,
     validate_openapi_schema,
 )
@@ -904,6 +905,58 @@ def _inline_component_refs(openapi_schema: dict[str, Any], components_to_inline:
     _inline_refs(openapi_schema)
 
 
+def _create_streaming_delta_tool_call(openapi_schema: dict[str, Any]) -> None:
+    """Create a streaming-friendly tool call schema for delta parsing.
+
+    The existing openapi.yml used the same ChatCompletionMessageToolCall schema for both
+    complete responses and streaming deltas, but streaming deltas on the wire include an
+    index field and omit id/type/function on continuation chunks. This function formalizes
+    the de-facto streaming protocol by creating a ChoiceDeltaToolCall variant with relaxed
+    field requirements, matching what the server actually sends.
+    """
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    tc_schema = schemas.get("ChatCompletionMessageToolCall")
+    if not tc_schema:
+        return
+
+    delta_tc = copy.deepcopy(tc_schema)
+    delta_tc["description"] = "A tool call delta in a streaming chat completion chunk."
+    delta_props = delta_tc.get("properties", {})
+
+    # Add back `index` (required for correlating chunks across streaming deltas)
+    delta_props["index"] = {
+        "type": "integer",
+        "description": "The index of the tool call being streamed.",
+    }
+
+    # Make id and type optional (only present in the first chunk for a tool call)
+    for field in ("id", "type"):
+        if field in delta_props:
+            delta_props[field] = {
+                "anyOf": [delta_props[field], {"type": "null"}],
+                "description": delta_props[field].get("description", ""),
+            }
+
+    # Make function optional and its inner fields (name, arguments) not required
+    if "function" in delta_props:
+        func_schema = delta_props["function"]
+        func_schema.pop("required", None)
+        delta_props["function"] = {
+            "anyOf": [func_schema, {"type": "null"}],
+            "description": func_schema.pop("description", ""),
+        }
+
+    delta_tc["required"] = ["index"]
+    schemas["ChoiceDeltaToolCall"] = delta_tc
+
+    # Point the streaming delta's tool_calls to the new variant
+    delta_schema = schemas.get("OpenAIChoiceDelta")
+    if delta_schema:
+        tc_prop = delta_schema.get("properties", {}).get("tool_calls", {})
+        if "items" in tc_prop:
+            tc_prop["items"] = {"$ref": "#/components/schemas/ChoiceDeltaToolCall"}
+
+
 def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
     """Fix common schema issues: exclusiveMinimum, null defaults, and add titles to unions."""
     # Convert standalone const values to single-value enums (OpenAI style)
@@ -972,6 +1025,8 @@ def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         openapi_schema, "OpenAIChatCompletionCustomToolCall", "ChatCompletionMessageCustomToolCall"
     )
 
+    _create_streaming_delta_tool_call(openapi_schema)
+
     # Add discriminator to tool_calls items anyOf (OpenAI uses propertyName: "type")
     if "components" in openapi_schema and "schemas" in openapi_schema["components"]:
         msg_schema = openapi_schema["components"]["schemas"].get("OpenAIChatCompletionResponseMessage")
@@ -986,5 +1041,8 @@ def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         for schema_name, schema_def in openapi_schema["components"]["schemas"].items():
             _fix_schema_recursive(schema_def)
             _add_titles_to_unions(schema_def, schema_name)
+
+    # Run compact transforms AFTER titles are added so the new oneOf wrapper stays title-free.
+    _fix_compact_request_schema(openapi_schema)
 
     return openapi_schema

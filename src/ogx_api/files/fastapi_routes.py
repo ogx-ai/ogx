@@ -4,11 +4,14 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from typing import Annotated
+import json
+from collections.abc import Mapping
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.param_functions import File, Form
 from fastapi.responses import Response
+from pydantic import ValidationError
 
 from ogx_api.common.upload_limits import (
     DEFAULT_MAX_UPLOAD_SIZE_BYTES,
@@ -38,6 +41,33 @@ get_list_files_request = create_query_dependency(ListFilesRequest)
 get_get_files_request = create_path_dependency(RetrieveFileRequest)
 get_delete_files_request = create_path_dependency(DeleteFileRequest)
 get_retrieve_file_content_request = create_path_dependency(RetrieveFileContentRequest)
+
+
+def _parse_expires_after_form(form: Mapping[str, Any]) -> ExpiresAfter | None:
+    bracket_data: dict[str, Any] = {}
+    prefix = "expires_after["
+    for key, value in form.items():
+        if key.startswith(prefix) and key.endswith("]"):
+            bracket_data[key[len(prefix) : -1]] = value
+
+    if bracket_data:
+        return ExpiresAfter.model_validate(bracket_data)
+
+    value = form.get("expires_after")
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return ExpiresAfter.model_validate(json.loads(value))
+    return ExpiresAfter.model_validate(value)
+
+
+async def get_upload_file_expires_after(request: Request) -> ExpiresAfter | None:
+    """Parse expires_after from multipart forms sent as JSON or bracketed fields."""
+    form = await request.form()
+    try:
+        return _parse_expires_after_form(form)
+    except (json.JSONDecodeError, TypeError, ValidationError) as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse expires_after: {e}") from e
 
 
 def create_router(impl: Files, max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES) -> APIRouter:
@@ -118,9 +148,10 @@ def create_router(impl: Files, max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_S
     async def upload_file(
         file: Annotated[UploadFile, File(description="The file to upload.")],
         purpose: Annotated[OpenAIFileUploadPurpose, Form(description="The intended purpose of the uploaded file.")],
-        expires_after: Annotated[
-            ExpiresAfter | None,
-            Form(description="Optional expiration settings for the file."),
+        expires_after: Annotated[ExpiresAfter | None, Depends(get_upload_file_expires_after)] = None,
+        expires_after_schema: Annotated[
+            str | None,
+            Form(alias="expires_after", description="Optional expiration settings for the file."),
         ] = None,
     ) -> OpenAIFileObject:
         content = await read_upload_with_size_limit(file, max_upload_size_bytes)

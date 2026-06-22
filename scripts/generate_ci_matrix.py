@@ -88,7 +88,7 @@ def generate_matrix(schedule="", test_setup="", matrix_key="default", changed_fi
     Args:
         schedule: GitHub cron schedule string (e.g., "1 0 * * 0" for weekly)
         test_setup: Manual test setup input (e.g., "ollama-vision")
-        matrix_key: Matrix configuration key from ci_matrix.json (e.g., "default", "stainless")
+        matrix_key: Matrix configuration key from ci_matrix.json (e.g., "default")
         changed_files: List of changed file paths for targeted PR testing
 
     Returns:

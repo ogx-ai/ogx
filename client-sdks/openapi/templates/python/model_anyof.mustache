@@ -127,10 +127,15 @@ class {{classname}}({{#parent}}{{{.}}}{{/parent}}{{^parent}}BaseModel{{/parent}}
             error_messages.append(str(e))
         {{/isPrimitiveType}}
         {{^isPrimitiveType}}
-        if not isinstance(v, {{{dataType}}}):
-            error_messages.append(f"Error! Input type `{type(v)}` is not `{{{dataType}}}`")
-        else:
+        if isinstance(v, {{{dataType}}}):
             return v
+        if isinstance(v, (str, int)):
+            try:
+                v = {{{dataType}}}(v)
+                return v
+            except Exception:
+                pass
+        error_messages.append(f"Error! Input type `{type(v)}` is not `{{{dataType}}}`")
 
         {{/isPrimitiveType}}
         {{/isContainer}}

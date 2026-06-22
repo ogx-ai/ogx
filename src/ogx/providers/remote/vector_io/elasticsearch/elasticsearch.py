@@ -46,9 +46,10 @@ OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX = f"openai_vector_stores_files_conten
 class ElasticsearchIndex(EmbeddingIndex):
     """Embedding index backed by an Elasticsearch index."""
 
-    def __init__(self, client: AsyncElasticsearch, collection_name: str):
+    def __init__(self, client: AsyncElasticsearch, vector_store: VectorStore):
         self.client = client
-        self.collection_name = collection_name
+        self.collection_name = vector_store.identifier
+        self.dimension = vector_store.embedding_dimension
 
     # Check if the rerank_params contains the following structure:
     # {
@@ -106,15 +107,6 @@ class ElasticsearchIndex(EmbeddingIndex):
         }
 
     async def initialize(self) -> None:
-        # Elasticsearch collections (indexes) are created on-demand in add_chunks
-        # If the index does not exist, it will be created in add_chunks.
-        pass
-
-    async def add_chunks(self, chunks: list[EmbeddedChunk]):
-        """Adds chunks to the Elasticsearch index."""
-        if not chunks:
-            return
-
         try:
             await self.client.indices.create(
                 index=self.collection_name,
@@ -125,17 +117,25 @@ class ElasticsearchIndex(EmbeddingIndex):
                             "chunk_id": {"type": "keyword"},
                             "metadata": {"type": "object"},
                             "chunk_metadata": {"type": "object"},
-                            "embedding": {"type": "dense_vector", "dims": len(chunks[0].embedding)},
+                            "embedding": {"type": "dense_vector", "dims": self.dimension},
                             "embedding_dimension": {"type": "integer"},
                             "embedding_model": {"type": "keyword"},
                         }
                     }
                 },
             )
+            log.info("Created Elasticsearch index", collection_name=self.collection_name)
         except ApiError as e:
-            if e.status_code != 400 or "resource_already_exists_exception" not in e.message:
+            if e.status_code == 400 and "resource_already_exists_exception" in e.message:
+                log.debug("Elasticsearch index already exists", collection_name=self.collection_name)
+            else:
                 log.error(f"Error creating Elasticsearch index {self.collection_name}: {e}")
                 raise
+
+    async def add_chunks(self, chunks: list[EmbeddedChunk]):
+        """Adds chunks to the Elasticsearch index."""
+        if not chunks:
+            return
 
         actions = []
         for chunk in chunks:
@@ -232,8 +232,7 @@ class ElasticsearchIndex(EmbeddingIndex):
                 query={"knn": {"field": "embedding", "query_vector": embedding.tolist(), "k": k}},
                 min_score=score_threshold,
                 size=k,
-                source={"exclude_vectors": False},  # Retrieve the embedding
-                ignore_unavailable=True,  # In case the index does not exist
+                source={"exclude_vectors": False},
             )
         except Exception as e:
             log.error(f"Error performing vector query on Elasticsearch index {self.collection_name}: {e}")
@@ -359,8 +358,7 @@ class ElasticsearchIndex(EmbeddingIndex):
                 size=k,
                 retriever=retriever,
                 min_score=score_threshold,
-                source={"exclude_vectors": False},  # Retrieve the embedding
-                ignore_unavailable=True,  # In case the index does not exist
+                source={"exclude_vectors": False},
             )
         except Exception as e:
             log.error(f"Error performing hybrid query on Elasticsearch index {self.collection_name}: {e}")
@@ -414,9 +412,9 @@ class ElasticsearchVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStore
 
         for vector_store_data in stored_vector_stores:
             vector_store = VectorStore.model_validate_json(vector_store_data)
-            index = VectorStoreWithIndex(
-                vector_store, ElasticsearchIndex(self.client, vector_store.identifier), self.inference_api
-            )
+            es_index = ElasticsearchIndex(self.client, vector_store)
+            await es_index.initialize()
+            index = VectorStoreWithIndex(vector_store, es_index, self.inference_api)
             self.cache[vector_store.identifier] = index
         await self.initialize_openai_vector_stores()
 
@@ -430,9 +428,11 @@ class ElasticsearchVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStore
         key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
         await self.kvstore.set(key=key, value=vector_store.model_dump_json())
 
+        es_index = ElasticsearchIndex(self.client, vector_store)
+        await es_index.initialize()
         index = VectorStoreWithIndex(
             vector_store=vector_store,
-            index=ElasticsearchIndex(self.client, vector_store.identifier),
+            index=es_index,
             inference_api=self.inference_api,
         )
 
@@ -450,16 +450,20 @@ class ElasticsearchVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStore
         if vector_store_id in self.cache:
             return self.cache[vector_store_id]
 
-        if self.vector_store_table is None:
-            raise ValueError(f"Vector DB not found {vector_store_id}")
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before using vector stores.")
 
-        vector_store = await self.vector_store_table.get_vector_store(vector_store_id)
-        if not vector_store:
+        key = f"{VECTOR_DBS_PREFIX}{vector_store_id}"
+        vector_store_data = await self.kvstore.get(key)
+        if not vector_store_data:
             raise VectorStoreNotFoundError(vector_store_id)
 
+        vector_store = VectorStore.model_validate_json(vector_store_data)
+        es_index = ElasticsearchIndex(client=self.client, vector_store=vector_store)
+        await es_index.initialize()
         index = VectorStoreWithIndex(
             vector_store=vector_store,
-            index=ElasticsearchIndex(client=self.client, collection_name=vector_store.identifier),
+            index=es_index,
             inference_api=self.inference_api,
         )
         self.cache[vector_store_id] = index

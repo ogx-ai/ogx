@@ -23,7 +23,7 @@ setup_logging()
 import pytest
 import requests
 import yaml
-from ogx_client import OgxClient
+from ogx_open_client import OgxClient
 from openai import OpenAI
 
 from ogx.core.datatypes import QualifiedModel, RerankerModel, VectorStoresConfig

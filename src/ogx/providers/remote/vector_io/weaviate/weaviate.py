@@ -131,7 +131,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             if doc.metadata.distance is None:
@@ -201,7 +201,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             score = doc.metadata.score if doc.metadata.score is not None else 0.0
@@ -275,7 +275,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             score = doc.metadata.score if doc.metadata.score is not None else 0.0

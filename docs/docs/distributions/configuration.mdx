@@ -251,6 +251,8 @@ server:
   tls_certfile: "/path/to/cert.pem"  # Optional: Path to TLS certificate for HTTPS
   tls_keyfile: "/path/to/key.pem"    # Optional: Path to TLS key for HTTPS
   registry_refresh_interval_seconds: 300  # Optional: Interval between registry refreshes (default: 300)
+  tenancy:                           # Optional: Multi-tenancy isolation (default: disabled)
+    mode: "disabled"                 # "disabled", "single", or "multi"
 ```
 
 ### Registry Refresh Interval
@@ -639,47 +641,201 @@ Regex patterns can be used to match resources based on naming conventions. For e
 - Use anchors (`^` and `$`) when you need exact matching (default behavior uses `re.match()` which anchors at the start but not the end)
 - Invalid regex patterns will log a warning and be treated as non-matches
 
-### Multi-Tenant Isolation for Conversations and Responses
+### Multi-Tenancy
 
-In a multi-tenant deployment, you typically want to ensure that each
-user's conversations, responses, and files are isolated from other
-users. Unlike registry resources (models, vector stores, etc.) which are
-identified by types like `model::my-model`, stored data uses the
-`sql_record::<table_name>::<record_id>` resource type pattern. Each
-record is automatically stamped with the authenticated user's identity
-when created, and the `user is owner` condition can be used to restrict
-access to only the user who created the record.
+OGX provides two layers of data isolation that can be used independently
+or together:
 
-The relevant `sql_record` table names are:
+1. **Tenant isolation** (`server.tenancy`) — a hard partition key
+   (`tenant_id`) applied to every stored row. Tenants cannot see each
+   other's data regardless of access policy. This is the primary
+   isolation boundary for multi-tenant deployments.
+2. **Owner-based access control** (`access_policy` with `user is owner`)
+   — attribute-based rules that control which user within a tenant can
+   read, update, or delete a given record. This is a sharing mechanism
+   within a tenant, not an isolation boundary on its own.
 
-| Table Name | Description |
-|---|---|
-| `openai_conversations` | Conversation sessions |
-| `conversation_items` | Messages and items within conversations |
-| `responses` | Stored responses (table name is configurable in provider config) |
-| `openai_files` | Uploaded files |
+For production multi-tenant deployments, use tenant isolation. Owner-based
+access control is useful for single-tenant setups where you want per-user
+record isolation, or as an additional layer within a tenant.
 
-The following example shows a complete access policy that allows any
-authenticated user to use models and create new resources, while
-ensuring that conversations, responses, and files can only be accessed
-by the user who created them:
+#### Tenancy Modes
+
+The `server.tenancy` section configures tenant isolation. There are
+three modes:
+
+| Mode | Behavior |
+|------|----------|
+| `disabled` (default) | No tenant column, no filtering. Current behavior preserved. |
+| `single` | All records are stamped with a single configured `default_tenant_id`. Useful for dedicated single-tenant deployments that want a migration path to `multi`. |
+| `multi` | Every request must resolve a `tenant_id` from authentication. Requests without a tenant are rejected (401). Records are partitioned by tenant. |
+
+#### Tenant Resolution by Auth Provider
+
+Each authentication provider can resolve a `tenant_id` from the
+incoming request. The resolution mechanism depends on the provider type:
+
+| Provider | Config field | Source |
+|----------|-------------|--------|
+| `upstream_header` | `tenant_header` | HTTP header set by the upstream gateway |
+| `oauth2_token` | `tenant_claim` | JWT claim (JWKS) or introspection response field |
+| `kubernetes` | `tenant_claim` | Kubernetes user claim (resolved via `claims_mapping`) |
+| `custom` | `tenant_field` | Field in the auth endpoint JSON response |
+
+Tenant IDs are validated and normalized: lowercase, alphanumeric with
+hyphens and underscores, max 128 characters, matching
+`[a-z0-9][a-z0-9-_]{0,127}`.
+
+#### Example: Single-Tenant Deployment
+
+A dedicated deployment where all data belongs to one tenant. No auth
+required — useful for development or single-customer deployments:
 
 ```yaml
 server:
   port: 8321
+  tenancy:
+    mode: "single"
+    default_tenant_id: "acme-corp"
+```
+
+All records are automatically stamped with `tenant_id: "acme-corp"`.
+This creates a clean migration path — when you later move to `multi`
+mode, existing data is already tagged.
+
+#### Example: Multi-Tenant with Upstream Gateway (Authorino, Istio)
+
+The most common production pattern. An upstream gateway (Authorino,
+Istio, or a reverse proxy) authenticates the request and injects
+identity headers. OGX trusts these headers and extracts the tenant from
+a dedicated header:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "upstream_header"
+      principal_header: "x-auth-user-id"
+      tenant_header: "x-tenant-id"
+      attributes_header: "x-auth-attributes"
+```
+
+The gateway is responsible for setting `x-tenant-id` on every request.
+If the header is missing, OGX rejects the request with a 401.
+
+#### Example: Multi-Tenant with OAuth2/OIDC (Keycloak)
+
+Extract the tenant from a JWT claim. Configure your identity provider
+to include a tenant claim in the token:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
   auth:
     provider_config:
       type: "oauth2_token"
+      tenant_claim: "tenant"
+      jwks:
+        uri: ${env.KEYCLOAK_URL}/realms/ogx/protocol/openid-connect/certs
+      issuer: ${env.KEYCLOAK_URL}/realms/ogx
+      audience: "ogx"
+```
+
+This reads the `tenant` claim from the JWT payload. For example, a
+decoded token with `{"sub": "alice", "tenant": "acme-corp", ...}` would
+resolve `tenant_id: "acme-corp"`. Any claim name can be used — set
+`tenant_claim` to match your IdP's token structure (e.g., `"org"`,
+`"organization_id"`, `"tid"`).
+
+#### Example: Multi-Tenant with Kubernetes Auth
+
+Use a Kubernetes user claim as the tenant identifier. The `tenant_claim`
+is resolved through the same `claims_mapping` path used for access
+attributes:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "kubernetes"
+      api_server_url: "https://kubernetes.default.svc"
+      tenant_claim: "extra.tenant"
+      claims_mapping:
+        username: "roles"
+        groups: "roles"
+```
+
+Here `tenant_claim: "extra.tenant"` extracts the first value from
+`userInfo.extra.tenant` (for example, `"tenant-a"`) as the tenant
+partition key. Use a claim whose value already matches the tenant ID
+format; raw Kubernetes usernames such as
+`system:serviceaccount:tenant-a:default` are not valid tenant IDs.
+
+#### Example: Multi-Tenant with Custom Auth Endpoint
+
+Extract the tenant from your custom auth endpoint's response. The
+endpoint must return the tenant identifier in a known field:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "custom"
+      endpoint: "https://auth.example.com/validate"
+      tenant_field: "tenant_id"
+```
+
+The custom endpoint's JSON response should include the tenant field:
+
+```json
+{
+  "principal": "alice",
+  "attributes": {
+    "roles": ["user"],
+    "teams": ["ml-team"]
+  },
+  "tenant_id": "acme-corp",
+  "message": "Authentication successful"
+}
+```
+
+#### Combining Tenant Isolation with Access Control
+
+Tenant isolation and access control operate at different levels. Tenant
+isolation partitions data between organizations. Access control governs
+what individual users can do within their tenant. For full production
+isolation, use both:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "oauth2_token"
+      tenant_claim: "tenant"
       jwks:
         uri: "https://my-auth-provider.com/jwks"
     access_policy:
-    # Allow all authenticated users to use configured models for inference
+    # All authenticated users can use configured models
     - permit:
         actions: [read]
         resource: model::*
       description: Any authenticated user can use configured models
 
-    # File isolation
+    # File isolation — users can only access their own files
     - permit:
         actions: [create]
         resource: sql_record::openai_files::*
@@ -724,19 +880,76 @@ server:
       description: Users can only access their own responses
 ```
 
-With this policy:
-- Any user with a valid token can call inference endpoints and create new conversations, responses, and files.
-- A user can only list, read, update, or delete their own conversations, responses, and files. Attempts to access another user's resources will be denied.
-- The `user is owner` condition works by comparing the authenticated user's principal (from the JWT token) against the `owner_principal` stored on each record.
+With this configuration:
+- **Tenant isolation** ensures that users in `acme-corp` never see data
+  from `beta-inc`, regardless of access policy rules.
+- **Owner isolation** ensures that Alice within `acme-corp` cannot read
+  Bob's conversations, even though they share a tenant.
+- The `user is owner` condition compares the authenticated user's
+  principal (from the JWT `sub` claim) against the `owner_principal`
+  stored on each record.
+
+:::note
+Tenant isolation is enforced at the storage layer independently of
+access policies. Even if the access policy permits all actions, a user
+can only see rows that match their `tenant_id`. This is a non-bypassable
+filter — there is no policy rule that can override it.
+:::
+
+#### Owner-Based Isolation Without Tenancy
+
+For single-tenant deployments or development environments where you want
+per-user record isolation without a tenant partition, you can use
+`user is owner` conditions in the access policy alone:
+
+```yaml
+server:
+  port: 8321
+  auth:
+    provider_config:
+      type: "oauth2_token"
+      jwks:
+        uri: "https://my-auth-provider.com/jwks"
+    access_policy:
+    - permit:
+        actions: [read]
+        resource: model::*
+      description: Any authenticated user can use configured models
+    - permit:
+        actions: [create]
+        resource: sql_record::*
+      description: Any authenticated user can create records
+    - permit:
+        actions: [read, update, delete]
+        resource: sql_record::*
+      when: user is owner
+      description: Users can only access records they created
+```
+
+This provides user-level isolation through access control but does not
+create a hard tenant boundary. If two users share an attribute value
+(e.g., `teams=["engineering"]`), a policy using `user in owner teams`
+could grant cross-user access. For production multi-tenant deployments,
+use `server.tenancy.mode: "multi"` instead.
 
 :::note
 If no explicit `access_policy` is specified, OGX applies a
 default policy where all users can access resources defined in config
 (like models) but dynamically created resources can only be accessed by
-the user that created them. However, for production multi-tenant
-deployments it is recommended to define an explicit policy like the
-example above.
+the user that created them.
 :::
+
+#### SQL Record Table Names
+
+The following table names are used for `sql_record` resource types in
+access policies:
+
+| Table Name | Description |
+|---|---|
+| `openai_conversations` | Conversation sessions |
+| `conversation_items` | Messages and items within conversations |
+| `responses` | Stored responses (table name is configurable in provider config) |
+| `openai_files` | Uploaded files |
 
 ### Route-Level Authorization
 

@@ -24,6 +24,10 @@ inputs:
     description: 'Regex pattern to pass to pytest -k'
     required: false
     default: ''
+  text-model:
+    description: 'Text model override to pass to integration-tests.sh'
+    required: false
+    default: ''
   target-branch:
     description: 'Target branch for recording commits (for PRs, use the PR head branch)'
     required: false
@@ -56,6 +60,7 @@ runs:
         INPUT_SUITE: ${{ inputs.suite }}
         INPUT_SUBDIRS: ${{ inputs.subdirs }}
         INPUT_PATTERN: ${{ inputs.pattern }}
+        INPUT_TEXT_MODEL: ${{ inputs.text-model }}
       run: |
         SCRIPT_ARGS="--stack-config ${INPUT_STACK_CONFIG} --inference-mode ${INPUT_INFERENCE_MODE}"
 
@@ -71,6 +76,9 @@ runs:
         fi
         if [ -n "${INPUT_PATTERN}" ]; then
           SCRIPT_ARGS="${SCRIPT_ARGS} --pattern ${INPUT_PATTERN}"
+        fi
+        if [ -n "${INPUT_TEXT_MODEL}" ]; then
+          SCRIPT_ARGS="${SCRIPT_ARGS} --text-model ${INPUT_TEXT_MODEL}"
         fi
 
         echo "=== Running command ==="

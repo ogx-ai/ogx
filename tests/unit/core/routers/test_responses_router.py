@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 from unittest.mock import AsyncMock
 
 import httpx
@@ -551,8 +552,6 @@ def test_create_response_form_urlencoded_with_json_encoded_complex_fields():
     router = build_fastapi_router(Api.responses, impl)
     assert router is not None
     app.include_router(router)
-
-    import json
 
     tools_json = json.dumps([{"type": "web_search_preview"}])
     client = TestClient(app, raise_server_exceptions=False)

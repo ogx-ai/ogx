@@ -106,6 +106,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     :cvar interactions: Google Interactions API compatibility layer
     :cvar containers: Sandboxed container management for code/shell tool execution
     :cvar container_runtime: Backend runtime for containers (Docker/Podman, Kubernetes)
+    :cvar skills: Versioned skill bundle management
     :cvar inspect: Built-in system inspection and introspection
     """
 
@@ -128,6 +129,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     containers = "containers"
     messages = "messages"
     interactions = "interactions"
+    skills = "skills"
 
     # built-in API
     inspect = "inspect"
