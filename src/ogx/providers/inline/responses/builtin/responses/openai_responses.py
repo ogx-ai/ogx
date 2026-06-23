@@ -1193,6 +1193,7 @@ class OpenAIResponsesImpl:
             tools=[],  # Will be populated when processing completes
             tool_choice=tool_choice,
             instructions=instructions,
+            skills=skills,
             max_tool_calls=max_tool_calls,
             reasoning=reasoning,
             metadata=metadata,
