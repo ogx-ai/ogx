@@ -115,17 +115,13 @@ class CompactionConfig(BaseModel):
 class MemoryConfig(BaseModel):
     """Configuration for Responses memory reads."""
 
-    default_enabled: bool = Field(
-        default=True,
-        description="Use memories by default when a memory vector store is configured.",
+    enabled: bool = Field(
+        default=False,
+        description="Enable Responses memory reads. Disabled by default because memory is an alpha feature.",
     )
     default_vector_store_id: str | None = Field(
         default=None,
         description="Default vector store containing conversation memory files.",
-    )
-    require_owner: bool = Field(
-        default=True,
-        description="Skip memory reads unless an owner identifier is available.",
     )
     owner_metadata_key: str = Field(
         default="owner_id",

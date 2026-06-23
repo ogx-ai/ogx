@@ -6,6 +6,7 @@
 
 from typing import Any
 
+from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.config import MemoryConfig
 from ogx_api import OpenAIResponseInput, OpenAIResponseMessage, VectorIO
@@ -40,11 +41,13 @@ def build_memory_filters(
     owner_id: str | None,
     request_filters: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    if not owner_id:
+        raise ValueError("memory owner is required")
+
     filters: list[dict[str, Any]] = [
         {"type": "eq", "key": memory_config.memory_metadata_key, "value": True},
+        {"type": "eq", "key": memory_config.owner_metadata_key, "value": owner_id},
     ]
-    if owner_id:
-        filters.append({"type": "eq", "key": memory_config.owner_metadata_key, "value": owner_id})
     if request_filters:
         filters.append(request_filters)
 
@@ -59,8 +62,9 @@ async def resolve_memory_context(
     metadata: dict[str, str] | None,
     safety_identifier: str | None,
 ) -> str | None:
-    enabled = request_memory.enabled if request_memory is not None else memory_config.default_enabled
-    if not enabled:
+    if not memory_config.enabled:
+        return None
+    if request_memory is not None and not request_memory.enabled:
         return None
 
     vector_store_id = (
@@ -73,7 +77,7 @@ async def resolve_memory_context(
         return None
 
     owner_id = _resolve_owner_id(request_memory, metadata, safety_identifier)
-    if not owner_id and memory_config.require_owner:
+    if not owner_id:
         logger.debug("Skipping memory retrieval without owner")
         return None
 
@@ -127,6 +131,9 @@ def _resolve_owner_id(
     metadata: dict[str, str] | None,
     safety_identifier: str | None,
 ) -> str | None:
+    user = get_authenticated_user()
+    if user is not None:
+        return user.principal or None
     if request_memory is not None and request_memory.owner_id:
         return request_memory.owner_id
     if safety_identifier:

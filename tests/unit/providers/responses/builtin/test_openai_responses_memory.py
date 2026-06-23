@@ -6,6 +6,11 @@
 
 from unittest.mock import AsyncMock
 
+import pytest
+
+from ogx.core.access_control.access_control import AccessDeniedError
+from ogx.core.datatypes import User
+from ogx.core.request_headers import RequestProviderDataContext
 from ogx.providers.inline.responses.builtin.config import MemoryConfig
 from ogx.providers.inline.responses.builtin.responses.memory import (
     build_memory_filters,
@@ -39,6 +44,10 @@ def test_extract_memory_query_uses_latest_user_text():
     assert query == "latest user turn"
 
 
+def test_memory_config_defaults_to_disabled():
+    assert MemoryConfig().enabled is False
+
+
 def test_build_memory_filters_requires_owner_scope():
     filters = build_memory_filters(
         memory_config=MemoryConfig(),
@@ -56,20 +65,29 @@ def test_build_memory_filters_requires_owner_scope():
     }
 
 
-def test_build_memory_filters_omits_owner_when_not_available():
-    filters = build_memory_filters(
-        memory_config=MemoryConfig(),
-        owner_id=None,
-        request_filters={"type": "eq", "key": "project", "value": "ogx"},
+def test_build_memory_filters_rejects_missing_owner_scope():
+    with pytest.raises(ValueError, match="memory owner"):
+        build_memory_filters(
+            memory_config=MemoryConfig(),
+            owner_id=None,
+            request_filters={"type": "eq", "key": "project", "value": "ogx"},
+        )
+
+
+async def test_resolve_memory_context_skips_when_server_memory_disabled():
+    vector_io = AsyncMock()
+
+    context = await resolve_memory_context(
+        vector_io_api=vector_io,
+        memory_config=MemoryConfig(default_vector_store_id="vs_mem"),
+        request_memory=MemoryToolConfig(owner_id="user-123"),
+        input="repo prefs",
+        metadata=None,
+        safety_identifier=None,
     )
 
-    assert filters == {
-        "type": "and",
-        "filters": [
-            {"type": "eq", "key": "memory", "value": True},
-            {"type": "eq", "key": "project", "value": "ogx"},
-        ],
-    }
+    assert context is None
+    vector_io.openai_search_vector_store.assert_not_called()
 
 
 async def test_resolve_memory_context_searches_with_owner_filter():
@@ -90,7 +108,7 @@ async def test_resolve_memory_context_searches_with_owner_filter():
 
     context = await resolve_memory_context(
         vector_io_api=vector_io,
-        memory_config=MemoryConfig(default_vector_store_id="vs_mem"),
+        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
         request_memory=MemoryToolConfig(owner_id="user-123"),
         input="repo prefs",
         metadata=None,
@@ -103,12 +121,12 @@ async def test_resolve_memory_context_searches_with_owner_filter():
     assert request.filters["filters"][1] == {"type": "eq", "key": "owner_id", "value": "user-123"}
 
 
-async def test_resolve_memory_context_skips_without_owner_when_required():
+async def test_resolve_memory_context_skips_without_owner():
     vector_io = AsyncMock()
 
     context = await resolve_memory_context(
         vector_io_api=vector_io,
-        memory_config=MemoryConfig(default_vector_store_id="vs_mem", require_owner=True),
+        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
         request_memory=MemoryToolConfig(),
         input="repo prefs",
         metadata=None,
@@ -119,7 +137,7 @@ async def test_resolve_memory_context_skips_without_owner_when_required():
     vector_io.openai_search_vector_store.assert_not_called()
 
 
-async def test_resolve_memory_context_searches_without_owner_when_optional():
+async def test_resolve_memory_context_uses_authenticated_user_for_owner_scope():
     vector_io = AsyncMock()
     vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
         search_query=["repo prefs"],
@@ -129,25 +147,26 @@ async def test_resolve_memory_context_searches_without_owner_when_optional():
                 file_id="file_1",
                 filename="memory.md",
                 score=0.9,
-                attributes={"memory": True, "created_at": 123.0},
-                content=[VectorStoreContent(type="text", text="Global rollout preference.")],
+                attributes={"owner_id": "auth-user", "memory": True, "created_at": 123.0},
+                content=[VectorStoreContent(type="text", text="Authenticated owner preference.")],
             )
         ],
     )
 
-    context = await resolve_memory_context(
-        vector_io_api=vector_io,
-        memory_config=MemoryConfig(default_vector_store_id="vs_mem", require_owner=False),
-        request_memory=MemoryToolConfig(),
-        input="repo prefs",
-        metadata=None,
-        safety_identifier=None,
-    )
+    with RequestProviderDataContext(user=User("auth-user", None)):
+        context = await resolve_memory_context(
+            vector_io_api=vector_io,
+            memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
+            request_memory=MemoryToolConfig(owner_id="spoofed-user"),
+            input="repo prefs",
+            metadata={"owner_id": "metadata-user", "user_id": "metadata-user"},
+            safety_identifier="safety-user",
+        )
 
     assert context is not None
-    assert "Global rollout preference." in context
+    assert "Authenticated owner preference." in context
     request = vector_io.openai_search_vector_store.call_args.kwargs["request"]
-    assert request.filters == {"type": "and", "filters": [{"type": "eq", "key": "memory", "value": True}]}
+    assert request.filters["filters"][1] == {"type": "eq", "key": "owner_id", "value": "auth-user"}
 
 
 async def test_resolve_memory_context_continues_on_search_error():
@@ -156,7 +175,7 @@ async def test_resolve_memory_context_continues_on_search_error():
 
     context = await resolve_memory_context(
         vector_io_api=vector_io,
-        memory_config=MemoryConfig(default_vector_store_id="vs_mem"),
+        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
         request_memory=MemoryToolConfig(owner_id="user-123"),
         input="repo prefs",
         metadata=None,
@@ -164,6 +183,24 @@ async def test_resolve_memory_context_continues_on_search_error():
     )
 
     assert context is None
+
+
+async def test_resolve_memory_context_skips_on_vector_store_abac_denial():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.side_effect = AccessDeniedError()
+
+    with RequestProviderDataContext(user=User("blocked-user", None)):
+        context = await resolve_memory_context(
+            vector_io_api=vector_io,
+            memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
+            request_memory=MemoryToolConfig(),
+            input="repo prefs",
+            metadata=None,
+            safety_identifier=None,
+        )
+
+    assert context is None
+    vector_io.openai_search_vector_store.assert_called_once()
 
 
 async def test_memory_context_is_injected_without_file_search_output(
@@ -186,6 +223,7 @@ async def test_memory_context_is_injected_without_file_search_output(
         ],
     )
     openai_responses_impl.memory_config.default_vector_store_id = "vs_mem"
+    openai_responses_impl.memory_config.enabled = True
 
     result = await openai_responses_impl.create_openai_response(
         input="repo prefs",
@@ -207,6 +245,7 @@ async def test_memory_disabled_does_not_search(
 ):
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
     openai_responses_impl.memory_config.default_vector_store_id = "vs_mem"
+    openai_responses_impl.memory_config.enabled = True
 
     result = await openai_responses_impl.create_openai_response(
         input="repo prefs",
