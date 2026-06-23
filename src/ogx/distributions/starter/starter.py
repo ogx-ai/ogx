@@ -20,6 +20,8 @@ from ogx.core.storage.kvstore.config import PostgresKVStoreConfig
 from ogx.core.storage.sqlstore.sqlstore import PostgresSqlStoreConfig
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.distributions.template import DistributionTemplate, RunConfigSettings
+from ogx.providers.inline.container_runtime.local.config import LocalContainerRuntimeConfig
+from ogx.providers.inline.containers.builtin.config import BuiltinContainersConfig
 from ogx.providers.inline.file_processor.auto.config import AutoFileProcessorConfig
 from ogx.providers.inline.files.localfs.config import LocalfsFilesImplConfig
 from ogx.providers.inline.inference.sentence_transformers import (
@@ -153,6 +155,8 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "messages": [BuildProvider(provider_type="inline::builtin")],
         "responses": [BuildProvider(provider_type="inline::builtin")],
         "skills": [BuildProvider(provider_type="inline::builtin")],
+        "containers": [BuildProvider(provider_type="inline::builtin")],
+        "container_runtime": [BuildProvider(provider_type="inline::local")],
         "tool_runtime": [
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
@@ -262,6 +266,22 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 provider_id="auto",
                 provider_type="inline::auto",
                 config=AutoFileProcessorConfig.sample_run_config(),
+            ),
+        ],
+        # Optional sandbox execution. The local runtime connects to the Docker/Podman
+        # socket lazily, so the server still starts when no engine is available.
+        "containers": [
+            Provider(
+                provider_id="builtin",
+                provider_type="inline::builtin",
+                config=BuiltinContainersConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+        ],
+        "container_runtime": [
+            Provider(
+                provider_id="local",
+                provider_type="inline::local",
+                config=LocalContainerRuntimeConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
         ],
         "tool_runtime": [

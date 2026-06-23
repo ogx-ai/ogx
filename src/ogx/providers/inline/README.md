@@ -15,6 +15,8 @@ inline/
   files/               # File storage and management
   file_processor/      # File processing (text extraction, etc.)
   skills/              # Skills API (versioned skill bundle management)
+  containers/          # Containers API (builtin: policy + delegation)
+  container_runtime/   # Container backends (local: Docker/Podman)
   __init__.py
 ```
 
@@ -31,3 +33,5 @@ Their factory function is typically named `get_provider_impl()` and returns an i
 - **`inference/transformers`** -- Runs Llama models locally using the transformers library.
 - **`vector_io/sqlite_vec`** -- SQLite-based vector storage using the sqlite-vec extension.
 - **`skills/builtin`** -- Manages versioned skill bundles (zip archives with SKILL.md manifests). Stores bundles via the Files API and metadata in KVStore.
+- **`containers/builtin`** -- Implements the Containers API. Enforces operator network-policy layering, seeds requested file_ids from the Files API, and delegates lifecycle/file/shell work to a container_runtime provider.
+- **`container_runtime/local`** -- Drives a local Docker or Podman engine via the docker-py SDK (engine-selectable). Manages sandbox lifecycle, file operations, shell execution, and skill mounting; reaps expired containers via a background task.

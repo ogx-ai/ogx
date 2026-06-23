@@ -1,0 +1,35 @@
+---
+description: "Local container runtime backed by Docker or Podman via the docker-py SDK. Manages sandbox lifecycle, file operations, shell execution, and skill mounting against a local container engine socket. Container and file metadata is persisted in a SQL store; expired containers are reaped by a background task."
+sidebar_label: Local
+title: inline::local
+---
+
+# inline::local
+
+## Description
+
+Local container runtime backed by Docker or Podman via the docker-py SDK. Manages sandbox lifecycle, file operations, shell execution, and skill mounting against a local container engine socket. Container and file metadata is persisted in a SQL store; expired containers are reaped by a background task.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `engine` | `Literal[docker, podman]` | No | docker | Container engine to drive. Both are accessed through the docker-py SDK. |
+| `socket_url` | `str \| None` | No |  | Engine API socket URL. Defaults to the standard Docker or Podman socket for the selected engine when unset. |
+| `default_image` | `str` | No | python:3.12-slim | Image used for new containers when a request does not specify one. |
+| `max_containers` | `int` | No | 50 | Maximum number of concurrently active containers this runtime will create. |
+| `enable_local` | `bool` | No | False | Allow non-container ('local') shell execution on the host. Disabled by default. |
+| `expiration_poll_seconds` | `int` | No | 60 | Interval between sweeps of the background task that reaps expired containers. |
+| `metadata_store` | `SqlStoreReference` | No |  | SQL store for container and container-file metadata. |
+| `metadata_store.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `metadata_store.backend` | `str` | No |  | Name of backend from storage.backends |
+
+## Sample Configuration
+
+```yaml
+engine: ${env.CONTAINER_ENGINE:=docker}
+default_image: ${env.CONTAINER_DEFAULT_IMAGE:=python:3.12-slim}
+metadata_store:
+  table_name: container_runtime_metadata
+  backend: sql_default
+```

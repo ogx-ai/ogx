@@ -136,6 +136,20 @@ class ContainerStatus(StrEnum):
     EXPIRED = "expired"
 
 
+class ContainerMemoryLimit(StrEnum):
+    """Memory cap applied to a container, mirroring the OpenAI Containers API.
+
+    Distinct from ``image`` (which selects *what* runs): this bounds *how much*
+    memory the sandbox may use. The runtime translates each value into the
+    backend's native memory limit (e.g. Docker ``mem_limit``).
+    """
+
+    GB_1 = "1g"
+    GB_4 = "4g"
+    GB_16 = "16g"
+    GB_64 = "64g"
+
+
 @json_schema_type
 class Container(BaseModel):
     """A sandboxed execution environment.
@@ -161,6 +175,10 @@ class Container(BaseModel):
         default=None,
         description="Container image used to run the sandbox. May be operator-locked.",
     )
+    memory_limit: ContainerMemoryLimit = Field(
+        default=ContainerMemoryLimit.GB_1,
+        description="Memory cap applied to the sandbox. One of '1g', '4g', '16g', '64g'.",
+    )
     network_policy: NetworkPolicy | None = Field(
         default=None,
         description="Effective network policy after layering operator defaults with request extensions.",
@@ -182,6 +200,10 @@ class ContainerCreateRequest(BaseModel):
     image: str | None = Field(
         default=None,
         description="Requested container image. The operator policy may pin or reject this value.",
+    )
+    memory_limit: ContainerMemoryLimit = Field(
+        default=ContainerMemoryLimit.GB_1,
+        description="Requested memory cap for the sandbox. One of '1g', '4g', '16g', '64g'.",
     )
     network_policy: NetworkPolicyExtended | None = Field(
         default=None,

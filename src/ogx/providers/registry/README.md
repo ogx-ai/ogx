@@ -8,6 +8,8 @@ Provider spec declarations. Each file defines which providers are available for 
 registry/
   __init__.py
   batches.py           # Batch processing providers
+  container_runtime.py # Container runtime backends (inline::local Docker/Podman)
+  containers.py        # Containers API providers (inline::builtin)
   file_processors.py   # File processor providers
   files.py             # File storage providers
   inference.py         # Inference providers (20+ remote + 2 inline)

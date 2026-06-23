@@ -2,6 +2,8 @@ version: 2
 distro_name: starter
 apis:
 - batches
+- container_runtime
+- containers
 - file_processors
 - files
 - inference
@@ -218,6 +220,18 @@ providers:
       persistence:
         namespace: skills
         backend: kv_default
+  containers:
+  - provider_id: builtin
+    provider_type: inline::builtin
+  container_runtime:
+  - provider_id: local
+    provider_type: inline::local
+    config:
+      engine: ${env.CONTAINER_ENGINE:=docker}
+      default_image: ${env.CONTAINER_DEFAULT_IMAGE:=python:3.12-slim}
+      metadata_store:
+        table_name: container_runtime_metadata
+        backend: sql_default
   tool_runtime:
   - provider_id: brave-search
     provider_type: remote::brave-search

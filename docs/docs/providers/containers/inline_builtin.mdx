@@ -1,0 +1,27 @@
+---
+description: "Serves the Containers API (POST/GET/DELETE /v1alpha/containers and file sub-resources). Enforces operator network-policy layering, seeds requested file_ids from the Files API, and delegates all lifecycle, file, and shell-execution work to a configured container_runtime provider."
+sidebar_label: Builtin
+title: inline::builtin
+---
+
+# inline::builtin
+
+## Description
+
+Serves the Containers API (POST/GET/DELETE /v1alpha/containers and file sub-resources). Enforces operator network-policy layering, seeds requested file_ids from the Files API, and delegates all lifecycle, file, and shell-execution work to a configured container_runtime provider.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `default_network_policy` | `NetworkPolicy` | No | mode=&lt;NetworkPolicyMode.DENY: 'deny'&gt; allow_domains=[] deny_domains=[] | Operator-set network policy applied as the upper bound for every container. Request-supplied network policies may only narrow this, never expand it. |
+| `default_network_policy.mode` | `NetworkPolicyMode` | No | deny | Default egress disposition. 'deny' blocks all egress except entries in 'allow_domains'. |
+| `default_network_policy.allow_domains` | `list[str]` | No | [] | Domains permitted for outbound traffic. Used when mode is 'allow_list'. |
+| `default_network_policy.deny_domains` | `list[str]` | No | [] | Domains explicitly blocked. Takes precedence over 'allow_domains'. |
+| `allowed_images` | `list[str] \| None` | No |  | If set, restricts the images a request may select. Requests for any other image are rejected. When unset, any image is permitted. |
+
+## Sample Configuration
+
+```yaml
+{}
+```

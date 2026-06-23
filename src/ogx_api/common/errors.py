@@ -216,6 +216,36 @@ class BatchNotFoundError(ResourceNotFoundError):
         super().__init__(batch_id, resource_type="Batch", client_command="batches.list", resource_name_plural="batches")
 
 
+class ContainerNotFoundError(ResourceNotFoundError):
+    """raised when OGX cannot find a referenced container"""
+
+    def __init__(self, container_id: str) -> None:
+        super().__init__(container_id, resource_type="Container", client_command="containers.list")
+
+
+class ContainerFileNotFoundError(ResourceNotFoundError):
+    """raised when OGX cannot find a referenced file inside a container"""
+
+    def __init__(self, file_id: str, container_id: str) -> None:
+        super().__init__(
+            file_id,
+            resource_type="Container file",
+            client_command="containers.files.list",
+            client_command_args=container_id,
+            resource_name_plural="container files",
+            parent_resource=f"container '{container_id}'",
+        )
+
+
+class NetworkPolicyViolationError(OGXError):
+    """raised when a request-supplied network policy tries to expand the operator default"""
+
+    status_code: httpx.codes = httpx.codes.FORBIDDEN
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class UnsupportedModelError(OGXError):
     """raised when model is not present in the list of supported models"""
 

@@ -10215,6 +10215,20 @@ components:
           type: array
       title: NetworkPolicyExtended
       type: object
+    ContainerMemoryLimit:
+      description: |-
+        Memory cap applied to a container, mirroring the OpenAI Containers API.
+
+        Distinct from ``image`` (which selects *what* runs): this bounds *how much*
+        memory the sandbox may use. The runtime translates each value into the
+        backend's native memory limit (e.g. Docker ``mem_limit``).
+      enum:
+      - 1g
+      - 4g
+      - 16g
+      - 64g
+      title: ContainerMemoryLimit
+      type: string
     ContainerStatus:
       description: Lifecycle status of a container.
       enum:
@@ -10270,6 +10284,10 @@ components:
           - type: 'null'
           description: Container image used to run the sandbox. May be operator-locked.
           nullable: true
+        memory_limit:
+          $ref: '#/components/schemas/ContainerMemoryLimit'
+          default: 1g
+          description: Memory cap applied to the sandbox. One of '1g', '4g', '16g', '64g'.
         network_policy:
           anyOf:
           - $ref: '#/components/schemas/NetworkPolicy'
@@ -10314,6 +10332,10 @@ components:
           - type: 'null'
           description: Requested container image. The operator policy may pin or reject this value.
           nullable: true
+        memory_limit:
+          $ref: '#/components/schemas/ContainerMemoryLimit'
+          default: 1g
+          description: Requested memory cap for the sandbox. One of '1g', '4g', '16g', '64g'.
         network_policy:
           anyOf:
           - $ref: '#/components/schemas/NetworkPolicyExtended'

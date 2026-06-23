@@ -55,6 +55,8 @@ CATEGORIES = [
     "connectors",
     "messages",
     "interactions",
+    "containers",
+    "container_runtime",
 ]
 UNCATEGORIZED = "uncategorized"
 
