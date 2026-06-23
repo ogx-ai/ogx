@@ -195,7 +195,7 @@ def available_providers() -> list[ProviderSpec]:
             adapter_type="vertexai",
             provider_type="remote::vertexai",
             pip_packages=[
-                "google-genai>=1.69.0",
+                "google-genai>=2.3.0",
             ],
             module="ogx.providers.remote.inference.vertexai",
             config_class="ogx.providers.remote.inference.vertexai.VertexAIConfig",
