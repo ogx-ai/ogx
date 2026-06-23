@@ -56,6 +56,22 @@ def test_build_memory_filters_requires_owner_scope():
     }
 
 
+def test_build_memory_filters_omits_owner_when_not_available():
+    filters = build_memory_filters(
+        memory_config=MemoryConfig(),
+        owner_id=None,
+        request_filters={"type": "eq", "key": "project", "value": "ogx"},
+    )
+
+    assert filters == {
+        "type": "and",
+        "filters": [
+            {"type": "eq", "key": "memory", "value": True},
+            {"type": "eq", "key": "project", "value": "ogx"},
+        ],
+    }
+
+
 async def test_resolve_memory_context_searches_with_owner_filter():
     vector_io = AsyncMock()
     vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
@@ -101,6 +117,37 @@ async def test_resolve_memory_context_skips_without_owner_when_required():
 
     assert context is None
     vector_io.openai_search_vector_store.assert_not_called()
+
+
+async def test_resolve_memory_context_searches_without_owner_when_optional():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"memory": True, "created_at": 123.0},
+                content=[VectorStoreContent(type="text", text="Global rollout preference.")],
+            )
+        ],
+    )
+
+    context = await resolve_memory_context(
+        vector_io_api=vector_io,
+        memory_config=MemoryConfig(default_vector_store_id="vs_mem", require_owner=False),
+        request_memory=MemoryToolConfig(),
+        input="repo prefs",
+        metadata=None,
+        safety_identifier=None,
+    )
+
+    assert context is not None
+    assert "Global rollout preference." in context
+    request = vector_io.openai_search_vector_store.call_args.kwargs["request"]
+    assert request.filters == {"type": "and", "filters": [{"type": "eq", "key": "memory", "value": True}]}
 
 
 async def test_resolve_memory_context_continues_on_search_error():

@@ -85,6 +85,7 @@ from .streaming import StreamingResponseOrchestrator
 from .tool_executor import ToolExecutor
 from .types import ChatCompletionContext, ToolContext
 from .utils import (
+    APPROX_CHARS_PER_TOKEN,
     convert_response_content_to_chat_content,
     convert_response_input_to_chat_messages,
     convert_response_text_to_chat_response_format,
@@ -1513,9 +1514,9 @@ class OpenAIResponsesImpl:
 
     def _estimate_tokens_by_chars(self, input: str | list[OpenAIResponseInput]) -> int:
         if isinstance(input, str):
-            return max(1, len(input) // 4)
+            return max(1, len(input) // APPROX_CHARS_PER_TOKEN)
         total_chars = sum(len(s) for s in self._extract_text_segments(input))
-        return max(1, total_chars // 4)
+        return max(1, total_chars // APPROX_CHARS_PER_TOKEN)
 
     async def _maybe_auto_compact(
         self,

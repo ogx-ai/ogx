@@ -12,9 +12,10 @@ from ogx_api import OpenAIResponseInput, OpenAIResponseMessage, VectorIO
 from ogx_api.responses.models import MemoryToolConfig
 from ogx_api.vector_io.models import OpenAISearchVectorStoreRequest, VectorStoreSearchResponse
 
+from .utils import APPROX_CHARS_PER_TOKEN
+
 logger = get_logger(name=__name__, category="openai_responses::memory")
 
-_APPROX_CHARS_PER_TOKEN = 4
 _TRUNCATION_SUFFIX = "\n[truncated]"
 
 
@@ -36,13 +37,14 @@ def extract_memory_query(input: str | list[OpenAIResponseInput]) -> str:
 
 def build_memory_filters(
     memory_config: MemoryConfig,
-    owner_id: str,
+    owner_id: str | None,
     request_filters: dict[str, Any] | None,
 ) -> dict[str, Any]:
     filters: list[dict[str, Any]] = [
         {"type": "eq", "key": memory_config.memory_metadata_key, "value": True},
-        {"type": "eq", "key": memory_config.owner_metadata_key, "value": owner_id},
     ]
+    if owner_id:
+        filters.append({"type": "eq", "key": memory_config.owner_metadata_key, "value": owner_id})
     if request_filters:
         filters.append(request_filters)
 
@@ -71,7 +73,7 @@ async def resolve_memory_context(
         return None
 
     owner_id = _resolve_owner_id(request_memory, metadata, safety_identifier)
-    if not owner_id:
+    if not owner_id and memory_config.require_owner:
         logger.debug("Skipping memory retrieval without owner")
         return None
 
@@ -164,7 +166,7 @@ def _format_memory_context(
             continue
 
         if not snippets:
-            remaining_chars = max_context_tokens * _APPROX_CHARS_PER_TOKEN - len(opening) - len(closing) - 2
+            remaining_chars = max_context_tokens * APPROX_CHARS_PER_TOKEN - len(opening) - len(closing) - 2
             snippets.append(_truncate_text(snippet, remaining_chars))
         break
 
@@ -177,12 +179,14 @@ def _format_memory_context(
 def _format_memory_result(index: int, result: VectorStoreSearchResponse) -> str:
     attributes = result.attributes or {}
     created_at = attributes.get("created_at", "")
-    text = "\n".join(content.text for content in result.content if content.text)
+    text = "\n".join(
+        text for content in result.content if isinstance(text := getattr(content, "text", None), str) and text
+    )
     return f'<memory index="{index}" file_id="{result.file_id}" created_at="{created_at}">\n{text}\n</memory>'
 
 
 def _estimate_tokens(text: str) -> int:
-    return max(1, len(text) // _APPROX_CHARS_PER_TOKEN)
+    return max(1, len(text) // APPROX_CHARS_PER_TOKEN)
 
 
 def _truncate_text(text: str, max_chars: int) -> str:
