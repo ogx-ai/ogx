@@ -276,6 +276,7 @@ jobs:
           GEMINI_API_KEY: ${{ matrix.provider.setup == 'gemini' && secrets.GEMINI_API_KEY || '' }}
           TAVILY_SEARCH_API_KEY: ${{ contains(fromJSON('["gpt","azure","vertexai"]'), matrix.provider.setup) && secrets.TAVILY_SEARCH_API_KEY || '' }}
           AWS_BEDROCK_BEARER_TOKEN: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
+          AWS_BEARER_TOKEN_BEDROCK: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_DEFAULT_REGION: ${{ matrix.provider.setup == 'bedrock' && 'us-west-2' || '' }}
         with:
           stack-config: 'server:ci-tests'

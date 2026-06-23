@@ -13,7 +13,7 @@ from ogx_api import (
 )
 
 # Common dependencies for all vector IO providers that support document processing
-DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.10.0"]
+DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.13.0"]
 
 
 def available_providers() -> list[ProviderSpec]:
@@ -818,7 +818,7 @@ For more details on TLS configuration, refer to the [TLS setup guide](https://mi
         InlineProviderSpec(
             api=Api.vector_io,
             provider_type="inline::milvus",
-            pip_packages=["pymilvus[milvus-lite]>=2.4.10"] + DEFAULT_VECTOR_IO_DEPS,
+            pip_packages=["pymilvus[milvus-lite]>=2.6.2"] + DEFAULT_VECTOR_IO_DEPS,
             module="ogx.providers.inline.vector_io.milvus",
             config_class="ogx.providers.inline.vector_io.milvus.MilvusVectorIOConfig",
             api_dependencies=[Api.inference],
