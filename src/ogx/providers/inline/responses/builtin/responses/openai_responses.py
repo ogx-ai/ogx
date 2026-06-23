@@ -5,9 +5,11 @@
 # the root directory of this source tree.
 
 import asyncio
+import io
 import re
 import time
 import uuid
+import zipfile
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -28,6 +30,8 @@ from ogx.core.task import (
 )
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.config import CompactionConfig, MemoryConfig
+from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
+from ogx.providers.inline.skills.builtin.validation import _SKILL_MD
 from ogx.providers.utils.responses.responses_store import (
     ResponsesStore,
     _OpenAIResponseObjectWithInputAndMessages,
@@ -550,17 +554,13 @@ class OpenAIResponsesImpl:
         the SKILL.md manifest, and builds a system message from the skill
         name, description, and full instructions body.
         """
-        from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
-        from ogx.providers.inline.skills.builtin.validation import _SKILL_MD
 
         async def _resolve_one(skill_id: str) -> str:
             assert self.skills_api is not None
             skill = await self.skills_api.get_skill(skill_id)
             resp = await self.skills_api.get_skill_version_content(skill_id, skill.default_version)
-            import zipfile
-            from io import BytesIO
 
-            with zipfile.ZipFile(BytesIO(resp.body)) as zf:
+            with zipfile.ZipFile(io.BytesIO(resp.body)) as zf:
                 if _SKILL_MD in zf.namelist():
                     manifest = parse_skill_manifest(zf.read(_SKILL_MD).decode("utf-8"))
                 else:
@@ -572,8 +572,6 @@ class OpenAIResponsesImpl:
             if manifest and manifest.instructions:
                 section += f"\n\n### Instructions\n{manifest.instructions}"
             return section
-
-        import asyncio
 
         results = await asyncio.gather(*[_resolve_one(sid) for sid in skill_ids])
         parts = list(results)
