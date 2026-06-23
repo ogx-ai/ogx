@@ -16,9 +16,12 @@ from ogx.core.access_control.datatypes import RouteAccessRule
 from ogx.core.datatypes import AuthenticationConfig, TenancyConfig, TenancyMode, User
 from ogx.core.request_headers import user_from_scope
 from ogx.core.server.auth_providers import create_auth_provider
-from ogx.core.server.routes import find_matching_route, initialize_route_impls
+from ogx.core.server.routes import (
+    RouteImpls,
+    build_route_impls_from_routes,
+    find_matching_route,
+)
 from ogx.log import get_logger
-from ogx_api import Api
 from ogx_api.common.errors import AuthServiceUnavailableError, OpenAIErrorResponse, TokenValidationError
 
 logger = get_logger(name=__name__, category="core::auth")
@@ -92,10 +95,10 @@ class AuthenticationMiddleware:
     access resources that don't have access_attributes defined.
     """
 
-    def __init__(self, app: ASGIApp, auth_config: AuthenticationConfig, impls: dict[Api, Any]) -> None:
+    def __init__(self, app: ASGIApp, auth_config: AuthenticationConfig) -> None:
         self.app = app
-        self.impls = impls
         self.auth_provider = create_auth_provider(auth_config)
+        self._route_impls: RouteImpls | None = None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         # Authenticate both HTTP requests and WebSocket handshakes. WebSocket
@@ -108,15 +111,17 @@ class AuthenticationMiddleware:
             path = scope.get("path", "")
             method = scope.get("method", "GET")
 
-            if not hasattr(self, "route_impls"):
-                self.route_impls = initialize_route_impls(self.impls)
+            if self._route_impls is None:
+                top_app = scope.get("app")
+                assert top_app is not None, "scope must contain the FastAPI app under the 'app' key"
+                self._route_impls = build_route_impls_from_routes(top_app.router.routes)
 
             # WebSocket routes are not part of the generated webmethod table, so
             # the require_authentication opt-out only applies to HTTP routes.
             webmethod = None
             if not is_websocket:
                 try:
-                    _, _, _, webmethod = find_matching_route(method, path, self.route_impls)
+                    _, _, _, webmethod = find_matching_route(method, path, self._route_impls)
                 except ValueError:
                     # If no matching endpoint is found, pass here to run auth anyways
                     pass
@@ -419,10 +424,10 @@ class TenancyMiddleware:
     In multi mode, rejects requests that have no tenant_id after auth resolution.
     """
 
-    def __init__(self, app: ASGIApp, tenancy_config: TenancyConfig, impls: dict[Api, Any] | None = None) -> None:
+    def __init__(self, app: ASGIApp, tenancy_config: TenancyConfig) -> None:
         self.app = app
         self.tenancy_config = tenancy_config
-        self.impls = impls or {}
+        self._route_impls: RouteImpls | None = None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         if scope["type"] not in ("http", "websocket"):
@@ -450,13 +455,15 @@ class TenancyMiddleware:
         return await self.app(scope, receive, send)
 
     def _is_public_route(self, scope: Scope) -> bool:
-        if not hasattr(self, "route_impls"):
-            self.route_impls = initialize_route_impls(self.impls)
+        if self._route_impls is None:
+            top_app = scope.get("app")
+            assert top_app is not None, "scope must contain the FastAPI app under the 'app' key"
+            self._route_impls = build_route_impls_from_routes(top_app.router.routes)
 
         path = scope.get("path", "")
         method = scope.get("method", "GET")
         try:
-            _, _, _, webmethod = find_matching_route(method, path, self.route_impls)
+            _, _, _, webmethod = find_matching_route(method, path, self._route_impls)
         except ValueError:
             return False
         return webmethod.require_authentication is False

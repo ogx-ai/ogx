@@ -103,11 +103,13 @@ jobs:
           CHANGED=$(jq -r '.changed' constraint-update/change-info.json)
           DEP_NAME=$(jq -r '.dep_name' constraint-update/change-info.json)
           DEP_VERSION=$(jq -r '.dep_version' constraint-update/change-info.json)
+          REGISTRY_CHANGED=$(jq -r '.registry_changed // "false"' constraint-update/change-info.json)
 
           {
             echo "changed=$CHANGED"
             echo "dep_name=$DEP_NAME"
             echo "dep_version=$DEP_VERSION"
+            echo "registry_changed=$REGISTRY_CHANGED"
           } >> "$GITHUB_OUTPUT"
 
           if [ "$CHANGED" != "true" ]; then
@@ -226,6 +228,16 @@ jobs:
             echo "Copied updated src/ogx_api/uv.lock"
           fi
 
+      - name: Copy updated registry files to repo
+        if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true'
+        run: |
+          for f in constraint-update/src/ogx/providers/registry/*.py; do
+            [ -f "$f" ] || continue
+            target="src/ogx/providers/registry/$(basename "$f")"
+            cp "$f" "$target"
+            echo "Copied updated $target"
+          done
+
       - name: Commit and push constraint updates
         id: commit
         if: steps.download-update.outputs.skip != 'true' && steps.changes.outputs.skip != 'true' && steps.pr-info.outputs.skip != 'true'
@@ -241,13 +253,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if [[ -z $(git status --porcelain pyproject.toml uv.lock src/ogx_api/pyproject.toml src/ogx_api/uv.lock) ]]; then
+          TRACKED_FILES=(pyproject.toml uv.lock src/ogx_api/pyproject.toml src/ogx_api/uv.lock)
+          mapfile -t REGISTRY_FILES < <(find src/ogx/providers/registry -name '*.py' 2>/dev/null)
+
+          if [[ -z $(git status --porcelain "${TRACKED_FILES[@]}" "${REGISTRY_FILES[@]}") ]]; then
             echo "No changes to commit"
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          git add pyproject.toml uv.lock src/ogx_api/pyproject.toml src/ogx_api/uv.lock
+          git add "${TRACKED_FILES[@]}" "${REGISTRY_FILES[@]}"
           git commit -s -m "fix(deps): update constraint-dependencies for ${DEP_NAME}"
 
           if [ "$IS_FORK_PR" = "true" ]; then
@@ -281,18 +296,25 @@ jobs:
           PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
           DEP_NAME: ${{ steps.changes.outputs.dep_name }}
           DEP_VERSION: ${{ steps.changes.outputs.dep_version }}
+          REGISTRY_CHANGED: ${{ steps.changes.outputs.registry_changed }}
         with:
           script: |
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
             const depName = process.env.DEP_NAME;
             const depVersion = process.env.DEP_VERSION;
+            const registryChanged = process.env.REGISTRY_CHANGED === 'true';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const COMMENT_MARKER = '<!-- commit-constraint-updates-bot -->';
 
+            let body = `Updated \`pyproject.toml\` constraint for \`${depName}\` to \`>=${depVersion}\` ` +
+              `and regenerated \`uv.lock\`.`;
+            if (registryChanged) {
+              body += `\nAlso updated \`pip_packages\` version floor in provider registry files.`;
+            }
+
             const message = `${COMMENT_MARKER}\n` +
               `✅ **Constraint-dependencies updated**\n\n` +
-              `Updated \`pyproject.toml\` constraint for \`${depName}\` to \`>=${depVersion}\` ` +
-              `and regenerated \`uv.lock\`.\n\n` +
+              `${body}\n\n` +
               `[View commit workflow](${runUrl})`;
 
             try {
