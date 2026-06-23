@@ -37,6 +37,7 @@ DEFAULT_MEMORY_READ_PROMPT = (
     "as search results or cite them."
 )
 
+
 class CompactionConfig(BaseModel):
     """Configuration for conversation compaction behavior and prompt templates."""
 
