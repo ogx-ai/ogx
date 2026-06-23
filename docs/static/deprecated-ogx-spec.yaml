@@ -9072,6 +9072,7 @@ components:
       - batches
       - vector_io
       - tool_runtime
+      - container_runtime
       - models
       - vector_stores
       - tool_groups
@@ -9080,6 +9081,7 @@ components:
       - prompts
       - conversations
       - connectors
+      - containers
       - messages
       - interactions
       - skills
@@ -10086,6 +10088,716 @@ components:
           enum:
           - dialog
       title: DialogType
+      type: object
+    ContainerExpiresAfter:
+      description: |-
+        Control expiration of a container.
+
+        Anchored on ``last_active_at`` (each shell execution or file operation
+        refreshes the anchor). Operator-set bounds protect the host from
+        long-lived sandboxes.
+      properties:
+        anchor:
+          description: The anchor point for expiration. Must be 'last_active_at'.
+          title: Anchor
+          type: string
+          enum:
+          - last_active_at
+        minutes:
+          description: Minutes of inactivity after the anchor before the container expires.
+          maximum: 1440
+          minimum: 1
+          title: Minutes
+          type: integer
+      required:
+      - minutes
+      title: ContainerExpiresAfter
+      type: object
+    NetworkCredential:
+      description: |-
+        A named credential available to outbound network calls.
+
+        The ``value`` should be a secret reference (e.g. ``${env.MY_SECRET}``)
+        in operator-supplied configuration, never a raw secret in a request body.
+      properties:
+        name:
+          description: Logical name used by the container to look up the credential.
+          title: Name
+          type: string
+        value:
+          description: Secret reference or literal value to be injected into the container.
+          format: password
+          title: Value
+          type: string
+          writeOnly: true
+      required:
+      - name
+      - value
+      title: NetworkCredential
+      type: object
+    NetworkDomainCredential:
+      description: Bind a ``NetworkCredential`` to a specific outbound domain.
+      properties:
+        domain:
+          description: Fully-qualified domain name to which the credential applies.
+          title: Domain
+          type: string
+        credential:
+          $ref: '#/components/schemas/NetworkCredential'
+          description: Credential injected on outbound calls to this domain.
+      required:
+      - domain
+      - credential
+      title: NetworkDomainCredential
+      type: object
+    NetworkPolicyMode:
+      description: Egress policy mode applied to a container's outbound network.
+      enum:
+      - deny
+      - allow_list
+      - allow_all
+      title: NetworkPolicyMode
+      type: string
+    NetworkPolicy:
+      description: |-
+        Operator-set egress policy for a container.
+
+        A NetworkPolicy is the *upper bound* — request-supplied
+        ``NetworkPolicyExtended`` values may only narrow this policy.
+      properties:
+        mode:
+          $ref: '#/components/schemas/NetworkPolicyMode'
+          default: deny
+          description: Default egress disposition. 'deny' blocks all egress except entries in 'allow_domains'.
+        allow_domains:
+          description: Domains permitted for outbound traffic. Used when mode is 'allow_list'.
+          items:
+            type: string
+          title: Allow Domains
+          type: array
+        deny_domains:
+          description: Domains explicitly blocked. Takes precedence over 'allow_domains'.
+          items:
+            type: string
+          title: Deny Domains
+          type: array
+      title: NetworkPolicy
+      type: object
+    NetworkPolicyExtended:
+      description: |-
+        Request-layer extension of an operator NetworkPolicy.
+
+        The request may add domain credentials and narrow allow/deny lists, but
+        cannot expand the operator default — enforcement is performed at the API
+        layer; see issue #5892 task 8.
+      properties:
+        mode:
+          $ref: '#/components/schemas/NetworkPolicyMode'
+          default: deny
+          description: Default egress disposition. 'deny' blocks all egress except entries in 'allow_domains'.
+        allow_domains:
+          description: Domains permitted for outbound traffic. Used when mode is 'allow_list'.
+          items:
+            type: string
+          title: Allow Domains
+          type: array
+        deny_domains:
+          description: Domains explicitly blocked. Takes precedence over 'allow_domains'.
+          items:
+            type: string
+          title: Deny Domains
+          type: array
+        domain_credentials:
+          description: Per-domain credentials injected on outbound calls from this container.
+          items:
+            $ref: '#/components/schemas/NetworkDomainCredential'
+          title: Domain Credentials
+          type: array
+      title: NetworkPolicyExtended
+      type: object
+    ContainerStatus:
+      description: Lifecycle status of a container.
+      enum:
+      - active
+      - expired
+      title: ContainerStatus
+      type: string
+    Container:
+      description: |-
+        A sandboxed execution environment.
+
+        Mirrors the OpenAI Containers API resource with OGX-specific extensions
+        for network policy and image selection.
+      properties:
+        id:
+          description: Identifier for the container.
+          title: Id
+          type: string
+        object:
+          description: The object type, which is always 'container'.
+          title: Object
+          type: string
+          enum:
+          - container
+        created_at:
+          description: Unix timestamp (in seconds) for when the container was created.
+          title: Created At
+          type: integer
+        status:
+          $ref: '#/components/schemas/ContainerStatus'
+          description: Current lifecycle status.
+        last_active_at:
+          description: Unix timestamp (in seconds) of the last operation performed against this container.
+          title: Last Active At
+          type: integer
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Human-readable name for the container.
+          nullable: true
+        expires_after:
+          anyOf:
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
+          - type: 'null'
+          description: Inactivity-based expiration settings.
+          nullable: true
+          title: ContainerExpiresAfter
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Container image used to run the sandbox. May be operator-locked.
+          nullable: true
+        network_policy:
+          anyOf:
+          - $ref: '#/components/schemas/NetworkPolicy'
+            title: NetworkPolicy
+          - type: 'null'
+          description: Effective network policy after layering operator defaults with request extensions.
+          nullable: true
+          title: NetworkPolicy
+      required:
+      - id
+      - created_at
+      - status
+      - last_active_at
+      title: Container
+      type: object
+    ContainerCreateRequest:
+      description: Request body for ``POST /containers``.
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Human-readable name for the container.
+          nullable: true
+        file_ids:
+          description: Files (from the Files API) to seed into the container at /mnt/data/.
+          items:
+            type: string
+          title: File Ids
+          type: array
+        expires_after:
+          anyOf:
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
+          - type: 'null'
+          description: Inactivity-based expiration settings.
+          nullable: true
+          title: ContainerExpiresAfter
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Requested container image. The operator policy may pin or reject this value.
+          nullable: true
+        network_policy:
+          anyOf:
+          - $ref: '#/components/schemas/NetworkPolicyExtended'
+            title: NetworkPolicyExtended
+          - type: 'null'
+          description: Request-supplied network policy extension. Must be a subset of the operator default.
+          nullable: true
+          title: NetworkPolicyExtended
+      title: ContainerCreateRequest
+      type: object
+    ListContainersRequest:
+      description: Query parameters for ``GET /containers``.
+      properties:
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Cursor for pagination. Returns containers after this ID.
+          nullable: true
+        limit:
+          anyOf:
+          - maximum: 100
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: 20
+          description: Maximum number of containers to return (1-100).
+        order:
+          anyOf:
+          - $ref: '#/components/schemas/Order'
+            title: Order
+          - type: 'null'
+          default: desc
+          description: Sort order by created_at timestamp ('asc' or 'desc').
+          title: Order
+      title: ListContainersRequest
+      type: object
+    ListContainersResponse:
+      description: Response for ``GET /containers``.
+      properties:
+        object:
+          description: The object type, which is always 'list'.
+          title: Object
+          type: string
+          enum:
+          - list
+        data:
+          description: The list of containers.
+          items:
+            $ref: '#/components/schemas/Container'
+          title: Data
+          type: array
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the first container in the page.
+          nullable: true
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the last container in the page.
+          nullable: true
+        has_more:
+          description: Whether more containers exist beyond this page.
+          title: Has More
+          type: boolean
+      required:
+      - data
+      - has_more
+      title: ListContainersResponse
+      type: object
+    GetContainerRequest:
+      properties:
+        container_id:
+          description: The ID of the container to retrieve.
+          title: Container Id
+          type: string
+      required:
+      - container_id
+      title: GetContainerRequest
+      type: object
+    DeleteContainerRequest:
+      properties:
+        container_id:
+          description: The ID of the container to delete.
+          title: Container Id
+          type: string
+      required:
+      - container_id
+      title: DeleteContainerRequest
+      type: object
+    ContainerDeleteResponse:
+      description: Response for ``DELETE /containers/{container_id}``.
+      properties:
+        id:
+          description: The container identifier that was deleted.
+          title: Id
+          type: string
+        object:
+          description: The object type, which is always 'container'.
+          title: Object
+          type: string
+          enum:
+          - container
+        deleted:
+          description: Whether the container was successfully deleted.
+          title: Deleted
+          type: boolean
+      required:
+      - id
+      - deleted
+      title: ContainerDeleteResponse
+      type: object
+    ContainerFileSource:
+      description: Origin of a file inside a container.
+      enum:
+      - user
+      - assistant
+      title: ContainerFileSource
+      type: string
+    ContainerFile:
+      description: A file present inside a container's filesystem.
+      properties:
+        id:
+          description: Identifier of the container file.
+          title: Id
+          type: string
+        object:
+          description: The object type, which is always 'container.file'.
+          title: Object
+          type: string
+          enum:
+          - container.file
+        container_id:
+          description: ID of the container holding the file.
+          title: Container Id
+          type: string
+        created_at:
+          description: Unix timestamp (in seconds) when the file was created.
+          title: Created At
+          type: integer
+        bytes:
+          description: Size of the file in bytes.
+          title: Bytes
+          type: integer
+        path:
+          description: Absolute path to the file inside the container.
+          title: Path
+          type: string
+        source:
+          $ref: '#/components/schemas/ContainerFileSource'
+          description: Whether the file was supplied by the user or written by the model.
+      required:
+      - id
+      - container_id
+      - created_at
+      - bytes
+      - path
+      - source
+      title: ContainerFile
+      type: object
+    UploadContainerFileRequest:
+      description: |-
+        Path parameters for ``POST /containers/{container_id}/files``.
+
+        The file content itself is supplied as a multipart upload and not part of
+        this Pydantic body; see ``fastapi_routes.py``.
+      properties:
+        container_id:
+          description: The ID of the container to upload into.
+          title: Container Id
+          type: string
+      required:
+      - container_id
+      title: UploadContainerFileRequest
+      type: object
+    ListContainerFilesRequest:
+      properties:
+        container_id:
+          description: The ID of the container whose files should be listed.
+          title: Container Id
+          type: string
+        after:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Cursor for pagination.
+          nullable: true
+        limit:
+          anyOf:
+          - maximum: 100
+            minimum: 1
+            type: integer
+          - type: 'null'
+          default: 20
+          description: Maximum number of files to return (1-100).
+        order:
+          anyOf:
+          - $ref: '#/components/schemas/Order'
+            title: Order
+          - type: 'null'
+          default: desc
+          description: Sort order by created_at timestamp.
+          title: Order
+      required:
+      - container_id
+      title: ListContainerFilesRequest
+      type: object
+    ListContainerFilesResponse:
+      properties:
+        object:
+          description: The object type, which is always 'list'.
+          title: Object
+          type: string
+          enum:
+          - list
+        data:
+          description: The list of files in the container.
+          items:
+            $ref: '#/components/schemas/ContainerFile'
+          title: Data
+          type: array
+        first_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the first file in the page.
+          nullable: true
+        last_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the last file in the page.
+          nullable: true
+        has_more:
+          description: Whether more files exist beyond this page.
+          title: Has More
+          type: boolean
+      required:
+      - data
+      - has_more
+      title: ListContainerFilesResponse
+      type: object
+    GetContainerFileRequest:
+      properties:
+        container_id:
+          description: The ID of the container holding the file.
+          title: Container Id
+          type: string
+        file_id:
+          description: The ID of the container file to retrieve.
+          title: File Id
+          type: string
+      required:
+      - container_id
+      - file_id
+      title: GetContainerFileRequest
+      type: object
+    GetContainerFileContentRequest:
+      properties:
+        container_id:
+          description: The ID of the container holding the file.
+          title: Container Id
+          type: string
+        file_id:
+          description: The ID of the container file to download.
+          title: File Id
+          type: string
+      required:
+      - container_id
+      - file_id
+      title: GetContainerFileContentRequest
+      type: object
+    DeleteContainerFileRequest:
+      properties:
+        container_id:
+          description: The ID of the container holding the file.
+          title: Container Id
+          type: string
+        file_id:
+          description: The ID of the container file to delete.
+          title: File Id
+          type: string
+      required:
+      - container_id
+      - file_id
+      title: DeleteContainerFileRequest
+      type: object
+    ContainerFileDeleteResponse:
+      properties:
+        id:
+          description: The container file identifier that was deleted.
+          title: Id
+          type: string
+        object:
+          description: The object type, which is always 'container.file'.
+          title: Object
+          type: string
+          enum:
+          - container.file
+        deleted:
+          description: Whether the file was successfully deleted.
+          title: Deleted
+          type: boolean
+      required:
+      - id
+      - deleted
+      title: ContainerFileDeleteResponse
+      type: object
+    ShellEnvironmentContainerAuto:
+      description: |-
+        Provider-managed container environment.
+
+        The provider lazily creates and reuses a container for the calling
+        response chain. Useful when the caller does not need to persist or
+        reference the container across responses.
+      properties:
+        type:
+          description: Discriminator.
+          title: Type
+          type: string
+          enum:
+          - container_auto
+        image:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional preferred container image.
+          nullable: true
+        expires_after:
+          anyOf:
+          - $ref: '#/components/schemas/ContainerExpiresAfter'
+            title: ContainerExpiresAfter
+          - type: 'null'
+          description: Inactivity-based expiration for the auto-created container.
+          nullable: true
+          title: ContainerExpiresAfter
+      title: ShellEnvironmentContainerAuto
+      type: object
+    ShellEnvironmentContainerReference:
+      description: Reference an existing container by ID.
+      properties:
+        type:
+          description: Discriminator.
+          title: Type
+          type: string
+          enum:
+          - container_reference
+        container_id:
+          description: The ID of an existing container to execute inside.
+          title: Container Id
+          type: string
+      required:
+      - container_id
+      title: ShellEnvironmentContainerReference
+      type: object
+    ShellEnvironmentLocal:
+      description: |-
+        Local (non-container) execution mode.
+
+        Only available when the operator has explicitly enabled local mode in
+        the ContainerRuntime provider configuration.
+      properties:
+        type:
+          description: Discriminator.
+          title: Type
+          type: string
+          enum:
+          - local
+        working_directory:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional working directory for local execution.
+          nullable: true
+      title: ShellEnvironmentLocal
+      type: object
+    ShellOutcomeSuccess:
+      description: Process exited cleanly with status 0.
+      properties:
+        type:
+          description: Discriminator.
+          title: Type
+          type: string
+          enum:
+          - success
+        exit_code:
+          description: Process exit code (always 0 for success).
+          title: Exit Code
+          type: integer
+          enum:
+          - 0
+      title: ShellOutcomeSuccess
+      type: object
+    ShellOutcomeFailure:
+      description: Process exited with a non-zero status.
+      properties:
+        type:
+          description: Discriminator.
+          title: Type
+          type: string
+          enum:
+          - failure
+        exit_code:
+          description: Process exit code.
+          title: Exit Code
+          type: integer
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Human-readable failure reason, if known.
+          nullable: true
+      required:
+      - exit_code
+      title: ShellOutcomeFailure
+      type: object
+    ShellOutcomeTimeout:
+      description: Process was terminated for exceeding its time budget.
+      properties:
+        type:
+          description: Discriminator.
+          title: Type
+          type: string
+          enum:
+          - timeout
+        elapsed_seconds:
+          description: Wall-clock seconds elapsed before termination.
+          title: Elapsed Seconds
+          type: number
+      required:
+      - elapsed_seconds
+      title: ShellOutcomeTimeout
+      type: object
+    ShellCallOutput:
+      description: |-
+        Captured output of a single shell execution.
+
+        Consumed by the Responses provider to construct ``ShellCallOutputItem``
+        entries on the output stream.
+      properties:
+        stdout:
+          description: UTF-8 decoded standard output (truncated by the runtime if oversized).
+          title: Stdout
+          type: string
+        stderr:
+          description: UTF-8 decoded standard error (truncated by the runtime if oversized).
+          title: Stderr
+          type: string
+        outcome:
+          description: How the shell process terminated.
+          discriminator:
+            mapping:
+              failure: '#/components/schemas/ShellOutcomeFailure'
+              success: '#/components/schemas/ShellOutcomeSuccess'
+              timeout: '#/components/schemas/ShellOutcomeTimeout'
+            propertyName: type
+          oneOf:
+          - $ref: '#/components/schemas/ShellOutcomeSuccess'
+            title: ShellOutcomeSuccess
+          - $ref: '#/components/schemas/ShellOutcomeFailure'
+            title: ShellOutcomeFailure
+          - $ref: '#/components/schemas/ShellOutcomeTimeout'
+            title: ShellOutcomeTimeout
+          title: ShellOutcomeSuccess | ShellOutcomeFailure | ShellOutcomeTimeout
+        duration_ms:
+          description: Wall-clock duration of the shell call in milliseconds.
+          minimum: 0
+          title: Duration Ms
+          type: integer
+        container_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of the container the call executed in, when applicable. Null for local mode.
+          nullable: true
+      required:
+      - stdout
+      - stderr
+      - outcome
+      - duration_ms
+      title: ShellCallOutput
       type: object
     ConversationMessage:
       description: OpenAI-compatible message item for conversations.
