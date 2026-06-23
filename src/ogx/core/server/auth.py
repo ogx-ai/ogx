@@ -113,6 +113,7 @@ class AuthenticationMiddleware:
 
             if self._route_impls is None:
                 top_app = scope.get("app")
+                assert top_app is not None, "scope must contain the FastAPI app under the 'app' key"
                 self._route_impls = build_route_impls_from_routes(top_app.router.routes)
 
             # WebSocket routes are not part of the generated webmethod table, so
@@ -456,6 +457,7 @@ class TenancyMiddleware:
     def _is_public_route(self, scope: Scope) -> bool:
         if self._route_impls is None:
             top_app = scope.get("app")
+            assert top_app is not None, "scope must contain the FastAPI app under the 'app' key"
             self._route_impls = build_route_impls_from_routes(top_app.router.routes)
 
         path = scope.get("path", "")
