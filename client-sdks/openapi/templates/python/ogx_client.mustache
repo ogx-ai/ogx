@@ -43,6 +43,7 @@ class OgxClient:
         cookie: str | None = None,
         default_headers: Mapping[str, str] | None = None,
         provider_data: Mapping[str, Any] | None = None,
+        api_key: str | None = None,
         **kwargs,
     ) -> None:
         """
@@ -54,7 +55,10 @@ class OgxClient:
             header_name: Optional header name for authentication.
             header_value: Optional header value for authentication.
             cookie: Optional cookie string for authentication.
+            api_key: Optional API key (stored for compatibility with stainless SDK consumers).
         """
+        self.api_key = api_key
+
         # Handle string URL as configuration
         if isinstance(configuration, str):
             configuration = Configuration(host=configuration)
@@ -136,6 +140,7 @@ class AsyncOgxClient:
         header_name: str | None = None,
         header_value: str | None = None,
         cookie: str | None = None,
+        api_key: str | None = None,
         **kwargs,
     ) -> None:
         """
@@ -147,7 +152,10 @@ class AsyncOgxClient:
             header_name: Optional header name for authentication.
             header_value: Optional header value for authentication.
             cookie: Optional cookie string for authentication.
+            api_key: Optional API key (stored for compatibility with stainless SDK consumers).
         """
+        self.api_key = api_key
+
         # Handle string URL as configuration
         if isinstance(configuration, str):
             configuration = Configuration(host=configuration)
