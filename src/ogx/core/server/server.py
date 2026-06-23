@@ -39,7 +39,6 @@ from ogx.core.request_headers import (
     user_from_scope,
 )
 from ogx.core.server.fastapi_router_registry import (
-    _ROUTER_FACTORIES,
     build_fastapi_router,
     register_external_api_routers,
 )
@@ -54,7 +53,7 @@ from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
 
 from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
-from .metrics import RequestMetricsMiddleware, build_route_to_api_map
+from .metrics import RequestMetricsMiddleware
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 
@@ -364,10 +363,10 @@ def create_app() -> StackApp:
     apis_to_serve.add("prompts")
     apis_to_serve.add("conversations")
 
-    # Build route-to-API mapping and add request metrics middleware.
+    # Add request metrics middleware.
     # Added last so it runs first (outermost), wrapping auth.
-    route_to_api = build_route_to_api_map(_ROUTER_FACTORIES, impls)
-    app.add_middleware(RequestMetricsMiddleware, route_to_api=route_to_api)
+    # Route mapping is built lazily on the first request from scope["app"].
+    app.add_middleware(RequestMetricsMiddleware)
 
     for api_str in apis_to_serve:
         api = Api(api_str)
