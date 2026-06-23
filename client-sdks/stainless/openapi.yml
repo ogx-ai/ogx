@@ -5595,7 +5595,7 @@ components:
         tool_calls:
           description: The tool calls of the delta.
           items:
-            $ref: '#/components/schemas/ChatCompletionMessageToolCall'
+            $ref: '#/components/schemas/ChoiceDeltaToolCall'
           title: Tool Calls
           type: array
           nullable: true
@@ -16978,6 +16978,43 @@ components:
       - type
       - custom
       description: A call to a custom tool created by the model.
+    ChoiceDeltaToolCall:
+      properties:
+        id:
+          anyOf:
+          - type: string
+            description: Unique identifier for the tool call.
+          - type: 'null'
+          description: Unique identifier for the tool call.
+        type:
+          anyOf:
+          - type: string
+            description: Must be 'function' to identify this as a function call.
+            enum:
+            - function
+          - type: 'null'
+          description: Must be 'function' to identify this as a function call.
+        function:
+          anyOf:
+          - properties:
+              name:
+                type: string
+                title: Name
+                description: Name of the function to call.
+              arguments:
+                type: string
+                title: Arguments
+                description: Arguments to pass to the function as a JSON string.
+            type: object
+          - type: 'null'
+          description: Function call details.
+        index:
+          type: integer
+          description: The index of the tool call being streamed.
+      type: object
+      description: A tool call delta in a streaming chat completion chunk.
+      required:
+      - index
     ModelIdsResponses:
       type: string
       description: Model identifier.

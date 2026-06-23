@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 import pytest
-from ogx_client import OgxClient
+from ogx_open_client import OgxClient
 
 from ogx.core.library_client import OGXAsLibraryClient
 

@@ -198,11 +198,14 @@ class RESTClientObject:
                     if isinstance(v, tuple) and len(v) == 3:
                         # File tuple: (filename, file_content, content_type)
                         files.append((k, v))
+                    elif isinstance(v, dict):
+                        # Flatten nested dicts into bracket-notation keys
+                        # e.g. {"anchor": "created_at", "seconds": 3600}
+                        # becomes expires_after[anchor]=created_at&expires_after[seconds]=3600
+                        for subkey, subval in v.items():
+                            data[f"{k}[{subkey}]"] = str(subval) if not isinstance(subval, str) else subval
                     else:
-                        # Regular field
-                        if isinstance(v, dict):
-                            v = json.dumps(v)
-                        elif isinstance(v, int):
+                        if isinstance(v, int):
                             v = str(v)
                         data[k] = v
 

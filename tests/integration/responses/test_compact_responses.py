@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 import pytest
-from ogx_client import OgxClient
+from ogx_open_client import OgxClient
 
 from .helpers import skip_if_provider_is_vertexai
 

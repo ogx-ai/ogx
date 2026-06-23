@@ -76,71 +76,64 @@ class MilvusIndex(EmbeddingIndex):
     def __init__(
         self,
         client: MilvusClient,
-        collection_name: str,
+        vector_store: VectorStore,
         consistency_level: str = "Strong",
         kvstore: KVStore | None = None,
         use_native_hybrid: bool = False,
     ):
         self.client = client
-        self.collection_name = sanitize_collection_name(collection_name)
+        self.collection_name = sanitize_collection_name(vector_store.identifier)
         self.consistency_level = consistency_level
         self.kvstore = kvstore
         self.use_native_hybrid = use_native_hybrid
-
-    async def _collection_exists(self) -> bool:
-        return await asyncio.to_thread(self.client.has_collection, self.collection_name)
+        self.dimension = vector_store.embedding_dimension
 
     async def initialize(self):
-        # MilvusIndex does not require explicit initialization
-        # TODO: could move collection creation into initialization but it is not really necessary
-        pass
+        if await asyncio.to_thread(self.client.has_collection, self.collection_name):
+            return
+
+        # Create schema for vector search
+        schema = self.client.create_schema()
+        schema.add_field(field_name="chunk_id", datatype=DataType.VARCHAR, is_primary=True, max_length=100)
+        schema.add_field(
+            field_name="content",
+            datatype=DataType.VARCHAR,
+            max_length=65535,
+            enable_analyzer=True,
+        )
+        schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=self.dimension)
+        schema.add_field(field_name="chunk_content", datatype=DataType.JSON)
+        schema.add_field(field_name="sparse", datatype=DataType.SPARSE_FLOAT_VECTOR)
+
+        # Create indexes
+        index_params = self.client.prepare_index_params()
+        index_params.add_index(field_name="vector", index_type="FLAT", metric_type="COSINE")
+        index_params.add_index(field_name="sparse", index_type="SPARSE_INVERTED_INDEX", metric_type="BM25")
+
+        # Add BM25 function for full-text search
+        bm25_function = Function(
+            name="text_bm25_emb",
+            input_field_names=["content"],
+            output_field_names=["sparse"],
+            function_type=FunctionType.BM25,
+        )
+        schema.add_function(bm25_function)
+
+        logger.info("Creating Milvus collection", collection_name=self.collection_name)
+        await asyncio.to_thread(
+            self.client.create_collection,
+            self.collection_name,
+            schema=schema,
+            index_params=index_params,
+            consistency_level=self.consistency_level,
+        )
 
     async def delete(self):
-        if await asyncio.to_thread(self.client.has_collection, self.collection_name):
-            await asyncio.to_thread(self.client.drop_collection, collection_name=self.collection_name)
+        await asyncio.to_thread(self.client.drop_collection, collection_name=self.collection_name)
 
     async def add_chunks(self, chunks: list[EmbeddedChunk]):
         if not chunks:
             return
-
-        if not await asyncio.to_thread(self.client.has_collection, self.collection_name):
-            logger.info("Creating new collection with nullable sparse field", collection_name=self.collection_name)
-            # Create schema for vector search
-            schema = self.client.create_schema()
-            schema.add_field(field_name="chunk_id", datatype=DataType.VARCHAR, is_primary=True, max_length=100)
-            schema.add_field(
-                field_name="content",
-                datatype=DataType.VARCHAR,
-                max_length=65535,
-                enable_analyzer=True,  # Enable text analysis for BM25
-            )
-            schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=len(chunks[0].embedding))
-            schema.add_field(field_name="chunk_content", datatype=DataType.JSON)
-            # Add sparse vector field for BM25 (required by the function)
-            schema.add_field(field_name="sparse", datatype=DataType.SPARSE_FLOAT_VECTOR)
-
-            # Create indexes
-            index_params = self.client.prepare_index_params()
-            index_params.add_index(field_name="vector", index_type="FLAT", metric_type="COSINE")
-            # Add index for sparse field (required by BM25 function)
-            index_params.add_index(field_name="sparse", index_type="SPARSE_INVERTED_INDEX", metric_type="BM25")
-
-            # Add BM25 function for full-text search
-            bm25_function = Function(
-                name="text_bm25_emb",
-                input_field_names=["content"],
-                output_field_names=["sparse"],
-                function_type=FunctionType.BM25,
-            )
-            schema.add_function(bm25_function)
-
-            await asyncio.to_thread(
-                self.client.create_collection,
-                self.collection_name,
-                schema=schema,
-                index_params=index_params,
-                consistency_level=self.consistency_level,
-            )
 
         data = []
         for chunk in chunks:
@@ -227,9 +220,6 @@ class MilvusIndex(EmbeddingIndex):
     async def query_vector(
         self, embedding: NDArray, k: int, score_threshold: float, filters: Any = None
     ) -> QueryChunksResponse:
-        if not await self._collection_exists():
-            return QueryChunksResponse(chunks=[], scores=[])
-
         # Translate filters to Milvus expression format
         filter_expr = self._translate_filters(filters) if filters else None
 
@@ -260,9 +250,6 @@ class MilvusIndex(EmbeddingIndex):
         """
         Perform BM25-based keyword search using Milvus's built-in full-text search.
         """
-        if not await self._collection_exists():
-            return QueryChunksResponse(chunks=[], scores=[])
-
         try:
             # Translate filters to Milvus expression format
             filter_expr = self._translate_filters(filters) if filters else None
@@ -308,9 +295,6 @@ class MilvusIndex(EmbeddingIndex):
         """
         Fallback to simple text search when BM25 search is not available.
         """
-        if not await self._collection_exists():
-            return QueryChunksResponse(chunks=[], scores=[])
-
         # Simple text search using content field
         search_res = await asyncio.to_thread(
             self.client.query,
@@ -358,9 +342,6 @@ class MilvusIndex(EmbeddingIndex):
         Uses Milvus's hybrid_search method which combines vector search and
         BM25 search server-side with configurable reranking strategies.
         """
-        if not await self._collection_exists():
-            return QueryChunksResponse(chunks=[], scores=[])
-
         search_requests = []
 
         search_requests.append(
@@ -453,9 +434,6 @@ class MilvusIndex(EmbeddingIndex):
 
     async def delete_chunks(self, chunks_for_deletion: list[ChunkForDeletion]) -> None:
         """Remove a chunk from the Milvus collection."""
-        if not await self._collection_exists():
-            return
-
         chunk_ids = [c.chunk_id for c in chunks_for_deletion]
         try:
             # Use IN clause with square brackets and single quotes for VARCHAR field
@@ -499,25 +477,6 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
 
             self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
-        start_key = VECTOR_DBS_PREFIX
-        end_key = f"{VECTOR_DBS_PREFIX}\xff"
-        stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
-
-        use_native_hybrid = isinstance(self.config, RemoteMilvusVectorIOConfig)
-        for vector_store_data in stored_vector_stores:
-            vector_store = VectorStore.model_validate_json(vector_store_data)
-            index = VectorStoreWithIndex(
-                vector_store,
-                index=MilvusIndex(
-                    client=self.client,
-                    collection_name=vector_store.identifier,
-                    consistency_level=self.config.consistency_level,
-                    kvstore=self.kvstore,
-                    use_native_hybrid=use_native_hybrid,
-                ),
-                inference_api=self.inference_api,
-            )
-            self.cache[vector_store.identifier] = index
         if isinstance(self.config, RemoteMilvusVectorIOConfig):
             logger.info("Connecting to Milvus server at", uri=self.config.uri)
             self.client = MilvusClient(
@@ -528,7 +487,27 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
             uri = os.path.expanduser(self.config.db_path)
             self.client = MilvusClient(uri=uri)
 
-        # Load existing OpenAI vector stores into the in-memory cache
+        start_key = VECTOR_DBS_PREFIX
+        end_key = f"{VECTOR_DBS_PREFIX}\xff"
+        stored_vector_stores = await self.kvstore.values_in_range(start_key, end_key)
+
+        use_native_hybrid = isinstance(self.config, RemoteMilvusVectorIOConfig)
+        for vector_store_data in stored_vector_stores:
+            vector_store = VectorStore.model_validate_json(vector_store_data)
+            milvus_index = MilvusIndex(
+                client=self.client,
+                vector_store=vector_store,
+                consistency_level=self.config.consistency_level,
+                kvstore=self.kvstore,
+                use_native_hybrid=use_native_hybrid,
+            )
+            await milvus_index.initialize()
+            index = VectorStoreWithIndex(
+                vector_store,
+                index=milvus_index,
+                inference_api=self.inference_api,
+            )
+            self.cache[vector_store.identifier] = index
         await self.initialize_openai_vector_stores()
 
     async def shutdown(self) -> None:
@@ -542,14 +521,16 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
             consistency_level = self.config.consistency_level
         else:
             consistency_level = "Strong"
+        milvus_index = MilvusIndex(
+            self.client,
+            vector_store,
+            consistency_level=consistency_level,
+            use_native_hybrid=use_native_hybrid,
+        )
+        await milvus_index.initialize()
         index = VectorStoreWithIndex(
             vector_store=vector_store,
-            index=MilvusIndex(
-                self.client,
-                vector_store.identifier,
-                consistency_level=consistency_level,
-                use_native_hybrid=use_native_hybrid,
-            ),
+            index=milvus_index,
             inference_api=self.inference_api,
         )
 
@@ -570,14 +551,16 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
 
         vector_store = VectorStore.model_validate_json(vector_store_data)
         use_native_hybrid = isinstance(self.config, RemoteMilvusVectorIOConfig)
+        milvus_index = MilvusIndex(
+            client=self.client,
+            vector_store=vector_store,
+            kvstore=self.kvstore,
+            use_native_hybrid=use_native_hybrid,
+        )
+        await milvus_index.initialize()
         index = VectorStoreWithIndex(
             vector_store=vector_store,
-            index=MilvusIndex(
-                client=self.client,
-                collection_name=vector_store.identifier,
-                kvstore=self.kvstore,
-                use_native_hybrid=use_native_hybrid,
-            ),
+            index=milvus_index,
             inference_api=self.inference_api,
         )
         self.cache[vector_store_id] = index
