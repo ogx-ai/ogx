@@ -5,7 +5,10 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ogx_api.skills import Skills
 
 from opentelemetry import metrics
 
@@ -76,7 +79,7 @@ class BuiltinResponsesImpl(Responses):
         files_api: Files,
         connectors_api: Connectors,
         policy: list[AccessRule],
-        skills_api: Any = None,
+        skills_api: "Skills | None" = None,
     ):
         self.config = config
         self.inference_api = inference_api

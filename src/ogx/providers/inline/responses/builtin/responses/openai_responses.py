@@ -10,7 +10,10 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ogx_api.skills import Skills
 
 import tiktoken
 from pydantic import TypeAdapter
@@ -130,7 +133,7 @@ class OpenAIResponsesImpl:
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
-        skills_api: Any = None,
+        skills_api: "Skills | None" = None,
         moderation_headers: dict[str, str] | None = None,
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
@@ -541,18 +544,39 @@ class OpenAIResponsesImpl:
                 error=str(exc),
             )
     async def _resolve_skill_instructions(self, skill_ids: list[str]) -> list[OpenAISystemMessageParam]:
-        """Resolve skill IDs and return system messages with their instructions.
+        """Resolve skill IDs and return system messages with their SKILL.md instructions.
 
-        Fetches each skill's metadata and builds a system message from
-        the skill name and description (from SKILL.md frontmatter).
+        For each skill, fetches the default version's zip content, parses
+        the SKILL.md manifest, and builds a system message from the skill
+        name, description, and full instructions body.
         """
-        parts: list[str] = []
-        for skill_id in skill_ids:
+        from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
+        from ogx.providers.inline.skills.builtin.validation import _SKILL_MD
+
+        async def _resolve_one(skill_id: str) -> str:
+            assert self.skills_api is not None
             skill = await self.skills_api.get_skill(skill_id)
+            resp = await self.skills_api.get_skill_version_content(skill_id, skill.default_version)
+            import zipfile
+            from io import BytesIO
+
+            with zipfile.ZipFile(BytesIO(resp.body)) as zf:
+                if _SKILL_MD in zf.namelist():
+                    manifest = parse_skill_manifest(zf.read(_SKILL_MD).decode("utf-8"))
+                else:
+                    manifest = None
+
             section = f"## Skill: {skill.name}"
             if skill.description:
                 section += f"\n{skill.description}"
-            parts.append(section)
+            if manifest and manifest.instructions:
+                section += f"\n\n### Instructions\n{manifest.instructions}"
+            return section
+
+        import asyncio
+
+        results = await asyncio.gather(*[_resolve_one(sid) for sid in skill_ids])
+        parts = list(results)
         if not parts:
             return []
         return [OpenAISystemMessageParam(content="\n\n".join(parts))]
@@ -1417,7 +1441,9 @@ class OpenAIResponsesImpl:
             messages.insert(0, OpenAISystemMessageParam(content=instructions))
 
         # Inject skill instructions after user instructions
-        if skills and self.skills_api:
+        if skills:
+            if not self.skills_api:
+                raise ServiceNotEnabledError("skills")
             skill_messages = await self._resolve_skill_instructions(skills)
             insert_idx = 1 if instructions else 0
             for i, msg in enumerate(skill_messages):
