@@ -9,6 +9,7 @@ from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
 def test_bedrock_config_defaults_no_env(monkeypatch):
     """Test BedrockConfig defaults when env vars are not set"""
+    monkeypatch.delenv("AWS_BEDROCK_BEARER_TOKEN", raising=False)
     monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
     monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
     config = BedrockConfig()
@@ -23,11 +24,31 @@ def test_bedrock_config_reads_from_env(monkeypatch):
     assert config.region_name == "eu-west-1"
 
 
+def test_bedrock_config_reads_canonical_bearer_token_env(monkeypatch):
+    monkeypatch.setenv("AWS_BEDROCK_BEARER_TOKEN", "canonical-token")
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "legacy-token")
+    config = BedrockConfig()
+    assert config.auth_credential.get_secret_value() == "canonical-token"
+
+
+def test_bedrock_config_reads_legacy_bearer_token_env(monkeypatch):
+    monkeypatch.delenv("AWS_BEDROCK_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "legacy-token")
+    config = BedrockConfig()
+    assert config.auth_credential.get_secret_value() == "legacy-token"
+
+
 def test_bedrock_config_with_values():
     """Test BedrockConfig accepts explicit values via the canonical field name."""
     config = BedrockConfig(aws_bedrock_bearer_token="test-key", region_name="us-west-2")
     assert config.auth_credential.get_secret_value() == "test-key"
     assert config.region_name == "us-west-2"
+
+
+def test_bedrock_config_legacy_field_alias_still_works():
+    """Test BedrockConfig keeps accepting the legacy Bedrock token field alias."""
+    config = BedrockConfig(aws_bearer_token_bedrock="legacy-key", region_name="us-west-2")
+    assert config.auth_credential.get_secret_value() == "legacy-key"
 
 
 def test_bedrock_config_legacy_api_key_alias_still_works():
