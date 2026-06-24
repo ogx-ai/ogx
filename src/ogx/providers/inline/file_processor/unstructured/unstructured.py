@@ -6,6 +6,7 @@
 
 import asyncio
 import io
+import threading
 import time
 import uuid
 from typing import Any
@@ -51,6 +52,7 @@ class UnstructuredFileProcessor:
     def __init__(self, config: UnstructuredFileProcessorConfig, files_api=None) -> None:
         self.config = config
         self.files_api = files_api
+        self._partition_lock = threading.Lock()
 
     async def process_file(
         self,
@@ -104,15 +106,17 @@ class UnstructuredFileProcessor:
         )
 
         file_like = io.BytesIO(content)
-        elements = partition(
-            file=file_like,
-            metadata_filename=filename,
-            strategy=self.config.strategy,
-            include_page_breaks=self.config.include_page_breaks,
-            skip_infer_table_types=self.config.skip_infer_table_types,
-            extract_images_in_pdf=self.config.extract_images_in_pdf,
-            languages=self.config.languages,
-        )
+
+        with self._partition_lock:
+            elements = partition(
+                file=file_like,
+                metadata_filename=filename,
+                strategy=self.config.strategy,
+                include_page_breaks=self.config.include_page_breaks,
+                skip_infer_table_types=self.config.skip_infer_table_types,
+                extract_images_in_pdf=self.config.extract_images_in_pdf,
+                languages=self.config.languages,
+            )
 
         log.info(
             "Unstructured partitioning complete",
@@ -225,8 +229,8 @@ class UnstructuredFileProcessor:
             # Generate chunk_id
             chunk_id = generate_chunk_id(document_id, text, str(idx))
 
-            # Calculate token count (whitespace split estimate)
-            content_token_count = len(text.split())
+            # Calculate token count (heuristic: 1 token ≈ 4 characters)
+            content_token_count = len(text) // 4
 
             # Build metadata dict
             metadata_dict: dict[str, Any] = {
