@@ -62,7 +62,10 @@ def custom_auth_client():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -105,7 +108,10 @@ def oauth2_client():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -227,7 +233,10 @@ def introspection_client():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -270,7 +279,10 @@ def kubernetes_auth_client():
             "claims_mapping": {"username": "roles", "groups": "roles"},
         },
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
