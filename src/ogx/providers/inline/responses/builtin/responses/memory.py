@@ -4,12 +4,13 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from html import escape
 from typing import Any
 
 from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.config import MemoryConfig
-from ogx_api import OpenAIResponseInput, OpenAIResponseMessage, VectorIO
+from ogx_api import OpenAIResponseInput, OpenAIResponseMessage, VectorIO, VectorStoreNotFoundError
 from ogx_api.responses.models import MemoryToolConfig
 from ogx_api.vector_io.models import OpenAISearchVectorStoreRequest, VectorStoreSearchResponse
 
@@ -110,11 +111,10 @@ async def resolve_memory_context(
                 rewrite_query=False,
             ),
         )
-    except Exception as exc:
+    except VectorStoreNotFoundError as exc:
         logger.warning(
-            "Failed to retrieve memory context",
+            "Failed to retrieve memory context because vector store was not found",
             vector_store_id=vector_store_id,
-            owner_id=owner_id,
             error=str(exc),
         )
         return None
@@ -204,7 +204,22 @@ def _format_memory_result(index: int, result: VectorStoreSearchResponse) -> str:
     text = "\n".join(
         text for content in result.content if isinstance(text := getattr(content, "text", None), str) and text
     )
-    return f'<memory index="{index}" file_id="{result.file_id}" created_at="{created_at}">\n{text}\n</memory>'
+    escaped_file_id = _escape_xml_attr(result.file_id)
+    escaped_created_at = _escape_xml_attr(created_at)
+    escaped_text = _escape_xml_text(text)
+    return (
+        f'<memory index="{index}" file_id="{escaped_file_id}" created_at="{escaped_created_at}">\n'
+        f"{escaped_text}\n"
+        "</memory>"
+    )
+
+
+def _escape_xml_attr(value: Any) -> str:
+    return escape(str(value), quote=True)
+
+
+def _escape_xml_text(value: str) -> str:
+    return escape(value, quote=False)
 
 
 def _estimate_tokens(text: str) -> int:
