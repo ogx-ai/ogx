@@ -307,57 +307,67 @@ async def pgvector_vec_adapter(unique_kvstore_config, mock_inference_api, embedd
 
     mock_pool, mock_conn = _make_mock_asyncpg_pool()
 
+    mock_standalone_conn = AsyncMock()
+    mock_standalone_conn.execute = AsyncMock()
+    mock_standalone_conn.close = AsyncMock()
+
     with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
+        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.connect",
         new_callable=AsyncMock,
-    ) as mock_create_pool:
-        mock_create_pool.return_value = mock_pool
+    ) as mock_connect:
+        mock_connect.return_value = mock_standalone_conn
 
         with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+            "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
             new_callable=AsyncMock,
-        ) as mock_check_version:
-            mock_check_version.return_value = "0.5.1"
+        ) as mock_create_pool:
+            mock_create_pool.return_value = mock_pool
 
-            with patch("ogx.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
-                mock_kvstore = AsyncMock()
-                mock_kvstore_impl.return_value = mock_kvstore
+            with patch(
+                "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+                new_callable=AsyncMock,
+            ) as mock_check_version:
+                mock_check_version.return_value = "0.5.1"
 
-                with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
-                    with patch(
-                        "ogx.providers.remote.vector_io.pgvector.pgvector.upsert_models",
-                        new_callable=AsyncMock,
-                    ):
-                        await adapter.initialize()
-                        adapter.pool = mock_pool
+                with patch("ogx.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
+                    mock_kvstore = AsyncMock()
+                    mock_kvstore_impl.return_value = mock_kvstore
 
-                        async def mock_insert_chunks(request):
-                            index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
-                            if not index:
-                                raise VectorStoreNotFoundError(request.vector_store_id)
-                            await index.insert_chunks(request)
+                    with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
+                        with patch(
+                            "ogx.providers.remote.vector_io.pgvector.pgvector.upsert_models",
+                            new_callable=AsyncMock,
+                        ):
+                            await adapter.initialize()
+                            adapter.pool = mock_pool
 
-                        adapter.insert_chunks = mock_insert_chunks
+                            async def mock_insert_chunks(request):
+                                index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
+                                if not index:
+                                    raise VectorStoreNotFoundError(request.vector_store_id)
+                                await index.insert_chunks(request)
 
-                        async def mock_query_chunks(request):
-                            index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
-                            if not index:
-                                raise VectorStoreNotFoundError(request.vector_store_id)
-                            return await index.query_chunks(request)
+                            adapter.insert_chunks = mock_insert_chunks
 
-                        adapter.query_chunks = mock_query_chunks
+                            async def mock_query_chunks(request):
+                                index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
+                                if not index:
+                                    raise VectorStoreNotFoundError(request.vector_store_id)
+                                return await index.query_chunks(request)
 
-                        test_vector_store = VectorStore(
-                            identifier=f"pgvector_test_collection_{random.randint(1, 1_000_000)}",
-                            provider_id="test_provider",
-                            embedding_model="test_model",
-                            embedding_dimension=embedding_dimension,
-                        )
-                        await adapter.register_vector_store(test_vector_store)
-                        adapter.test_collection_id = test_vector_store.identifier
+                            adapter.query_chunks = mock_query_chunks
 
-                        yield adapter
-                        await adapter.shutdown()
+                            test_vector_store = VectorStore(
+                                identifier=f"pgvector_test_collection_{random.randint(1, 1_000_000)}",
+                                provider_id="test_provider",
+                                embedding_model="test_model",
+                                embedding_dimension=embedding_dimension,
+                            )
+                            await adapter.register_vector_store(test_vector_store)
+                            adapter.test_collection_id = test_vector_store.identifier
+
+                            yield adapter
+                            await adapter.shutdown()
 
 
 @pytest.fixture
