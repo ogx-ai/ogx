@@ -5,13 +5,14 @@
 # the root directory of this source tree.
 
 import asyncio
-import os
-import tempfile
+import io
 import time
 import uuid
 from typing import Any
 
 from fastapi import UploadFile
+from unstructured.chunking.title import chunk_by_title
+from unstructured.partition.auto import partition
 
 from ogx.log import get_logger
 from ogx.providers.inline.file_processor.zip_utils import validate_zip_content
@@ -93,32 +94,25 @@ class UnstructuredFileProcessor:
         start_time: float,
     ) -> ProcessFileResponse:
         """Partition and chunk file content. Runs in a thread."""
-        from unstructured.partition.auto import partition
-
         validate_zip_content(content, filename)
 
-        # Write to temp file (Unstructured requires file path)
-        suffix = os.path.splitext(filename)[1] or ".bin"
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
-            tmp.write(content)
-            tmp.flush()
+        log.info(
+            "Partitioning file with Unstructured",
+            filename=filename,
+            size_bytes=len(content),
+            strategy=self.config.strategy,
+        )
 
-            log.info(
-                "Partitioning file with Unstructured",
-                filename=filename,
-                size_bytes=len(content),
-                strategy=self.config.strategy,
-            )
-
-            # Call local partition - returns list of Element objects
-            elements = partition(
-                filename=tmp.name,
-                strategy=self.config.strategy,
-                include_page_breaks=self.config.include_page_breaks,
-                skip_infer_table_types=self.config.skip_infer_table_types,
-                extract_images_in_pdf=self.config.extract_images_in_pdf,
-                languages=self.config.languages,
-            )
+        file_like = io.BytesIO(content)
+        elements = partition(
+            file=file_like,
+            metadata_filename=filename,
+            strategy=self.config.strategy,
+            include_page_breaks=self.config.include_page_breaks,
+            skip_infer_table_types=self.config.skip_infer_table_types,
+            extract_images_in_pdf=self.config.extract_images_in_pdf,
+            languages=self.config.languages,
+        )
 
         log.info(
             "Unstructured partitioning complete",
@@ -169,8 +163,6 @@ class UnstructuredFileProcessor:
             return self._elements_to_individual_chunks(elements, document_id, document_metadata)
 
         # With chunking - use Unstructured's chunk_by_title (matches API behavior)
-        from unstructured.chunking.title import chunk_by_title
-
         # Determine max_characters based on strategy (same logic as remote API)
         if chunking_strategy.type == "auto":
             max_tokens = self.config.default_chunk_size_tokens
