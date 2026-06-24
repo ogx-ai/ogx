@@ -17,13 +17,13 @@ from .utils import APPROX_CHARS_PER_TOKEN
 
 logger = get_logger(name=__name__, category="openai_responses::memory")
 
-_TRUNCATION_SUFFIX = "\n[truncated]"
+_TRUNCATION_SUFFIX = "[truncated]"
 
 
-def extract_memory_query(input: str | list[OpenAIResponseInput]) -> str:
+def extract_memory_query(input: str | list[OpenAIResponseInput]) -> str | None:
     """Extract the latest user text from the current request input."""
     if isinstance(input, str):
-        return input
+        return input if input.strip() else None
 
     for item in reversed(input):
         if not isinstance(item, OpenAIResponseMessage) or item.role != "user":
@@ -33,7 +33,7 @@ def extract_memory_query(input: str | list[OpenAIResponseInput]) -> str:
         if text_segments:
             return "\n".join(text_segments)
 
-    return "Current user turn"
+    return None
 
 
 def build_memory_filters(
@@ -64,12 +64,15 @@ async def resolve_memory_context(
 ) -> str | None:
     if not memory_config.enabled:
         return None
-    if request_memory is not None and not request_memory.enabled:
+    if request_memory is None:
+        logger.debug("Skipping memory retrieval without request opt-in")
+        return None
+    if not request_memory.enabled:
         return None
 
     vector_store_id = (
         request_memory.vector_store_id
-        if request_memory is not None and request_memory.vector_store_id is not None
+        if request_memory.vector_store_id is not None
         else memory_config.default_vector_store_id
     )
     if not vector_store_id:
@@ -81,20 +84,20 @@ async def resolve_memory_context(
         logger.debug("Skipping memory retrieval without owner")
         return None
 
-    request_filters = request_memory.filters if request_memory is not None else None
-    filters = build_memory_filters(memory_config, owner_id, request_filters)
+    filters = build_memory_filters(memory_config, owner_id, request_memory.filters)
     max_num_results = (
-        request_memory.max_num_results
-        if request_memory is not None and request_memory.max_num_results is not None
-        else memory_config.max_num_results
+        request_memory.max_num_results if request_memory.max_num_results is not None else memory_config.max_num_results
     )
     max_context_tokens = (
         request_memory.max_context_tokens
-        if request_memory is not None and request_memory.max_context_tokens is not None
+        if request_memory.max_context_tokens is not None
         else memory_config.max_context_tokens
     )
-    ranking_options = request_memory.ranking_options if request_memory is not None else None
+    ranking_options = request_memory.ranking_options
     query = extract_memory_query(input)
+    if query is None:
+        logger.debug("Skipping memory retrieval without query text")
+        return None
 
     try:
         search_response = await vector_io_api.openai_search_vector_store(
@@ -133,24 +136,34 @@ def _resolve_owner_id(
 ) -> str | None:
     user = get_authenticated_user()
     if user is not None:
-        return user.principal or None
-    if request_memory is not None and request_memory.owner_id:
-        return request_memory.owner_id
-    if safety_identifier:
-        return safety_identifier
+        return _normalize_owner_id(user.principal)
+    if request_memory is not None:
+        owner_id = _normalize_owner_id(request_memory.owner_id)
+        if owner_id:
+            return owner_id
+    owner_id = _normalize_owner_id(safety_identifier)
+    if owner_id:
+        return owner_id
     if metadata:
-        return metadata.get("owner_id") or metadata.get("user_id")
+        return _normalize_owner_id(metadata.get("owner_id")) or _normalize_owner_id(metadata.get("user_id"))
     return None
+
+
+def _normalize_owner_id(owner_id: str | None) -> str | None:
+    if owner_id is None:
+        return None
+    owner_id = owner_id.strip()
+    return owner_id or None
 
 
 def _extract_text_from_message(message: OpenAIResponseMessage) -> list[str]:
     if isinstance(message.content, str):
-        return [message.content]
+        return [message.content] if message.content.strip() else []
 
     text_segments: list[str] = []
     for content_item in message.content:
         text = getattr(content_item, "text", None)
-        if isinstance(text, str) and text:
+        if isinstance(text, str) and text.strip():
             text_segments.append(text)
     return text_segments
 
@@ -164,16 +177,18 @@ def _format_memory_context(
     opening = f"{header}\n\n<memories>"
     closing = "</memories>"
     snippets: list[str] = []
+    used_chars = len(opening) + len(closing) + 1
 
     for result in results:
         snippet = _format_memory_result(len(snippets) + 1, result)
-        candidate = "\n".join([opening, *snippets, snippet, closing])
-        if _estimate_tokens(candidate) <= max_context_tokens:
+        candidate_chars = used_chars + len(snippet) + 1
+        if _estimate_tokens_for_chars(candidate_chars) <= max_context_tokens:
             snippets.append(snippet)
+            used_chars = candidate_chars
             continue
 
         if not snippets:
-            remaining_chars = max_context_tokens * APPROX_CHARS_PER_TOKEN - len(opening) - len(closing) - 2
+            remaining_chars = max_context_tokens * APPROX_CHARS_PER_TOKEN - used_chars - 1
             snippets.append(_truncate_text(snippet, remaining_chars))
         break
 
@@ -193,7 +208,11 @@ def _format_memory_result(index: int, result: VectorStoreSearchResponse) -> str:
 
 
 def _estimate_tokens(text: str) -> int:
-    return max(1, len(text) // APPROX_CHARS_PER_TOKEN)
+    return _estimate_tokens_for_chars(len(text))
+
+
+def _estimate_tokens_for_chars(char_count: int) -> int:
+    return max(1, char_count // APPROX_CHARS_PER_TOKEN)
 
 
 def _truncate_text(text: str, max_chars: int) -> str:

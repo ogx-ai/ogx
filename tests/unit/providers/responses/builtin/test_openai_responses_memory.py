@@ -44,6 +44,12 @@ def test_extract_memory_query_uses_latest_user_text():
     assert query == "latest user turn"
 
 
+def test_extract_memory_query_returns_none_without_user_text():
+    query = extract_memory_query([OpenAIResponseMessage(role="assistant", content="assistant text")])
+
+    assert query is None
+
+
 def test_memory_config_defaults_to_disabled():
     assert MemoryConfig().enabled is False
 
@@ -121,6 +127,64 @@ async def test_resolve_memory_context_searches_with_owner_filter():
     assert request.filters["filters"][1] == {"type": "eq", "key": "owner_id", "value": "user-123"}
 
 
+async def test_resolve_memory_context_requires_request_memory_opt_in():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"owner_id": "user-123", "memory": True},
+                content=[VectorStoreContent(type="text", text="Prefers small stacked PRs.")],
+            )
+        ],
+    )
+
+    context = await resolve_memory_context(
+        vector_io_api=vector_io,
+        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
+        request_memory=None,
+        input="repo prefs",
+        metadata=None,
+        safety_identifier="user-123",
+    )
+
+    assert context is None
+    vector_io.openai_search_vector_store.assert_not_called()
+
+
+async def test_resolve_memory_context_skips_without_user_query():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["Current user turn"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"owner_id": "user-123", "memory": True},
+                content=[VectorStoreContent(type="text", text="Irrelevant memory.")],
+            )
+        ],
+    )
+
+    context = await resolve_memory_context(
+        vector_io_api=vector_io,
+        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
+        request_memory=MemoryToolConfig(owner_id="user-123"),
+        input=[OpenAIResponseMessage(role="assistant", content="assistant text")],
+        metadata=None,
+        safety_identifier=None,
+    )
+
+    assert context is None
+    vector_io.openai_search_vector_store.assert_not_called()
+
+
 async def test_resolve_memory_context_skips_without_owner():
     vector_io = AsyncMock()
 
@@ -167,6 +231,36 @@ async def test_resolve_memory_context_uses_authenticated_user_for_owner_scope():
     assert "Authenticated owner preference." in context
     request = vector_io.openai_search_vector_store.call_args.kwargs["request"]
     assert request.filters["filters"][1] == {"type": "eq", "key": "owner_id", "value": "auth-user"}
+
+
+async def test_resolve_memory_context_rejects_blank_authenticated_owner_scope():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"owner_id": "spoofed-user", "memory": True},
+                content=[VectorStoreContent(type="text", text="Spoofed owner preference.")],
+            )
+        ],
+    )
+
+    with RequestProviderDataContext(user=User("   ", None)):
+        context = await resolve_memory_context(
+            vector_io_api=vector_io,
+            memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
+            request_memory=MemoryToolConfig(owner_id="spoofed-user"),
+            input="repo prefs",
+            metadata={"owner_id": "metadata-user", "user_id": "metadata-user"},
+            safety_identifier="safety-user",
+        )
+
+    assert context is None
+    vector_io.openai_search_vector_store.assert_not_called()
 
 
 async def test_resolve_memory_context_continues_on_search_error():

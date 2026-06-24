@@ -107,7 +107,11 @@ class MemoryToolConfig(BaseModel):
     )
     filters: dict[str, Any] | None = Field(
         default=None,
-        description="Additional vector-store filters combined with the required owner filter.",
+        description=(
+            "Additional vector-store filters combined with the required owner filter. "
+            "Use the vector store filter shape, such as {'type': 'eq', 'key': ..., 'value': ...} "
+            "or {'type': 'and', 'filters': [...]}."
+        ),
     )
     ranking_options: SearchRankingOptions | None = Field(
         default=None,
