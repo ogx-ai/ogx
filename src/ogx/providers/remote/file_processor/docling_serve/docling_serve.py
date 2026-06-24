@@ -112,17 +112,12 @@ class DoclingServeFileProcessor:
                     sdk_module="docling.service_client",
                 )
                 conversion_method = "async"
-            except Exception as e:
-                log.warning(
-                    "Async conversion failed, falling back to sync endpoints",
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    mode=self.config.mode,
-                )
-                import traceback
-
-                log.debug("Full traceback", traceback=traceback.format_exc())
-                chunks = None
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                if self.config.mode == "auto":
+                    log.warning("Async failed, falling back to sync", error=str(e))
+                    chunks = None
+                else:
+                    raise
 
         # Fallback to sync endpoints if async failed or mode is sync
         if chunks is None:

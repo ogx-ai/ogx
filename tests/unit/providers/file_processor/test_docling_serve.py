@@ -300,13 +300,18 @@ class TestDoclingServeFileProcessor:
     async def test_fallback_from_async_to_sync(
         self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
     ):
-        """Test that async failure falls back to sync successfully."""
-        processor = DoclingServeFileProcessor(config_async, files_api=files_api)
+        """Test that async failure falls back to sync in auto mode."""
+        # Use auto mode for fallback behavior
+        config_auto = DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            mode="auto",
+        )
+        processor = DoclingServeFileProcessor(config_auto, files_api=files_api)
         request = ProcessFileRequest()
 
-        # Mock SDK to raise exception
+        # Mock SDK to raise network exception
         mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(side_effect=Exception("SDK connection failed"))
+        mock_client.__aenter__ = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
         sync_response = _make_httpx_response(CONVERT_RESPONSE)

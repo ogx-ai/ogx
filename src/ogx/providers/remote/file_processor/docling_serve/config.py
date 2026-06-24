@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
@@ -28,7 +28,7 @@ class DoclingServeFileProcessorConfig(BaseModel):
         le=4096,
         description="Default chunk size in tokens when chunking_strategy type is 'auto'",
     )
-    mode: str = Field(
+    mode: Literal["async", "sync", "auto"] = Field(
         default="async",
         description=(
             "API mode: 'async' (use asynchronous submit/poll endpoints, recommended for both local and SaaS), "
