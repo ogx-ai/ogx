@@ -461,6 +461,18 @@ def _make_pgvector_adapter():
     return PGVectorVectorIOAdapter(config, mock_inference, None)
 
 
+def _mock_asyncpg_connect():
+    """Return a patch context manager that mocks asyncpg.connect for _ensure_pool's standalone connection."""
+    mock_conn = AsyncMock()
+    mock_conn.execute = AsyncMock()
+    mock_conn.close = AsyncMock()
+    return patch(
+        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.connect",
+        new_callable=AsyncMock,
+        return_value=mock_conn,
+    )
+
+
 async def test_ensure_pool_concurrent_calls_create_single_pool():
     """Test that concurrent _ensure_pool() calls create only one pool."""
     adapter = _make_pgvector_adapter()
@@ -472,20 +484,21 @@ async def test_ensure_pool_concurrent_calls_create_single_pool():
         call_count += 1
         return pool
 
-    with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
-        side_effect=mock_create_pool,
-    ):
+    with _mock_asyncpg_connect():
         with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
-            new_callable=AsyncMock,
-            return_value="0.5.1",
+            "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
+            side_effect=mock_create_pool,
         ):
-            results = await asyncio.gather(
-                adapter._ensure_pool(),
-                adapter._ensure_pool(),
-                adapter._ensure_pool(),
-            )
+            with patch(
+                "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+                new_callable=AsyncMock,
+                return_value="0.5.1",
+            ):
+                results = await asyncio.gather(
+                    adapter._ensure_pool(),
+                    adapter._ensure_pool(),
+                    adapter._ensure_pool(),
+                )
 
     assert call_count == 1, f"Expected 1 pool creation, got {call_count}"
     assert all(r is pool for r in results)
@@ -495,12 +508,15 @@ async def test_ensure_pool_closes_pool_on_init_failure():
     """Test that pool is closed if one-time initialization fails."""
     adapter = _make_pgvector_adapter()
     pool, mock_conn = _make_mock_asyncpg_pool()
-    mock_conn.execute = AsyncMock(side_effect=asyncpg.PostgresError("init failure"))
+
+    mock_standalone = AsyncMock()
+    mock_standalone.execute = AsyncMock(side_effect=asyncpg.PostgresError("init failure"))
+    mock_standalone.close = AsyncMock()
 
     with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
+        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.connect",
         new_callable=AsyncMock,
-        return_value=pool,
+        return_value=mock_standalone,
     ):
         with patch(
             "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
@@ -514,7 +530,6 @@ async def test_ensure_pool_closes_pool_on_init_failure():
                 with pytest.raises(asyncpg.PostgresError, match="init failure"):
                     await adapter._ensure_pool()
 
-    pool.close.assert_awaited_once()
     assert adapter.pool is None
     assert adapter._pool_initialized is False
 
@@ -530,17 +545,18 @@ async def test_ensure_pool_recreates_on_stale_event_loop():
     adapter.pool = stale_pool
     adapter._pool_initialized = True
 
-    with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
-        new_callable=AsyncMock,
-        return_value=new_pool,
-    ):
+    with _mock_asyncpg_connect():
         with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+            "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
             new_callable=AsyncMock,
-            return_value="0.5.1",
+            return_value=new_pool,
         ):
-            result = await adapter._ensure_pool()
+            with patch(
+                "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+                new_callable=AsyncMock,
+                return_value="0.5.1",
+            ):
+                result = await adapter._ensure_pool()
 
     assert result is new_pool
     stale_pool.close.assert_awaited_once()
@@ -552,32 +568,33 @@ async def test_adapter_initialize_cleans_up_pool_on_index_failure():
     adapter = _make_pgvector_adapter()
     pool, mock_conn = _make_mock_asyncpg_pool()
 
-    with patch(
-        "ogx.providers.remote.vector_io.pgvector.pgvector.kvstore_impl", new_callable=AsyncMock
-    ) as mock_kvstore_impl:
-        mock_kvstore = AsyncMock()
-        mock_kvstore.values_in_range = AsyncMock(
-            return_value=['{"identifier":"vs1","embedding_model":"m","embedding_dimension":768,"provider_id":"p"}']
-        )
-        mock_kvstore_impl.return_value = mock_kvstore
-
+    with _mock_asyncpg_connect():
         with patch(
-            "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
-            new_callable=AsyncMock,
-            return_value=pool,
-        ):
+            "ogx.providers.remote.vector_io.pgvector.pgvector.kvstore_impl", new_callable=AsyncMock
+        ) as mock_kvstore_impl:
+            mock_kvstore = AsyncMock()
+            mock_kvstore.values_in_range = AsyncMock(
+                return_value=['{"identifier":"vs1","embedding_model":"m","embedding_dimension":768,"provider_id":"p"}']
+            )
+            mock_kvstore_impl.return_value = mock_kvstore
+
             with patch(
-                "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+                "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
                 new_callable=AsyncMock,
-                return_value="0.5.1",
+                return_value=pool,
             ):
-                with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
-                    with patch(
-                        "ogx.providers.remote.vector_io.pgvector.pgvector.PGVectorIndex.initialize",
-                        new_callable=AsyncMock,
-                        side_effect=RuntimeError("index init failed"),
-                    ):
-                        with pytest.raises(RuntimeError, match="index init failed"):
-                            await adapter.initialize()
+                with patch(
+                    "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+                    new_callable=AsyncMock,
+                    return_value="0.5.1",
+                ):
+                    with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
+                        with patch(
+                            "ogx.providers.remote.vector_io.pgvector.pgvector.PGVectorIndex.initialize",
+                            new_callable=AsyncMock,
+                            side_effect=RuntimeError("index init failed"),
+                        ):
+                            with pytest.raises(RuntimeError, match="index init failed"):
+                                await adapter.initialize()
 
     pool.close.assert_awaited_once()

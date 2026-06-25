@@ -83,11 +83,10 @@ def _make_app_and_client(
     # So add order is: ProviderData first (innermost), then Tenancy, then Auth last (outermost).
     app.add_middleware(ProviderDataMiddleware)
     if include_tenancy and tenancy_config.mode != TenancyMode.DISABLED:
-        app.add_middleware(TenancyMiddleware, tenancy_config=tenancy_config, impls={})
+        app.add_middleware(TenancyMiddleware, tenancy_config=tenancy_config)
     if include_auth:
-        app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+        app.add_middleware(AuthenticationMiddleware, auth_config=auth_config)
 
-    monkeypatch.setattr("ogx.core.server.auth.initialize_route_impls", lambda impls: {})
     monkeypatch.setattr(
         "ogx.core.server.auth.find_matching_route",
         lambda method, path, route_impls: (None, {}, path, RouteAuthInfo(require_authentication=True)),

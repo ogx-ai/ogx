@@ -329,18 +329,18 @@ def create_app() -> StackApp:
         # Tenancy middleware applies tenant mode enforcement after auth resolution
         if config.server.tenancy.mode != TenancyMode.DISABLED:
             logger.info("Enabling tenancy enforcement", mode=config.server.tenancy.mode.value)
-            app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy, impls=impls)
+            app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
         # Add authentication middleware only if provider is configured
         # This runs FIRST in the middleware chain (last added = first to run)
         if config.server.auth.provider_config:
             logger.info("Enabling authentication", provider=config.server.auth.provider_config.type.value)
-            app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth, impls=impls)
+            app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth)
 
     elif config.server.tenancy.mode != TenancyMode.DISABLED:
         # Tenancy without auth: single mode injects default tenant on every request
         logger.info("Enabling tenancy enforcement (no auth)", mode=config.server.tenancy.mode.value)
-        app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy, impls=impls)
+        app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
     # Load and register external API routers if configured
     external_apis = load_external_apis(config)
