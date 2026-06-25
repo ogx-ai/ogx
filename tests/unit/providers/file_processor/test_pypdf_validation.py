@@ -96,7 +96,23 @@ async def test_rejects_password_protected_pdf(pypdf_processor):
 
     mock_reader = MagicMock(spec=PdfReader)
     mock_reader.is_encrypted = True
-    mock_reader.decrypt.side_effect = Exception("password required")
+    mock_reader.decrypt.return_value = 0
+
+    with patch("ogx.providers.inline.file_processor.pypdf.pypdf.PdfReader", return_value=mock_reader):
+        with pytest.raises(HTTPException) as exc_info:
+            await pypdf_processor.process_file(file=file)
+
+    assert exc_info.value.status_code == 422
+    assert "Password-protected" in exc_info.value.detail
+
+
+async def test_rejects_corrupted_encrypted_pdf(pypdf_processor):
+    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\nxref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n115\n%%EOF"
+    file = UploadFile(filename="corrupted.pdf", file=io.BytesIO(pdf_bytes))
+
+    mock_reader = MagicMock(spec=PdfReader)
+    mock_reader.is_encrypted = True
+    mock_reader.decrypt.side_effect = Exception("corrupted encryption metadata")
 
     with patch("ogx.providers.inline.file_processor.pypdf.pypdf.PdfReader", return_value=mock_reader):
         with pytest.raises(HTTPException) as exc_info:
@@ -115,7 +131,7 @@ async def test_allows_owner_encrypted_pdf(pypdf_processor):
 
     mock_reader = MagicMock(spec=PdfReader)
     mock_reader.is_encrypted = True
-    mock_reader.decrypt.return_value = 1
+    mock_reader.decrypt.return_value = 2
     mock_reader.pages = [mock_page]
     mock_reader.metadata = None
 
