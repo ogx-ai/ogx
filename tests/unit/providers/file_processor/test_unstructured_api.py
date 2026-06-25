@@ -92,15 +92,17 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request, file=upload_file)
 
         # Verify API was called
-        mock_client.general.partition.assert_called_once()
+        mock_client.general.partition_async.assert_called_once()
 
         # Verify response structure
         assert len(response.chunks) == 4  # 5 elements, but 1 is empty and skipped
@@ -115,9 +117,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request, file=upload_file)
@@ -134,9 +138,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request, file=upload_file)
@@ -152,9 +158,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS[:1]  # Just first element
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request, file=upload_file)
@@ -179,9 +187,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request, file=upload_file)
@@ -195,9 +205,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request, file=upload_file)
@@ -213,9 +225,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS[:1]
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request, file=upload_file)
@@ -237,9 +251,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS[:1]
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             response = await processor.process_file(request)
@@ -257,9 +273,11 @@ class TestUnstructuredApiFileProcessor:
         mock_response = MagicMock()
         mock_response.elements = MOCK_ELEMENTS[:1]
 
-        with patch("unstructured_client.UnstructuredClient") as mock_client_class:
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
             mock_client = MagicMock()
-            mock_client.general.partition.return_value = mock_response
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
             await processor.process_file(request, file=upload_file)

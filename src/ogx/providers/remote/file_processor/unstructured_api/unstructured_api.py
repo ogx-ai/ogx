@@ -9,8 +9,11 @@ import uuid
 from typing import Any
 
 from fastapi import UploadFile
+from unstructured_client import UnstructuredClient
+from unstructured_client.models import operations, shared
 
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
 from ogx_api.files import Files, RetrieveFileContentRequest, RetrieveFileRequest
@@ -64,7 +67,7 @@ class UnstructuredApiFileProcessor:
             content_response = await self.files_api.openai_retrieve_file_content(
                 RetrieveFileContentRequest(file_id=file_id)
             )
-            content = bytes(content_response.body)
+            content = await response_body_bytes(content_response)
 
         document_id = file_id if file_id else str(uuid.uuid4())
         document_metadata: dict[str, Any] = {"filename": filename}
@@ -73,10 +76,10 @@ class UnstructuredApiFileProcessor:
 
         # Call Unstructured.io API
         if chunking_strategy:
-            log.info("Using chunking strategy", strategy_type=chunking_strategy.type)
+            log.debug("Using chunking strategy", strategy_type=chunking_strategy.type)
             elements = await self._partition_and_chunk(content, filename, chunking_strategy)
         else:
-            log.info("No chunking strategy - using element-level chunks")
+            log.debug("No chunking strategy - using element-level chunks")
             elements = await self._partition_no_chunk(content, filename)
 
         # Convert elements to chunks
@@ -107,9 +110,6 @@ class UnstructuredApiFileProcessor:
         Raises:
             Exception: If API call fails
         """
-        from unstructured_client import UnstructuredClient
-        from unstructured_client.models import operations, shared
-
         client = UnstructuredClient(api_key_auth=self.config.api_key.get_secret_value())
 
         req = operations.PartitionRequest(
@@ -122,19 +122,19 @@ class UnstructuredApiFileProcessor:
             )
         )
 
-        log.info(
+        log.debug(
             "Calling Unstructured.io API",
             filename=filename,
             size_bytes=len(content),
         )
 
-        resp = client.general.partition(request=req)
+        resp = await client.general.partition_async(request=req)
 
         if not resp.elements:
             log.warning("Unstructured.io API returned no elements", filename=filename)
             return []
 
-        log.info(
+        log.debug(
             "Unstructured.io API returned elements",
             filename=filename,
             element_count=len(resp.elements),
@@ -162,9 +162,6 @@ class UnstructuredApiFileProcessor:
         Raises:
             Exception: If API call fails
         """
-        from unstructured_client import UnstructuredClient
-        from unstructured_client.models import operations, shared
-
         client = UnstructuredClient(api_key_auth=self.config.api_key.get_secret_value())
 
         # Determine max_tokens based on strategy
@@ -190,20 +187,20 @@ class UnstructuredApiFileProcessor:
             )
         )
 
-        log.info(
+        log.debug(
             "Calling Unstructured.io API with chunking",
             filename=filename,
             size_bytes=len(content),
             max_characters=max_characters,
         )
 
-        resp = client.general.partition(request=req)
+        resp = await client.general.partition_async(request=req)
 
         if not resp.elements:
             log.warning("Unstructured.io API returned no elements", filename=filename)
             return []
 
-        log.info(
+        log.debug(
             "Unstructured.io API returned chunked elements",
             filename=filename,
             element_count=len(resp.elements),
@@ -273,7 +270,7 @@ class UnstructuredApiFileProcessor:
 
             chunks.append(chunk)
 
-        log.info(
+        log.debug(
             "Converted elements to chunks",
             total_elements=len(elements),
             total_chunks=len(chunks),
@@ -281,3 +278,6 @@ class UnstructuredApiFileProcessor:
         )
 
         return chunks
+
+    async def shutdown(self) -> None:
+        pass
