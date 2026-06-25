@@ -74,13 +74,18 @@ class UnstructuredApiFileProcessor:
         if file_id:
             document_metadata["file_id"] = file_id
 
-        # Call Unstructured.io API
+        # Create client and build request
+        client = UnstructuredClient(api_key_auth=self.config.api_key.get_secret_value())
+
         if chunking_strategy:
             log.debug("Using chunking strategy", strategy_type=chunking_strategy.type)
-            elements = await self._partition_and_chunk(content, filename, chunking_strategy)
+            partition_request = self._make_request_with_chunking(content, filename, chunking_strategy)
         else:
             log.debug("No chunking strategy - using element-level chunks")
-            elements = await self._partition_no_chunk(content, filename)
+            partition_request = self._make_request(content, filename)
+
+        # Call API
+        elements = await self._partition(client, partition_request, filename)
 
         # Convert elements to chunks
         chunks = self._elements_to_chunks(elements, document_id, document_metadata)
@@ -97,22 +102,17 @@ class UnstructuredApiFileProcessor:
 
         return ProcessFileResponse(chunks=chunks, metadata=response_metadata)
 
-    async def _partition_no_chunk(self, content: bytes, filename: str) -> list[dict[str, Any]]:
-        """Call Unstructured.io API to partition the document without chunking.
+    def _make_request(self, content: bytes, filename: str) -> operations.PartitionRequest:
+        """Make partition request without chunking.
 
         Args:
             content: File content as bytes
             filename: Original filename (used for format detection)
 
         Returns:
-            List of element dictionaries from Unstructured API
-
-        Raises:
-            Exception: If API call fails
+            PartitionRequest object for API call
         """
-        client = UnstructuredClient(api_key_auth=self.config.api_key.get_secret_value())
-
-        req = operations.PartitionRequest(
+        return operations.PartitionRequest(
             partition_parameters=shared.PartitionParameters(
                 files=shared.Files(
                     content=content,
@@ -122,34 +122,13 @@ class UnstructuredApiFileProcessor:
             )
         )
 
-        log.debug(
-            "Calling Unstructured.io API",
-            filename=filename,
-            size_bytes=len(content),
-        )
-
-        resp = await client.general.partition_async(request=req)
-
-        if not resp.elements:
-            log.warning("Unstructured.io API returned no elements", filename=filename)
-            return []
-
-        log.debug(
-            "Unstructured.io API returned elements",
-            filename=filename,
-            element_count=len(resp.elements),
-        )
-
-        # Convert response elements to list of dicts
-        return [dict(elem) for elem in resp.elements]
-
-    async def _partition_and_chunk(
+    def _make_request_with_chunking(
         self,
         content: bytes,
         filename: str,
         chunking_strategy: VectorStoreChunkingStrategy,
-    ) -> list[dict[str, Any]]:
-        """Call Unstructured.io API to partition and chunk the document.
+    ) -> operations.PartitionRequest:
+        """Make partition request with chunking enabled.
 
         Args:
             content: File content as bytes
@@ -157,13 +136,8 @@ class UnstructuredApiFileProcessor:
             chunking_strategy: Chunking configuration from request
 
         Returns:
-            List of element dictionaries from Unstructured API (pre-chunked)
-
-        Raises:
-            Exception: If API call fails
+            PartitionRequest object for API call with chunking parameters
         """
-        client = UnstructuredClient(api_key_auth=self.config.api_key.get_secret_value())
-
         # Determine max_tokens based on strategy
         if chunking_strategy.type == "auto":
             max_tokens = self.config.default_chunk_size_tokens
@@ -175,7 +149,7 @@ class UnstructuredApiFileProcessor:
         # Convert tokens to characters (rough estimate: 1 token ≈ 4 characters)
         max_characters = max_tokens * 4
 
-        req = operations.PartitionRequest(
+        return operations.PartitionRequest(
             partition_parameters=shared.PartitionParameters(
                 files=shared.Files(
                     content=content,
@@ -187,21 +161,35 @@ class UnstructuredApiFileProcessor:
             )
         )
 
-        log.debug(
-            "Calling Unstructured.io API with chunking",
-            filename=filename,
-            size_bytes=len(content),
-            max_characters=max_characters,
-        )
+    async def _partition(
+        self,
+        client: UnstructuredClient,
+        request: operations.PartitionRequest,
+        filename: str,
+    ) -> list[dict[str, Any]]:
+        """Call Unstructured.io API to partition the document.
 
-        resp = await client.general.partition_async(request=req)
+        Args:
+            client: Unstructured API client
+            request: Partition request with parameters
+            filename: Original filename (for logging)
+
+        Returns:
+            List of element dictionaries from Unstructured API
+
+        Raises:
+            Exception: If API call fails
+        """
+        log.debug("Calling Unstructured.io API", filename=filename)
+
+        resp = await client.general.partition_async(request=request)
 
         if not resp.elements:
             log.warning("Unstructured.io API returned no elements", filename=filename)
             return []
 
         log.debug(
-            "Unstructured.io API returned chunked elements",
+            "Unstructured.io API returned elements",
             filename=filename,
             element_count=len(resp.elements),
         )
