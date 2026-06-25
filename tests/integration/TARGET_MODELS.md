@@ -17,7 +17,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `responses` | `gpt` | `responses` only; Responses coverage: 136/136 (100%) |
 | `responses` | `azure` | `responses` only; Responses coverage: 111/136 (82%) |
 | `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 136/136 (100%) |
-| `responses` | `watsonx` | `responses` only; Responses coverage: 53/136 (39%) |
+| `responses` | `watsonx` | `responses` only; Responses coverage: 61/136 (45%) |
 | `responses` | `vertexai` | `responses` only; Responses coverage: 70/136 (51%) |
 | `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/136 (20%) |
 | `base-vllm-subset` | `vllm` | `inference` only |
@@ -77,7 +77,7 @@ This section is derived from the same replay recordings used to generate `docs/d
 | OpenAI | 136 | 136 | 100% |
 | Azure | 111 | 111 | 82% |
 | Vertex AI | 70 | 70 | 51% |
-| WatsonX | 53 | 53 | 39% |
+| WatsonX | 61 | 61 | 45% |
 | Bedrock | 27 | 27 | 20% |
 | vLLM | 3 | 3 | 2% |
 | Ollama | 2 | 2 | 1% |
