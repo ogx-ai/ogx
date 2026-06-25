@@ -51,6 +51,11 @@ on:
         type: string
         required: false
         default: ''
+      commit_mode:
+        description: 'How to land recordings: pr (commit to PR branch), branch (open a new PR against the dispatched branch), none (artifacts only). Leave blank to auto-select.'
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || inputs.pr_number || github.run_number }}
@@ -74,6 +79,7 @@ jobs:
       pr_head_repo: ${{ steps.compute.outputs.pr_head_repo }}
       is_fork_pr: ${{ steps.compute.outputs.is_fork_pr }}
       providers_to_run: ${{ steps.compute.outputs.providers_to_run }}
+      commit_mode: ${{ steps.compute.outputs.commit_mode }}
     steps:
       - name: Compute PR metadata
         id: compute
@@ -84,6 +90,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
           INPUT_PROVIDERS: ${{ inputs.providers }}
+          INPUT_COMMIT_MODE: ${{ inputs.commit_mode }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
@@ -123,6 +130,18 @@ jobs:
             IS_FORK_PR="false"
           fi
 
+          # Determine how recordings should land.
+          # - PR-targeted runs (pull_request event, or dispatch with a pr_number) commit to the PR branch.
+          # - Dispatch on a branch with no PR (e.g. main) opens a new PR with the refreshed recordings.
+          # An explicit commit_mode input overrides the auto-selection.
+          if [ -n "$INPUT_COMMIT_MODE" ]; then
+            COMMIT_MODE="$INPUT_COMMIT_MODE"
+          elif [ "$PR_NUMBER" = "manual" ]; then
+            COMMIT_MODE="branch"
+          else
+            COMMIT_MODE="pr"
+          fi
+
           # Determine which providers to run
           # Security: For pull_request, only run ollama variants (no secrets needed)
           # Manual workflow_dispatch uses input providers (defaults to API providers)
@@ -140,6 +159,7 @@ jobs:
             echo "pr_head_repo=${HEAD_REPO}"
             echo "is_fork_pr=${IS_FORK_PR}"
             echo "providers_to_run=${PROVIDERS}"
+            echo "commit_mode=${COMMIT_MODE}"
           } >> "$GITHUB_OUTPUT"
 
           echo "Recording for PR #${PR_NUMBER}"
@@ -148,6 +168,7 @@ jobs:
           echo "  Repo: ${HEAD_REPO}"
           echo "  Fork PR: ${IS_FORK_PR}"
           echo "  Providers: ${PROVIDERS}"
+          echo "  Commit mode: ${COMMIT_MODE}"
 
   # Upload PR metadata for companion workflow
   upload-pr-metadata:
@@ -162,6 +183,7 @@ jobs:
           PR_HEAD_SHA: ${{ needs.compute-pr-info.outputs.pr_head_sha }}
           PR_HEAD_REPO: ${{ needs.compute-pr-info.outputs.pr_head_repo }}
           IS_FORK_PR: ${{ needs.compute-pr-info.outputs.is_fork_pr }}
+          COMMIT_MODE: ${{ needs.compute-pr-info.outputs.commit_mode }}
         run: |
           mkdir -p pr-metadata
           cat > pr-metadata/pr-info.json <<EOF
@@ -170,7 +192,8 @@ jobs:
             "pr_head_ref": "${PR_HEAD_REF}",
             "pr_head_sha": "${PR_HEAD_SHA}",
             "pr_head_repo": "${PR_HEAD_REPO}",
-            "is_fork_pr": "${IS_FORK_PR}"
+            "is_fork_pr": "${IS_FORK_PR}",
+            "commit_mode": "${COMMIT_MODE}"
           }
           EOF
           cat pr-metadata/pr-info.json

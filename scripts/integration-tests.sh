@@ -631,7 +631,7 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         $EXTRA_PARAMS \
         --color=yes \
         --embedding-model=sentence-transformers/nomic-ai/nomic-embed-text-v1.5 \
-        --rerank-model=transformers/Qwen/Qwen3-Reranker-0.6B \
+        --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?
 else

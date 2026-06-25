@@ -23,8 +23,6 @@ providers:
     provider_type: inline::sentence-transformers
     config:
       trust_remote_code: true
-  - provider_id: transformers
-    provider_type: inline::transformers
   vector_io:
   - provider_id: milvus
     provider_type: remote::milvus
@@ -99,7 +97,7 @@ vector_stores:
     provider_id: sentence-transformers
     model_id: nomic-ai/nomic-embed-text-v1.5
   default_reranker_model:
-    provider_id: transformers
+    provider_id: sentence-transformers
     model_id: Qwen/Qwen3-Reranker-0.6B
   default_search_mode: hybrid
   file_search_params:
