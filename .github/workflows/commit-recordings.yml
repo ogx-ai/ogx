@@ -105,6 +105,7 @@ jobs:
             let headRepo = null;
             let headRef = null;
             let headSha = null;
+            let commitMode = null;
 
             // Try to load from metadata artifact first
             if (fs.existsSync('pr-info.json')) {
@@ -114,10 +115,28 @@ jobs:
                 headRepo = metadata.pr_head_repo;
                 headRef = metadata.pr_head_ref;
                 headSha = metadata.pr_head_sha;
-                console.log(`Loaded PR info from metadata: PR #${prNumber}`);
+                commitMode = metadata.commit_mode || null;
+                console.log(`Loaded PR info from metadata: PR #${prNumber}, commit_mode=${commitMode}`);
               } catch (e) {
                 console.log(`Failed to parse metadata: ${e.message}`);
               }
+            }
+
+            // Branch mode: a dispatch on a branch (e.g. main) with no PR.
+            // Open a fresh PR with the recordings instead of pushing to an existing PR branch.
+            if (commitMode === 'branch') {
+              if (!headRef || !headRepo) {
+                console.log('Branch mode requested but base branch/repo missing, skipping');
+                core.setOutput('skip', 'true');
+                return;
+              }
+              console.log(`Branch mode: will open a recordings PR against ${headRepo}@${headRef}`);
+              core.setOutput('commit_to_branch', 'true');
+              core.setOutput('base_branch', headRef);
+              core.setOutput('head_repo', headRepo);
+              core.setOutput('head_ref', headRef);
+              core.setOutput('is_fork_pr', 'false');
+              return;
             }
 
             // Fallback: check if triggered by pull_request event
@@ -234,11 +253,15 @@ jobs:
         id: commit
         if: steps.pr-info.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ steps.pr-info.outputs.is_fork_pr == 'true' && secrets.RELEASE_PAT || github.token }}
+          # Branch mode and fork pushes need RELEASE_PAT: it can push to the base repo and,
+          # for branch mode, lets the opened PR trigger CI (github.token-created PRs don't).
+          GH_TOKEN: ${{ (steps.pr-info.outputs.is_fork_pr == 'true' || steps.pr-info.outputs.commit_to_branch == 'true') && secrets.RELEASE_PAT || github.token }}
           PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
           HEAD_REPO: ${{ steps.pr-info.outputs.head_repo }}
           HEAD_REF: ${{ steps.pr-info.outputs.head_ref }}
           IS_FORK_PR: ${{ steps.pr-info.outputs.is_fork_pr }}
+          COMMIT_TO_BRANCH: ${{ steps.pr-info.outputs.commit_to_branch }}
+          BASE_BRANCH: ${{ steps.pr-info.outputs.base_branch }}
           BASE_REPO: ${{ github.repository }}
         run: |
           # Configure git
@@ -254,6 +277,26 @@ jobs:
 
           echo "Recording changes detected, committing..."
           git add tests/integration/recordings/ tests/integration/*/recordings/
+
+          # Branch mode: open a new PR against the dispatched branch instead of pushing
+          # recordings into an existing PR branch.
+          if [ "$COMMIT_TO_BRANCH" = "true" ]; then
+            NEW_BRANCH="ci/update-recordings-${GITHUB_RUN_ID}"
+            echo "Branch mode: committing recordings to $NEW_BRANCH and opening a PR against $BASE_BRANCH"
+            git checkout -b "$NEW_BRANCH"
+            git commit -m "ci: update integration test recordings
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+            git push "https://x-access-token:${GH_TOKEN}@github.com/${BASE_REPO}.git" "HEAD:${NEW_BRANCH}"
+            gh pr create \
+              --repo "$BASE_REPO" \
+              --base "$BASE_BRANCH" \
+              --head "$NEW_BRANCH" \
+              --title "ci: update integration test recordings" \
+              --body "Automated recording refresh from the [record workflow](${GITHUB_SERVER_URL}/${BASE_REPO}/actions/runs/${GITHUB_RUN_ID}) dispatched on \`${BASE_BRANCH}\`."
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           git commit -m "Recordings update from CI
 
@@ -285,7 +328,7 @@ jobs:
           fi
 
       - name: Comment on PR
-        if: steps.commit.outputs.pushed == 'true'
+        if: steps.commit.outputs.pushed == 'true' && steps.pr-info.outputs.commit_to_branch != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
