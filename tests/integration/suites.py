@@ -97,6 +97,23 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
+    "vllm-postgres": Setup(
+        name="vllm-postgres",
+        description="vLLM inference with PostgreSQL-backed persistence (full e2e)",
+        env={
+            "VLLM_URL": "http://localhost:8000/v1",
+            "POSTGRES_HOST": "127.0.0.1",
+            "POSTGRES_PORT": "5432",
+            "POSTGRES_DB": "ogx",
+            "POSTGRES_USER": "ogx",
+            "POSTGRES_PASSWORD": "ogx",
+        },
+        defaults={
+            "text_model": "vllm/Qwen/Qwen3-0.6B",
+            "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
+            "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
+        },
+    ),
     "ollama-reasoning": Setup(
         name="ollama",
         description="Local Ollama provider with a reasoning-capable model (deepseek-r1)",
@@ -261,7 +278,8 @@ base_roots = [
     str(p)
     for p in this_dir.glob("*")
     if p.is_dir()
-    and p.name not in ("__pycache__", "fixtures", "test_cases", "recordings", "responses", "messages", "interactions")
+    and p.name
+    not in ("__pycache__", "fixtures", "test_cases", "recordings", "responses", "messages", "interactions", "e2e")
 ]
 
 SUITE_DEFINITIONS: dict[str, Suite] = {
@@ -274,6 +292,18 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="base-vllm-subset",
         roots=["tests/integration/inference"],
         default_setup="vllm",
+    ),
+    "responses-e2e": Suite(
+        name="responses-e2e",
+        roots=[
+            "tests/integration/responses/test_basic_responses.py",
+            "tests/integration/responses/test_conversation_responses.py",
+            "tests/integration/responses/test_responses_errors.py",
+            "tests/integration/responses/test_compact_responses.py",
+            "tests/integration/responses/test_prompt_templates.py",
+            "tests/integration/e2e",
+        ],
+        default_setup="vllm-postgres",
     ),
     "responses": Suite(
         name="responses",

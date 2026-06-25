@@ -31,7 +31,7 @@ PROVIDER_PATH_TO_SETUPS: list[tuple[str, list[str]]] = [
     ("src/ogx/providers/remote/inference/openai/", ["gpt", "gpt-reasoning"]),
     ("src/ogx/providers/remote/inference/azure/", ["azure"]),
     ("src/ogx/providers/remote/inference/bedrock/", ["bedrock"]),
-    ("src/ogx/providers/remote/inference/vllm/", ["vllm"]),
+    ("src/ogx/providers/remote/inference/vllm/", ["vllm", "vllm-postgres"]),
     ("src/ogx/providers/remote/inference/watsonx/", ["watsonx"]),
     ("src/ogx/providers/remote/inference/vertexai/", ["vertexai"]),
     ("src/ogx/providers/remote/inference/gemini/", ["gemini"]),
@@ -45,6 +45,9 @@ CORE_PATHS = [
     "src/ogx/providers/inline/agents/",
     "src/ogx_api/",
     "tests/integration/conftest",
+    "tests/integration/e2e/",
+    "tests/integration/suites.py",
+    "tests/integration/ci_matrix.json",
 ]
 
 
