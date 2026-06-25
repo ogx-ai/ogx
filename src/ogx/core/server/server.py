@@ -148,16 +148,24 @@ class StackApp(FastAPI):
 
         reset_sqlstore_engines()
 
-        # Reset VertexAI provider clients that may have been created in the
-        # temporary event loop during model listing (refresh_registry_once).
+        # Reset provider clients that may have been created in the temporary
+        # event loop during model listing (refresh_registry_once).
         # Like SQL engines, the Google genai Client eagerly binds an internal
         # httpx.AsyncClient to the current event loop, and the cached client
         # becomes unusable after the temporary loop is terminated.
+        #
+        # Top-level impls are routing tables (CommonRoutingTableImpl), not the
+        # actual provider adapters. Walk into impls_by_provider_id to reach
+        # the real providers (e.g., VertexAIInferenceAdapter).
         if self.stack.impls:
             for impl in self.stack.impls.values():
                 reset_fn = getattr(impl, "_reset_client", None)
                 if reset_fn is not None:
                     reset_fn()
+                for provider in getattr(impl, "impls_by_provider_id", {}).values():
+                    reset_fn = getattr(provider, "_reset_client", None)
+                    if reset_fn is not None:
+                        reset_fn()
 
 
 @asynccontextmanager
@@ -321,18 +329,18 @@ def create_app() -> StackApp:
         # Tenancy middleware applies tenant mode enforcement after auth resolution
         if config.server.tenancy.mode != TenancyMode.DISABLED:
             logger.info("Enabling tenancy enforcement", mode=config.server.tenancy.mode.value)
-            app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy, impls=impls)
+            app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
         # Add authentication middleware only if provider is configured
         # This runs FIRST in the middleware chain (last added = first to run)
         if config.server.auth.provider_config:
             logger.info("Enabling authentication", provider=config.server.auth.provider_config.type.value)
-            app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth, impls=impls)
+            app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth)
 
     elif config.server.tenancy.mode != TenancyMode.DISABLED:
         # Tenancy without auth: single mode injects default tenant on every request
         logger.info("Enabling tenancy enforcement (no auth)", mode=config.server.tenancy.mode.value)
-        app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy, impls=impls)
+        app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
     # Load and register external API routers if configured
     external_apis = load_external_apis(config)

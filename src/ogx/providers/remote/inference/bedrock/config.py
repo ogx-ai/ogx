@@ -11,6 +11,13 @@ from pydantic import AliasChoices, BaseModel, Field, SecretStr
 from ogx.providers.utils.bedrock.config import BedrockBaseConfig
 
 
+def _bedrock_bearer_token_from_env() -> SecretStr | None:
+    token = os.getenv("AWS_BEDROCK_BEARER_TOKEN") or os.getenv("AWS_BEARER_TOKEN_BEDROCK")
+    if token is None:
+        return None
+    return SecretStr(token)
+
+
 class BedrockProviderDataValidator(BaseModel):
     """Validates provider-specific request data for AWS Bedrock inference."""
 
@@ -29,9 +36,9 @@ class BedrockConfig(BedrockBaseConfig):
     """Configuration for the AWS Bedrock inference provider."""
 
     auth_credential: SecretStr | None = Field(
-        default=None,
+        default_factory=_bedrock_bearer_token_from_env,
         alias="aws_bedrock_bearer_token",
-        validation_alias=AliasChoices("aws_bedrock_bearer_token", "api_key"),
+        validation_alias=AliasChoices("aws_bedrock_bearer_token", "aws_bearer_token_bedrock", "api_key"),
         description=(
             "Optional bearer token for Amazon Bedrock's OpenAI-compatible runtime. "
             "Leave unset to use the server's AWS credential chain (recommended)."
