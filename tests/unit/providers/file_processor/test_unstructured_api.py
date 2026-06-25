@@ -285,6 +285,179 @@ class TestUnstructuredApiFileProcessor:
         # Verify client was initialized with API key
         mock_client_class.assert_called_once_with(api_key_auth="test-api-key-123")
 
+    # -- chunking strategy tests --
+
+    async def test_process_file_auto_chunking(self, processor: UnstructuredApiFileProcessor, upload_file: UploadFile):
+        """Test processing with auto chunking strategy."""
+        from ogx_api.vector_io import VectorStoreChunkingStrategyAuto
+
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
+        mock_response = MagicMock()
+        mock_response.elements = MOCK_ELEMENTS
+
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            response = await processor.process_file(request, file=upload_file)
+
+        # Verify API was called
+        mock_client.general.partition_async.assert_called_once()
+
+        # Get the request that was sent to the API
+        call_args = mock_client.general.partition_async.call_args
+        partition_request = call_args[1]["request"]
+
+        # Verify by_title chunking strategy is used
+        assert partition_request.partition_parameters.chunking_strategy == "by_title"
+
+        # Verify max_characters calculated from default_chunk_size_tokens (800 * 4 = 3200)
+        assert partition_request.partition_parameters.max_characters == 3200
+
+        # Verify response
+        assert len(response.chunks) == 4
+        assert response.metadata["processor"] == "unstructured-api"
+
+    async def test_process_file_static_chunking(self, processor: UnstructuredApiFileProcessor, upload_file: UploadFile):
+        """Test processing with static chunking strategy."""
+        from ogx_api.vector_io import VectorStoreChunkingStrategyStatic, VectorStoreChunkingStrategyStaticConfig
+
+        static_config = VectorStoreChunkingStrategyStaticConfig(max_chunk_size_tokens=500)
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyStatic(static=static_config))
+        mock_response = MagicMock()
+        mock_response.elements = MOCK_ELEMENTS
+
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            response = await processor.process_file(request, file=upload_file)
+
+        # Get the request
+        call_args = mock_client.general.partition_async.call_args
+        partition_request = call_args[1]["request"]
+
+        # Verify by_title chunking strategy is used
+        assert partition_request.partition_parameters.chunking_strategy == "by_title"
+
+        # Verify max_characters calculated from static tokens (500 * 4 = 2000)
+        assert partition_request.partition_parameters.max_characters == 2000
+
+        assert len(response.chunks) == 4
+
+    # -- empty response tests --
+
+    @pytest.mark.parametrize(
+        "chunking_strategy",
+        [
+            None,  # No chunking
+            pytest.param(
+                lambda: __import__("ogx_api.vector_io", fromlist=["VectorStoreChunkingStrategyAuto"]).VectorStoreChunkingStrategyAuto(),
+                id="with_chunking",
+            ),
+        ],
+        ids=["no_chunking", "with_chunking"],
+    )
+    async def test_empty_api_response(
+        self, processor: UnstructuredApiFileProcessor, upload_file: UploadFile, chunking_strategy
+    ):
+        """Test behavior when API returns no elements (with and without chunking)."""
+        # Handle lazy-loaded chunking_strategy
+        if callable(chunking_strategy):
+            chunking_strategy = chunking_strategy()
+
+        request = ProcessFileRequest(chunking_strategy=chunking_strategy)
+
+        # Mock API to return empty elements list
+        mock_response = MagicMock()
+        mock_response.elements = []  # Empty!
+
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.general.partition_async = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            response = await processor.process_file(request, file=upload_file)
+
+        # Verify returns empty chunks (doesn't crash)
+        assert len(response.chunks) == 0
+        assert response.metadata["total_elements"] == 0
+        assert response.metadata["processor"] == "unstructured-api"
+
+    # -- error handling tests --
+
+    async def test_api_unauthorized_error(self, processor: UnstructuredApiFileProcessor, upload_file: UploadFile):
+        """Test handling of 401 unauthorized errors from API."""
+        from unstructured_client.models.errors import SDKError
+
+        request = ProcessFileRequest()
+
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
+            mock_client = MagicMock()
+            # Mock API to raise 401 error
+            mock_response = MagicMock()
+            mock_response.text = '{"detail":"Unauthorized - invalid API key"}'
+            mock_client.general.partition_async = AsyncMock(
+                side_effect=SDKError("API error occurred", mock_response, mock_response.text)
+            )
+            mock_client_class.return_value = mock_client
+
+            # Verify error is raised (not swallowed)
+            with pytest.raises(SDKError) as exc_info:
+                await processor.process_file(request, file=upload_file)
+
+            assert "API error occurred" in str(exc_info.value)
+
+    async def test_api_server_error(self, processor: UnstructuredApiFileProcessor, upload_file: UploadFile):
+        """Test handling of 500 server errors from API."""
+        from unstructured_client.models.errors import SDKError
+
+        request = ProcessFileRequest()
+
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
+            mock_client = MagicMock()
+            # Mock API to raise 500 error
+            mock_response = MagicMock()
+            mock_response.text = '{"detail":"Internal server error"}'
+            mock_client.general.partition_async = AsyncMock(
+                side_effect=SDKError("API error occurred", mock_response, mock_response.text)
+            )
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(SDKError) as exc_info:
+                await processor.process_file(request, file=upload_file)
+
+            assert "API error occurred" in str(exc_info.value)
+
+    async def test_api_network_error(self, processor: UnstructuredApiFileProcessor, upload_file: UploadFile):
+        """Test handling of network/connection errors."""
+        import httpx
+
+        request = ProcessFileRequest()
+
+        with patch(
+            "ogx.providers.remote.file_processor.unstructured_api.unstructured_api.UnstructuredClient"
+        ) as mock_client_class:
+            mock_client = MagicMock()
+            # Mock network failure
+            mock_client.general.partition_async = AsyncMock(side_effect=httpx.ConnectError("Connection failed"))
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(httpx.ConnectError):
+                await processor.process_file(request, file=upload_file)
+
 
 class TestUnstructuredApiFileProcessorConfig:
     def test_default_values(self):
