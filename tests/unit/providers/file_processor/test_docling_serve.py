@@ -297,10 +297,8 @@ class TestDoclingServeFileProcessor:
 
     # -- async mode tests --
 
-    async def test_fallback_from_async_to_sync(
-        self, config_async: DoclingServeFileProcessorConfig, files_api: AsyncMock, upload_file: UploadFile
-    ):
-        """Test that async failure falls back to sync in auto mode."""
+    async def test_auto_mode_falls_back_to_sync(self, files_api: AsyncMock, upload_file: UploadFile):
+        """Test that mode='auto' gracefully falls back to sync when async is unavailable."""
         # Use auto mode for fallback behavior
         config_auto = DoclingServeFileProcessorConfig(
             base_url="http://localhost:5001",
