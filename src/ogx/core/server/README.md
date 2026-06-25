@@ -42,14 +42,14 @@ OTel metrics can be exported two ways, independently and simultaneously:
 
 - **OTLP push** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to push metrics to an OTel Collector.
 - **Prometheus scrape** — set `OGX_PROMETHEUS_ENABLED` (`1`/`true`/`yes`/`on`) to expose all
-  metrics at `GET /v1/metrics` in Prometheus exposition format, suitable for scrape-based
-  monitoring systems. The route is declared on the
-  Inspect API router (`ogx_api/inspect_api/fastapi_routes.py`) alongside `/v1/health`, opts
-  out of auth via `PUBLIC_ROUTE_KEY`, returns `404` when disabled, and is excluded from
-  `RequestMetricsMiddleware`.
+  metrics in Prometheus exposition format, suitable for scrape-based monitoring systems.
+  Metrics are served by a standalone HTTP server on a dedicated port (`OGX_PROMETHEUS_PORT`,
+  default `9464`; bind address `OGX_PROMETHEUS_HOST`, default `0.0.0.0`), separate from the
+  main API. Keeping the scrape endpoint off the API port means collectors need no API
+  authentication and the metrics are not reachable by regular API consumers.
 
 Both readers are attached to a single global `MeterProvider` in
-`ogx.telemetry.setup_telemetry()`.
+`ogx.telemetry.setup_telemetry()`, which also starts the Prometheus scrape server.
 
 ### Response Handling
 
