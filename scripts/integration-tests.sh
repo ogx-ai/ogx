@@ -347,7 +347,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     stop_server() {
         echo "Stopping OGX Server..."
-        pids=$(lsof -i :$OGX_PORT | awk 'NR>1 {print $2}')
+        pids=$(lsof -i :$OGX_PORT 2>/dev/null | awk 'NR>1 {print $2}' || true)
         if [[ -n "$pids" ]]; then
             echo "Killing OGX Server processes: $pids"
             kill -9 $pids

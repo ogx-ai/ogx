@@ -136,6 +136,126 @@ pip install docling
 See [Docling's documentation](https://docling-project.github.io/docling/) for more details.
 """,
         ),
+        InlineProviderSpec(
+            api=Api.file_processors,
+            provider_type="inline::unstructured",
+            pip_packages=["unstructured[all-docs]>=0.21.0"],  # Security fix in 0.21.0
+            module="ogx.providers.inline.file_processor.unstructured",
+            config_class="ogx.providers.inline.file_processor.unstructured.UnstructuredFileProcessorConfig",
+            api_dependencies=[Api.files],
+            description="""
+[Unstructured](https://github.com/Unstructured-IO/unstructured) is a comprehensive document
+processing library supporting 65+ file formats including PDF, Office documents (DOCX, PPTX, XLSX),
+email formats (EML, MSG), legacy formats (DOC, XLS), HTML, Markdown, and audio transcription.
+
+This provider uses the local Unstructured library for offline document processing. For cloud-based
+processing with better table extraction, use `remote::unstructured-api` instead.
+
+## Features
+
+- 65+ format support - broadest format coverage of any OGX file processor
+- Email processing - EML and MSG email formats (unique to Unstructured)
+- Legacy formats - DOC, XLS, and other legacy Office formats
+- Audio transcription - MP3, WAV, M4A via Whisper
+- Local processing - no network required, cost-effective for high volume
+- Structure-aware chunking - preserves document sections and headings
+
+## Limitations
+
+WARNING: Table detection is unreliable in local mode (GitHub issue [#2997](https://github.com/Unstructured-IO/unstructured/issues/2997)).
+For production table extraction, use `remote::unstructured-api` instead.
+
+## System Requirements
+
+Required system dependencies:
+- `libmagic-dev` - file type detection
+- `poppler-utils` - PDF processing
+- `tesseract-ocr` - OCR support
+
+Optional (for Office documents):
+- `libreoffice` - Office document conversion (~800 MB)
+
+### macOS
+```bash
+brew install libmagic poppler tesseract
+# Optional: brew install libreoffice
+```
+
+### Ubuntu/Debian
+```bash
+sudo apt-get update && sudo apt-get install -y \\
+    libmagic-dev \\
+    poppler-utils \\
+    tesseract-ocr
+# Optional: sudo apt-get install -y libreoffice
+```
+
+### Docker (Recommended)
+```dockerfile
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y \\
+    libmagic-dev \\
+    poppler-utils \\
+    tesseract-ocr \\
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install ogx[unstructured-local]
+```
+
+## Installation
+
+```bash
+pip install "ogx[unstructured-local]"
+```
+
+Then install system dependencies as shown above.
+
+## Usage
+
+Start OGX with the Unstructured file processor:
+
+```bash
+ogx stack run \\
+  --providers "file_processors=inline::unstructured" \\
+  --port 8321
+```
+
+Or add it to a custom `run.yaml`:
+
+```yaml
+file_processors:
+  - provider_id: unstructured
+    provider_type: inline::unstructured
+    config:
+      strategy: auto  # or 'fast', 'hi_res', 'ocr_only'
+      skip_infer_table_types: ["pdf"]  # Workaround for table issues
+```
+
+## When to Use
+
+**Use `inline::unstructured` when:**
+- You need email format support (EML, MSG)
+- You need legacy Office formats (DOC, XLS)
+- You need audio transcription
+- You need offline/local processing
+- You need the broadest format coverage
+
+**Use `inline::docling` when:**
+- You need precise token-based chunking
+- You need best-in-class table extraction
+- You primarily process PDF/DOCX/PPTX
+
+**Use `remote::unstructured-api` when:**
+- You need reliable table extraction
+- You have network connectivity and API key
+- You want to avoid system dependencies
+
+## Documentation
+
+See [Unstructured's documentation](https://docs.unstructured.io/) for more details.
+""",
+        ),
         RemoteProviderSpec(
             api=Api.file_processors,
             provider_type="remote::docling-serve",

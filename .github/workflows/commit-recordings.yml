@@ -1,11 +1,11 @@
-# Commits recordings from the record-integration-tests.yml workflow back to PRs.
+# Commits recordings from recording workflows back to PRs.
 # This workflow runs with elevated permissions but only executes trusted code from the base repo.
-# Triggered via workflow_run after record-integration-tests.yml completes successfully.
+# Triggered via workflow_run after recording workflows complete successfully.
 name: Commit Recordings
 
 on:
   workflow_run:
-    workflows: ["Integration Tests (Record)"]
+    workflows: ["Integration Tests (Record)", "Launch GPU EC2 Runner", "vLLM GPU Recording"]
     types:
       - completed
 
@@ -167,6 +167,18 @@ jobs:
               }
             }
 
+            const prData = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+
+            if (prData.data.head.sha !== headSha) {
+              core.warning(`PR #${prNumber} moved from ${headSha} to ${prData.data.head.sha}; skipping stale recording artifacts.`);
+              core.setOutput('skip', 'true');
+              return;
+            }
+
             core.setOutput('pr_number', prNumber);
             core.setOutput('head_repo', headRepo);
             core.setOutput('head_ref', headRef);
@@ -300,6 +312,7 @@ jobs:
 
           git commit -m "Recordings update from CI
 
+          Signed-off-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
           Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
 
           # Push to PR branch
