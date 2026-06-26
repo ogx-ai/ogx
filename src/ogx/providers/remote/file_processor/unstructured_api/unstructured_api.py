@@ -231,7 +231,7 @@ class UnstructuredApiFileProcessor:
             # Generate chunk_id from content and position
             chunk_id = generate_chunk_id(document_id, text, str(idx))
 
-            # Calculate token count (rough estimate: split on whitespace) for num words in textok
+            # Calculate token count (rough estimate: split on whitespace) for num words in text
             content_token_count = len(text.split())
 
             # Build metadata dict
