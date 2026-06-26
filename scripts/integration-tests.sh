@@ -347,7 +347,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     stop_server() {
         echo "Stopping OGX Server..."
-        pids=$(lsof -i :$OGX_PORT | awk 'NR>1 {print $2}')
+        pids=$(lsof -i :$OGX_PORT 2>/dev/null | awk 'NR>1 {print $2}' || true)
         if [[ -n "$pids" ]]; then
             echo "Killing OGX Server processes: $pids"
             kill -9 $pids
@@ -631,7 +631,7 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         $EXTRA_PARAMS \
         --color=yes \
         --embedding-model=sentence-transformers/nomic-ai/nomic-embed-text-v1.5 \
-        --rerank-model=transformers/Qwen/Qwen3-Reranker-0.6B \
+        --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?
 else
