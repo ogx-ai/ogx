@@ -358,7 +358,9 @@ class TestUnstructuredApiFileProcessor:
         [
             None,  # No chunking
             pytest.param(
-                lambda: __import__("ogx_api.vector_io", fromlist=["VectorStoreChunkingStrategyAuto"]).VectorStoreChunkingStrategyAuto(),
+                lambda: __import__(
+                    "ogx_api.vector_io", fromlist=["VectorStoreChunkingStrategyAuto"]
+                ).VectorStoreChunkingStrategyAuto(),
                 id="with_chunking",
             ),
         ],
