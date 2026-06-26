@@ -135,6 +135,17 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             await self._engine.dispose()
             self._engine = None
 
+    def _build_ssl(self) -> object:
+        if not isinstance(self.config, PostgresSqlStoreConfig):
+            return None
+        if self.config.ssl_mode == "verify-full" and self.config.ca_cert_path:
+            import ssl as _ssl
+
+            return _ssl.create_default_context(cafile=self.config.ca_cert_path)
+        if self.config.ssl_mode and self.config.ssl_mode != "disable":
+            return self.config.ssl_mode
+        return None
+
     def create_engine(self) -> AsyncEngine:
         # Configure connection args for better concurrency support
         connect_args = {}
@@ -149,6 +160,9 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             engine_kwargs["max_overflow"] = self.config.max_overflow
             if self.config.pool_recycle >= 0:
                 engine_kwargs["pool_recycle"] = self.config.pool_recycle
+            ssl_context = self._build_ssl()
+            if ssl_context is not None:
+                connect_args["ssl"] = ssl_context
 
         engine = create_async_engine(
             self.config.engine_str,
