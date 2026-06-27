@@ -5,7 +5,6 @@
 # the root directory of this source tree.
 
 import asyncio
-import concurrent.futures
 import os
 import sys
 import traceback
@@ -133,39 +132,6 @@ class StackApp(FastAPI):
         super().__init__(*args, **kwargs)
         self.stack: Stack = Stack(config)
 
-        # Initialize stack in a temporary event loop to set up impls for route registration.
-        # Storage backends use lazy engine initialization, so connections are created on
-        # first use in the correct event loop, avoiding event loop mismatch issues.
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(asyncio.run, self.stack.initialize())  # type: ignore[no-untyped-call]
-            future.result()
-
-        # Reset SQL engines that may have been created in the temporary event loop
-        # (e.g. by register_connectors → list_connectors → fetch_all) so they are
-        # recreated lazily in uvicorn's request-handling event loop.
-        from ogx.core.storage.sqlstore.sqlstore import reset_sqlstore_engines
-
-        reset_sqlstore_engines()
-
-        # Reset provider clients that may have been created in the temporary
-        # event loop during model listing (refresh_registry_once).
-        # Like SQL engines, the Google genai Client eagerly binds an internal
-        # httpx.AsyncClient to the current event loop, and the cached client
-        # becomes unusable after the temporary loop is terminated.
-        #
-        # Top-level impls are routing tables (CommonRoutingTableImpl), not the
-        # actual provider adapters. Walk into impls_by_provider_id to reach
-        # the real providers (e.g., VertexAIInferenceAdapter).
-        if self.stack.impls:
-            for impl in self.stack.impls.values():
-                reset_fn = getattr(impl, "_reset_client", None)
-                if reset_fn is not None:
-                    reset_fn()
-                for provider in getattr(impl, "impls_by_provider_id", {}).values():
-                    reset_fn = getattr(provider, "_reset_client", None)
-                    if reset_fn is not None:
-                        reset_fn()
-
 
 @asynccontextmanager
 async def lifespan(app: StackApp) -> AsyncIterator[None]:
@@ -178,7 +144,53 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
 
     logger.info("Starting up OGX server", version=server_version)
     assert app.stack is not None
+
+    # Initialize stack in uvicorn's event loop — no more temp-loop workaround.
+    # This runs before any requests are served, so routers can safely access
+    # impls at request time without event-loop binding issues.
+    await app.stack.initialize()
+
+    # Register routers from initialized impls.
+    # Router registration is deferred to lifespan because impls are None
+    # until Stack.initialize() completes.
+    impls = app.stack.impls
+    assert impls is not None
+
+    # Load and register external API routers if configured
+    external_apis = load_external_apis(app.stack.run_config)
+    if external_apis:
+        register_external_api_routers(external_apis)
+
+    if app.stack.run_config.apis:
+        apis_to_serve = set(app.stack.run_config.apis)
+    else:
+        apis_to_serve = set(impls.keys())
+
+    for inf in builtin_automatically_routed_apis():
+        # if we do not serve the corresponding router API, we should not serve the routing table API
+        if inf.router_api.value not in apis_to_serve:
+            continue
+        apis_to_serve.add(inf.routing_table_api.value)
+
+    apis_to_serve.add("admin")
+    apis_to_serve.add("inspect")
+    apis_to_serve.add("providers")
+    apis_to_serve.add("prompts")
+    apis_to_serve.add("conversations")
+
+    for api_str in apis_to_serve:
+        api = Api(api_str)
+        impl = impls[api]
+        router = build_fastapi_router(api, impl)
+        if router:
+            app.include_router(router)
+            logger.debug("Registered FastAPI router", api=str(api))
+
+    logger.debug("Serving APIs", apis=list(apis_to_serve))
+
+    # Start the registry refresh background task
     app.stack.create_registry_refresh_task()  # type: ignore[no-untyped-call]
+
     yield
     logger.info("Shutting down")
     await app.stack.shutdown()  # type: ignore[no-untyped-call]
@@ -407,9 +419,6 @@ def create_app() -> StackApp:
 
     app.add_middleware(ProviderDataMiddleware)
 
-    impls = app.stack.impls
-    assert impls is not None
-
     if config.server.auth:
         # Add route authorization middleware if route_policy is configured
         # This can work independently of authentication
@@ -435,42 +444,10 @@ def create_app() -> StackApp:
         logger.info("Enabling tenancy enforcement (no auth)", mode=config.server.tenancy.mode.value)
         app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
-    # Load and register external API routers if configured
-    external_apis = load_external_apis(config)
-    if external_apis:
-        register_external_api_routers(external_apis)
-
-    if config.apis:
-        apis_to_serve = set(config.apis)
-    else:
-        apis_to_serve = set(impls.keys())
-
-    for inf in builtin_automatically_routed_apis():
-        # if we do not serve the corresponding router API, we should not serve the routing table API
-        if inf.router_api.value not in apis_to_serve:
-            continue
-        apis_to_serve.add(inf.routing_table_api.value)
-
-    apis_to_serve.add("admin")
-    apis_to_serve.add("inspect")
-    apis_to_serve.add("providers")
-    apis_to_serve.add("prompts")
-    apis_to_serve.add("conversations")
-
     # Add request metrics middleware.
     # Added last so it runs first (outermost), wrapping auth.
     # Route mapping is built lazily on the first request from scope["app"].
     app.add_middleware(RequestMetricsMiddleware)
-
-    for api_str in apis_to_serve:
-        api = Api(api_str)
-        impl = impls[api]
-        router = build_fastapi_router(api, impl)
-        if router:
-            app.include_router(router)
-            logger.debug("Registered FastAPI router", api=str(api))
-
-    logger.debug("Serving APIs", apis=list(apis_to_serve))
 
     app.add_middleware(ZstdDecompressionMiddleware)
 
