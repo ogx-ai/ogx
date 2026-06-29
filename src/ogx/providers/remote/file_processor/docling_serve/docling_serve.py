@@ -200,13 +200,11 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert file using async endpoints with AsyncDoclingServiceClient."""
-        # AsyncDoclingServiceClient requires a file path, not bytes
-        # Write to temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
+        # AsyncDoclingServiceClient requires a file path via temp file
+        with tempfile.NamedTemporaryFile() as tmp:
             tmp.write(content)
             tmp_path = Path(tmp.name)
 
-        try:
             async with AsyncDoclingServiceClient(
                 url=self.config.base_url,
                 api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
@@ -233,9 +231,6 @@ class DoclingServeFileProcessor:
             elif hasattr(result, "document"):
                 # Local docling-serve: ConversionResult with direct document
                 md_content = result.document.export_to_markdown() if result.document else ""
-        finally:
-            # Clean up temp file
-            tmp_path.unlink(missing_ok=True)
 
         if not md_content or not md_content.strip():
             return []
@@ -357,13 +352,11 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert and chunk file using async endpoints with AsyncDoclingServiceClient."""
-        # AsyncDoclingServiceClient requires a file path, not bytes
-        # Write to temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
+        # AsyncDoclingServiceClient requires a file path via temp file
+        with tempfile.NamedTemporaryFile() as tmp:
             tmp.write(content)
             tmp_path = Path(tmp.name)
 
-        try:
             async with AsyncDoclingServiceClient(
                 url=self.config.base_url,
                 api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
@@ -392,9 +385,6 @@ class DoclingServeFileProcessor:
                     raise
 
             raw_chunks = response.chunks if response.chunks else []
-        finally:
-            # Clean up temp file
-            tmp_path.unlink(missing_ok=True)
 
         if not raw_chunks:
             return []
