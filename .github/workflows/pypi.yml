@@ -540,7 +540,7 @@ jobs:
   publish-packages:
     name: Publish ${{ matrix.package }}
     if: |
-      github.repository_owner == 'llamastack' &&
+      github.repository_owner == 'ogx-ai' &&
       (inputs.dry_run || 'test-pypi') != 'build-only' && (
         github.event_name == 'workflow_dispatch' ||
         github.event.action == 'published' ||
@@ -728,7 +728,7 @@ jobs:
   # are published to PyPI. CPU distros are built for linux/amd64 and
   # linux/arm64. GPU distros are built for linux/amd64 only.
   #
-  # Images are pushed to: llamastack/distribution-<distro>:<tag>
+  # Images are pushed to: ogxai/distribution-<distro>:<tag>
   #   - Production (release or dry_run=off): tagged with VERSION and "latest"
   #   - Test (test-pypi or schedule): tagged with "test-VERSION"
   publish-docker-images:
@@ -737,7 +737,7 @@ jobs:
       always() &&
       needs.compute-version.result == 'success' &&
       (needs.publish-packages.result == 'success' || needs.publish-packages.result == 'skipped') &&
-      github.repository_owner == 'llamastack' &&
+      github.repository_owner == 'ogx-ai' &&
       (inputs.dry_run || 'test-pypi') != 'build-only' &&
       (inputs.packages || 'all') != 'clients-only' && (
         github.event_name == 'workflow_dispatch' ||
@@ -757,11 +757,6 @@ jobs:
             platforms: linux/amd64,linux/arm64
           - distro: postgres-demo
             platforms: linux/amd64,linux/arm64
-          - distro: dell
-            platforms: linux/amd64,linux/arm64
-          # GPU distributions — amd64 only
-          - distro: starter-gpu
-            platforms: linux/amd64
 
     steps:
       - name: Free disk space
@@ -797,7 +792,7 @@ jobs:
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
           DISTRO="${{ matrix.distro }}"
-          IMAGE="llamastack/distribution-${DISTRO}"
+          IMAGE="ogxai/distribution-${DISTRO}"
 
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"
