@@ -67,6 +67,7 @@ Cron: `1 0 * * 0`
 | `llama-cpp-server` | llama-cpp-server/qwen2.5 | — | sentence-transformers/nomic-embed-text-v1.5 | — | — | — |
 | `tgi` | tgi/Qwen/Qwen3-0.6B | — | — | — | — | — |
 | `together` | together/meta-llama/Llama-3.3-70B-Instruct-Turbo-Free | — | together/togethercomputer/m2-bert-80M-32k-retrieval | — | — | — |
+| `vllm-gpu-gpt-oss` | vllm/gpt-oss:20b | — | — | — | — | — |
 
 ## Responses Coverage Summary
 
