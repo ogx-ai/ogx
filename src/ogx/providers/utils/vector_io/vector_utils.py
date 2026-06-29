@@ -175,15 +175,11 @@ class WeightedInMemoryAggregator:
                 keyword_weight = float(weights.get("keyword", 0.0))
                 vector_ranks = {
                     doc_id: i + 1
-                    for i, (doc_id, _) in enumerate(
-                        sorted(vector_scores.items(), key=lambda x: x[1], reverse=True)
-                    )
+                    for i, (doc_id, _) in enumerate(sorted(vector_scores.items(), key=lambda x: x[1], reverse=True))
                 }
                 keyword_ranks = {
                     doc_id: i + 1
-                    for i, (doc_id, _) in enumerate(
-                        sorted(keyword_scores.items(), key=lambda x: x[1], reverse=True)
-                    )
+                    for i, (doc_id, _) in enumerate(sorted(keyword_scores.items(), key=lambda x: x[1], reverse=True))
                 }
                 all_ids = set(vector_scores.keys()) | set(keyword_scores.keys())
                 return {
