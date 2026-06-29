@@ -44,6 +44,12 @@ class DoclingServeFileProcessor:
     def __init__(self, config: DoclingServeFileProcessorConfig, files_api: Files) -> None:
         self.config = config
         self.files_api = files_api
+        # Normalize base_url: AsyncDoclingServiceClient rejects URLs ending with /v1
+        # Strip /v1 suffix for backward compatibility with old configs
+        normalized_url = config.base_url.rstrip("/")
+        if normalized_url.endswith("/v1"):
+            normalized_url = normalized_url.removesuffix("/v1")
+        self.config.base_url = normalized_url
 
     def _get_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}

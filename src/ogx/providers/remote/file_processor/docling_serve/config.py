@@ -16,7 +16,11 @@ class DoclingServeFileProcessorConfig(BaseModel):
 
     base_url: str = Field(
         default="http://localhost:5001",
-        description="Base URL of the Docling Serve instance (do not include /v1 suffix)",
+        description=(
+            "Base URL of the Docling Serve instance. "
+            "Do not include /v1 suffix - AsyncDoclingServiceClient adds it automatically. "
+            "For backward compatibility, /v1 suffix will be stripped if present."
+        ),
     )
     api_key: SecretStr | None = Field(
         default=None,
