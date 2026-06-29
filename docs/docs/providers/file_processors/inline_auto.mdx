@@ -1,5 +1,5 @@
 ---
-description: "Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Routes PDF and text files to PyPDF, and office/structured formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. Unsupported formats are rejected with a clear error listing the supported types."
+description: "Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Always includes PyPDF (PDF, text) and MarkItDown (office, media) as built-in backends. Optionally configure one enhanced provider for higher-quality or broader-coverage processing: docling/docling-serve for structure-aware parsing, or unstructured/unstructured-api for 65+ format support."
 sidebar_label: Auto
 title: inline::auto
 ---
@@ -8,7 +8,7 @@ title: inline::auto
 
 ## Description
 
-Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Routes PDF and text files to PyPDF, and office/structured formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. Unsupported formats are rejected with a clear error listing the supported types.
+Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Always includes PyPDF (PDF, text) and MarkItDown (office, media) as built-in backends. Optionally configure one enhanced provider for higher-quality or broader-coverage processing: docling/docling-serve for structure-aware parsing, or unstructured/unstructured-api for 65+ format support.
 
 ## Configuration
 
@@ -18,6 +18,26 @@ Composite file processor that automatically dispatches to the appropriate backen
 | `default_chunk_overlap_tokens` | `int` | No | 400 | Default chunk overlap in tokens when chunking_strategy type is 'auto' |
 | `extract_metadata` | `bool` | No | True | Whether to extract PDF metadata (title, author, etc.) |
 | `clean_text` | `bool` | No | True | Whether to clean extracted text (remove extra whitespace, normalize line breaks) |
+| `docling` | `DoclingFileProcessorConfig \| None` | No |  | Enable inline Docling for structure-aware PDF, DOCX, PPTX, HTML, and image processing. Requires the 'docling' package. |
+| `docling.default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `docling.default_chunk_overlap_tokens` | `int` | No | 400 | Default chunk overlap in tokens when chunking_strategy type is 'auto' |
+| `docling.do_ocr` | `bool` | No | True | Enable OCR for scanned documents. Set to False for digital PDFs (with embedded text) to improve processing speed by ~3x for non-scanned PDFs. Note: Setting to False on scanned PDFs will result in minimal text extraction. |
+| `docling_serve` | `DoclingServeFileProcessorConfig \| None` | No |  | Enable remote Docling Serve for GPU-accelerated, structure-aware document processing. Requires a running Docling Serve instance. |
+| `docling_serve.base_url` | `str` | No | http://localhost:5001 | Base URL of the Docling Serve instance. Do not include /v1 suffix - AsyncDoclingServiceClient adds it automatically. For backward compatibility, /v1 suffix will be stripped if present. |
+| `docling_serve.api_key` | `SecretStr \| None` | No |  | API key for authenticating with Docling Serve (optional, required if server has DOCLING_SERVE_API_KEY set) |
+| `docling_serve.default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `docling_serve.mode` | `Literal[async, sync, auto]` | No | async | API mode: 'async' (use asynchronous submit/poll endpoints, recommended for both local and SaaS), 'sync' (use synchronous endpoints, fallback option), or 'auto' (detect server capabilities) |
+| `unstructured` | `UnstructuredFileProcessorConfig \| None` | No |  | Enable inline Unstructured for 65+ format support including email (EML, MSG) and legacy Office formats. Requires the 'unstructured' package and system dependencies. |
+| `unstructured.strategy` | `Literal[auto, fast, hi_res, ocr_only]` | No | auto | Only available when `unstructured` is a `UnstructuredFileProcessorConfig` object. Partitioning strategy for document processing. 'auto' (default) intelligently selects the best approach based on document type. 'fast' uses text extraction without layout analysis (fastest). 'hi_res' uses layout models for better structure detection (slowest). 'ocr_only' uses Tesseract OCR for scanned documents. WARNING: Table detection is unreliable in local mode due to known issue (https://github.com/Unstructured-IO/unstructured/issues/2997). Use remote::unstructured-api for production table extraction. |
+| `unstructured.default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `unstructured.default_chunk_overlap_tokens` | `int` | No | 400 | Default chunk overlap in tokens when chunking_strategy type is 'auto' |
+| `unstructured.include_page_breaks` | `bool` | No | True | Include PageBreak elements in output for supported formats (PDF, PPTX, HTML) |
+| `unstructured.skip_infer_table_types` | `list[str]` | No | ['pdf'] | File types to skip table inference for (workaround for local table detection issues). Example: ['pdf', 'docx']. Set to empty list [] to attempt table detection for all formats. Note: Table detection is unreliable in local mode; use remote::unstructured-api for reliable tables. |
+| `unstructured.extract_images_in_pdf` | `bool` | No | False | Extract images from PDFs. Requires strategy='hi_res'. May fail on some systems due to missing dependencies. Set to True only if you need image extraction and have verified it works in your environment. |
+| `unstructured.languages` | `list[str]` | No | ['eng'] | OCR language codes for Tesseract (e.g., ['eng', 'spa', 'deu']). Additional language packs must be installed separately via tesseract-ocr-&#123;lang&#125;. |
+| `unstructured_api` | `UnstructuredApiFileProcessorConfig \| None` | No |  | Enable Unstructured.io SaaS API for 65+ format support with cloud-based processing. Requires an API key from unstructured.io. |
+| `unstructured_api.api_key` | `SecretStr` | No |  | Only available when `unstructured_api` is a `UnstructuredApiFileProcessorConfig` object. API key for authenticating with Unstructured.io SaaS API (get one from https://unstructured.io) |
+| `unstructured_api.default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
 
 ## Sample Configuration
 

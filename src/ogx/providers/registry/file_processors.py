@@ -28,9 +28,10 @@ def available_providers() -> list[ProviderSpec]:
             api_dependencies=[Api.files],
             description=(
                 "Composite file processor that automatically dispatches to the appropriate backend "
-                "based on file MIME type. Routes PDF and text files to PyPDF, and office/structured "
-                "formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. "
-                "Unsupported formats are rejected with a clear error listing the supported types."
+                "based on file MIME type. Always includes PyPDF (PDF, text) and MarkItDown (office, "
+                "media) as built-in backends. Optionally configure one enhanced provider for "
+                "higher-quality or broader-coverage processing: docling/docling-serve for "
+                "structure-aware parsing, or unstructured/unstructured-api for 65+ format support."
             ),
         ),
         InlineProviderSpec(
