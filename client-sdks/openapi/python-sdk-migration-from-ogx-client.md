@@ -1,22 +1,22 @@
-# Migrating from `ogx_client` to `ogx_open_client`
+# Migrating `ogx_client` from <= 1.1.3 to >= 1.1.4
 
-This document describes all user-facing changes when migrating from the
-Stainless-generated `ogx_client` SDK to the new `ogx_open_client` SDK.
+This document describes all user-facing changes when migrating from
+`ogx_client` <= 1.1.3 (Stainless-generated) to `ogx_client` >= 1.1.4
+(OpenAPI-generator-generated).
 
 ---
 
 ## TL;DR
 
-For most codebases, this migration is **a search-and-replace**. The API methods
-accept the same keyword arguments, list responses are still iterable, streaming
-works the same way, and exceptions have the same names.
+For most codebases, this migration is **a search-and-replace**. The package name
+stays the same (`ogx_client`), the API methods accept the same keyword
+arguments, list responses are still iterable, streaming works the same way, and
+exceptions have the same names.
 
-The two things you will definitely do:
+The one thing you will definitely do:
 
-1. **Replace the package name** in every import:
-   `ogx_client` -> `ogx_open_client`
-2. **Replace the type import path and names**:
-   `from ogx_client.types import ResponseObject` -> `from ogx_open_client.models import OpenAIResponseObject`
+1. **Replace the type import path and names**:
+   `from ogx_client.types import ResponseObject` -> `from ogx_client.models import OpenAIResponseObject`
 
 Everything else in this document covers edge cases and advanced usage that most
 code does not touch. The sections below are ordered by how likely they are to
@@ -28,7 +28,7 @@ affect you.
 
 **Most codebases (search-and-replace):**
 
-1. [Package Name and Imports](#1-package-name-and-imports)
+1. [Import Path Changes](#1-import-path-changes)
 2. [Type and Model Name Changes](#2-type-and-model-name-changes)
 
 **Only if you use these specific features:**
@@ -50,34 +50,35 @@ affect you.
 
 ---
 
-## 1. Package Name and Imports
+## 1. Import Path Changes
 
-Every import changes. This is a straightforward find-and-replace.
+The package name stays `ogx_client` -- you do not need to change your top-level
+imports of `OgxClient` or `AsyncOgxClient`. However, the `types` sub-package
+has been renamed to `models`:
 
 ```python
-# Before
+# Before (<= 1.1.3)
 from ogx_client import OgxClient
 from ogx_client.types import ResponseObject
 
-# After
-from ogx_open_client import OgxClient
-from ogx_open_client.models import OpenAIResponseObject
+# After (>= 1.1.4)
+from ogx_client import OgxClient  # unchanged
+from ogx_client.models import OpenAIResponseObject
 ```
 
-The `types` sub-package is now called `models`. All models live in a single flat
-namespace -- there are no sub-packages like `types.shared`, `types.alpha`,
-`types.chat`, etc.
+All models now live in a single flat namespace -- there are no sub-packages like
+`types.shared`, `types.alpha`, `types.chat`, etc.
 
 ```python
-# Before -- types scattered across sub-packages
+# Before (<= 1.1.3) -- types scattered across sub-packages
 from ogx_client.types import ResponseObject
 from ogx_client.types.shared import HealthInfo
 from ogx_client.types.alpha import InferenceRerankResponse
 from ogx_client.types.chat import CompletionCreateResponse
 from ogx_client.types.vector_stores import VectorStoreFile
 
-# After -- everything from one place
-from ogx_open_client.models import (
+# After (>= 1.1.4) -- everything from one place
+from ogx_client.models import (
     OpenAIResponseObject,
     HealthInfo,
     RerankResponse,
@@ -93,8 +94,8 @@ and `AsyncOgxClient`.
 
 ## 2. Type and Model Name Changes
 
-Many types have been renamed. The actual data and fields on these types are
-the same -- only the class names changed. Here are the patterns:
+Many types have been renamed in >= 1.1.4. The actual data and fields on these
+types are the same -- only the class names changed. Here are the patterns:
 
 - **`OpenAI` prefix added** to types that wrap OpenAI-compatible API objects
 - **`Object` suffix added** to resource types (e.g., `VectorStore` -> `VectorStoreObject`)
@@ -102,8 +103,8 @@ the same -- only the class names changed. Here are the patterns:
 
 ### Core Resource Types
 
-| `ogx_client.types.*` | `ogx_open_client.models.*` |
-|----------------------|---------------------------|
+| `ogx_client.types.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|----------------------------------|-----------------------------------|
 | `File` | `OpenAIFileObject` |
 | `Model` | `OpenAIModel` |
 | `Prompt` | `Prompt` |
@@ -120,8 +121,8 @@ the same -- only the class names changed. Here are the patterns:
 
 ### Delete Response Types
 
-| `ogx_client.types.*` | `ogx_open_client.models.*` |
-|----------------------|---------------------------|
+| `ogx_client.types.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|----------------------------------|-----------------------------------|
 | `DeleteFileResponse` | `OpenAIFileDeleteResponse` |
 | `ResponseDeleteResponse` | `OpenAIDeleteResponseObject` |
 | `ConversationDeleteResponse` | `ConversationDeletedResource` |
@@ -130,8 +131,8 @@ the same -- only the class names changed. Here are the patterns:
 
 ### Batch Types (collapsed)
 
-| `ogx_client.types.*` | `ogx_open_client.models.*` |
-|----------------------|---------------------------|
+| `ogx_client.types.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|----------------------------------|-----------------------------------|
 | `BatchCreateResponse` | `Batch` |
 | `BatchRetrieveResponse` | `Batch` |
 | `BatchListResponse` | `Batch` |
@@ -139,8 +140,8 @@ the same -- only the class names changed. Here are the patterns:
 
 ### List Response Types
 
-| `ogx_client.types.*` | `ogx_open_client.models.*` |
-|----------------------|---------------------------|
+| `ogx_client.types.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|----------------------------------|-----------------------------------|
 | `ModelListResponse` | `ListModelsV1ModelsGet200Response` |
 | `ModelRetrieveResponse` | `GetModelV1ModelsModelIdGet200Response` |
 | `ListModelsResponse` | `ListModelsResponse` |
@@ -154,8 +155,8 @@ the same -- only the class names changed. Here are the patterns:
 
 ### Shared Types (moved from `types.shared` to flat `models`)
 
-| `ogx_client.types.shared.*` | `ogx_open_client.models.*` |
-|-----------------------------|---------------------------|
+| `ogx_client.types.shared.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|-----------------------------------------|-----------------------------------|
 | `ParamType` | `ParamType` |
 | `RouteInfo` | `RouteInfo` |
 | `HealthInfo` | `HealthInfo` |
@@ -170,16 +171,16 @@ the same -- only the class names changed. Here are the patterns:
 
 ### Alpha Types
 
-| `ogx_client.types.alpha.*` | `ogx_open_client.models.*` |
-|----------------------------|---------------------------|
+| `ogx_client.types.alpha.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|----------------------------------------|-----------------------------------|
 | `InferenceRerankResponse` | `RerankResponse` |
 | `InferenceRerankParams` | `RerankRequest` |
 | `AdminListRoutesParams` | `ListRoutesRequest` |
 
 ### Chat Types
 
-| `ogx_client.types.chat.*` | `ogx_open_client.models.*` |
-|---------------------------|---------------------------|
+| `ogx_client.types.chat.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|---------------------------------------|-----------------------------------|
 | `CompletionCreateResponse` | `OpenAIChatCompletion` |
 | `CompletionRetrieveResponse` | `OpenAIChatCompletion` |
 | `CompletionListResponse` | `ListOpenAIChatCompletionResponse` |
@@ -188,15 +189,15 @@ the same -- only the class names changed. Here are the patterns:
 
 ### Chat Completions Sub-types
 
-| `ogx_client.types.chat.completions.*` | `ogx_open_client.models.*` |
-|---------------------------------------|---------------------------|
+| `ogx_client.types.chat.completions.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|---------------------------------------------------|-----------------------------------|
 | `MessageListResponse` | `ChatCompletionMessage` |
 | `MessageListParams` | `ListChatCompletionMessagesRequest` |
 
 ### Conversations Types
 
-| `ogx_client.types.conversations.*` | `ogx_open_client.models.*` |
-|------------------------------------|---------------------------|
+| `ogx_client.types.conversations.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|------------------------------------------------|-----------------------------------|
 | `ItemGetResponse` | `ConversationItem` |
 | `ItemCreateResponse` | `ConversationItem` |
 | `ItemListResponse` | `ConversationItemList` |
@@ -206,20 +207,20 @@ the same -- only the class names changed. Here are the patterns:
 
 ### Models Sub-types
 
-| `ogx_client.types.models.*` | `ogx_open_client.models.*` |
-|-----------------------------|---------------------------|
+| `ogx_client.types.models.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|-----------------------------------------|-----------------------------------|
 | `OpenAIListResponse` | `OpenAIListModelsResponse` |
 
 ### Responses Sub-types
 
-| `ogx_client.types.responses.*` | `ogx_open_client.models.*` |
-|--------------------------------|---------------------------|
+| `ogx_client.types.responses.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|--------------------------------------------|-----------------------------------|
 | `InputItemListResponse` | `ListOpenAIResponseInputItem` |
 
 ### Vector Stores Sub-types
 
-| `ogx_client.types.vector_stores.*` | `ogx_open_client.models.*` |
-|------------------------------------|---------------------------|
+| `ogx_client.types.vector_stores.*` (<= 1.1.3) | `ogx_client.models.*` (>= 1.1.4) |
+|-------------------------------------------------|-----------------------------------|
 | `VectorStoreFile` | `VectorStoreFileObject` |
 | `VectorStoreFileBatches` | `VectorStoreFileBatchObject` |
 | `FileDeleteResponse` | `VectorStoreFileDeleteResponse` |
@@ -239,11 +240,11 @@ or `OGX_CLIENT_CUSTOM_HEADERS` environment variables, **or** if you pass
 
 ### Environment variables no longer read
 
-`ogx_client` auto-read three environment variables. `ogx_open_client` reads
+`ogx_client` <= 1.1.3 auto-read three environment variables. >= 1.1.4 reads
 none of them:
 
-| Environment Variable | `ogx_client` | `ogx_open_client` |
-|---------------------|-------------|-------------------|
+| Environment Variable | <= 1.1.3 | >= 1.1.4 |
+|---------------------|----------|----------|
 | `OGX_CLIENT_API_KEY` | Auto-inferred for `api_key` | **Not read** |
 | `OGX_CLIENT_BASE_URL` | Auto-inferred for `base_url` | **Not read** |
 | `OGX_CLIENT_CUSTOM_HEADERS` | Parsed and merged into default headers | **Not read** |
@@ -257,7 +258,7 @@ If you need to keep using env vars, read them yourself:
 
 ```python
 import os
-from ogx_open_client import OgxClient
+from ogx_client import OgxClient
 
 client = OgxClient(
     base_url=os.environ.get("OGX_CLIENT_BASE_URL", "http://localhost:8321"),
@@ -267,17 +268,17 @@ client = OgxClient(
 
 ### `api_key=` is accepted but silently ignored
 
-**This is the most dangerous gotcha in the migration.** The `api_key` parameter
-still exists on the `OgxClient` constructor, so this code **does not raise an
-error**:
+**This is the most dangerous gotcha in the migration.** In >= 1.1.4 the
+`api_key` parameter still exists on the `OgxClient` constructor, so this code
+**does not raise an error**:
 
 ```python
 # Looks correct, but the API key is NEVER sent to the server
 client = OgxClient(base_url="http://localhost:8321", api_key="my-secret-key")
 ```
 
-In `ogx_client`, this would automatically send
-`Authorization: Bearer my-secret-key` with every request. In `ogx_open_client`,
+In <= 1.1.3, this would automatically send
+`Authorization: Bearer my-secret-key` with every request. In >= 1.1.4,
 the key is stored on `self.api_key` but **never added to any request header**.
 Your requests will go out unauthenticated, and depending on your server
 configuration you may get silent 401 errors or unexpected behavior.
@@ -285,7 +286,7 @@ configuration you may get silent 401 errors or unexpected behavior.
 **The fix:** use `default_headers` to send the API key explicitly:
 
 ```python
-from ogx_open_client import OgxClient
+from ogx_client import OgxClient
 
 api_key = "my-secret-key"
 client = OgxClient(
@@ -312,7 +313,7 @@ auto-pagination to transparently fetch all pages across multiple API calls.
 Basic iteration over list results works identically:
 
 ```python
-# This works in both SDKs
+# This works in both versions
 for file in client.files.list():
     print(file.id)
 ```
@@ -323,9 +324,9 @@ all delegating to their internal `.data` list. So `for item in result`,
 
 ### What changed
 
-`ogx_client` used `SyncOpenAICursorPage[T]` for some endpoints -- an
+<= 1.1.3 used `SyncOpenAICursorPage[T]` for some endpoints -- an
 auto-paginating iterator that transparently made additional API calls when you
-iterated past the current page. `ogx_open_client` returns one page at a time.
+iterated past the current page. >= 1.1.4 returns one page at a time.
 If you have more data than fits in one page, you need to paginate manually:
 
 ```python
@@ -342,8 +343,8 @@ common case), the behavior is identical.
 
 ### Return type changes per endpoint
 
-| Method | `ogx_client` return | `ogx_open_client` return |
-|--------|--------------------|-----------------------|
+| Method | <= 1.1.3 return | >= 1.1.4 return |
+|--------|----------------|----------------|
 | `responses.list()` | `SyncOpenAICursorPage[ResponseListResponse]` | `ListOpenAIResponseObject` |
 | `responses.create()` | `ResponseObject` | `OpenAIResponseObject` |
 | `files.list()` | `SyncOpenAICursorPage[File]` | `ListOpenAIFileResponse` |
@@ -360,7 +361,7 @@ common case), the behavior is identical.
 
 ### TypeAlias lists replaced by wrapper objects
 
-A few endpoints in `ogx_client` returned plain Python lists via TypeAliases
+A few endpoints in <= 1.1.3 returned plain Python lists via TypeAliases
 (e.g., `ProviderListResponse = List[ProviderInfo]`). These are now Pydantic
 models with a `.data` field. If you were treating the result as a bare list,
 access `.data` or iterate (which delegates to `.data`):
@@ -428,21 +429,21 @@ response = client.files.content_without_preload_content("file-abc")
 
 ### `file_from_path` utility
 
-No longer available. Use standard Python file I/O:
+No longer available in >= 1.1.4. Use standard Python file I/O:
 
 ```python
-# Before
+# Before (<= 1.1.3)
 from ogx_client import file_from_path
 
-# After
+# After (>= 1.1.4)
 with open("path/to/file", "rb") as f:
     client.files.create(file=f, purpose="assistants")
 ```
 
 ### `aiohttp` backend
 
-The optional `[aiohttp]` backend for `AsyncOgxClient` is no longer available.
-`httpx.AsyncClient` is used exclusively.
+The optional `[aiohttp]` backend for `AsyncOgxClient` is no longer available
+in >= 1.1.4. `httpx.AsyncClient` is used exclusively.
 
 ---
 
@@ -455,8 +456,8 @@ The optional `[aiohttp]` backend for `AsyncOgxClient` is no longer available.
 ### Catching by type still works
 
 ```python
-# Works identically in both SDKs
-from ogx_open_client import NotFoundError, BadRequestError, RateLimitError
+# Works identically in both versions
+from ogx_client import NotFoundError, BadRequestError, RateLimitError
 
 try:
     client.models.retrieve("nonexistent")
@@ -466,8 +467,8 @@ except NotFoundError:
 
 ### Attribute names changed
 
-| What you want | `ogx_client` | `ogx_open_client` |
-|---------------|-------------|-------------------|
+| What you want | <= 1.1.3 | >= 1.1.4 |
+|---------------|----------|----------|
 | HTTP status code | `e.status_code` | `e.status` (also available as `e.status_code`) |
 | Full HTTP response | `e.response` (`httpx.Response`) | Not available (individual fields below) |
 | Response headers | `e.response.headers` | `e.headers` |
@@ -492,8 +493,8 @@ except NotFoundError as e:
 
 ### Exception hierarchy
 
-`ogx_client` had one hierarchy rooted at `OgxClientError -> APIError`.
-`ogx_open_client` has two coexisting hierarchies:
+<= 1.1.3 had one hierarchy rooted at `OgxClientError -> APIError`.
+>= 1.1.4 has two coexisting hierarchies:
 
 **Primary (used by default):**
 
@@ -503,7 +504,7 @@ OpenApiException
 ```
 
 The familiar names (`BadRequestError`, `NotFoundError`, etc.) are **aliases**
-for the `*Exception` classes. `from ogx_open_client import BadRequestError`
+for the `*Exception` classes. `from ogx_client import BadRequestError`
 gives you `BadRequestException` under the hood.
 
 **Secondary (Stainless-compatible, also importable):**
@@ -521,11 +522,11 @@ note that the primary hierarchy uses `ApiException` / `OpenApiException` instead
 
 **This is mostly backward-compatible.** `base_url=` and `api_key=` still work.
 
-The new SDK adds a `configuration` parameter as an alternative way to pass a URL
+>= 1.1.4 adds a `configuration` parameter as an alternative way to pass a URL
 string or a full `Configuration` object:
 
 ```python
-from ogx_open_client import OgxClient, Configuration
+from ogx_client import OgxClient, Configuration
 
 # All three are equivalent:
 client = OgxClient(base_url="http://localhost:8321")
@@ -539,8 +540,8 @@ client = OgxClient(configuration=config)
 
 ### Constructor parameter comparison
 
-| Parameter | `ogx_client` | `ogx_open_client` |
-|-----------|-------------|-------------------|
+| Parameter | <= 1.1.3 | >= 1.1.4 |
+|-----------|----------|----------|
 | `base_url` | Direct param | Supported via `**kwargs` (forwarded to `Configuration`) |
 | `api_key` | Direct param, auto-read from env | Direct param, **not** read from env |
 | `timeout` | Direct param (`float \| Timeout`) | Via `**kwargs` or `Configuration(timeout=...)` |
@@ -559,16 +560,16 @@ client = OgxClient(configuration=config)
 keyword arguments (the normal way), nothing changes:
 
 ```python
-# Works identically in both SDKs
+# Works identically in both versions
 response = client.responses.create(model="gpt-4o", input="Hello, world!")
 ```
 
-The new SDK additionally accepts a request body object as the first positional
+>= 1.1.4 additionally accepts a request body object as the first positional
 argument:
 
 ```python
-# New option (not available in ogx_client)
-from ogx_open_client.models import CreateResponseRequest
+# New option (not available in <= 1.1.3)
+from ogx_client.models import CreateResponseRequest
 
 request = CreateResponseRequest(model="gpt-4o", input="Hello, world!")
 response = client.responses.create(request)
@@ -576,12 +577,12 @@ response = client.responses.create(request)
 
 ### Minor differences (unlikely to matter)
 
-- `ogx_client` enforced keyword-only arguments via `*`. The new SDK does not --
+- <= 1.1.3 enforced keyword-only arguments via `*`. >= 1.1.4 does not --
   but since nobody passes positional args to these methods, this is invisible.
-- `ogx_client` used an `omit` sentinel to distinguish "not provided" from
-  `None`. The new SDK uses `None` as the default. In practice the server
+- <= 1.1.3 used an `omit` sentinel to distinguish "not provided" from
+  `None`. >= 1.1.4 uses `None` as the default. In practice the server
   treats both the same way.
-- Both SDKs support `extra_body` for sending additional fields.
+- Both versions support `extra_body` for sending additional fields.
 
 ---
 
@@ -590,7 +591,7 @@ response = client.responses.create(request)
 **The usage pattern is identical.** Only internal details changed.
 
 ```python
-# Works identically in both SDKs
+# Works identically in both versions
 stream = client.responses.create(model="gpt-4o", input="Hello", stream=True)
 for event in stream:
     print(event)
@@ -598,15 +599,15 @@ for event in stream:
 
 The stream event type names changed (same rename pattern as other types):
 
-| `ogx_client` | `ogx_open_client` |
-|-------------|-------------------|
+| <= 1.1.3 | >= 1.1.4 |
+|----------|----------|
 | `ResponseObjectStream` | `OpenAIResponseObjectStream` |
 | `ChatCompletionChunk` | `OpenAIChatCompletionChunk` |
 
 Other differences that only matter if you inspect stream internals:
 
-| Aspect | `ogx_client` | `ogx_open_client` |
-|--------|-------------|-------------------|
+| Aspect | <= 1.1.3 | >= 1.1.4 |
+|--------|----------|----------|
 | Error in stream | Raises `APIError` | Silently caught |
 | `response` attribute | `stream.response` (public) | `stream._response` (private) |
 | `status_code` | `stream.response.status_code` | `stream.status_code` |
@@ -620,10 +621,10 @@ Other differences that only matter if you inspect stream internals:
 **Only affects you if** you used `client.with_raw_response` (see
 [Section 5](#5-removed-client-features)).
 
-`ogx_client`'s `APIResponse` was a wrapper around a live `httpx.Response` with
+<= 1.1.3's `APIResponse` was a wrapper around a live `httpx.Response` with
 lazy parsing via `.parse()`.
 
-`ogx_open_client`'s `ApiResponse` is a **Pydantic BaseModel** with the data
+>= 1.1.4's `ApiResponse` is a **Pydantic BaseModel** with the data
 already parsed:
 
 ```python
@@ -642,23 +643,23 @@ resp.raw_data  # raw bytes
 **Only affects you if** you explicitly imported `*Params` TypedDict types for
 type annotations or static analysis.
 
-`ogx_client` provided TypedDict classes (named `*Params`) for type-checking
+<= 1.1.3 provided TypedDict classes (named `*Params`) for type-checking
 method arguments. Most users never imported these -- they just passed keyword
 arguments directly.
 
-`ogx_open_client` replaces them with Pydantic `BaseModel` classes (named
+>= 1.1.4 replaces them with Pydantic `BaseModel` classes (named
 `*Request`). If you referenced Params types in your code:
 
 ```python
-# Before
+# Before (<= 1.1.3)
 from ogx_client.types import ResponseCreateParams
 
 
 def my_func(params: ResponseCreateParams) -> None: ...
 
 
-# After
-from ogx_open_client.models import CreateResponseRequest
+# After (>= 1.1.4)
+from ogx_client.models import CreateResponseRequest
 
 
 def my_func(params: CreateResponseRequest) -> None: ...
@@ -666,8 +667,8 @@ def my_func(params: CreateResponseRequest) -> None: ...
 
 Full mapping:
 
-| `ogx_client` (TypedDict) | `ogx_open_client` (BaseModel) |
-|--------------------------|-------------------------------|
+| <= 1.1.3 (TypedDict) | >= 1.1.4 (BaseModel) |
+|----------------------|----------------------|
 | `ResponseCreateParams` | `CreateResponseRequest` |
 | `ResponseCompactParams` | `CompactResponseRequest` |
 | `EmbeddingCreateParams` | `OpenAIEmbeddingsRequestWithExtraBody` |
@@ -706,7 +707,7 @@ Full mapping:
 **Backward-compatible.** Usage is the same:
 
 ```python
-from ogx_open_client import AsyncOgxClient
+from ogx_client import AsyncOgxClient
 
 async_client = AsyncOgxClient(base_url="http://localhost:8321")
 response = await async_client.responses.create(model="gpt-4o", input="Hello")
@@ -715,15 +716,15 @@ response = await async_client.responses.create(model="gpt-4o", input="Hello")
 The `Client` and `AsyncClient` short aliases are gone -- use `OgxClient` and
 `AsyncOgxClient`.
 
-The optional `aiohttp` backend is no longer available.
+The optional `aiohttp` backend is no longer available in >= 1.1.4.
 `httpx.AsyncClient` is used exclusively.
 
 ---
 
 ## 13. Dependencies and Python Version
 
-| Dependency | `ogx_client` | `ogx_open_client` |
-|-----------|-------------|-------------------|
+| Dependency | <= 1.1.3 | >= 1.1.4 |
+|-----------|----------|----------|
 | Python | >= 3.9 | **>= 3.12** |
 | `httpx` | >= 0.23.0, < 1 | >= 0.28.1 |
 | `pydantic` | >= 1.9.0, < 3 | **>= 2** |
@@ -735,7 +736,7 @@ The optional `aiohttp` backend is no longer available.
 | `python-dateutil` | Not required | >= 2.8.2 |
 
 If you are on Python 3.9--3.11, you must upgrade to 3.12+. If you are on
-Pydantic v1, you must upgrade to v2. Both SDKs use **httpx** as the HTTP
+Pydantic v1, you must upgrade to v2. Both versions use **httpx** as the HTTP
 client.
 
 ---
@@ -745,9 +746,8 @@ client.
 **Everyone:**
 
 - [ ] Upgrade Python to 3.12+ and Pydantic to 2.x (if not already)
-- [ ] Replace `ogx_client` with `ogx_open_client` in `pip install` / `pyproject.toml`
-- [ ] Find-and-replace `from ogx_client` -> `from ogx_open_client` in all imports
-- [ ] Replace `from ogx_client.types` -> `from ogx_open_client.models`
+- [ ] Upgrade `ogx_client` to >= 1.1.4 in `pip install` / `pyproject.toml`
+- [ ] Replace `from ogx_client.types` -> `from ogx_client.models` in all imports
 - [ ] Update type names per the [mapping tables](#2-type-and-model-name-changes)
 
 **If applicable:**
