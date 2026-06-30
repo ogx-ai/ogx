@@ -39,7 +39,6 @@ from ogx.core.request_headers import (
     user_from_scope,
 )
 from ogx.core.server.fastapi_router_registry import (
-    _ROUTER_FACTORIES,
     build_fastapi_router,
     register_external_api_routers,
 )
@@ -54,7 +53,7 @@ from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
 
 from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
-from .metrics import RequestMetricsMiddleware, build_route_to_api_map
+from .metrics import RequestMetricsMiddleware
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 
@@ -262,6 +261,100 @@ class ProviderDataMiddleware:
         return await self.app(scope, receive, send)
 
 
+class ZstdDecompressionMiddleware:
+    """
+    ASGI middleware that decompresses zstd-encoded request bodies.
+
+    If the request body is not zstd-encoded, it passes through unchanged.
+    If decompression fails, it logs a warning and passes the original compressed body to the app.
+    If the decompressed body exceeds 100 MB, it returns a 413 Payload Too Large response.
+
+    This is useful for Codex CLI requests that send zstd-compressed payloads to reduce bandwidth usage.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        headers = {k.lower(): v for k, v in scope.get("headers", [])}
+        content_encoding = headers.get(b"content-encoding", b"").decode().lower()
+
+        if content_encoding != "zstd":
+            return await self.app(scope, receive, send)
+
+        # Collect the full request body first (needed for both success and fallback)
+        body_parts: list[bytes] = []
+        while True:
+            message = await receive()
+            body_parts.append(message.get("body", b""))
+            if not message.get("more_body", False):
+                break
+
+        compressed_body = b"".join(body_parts)
+
+        try:
+            max_decompressed_size = 100 * 1024 * 1024  # 100 MB
+
+            def _decompress_zstd(compressed: bytes, max_size: int) -> tuple[bytes | None, bool]:
+                decompressor = zstandard.ZstdDecompressor()
+                reader = decompressor.stream_reader(compressed)
+                try:
+                    data = reader.read(max_size)
+                    is_oversized = bool(reader.read(1))
+                    return (None, True) if is_oversized else (data, False)
+                finally:
+                    reader.close()
+
+            decompressed_body, oversized = await asyncio.to_thread(
+                _decompress_zstd, compressed_body, max_decompressed_size
+            )
+
+            if oversized:
+                return await _send_error_response(
+                    send,
+                    status=413,
+                    message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
+                )
+
+            # Strip content-encoding header and update content-length
+            new_headers = [
+                (k, v) for k, v in scope["headers"] if k.lower() not in (b"content-encoding", b"content-length")
+            ]
+            new_headers.append((b"content-length", str(len(decompressed_body)).encode()))
+            scope["headers"] = new_headers
+
+            # Feed the decompressed body back, then delegate to the
+            # original receive for disconnect detection so streaming
+            # responses stay alive until the client actually disconnects.
+            body_sent = False
+
+            async def receive_decompressed() -> dict:  # type: ignore[type-arg]
+                nonlocal body_sent
+                if not body_sent:
+                    body_sent = True
+                    return {"type": "http.request", "body": decompressed_body, "more_body": False}
+                return await receive()
+
+            return await self.app(scope, receive_decompressed, send)
+        except Exception as e:
+            logger.warning("Failed to decompress zstd request body, falling back to compressed data", error=str(e))
+
+            # Replay the original compressed body since decompression failed
+            body_sent = False
+
+            async def receive_original() -> dict:  # type: ignore[type-arg]
+                nonlocal body_sent
+                if not body_sent:
+                    body_sent = True
+                    return {"type": "http.request", "body": compressed_body, "more_body": False}
+                return await receive()
+
+            return await self.app(scope, receive_original, send)
+
+
 def create_app() -> StackApp:
     """Create and configure the FastAPI application.
 
@@ -364,10 +457,10 @@ def create_app() -> StackApp:
     apis_to_serve.add("prompts")
     apis_to_serve.add("conversations")
 
-    # Build route-to-API mapping and add request metrics middleware.
+    # Add request metrics middleware.
     # Added last so it runs first (outermost), wrapping auth.
-    route_to_api = build_route_to_api_map(_ROUTER_FACTORIES, impls)
-    app.add_middleware(RequestMetricsMiddleware, route_to_api=route_to_api)
+    # Route mapping is built lazily on the first request from scope["app"].
+    app.add_middleware(RequestMetricsMiddleware)
 
     for api_str in apis_to_serve:
         api = Api(api_str)
@@ -378,91 +471,6 @@ def create_app() -> StackApp:
             logger.debug("Registered FastAPI router", api=str(api))
 
     logger.debug("Serving APIs", apis=list(apis_to_serve))
-
-    # Decompress zstd-encoded request bodies (e.g. from Codex CLI)
-    # Must be a raw ASGI middleware to intercept the body before Starlette reads it
-    class ZstdDecompressionMiddleware:
-        def __init__(self, app: ASGIApp) -> None:
-            self.app = app
-
-        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
-            if scope["type"] != "http":
-                return await self.app(scope, receive, send)
-
-            headers = {k.lower(): v for k, v in scope.get("headers", [])}
-            content_encoding = headers.get(b"content-encoding", b"").decode().lower()
-
-            if content_encoding != "zstd":
-                return await self.app(scope, receive, send)
-
-            # Collect the full request body first (needed for both success and fallback)
-            body_parts: list[bytes] = []
-            while True:
-                message = await receive()
-                body_parts.append(message.get("body", b""))
-                if not message.get("more_body", False):
-                    break
-
-            compressed_body = b"".join(body_parts)
-
-            try:
-                max_decompressed_size = 100 * 1024 * 1024  # 100 MB
-
-                def _decompress_zstd(compressed: bytes, max_size: int) -> tuple[bytes | None, bool]:
-                    decompressor = zstandard.ZstdDecompressor()
-                    reader = decompressor.stream_reader(compressed)
-                    try:
-                        data = reader.read(max_size)
-                        is_oversized = bool(reader.read(1))
-                        return (None, True) if is_oversized else (data, False)
-                    finally:
-                        reader.close()
-
-                decompressed_body, oversized = await asyncio.to_thread(
-                    _decompress_zstd, compressed_body, max_decompressed_size
-                )
-
-                if oversized:
-                    return await _send_error_response(
-                        send,
-                        status=413,
-                        message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
-                    )
-
-                # Strip content-encoding header and update content-length
-                new_headers = [
-                    (k, v) for k, v in scope["headers"] if k.lower() not in (b"content-encoding", b"content-length")
-                ]
-                new_headers.append((b"content-length", str(len(decompressed_body)).encode()))
-                scope["headers"] = new_headers
-
-                # Feed the decompressed body back, then delegate to the
-                # original receive for disconnect detection so streaming
-                # responses stay alive until the client actually disconnects.
-                body_sent = False
-
-                async def receive_decompressed() -> dict:  # type: ignore[type-arg]
-                    nonlocal body_sent
-                    if not body_sent:
-                        body_sent = True
-                        return {"type": "http.request", "body": decompressed_body, "more_body": False}
-                    return await receive()
-
-                return await self.app(scope, receive_decompressed, send)
-            except Exception as e:
-                logger.warning("Failed to decompress zstd request body, falling back to compressed data", error=str(e))
-
-                # Replay the original compressed body since decompression failed
-                body_sent = False
-
-                async def receive_original() -> dict:  # type: ignore[type-arg]
-                    nonlocal body_sent
-                    if not body_sent:
-                        body_sent = True
-                        return {"type": "http.request", "body": compressed_body, "more_body": False}
-                    return await receive()
-
-                return await self.app(scope, receive_original, send)
 
     app.add_middleware(ZstdDecompressionMiddleware)
 
