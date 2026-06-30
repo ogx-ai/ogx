@@ -103,7 +103,13 @@ class PyPDFFileProcessor:
         reader = PdfReader(pdf_bytes)
 
         if reader.is_encrypted:
-            raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported")
+            try:
+                if not reader.decrypt(""):
+                    raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported")
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported") from None
 
         text_content, failed_pages = self._extract_pdf_text(reader)
 

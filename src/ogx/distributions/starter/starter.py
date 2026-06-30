@@ -25,9 +25,6 @@ from ogx.providers.inline.files.localfs.config import LocalfsFilesImplConfig
 from ogx.providers.inline.inference.sentence_transformers import (
     SentenceTransformersInferenceConfig,
 )
-from ogx.providers.inline.inference.transformers.config import (
-    TransformersInferenceConfig,
-)
 from ogx.providers.inline.skills.builtin.config import BuiltinSkillsConfig
 from ogx.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
 from ogx.providers.inline.vector_io.milvus.config import MilvusVectorIOConfig
@@ -134,7 +131,6 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "inference": [BuildProvider(provider_type=p.provider_type, module=p.module) for p in remote_inference_providers]
         + [
             BuildProvider(provider_type="inline::sentence-transformers"),
-            BuildProvider(provider_type="inline::transformers"),
         ],
         "vector_io": [
             BuildProvider(provider_type="inline::faiss"),
@@ -175,15 +171,10 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         provider_type="inline::sentence-transformers",
         config=SentenceTransformersInferenceConfig.sample_run_config(),
     )
-    reranker_provider = Provider(
-        provider_id="transformers",
-        provider_type="inline::transformers",
-        config=TransformersInferenceConfig.sample_run_config(),
-    )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
     default_overrides = {
-        "inference": remote_inference_providers + [embedding_provider, reranker_provider],
+        "inference": remote_inference_providers + [embedding_provider],
         "vector_io": [
             Provider(
                 provider_id="faiss",
@@ -321,7 +312,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 model_id="nomic-ai/nomic-embed-text-v1.5",
             ),
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         ),

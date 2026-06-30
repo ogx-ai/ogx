@@ -347,7 +347,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     stop_server() {
         echo "Stopping OGX Server..."
-        pids=$(lsof -i :$OGX_PORT | awk 'NR>1 {print $2}')
+        pids=$(lsof -i :$OGX_PORT 2>/dev/null | awk 'NR>1 {print $2}' || true)
         if [[ -n "$pids" ]]; then
             echo "Killing OGX Server processes: $pids"
             kill -9 $pids
@@ -504,6 +504,7 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     [ -n "${GEMINI_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GEMINI_API_KEY=$GEMINI_API_KEY"
     [ -n "${OLLAMA_URL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OLLAMA_URL=$OLLAMA_URL"
     [ -n "${AWS_BEDROCK_BEARER_TOKEN:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEDROCK_BEARER_TOKEN=$AWS_BEDROCK_BEARER_TOKEN"
+    [ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK"
     [ -n "${AWS_DEFAULT_REGION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
     [ -n "${VERTEX_AI_PROJECT:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_PROJECT=$VERTEX_AI_PROJECT"
     [ -n "${VERTEX_AI_LOCATION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_LOCATION=$VERTEX_AI_LOCATION"
@@ -630,7 +631,7 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         $EXTRA_PARAMS \
         --color=yes \
         --embedding-model=sentence-transformers/nomic-ai/nomic-embed-text-v1.5 \
-        --rerank-model=transformers/Qwen/Qwen3-Reranker-0.6B \
+        --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?
 else
