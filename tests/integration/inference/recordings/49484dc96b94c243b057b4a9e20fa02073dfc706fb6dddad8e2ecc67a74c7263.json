@@ -1,0 +1,105 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_structured_output[txt=vllm/gpt-oss:20b-inference:chat_completion:structured_output]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-oss:20b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant. Michael Jordan was born in 1963. His first name is \"Michael\", He played basketball for the Chicago Bulls for 15 seasons and was drafted in 1984"
+        },
+        {
+          "role": "user",
+          "content": "Please give me information about Michael Jordan."
+        }
+      ],
+      "max_tokens": 4096,
+      "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+          "name": "AnswerFormat",
+          "schema": {
+            "properties": {
+              "first_name": {
+                "title": "First Name",
+                "type": "string"
+              },
+              "last_name": {
+                "title": "Last Name",
+                "type": "string"
+              },
+              "year_of_birth": {
+                "title": "Year Of Birth",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "first_name",
+              "last_name",
+              "year_of_birth"
+            ],
+            "title": "AnswerFormat",
+            "type": "object"
+          }
+        }
+      },
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-oss:20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.41.1",
+      "vllm_server_version": "0.22.1"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-49484dc96b94",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "{\"first_name\":\"Michael\",\"last_name\":\"Jordan\",\"year_of_birth\":1963}",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [],
+              "reasoning": "We need to provide information about Michael Jordan. The user just asks \"Please give me information about Michael Jordan.\" They gave the previous context: \"Michael Jordan was born in 1963. His first name is 'Michael', He played basketball for the Chicago Bulls for 15 seasons and was drafted in 1984.\" That is basically a request for a brief biography. The assistant should elaborate: birth date, college, NBA career, championships, awards, post-career events. Possibly include stats. This is a general query; we should produce a structured biography. According to guidelines: we need to not mention policies. Should not mention we are assistant. Provide factual info.\n\nThus produce a concise biography: Michael Jeffrey Jordan, born February 17, 1963, etc. Explanation of his life: high school, Clemson, then UNC, then Chicago Bulls, 6 championships, 5 MVP awards, 14 All-Star selections, etc. He played in 1984 NBA draft pick 3. He also played for Washington Wizards, retired twice, involved in endorsements, baseball career. He also helped lead US national team (Golden) in 1992 Olympics. In 2009 he was inducted into Hall of Fame, with jersey numbers 23 and 45. He is an owner of the Charlotte Hornets. Also mention less known: his post-basketball career, philanthropic contributions, etc.\n\nCheck other aspects: It's permissible to write. So answer."
+            },
+            "stop_reason": null,
+            "token_ids": null,
+            "routed_experts": null
+          }
+        ],
+        "created": 0,
+        "model": "gpt-oss:20b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "vllm-0.22.1-0e654109",
+        "usage": {
+          "completion_tokens": 323,
+          "prompt_tokens": 119,
+          "total_tokens": 442,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "prompt_logprobs": null,
+        "prompt_token_ids": null,
+        "prompt_text": null,
+        "kv_transfer_params": null
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

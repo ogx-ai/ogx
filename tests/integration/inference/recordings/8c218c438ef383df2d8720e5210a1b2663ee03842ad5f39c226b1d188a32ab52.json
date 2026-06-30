@@ -1,0 +1,76 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=vllm/gpt-oss:20b-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-oss:20b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "max_tokens": 4096,
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-oss:20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.41.1",
+      "vllm_server_version": "0.22.1"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-8c218c438ef3",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "I\u2019m here to give you a quick snapshot of what San\u202fFrancisco usually feels like and how you can get the most up\u2011to\u2011date numbers.\n\n---\n\n## Typical San\u202fFrancisco Weather\n\n| Time of Year | Avg. Temperature | General Feel | What to Expect |\n|--------------|------------------|--------------|----------------|\n| **Winter (Dec\u2011Feb)** | 48\u201357\u202f\u00b0F (9\u201314\u202f\u00b0C) | Cool, sometimes wind\u2011chilled | Light rain, fog near the coast, hiking\u2011weather inland |\n| **Spring (Mar\u2011May)** | 54\u201363\u202f\u00b0F (12\u201318\u202f\u00b0C) | Milder, upbeat | Increasing sunshine, occasional rain, day\u2011to\u2011night swings |\n| **Summer (Jun\u2011Aug)** | 57\u201366\u202f\u00b0F (14\u201319\u202f\u00b0C) | Cool and breezy | Classic \u201cSan\u202fFran\u2011fog\u201d mornings, sunny afternoons, palms stay green |\n| **Fall (Sep\u2011Nov)** | 57\u201368\u202f\u00b0F (14\u201320\u202f\u00b0C) | Comfortable | Sunny days, mild evenings, less fog after mid\u2011Sept |\n\nSan\u202fFrancisco is famous for its microclimates: you can be in fog and chilly on the waterfront while the hills above are sun\u2011bright and warm. The East Bay typically stays a few degrees warmer than the west side.\n\n---\n\n## How to Get Current Conditions\n\n| Source | What It Gives You | How to Use |\n|--------|-------------------|------------|\n| **Weather Websites**\u00a0(e.g., Weather.com, AccuWeather, NOAA) | Forecast for the next 7 days, real\u2011time radar, heat index, wind chill | Visit the site or use the mobile app for \u201cSan\u202fFrancisco, CA\u201d |\n| **Smartphone Weather Apps**\u00a0(iPhone Weather, Google Weather, CarMirror) | Current temperature, humidity, air quality, UV index | Pull up the app; the home screen usually shows the local city |\n| **Station Radio/TV**\u00a0(Station 91.9 FM, NBC San\u202fFrancisco) | Live weather news, storm alerts | Tune in for a live brief |\n| **Voice Assistants**\u00a0(Siri, Google Assistant, Alexa) | \u201cHey Siri, what\u2019s the weather in San\u202fFrancisco?\u201d | Quick spoken answer, often includes humidity and UV index |\n\n---\n\n## Check the Numbers Now\n\nSince I don\u2019t have real\u2011time data embedded in this chat, the best way to know the *exact* current temperature, wind speed, humidity, and forecast for the next few hours is to:\n\n1. Open your preferred weather app.\n2. Enter \u201cSan\u202fFrancisco, CA\u201d as the location.\n3. Review the \u201cCurrent conditions\u201d card for the latest temperature and precipitation chance.\n\nYou can also surf to\u202f[weather.com/sanfrancisco](https://weather.com/weather/today/l/USCA0996:1:US) for a detailed, up\u2011to\u2011minute snapshot.\n\nEnjoy planning your day\u2014whether it\u2019s a fog\u2011shrouded stroll around Fisherman\u2019s Wharf or a bright hike up Twin Peaks, San\u202fFrancisco always has something in store!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [],
+              "reasoning": "We need to answer the question about current weather in San Francisco. Since we have no real-time data capability by default, but we might answer with a placeholder or a suggestion to check a reliable source. The user \"pretend you are a weather assistant\". Could provide a general idea: typical San Fran weather: cooler, foggy, etc. But could also mention we don't have live data. Clarify usage.\n\nIn this context, as ChatGPT we can't provide live weather updates. Let\u2019s provide a typical description and recommend checking a weather app or the official NOAA or other sources for up-to-date. Also answer in a helpful tone."
+            },
+            "stop_reason": null,
+            "token_ids": null,
+            "routed_experts": null
+          }
+        ],
+        "created": 0,
+        "model": "gpt-oss:20b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "vllm-0.22.1-0e654109",
+        "usage": {
+          "completion_tokens": 797,
+          "prompt_tokens": 89,
+          "total_tokens": 886,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "prompt_logprobs": null,
+        "prompt_token_ids": null,
+        "prompt_text": null,
+        "kv_transfer_params": null
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

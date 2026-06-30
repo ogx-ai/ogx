@@ -1,0 +1,71 @@
+{
+  "test_id": "tests/integration/batches/test_batches.py::TestBatchesIntegration::test_batch_e2e_chat_completions[txt=vllm/gpt-oss:20b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-oss:20b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Say hello"
+        }
+      ],
+      "max_tokens": 20
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-oss:20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.41.1",
+      "vllm_server_version": "0.22.1"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-784f4e097b25",
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": null,
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [],
+              "reasoning": "The user asks: \"Say hello\". This is a simple request. Likely answer"
+            },
+            "stop_reason": null,
+            "token_ids": null,
+            "routed_experts": null
+          }
+        ],
+        "created": 0,
+        "model": "gpt-oss:20b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "vllm-0.22.1-0e654109",
+        "usage": {
+          "completion_tokens": 20,
+          "prompt_tokens": 69,
+          "total_tokens": 89,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        },
+        "prompt_logprobs": null,
+        "prompt_token_ids": null,
+        "prompt_text": null,
+        "kv_transfer_params": null
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

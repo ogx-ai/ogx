@@ -127,7 +127,8 @@ runs:
             "                continue"
         )
         if old not in source:
-            raise SystemExit(f"Expected route.path assignment not found in {routing_path}")
+            print(f"Patch not needed: {old!r} not found in {routing_path}")
+            raise SystemExit(0)
         routing_path.write_text(source.replace(old, new, 1))
         print(f"Patched {routing_path}")
         PY
