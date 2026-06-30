@@ -15,6 +15,7 @@ constraint-dependencies = [
     "gitpython>=3.1.47",               # Command injection via Git options bypass
     "h11>=0.16.0",
     "idna>=3.15",
+    "joserfc>=1.6.7",
     "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
     "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
     "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
@@ -25,7 +26,7 @@ constraint-dependencies = [
     "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
     "starlette>=1.3.1",                # CVE-2026-48710
     "tornado>=6.5.5",
-    "urllib3>=2.7.0",
+    "urllib3>=2.7.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
     "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
     "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
@@ -56,7 +57,7 @@ dependencies = [
     "jsonschema",
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
     "openai>=2.41.0",
-    "python-dotenv",
+    "python-dotenv>=1.2.2",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
     "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
     "pydantic>=2.11.9",
     "rich",
