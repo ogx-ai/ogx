@@ -8,6 +8,7 @@
 import time
 
 import pytest
+from openai import OpenAI
 from pydantic import BaseModel
 
 from ..helpers import assert_text_contains
@@ -247,6 +248,7 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
     question = tc["question"]
     expected = tc["expected"]
 
+    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[
@@ -256,6 +258,7 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
             }
         ],
         stream=False,
+        **request_options,
     )
     message_content = response.choices[0].message.content
     assert len(message_content) > 0

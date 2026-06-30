@@ -99,7 +99,9 @@ jobs:
         branch: ${{ fromJSON(needs.discover-branches.outputs.branches) }}
         client: [library, docker, server]
         python-version: ["3.12"]
-        node-version: [22]
+        # Pinned to 22.22 due to node-fetch v2 "Premature close" regression in 22.23.0
+        # (nodejs/node#63989). Unpin once a patched 22.x ships with nodejs/node#64004.
+        node-version: ['22.22']
         client-version: ["latest"]
     steps:
       - name: Checkout ${{ matrix.branch }}

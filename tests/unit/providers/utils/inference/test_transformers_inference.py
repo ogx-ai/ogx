@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from ogx.providers.inline.inference.transformers.transformers import (
+from ogx.providers.inline.inference.sentence_transformers.sentence_transformers import (
     DEFAULT_RERANKER_INSTRUCTION,
-    TransformersInferenceImpl,
+    SentenceTransformersInferenceImpl,
 )
 from ogx_api import (
     OpenAIChatCompletionContentPartImageParam,
@@ -20,7 +20,7 @@ from ogx_api import (
 from ogx_api.inference import RerankRequest
 
 
-class ConcreteRerankerImpl(TransformersInferenceImpl):
+class ConcreteRerankerImpl(SentenceTransformersInferenceImpl):
     def __init__(self):
         self.model_store = MagicMock()
 
@@ -66,8 +66,8 @@ class TestRerank:
         with pytest.raises(ValidationError, match="max_num_results"):
             RerankRequest(model="test-model", query="test query", items=["some item"], max_num_results=max_num_results)
 
-    @patch.object(TransformersInferenceImpl, "load_reranker_model")
-    @patch.object(TransformersInferenceImpl, "compute_reranked_scores")
+    @patch.object(SentenceTransformersInferenceImpl, "load_reranker_model")
+    @patch.object(SentenceTransformersInferenceImpl, "compute_reranked_scores")
     async def test_rerank_returns_sorted_results(self, mock_compute, mock_load):
         reranker = ConcreteRerankerImpl()
 
@@ -97,8 +97,8 @@ class TestRerank:
         assert result.data[2].index == 1
         assert result.data[2].relevance_score == pytest.approx(0.1)
 
-    @patch.object(TransformersInferenceImpl, "load_reranker_model")
-    @patch.object(TransformersInferenceImpl, "compute_reranked_scores")
+    @patch.object(SentenceTransformersInferenceImpl, "load_reranker_model")
+    @patch.object(SentenceTransformersInferenceImpl, "compute_reranked_scores")
     async def test_rerank_respects_max_num_results(self, mock_compute, mock_load):
         reranker = ConcreteRerankerImpl()
 
@@ -121,8 +121,8 @@ class TestRerank:
         assert result.data[0].index == 1  # score 0.9
         assert result.data[1].index == 3  # score 0.7
 
-    @patch.object(TransformersInferenceImpl, "load_reranker_model")
-    @patch.object(TransformersInferenceImpl, "compute_reranked_scores")
+    @patch.object(SentenceTransformersInferenceImpl, "load_reranker_model")
+    @patch.object(SentenceTransformersInferenceImpl, "compute_reranked_scores")
     async def test_rerank_builds_correct_pairs(self, mock_compute, mock_load):
         reranker = ConcreteRerankerImpl()
 
