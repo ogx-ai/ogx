@@ -54,6 +54,26 @@ Features:
 - Configurable query generation
 - Context retrieval with token limits
 
+### Memory Alpha
+
+Responses memory is an alpha feature built on vector stores and file search retrieval, but it is not exposed to the model as a visible tool call. OGX retrieves memory summaries from a configured memory vector store, injects them as hidden context, and does not emit `file_search_call` items, annotations, or citations for those memories.
+
+Configure `memory_config.default_vector_store_id` on the built-in Responses provider to point at the vector store that stores memory files. Memory reads and writes are always scoped by an owner identifier and OGX skips memory retrieval when it cannot resolve one. The owner can come from `memory.owner_id`, `safety_identifier`, `metadata.owner_id`, or `metadata.user_id`.
+
+```python
+response = client.responses.create(
+    model="llama-3.3-70b",
+    input="Use my project preferences when answering.",
+    memory={
+        "owner_id": "user_123",
+        "max_num_results": 5,
+        "max_context_tokens": 1200,
+    },
+)
+```
+
+When `memory_config.write_enabled` is enabled, stored conversations that complete successfully are summarized asynchronously into Markdown memory files and attached to the same vector store. The memory file includes the generated summary plus a searchable transcript, so hybrid search can recover details that the summary omits. Use `memory.enabled=false` on a request to skip both recall and summary writes for that response.
+
 ## Model Context Protocol (MCP)
 
 [MCP](https://github.com/modelcontextprotocol) is an upcoming, popular standard for tool discovery and execution. It is a protocol that allows tools to be dynamically discovered from an MCP endpoint and can be used to extend the agent's capabilities.

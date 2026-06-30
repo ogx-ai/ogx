@@ -22,7 +22,12 @@ from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     _BackgroundWorkItem,
 )
 from ogx.providers.utils.responses.responses_store import _OpenAIResponseObjectWithInputAndMessages
-from ogx_api import ConflictError, OpenAIResponseError, OpenAIResponseObject
+from ogx_api import (
+    ConflictError,
+    OpenAIResponseError,
+    OpenAIResponseObject,
+    OpenAIResponseObjectStreamResponseInProgress,
+)
 
 
 class TestBackgroundFieldInResponseObject:
@@ -218,6 +223,102 @@ class TestBackgroundResponseCancellation:
             await impl.cancel_openai_response("resp_123")
 
         impl.responses_store.update_response_object.assert_not_called()
+
+    async def test_streaming_persistence_does_not_overwrite_cancelled_response(self):
+        """Streaming snapshots must not revive a response after cancellation."""
+        impl = _make_responses_impl()
+        stored_response = _OpenAIResponseObjectWithInputAndMessages(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="cancelled",
+            output=[],
+            background=True,
+            input=[],
+            store=True,
+        )
+        stream_response = OpenAIResponseObject(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="in_progress",
+            output=[],
+            background=False,
+            store=True,
+        )
+        stream_chunk = OpenAIResponseObjectStreamResponseInProgress(response=stream_response, sequence_number=1)
+        impl.responses_store.get_response_object = AsyncMock(return_value=stored_response)
+
+        await impl._persist_streaming_state(
+            stream_chunk=stream_chunk,
+            orchestrator=object(),
+            input_items=[],
+            output_items=[],
+            is_background_response=True,
+        )
+
+        impl.responses_store.upsert_response_object.assert_not_called()
+
+    async def test_foreground_streaming_persistence_does_not_fetch_background_status(self):
+        """Foreground streams should not pay the background cancellation guard cost."""
+        impl = _make_responses_impl()
+        stream_response = OpenAIResponseObject(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="in_progress",
+            output=[],
+            background=False,
+            store=True,
+        )
+        stream_chunk = OpenAIResponseObjectStreamResponseInProgress(response=stream_response, sequence_number=1)
+        impl.responses_store.get_response_object = AsyncMock(side_effect=AssertionError("unexpected status fetch"))
+
+        await impl._persist_streaming_state(
+            stream_chunk=stream_chunk,
+            orchestrator=object(),
+            input_items=[],
+            output_items=[],
+        )
+
+        impl.responses_store.get_response_object.assert_not_called()
+        impl.responses_store.upsert_response_object.assert_awaited_once()
+
+    async def test_streaming_persistence_preserves_background_flag(self):
+        """Background stream snapshots should remain cancellable after persistence."""
+        impl = _make_responses_impl()
+        stored_response = _OpenAIResponseObjectWithInputAndMessages(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="queued",
+            output=[],
+            background=True,
+            input=[],
+            store=True,
+        )
+        stream_response = OpenAIResponseObject(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="in_progress",
+            output=[],
+            background=False,
+            store=True,
+        )
+        stream_chunk = OpenAIResponseObjectStreamResponseInProgress(response=stream_response, sequence_number=1)
+        impl.responses_store.get_response_object = AsyncMock(return_value=stored_response)
+
+        await impl._persist_streaming_state(
+            stream_chunk=stream_chunk,
+            orchestrator=object(),
+            input_items=[],
+            output_items=[],
+            is_background_response=True,
+        )
+
+        persisted_response = impl.responses_store.upsert_response_object.call_args.kwargs["response_object"]
+        assert persisted_response.background is True
 
 
 class _CollectingExporter(SpanExporter):

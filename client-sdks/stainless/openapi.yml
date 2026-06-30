@@ -12216,6 +12216,13 @@ components:
             type: array
           - type: 'null'
           description: Context management configuration. When set with type 'compaction', automatically compacts conversation history when token count exceeds the compact_threshold.
+        memory:
+          anyOf:
+          - $ref: '#/components/schemas/MemoryToolConfig'
+            title: MemoryToolConfig
+          - type: 'null'
+          description: Controls owner-scoped memory retrieval for this response.
+          title: MemoryToolConfig
       additionalProperties: true
       type: object
       required:
@@ -12839,6 +12846,53 @@ components:
       - name
       title: MCPListToolsTool
       description: Tool definition returned by MCP list tools operation.
+    MemoryToolConfig:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether to retrieve memory context for this response.
+          default: true
+        owner_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Stable owner identifier used to scope memory retrieval.
+        vector_store_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Memory vector store override. Defaults to the server memory vector store.
+        max_num_results:
+          anyOf:
+          - type: integer
+            maximum: 50.0
+            minimum: 1.0
+          - type: 'null'
+          description: Maximum memory chunks to retrieve.
+        max_context_tokens:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          description: Approximate token budget for injected memory context.
+        filters:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: "Additional vector-store filters combined with the required owner filter. Use the vector store filter shape, such as {'type': 'eq', 'key': ..., 'value': ...} or {'type': 'and', 'filters': [...]}."
+        ranking_options:
+          anyOf:
+          - $ref: '#/components/schemas/SearchRankingOptions'
+            title: SearchRankingOptions
+          - type: 'null'
+          description: Ranking options for memory vector-store search.
+          title: SearchRankingOptions
+      additionalProperties: false
+      type: object
+      title: MemoryToolConfig
+      description: Configuration for Responses memory retrieval.
     MessageBatch:
       properties:
         id:
