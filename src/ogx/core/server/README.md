@@ -41,15 +41,19 @@ Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-
 OTel metrics can be exported two ways, independently and simultaneously:
 
 - **OTLP push** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to push metrics to an OTel Collector.
-- **Prometheus scrape** — set `OGX_PROMETHEUS_ENABLED` (`1`/`true`/`yes`/`on`) to expose all
-  metrics in Prometheus exposition format, suitable for scrape-based monitoring systems.
-  Metrics are served by a standalone HTTP server on a dedicated port (`OGX_PROMETHEUS_PORT`,
-  default `9464`; bind address `OGX_PROMETHEUS_HOST`, default `0.0.0.0`), separate from the
-  main API. Keeping the scrape endpoint off the API port means collectors need no API
-  authentication and the metrics are not reachable by regular API consumers.
+- **Metrics scrape endpoint** — set `OGX_METRICS_ENDPOINT_ENABLED` (`1`/`true`/`yes`/`on`) to
+  expose all metrics in Prometheus exposition format, suitable for scrape-based monitoring
+  systems. Metrics are served by a standalone HTTP server on a dedicated port
+  (`OGX_METRICS_PORT`, default `9464`; bind address `OGX_METRICS_HOST`, default `127.0.0.1`),
+  separate from the main API. It binds to loopback by default; set `OGX_METRICS_HOST` (e.g.
+  `0.0.0.0`) to expose it to other hosts or pods. Keeping the scrape endpoint off the API
+  port means collectors need no API authentication and the metrics are not reachable by
+  regular API consumers.
 
 Both readers are attached to a single global `MeterProvider` in
-`ogx.telemetry.setup_telemetry()`, which also starts the Prometheus scrape server.
+`ogx.telemetry.setup_telemetry()`. The scrape server's port is bound separately by
+`ogx.telemetry.start_metrics_server()`, called from the server run path so non-serving
+commands (e.g. `ogx stack list-deps`) do not open a network port.
 
 ### Response Handling
 

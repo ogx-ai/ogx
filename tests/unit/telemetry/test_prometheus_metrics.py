@@ -12,7 +12,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from prometheus_client import CollectorRegistry, generate_latest
 
-from ogx.telemetry import _DEFAULT_PROMETHEUS_PORT, _is_prometheus_enabled, _prometheus_port
+from ogx.telemetry import _DEFAULT_METRICS_PORT, _is_metrics_endpoint_enabled, _metrics_port
 
 
 @pytest.fixture
@@ -32,34 +32,36 @@ def prometheus_meter_provider():
     provider.shutdown()
 
 
-class TestPrometheusEnabledFlag:
+class TestMetricsEndpointEnabledFlag:
     @pytest.mark.parametrize("value", ["1", "true", "TRUE", "Yes", "on"])
     def test_truthy_values(self, monkeypatch, value):
-        monkeypatch.setenv("OGX_PROMETHEUS_ENABLED", value)
-        assert _is_prometheus_enabled() is True
+        monkeypatch.setenv("OGX_METRICS_ENDPOINT_ENABLED", value)
+        assert _is_metrics_endpoint_enabled() is True
 
     @pytest.mark.parametrize("value", ["", "0", "false", "no", "off", "  "])
     def test_falsy_values(self, monkeypatch, value):
-        monkeypatch.setenv("OGX_PROMETHEUS_ENABLED", value)
-        assert _is_prometheus_enabled() is False
+        monkeypatch.setenv("OGX_METRICS_ENDPOINT_ENABLED", value)
+        assert _is_metrics_endpoint_enabled() is False
 
     def test_unset(self, monkeypatch):
-        monkeypatch.delenv("OGX_PROMETHEUS_ENABLED", raising=False)
-        assert _is_prometheus_enabled() is False
+        monkeypatch.delenv("OGX_METRICS_ENDPOINT_ENABLED", raising=False)
+        assert _is_metrics_endpoint_enabled() is False
 
 
-class TestPrometheusPort:
+class TestMetricsPort:
     def test_default_when_unset(self, monkeypatch):
-        monkeypatch.delenv("OGX_PROMETHEUS_PORT", raising=False)
-        assert _prometheus_port() == _DEFAULT_PROMETHEUS_PORT
+        monkeypatch.delenv("OGX_METRICS_PORT", raising=False)
+        assert _metrics_port() == _DEFAULT_METRICS_PORT
 
     def test_override(self, monkeypatch):
-        monkeypatch.setenv("OGX_PROMETHEUS_PORT", "9999")
-        assert _prometheus_port() == 9999
+        monkeypatch.setenv("OGX_METRICS_PORT", "9999")
+        assert _metrics_port() == 9999
 
-    def test_invalid_falls_back_to_default(self, monkeypatch):
-        monkeypatch.setenv("OGX_PROMETHEUS_PORT", "not-a-port")
-        assert _prometheus_port() == _DEFAULT_PROMETHEUS_PORT
+    def test_invalid_raises(self, monkeypatch):
+        """A misconfigured port must fail fast rather than silently use the default."""
+        monkeypatch.setenv("OGX_METRICS_PORT", "not-a-port")
+        with pytest.raises(ValueError, match="OGX_METRICS_PORT"):
+            _metrics_port()
 
 
 class TestPrometheusExposition:

@@ -50,6 +50,7 @@ from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.config_dirs import migrate_legacy_config_dir
 from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
+from ogx.telemetry import start_metrics_server
 from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
 
@@ -368,6 +369,10 @@ def create_app() -> StackApp:
     # Added last so it runs first (outermost), wrapping auth.
     route_to_api = build_route_to_api_map(_ROUTER_FACTORIES, impls)
     app.add_middleware(RequestMetricsMiddleware, route_to_api=route_to_api)
+
+    # Bind the standalone metrics scrape server's port (no-op unless the endpoint is
+    # enabled). Done here, on the server run path, so non-serving commands don't open a port.
+    start_metrics_server()
 
     for api_str in apis_to_serve:
         api = Api(api_str)
