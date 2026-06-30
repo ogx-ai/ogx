@@ -28,6 +28,8 @@ from ogx_api import (
     Api,
     Batches,
     Connectors,
+    ContainerRuntime,
+    Containers,
     Conversations,
     ExternalApiSpec,
     FileProcessors,
@@ -92,6 +94,8 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.messages: Messages,
         Api.interactions: Interactions,
         Api.skills: Skills,
+        Api.containers: Containers,
+        Api.container_runtime: ContainerRuntime,
     }
 
     if external_apis:
