@@ -82,7 +82,10 @@ def http_app(mock_auth_endpoint):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -106,7 +109,10 @@ def ws_app(mock_auth_endpoint):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket):
@@ -146,13 +152,7 @@ def mock_http_middleware(mock_auth_endpoint):
         ),
         access_policy=[],
     )
-    return AuthenticationMiddleware(mock_app, auth_config, {}), mock_app
-
-
-@pytest.fixture
-def mock_impls():
-    """Mock implementations for scope testing"""
-    return {}
+    return AuthenticationMiddleware(mock_app, auth_config), mock_app
 
 
 @pytest.fixture
@@ -166,7 +166,7 @@ def middleware_with_mocks(mock_auth_endpoint):
         ),
         access_policy=[],
     )
-    middleware = AuthenticationMiddleware(mock_app, auth_config, {})
+    middleware = AuthenticationMiddleware(mock_app, auth_config)
 
     from ogx.core.server.routes import RouteAuthInfo
 
@@ -188,7 +188,6 @@ def middleware_with_mocks(mock_auth_endpoint):
     import ogx.core.server.auth
 
     ogx.core.server.auth.find_matching_route = mock_find_matching_route
-    ogx.core.server.auth.initialize_route_impls = lambda impls: {}
 
     return middleware, mock_app
 
@@ -307,6 +306,8 @@ async def test_http_middleware_with_access_attributes(mock_http_middleware, mock
     mock_receive = AsyncMock()
     mock_send = AsyncMock()
 
+    mock_scope["app"] = mock_app
+
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_response = MockResponse(
             200,
@@ -351,7 +352,10 @@ def oauth2_app():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -487,7 +491,10 @@ def oauth2_app_with_jwks_token():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -683,7 +690,10 @@ def introspection_app(mock_introspection_endpoint):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -713,7 +723,10 @@ def introspection_app_with_custom_mapping(mock_introspection_endpoint):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -844,7 +857,10 @@ def kubernetes_auth_app(mock_kubernetes_api_server):
             },
         },
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -964,7 +980,7 @@ async def test_unauthenticated_endpoint_access_health(middleware_with_mocks):
     middleware, mock_app = middleware_with_mocks
 
     # Test request to /health without auth header (level prefix v1 is added by router)
-    scope = {"type": "http", "path": "/health", "headers": [], "method": "GET"}
+    scope = {"type": "http", "path": "/health", "headers": [], "method": "GET", "app": mock_app}
     receive = AsyncMock()
     send = AsyncMock()
 
@@ -983,7 +999,7 @@ async def test_unauthenticated_endpoint_denied_for_other_paths(middleware_with_m
     middleware, mock_app = middleware_with_mocks
 
     # Test request to /models/list without auth header
-    scope = {"type": "http", "path": "/models/list", "headers": [], "method": "GET"}
+    scope = {"type": "http", "path": "/models/list", "headers": [], "method": "GET", "app": mock_app}
     receive = AsyncMock()
     send = AsyncMock()
 

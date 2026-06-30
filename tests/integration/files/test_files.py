@@ -9,7 +9,7 @@ from io import BytesIO
 
 import pytest
 import requests
-from ogx_client import OgxClient
+from ogx_open_client import OgxClient
 
 from ogx.core.datatypes import User
 from ogx.core.library_client import OGXAsLibraryClient
@@ -200,7 +200,7 @@ def test_files_authentication_isolation(ogx_client):
     if isinstance(ogx_client, OGXAsLibraryClient):
         pytest.skip("Library mode does not propagate per-request user identity")
 
-    from ogx_client import NotFoundError
+    from ogx_open_client import NotFoundError
 
     # Create two test users
     user1 = User("user1", {"roles": ["role-a"], "teams": ["team-a"]})

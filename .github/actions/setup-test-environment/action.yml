@@ -27,6 +27,10 @@ inputs:
     description: 'Explicit branch override (used by scheduled CI to pass the matrix branch)'
     required: false
     default: ''
+  enable-hf-cache:
+    description: 'Whether to cache HuggingFace models and datasets'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -40,6 +44,7 @@ runs:
         branch: ${{ inputs.branch }}
 
     - name: Cache HuggingFace models and datasets
+      if: ${{ inputs.enable-hf-cache == 'true' }}
       uses: actions/cache@v4
       with:
         path: ~/.cache/huggingface
@@ -48,6 +53,7 @@ runs:
           hf-cache-${{ runner.os }}-
 
     - name: Pre-download HuggingFace assets for offline use
+      if: ${{ inputs.enable-hf-cache == 'true' }}
       shell: bash
       env:
         HF_HUB_ENABLE_HF_TRANSFER: "1"
@@ -74,7 +80,7 @@ runs:
         setup: ${{ inputs.setup }}
 
     - name: Setup vllm
-      if: ${{ startsWith(inputs.setup, 'vllm') && inputs.inference-mode != 'replay' }}
+      if: ${{ startsWith(inputs.setup, 'vllm') && !startsWith(inputs.setup, 'vllm-gpu-') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-vllm
 
     - name: Start Postgres service

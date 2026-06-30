@@ -1,0 +1,143 @@
+---
+description: |
+  [Unstructured.io](https://unstructured.io) is a multi-format document parser that supports 65+ file types
+  including emails (EML/MSG), legacy documents, presentations, spreadsheets, and more. This provider uses
+  the Unstructured.io SaaS API for cloud-based document processing with advanced table and image detection.
+
+  ## Supported Formats
+
+  - **Documents**: PDF, DOC, DOCX, PPTX, XLSX, ODT, RTF, EPUB
+  - **Email**: EML, MSG (unique capability)
+  - **Web**: HTML, Markdown, XML, JSON
+  - **Images**: PNG, JPG, TIFF (with OCR)
+  - **Text**: TXT, CSV
+  - **65+ formats total** — see [Unstructured format support](https://docs.unstructured.io/pipelines/supported-file-types)
+
+  ## Features
+
+  - **Multi-format support** — 65+ file types including email formats (EML/MSG)
+  - **Cloud-based processing** — no local dependencies or system requirements
+  - **Table detection** — extracts tables with structure preservation
+  - **Image detection** — identifies and extracts image elements
+  - **SOC2/HIPAA/GDPR certified** — suitable for regulated industries
+
+  ## Usage
+
+  Get an API key from [Unstructured.io](https://unstructured.io) (free tier available), then start OGX:
+
+  ```bash
+  UNSTRUCTURED_API_KEY=your-api-key ogx stack run \
+    --providers "file_processors=remote::unstructured-api,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \
+    --port 8321
+  ```
+
+  Or add it to a custom `run.yaml`:
+
+  ```yaml
+  file_processors:
+    - provider_id: unstructured
+      provider_type: remote::unstructured-api
+      config:
+        api_key: ${env.UNSTRUCTURED_API_KEY}
+  ```
+
+  ## When to Use
+
+  - **Diverse formats**: Need to process emails, legacy documents, or 10+ different file types
+  - **Managed service**: Want zero setup and no system dependencies
+  - **Compliance**: Require SOC2/HIPAA/GDPR certified processing
+  - **Email RAG**: Building customer support or communication archive applications
+
+  For faster processing with fewer formats, use `inline::docling` instead.
+
+  ## Performance
+
+  - Processing speed: ~1-2 seconds per page
+  - Best for: Documents <100 pages
+  - Cost: ~$0.01 per page (verify current pricing with Unstructured.io)
+
+  ## Documentation
+
+  See [Unstructured.io documentation](https://docs.unstructured.io) for API details and format support.
+sidebar_label: Remote - Unstructured-Api
+title: remote::unstructured-api
+---
+
+# remote::unstructured-api
+
+## Description
+
+
+[Unstructured.io](https://unstructured.io) is a multi-format document parser that supports 65+ file types
+including emails (EML/MSG), legacy documents, presentations, spreadsheets, and more. This provider uses
+the Unstructured.io SaaS API for cloud-based document processing with advanced table and image detection.
+
+## Supported Formats
+
+- **Documents**: PDF, DOC, DOCX, PPTX, XLSX, ODT, RTF, EPUB
+- **Email**: EML, MSG (unique capability)
+- **Web**: HTML, Markdown, XML, JSON
+- **Images**: PNG, JPG, TIFF (with OCR)
+- **Text**: TXT, CSV
+- **65+ formats total** — see [Unstructured format support](https://docs.unstructured.io/pipelines/supported-file-types)
+
+## Features
+
+- **Multi-format support** — 65+ file types including email formats (EML/MSG)
+- **Cloud-based processing** — no local dependencies or system requirements
+- **Table detection** — extracts tables with structure preservation
+- **Image detection** — identifies and extracts image elements
+- **SOC2/HIPAA/GDPR certified** — suitable for regulated industries
+
+## Usage
+
+Get an API key from [Unstructured.io](https://unstructured.io) (free tier available), then start OGX:
+
+```bash
+UNSTRUCTURED_API_KEY=your-api-key ogx stack run \
+  --providers "file_processors=remote::unstructured-api,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \
+  --port 8321
+```
+
+Or add it to a custom `run.yaml`:
+
+```yaml
+file_processors:
+  - provider_id: unstructured
+    provider_type: remote::unstructured-api
+    config:
+      api_key: ${env.UNSTRUCTURED_API_KEY}
+```
+
+## When to Use
+
+- **Diverse formats**: Need to process emails, legacy documents, or 10+ different file types
+- **Managed service**: Want zero setup and no system dependencies
+- **Compliance**: Require SOC2/HIPAA/GDPR certified processing
+- **Email RAG**: Building customer support or communication archive applications
+
+For faster processing with fewer formats, use `inline::docling` instead.
+
+## Performance
+
+- Processing speed: ~1-2 seconds per page
+- Best for: Documents <100 pages
+- Cost: ~$0.01 per page (verify current pricing with Unstructured.io)
+
+## Documentation
+
+See [Unstructured.io documentation](https://docs.unstructured.io) for API details and format support.
+
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `api_key` | `SecretStr` | No |  | API key for authenticating with Unstructured.io SaaS API (get one from https://unstructured.io) |
+| `default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+
+## Sample Configuration
+
+```yaml
+api_key: ${env.UNSTRUCTURED_API_KEY}
+```
