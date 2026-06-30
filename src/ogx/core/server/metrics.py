@@ -14,6 +14,7 @@ from opentelemetry import metrics
 from opentelemetry.metrics import Counter, Histogram, UpDownCounter
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from ogx.core.server.fastapi_router_registry import _ROUTER_FACTORIES
 from ogx.log import get_logger
 from ogx.telemetry.constants import (
     CONCURRENT_REQUESTS,
@@ -141,12 +142,13 @@ class RequestMetricsMiddleware:
     - ogx.concurrent_requests: up-down counter by api
     """
 
-    def __init__(self, app: ASGIApp, route_to_api: dict[str, RouteInfo] | None = None) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        self._patterns: list[tuple[re.Pattern[str], RouteInfo]] = _compile_route_patterns(route_to_api or {})
+        self._patterns: list[tuple[re.Pattern[str], RouteInfo]] | None = None
 
     def _resolve_route(self, http_method: str, path: str) -> RouteInfo:
         """Resolve HTTP method + path to RouteInfo using compiled route patterns."""
+        assert self._patterns is not None, "Patterns not initialized"
         lookup = f"{http_method}:{path}"
         for pattern, route_info in self._patterns:
             if pattern.match(lookup):
@@ -161,6 +163,13 @@ class RequestMetricsMiddleware:
 
         if any(path.startswith(excluded) for excluded in _EXCLUDED_PATHS):
             return await self.app(scope, receive, send)
+
+        # Lazy: build route->metrics patterns from FastAPI app on first request
+        if self._patterns is None:
+            fastapi_app = scope.get("app")
+            assert fastapi_app is not None, "scope['app'] must be set when RequestMetricsMiddleware is used"
+            route_to_api = build_route_to_api_map(_ROUTER_FACTORIES, fastapi_app.stack.impls)
+            self._patterns = _compile_route_patterns(route_to_api)
 
         http_method = scope.get("method", "GET")
         route_info = self._resolve_route(http_method, path)
