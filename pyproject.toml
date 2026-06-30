@@ -32,7 +32,7 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",
-    "aiohttp>=3.13.3",
+    "aiohttp>=3.14.0",                                  # CVE-2026-34993: CookieJar.load() RCE
     "fastapi>=0.115.0,<1.0",                          # server
     "fire",                                           # for MCP in LLS client
     "httpx",
@@ -42,7 +42,7 @@ dependencies = [
     "openai>=2.5.0",
     "prompt-toolkit",
     "python-dotenv",
-    "pyjwt[crypto]>=2.12.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
+    "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. CVE-2026-48526: auth bypass via forged JWTs.
     "pydantic>=2.11.9",
     "rich",
     "structlog>=24.1.0",
