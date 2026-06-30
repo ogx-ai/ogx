@@ -260,7 +260,7 @@ See [Unstructured's documentation](https://docs.unstructured.io/) for more detai
             api=Api.file_processors,
             provider_type="remote::docling-serve",
             adapter_type="docling-serve",
-            pip_packages=["httpx"],
+            pip_packages=["httpx", "docling-slim[service-client]>=2.103.0"],
             module="ogx.providers.remote.file_processor.docling_serve",
             config_class="ogx.providers.remote.file_processor.docling_serve.DoclingServeFileProcessorConfig",
             api_dependencies=[Api.files],
@@ -292,7 +292,7 @@ docker run -p 5001:5001 quay.io/docling-project/docling-serve
 Then start OGX with the remote Docling Serve provider:
 
 ```bash
-DOCLING_SERVE_URL=http://localhost:5001/v1 ogx stack run \\
+DOCLING_SERVE_URL=http://localhost:5001 ogx stack run \\
   --providers "file_processors=remote::docling-serve,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \\
   --port 8321
 ```
@@ -304,13 +304,85 @@ file_processors:
   - provider_id: docling-serve
     provider_type: remote::docling-serve
     config:
-      base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}
+      base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001}
       api_key: ${env.DOCLING_SERVE_API_KEY:=}
 ```
 
 ## Documentation
 
 See [Docling Serve's documentation](https://github.com/docling-project/docling-serve/blob/main/docs/README.md) for more details on setup and configuration.
+""",
+        ),
+        RemoteProviderSpec(
+            api=Api.file_processors,
+            provider_type="remote::unstructured-api",
+            adapter_type="unstructured-api",
+            pip_packages=[
+                "unstructured-client>=0.25.0",  # >=0.25.0: supports full feature set (chunking + split_pdf_page_range)
+            ],
+            module="ogx.providers.remote.file_processor.unstructured_api",
+            config_class="ogx.providers.remote.file_processor.unstructured_api.UnstructuredApiFileProcessorConfig",
+            api_dependencies=[Api.files],
+            description="""
+[Unstructured.io](https://unstructured.io) is a multi-format document parser that supports 65+ file types
+including emails (EML/MSG), legacy documents, presentations, spreadsheets, and more. This provider uses
+the Unstructured.io SaaS API for cloud-based document processing with advanced table and image detection.
+
+## Supported Formats
+
+- **Documents**: PDF, DOC, DOCX, PPTX, XLSX, ODT, RTF, EPUB
+- **Email**: EML, MSG (unique capability)
+- **Web**: HTML, Markdown, XML, JSON
+- **Images**: PNG, JPG, TIFF (with OCR)
+- **Text**: TXT, CSV
+- **65+ formats total** — see [Unstructured format support](https://docs.unstructured.io/pipelines/supported-file-types)
+
+## Features
+
+- **Multi-format support** — 65+ file types including email formats (EML/MSG)
+- **Cloud-based processing** — no local dependencies or system requirements
+- **Table detection** — extracts tables with structure preservation
+- **Image detection** — identifies and extracts image elements
+- **SOC2/HIPAA/GDPR certified** — suitable for regulated industries
+
+## Usage
+
+Get an API key from [Unstructured.io](https://unstructured.io) (free tier available), then start OGX:
+
+```bash
+UNSTRUCTURED_API_KEY=your-api-key ogx stack run \\
+  --providers "file_processors=remote::unstructured-api,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \\
+  --port 8321
+```
+
+Or add it to a custom `run.yaml`:
+
+```yaml
+file_processors:
+  - provider_id: unstructured
+    provider_type: remote::unstructured-api
+    config:
+      api_key: ${env.UNSTRUCTURED_API_KEY}
+```
+
+## When to Use
+
+- **Diverse formats**: Need to process emails, legacy documents, or 10+ different file types
+- **Managed service**: Want zero setup and no system dependencies
+- **Compliance**: Require SOC2/HIPAA/GDPR certified processing
+- **Email RAG**: Building customer support or communication archive applications
+
+For faster processing with fewer formats, use `inline::docling` instead.
+
+## Performance
+
+- Processing speed: ~1-2 seconds per page
+- Best for: Documents <100 pages
+- Cost: ~$0.01 per page (verify current pricing with Unstructured.io)
+
+## Documentation
+
+See [Unstructured.io documentation](https://docs.unstructured.io) for API details and format support.
 """,
         ),
     ]
