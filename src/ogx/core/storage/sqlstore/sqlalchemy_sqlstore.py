@@ -141,7 +141,7 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         if self.config.ssl_mode == "verify-full" and self.config.ca_cert_path:
             import ssl as _ssl
 
-            return _ssl.create_default_context(cafile=self.config.ca_cert_path)
+            return _ssl.create_default_context(cafile=str(self.config.ca_cert_path))
         if self.config.ssl_mode and self.config.ssl_mode != "disable":
             return self.config.ssl_mode
         return None
