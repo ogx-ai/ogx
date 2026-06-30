@@ -14,7 +14,7 @@ from typing import Any
 
 from docling.chunking import HybridChunker
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions, VlmPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from fastapi import UploadFile
@@ -42,18 +42,89 @@ class DoclingFileProcessor:
     Supports multiple file formats via docling's DocumentConverter (PDF, DOCX, PPTX, HTML, images, etc.).
     """
 
-    def __init__(self, config: DoclingFileProcessorConfig, files_api=None) -> None:
+    def __init__(self, config: DoclingFileProcessorConfig, files_api=None, inference_api=None) -> None:
         self.config = config
         self.files_api = files_api
+        self.inference_api = inference_api
+        self._vlm_enabled = False
 
-        pipeline_options = PdfPipelineOptions(
-            do_ocr=config.do_ocr,
-        )
-
-        self.converter = DocumentConverter(
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-        )
+        self.converter = self._build_converter()
         self._converter_lock = threading.Lock()
+
+    def _build_converter(self) -> DocumentConverter:
+        if self.config.vlm_model and self.inference_api:
+            return self._build_vlm_converter()
+
+        if self.config.vlm_model and not self.inference_api:
+            log.warning(
+                "VLM model configured but no inference API available, falling back to standard pipeline",
+                vlm_model=self.config.vlm_model,
+            )
+
+        pipeline_options = PdfPipelineOptions(do_ocr=self.config.do_ocr)
+        return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)})
+
+    def _build_vlm_converter(self) -> DocumentConverter:
+        from docling.datamodel.pipeline_options import VlmConvertOptions
+        from docling.datamodel.vlm_engine_options import ApiVlmEngineOptions, VlmEngineType
+        from docling.pipeline.vlm_pipeline import VlmPipeline
+
+        from .vlm_engine import OgxInferenceVlmEngine
+
+        assert self.config.vlm_model is not None
+
+        try:
+            vlm_options = VlmConvertOptions.from_preset(
+                self.config.vlm_preset,
+                engine_options=ApiVlmEngineOptions(engine_type=VlmEngineType.API_OPENAI),
+            )
+        except KeyError:
+            log.error(
+                "Invalid VLM preset, falling back to standard pipeline",
+                vlm_preset=self.config.vlm_preset,
+            )
+            pipeline_options = PdfPipelineOptions(do_ocr=self.config.do_ocr)
+            return DocumentConverter(
+                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+            )
+
+        vlm_pipeline_options = VlmPipelineOptions(
+            vlm_options=vlm_options,
+            enable_remote_services=True,
+        )
+
+        converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_cls=VlmPipeline,
+                    pipeline_options=vlm_pipeline_options,
+                )
+            }
+        )
+
+        converter.initialize_pipeline(InputFormat.PDF)
+
+        event_loop = asyncio.get_event_loop()
+        ogx_engine = OgxInferenceVlmEngine(
+            inference_api=self.inference_api,
+            model=self.config.vlm_model,
+            event_loop=event_loop,
+        )
+
+        for pipeline in converter.initialized_pipelines.values():
+            for stage in getattr(pipeline, "build_pipe", []):
+                if hasattr(stage, "engine"):
+                    stage.engine = ogx_engine
+                    break
+
+        self._vlm_enabled = True
+        log.info(
+            "VLM pipeline enabled",
+            vlm_model=self.config.vlm_model,
+            vlm_preset=self.config.vlm_preset,
+        )
+
+        return converter
 
     async def process_file(
         self,
@@ -118,13 +189,17 @@ class DoclingFileProcessor:
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
+        extraction_method = "docling-vlm" if self._vlm_enabled else "docling"
         response_metadata: dict[str, Any] = {
             "processor": "docling",
             "processing_time_ms": processing_time_ms,
             "page_count": page_count,
-            "extraction_method": "docling",
+            "extraction_method": extraction_method,
             "file_size_bytes": len(content),
         }
+        if self._vlm_enabled:
+            response_metadata["vlm_model"] = self.config.vlm_model
+            response_metadata["vlm_preset"] = self.config.vlm_preset
 
         # Create chunks
         chunks = self._create_chunks(doc, document_id, chunking_strategy, document_metadata)
