@@ -11,7 +11,7 @@ from ogx.core.datatypes import User
 from ogx.core.request_headers import RequestProviderDataContext
 from ogx.providers.inline.responses.builtin.responses import openai_responses as openai_responses_module
 from ogx_api import ConversationItemList
-from ogx_api.responses.models import MemoryToolConfig
+from ogx_api.responses.models import CreateResponseRequest, MemoryToolConfig
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
 
@@ -51,11 +51,13 @@ async def test_memory_write_trigger_schedules_for_completed_stored_conversation(
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
     response = await openai_responses_impl.create_openai_response(
-        input="remember this preference",
-        model="test-model",
-        conversation=conv_id,
-        stream=False,
-        memory=MemoryToolConfig(owner_id="user-123"),
+        CreateResponseRequest(
+            input="remember this preference",
+            model="test-model",
+            conversation=conv_id,
+            stream=False,
+            memory=MemoryToolConfig(owner_id="user-123"),
+        ),
     )
     await asyncio.sleep(0)
 
@@ -248,12 +250,14 @@ async def test_memory_write_trigger_skips_when_store_false(
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
     response = await openai_responses_impl.create_openai_response(
-        input="remember this preference",
-        model="test-model",
-        store=False,
-        conversation=conv_id,
-        stream=False,
-        memory=MemoryToolConfig(owner_id="user-123"),
+        CreateResponseRequest(
+            input="remember this preference",
+            model="test-model",
+            store=False,
+            conversation=conv_id,
+            stream=False,
+            memory=MemoryToolConfig(owner_id="user-123"),
+        ),
     )
 
     assert response.status == "completed"

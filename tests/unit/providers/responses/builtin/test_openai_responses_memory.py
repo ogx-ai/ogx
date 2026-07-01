@@ -33,6 +33,7 @@ from ogx_api import (
 )
 from ogx_api.files.models import OpenAIFilePurpose
 from ogx_api.responses.models import MemoryToolConfig
+from ogx_api.responses.models import CreateResponseRequest
 from ogx_api.vector_io.models import VectorStoreContent, VectorStoreSearchResponse, VectorStoreSearchResponsePage
 from tests.unit.providers.responses.builtin.memory_needle_cases import (
     MemoryNeedleCase,
@@ -502,10 +503,12 @@ async def test_memory_context_is_injected_without_file_search_output(
     openai_responses_impl.memory_config.enabled = True
 
     result = await openai_responses_impl.create_openai_response(
-        input="repo prefs",
-        model="test-model",
-        stream=True,
-        memory=MemoryToolConfig(owner_id="user-123"),
+        CreateResponseRequest(
+            input="repo prefs",
+            model="test-model",
+            stream=True,
+            memory=MemoryToolConfig(owner_id="user-123"),
+        )
     )
     chunks = [chunk async for chunk in result]
 
@@ -524,10 +527,12 @@ async def test_memory_disabled_does_not_search(
     openai_responses_impl.memory_config.enabled = True
 
     result = await openai_responses_impl.create_openai_response(
-        input="repo prefs",
-        model="test-model",
-        stream=True,
-        memory=MemoryToolConfig(enabled=False, owner_id="user-123"),
+        CreateResponseRequest(
+            input="repo prefs",
+            model="test-model",
+            stream=True,
+            memory=MemoryToolConfig(enabled=False, owner_id="user-123"),
+        )
     )
     _chunks = [chunk async for chunk in result]
 

@@ -25,6 +25,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseInputMessageContentText,
     OpenAIResponsePrompt,
 )
+from ogx_api.responses.models import CreateResponseRequest
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
 
@@ -54,9 +55,7 @@ async def test_create_openai_response_with_prompt(openai_responses_impl, mock_in
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        prompt=openai_response_prompt,
+        CreateResponseRequest(input=input_text, model=model, prompt=openai_response_prompt)
     )
 
     mock_prompts_api.get_prompt.assert_called_with(GetPromptRequest(prompt_id=prompt_id, version=1))
@@ -103,9 +102,7 @@ async def test_prepend_prompt_successful_without_variables(openai_responses_impl
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
     await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        prompt=openai_response_prompt,
+        CreateResponseRequest(input=input_text, model=model, prompt=openai_response_prompt)
     )
 
     mock_prompts_api.get_prompt.assert_called_with(GetPromptRequest(prompt_id=prompt_id, version=1))

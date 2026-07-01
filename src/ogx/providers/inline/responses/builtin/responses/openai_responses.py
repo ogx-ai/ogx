@@ -43,6 +43,7 @@ from ogx_api import (
     Connectors,
     ConversationItem,
     Conversations,
+    CreateResponseRequest,
     Files,
     GetPromptRequest,
     Inference,
@@ -80,7 +81,6 @@ from ogx_api import (
     Prompts,
     ResponseItemInclude,
     ResponseNotFoundError,
-    ResponseStreamOptions,
     ResponseTruncation,
     ServiceNotEnabledError,
     ToolGroups,
@@ -915,61 +915,24 @@ class OpenAIResponsesImpl:
 
     async def create_openai_response(
         self,
-        input: str | list[OpenAIResponseInput],
-        model: str,
-        background: bool | None = False,
-        prompt: OpenAIResponsePrompt | None = None,
-        instructions: str | None = None,
-        skills: list[str] | None = None,
-        previous_response_id: str | None = None,
-        prompt_cache_key: str | None = None,
-        conversation: str | None = None,
-        store: bool | None = True,
-        stream: bool | None = False,
-        temperature: float | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        text: OpenAIResponseText | None = None,
-        tool_choice: OpenAIResponseInputToolChoice | None = None,
-        tools: list[OpenAIResponseInputTool] | None = None,
-        include: list[ResponseItemInclude] | None = None,
-        max_infer_iters: int | None = 10,
-        guardrails: bool | None = None,
-        parallel_tool_calls: bool | None = None,
-        max_tool_calls: int | None = None,
-        reasoning: OpenAIResponseReasoning | None = None,
-        max_output_tokens: int | None = None,
-        service_tier: ServiceTier | None = None,
-        metadata: dict[str, str] | None = None,
-        safety_identifier: str | None = None,
-        truncation: ResponseTruncation | None = None,
-        top_logprobs: int | None = None,
-        presence_penalty: float | None = None,
-        extra_body: dict | None = None,
-        stream_options: ResponseStreamOptions | None = None,
-        context_management: list | None = None,
-        memory: MemoryToolConfig | None = None,
+        request: CreateResponseRequest,
     ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
-        stream = bool(stream)
-        background = bool(background)
-        text = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")) if text is None else text
-
         # Validate that stream and background are mutually exclusive
-        if stream and background:
+        if request.stream and request.background:
             raise ValueError("OGX does not yet support 'stream' and 'background' together.")
 
-        if background and store is False:
+        if request.background and request.store is False:
             raise ValueError("Cannot use 'background' with 'store=False'. Background responses must be stored.")
 
         # Filter out unsupported include items instead of rejecting the request
-        if include:
-            include = [item for item in include if str(item) != "reasoning.encrypted_content"]
+        if request.include:
+            request.include = [item for item in request.include if str(item) != "reasoning.encrypted_content"]
 
         # Validate MCP tools: ensure Authorization header is not passed via headers dict
-        if tools:
+        if request.tools:
             from ogx_api.openai_responses import OpenAIResponseInputToolMCP
 
-            for tool in tools:
+            for tool in request.tools:
                 if isinstance(tool, OpenAIResponseInputToolMCP) and tool.headers:
                     for key in tool.headers.keys():
                         if key.lower() == "authorization":
@@ -979,101 +942,39 @@ class OpenAIResponsesImpl:
                                 "Authorization credentials must be passed via the 'authorization' parameter, not 'headers'.",
                             )
 
-        enable_guardrails = bool(guardrails)
-
-        if enable_guardrails and not self.moderation_endpoint:
+        if request.guardrails and not self.moderation_endpoint:
             raise ServiceNotEnabledError(
                 "moderation_endpoint",
                 provider_specific_message="Guardrails require a moderation endpoint to be configured on the server. Contact your platform administrator to set 'moderation_endpoint' on the responses provider, or remove the 'guardrails' parameter from your request.",
             )
 
-        if conversation is not None:
-            if previous_response_id is not None:
+        if request.conversation is not None:
+            if request.previous_response_id is not None:
                 raise InvalidParameterError(
                     "previous_response_id, conversation",
                     "previous_response_id and conversation are both provided",
                     "Provide only one of these parameters.",
                 )
 
-            if not CONVERSATION_ID_PATTERN.fullmatch(conversation):
+            if not CONVERSATION_ID_PATTERN.fullmatch(request.conversation):
                 raise InvalidParameterError(
                     "conversation",
-                    conversation,
+                    request.conversation,
                     "Must match format 'conv_' followed by 48 lowercase hex characters.",
                 )
 
+        max_tool_calls = request.max_tool_calls
         if max_tool_calls is not None and max_tool_calls < 1:
             raise ValueError(f"Invalid {max_tool_calls=}; should be >= 1")
 
         # Handle background mode
-        if background:
-            return await self._create_background_response(
-                input=input,
-                model=model,
-                prompt=prompt,
-                instructions=instructions,
-                skills=skills,
-                previous_response_id=previous_response_id,
-                conversation=conversation,
-                store=store,
-                temperature=temperature,
-                frequency_penalty=frequency_penalty,
-                text=text,
-                tool_choice=tool_choice,
-                tools=tools,
-                include=include,
-                max_infer_iters=max_infer_iters,
-                enable_guardrails=enable_guardrails,
-                parallel_tool_calls=parallel_tool_calls,
-                max_tool_calls=max_tool_calls,
-                reasoning=reasoning,
-                max_output_tokens=max_output_tokens,
-                service_tier=service_tier,
-                metadata=metadata,
-                safety_identifier=safety_identifier,
-                truncation=truncation,
-                presence_penalty=presence_penalty,
-                extra_body=extra_body,
-                context_management=context_management,
-                memory=memory,
-            )
+        if request.background:
+            response_id = f"resp_{uuid.uuid4()}"
+            return await self._create_background_response(request, response_id)
 
-        stream_gen = self._create_streaming_response(
-            input=input,
-            conversation=conversation,
-            model=model,
-            prompt=prompt,
-            instructions=instructions,
-            skills=skills,
-            previous_response_id=previous_response_id,
-            prompt_cache_key=prompt_cache_key,
-            store=store,
-            temperature=temperature,
-            top_p=top_p,
-            frequency_penalty=frequency_penalty,
-            text=text,
-            tools=tools,
-            tool_choice=tool_choice,
-            max_infer_iters=max_infer_iters,
-            enable_guardrails=enable_guardrails,
-            parallel_tool_calls=parallel_tool_calls,
-            max_tool_calls=max_tool_calls,
-            reasoning=reasoning,
-            max_output_tokens=max_output_tokens,
-            service_tier=service_tier,
-            metadata=metadata,
-            safety_identifier=safety_identifier,
-            include=include,
-            truncation=truncation,
-            top_logprobs=top_logprobs,
-            presence_penalty=presence_penalty,
-            extra_body=extra_body,
-            stream_options=stream_options,
-            context_management=context_management,
-            memory=memory,
-        )
+        stream_gen = self._create_streaming_response(request)
 
-        if stream:
+        if request.stream:
             return stream_gen
         else:
             final_response = None
@@ -1088,9 +989,9 @@ class OpenAIResponsesImpl:
                                 response_id=stream_chunk.response.id,
                                 first_terminal_event=final_event_type,
                                 second_terminal_event=stream_chunk.type,
-                                model=model,
-                                conversation=conversation,
-                                previous_response_id=previous_response_id,
+                                model=request.model,
+                                conversation=request.conversation,
+                                previous_response_id=request.previous_response_id,
                             )
                             raise InternalServerError()
                         final_response = stream_chunk.response
@@ -1108,12 +1009,12 @@ class OpenAIResponsesImpl:
                             error_message=error_message,
                             error_code=error_code,
                             response_id=failed_response.id,
-                            model=model,
+                            model=request.model,
                         )
                         # Surface the provider message — it may be actionable (e.g. wrong tool-call-parser,
                         # context window exceeded). Use the error code to pick the right HTTP status.
                         if error_code == "invalid_prompt":
-                            raise InvalidParameterError("model", model, error_message)
+                            raise InvalidParameterError("model", request.model, error_message)
                         raise InternalServerError(error_message)
                     case _:
                         pass  # Other event types don't have .response
@@ -1121,45 +1022,19 @@ class OpenAIResponsesImpl:
             if final_response is None:
                 logger.error(
                     "The response stream never reached a terminal state",
-                    model=model,
-                    conversation=conversation,
-                    previous_response_id=previous_response_id,
+                    model=request.model,
+                    conversation=request.conversation,
+                    previous_response_id=request.previous_response_id,
                 )
                 raise InternalServerError()
             # Preserve the request mode on the terminal response object returned to the caller.
-            final_response.background = background
+            final_response.background = request.background
             return final_response
 
     async def _create_background_response(
         self,
-        input: str | list[OpenAIResponseInput],
-        model: str,
-        prompt: OpenAIResponsePrompt | None = None,
-        instructions: str | None = None,
-        skills: list[str] | None = None,
-        previous_response_id: str | None = None,
-        conversation: str | None = None,
-        store: bool | None = True,
-        temperature: float | None = None,
-        frequency_penalty: float | None = None,
-        text: OpenAIResponseText | None = None,
-        tool_choice: OpenAIResponseInputToolChoice | None = None,
-        tools: list[OpenAIResponseInputTool] | None = None,
-        include: list[ResponseItemInclude] | None = None,
-        max_infer_iters: int | None = 10,
-        enable_guardrails: bool = False,
-        parallel_tool_calls: bool | None = None,
-        max_tool_calls: int | None = None,
-        reasoning: OpenAIResponseReasoning | None = None,
-        max_output_tokens: int | None = None,
-        service_tier: ServiceTier | None = None,
-        metadata: dict[str, str] | None = None,
-        safety_identifier: str | None = None,
-        truncation: ResponseTruncation | None = None,
-        presence_penalty: float | None = None,
-        extra_body: dict | None = None,
-        context_management: list | None = None,
-        memory: MemoryToolConfig | None = None,
+        request: CreateResponseRequest,
+        response_id: str,
     ) -> OpenAIResponseObject:
         """Create a response that processes in the background.
 
@@ -1168,36 +1043,40 @@ class OpenAIResponsesImpl:
         # Start workers in the current (request-handling) event loop if not already running.
         await self._ensure_workers_started()
 
-        response_id = f"resp_{uuid.uuid4()}"
+        # Extract extra_body from request's model_extra for queueing
+        extra_body = request.model_extra.get("extra_body") if request.model_extra else None
+
         created_at = int(time.time())
 
         # Normalize input to list format for storage
         input_items: list[OpenAIResponseInput] = (
-            [OpenAIResponseMessage(content=input, role="user")] if isinstance(input, str) else input
+            [OpenAIResponseMessage(content=request.input, role="user")]
+            if isinstance(request.input, str)
+            else request.input
         )
 
         # Create initial queued response
         queued_response = OpenAIResponseObject(
             id=response_id,
             created_at=created_at,
-            model=model,
+            model=request.model,
             status="queued",
             output=[],
             background=True,
-            parallel_tool_calls=parallel_tool_calls if parallel_tool_calls is not None else True,
-            previous_response_id=previous_response_id,
-            prompt=prompt,
-            temperature=temperature,
-            text=text if text else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+            parallel_tool_calls=request.parallel_tool_calls if request.parallel_tool_calls is not None else True,
+            previous_response_id=request.previous_response_id,
+            prompt=request.prompt,
+            temperature=request.temperature,
+            text=request.text if request.text else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
             tools=[],  # Will be populated when processing completes
-            tool_choice=tool_choice,
-            instructions=instructions,
-            skills=skills,
-            max_tool_calls=max_tool_calls,
-            reasoning=reasoning,
-            metadata=metadata,
-            safety_identifier=safety_identifier,
-            store=store if store is not None else True,
+            tool_choice=request.tool_choice,
+            instructions=request.instructions,
+            skills=request.skills,
+            max_tool_calls=request.max_tool_calls,
+            reasoning=request.reasoning,
+            metadata=request.metadata,
+            safety_identifier=request.safety_identifier,
+            store=request.store if request.store is not None else True,
         )
 
         # Store the queued response
@@ -1214,34 +1093,34 @@ class OpenAIResponsesImpl:
                     request_context=capture_request_context(),
                     kwargs=dict(
                         response_id=response_id,
-                        input=input,
-                        model=model,
-                        prompt=prompt,
-                        instructions=instructions,
-                        skills=skills,
-                        previous_response_id=previous_response_id,
-                        conversation=conversation,
-                        store=store,
-                        temperature=temperature,
-                        frequency_penalty=frequency_penalty,
-                        text=text,
-                        tool_choice=tool_choice,
-                        tools=tools,
-                        include=include,
-                        max_infer_iters=max_infer_iters,
-                        enable_guardrails=enable_guardrails,
-                        parallel_tool_calls=parallel_tool_calls,
-                        max_tool_calls=max_tool_calls,
-                        reasoning=reasoning,
-                        max_output_tokens=max_output_tokens,
-                        service_tier=service_tier,
-                        metadata=metadata,
-                        safety_identifier=safety_identifier,
-                        truncation=truncation,
-                        presence_penalty=presence_penalty,
+                        input=request.input,
+                        model=request.model,
+                        prompt=request.prompt,
+                        instructions=request.instructions,
+                        skills=request.skills,
+                        previous_response_id=request.previous_response_id,
+                        conversation=request.conversation,
+                        store=request.store,
+                        temperature=request.temperature,
+                        frequency_penalty=request.frequency_penalty,
+                        text=request.text,
+                        tool_choice=request.tool_choice,
+                        tools=request.tools,
+                        include=request.include,
+                        max_infer_iters=request.max_infer_iters,
+                        guardrails=request.guardrails,
+                        parallel_tool_calls=request.parallel_tool_calls,
+                        max_tool_calls=request.max_tool_calls,
+                        reasoning=request.reasoning,
+                        max_output_tokens=request.max_output_tokens,
+                        service_tier=request.service_tier,
+                        metadata=request.metadata,
+                        safety_identifier=request.safety_identifier,
+                        truncation=request.truncation,
+                        presence_penalty=request.presence_penalty,
+                        context_management=request.context_management,
+                        memory=request.memory,
                         extra_body=extra_body,
-                        context_management=context_management,
-                        memory=memory,
                     ),
                 )
             )
@@ -1270,7 +1149,7 @@ class OpenAIResponsesImpl:
         tools: list[OpenAIResponseInputTool] | None = None,
         include: list[ResponseItemInclude] | None = None,
         max_infer_iters: int | None = 10,
-        enable_guardrails: bool = False,
+        guardrails: bool | None = None,
         parallel_tool_calls: bool | None = None,
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
@@ -1297,7 +1176,7 @@ class OpenAIResponsesImpl:
             await self.responses_store.update_response_object(existing)
 
         # Process the response using existing streaming logic
-        stream_gen = self._create_streaming_response(
+        request = CreateResponseRequest(
             input=input,
             conversation=conversation,
             model=model,
@@ -1305,14 +1184,14 @@ class OpenAIResponsesImpl:
             instructions=instructions,
             skills=skills,
             previous_response_id=previous_response_id,
-            store=store,
+            store=store if store is not None else True,
             temperature=temperature,
             frequency_penalty=frequency_penalty,
             text=text,
             tools=tools,
             tool_choice=tool_choice,
             max_infer_iters=max_infer_iters,
-            enable_guardrails=enable_guardrails,
+            guardrails=guardrails,
             parallel_tool_calls=parallel_tool_calls,
             max_tool_calls=max_tool_calls,
             reasoning=reasoning,
@@ -1328,7 +1207,8 @@ class OpenAIResponsesImpl:
             context_management=context_management,
             memory=memory,
             background=True,
-        )
+        )  # type: ignore[call-arg]
+        stream_gen = self._create_streaming_response(request, response_id=response_id)
 
         result_response = None
 
@@ -1373,45 +1253,21 @@ class OpenAIResponsesImpl:
 
     async def _create_streaming_response(
         self,
-        input: str | list[OpenAIResponseInput],
-        model: str,
-        instructions: str | None = None,
-        skills: list[str] | None = None,
-        previous_response_id: str | None = None,
-        prompt_cache_key: str | None = None,
-        conversation: str | None = None,
-        prompt: OpenAIResponsePrompt | None = None,
-        store: bool | None = True,
-        temperature: float | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        text: OpenAIResponseText | None = None,
-        tools: list[OpenAIResponseInputTool] | None = None,
-        tool_choice: OpenAIResponseInputToolChoice | None = None,
-        max_infer_iters: int | None = 10,
-        enable_guardrails: bool = False,
-        parallel_tool_calls: bool | None = True,
-        max_tool_calls: int | None = None,
-        reasoning: OpenAIResponseReasoning | None = None,
-        max_output_tokens: int | None = None,
-        service_tier: ServiceTier | None = None,
-        metadata: dict[str, str] | None = None,
-        safety_identifier: str | None = None,
-        include: list[ResponseItemInclude] | None = None,
-        truncation: ResponseTruncation | None = None,
+        request: CreateResponseRequest,
         response_id: str | None = None,
-        top_logprobs: int | None = None,
-        presence_penalty: float | None = None,
-        extra_body: dict | None = None,
-        stream_options: ResponseStreamOptions | None = None,
-        context_management: list | None = None,
-        memory: MemoryToolConfig | None = None,
-        background: bool = False,
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
+        extra_body = request.model_extra.get("extra_body") if request.model_extra else None
+
+        text = (
+            request.text
+            if request.text is not None
+            else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text"))
+        )
+
         # These should never be None when called from create_openai_response (which sets defaults)
         # but we assert here to help mypy understand the types
         assert text is not None, "text must not be None"
-        assert max_infer_iters is not None, "max_infer_iters must not be None"
+        assert request.max_infer_iters is not None, "max_infer_iters must not be None"
 
         # Input preprocessing
         (
@@ -1420,45 +1276,47 @@ class OpenAIResponsesImpl:
             tool_context,
             previous_usage,
             inherited_skills,
-        ) = await self._process_input_with_previous_response(input, tools, previous_response_id, conversation)
+        ) = await self._process_input_with_previous_response(
+            request.input, request.tools, request.previous_response_id, request.conversation
+        )
 
         # Inherit skills from previous response if not explicitly provided
-        if skills is None and inherited_skills:
-            skills = inherited_skills
+        if request.skills is None and inherited_skills:
+            request.skills = inherited_skills
 
         # Auto-compact if context_management is configured (runs on resolved history, not just new input)
         compacted_history_applied = False
-        if context_management:
+        if request.context_management:
             compacted_input = await self._maybe_auto_compact(
-                all_input, model, context_management, previous_usage, extra_body=extra_body
+                all_input, request.model, request.context_management, previous_usage, extra_body=extra_body
             )
             if compacted_input is not all_input:
                 compacted_history_applied = True
                 all_input = compacted_input
                 messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
 
-        if instructions:
-            messages.insert(0, OpenAISystemMessageParam(content=instructions))
+        if request.instructions:
+            messages.insert(0, OpenAISystemMessageParam(content=request.instructions))
 
         # Inject skill instructions after user instructions
-        if skills:
+        if request.skills:
             if not self.skills_api:
                 raise ServiceNotEnabledError("skills")
-            skill_messages = await self._resolve_skill_instructions(skills)
-            insert_idx = 1 if instructions else 0
+            skill_messages = await self._resolve_skill_instructions(request.skills)
+            insert_idx = 1 if request.instructions else 0
             for i, msg in enumerate(skill_messages):
                 messages.insert(insert_idx + i, msg)
 
         # Prepend reusable prompt (if provided)
-        await self._prepend_prompt(messages, prompt)
+        await self._prepend_prompt(messages, request.prompt)
 
         memory_context = await resolve_memory_context(
             vector_io_api=self.vector_io_api,
             memory_config=self.memory_config,
-            request_memory=memory,
-            input=input,
-            metadata=metadata,
-            safety_identifier=safety_identifier,
+            request_memory=request.memory,
+            input=request.input,
+            metadata=request.metadata,
+            safety_identifier=request.safety_identifier,
         )
         if memory_context:
             self._insert_memory_context(messages, memory_context)
@@ -1467,13 +1325,13 @@ class OpenAIResponsesImpl:
         response_format = await convert_response_text_to_chat_response_format(text)
 
         ctx = ChatCompletionContext(
-            model=model,
+            model=request.model,
             messages=messages,
-            response_tools=tools,
-            tool_choice=tool_choice,
-            temperature=temperature,
-            top_p=top_p,
-            frequency_penalty=frequency_penalty,
+            response_tools=request.tools,
+            tool_choice=request.tool_choice,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            frequency_penalty=request.frequency_penalty,
             response_format=response_format,
             tool_context=tool_context,
             inputs=all_input,
@@ -1501,32 +1359,32 @@ class OpenAIResponsesImpl:
                 ctx=ctx,
                 response_id=response_id,
                 created_at=created_at,
-                prompt=prompt,
-                prompt_cache_key=prompt_cache_key,
-                previous_response_id=previous_response_id,
-                skills=skills,
+                prompt=request.prompt,
+                prompt_cache_key=request.prompt_cache_key,
+                previous_response_id=request.previous_response_id,
+                skills=request.skills,
                 text=text,
-                max_infer_iters=max_infer_iters,
-                parallel_tool_calls=parallel_tool_calls,
+                max_infer_iters=request.max_infer_iters,
+                parallel_tool_calls=request.parallel_tool_calls,
                 tool_executor=request_tool_executor,
                 moderation_endpoint=self.moderation_endpoint,
                 moderation_headers=self.moderation_headers,
                 connectors_api=self.connectors_api,
-                enable_guardrails=enable_guardrails,
-                instructions=instructions,
-                max_tool_calls=max_tool_calls,
-                reasoning=reasoning,
-                max_output_tokens=max_output_tokens,
-                service_tier=service_tier,
-                metadata=metadata,
-                safety_identifier=safety_identifier,
-                include=include,
-                store=store,
-                truncation=truncation,
-                top_logprobs=top_logprobs,
-                presence_penalty=presence_penalty,
+                enable_guardrails=bool(request.guardrails),
+                instructions=request.instructions,
+                max_tool_calls=request.max_tool_calls,
+                reasoning=request.reasoning,
+                max_output_tokens=request.max_output_tokens,
+                service_tier=request.service_tier,
+                metadata=request.metadata,
+                safety_identifier=request.safety_identifier,
+                include=request.include,
+                store=request.store,
+                truncation=request.truncation,
+                top_logprobs=request.top_logprobs,
+                presence_penalty=request.presence_penalty,
+                stream_options=request.stream_options,
                 extra_body=extra_body,
-                stream_options=stream_options,
             )
 
             final_response = None
@@ -1537,9 +1395,9 @@ class OpenAIResponsesImpl:
             # Store only new input when building on a previous response (O(n) vs O(n²) storage).
             # If auto-compaction rewrote the history, store the effective compacted input as a full snapshot
             # so subsequent previous_response_id turns continue from the compacted context.
-            incremental = bool(previous_response_id) and not compacted_history_applied
+            incremental = bool(request.previous_response_id) and not compacted_history_applied
             if incremental:
-                input_items_for_storage = self._prepare_input_items_for_storage(input)
+                input_items_for_storage = self._prepare_input_items_for_storage(request.input)
             else:
                 input_items_for_storage = self._prepare_input_items_for_storage(all_input)
 
@@ -1557,14 +1415,14 @@ class OpenAIResponsesImpl:
 
                 # Incremental persistence: persist on significant state changes
                 # This enables clients to poll GET /v1/responses/{response_id} during streaming
-                if store:
+                if request.store:
                     await self._persist_streaming_state(
                         stream_chunk=stream_chunk,
                         orchestrator=orchestrator,
                         input_items=input_items_for_storage,
                         output_items=output_items,
                         incremental_input=incremental,
-                        is_background_response=background,
+                        is_background_response=bool(request.background),
                     )
 
                 # Store and sync before yielding terminal events
@@ -1573,22 +1431,22 @@ class OpenAIResponsesImpl:
                     stream_chunk.type in {"response.completed", "response.incomplete"}
                     and final_response
                     and failed_response is None
-                    and store
+                    and request.store
                 ):
-                    if conversation:
+                    if request.conversation:
                         messages_to_store = list(
                             filter(lambda x: not isinstance(x, OpenAISystemMessageParam), orchestrator.final_messages)
                         )
-                        await self._sync_response_to_conversation(conversation, input, output_items)
-                        await self.responses_store.store_conversation_messages(conversation, messages_to_store)
+                        await self._sync_response_to_conversation(request.conversation, request.input, output_items)
+                        await self.responses_store.store_conversation_messages(request.conversation, messages_to_store)
                         self._schedule_memory_write(
-                            conversation_id=conversation,
+                            conversation_id=request.conversation,
                             response_id=final_response.id,
                             response_status=final_response.status,
-                            model=model,
-                            memory=memory,
-                            metadata=metadata,
-                            safety_identifier=safety_identifier,
+                            model=request.model,
+                            memory=request.memory,
+                            metadata=request.metadata,
+                            safety_identifier=request.safety_identifier,
                         )
 
                 yield stream_chunk

@@ -141,42 +141,7 @@ class BuiltinResponsesImpl(Responses):
         """
         _record_parameter_usage(request, operation="create_response")
         assert self.openai_responses_impl is not None, "OpenAI responses not initialized"
-        result = await self.openai_responses_impl.create_openai_response(
-            input=request.input,
-            model=request.model,
-            prompt=request.prompt,
-            instructions=request.instructions,
-            skills=request.skills,
-            previous_response_id=request.previous_response_id,
-            prompt_cache_key=request.prompt_cache_key,
-            conversation=request.conversation,
-            store=request.store,
-            stream=request.stream,
-            temperature=request.temperature,
-            top_p=request.top_p,
-            frequency_penalty=request.frequency_penalty,
-            text=request.text,
-            tool_choice=request.tool_choice,
-            tools=request.tools,
-            include=request.include,
-            max_infer_iters=request.max_infer_iters,
-            guardrails=request.guardrails,
-            parallel_tool_calls=request.parallel_tool_calls,
-            max_tool_calls=request.max_tool_calls,
-            max_output_tokens=request.max_output_tokens,
-            reasoning=request.reasoning,
-            service_tier=request.service_tier,
-            metadata=request.metadata,
-            safety_identifier=request.safety_identifier,
-            background=request.background,
-            truncation=request.truncation,
-            top_logprobs=request.top_logprobs,
-            presence_penalty=request.presence_penalty,
-            extra_body=request.model_extra,
-            stream_options=request.stream_options,
-            context_management=request.context_management,
-            memory=request.memory,
-        )
+        result = await self.openai_responses_impl.create_openai_response(request)
         return result
 
     async def list_openai_responses(
