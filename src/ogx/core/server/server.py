@@ -463,8 +463,10 @@ def create_app() -> StackApp:
     # Route mapping is built lazily on the first request from scope["app"].
     app.add_middleware(RequestMetricsMiddleware)
 
-    # Bind the standalone metrics scrape server's port (no-op unless the endpoint is
-    # enabled). Done here, on the server run path, so non-serving commands don't open a port.
+    # Bind the standalone metrics scrape server's port (no-op unless the endpoint is enabled).
+    # Telemetry itself is configured in Stack.initialize(); this only exposes the scrape
+    # endpoint, which is a server-mode concern. On the run path so non-serving commands
+    # (e.g. `ogx stack list-deps`) don't open a port.
     start_metrics_server()
 
     for api_str in apis_to_serve:

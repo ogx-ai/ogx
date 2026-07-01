@@ -16,9 +16,11 @@ Two export paths can be enabled independently and simultaneously:
   authentication and without being reachable by regular API consumers. It binds to loopback
   by default; set OGX_METRICS_HOST to expose it to other hosts or pods.
 
-setup_telemetry() configures the metric readers at import time, while start_metrics_server()
-binds the scrape server's port. The bind is deferred to the server run path so commands that
-merely import this module (e.g. `ogx stack list-deps`) do not open a network port.
+setup_telemetry() configures the metric readers and start_metrics_server() binds the scrape
+server's port. Neither runs at import: setup_telemetry() is called from Stack.initialize()
+(server and library modes), and start_metrics_server() from create_app() (server mode only).
+So commands that merely import this module (e.g. `ogx stack list-deps`) neither configure
+telemetry nor open a network port.
 """
 
 import os
@@ -60,6 +62,9 @@ def setup_telemetry() -> None:
     reader only registers a collector here; the HTTP server that serves it is started
     separately by start_metrics_server(). If neither path is configured, no MeterProvider
     is installed and metrics are not exported.
+
+    Invoked from the server run path, not at import, so non-serving commands don't configure
+    telemetry. Safe to call more than once; only the first call configures the provider.
     """
     otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
     metrics_endpoint_enabled = _is_metrics_endpoint_enabled()
@@ -73,6 +78,13 @@ def setup_telemetry() -> None:
         from opentelemetry.sdk.metrics import MeterProvider
         from opentelemetry.sdk.metrics.export import MetricReader
         from opentelemetry.sdk.resources import Resource
+
+        # A real SDK MeterProvider means telemetry was already configured on an earlier
+        # Stack.initialize() in this process (get_meter_provider() returns a proxy until
+        # set). Skip re-running so we don't register a duplicate Prometheus collector or
+        # trigger OpenTelemetry's "provider already set" warning.
+        if isinstance(metrics.get_meter_provider(), MeterProvider):
+            return
 
         metric_readers: list[MetricReader] = []
 
@@ -131,8 +143,3 @@ def start_metrics_server() -> None:
     host = os.environ.get("OGX_METRICS_HOST", "127.0.0.1").strip() or "127.0.0.1"
     start_http_server(port=port, addr=host)
     logger.info("Metrics scrape endpoint exposed", host=host, port=port)
-
-
-# Initialize telemetry metric readers when module is imported. The scrape server's port is
-# bound separately via start_metrics_server() from the server run path.
-setup_telemetry()
