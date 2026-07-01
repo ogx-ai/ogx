@@ -96,9 +96,9 @@ runs:
 
         echo "=== Installing vLLM with CUDA support ==="
         if [ "$VLLM_VERSION" = "latest" ]; then
-          uv pip install --no-config vllm --torch-backend=auto
+          uv pip install --no-config vllm "prometheus-fastapi-instrumentator==8.0.2" --torch-backend=auto
         else
-          uv pip install --no-config "vllm==$VLLM_VERSION" --torch-backend=auto
+          uv pip install --no-config "vllm==$VLLM_VERSION" "prometheus-fastapi-instrumentator==8.0.2" --torch-backend=auto
         fi
 
         echo "=== Verifying installation ==="
@@ -106,31 +106,6 @@ runs:
         python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
         python -c "import torch; print(f'CUDA device count: {torch.cuda.device_count()}')"
         vllm --version
-
-    - name: Patch vLLM metrics route discovery
-      shell: bash
-      run: |
-        source /tmp/vllm-env/bin/activate
-
-        python - <<'PY'
-        from __future__ import annotations
-
-        from pathlib import Path
-        import prometheus_fastapi_instrumentator.routing as routing
-
-        routing_path = Path(routing.__file__)
-        source = routing_path.read_text()
-        old = "route_name = route.path"
-        new = (
-            "route_name = getattr(route, 'path', None)\n"
-            "            if route_name is None:\n"
-            "                continue"
-        )
-        if old not in source:
-            raise SystemExit(f"Expected route.path assignment not found in {routing_path}")
-        routing_path.write_text(source.replace(old, new, 1))
-        print(f"Patched {routing_path}")
-        PY
 
     - name: Resolve model identifier
       shell: bash
