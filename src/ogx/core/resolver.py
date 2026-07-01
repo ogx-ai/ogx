@@ -294,6 +294,7 @@ async def instantiate_providers(
     """Instantiates providers asynchronously while managing dependencies."""
     impls: dict[Api, Any] = internal_impls.copy() if internal_impls else {}
     inner_impls_by_provider_id: dict[str, dict[str, Any]] = {f"inner-{x.value}": {} for x in router_apis}
+    sibling_impls_by_api: dict[str, dict[str, Any]] = {}
     for api_str, provider in sorted_providers:
         # Skip providers that are not enabled
         if provider.provider_id is None:
@@ -316,13 +317,15 @@ async def instantiate_providers(
         if isinstance(provider.spec, RoutingTableProviderSpec):
             inner_impls = inner_impls_by_provider_id[f"inner-{provider.spec.router_api.value}"]
 
-        impl = await instantiate_provider(provider, deps, inner_impls, dist_registry, run_config, policy)
+        sibling_impls = dict(sibling_impls_by_api.get(api_str, {}))
+        impl = await instantiate_provider(provider, deps, inner_impls, dist_registry, run_config, policy, sibling_impls)
 
         if api_str.startswith("inner-"):
             inner_impls_by_provider_id[api_str][provider.provider_id] = impl
         else:
             api = Api(api_str)
             impls[api] = impl
+            sibling_impls_by_api.setdefault(api_str, {})[provider.provider_id] = impl
 
     # Post-instantiation: Inject VectorIORouter into VectorStoresRoutingTable
     if Api.vector_io in impls and Api.vector_stores in impls:
@@ -377,6 +380,7 @@ async def instantiate_provider(
     dist_registry: DistributionRegistry,
     run_config: StackConfig,
     policy: list[AccessRule],
+    sibling_impls: dict[str, Any] | None = None,
 ):
     """Instantiate a single provider, loading its module and verifying protocol compliance.
 
@@ -387,6 +391,7 @@ async def instantiate_provider(
         dist_registry: The distribution registry for resource management.
         run_config: The stack run configuration.
         policy: Access control policy rules.
+        sibling_impls: Previously instantiated providers for the same API, keyed by provider_id.
 
     Returns:
         The instantiated provider implementation.
@@ -443,8 +448,11 @@ async def instantiate_provider(
         provider_config = _inject_config_defaults(config_type, provider.config.copy())
         config = config_type(**provider_config)
         args = [config, deps]
-        if "policy" in inspect.signature(getattr(module, method)).parameters:
+        sig = inspect.signature(getattr(module, method))
+        if "policy" in sig.parameters:
             args.append(policy)
+        if "sibling_providers" in sig.parameters:
+            args.append(sibling_impls or {})
     fn = getattr(module, method)
     impl = await fn(*args)
     impl.__provider_id__ = provider.provider_id

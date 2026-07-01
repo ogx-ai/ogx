@@ -40,6 +40,9 @@ class UnstructuredApiFileProcessor:
         self.config = config
         self.files_api = files_api
 
+    def supported_mime_types(self) -> set[str] | None:
+        return None
+
     async def process_file(
         self,
         request: ProcessFileRequest,

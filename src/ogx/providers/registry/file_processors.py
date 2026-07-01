@@ -27,11 +27,10 @@ def available_providers() -> list[ProviderSpec]:
             config_class="ogx.providers.inline.file_processor.auto.AutoFileProcessorConfig",
             api_dependencies=[Api.files],
             description=(
-                "Composite file processor that automatically dispatches to the appropriate backend "
-                "based on file MIME type. Always includes PyPDF (PDF, text) and MarkItDown (office, "
-                "media) as built-in backends. Optionally configure one enhanced provider for "
-                "higher-quality or broader-coverage processing: docling/docling-serve for "
-                "structure-aware parsing, or unstructured/unstructured-api for 65+ format support."
+                "Composite file processor that dispatches to sibling providers based on file MIME "
+                "type. Configure a priority list of provider IDs; each provider declares the MIME "
+                "types it supports and the first match wins. Without a priority list, falls back to "
+                "built-in PyPDF (PDF, text) and MarkItDown (office, media) backends."
             ),
         ),
         InlineProviderSpec(

@@ -33,6 +33,19 @@ from .config import DoclingServeFileProcessorConfig
 
 log = get_logger(name=__name__, category="providers::file_processors")
 
+DOCLING_SERVE_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    "text/html",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/bmp",
+    "image/tiff",
+    "image/webp",
+}
+
 
 class DoclingServeFileProcessor:
     """Remote file processor that delegates to a Docling Serve instance.
@@ -50,6 +63,9 @@ class DoclingServeFileProcessor:
         if normalized_url.endswith("/v1"):
             normalized_url = normalized_url.removesuffix("/v1")
         self.config.base_url = normalized_url
+
+    def supported_mime_types(self) -> set[str] | None:
+        return DOCLING_SERVE_MIME_TYPES
 
     def _get_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}

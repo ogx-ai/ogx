@@ -11,7 +11,11 @@ from ogx_api import Api
 from .config import AutoFileProcessorConfig
 
 
-async def get_provider_impl(config: AutoFileProcessorConfig, deps: dict[Api, Any]):
+async def get_provider_impl(
+    config: AutoFileProcessorConfig,
+    deps: dict[Api, Any],
+    sibling_providers: dict[str, Any] | None = None,
+):
     """Get the auto file processor implementation."""
     from .auto import AutoFileProcessor
 
@@ -19,7 +23,7 @@ async def get_provider_impl(config: AutoFileProcessorConfig, deps: dict[Api, Any
 
     files_api = deps[Api.files]
 
-    impl = AutoFileProcessor(config, files_api)
+    impl = AutoFileProcessor(config, files_api, sibling_providers)
     return impl
 
 

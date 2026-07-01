@@ -11,7 +11,10 @@ from fastapi import HTTPException, UploadFile
 
 from ogx.log import get_logger
 from ogx.providers.inline.file_processor.markitdown.config import MarkItDownFileProcessorConfig
-from ogx.providers.inline.file_processor.markitdown.markitdown_processor import MarkItDownFileProcessor
+from ogx.providers.inline.file_processor.markitdown.markitdown_processor import (
+    MARKITDOWN_MIME_TYPES,
+    MarkItDownFileProcessor,
+)
 from ogx.providers.inline.file_processor.pypdf.config import PyPDFFileProcessorConfig
 from ogx.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
@@ -20,52 +23,6 @@ from ogx_api.files import RetrieveFileRequest
 from .config import AutoFileProcessorConfig
 
 log = get_logger(name=__name__, category="providers::file_processors")
-
-# MIME types routed to MarkItDown. Derived from markitdown's bundled converters:
-# DocxConverter, PptxConverter, XlsxConverter, XlsConverter, HtmlConverter,
-# EpubConverter, OutlookMsgConverter, IpynbConverter, RssConverter, ImageConverter,
-# AudioConverter, ZipConverter. CSV, JSON, XML, and text/* are handled by PyPDF.
-MARKITDOWN_MIME_TYPES = {
-    # Office documents
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
-    "application/msword",  # .doc
-    "application/vnd.ms-powerpoint",  # .ppt
-    "application/vnd.ms-excel",  # .xls
-    "application/rtf",  # .rtf
-    # Structured formats
-    "application/epub+zip",  # .epub
-    "application/rss+xml",  # .rss
-    # Archives
-    "application/zip",  # .zip
-    # Images
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/bmp",
-    "image/tiff",
-    "image/webp",
-    # Audio
-    "audio/mpeg",  # .mp3
-    "audio/x-wav",  # .wav
-}
-
-# MIME types that docling/docling-serve handle with structure-aware parsing.
-# These formats get upgraded quality (layout preservation, table detection,
-# semantic chunking) when a docling provider is configured.
-DOCLING_MIME_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
-    "text/html",
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/bmp",
-    "image/tiff",
-    "image/webp",
-}
 
 SUPPORTED_DESCRIPTION = (
     "PDF, text (txt, csv, md, json, xml, html, code), "
@@ -77,21 +34,33 @@ SUPPORTED_DESCRIPTION = (
 class AutoFileProcessor:
     """Composite file processor that dispatches to backends based on MIME type.
 
-    Always includes PyPDF (PDF/text) and MarkItDown (office/media) as built-in
-    backends. Optionally dispatches to one enhanced provider when configured:
+    When ``priority`` is configured, interrogates sibling providers to build a
+    dispatch map. Each provider declares which MIME types it supports via
+    ``supported_mime_types()``. The first provider in the priority list that
+    supports a given MIME type handles it.
 
-    - Docling/Docling-Serve: structure-aware parsing for PDF, DOCX, PPTX, HTML,
-      and images. Other formats fall through to the built-in backends.
-    - Unstructured/Unstructured-API: broad 65+ format coverage, handles all
-      files when configured.
-
-    Unsupported formats are rejected with a 422 error.
+    When no ``priority`` is configured, falls back to built-in PyPDF (PDF/text)
+    and MarkItDown (office/media) backends for backward compatibility.
     """
 
-    def __init__(self, config: AutoFileProcessorConfig, files_api) -> None:
+    def __init__(
+        self, config: AutoFileProcessorConfig, files_api, sibling_providers: dict[str, Any] | None = None
+    ) -> None:
         self.config = config
         self.files_api = files_api
 
+        self.dispatch_map: dict[str, Any] = {}
+        self.category_map: dict[str, Any] = {}
+        self.fallback_provider: Any = None
+        self._using_priority = False
+
+        if config.priority and sibling_providers:
+            self._build_dispatch_map(sibling_providers, config.priority)
+            self._using_priority = True
+        else:
+            self._init_legacy_backends(config, files_api)
+
+    def _init_legacy_backends(self, config: AutoFileProcessorConfig, files_api: Any) -> None:
         pypdf_config = PyPDFFileProcessorConfig(
             default_chunk_size_tokens=config.default_chunk_size_tokens,
             default_chunk_overlap_tokens=config.default_chunk_overlap_tokens,
@@ -106,38 +75,41 @@ class AutoFileProcessor:
         )
         self.markitdown = MarkItDownFileProcessor(markitdown_config, files_api)
 
-        self.enhanced: Any = None
-        self.enhanced_is_catch_all = False
-        self._init_enhanced_provider(config, files_api)
+    def _build_dispatch_map(self, providers: dict[str, Any], priority: list[str]) -> None:
+        for provider_id in priority:
+            if provider_id not in providers:
+                raise ValueError(
+                    f"Failed to resolve priority entry '{provider_id}': "
+                    f"no sibling provider with that ID is configured. "
+                    f"Available providers: {', '.join(sorted(providers.keys()))}"
+                )
 
-    def _init_enhanced_provider(self, config: AutoFileProcessorConfig, files_api) -> None:
-        if config.docling_serve is not None:
-            from ogx.providers.remote.file_processor.docling_serve.docling_serve import DoclingServeFileProcessor
+            provider = providers[provider_id]
 
-            self.enhanced = DoclingServeFileProcessor(config.docling_serve, files_api)
-            log.info("Enhanced provider configured", provider="docling-serve")
+            if not hasattr(provider, "supported_mime_types"):
+                log.warning("Provider does not declare supported_mime_types, skipping", provider_id=provider_id)
+                continue
 
-        elif config.docling is not None:
-            from ogx.providers.inline.file_processor.docling.docling import DoclingFileProcessor
+            mime_types = provider.supported_mime_types()
 
-            self.enhanced = DoclingFileProcessor(config.docling, files_api)
-            log.info("Enhanced provider configured", provider="docling")
+            if mime_types is None:
+                if self.fallback_provider is None:
+                    self.fallback_provider = provider
+                    log.info("Catch-all provider registered", provider_id=provider_id)
+                continue
 
-        elif config.unstructured_api is not None:
-            from ogx.providers.remote.file_processor.unstructured_api.unstructured_api import (
-                UnstructuredApiFileProcessor,
-            )
+            for mime in mime_types:
+                if mime.endswith("/*"):
+                    category = mime.split("/")[0]
+                    if category not in self.category_map:
+                        self.category_map[category] = provider
+                elif mime not in self.dispatch_map:
+                    self.dispatch_map[mime] = provider
 
-            self.enhanced = UnstructuredApiFileProcessor(config.unstructured_api, files_api)
-            self.enhanced_is_catch_all = True
-            log.info("Enhanced provider configured", provider="unstructured-api")
+            log.info("Provider registered", provider_id=provider_id, mime_type_count=len(mime_types))
 
-        elif config.unstructured is not None:
-            from ogx.providers.inline.file_processor.unstructured.unstructured import UnstructuredFileProcessor
-
-            self.enhanced = UnstructuredFileProcessor(config.unstructured, files_api)
-            self.enhanced_is_catch_all = True
-            log.info("Enhanced provider configured", provider="unstructured")
+    def supported_mime_types(self) -> set[str] | None:
+        return None
 
     async def process_file(
         self,
@@ -148,17 +120,41 @@ class AutoFileProcessor:
         mime_type, _ = mimetypes.guess_type(filename)
         mime_category = mime_type.split("/")[0] if (mime_type and "/" in mime_type) else None
 
-        # Catch-all enhanced providers (unstructured) handle everything
-        if self.enhanced and self.enhanced_is_catch_all:
-            result: ProcessFileResponse = await self.enhanced.process_file(request=request, file=file)
+        if self._using_priority:
+            return await self._dispatch_priority(request, file, mime_type, mime_category)
+        return await self._dispatch_legacy(request, file, mime_type, mime_category)
+
+    async def _dispatch_priority(
+        self,
+        request: ProcessFileRequest,
+        file: UploadFile | None,
+        mime_type: str | None,
+        mime_category: str | None,
+    ) -> ProcessFileResponse:
+        if mime_type and mime_type in self.dispatch_map:
+            result: ProcessFileResponse = await self.dispatch_map[mime_type].process_file(request=request, file=file)
             return result
 
-        # Format-specific enhanced providers (docling) handle their MIME types
-        if self.enhanced and mime_type in DOCLING_MIME_TYPES:
-            result = await self.enhanced.process_file(request=request, file=file)
+        if mime_category and mime_category in self.category_map:
+            result = await self.category_map[mime_category].process_file(request=request, file=file)
             return result
 
-        # Built-in backends
+        if self.fallback_provider:
+            result = await self.fallback_provider.process_file(request=request, file=file)
+            return result
+
+        raise HTTPException(
+            status_code=422,
+            detail=f"File type '{mime_type or 'unknown'}' is not supported by any configured provider.",
+        )
+
+    async def _dispatch_legacy(
+        self,
+        request: ProcessFileRequest,
+        file: UploadFile | None,
+        mime_type: str | None,
+        mime_category: str | None,
+    ) -> ProcessFileResponse:
         if mime_type == "application/pdf" or mime_category == "text":
             return await self.pypdf.process_file(
                 file=file,
@@ -187,5 +183,8 @@ class AutoFileProcessor:
         return "unknown"
 
     async def shutdown(self) -> None:
-        if self.enhanced and hasattr(self.enhanced, "shutdown"):
-            await self.enhanced.shutdown()
+        for provider in {*self.dispatch_map.values(), *self.category_map.values()}:
+            if hasattr(provider, "shutdown"):
+                await provider.shutdown()
+        if self.fallback_provider and hasattr(self.fallback_provider, "shutdown"):
+            await self.fallback_provider.shutdown()

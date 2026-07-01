@@ -54,6 +54,9 @@ class UnstructuredFileProcessor:
         self.files_api = files_api
         self._partition_lock = threading.Lock()
 
+    def supported_mime_types(self) -> set[str] | None:
+        return None
+
     async def process_file(
         self,
         request: ProcessFileRequest,
