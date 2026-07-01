@@ -49,7 +49,6 @@ from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.config_dirs import migrate_legacy_config_dir
 from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
-from ogx.telemetry import start_metrics_server
 from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
 
@@ -462,12 +461,6 @@ def create_app() -> StackApp:
     # Added last so it runs first (outermost), wrapping auth.
     # Route mapping is built lazily on the first request from scope["app"].
     app.add_middleware(RequestMetricsMiddleware)
-
-    # Bind the standalone metrics scrape server's port (no-op unless the endpoint is enabled).
-    # Telemetry itself is configured in Stack.initialize(); this only exposes the scrape
-    # endpoint, which is a server-mode concern. On the run path so non-serving commands
-    # (e.g. `ogx stack list-deps`) don't open a port.
-    start_metrics_server()
 
     for api_str in apis_to_serve:
         api = Api(api_str)

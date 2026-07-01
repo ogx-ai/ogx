@@ -16,11 +16,14 @@ Two export paths can be enabled independently and simultaneously:
   authentication and without being reachable by regular API consumers. It binds to loopback
   by default; set OGX_METRICS_HOST to expose it to other hosts or pods.
 
-setup_telemetry() configures the metric readers and start_metrics_server() binds the scrape
-server's port. Neither runs at import: setup_telemetry() is called from Stack.initialize()
-(server and library modes), and start_metrics_server() from create_app() (server mode only).
-So commands that merely import this module (e.g. `ogx stack list-deps`) neither configure
-telemetry nor open a network port.
+initialize_telemetry() is the entry point: it configures the metric readers and starts the
+scrape server. It is called from Stack.initialize() (server and library modes), not at
+import, so commands that merely import this module (e.g. `ogx stack list-deps`) neither
+configure telemetry nor open a network port.
+
+When the process is launched with `opentelemetry-instrument`, the auto-instrumentation owns
+the global MeterProvider and manages OTLP export. In that case setup_telemetry() adds only
+the Prometheus scrape reader to the existing provider rather than installing a competing one.
 """
 
 import os
@@ -31,6 +34,11 @@ logger = get_logger(__name__, category="telemetry")
 
 # Default port for the metrics scrape server, matching the OpenTelemetry Prometheus convention.
 _DEFAULT_METRICS_PORT = 9464
+
+# Guards initialize_telemetry() so repeated stack initializations in one process (e.g. in
+# tests) don't reconfigure telemetry, which would duplicate the Prometheus collector or
+# rebind the scrape port.
+_telemetry_initialized = False
 
 
 def _is_metrics_endpoint_enabled() -> bool:
@@ -53,18 +61,34 @@ def _metrics_port() -> int:
         raise ValueError(f"Failed to parse OGX_METRICS_PORT as an integer: {raw!r}") from e
 
 
+def initialize_telemetry() -> None:
+    """Configure metric export and start the scrape server.
+
+    Single entry point invoked once from a serving path (Stack.initialize()). Guarded so
+    repeated stack initializations in one process do not reconfigure telemetry or rebind the
+    scrape port.
+    """
+    global _telemetry_initialized
+    if _telemetry_initialized:
+        return
+    _telemetry_initialized = True
+
+    setup_telemetry()
+    start_metrics_server()
+
+
 def setup_telemetry() -> None:
-    """Initialize OpenTelemetry metric readers based on environment configuration.
+    """Configure OpenTelemetry metric export based on environment configuration.
 
-    Adds an OTLP push reader when OTEL_EXPORTER_OTLP_ENDPOINT is set and a Prometheus
-    scrape reader when OGX_METRICS_ENDPOINT_ENABLED is truthy. Both readers attach to a
-    single global MeterProvider, so the two export paths operate independently. The scrape
-    reader only registers a collector here; the HTTP server that serves it is started
-    separately by start_metrics_server(). If neither path is configured, no MeterProvider
-    is installed and metrics are not exported.
+    Adds an OTLP push reader when OTEL_EXPORTER_OTLP_ENDPOINT is set and a Prometheus scrape
+    reader when OGX_METRICS_ENDPOINT_ENABLED is truthy.
 
-    Invoked from the server run path, not at import, so non-serving commands don't configure
-    telemetry. Safe to call more than once; only the first call configures the provider.
+    If an SDK MeterProvider is already installed — e.g. when the process is launched with
+    `opentelemetry-instrument`, which owns OTLP export — the Prometheus scrape reader is
+    added to that provider instead of installing a competing one. Installing a second
+    provider is rejected by OpenTelemetry ("Overriding of current MeterProvider is not
+    allowed") and would leave ogx metrics off the scrape endpoint. Otherwise a new
+    MeterProvider is created and installed.
     """
     otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
     metrics_endpoint_enabled = _is_metrics_endpoint_enabled()
@@ -79,11 +103,16 @@ def setup_telemetry() -> None:
         from opentelemetry.sdk.metrics.export import MetricReader
         from opentelemetry.sdk.resources import Resource
 
-        # A real SDK MeterProvider means telemetry was already configured on an earlier
-        # Stack.initialize() in this process (get_meter_provider() returns a proxy until
-        # set). Skip re-running so we don't register a duplicate Prometheus collector or
-        # trigger OpenTelemetry's "provider already set" warning.
-        if isinstance(metrics.get_meter_provider(), MeterProvider):
+        existing_provider = metrics.get_meter_provider()
+        if isinstance(existing_provider, MeterProvider):
+            # A provider is already installed (e.g. by opentelemetry-instrument, which manages
+            # OTLP export). Add only the Prometheus scrape reader — ogx's addition — to it, so
+            # ogx metrics reach the scrape endpoint without displacing the existing provider.
+            if metrics_endpoint_enabled:
+                from opentelemetry.exporter.prometheus import PrometheusMetricReader
+
+                existing_provider.add_metric_reader(PrometheusMetricReader())
+                logger.info("Added Prometheus scrape reader to the existing MeterProvider")
             return
 
         metric_readers: list[MetricReader] = []
@@ -108,9 +137,8 @@ def setup_telemetry() -> None:
         if metrics_endpoint_enabled:
             from opentelemetry.exporter.prometheus import PrometheusMetricReader
 
-            # Registers a collector on the default prometheus_client registry; the HTTP
-            # server that serves it is started later by start_metrics_server() from the
-            # server run path, so non-serving commands don't bind a port.
+            # Registers a collector on the default prometheus_client registry; the HTTP server
+            # that serves it is started by start_metrics_server().
             metric_readers.append(PrometheusMetricReader())
             logger.info("OpenTelemetry metrics scrape reader configured")
 
@@ -127,10 +155,9 @@ def setup_telemetry() -> None:
 def start_metrics_server() -> None:
     """Start the standalone metrics scrape HTTP server when the endpoint is enabled.
 
-    Called from the server run path rather than at import time, so commands that merely
-    import this module (e.g. `ogx stack list-deps`) do not bind a network port. Serves the
-    default prometheus_client registry that setup_telemetry()'s PrometheusMetricReader
-    writes to. Raises if OGX_METRICS_PORT is misconfigured, failing startup fast.
+    Serves the default prometheus_client registry that setup_telemetry()'s
+    PrometheusMetricReader writes to. Raises if OGX_METRICS_PORT is misconfigured, failing
+    startup fast.
     """
     if not _is_metrics_endpoint_enabled():
         return

@@ -50,11 +50,13 @@ OTel metrics can be exported two ways, independently and simultaneously:
   port means collectors need no API authentication and the metrics are not reachable by
   regular API consumers.
 
-Both readers are attached to a single global `MeterProvider` in
-`ogx.telemetry.setup_telemetry()`, called from `Stack.initialize()` (server and library
-modes). The scrape server's port is bound separately by `ogx.telemetry.start_metrics_server()`,
-called from the server run path (`create_app`). Neither runs at import, so non-serving
+Telemetry is configured by `ogx.telemetry.initialize_telemetry()`, called from
+`Stack.initialize()` (server and library modes). It does not run at import, so non-serving
 commands (e.g. `ogx stack list-deps`) neither configure telemetry nor open a network port.
+When ogx is launched under `opentelemetry-instrument`, the auto-instrumentation owns the
+global `MeterProvider` and manages OTLP export; in that case the scrape reader is added to
+the existing provider instead of installing a competing one, so ogx metrics still reach the
+scrape endpoint.
 
 ### Response Handling
 
