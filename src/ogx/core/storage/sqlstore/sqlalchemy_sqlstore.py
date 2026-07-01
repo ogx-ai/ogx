@@ -3,6 +3,7 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
+import ssl
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
@@ -135,20 +136,20 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             await self._engine.dispose()
             self._engine = None
 
-    def _build_ssl(self) -> object:
-        if not isinstance(self.config, PostgresSqlStoreConfig):
-            return None
-        if self.config.ssl_mode == "verify-full" and self.config.ca_cert_path:
-            import ssl as _ssl
-
-            return _ssl.create_default_context(cafile=str(self.config.ca_cert_path))
+    def _build_ssl(self) -> ssl.SSLContext | str | None:
+        assert isinstance(self.config, PostgresSqlStoreConfig)
+        if self.config.ssl_mode in ("verify-full", "verify-ca") and self.config.ca_cert_path:
+            ctx = ssl.create_default_context(cafile=self.config.ca_cert_path)
+            if self.config.ssl_mode == "verify-ca":
+                ctx.check_hostname = False
+            return ctx
         if self.config.ssl_mode and self.config.ssl_mode != "disable":
             return self.config.ssl_mode
         return None
 
     def create_engine(self) -> AsyncEngine:
         # Configure connection args for better concurrency support
-        connect_args = {}
+        connect_args: dict[str, Any] = {}
         engine_kwargs: dict[str, Any] = {"pool_pre_ping": self.config.pool_pre_ping}
         if self._is_sqlite_backend:
             # SQLite-specific optimizations for concurrent access

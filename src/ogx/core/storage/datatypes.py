@@ -206,7 +206,9 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     db: str = "ogx"
     user: str
     password: SecretStr | None = None
-    ssl_mode: str | None = None
+    ssl_mode: Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] | None = Field(
+        default=None, description="PostgreSQL SSL mode (e.g. require, verify-full)"
+    )
     ca_cert_path: Path | None = None
     pool_size: int = Field(default=10, ge=1, description="Number of persistent connections in the pool")
     max_overflow: int = Field(default=20, ge=0, description="Max additional connections beyond pool_size")
@@ -236,8 +238,6 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
             "db": "${env.POSTGRES_DB:=ogx}",
             "user": "${env.POSTGRES_USER:=ogx}",
             "password": "${env.POSTGRES_PASSWORD:=ogx}",
-            "ssl_mode": "${env.POSTGRES_SSL_MODE:=}",
-            "ca_cert_path": "${env.POSTGRES_CA_CERT_PATH:=}",
             "pool_size": "${env.POSTGRES_POOL_SIZE:=10}",
             "max_overflow": "${env.POSTGRES_MAX_OVERFLOW:=20}",
             "pool_recycle": "${env.POSTGRES_POOL_RECYCLE:=3600}",

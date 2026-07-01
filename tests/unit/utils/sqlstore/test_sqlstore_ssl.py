@@ -7,8 +7,6 @@
 import ssl
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from ogx.core.storage.datatypes import PostgresSqlStoreConfig
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
 
@@ -42,6 +40,23 @@ class TestBuildSsl:
         store = SqlAlchemySqlStoreImpl(_make_config(ssl_mode="prefer"))
         assert store._build_ssl() == "prefer"
 
+    def test_ssl_mode_verify_ca_without_ca_returns_mode_string(self):
+        store = SqlAlchemySqlStoreImpl(_make_config(ssl_mode="verify-ca"))
+        assert store._build_ssl() == "verify-ca"
+
+    def test_ssl_mode_verify_ca_with_ca_returns_ssl_context_no_hostname_check(self, tmp_path):
+        ca_file = tmp_path / "ca.pem"
+        ca_file.write_text("")
+
+        with patch("ogx.core.storage.sqlstore.sqlalchemy_sqlstore.ssl.create_default_context") as mock_ctx:
+            mock_context = MagicMock(spec=ssl.SSLContext)
+            mock_ctx.return_value = mock_context
+            store = SqlAlchemySqlStoreImpl(_make_config(ssl_mode="verify-ca", ca_cert_path=str(ca_file)))
+            result = store._build_ssl()
+            mock_ctx.assert_called_once_with(cafile=ca_file)
+            assert mock_context.check_hostname is False
+            assert result == mock_context
+
     def test_ssl_mode_verify_full_without_ca_returns_mode_string(self):
         store = SqlAlchemySqlStoreImpl(_make_config(ssl_mode="verify-full"))
         assert store._build_ssl() == "verify-full"
@@ -50,13 +65,11 @@ class TestBuildSsl:
         ca_file = tmp_path / "ca.pem"
         ca_file.write_text("")
 
-        with patch("ssl.create_default_context") as mock_ctx:
+        with patch("ogx.core.storage.sqlstore.sqlalchemy_sqlstore.ssl.create_default_context") as mock_ctx:
             mock_ctx.return_value = MagicMock(spec=ssl.SSLContext)
-            store = SqlAlchemySqlStoreImpl(
-                _make_config(ssl_mode="verify-full", ca_cert_path=str(ca_file))
-            )
+            store = SqlAlchemySqlStoreImpl(_make_config(ssl_mode="verify-full", ca_cert_path=str(ca_file)))
             result = store._build_ssl()
-            mock_ctx.assert_called_once_with(cafile=str(ca_file))
+            mock_ctx.assert_called_once_with(cafile=ca_file)
             assert result == mock_ctx.return_value
 
 
@@ -91,11 +104,9 @@ class TestCreateEngineWithSsl:
         ca_file.write_text("")
         mock_create_engine.return_value = MagicMock()
 
-        with patch("ssl.create_default_context") as mock_ctx:
+        with patch("ogx.core.storage.sqlstore.sqlalchemy_sqlstore.ssl.create_default_context") as mock_ctx:
             mock_ctx.return_value = MagicMock(spec=ssl.SSLContext)
-            store = SqlAlchemySqlStoreImpl(
-                _make_config(ssl_mode="verify-full", ca_cert_path=str(ca_file))
-            )
+            store = SqlAlchemySqlStoreImpl(_make_config(ssl_mode="verify-full", ca_cert_path=str(ca_file)))
             store.create_engine()
             _, kwargs = mock_create_engine.call_args
             assert kwargs["connect_args"]["ssl"] == mock_ctx.return_value
