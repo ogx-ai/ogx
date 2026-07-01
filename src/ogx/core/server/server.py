@@ -197,12 +197,33 @@ async def _send_error_response(send: Send, status: int, message: str) -> None:
     await send({"type": "http.response.body", "body": error_msg})
 
 
+class HSTSMiddleware:
+    """Adds Strict-Transport-Security header to all HTTPS responses."""
+
+    def __init__(self, app: ASGIApp, max_age: int = 31536000) -> None:
+        self.app = app
+        self.hsts_value = f"max-age={max_age}; includeSubDomains".encode()
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
+        if scope["type"] == "http":
+
+            async def send_with_hsts(message: dict[str, Any]) -> None:
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    headers.append([b"strict-transport-security", self.hsts_value])
+                    message["headers"] = headers
+                await send(message)
+
+            return await self.app(scope, receive, send_with_hsts)
+        return await self.app(scope, receive, send)
+
+
 class ClientVersionMiddleware:
     """ASGI middleware that rejects requests from clients with incompatible major.minor versions."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        self.server_version = parse_version("ogx")
+        self.server_version = parse_version("ogx-api")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         if scope["type"] == "http":
@@ -259,6 +280,28 @@ class ProviderDataMiddleware:
                         reset_fn(test_context_token)
 
         return await self.app(scope, receive, send)
+
+
+def validate_auth_security(config: StackConfig) -> None:
+    """Validate auth provider TLS settings.
+
+    Raises SystemExit if verify_tls=False unless insecure mode is enabled.
+    """
+    if not config.server.auth:
+        return
+    provider_config = config.server.auth.provider_config
+    if not provider_config or not hasattr(provider_config, "verify_tls") or provider_config.verify_tls:
+        return
+
+    if config.server.insecure:
+        logger.warning(
+            "TLS verification is disabled in auth provider config (verify_tls=False). "
+            "This is insecure and should only be used for local development or testing."
+        )
+        return
+    raise SystemExit(
+        "FATAL: verify_tls=False in auth provider config. TLS verification is required. Use '--insecure' to override."
+    )
 
 
 class ZstdDecompressionMiddleware:
@@ -402,6 +445,10 @@ def create_app() -> StackApp:
         config=config,
     )
 
+    # Add HSTS middleware when TLS is configured and HSTS is not disabled
+    if config.server.tls_certfile and config.server.tls_keyfile and config.server.hsts_max_age > 0:
+        app.add_middleware(HSTSMiddleware, max_age=config.server.hsts_max_age)
+
     if not os.environ.get("OGX_DISABLE_VERSION_CHECK"):
         app.add_middleware(ClientVersionMiddleware)
 
@@ -409,6 +456,8 @@ def create_app() -> StackApp:
 
     impls = app.stack.impls
     assert impls is not None
+
+    validate_auth_security(config)
 
     if config.server.auth:
         # Add route authorization middleware if route_policy is configured

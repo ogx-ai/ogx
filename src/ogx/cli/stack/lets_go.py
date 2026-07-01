@@ -314,7 +314,11 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
 
 
-def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    """Async core: provider probing, config generation, and embedding detection.
+
+    Returns a dict with 'config_file', 'stack_args', and 'port' for the caller
+    to pass to uvicorn after asyncio.run() returns."""
     if args.enable_ui:
         try:
             _start_ui_development_server(args.port)
@@ -325,7 +329,7 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         providers_spec = args.providers_override
         autodetect_embedding: tuple[QualifiedModel, int | None] | None = None
     else:
-        providers_spec, autodetect_embedding = _autodetect_providers(debug=getattr(args, "debug", False))
+        providers_spec, autodetect_embedding = await _autodetect_providers(debug=getattr(args, "debug", False))
 
     has_inference = any(p.startswith("inference=") for p in (providers_spec or "").split(","))
     if not has_inference:
@@ -392,7 +396,7 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         _add_file_search_and_responses(run_config)
     elif "vector_io" in run_config.providers:
         detected_result = (
-            autodetect_embedding if autodetect_embedding is not None else _detect_embedding_model(run_config)
+            autodetect_embedding if autodetect_embedding is not None else await _detect_embedding_model(run_config)
         )
         if detected_result:
             detected, embedding_dimension = detected_result
@@ -456,11 +460,26 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
     with open(config_file, "w") as f:
         yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
+    return {
+        "config_file": config_file,
+        "stack_args": argparse.Namespace(
+            port=args.port,
+            enable_ui=args.enable_ui,
+            providers=None,
+        ),
+    }
+
+
+def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Entry point for `ogx letsgo`.
+
+    Provider probing and embedding detection run inside asyncio.run() on
+    _run_letsgo_cmd_impl. After it returns, we call _uvicorn_run in a sync
+    context so uvicorn can start its own event loop without conflict."""
+    result = asyncio.run(_run_letsgo_cmd_impl(args, parser))
+    config_file: Path = result["config_file"]
+    stack_args: argparse.Namespace = result["stack_args"]
     try:
-        stack_args = argparse.Namespace()
-        stack_args.port = args.port
-        stack_args.enable_ui = args.enable_ui
-        stack_args.providers = None
         _uvicorn_run(config_file, stack_args, parser)
     except Exception:
         logger.exception("Failed to start the stack server")
@@ -493,7 +512,7 @@ def _install_provider_deps(normal_deps: list[str], special_deps: list[str]) -> N
             )
 
 
-def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedModel, int | None] | None]:
+async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedModel, int | None] | None]:
     """Probe all candidate providers and return a spec string and first detected embedding model.
 
     Each provider is probed by instantiating it and calling list_models() to confirm
@@ -523,7 +542,7 @@ def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedMode
     detected_embedding: tuple[QualifiedModel, int | None] | None = None
     cprint("Scanning for available providers...", color="cyan")
     for provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env in candidates:
-        status, models, base_url, base_source, pip_packages = _probe_provider_availability(
+        status, models, base_url, base_source, pip_packages = await _probe_provider_availability(
             provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env, debug=debug
         )
 
@@ -681,24 +700,20 @@ def _pick_embedding_from_models(models: list[Any], provider_id: str) -> tuple[Qu
     return best
 
 
-def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, int | None] | None:
+async def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, int | None] | None:
     """Find an embedding model by instantiating each inference provider and calling list_models().
 
     Returns tuple of (QualifiedModel, embedding_dimension) or None if not found.
     Dimension may be None if not available in model metadata — caller must handle this.
     """
-
-    async def _detect_async() -> tuple[QualifiedModel, int | None] | None:
-        for provider in run_config.providers.get("inference", []):
-            if not provider.provider_id:
-                continue
-            models = await _list_models_from_provider(provider)
-            result = _pick_embedding_from_models(models, provider.provider_id)
-            if result is not None:
-                return result
-        return None
-
-    return asyncio.run(_detect_async())
+    for provider in run_config.providers.get("inference", []):
+        if not provider.provider_id:
+            continue
+        models = await _list_models_from_provider(provider)
+        result = _pick_embedding_from_models(models, provider.provider_id)
+        if result is not None:
+            return result
+    return None
 
 
 async def _instantiate_with_timeout(
@@ -748,7 +763,7 @@ def _suppress_provider_logs(suppress: bool = True) -> Generator[None, None, None
         logging.disable(previous_disable_level)
 
 
-def _probe_provider_availability(
+async def _probe_provider_availability(
     provider_type: str,
     base_url_env: str | None,
     default_base_url: str,
@@ -864,7 +879,7 @@ def _probe_provider_availability(
                     factory_name=_FactoryDispatcher.method_name_for_spec(provider_spec),
                 )
                 # Pass empty deps dict {} for single-provider probing
-                provider: ProbeableProvider = asyncio.run(_instantiate_with_timeout(factory_fn, config))  # type: ignore[arg-type]
+                provider: ProbeableProvider = await _instantiate_with_timeout(factory_fn, config)  # type: ignore[arg-type]
                 logger.debug("Provider instantiated successfully for provider", provider_type=provider_type)
 
                 # Set required attributes (normally done by resolver)
@@ -882,14 +897,14 @@ def _probe_provider_availability(
             # List models with timeout
             try:
                 logger.debug("Calling list_models for provider", provider_type=provider_type)
-                models = asyncio.run(_list_models_with_timeout(provider, timeout_seconds=5))
+                models = await _list_models_with_timeout(provider, timeout_seconds=5)
                 logger.debug("Listed models for provider", provider_type=provider_type, model_count=len(models))
 
                 # Cleanup provider: call shutdown() if available.
                 try:
                     shutdown_result = provider.shutdown()
                     if shutdown_result is not None:
-                        asyncio.run(shutdown_result)  # type: ignore[arg-type]
+                        await shutdown_result
                 except AttributeError:
                     # Provider did not declare `shutdown()`; surface as a warning.
                     cprint(
