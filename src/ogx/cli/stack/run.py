@@ -153,7 +153,8 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
 
     env_port = os.getenv("OGX_PORT")
     port = args.port or (int(env_port) if env_port else None) or config.server.port
-    workers = config.server.workers
+    env_workers = os.getenv("OGX_WORKERS")
+    workers = (int(env_workers) if env_workers else None) or config.server.workers
 
     host = ""
     if config.server.host:

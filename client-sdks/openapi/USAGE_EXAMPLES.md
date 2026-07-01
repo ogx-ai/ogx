@@ -382,7 +382,7 @@ pip install ogx-open-client
 ```python
 # If you see: Connection refused
 # Solution: Ensure OGX server is running
-# Start server: uv run ogx stack run starter
+# Start server: uv run ogx run starter
 ```
 
 ### Type Checking

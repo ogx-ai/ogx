@@ -202,7 +202,7 @@ class ClientVersionMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        self.server_version = parse_version("ogx")
+        self.server_version = parse_version("ogx-api")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         if scope["type"] == "http":

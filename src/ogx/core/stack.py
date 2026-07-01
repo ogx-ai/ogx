@@ -482,8 +482,15 @@ def extract_env_var_references(config: Any) -> list[str]:
     return result
 
 
-def replace_env_vars(config: Any, path: str = "") -> Any:
-    """Recursively replace environment variable references in a configuration object."""
+def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = False) -> Any:
+    """Recursively replace environment variable references in a configuration object.
+
+    When *ignore_unresolved* is True, bare ``${env.VAR}`` references that cannot
+    be resolved (env var not set, no default) are replaced with an empty string
+    instead of raising :class:`EnvVarError`.  This is used by ``list-deps`` which
+    only needs the structural shape of the config (provider types), not actual
+    runtime values.
+    """
     if isinstance(config, dict):
         # Special handling for auth provider_config with conditional type field
         # This allows auth to be enabled/disabled via environment variables
@@ -493,7 +500,9 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
             if isinstance(provider_cfg, dict) and "type" in provider_cfg:
                 try:
                     # Resolve the type field first to check if auth should be enabled
-                    resolved_type = replace_env_vars(provider_cfg["type"], f"{path}.provider_config.type")
+                    resolved_type = replace_env_vars(
+                        provider_cfg["type"], f"{path}.provider_config.type", ignore_unresolved
+                    )
 
                     # If type is empty/None, disable auth by setting provider_config to None
                     # This prevents validation errors on the discriminated union
@@ -501,7 +510,7 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                         # Process rest of config normally but exclude provider_config from expansion
                         # to avoid EnvVarError from bare env vars (e.g., ${env.KEYCLOAK_URL})
                         result = {
-                            k: replace_env_vars(v, f"{path}.{k}" if path else k)
+                            k: replace_env_vars(v, f"{path}.{k}" if path else k, ignore_unresolved)
                             for k, v in config.items()
                             if k != "provider_config"
                         }
@@ -518,7 +527,7 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
         result = {}
         for k, v in config.items():
             try:
-                result[k] = replace_env_vars(v, f"{path}.{k}" if path else k)
+                result[k] = replace_env_vars(v, f"{path}.{k}" if path else k, ignore_unresolved)
             except EnvVarError as e:
                 raise EnvVarError(e.var_name, e.path) from None
         return result
@@ -533,7 +542,9 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                 # is disabled so that we can skip config env variable expansion and avoid validation errors
                 if isinstance(v, dict) and "provider_id" in v:
                     try:
-                        resolved_provider_id = replace_env_vars(v["provider_id"], f"{path}[{i}].provider_id")
+                        resolved_provider_id = replace_env_vars(
+                            v["provider_id"], f"{path}[{i}].provider_id", ignore_unresolved
+                        )
                         if resolved_provider_id == "__disabled__":
                             logger.debug(
                                 "Skipping config env variable expansion for disabled provider",
@@ -551,7 +562,9 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                     for id_field in RESOURCE_ID_FIELDS:
                         if id_field in v:
                             try:
-                                resolved_id = replace_env_vars(v[id_field], f"{path}[{i}].{id_field}")
+                                resolved_id = replace_env_vars(
+                                    v[id_field], f"{path}[{i}].{id_field}", ignore_unresolved
+                                )
                                 if resolved_id is None or resolved_id == "":
                                     logger.debug(
                                         "Skipping [] with empty (conditional env var not set)",
@@ -575,7 +588,7 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
 
                 # Normal processing
                 # result is a list here, but mypy sees it could be dict/str
-                result.append(replace_env_vars(v, f"{path}[{i}]"))  # type: ignore[attr-defined]
+                result.append(replace_env_vars(v, f"{path}[{i}]", ignore_unresolved))  # type: ignore[attr-defined]
             except EnvVarError as e:
                 raise EnvVarError(e.var_name, e.path) from None
         return result
@@ -620,6 +633,8 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                     value = ""
             else:  # No operator case: ${env.FOO}
                 if not env_value:
+                    if ignore_unresolved:
+                        return ""
                     raise EnvVarError(env_var, path)
                 value = env_value
 

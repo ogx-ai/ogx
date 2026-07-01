@@ -8,7 +8,7 @@ fallback_version = "1.1.4.dev0"
 [tool.uv]
 required-version = ">=0.7.0"
 constraint-dependencies = [
-    "aiohttp>=3.13.4",                # CVE-2026-34514 + 9 more: CRLF injection, header leak, DoS
+    "aiohttp>=3.14.0",                # CVE-2026-34993: CookieJar.load() RCE
     "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
     "cryptography>=48.0.1",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
     "fonttools>=4.60.2",
@@ -16,6 +16,7 @@ constraint-dependencies = [
     "h11>=0.16.0",
     "idna>=3.15",
     "joserfc>=1.6.7",
+    "langgraph-sdk>=0.3.15",
     "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
     "msgpack>=1.2.1",
     "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
@@ -60,7 +61,7 @@ dependencies = [
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
     "openai>=2.41.0",
     "python-dotenv>=1.2.2",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
-    "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
+    "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. CVE-2026-48526: auth bypass via forged JWTs.
     "pydantic>=2.11.9",
     "rich",
     "structlog>=24.1.0",
