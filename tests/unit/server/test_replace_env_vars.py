@@ -42,6 +42,40 @@ def test_simple_replacement_raises_when_not_set(setup_env_vars):
     assert exc_info.value.var_name == "NOT_SET"
 
 
+def test_ignore_unresolved_returns_empty_for_bare_env_var(setup_env_vars):
+    result = replace_env_vars("${env.NOT_SET}", ignore_unresolved=True)
+    assert result is None
+
+
+def test_ignore_unresolved_still_resolves_set_vars(setup_env_vars):
+    assert replace_env_vars("${env.TEST_VAR}", ignore_unresolved=True) == "test_value"
+
+
+def test_ignore_unresolved_skips_resource_with_bare_env_var(setup_env_vars):
+    """Bare ${env.VAR} in a model_id should skip the item when ignore_unresolved=True."""
+    data = {
+        "models": [
+            {"model_id": "${env.INFERENCE_MODEL}", "provider_id": "nvidia"},
+            {"model_id": "always-present", "provider_id": "other"},
+        ]
+    }
+    result = replace_env_vars(data, ignore_unresolved=True)
+    assert len(result["models"]) == 1
+    assert result["models"][0]["model_id"] == "always-present"
+
+
+def test_ignore_unresolved_preserves_defaults_and_conditionals(setup_env_vars):
+    data = {
+        "url": "${env.BASE_URL:=https://example.com}",
+        "key": "${env.API_KEY:=}",
+        "opt": "${env.OPTIONAL:+enabled}",
+    }
+    result = replace_env_vars(data, ignore_unresolved=True)
+    assert result["url"] == "https://example.com"
+    assert result["key"] is None
+    assert result["opt"] is None
+
+
 def test_default_value_when_not_set(setup_env_vars):
     assert replace_env_vars("${env.NOT_SET:=default}") == "default"
 

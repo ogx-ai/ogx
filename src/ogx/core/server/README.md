@@ -36,6 +36,28 @@ Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-
 - **`ClientVersionMiddleware`** (`server.py`): Rejects requests from clients with incompatible major.minor versions.
 - **`ProviderDataMiddleware`** (`server.py`): Sets up request context for provider data propagation and test context.
 
+### Metrics Export
+
+OTel metrics can be exported two ways, independently and simultaneously:
+
+- **OTLP push** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to push metrics to an OTel Collector.
+- **Metrics scrape endpoint** — set `OGX_METRICS_ENDPOINT_ENABLED` (`1`/`true`/`yes`/`on`) to
+  expose all metrics in Prometheus exposition format, suitable for scrape-based monitoring
+  systems. Metrics are served by a standalone HTTP server on a dedicated port
+  (`OGX_METRICS_PORT`, default `9464`; bind address `OGX_METRICS_HOST`, default `127.0.0.1`),
+  separate from the main API. It binds to loopback by default; set `OGX_METRICS_HOST` (e.g.
+  `0.0.0.0`) to expose it to other hosts or pods. Keeping the scrape endpoint off the API
+  port means collectors need no API authentication and the metrics are not reachable by
+  regular API consumers.
+
+Telemetry is configured by `ogx.telemetry.initialize_telemetry()`, called from
+`Stack.initialize()` (server and library modes). It does not run at import, so non-serving
+commands (e.g. `ogx stack list-deps`) neither configure telemetry nor open a network port.
+When ogx is launched under `opentelemetry-instrument`, the auto-instrumentation owns the
+global `MeterProvider` and manages OTLP export; in that case the scrape reader is added to
+the existing provider instead of installing a competing one, so ogx metrics still reach the
+scrape endpoint.
+
 ### Response Handling
 
 - Non-streaming responses return JSON via FastAPI's standard response handling.

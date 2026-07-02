@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
@@ -15,8 +15,12 @@ class DoclingServeFileProcessorConfig(BaseModel):
     """Configuration for remote Docling Serve file processor."""
 
     base_url: str = Field(
-        default="http://localhost:5001/v1",
-        description="Base URL of the Docling Serve instance",
+        default="http://localhost:5001",
+        description=(
+            "Base URL of the Docling Serve instance. "
+            "Do not include /v1 suffix - AsyncDoclingServiceClient adds it automatically. "
+            "For backward compatibility, /v1 suffix will be stripped if present."
+        ),
     )
     api_key: SecretStr | None = Field(
         default=None,
@@ -28,10 +32,18 @@ class DoclingServeFileProcessorConfig(BaseModel):
         le=4096,
         description="Default chunk size in tokens when chunking_strategy type is 'auto'",
     )
+    mode: Literal["async", "sync", "auto"] = Field(
+        default="async",
+        description=(
+            "API mode: 'async' (use asynchronous submit/poll endpoints, recommended for both local and SaaS), "
+            "'sync' (use synchronous endpoints, fallback option), or 'auto' (detect server capabilities)"
+        ),
+    )
 
     @classmethod
     def sample_run_config(cls, **kwargs: Any) -> dict[str, Any]:
         return {
-            "base_url": "${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}",
+            "base_url": "${env.DOCLING_SERVE_URL:=http://localhost:5001}",
             "api_key": "${env.DOCLING_SERVE_API_KEY:=}",
+            "mode": "${env.DOCLING_SERVE_MODE:=async}",
         }
