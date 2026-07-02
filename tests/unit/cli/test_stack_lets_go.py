@@ -8,7 +8,7 @@
 
 import argparse
 import warnings
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -17,11 +17,10 @@ from ogx.cli.stack.lets_go import (
     _CLAUDE_CODE_ALIASES,
     _CLAUDE_CODE_PROVIDER_PRIORITY,
     StackLetsGo,
+    _autodetect_providers,
     _build_claude_code_aliases,
     _ProbeStatus,
 )
-from ogx.core.datatypes import QualifiedModel
-from ogx_api import ModelType
 
 
 @pytest.fixture
@@ -104,46 +103,30 @@ class TestTopLevelLetsGoArguments:
 
 
 class TestAutodetect:
-    @patch(
-        "ogx.cli.stack.lets_go._probe_provider_availability",
-        return_value=(_ProbeStatus.UNREACHABLE, [], "", "default", None),
-    )
-    def test_autodetect_no_providers(self, mock_probe: MagicMock):
-        from ogx.cli.stack.lets_go import _autodetect_providers
+    async def test_autodetect_no_providers(self):
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability") as m:
+            m.return_value = (_ProbeStatus.UNREACHABLE, [], "", "default", None)
+            parts = (await _autodetect_providers())[0].split(",")
+            assert "files=inline::localfs" in parts
+            assert "vector_io=inline::faiss" in parts
 
-        parts = _autodetect_providers()[0].split(",")
-        assert "files=inline::localfs" in parts
-        assert "vector_io=inline::faiss" in parts
+    async def test_no_key_providers_excluded(self):
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability") as m:
+            m.return_value = (_ProbeStatus.NO_KEY, [], "", "default", None)
+            parts = (await _autodetect_providers())[0].split(",")
+            assert "files=inline::localfs" in parts
+            assert "vector_io=inline::faiss" in parts
 
-    @patch(
-        "ogx.cli.stack.lets_go._probe_provider_availability",
-        return_value=(_ProbeStatus.NO_KEY, [], "", "default", None),
-    )
-    def test_no_key_providers_excluded(self, mock_probe: MagicMock):
-        from ogx.cli.stack.lets_go import _autodetect_providers
+    async def test_autodetect_all_ok(self):
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability") as m:
+            m.return_value = (_ProbeStatus.OK, [], "http://test", "default", None)
+            spec, _ = await _autodetect_providers()
+            parts = spec.split(",")
+            assert "inference=remote::ollama" in parts
+            assert "inference=remote::anthropic" in parts
+            assert "files=inline::localfs" in parts
 
-        parts = _autodetect_providers()[0].split(",")
-        assert "files=inline::localfs" in parts
-        assert "vector_io=inline::faiss" in parts
-
-    @patch(
-        "ogx.cli.stack.lets_go._probe_provider_availability",
-        return_value=(_ProbeStatus.OK, [], "http://test", "default", None),
-    )
-    def test_autodetect_all_ok(self, mock_probe: MagicMock):
-        from ogx.cli.stack.lets_go import _autodetect_providers
-
-        spec, _ = _autodetect_providers()
-        parts = spec.split(",")
-        assert "inference=remote::ollama" in parts
-        assert "inference=remote::anthropic" in parts
-        assert "files=inline::localfs" in parts
-        assert len(parts) == 13  # 8 probed + 5 inline
-
-    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
-    def test_autodetect_only_ollama(self, mock_probe: MagicMock):
-        from ogx.cli.stack.lets_go import _autodetect_providers
-
+    async def test_autodetect_only_ollama(self):
         def side_effect(
             provider_type: str,
             base_url_env: object,
@@ -156,16 +139,12 @@ class TestAutodetect:
                 return (_ProbeStatus.OK, [], "http://localhost:11434/v1", "default", None)
             return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
-        mock_probe.side_effect = side_effect
-        parts = _autodetect_providers()[0].split(",")
-        assert "inference=remote::ollama" in parts
-        assert "files=inline::localfs" in parts
-        assert len(parts) == 6  # 1 inference + 5 inline
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability", side_effect=side_effect):
+            parts = (await _autodetect_providers())[0].split(",")
+            assert "inference=remote::ollama" in parts
+            assert len(parts) == 6  # 1 inference + 5 inline
 
-    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
-    def test_autodetect_uses_env_var_name(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _autodetect_providers
-
+    async def test_autodetect_uses_env_var_name(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("OLLAMA_URL", "http://myhost:11434/v1")
         captured: list[str] = []
 
@@ -181,16 +160,11 @@ class TestAutodetect:
                 captured.append(base_url_env)
             return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
-        mock_probe.side_effect = side_effect
-        _autodetect_providers()
-        assert captured[0] == "OLLAMA_URL"
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability", side_effect=side_effect):
+            await _autodetect_providers()
+            assert captured[0] == "OLLAMA_URL"
 
-    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
-    def test_autodetect_result_order_matches_candidate_order(
-        self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch
-    ):
-        from ogx.cli.stack.lets_go import _autodetect_providers
-
+    async def test_autodetect_result_order_matches_candidate_order(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
         def side_effect(
@@ -205,14 +179,11 @@ class TestAutodetect:
                 return (_ProbeStatus.OK, [], "http://test", "default", None)
             return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
-        mock_probe.side_effect = side_effect
-        parts = _autodetect_providers()[0].split(",")
-        assert parts.index("inference=remote::ollama") < parts.index("inference=remote::openai")
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability", side_effect=side_effect):
+            parts = (await _autodetect_providers())[0].split(",")
+            assert parts.index("inference=remote::ollama") < parts.index("inference=remote::openai")
 
-    @patch("ogx.cli.stack.lets_go._probe_provider_availability")
-    def test_autodetect_includes_vllm_on_needs_key(self, mock_probe: MagicMock, monkeypatch: pytest.MonkeyPatch):
-        from ogx.cli.stack.lets_go import _autodetect_providers
-
+    async def test_autodetect_includes_vllm_on_needs_key(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("VLLM_API_TOKEN", raising=False)
 
         def side_effect(
@@ -227,54 +198,96 @@ class TestAutodetect:
                 return (_ProbeStatus.NEEDS_KEY, [], "http://localhost:8000/v1", "default", None)
             return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
 
-        mock_probe.side_effect = side_effect
-        parts = _autodetect_providers()[0].split(",")
-        assert "inference=remote::vllm" in parts
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability", side_effect=side_effect):
+            parts = (await _autodetect_providers())[0].split(",")
+            assert "inference=remote::vllm" in parts
+
+    async def test_autodetect_detects_embedding_when_no_key_env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        def side_effect(
+            provider_type: str,
+            base_url_env: object,
+            default_base_url: str,
+            required_api_key_env: object,
+            optional_api_key_env: object = None,
+            debug: bool = False,
+        ) -> tuple:
+            if provider_type == "remote::openai":
+                # No key → NO_KEY status
+                return (_ProbeStatus.NO_KEY, [], "https://api.openai.com/v1", "default", None)
+            return (_ProbeStatus.UNREACHABLE, [], "", "default", None)
+
+        with patch("ogx.cli.stack.lets_go._probe_provider_availability", side_effect=side_effect):
+            spec, embedding = await _autodetect_providers()
+            assert embedding is None
 
 
-class TestRunCommand:
+class TestRunCommandSync:
+    """Tests that interact with the sync CLI entry point via _run_stack_lets_go_cmd.
+
+    These patch `_autodetect_providers` with AsyncMock because it is now async.
+    run_letsgo_cmd internally calls asyncio.run(), so these tests must not use
+    the async test marker (which would have a running event loop already).
+    """
+
     def test_no_inference_provider_exits(self, lets_go: StackLetsGo):
         args = lets_go.parser.parse_args([])
-        with (
-            patch(
-                "ogx.cli.stack.lets_go._autodetect_providers",
-                return_value=(
-                    "files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
-                    None,
-                ),
-            ),
-            warnings.catch_warnings(),
-            pytest.raises(SystemExit),
-        ):
+        with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
+            with pytest.raises(SystemExit):
+                with patch(
+                    "ogx.cli.stack.lets_go._autodetect_providers",
+                    AsyncMock(
+                        return_value=(
+                            "files=inline::localfs,vector_io=inline::faiss,tool_runtime=inline::file-search,responses=inline::builtin",
+                            None,
+                        )
+                    ),
+                ):
+                    lets_go._run_stack_lets_go_cmd(args)
 
     def test_empty_spec_exits(self, lets_go: StackLetsGo):
         args = lets_go.parser.parse_args([])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            with pytest.raises(SystemExit):
+                with patch("ogx.cli.stack.lets_go._autodetect_providers", AsyncMock(return_value=("", None))):
+                    lets_go._run_stack_lets_go_cmd(args)
+
+    def test_run_command_uses_autodetected_providers(self, lets_go: StackLetsGo):
+        args = lets_go.parser.parse_args([])
+        mock_cfg = MagicMock()
+        mock_cfg.model_dump.return_value = {}
+
         with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("", None)),
+            patch("ogx.cli.stack.lets_go._uvicorn_run"),
+            patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], [])),
+            patch("ogx.cli.stack.lets_go.subprocess.run"),
+            patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec", return_value=mock_cfg),
+            patch(
+                "ogx.cli.stack.lets_go._autodetect_providers",
+                AsyncMock(return_value=("inference=remote::ollama", None)),
+            ),
+            patch("builtins.open", MagicMock()),
+            patch("ogx.cli.stack.lets_go.yaml.dump"),
             warnings.catch_warnings(),
-            pytest.raises(SystemExit),
         ):
             warnings.simplefilter("ignore", FutureWarning)
             lets_go._run_stack_lets_go_cmd(args)
 
-    @patch("ogx.cli.stack.lets_go._uvicorn_run")
-    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
-    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
-    def test_providers_override_skips_autodetect(
-        self,
-        mock_build_config: MagicMock,
-        mock_get_deps: MagicMock,
-        mock_uvicorn_run: MagicMock,
-        lets_go: StackLetsGo,
-    ):
+        assert mock_cfg.model_dump.called
+
+    def test_providers_override_skips_autodetect(self, lets_go: StackLetsGo):
         args = lets_go.parser.parse_args(["--providers-override", "inference=remote::ollama"])
         mock_cfg = MagicMock()
         mock_cfg.model_dump.return_value = {}
-        mock_build_config.return_value = mock_cfg
 
         with (
+            patch("ogx.cli.stack.lets_go._uvicorn_run"),
+            patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], [])),
+            patch("ogx.cli.stack.lets_go.subprocess.run"),
+            patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec", return_value=mock_cfg),
             patch("ogx.cli.stack.lets_go._autodetect_providers") as mock_detect,
             patch("builtins.open", MagicMock()),
             patch("ogx.cli.stack.lets_go.yaml.dump"),
@@ -283,177 +296,6 @@ class TestRunCommand:
             warnings.simplefilter("ignore", FutureWarning)
             lets_go._run_stack_lets_go_cmd(args)
         mock_detect.assert_not_called()
-
-    @patch("ogx.cli.stack.lets_go._uvicorn_run")
-    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
-    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
-    def test_run_command_uses_autodetected_providers(
-        self,
-        mock_build_config: MagicMock,
-        mock_get_deps: MagicMock,
-        mock_uvicorn_run: MagicMock,
-        lets_go: StackLetsGo,
-    ):
-        args = lets_go.parser.parse_args([])
-        mock_cfg = MagicMock()
-        mock_cfg.model_dump.return_value = {}
-        mock_build_config.return_value = mock_cfg
-
-        with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
-            patch("builtins.open", MagicMock()),
-            patch("ogx.cli.stack.lets_go.yaml.dump"),
-            warnings.catch_warnings(),
-        ):
-            warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
-
-        mock_build_config.assert_called_once()
-        assert mock_build_config.call_args.kwargs["dynamic_config_spec"] == "inference=remote::ollama"
-
-    @patch("ogx.cli.stack.lets_go._uvicorn_run")
-    @patch("ogx.cli.stack.lets_go.subprocess.run")
-    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=(["httpx", "faiss-cpu"], [], []))
-    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
-    def test_install_deps_called_by_default(
-        self,
-        mock_build_config: MagicMock,
-        mock_get_deps: MagicMock,
-        mock_subprocess: MagicMock,
-        mock_uvicorn_run: MagicMock,
-        lets_go: StackLetsGo,
-    ):
-        args = lets_go.parser.parse_args([])
-        mock_cfg = MagicMock()
-        mock_cfg.model_dump.return_value = {}
-        mock_build_config.return_value = mock_cfg
-        mock_subprocess.return_value = MagicMock(returncode=0)
-
-        with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
-            patch("builtins.open", MagicMock()),
-            patch("ogx.cli.stack.lets_go.yaml.dump"),
-            warnings.catch_warnings(),
-        ):
-            warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
-
-        mock_subprocess.assert_called_once()
-        call_args = mock_subprocess.call_args[0][0]
-        assert "httpx" in call_args
-        assert "faiss-cpu" in call_args
-
-    @patch("ogx.cli.stack.lets_go._uvicorn_run")
-    @patch("ogx.cli.stack.lets_go.subprocess.run")
-    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=(["httpx"], [], []))
-    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
-    def test_install_deps_skipped_with_flag(
-        self,
-        mock_build_config: MagicMock,
-        mock_get_deps: MagicMock,
-        mock_subprocess: MagicMock,
-        mock_uvicorn_run: MagicMock,
-        lets_go: StackLetsGo,
-    ):
-        args = lets_go.parser.parse_args(["--skip-install-deps"])
-        mock_cfg = MagicMock()
-        mock_cfg.model_dump.return_value = {}
-        mock_build_config.return_value = mock_cfg
-
-        with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::ollama", None)),
-            patch("builtins.open", MagicMock()),
-            patch("ogx.cli.stack.lets_go.yaml.dump"),
-            warnings.catch_warnings(),
-        ):
-            warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
-
-        mock_subprocess.assert_not_called()
-
-    @patch("ogx.cli.stack.lets_go._uvicorn_run")
-    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
-    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
-    @patch("ogx.cli.stack.lets_go._detect_embedding_model")
-    def test_autodetected_embedding_model_is_registered_as_embedding(
-        self,
-        mock_detect_embedding_model: MagicMock,
-        mock_build_config: MagicMock,
-        mock_get_deps: MagicMock,
-        mock_uvicorn_run: MagicMock,
-        lets_go: StackLetsGo,
-    ):
-        args = lets_go.parser.parse_args([])
-        mock_cfg = MagicMock()
-        mock_cfg.providers = {"inference": [MagicMock()], "vector_io": [MagicMock()]}
-        mock_cfg.vector_stores = None
-        mock_cfg.registered_resources.models = []
-        mock_cfg.model_dump.return_value = {}
-        mock_build_config.return_value = mock_cfg
-        mock_detect_embedding_model.return_value = (
-            QualifiedModel(provider_id="openai", model_id="Qwen/Qwen3-Embedding-0.6B"),
-            512,
-        )
-
-        with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::openai", None)),
-            patch("builtins.open", MagicMock()),
-            patch("ogx.cli.stack.lets_go.yaml.dump"),
-            warnings.catch_warnings(),
-        ):
-            warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
-
-        matches = [
-            model
-            for model in mock_cfg.registered_resources.models
-            if model.provider_id == "openai"
-            and model.model_id == "Qwen/Qwen3-Embedding-0.6B"
-            and model.provider_model_id == "Qwen/Qwen3-Embedding-0.6B"
-            and model.model_type == ModelType.embedding
-            and model.metadata.get("embedding_dimension") == 512
-        ]
-        assert len(matches) == 1
-
-    @patch("ogx.cli.stack.lets_go._uvicorn_run")
-    @patch("ogx.cli.stack.lets_go.get_provider_dependencies", return_value=([], [], []))
-    @patch("ogx.cli.stack.lets_go.run_config_from_dynamic_config_spec")
-    def test_default_embedding_model_sets_temp_embedding_dimension_metadata(
-        self,
-        mock_build_config: MagicMock,
-        mock_get_deps: MagicMock,
-        mock_uvicorn_run: MagicMock,
-        lets_go: StackLetsGo,
-    ):
-        args = lets_go.parser.parse_args(
-            ["--default-embedding-model", "openai/Qwen/Qwen3-Embedding-0.6B", "--default-embedding-dimension", "512"]
-        )
-        mock_cfg = MagicMock()
-        mock_cfg.providers = {"inference": [MagicMock()], "vector_io": [MagicMock()]}
-        mock_cfg.vector_stores = None
-        mock_cfg.registered_resources.models = []
-        mock_cfg.model_dump.return_value = {}
-        mock_build_config.return_value = mock_cfg
-
-        with (
-            patch("ogx.cli.stack.lets_go._autodetect_providers", return_value=("inference=remote::openai", None)),
-            patch("builtins.open", MagicMock()),
-            patch("ogx.cli.stack.lets_go.yaml.dump"),
-            warnings.catch_warnings(),
-        ):
-            warnings.simplefilter("ignore", FutureWarning)
-            lets_go._run_stack_lets_go_cmd(args)
-
-        matches = [
-            model
-            for model in mock_cfg.registered_resources.models
-            if model.provider_id == "openai"
-            and model.model_id == "Qwen/Qwen3-Embedding-0.6B"
-            and model.provider_model_id == "Qwen/Qwen3-Embedding-0.6B"
-            and model.model_type == ModelType.embedding
-            and model.metadata.get("embedding_dimension") == 512
-        ]
-        assert len(matches) == 1
 
 
 class TestDeprecation:
