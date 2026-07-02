@@ -377,7 +377,7 @@ For faster processing with fewer formats, use `inline::docling` instead.
 ## Performance
 
 - Processing speed: ~1-2 seconds per page
-- Best for: Documents <100 pages
+- Best for: Documents under 100 pages
 - Cost: ~$0.01 per page (verify current pricing with Unstructured.io)
 
 ## Documentation
