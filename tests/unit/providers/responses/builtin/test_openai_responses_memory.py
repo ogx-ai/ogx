@@ -815,6 +815,80 @@ async def test_memory_write_trigger_coalesces_pending_conversation_writes(
     assert recorded_calls[0]["response_id"] == "resp_second"
 
 
+async def test_memory_write_trigger_serializes_active_conversation_writes(
+    monkeypatch,
+    openai_responses_impl,
+):
+    calls = []
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+
+    async def fake_write_conversation_memory(**kwargs):
+        response_id = kwargs["response_id"]
+        calls.append(("start", response_id))
+        if response_id == "resp_first":
+            first_started.set()
+            await release_first.wait()
+        calls.append(("end", response_id))
+
+    def fake_create_detached_background_task(coro):
+        return asyncio.create_task(coro)
+
+    monkeypatch.setattr(openai_responses_module, "write_conversation_memory", fake_write_conversation_memory)
+    monkeypatch.setattr(
+        openai_responses_module,
+        "create_detached_background_task",
+        fake_create_detached_background_task,
+    )
+    openai_responses_impl.memory_config.enabled = True
+    openai_responses_impl.memory_config.default_vector_store_id = "vs_mem"
+    openai_responses_impl.memory_config.write_debounce_seconds = 0
+
+    openai_responses_impl._schedule_memory_write(
+        conversation_id="conv_" + "i" * 48,
+        response_id="resp_first",
+        response_status="completed",
+        model="test-model",
+        memory=MemoryToolConfig(owner_id="user-123"),
+        metadata=None,
+        safety_identifier=None,
+    )
+    await asyncio.wait_for(first_started.wait(), timeout=1)
+
+    openai_responses_impl._schedule_memory_write(
+        conversation_id="conv_" + "i" * 48,
+        response_id="resp_second",
+        response_status="completed",
+        model="test-model",
+        memory=MemoryToolConfig(owner_id="user-123"),
+        metadata=None,
+        safety_identifier=None,
+    )
+    await asyncio.sleep(0)
+
+    assert calls == [("start", "resp_first")]
+
+    release_first.set()
+    for _ in range(10):
+        if calls == [
+            ("start", "resp_first"),
+            ("end", "resp_first"),
+            ("start", "resp_second"),
+            ("end", "resp_second"),
+        ]:
+            break
+        await asyncio.sleep(0.01)
+
+    assert calls == [
+        ("start", "resp_first"),
+        ("end", "resp_first"),
+        ("start", "resp_second"),
+        ("end", "resp_second"),
+    ]
+    assert openai_responses_impl._memory_write_tasks == {}
+    assert openai_responses_impl._memory_write_locks == {}
+
+
 async def test_memory_write_trigger_captures_authenticated_owner_before_detaching(
     monkeypatch,
     openai_responses_impl,

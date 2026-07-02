@@ -160,6 +160,8 @@ class OpenAIResponsesImpl:
         self._background_response_tasks_lock = asyncio.Lock()
         self._background_response_status_locks: dict[str, asyncio.Lock] = {}
         self._memory_write_tasks: dict[tuple[str, str, str], asyncio.Task] = {}
+        self._memory_write_locks: dict[tuple[str, str, str], asyncio.Lock] = {}
+        self._active_memory_write_keys: set[tuple[str, str, str]] = set()
 
     async def initialize(self) -> None:
         """No-op: background workers are started lazily on first use.
@@ -202,6 +204,13 @@ class OpenAIResponsesImpl:
         if lock is None:
             lock = asyncio.Lock()
             self._background_response_status_locks[response_id] = lock
+        return lock
+
+    def _get_memory_write_lock(self, memory_write_key: tuple[str, str, str]) -> asyncio.Lock:
+        lock = self._memory_write_locks.get(memory_write_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._memory_write_locks[memory_write_key] = lock
         return lock
 
     async def _background_worker(self) -> None:
@@ -426,7 +435,8 @@ class OpenAIResponsesImpl:
         memory_write_key = (owner_id, conversation_id, vector_store_id)
         previous_task = self._memory_write_tasks.get(memory_write_key)
         if previous_task is not None and not previous_task.done():
-            previous_task.cancel()
+            if memory_write_key not in self._active_memory_write_keys:
+                previous_task.cancel()
 
         task = create_detached_background_task(
             self._write_conversation_memory_after_delay(
@@ -458,22 +468,32 @@ class OpenAIResponsesImpl:
         try:
             if self.memory_config.write_debounce_seconds > 0:
                 await asyncio.sleep(self.memory_config.write_debounce_seconds)
-            await self._write_conversation_memory_safe(
-                conversation_id=conversation_id,
-                response_id=response_id,
-                response_status=response_status,
-                model=model,
-                memory=memory,
-                metadata=metadata,
-                safety_identifier=safety_identifier,
-                owner_id=owner_id,
-            )
+            async with self._get_memory_write_lock(memory_write_key):
+                self._active_memory_write_keys.add(memory_write_key)
+                try:
+                    await self._write_conversation_memory_safe(
+                        conversation_id=conversation_id,
+                        response_id=response_id,
+                        response_status=response_status,
+                        model=model,
+                        memory=memory,
+                        metadata=metadata,
+                        safety_identifier=safety_identifier,
+                        owner_id=owner_id,
+                    )
+                finally:
+                    self._active_memory_write_keys.discard(memory_write_key)
         except asyncio.CancelledError:
             raise
         finally:
             current_task = asyncio.current_task()
             if self._memory_write_tasks.get(memory_write_key) is current_task:
                 self._memory_write_tasks.pop(memory_write_key, None)
+            if (
+                memory_write_key not in self._memory_write_tasks
+                and memory_write_key not in self._active_memory_write_keys
+            ):
+                self._memory_write_locks.pop(memory_write_key, None)
 
     async def _write_conversation_memory_safe(
         self,
