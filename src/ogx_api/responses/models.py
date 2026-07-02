@@ -88,7 +88,10 @@ class MemoryToolConfig(BaseModel):
     )
     owner_id: str | None = Field(
         default=None,
-        description="Stable owner identifier used to scope memory retrieval.",
+        description=(
+            "Fallback owner identifier used to scope memory retrieval when no authenticated "
+            "user principal is available."
+        ),
     )
     vector_store_id: str | None = Field(
         default=None,
