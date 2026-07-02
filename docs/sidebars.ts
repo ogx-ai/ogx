@@ -191,7 +191,6 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'providers/inference/index' },
           items: [
             'providers/inference/inline_sentence-transformers',
-            'providers/inference/inline_transformers',
             'providers/inference/remote_anthropic',
             'providers/inference/remote_azure',
             'providers/inference/remote_bedrock',
