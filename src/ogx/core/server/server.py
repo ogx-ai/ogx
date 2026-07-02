@@ -22,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from openai import BadRequestError
+from packaging.version import InvalidVersion, Version
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ogx.core.access_control.access_control import AccessDeniedError
@@ -243,19 +244,25 @@ class ClientVersionMiddleware:
             client_version = headers.get(b"x-ogx-client-version", b"").decode()
             if client_version:
                 try:
-                    client_version_parts = tuple(map(int, client_version.split(".")[:2]))
-                    server_version_parts = tuple(map(int, self.server_version.split(".")[:2]))
-                    if client_version_parts != server_version_parts:
+                    if not _client_version_is_compatible(client_version, self.server_version):
                         return await _send_error_response(
                             send,
                             status=httpx.codes.UPGRADE_REQUIRED,
                             message=f"Client version {client_version} is not compatible with server version {self.server_version}. Please update your client.",
                         )
-                except (ValueError, IndexError):
+                except InvalidVersion:
                     # If version parsing fails, let the request through
                     pass
 
         return await self.app(scope, receive, send)
+
+
+def _client_version_is_compatible(client_version: str, server_version: str) -> bool:
+    client = Version(client_version)
+    server = Version(server_version)
+    if client.is_devrelease or server.is_devrelease or client.local or server.local:
+        return True
+    return (client.major, client.minor) == (server.major, server.minor)
 
 
 class ProviderDataMiddleware:
