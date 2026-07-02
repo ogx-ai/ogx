@@ -16,6 +16,7 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.config import MemoryConfig
 from ogx.providers.utils.responses.responses_store import ResponsesStore
 from ogx_api import (
+    DeleteFileRequest,
     Files,
     Inference,
     OpenAIFileUploadPurpose,
@@ -83,7 +84,7 @@ async def resolve_memory_context(
     if not memory_config.enabled:
         return None
     if request_memory is None:
-        logger.debug("Skipping memory retrieval without request opt-in")
+        logger.debug("Skipping memory retrieval", reason="missing request opt-in")
         return None
     if not request_memory.enabled:
         return None
@@ -94,12 +95,12 @@ async def resolve_memory_context(
         else memory_config.default_vector_store_id
     )
     if not vector_store_id:
-        logger.debug("Skipping memory retrieval without vector store")
+        logger.debug("Skipping memory retrieval", reason="missing vector store")
         return None
 
-    owner_id = _resolve_owner_id(request_memory, metadata, safety_identifier)
+    owner_id = resolve_memory_owner_id(request_memory, metadata, safety_identifier)
     if not owner_id:
-        logger.debug("Skipping memory retrieval without owner")
+        logger.debug("Skipping memory retrieval", reason="missing owner")
         return None
 
     filters = build_memory_filters(memory_config, owner_id, request_memory.filters)
@@ -114,7 +115,7 @@ async def resolve_memory_context(
     ranking_options = request_memory.ranking_options
     query = extract_memory_query(input)
     if query is None:
-        logger.debug("Skipping memory retrieval without query text")
+        logger.debug("Skipping memory retrieval", reason="missing query text")
         return None
 
     try:
@@ -160,6 +161,7 @@ async def write_conversation_memory(
     model: str | None,
     metadata: dict[str, str] | None,
     safety_identifier: str | None,
+    owner_id: str | None = None,
 ) -> None:
     if (
         not memory_config.enabled
@@ -177,12 +179,12 @@ async def write_conversation_memory(
         else memory_config.default_vector_store_id
     )
     if not vector_store_id:
-        logger.debug("Skipping memory write without vector store")
+        logger.debug("Skipping memory write", reason="missing vector store")
         return
 
-    owner_id = _resolve_owner_id(request_memory, metadata, safety_identifier)
+    owner_id = _normalize_owner_id(owner_id) or resolve_memory_owner_id(request_memory, metadata, safety_identifier)
     if not owner_id:
-        logger.debug("Skipping memory write without owner")
+        logger.debug("Skipping memory write", reason="missing owner")
         return
 
     summarization_model = memory_config.summarization_model or model
@@ -230,11 +232,6 @@ async def write_conversation_memory(
         file=upload,
     )
 
-    previous_record = await responses_store.get_memory_record(
-        owner_id=owner_id,
-        conversation_id=conversation_id,
-        vector_store_id=vector_store_id,
-    )
     attached_file = await vector_io_api.openai_attach_file_to_vector_store(
         vector_store_id=vector_store_id,
         request=OpenAIAttachFileRequest(
@@ -255,8 +252,14 @@ async def write_conversation_memory(
             vector_store_id=vector_store_id,
             file_id=uploaded_file.id,
         )
+        await _delete_uploaded_memory_file(files_api=files_api, file_id=uploaded_file.id)
         return
 
+    previous_record = await responses_store.get_memory_record(
+        owner_id=owner_id,
+        conversation_id=conversation_id,
+        vector_store_id=vector_store_id,
+    )
     await responses_store.upsert_memory_record(
         owner_id=owner_id,
         conversation_id=conversation_id,
@@ -266,21 +269,15 @@ async def write_conversation_memory(
     )
 
     if previous_record is not None and previous_record.file_id != uploaded_file.id:
-        try:
-            await vector_io_api.openai_delete_vector_store_file(
-                vector_store_id=vector_store_id,
-                file_id=previous_record.file_id,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Failed to delete previous memory file",
-                vector_store_id=vector_store_id,
-                file_id=previous_record.file_id,
-                error=str(exc),
-            )
+        await _delete_previous_memory_file(
+            files_api=files_api,
+            vector_io_api=vector_io_api,
+            vector_store_id=vector_store_id,
+            file_id=previous_record.file_id,
+        )
 
 
-def _resolve_owner_id(
+def resolve_memory_owner_id(
     request_memory: MemoryToolConfig | None,
     metadata: dict[str, str] | None,
     safety_identifier: str | None,
@@ -298,6 +295,39 @@ def _resolve_owner_id(
     if metadata:
         return _normalize_owner_id(metadata.get("owner_id")) or _normalize_owner_id(metadata.get("user_id"))
     return None
+
+
+async def _delete_previous_memory_file(
+    files_api: Files,
+    vector_io_api: VectorIO,
+    vector_store_id: str,
+    file_id: str,
+) -> None:
+    try:
+        await vector_io_api.openai_delete_vector_store_file(
+            vector_store_id=vector_store_id,
+            file_id=file_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to delete previous memory file from vector store",
+            vector_store_id=vector_store_id,
+            file_id=file_id,
+            error=str(exc),
+        )
+
+    await _delete_uploaded_memory_file(files_api=files_api, file_id=file_id)
+
+
+async def _delete_uploaded_memory_file(files_api: Files, file_id: str) -> None:
+    try:
+        await files_api.openai_delete_file(request=DeleteFileRequest(file_id=file_id))
+    except Exception as exc:
+        logger.warning(
+            "Failed to delete memory file",
+            file_id=file_id,
+            error=str(exc),
+        )
 
 
 def _normalize_owner_id(owner_id: str | None) -> str | None:
@@ -439,10 +469,6 @@ def _escape_xml_attr(value: Any) -> str:
 
 def _escape_xml_text(value: str) -> str:
     return escape(value, quote=False)
-
-
-def _estimate_tokens(text: str) -> int:
-    return _estimate_tokens_for_chars(len(text))
 
 
 def _estimate_tokens_for_chars(char_count: int) -> int:

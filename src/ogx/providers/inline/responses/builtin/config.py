@@ -159,6 +159,11 @@ class MemoryConfig(BaseModel):
         default=True,
         description="Whether to write conversation summaries to memory after stored responses complete.",
     )
+    write_debounce_seconds: float = Field(
+        default=30.0,
+        ge=0,
+        description="Seconds to wait before materializing memory so rapid conversation turns coalesce into one write.",
+    )
     summarization_prompt: str = Field(
         default=DEFAULT_MEMORY_SUMMARIZATION_PROMPT,
         description="Prompt template used to generate long-term memory summaries.",

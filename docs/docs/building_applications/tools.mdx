@@ -72,7 +72,7 @@ response = client.responses.create(
 )
 ```
 
-When `memory_config.write_enabled` is enabled, stored conversations that complete successfully are summarized asynchronously into Markdown memory files and attached to the same vector store. The memory file includes the generated summary plus a searchable transcript, so hybrid search can recover details that the summary omits. Use `memory.enabled=false` on a request to skip both recall and summary writes for that response.
+When `memory_config.write_enabled` is enabled, stored conversations that complete successfully are queued for asynchronous memory materialization. Conversation messages are stored on every turn, while memory writes are debounced by `memory_config.write_debounce_seconds` so rapid turns in the same conversation and vector store coalesce into one Markdown memory file. The memory file includes the generated summary plus a searchable transcript, so hybrid search can recover details that the summary omits. Use `memory.enabled=false` on a request to skip both recall and summary writes for that response.
 
 ## Model Context Protocol (MCP)
 

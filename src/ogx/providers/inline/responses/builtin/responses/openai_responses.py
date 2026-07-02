@@ -81,7 +81,7 @@ from ogx_api import (
 )
 from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier
 
-from .memory import resolve_memory_context, write_conversation_memory
+from .memory import resolve_memory_context, resolve_memory_owner_id, write_conversation_memory
 from .streaming import StreamingResponseOrchestrator
 from .tool_executor import ToolExecutor
 from .types import ChatCompletionContext, ToolContext
@@ -97,6 +97,13 @@ logger = get_logger(name=__name__, category="openai_responses")
 BACKGROUND_RESPONSE_TIMEOUT_SECONDS = 300  # 5 minutes
 BACKGROUND_QUEUE_MAX_SIZE = 100
 BACKGROUND_NUM_WORKERS = 10
+STREAMING_PERSISTED_EVENT_TYPES = {
+    "response.in_progress",
+    "response.output_item.done",
+    "response.completed",
+    "response.incomplete",
+    "response.failed",
+}
 
 
 @dataclass
@@ -152,6 +159,7 @@ class OpenAIResponsesImpl:
         self._background_response_tasks: dict[str, asyncio.Task] = {}
         self._background_response_tasks_lock = asyncio.Lock()
         self._background_response_status_locks: dict[str, asyncio.Lock] = {}
+        self._memory_write_tasks: dict[tuple[str, str, str], asyncio.Task] = {}
 
     async def initialize(self) -> None:
         """No-op: background workers are started lazily on first use.
@@ -181,8 +189,12 @@ class OpenAIResponsesImpl:
         for task in self._background_worker_tasks:
             task.cancel()
 
+        memory_write_task_list = list(self._memory_write_tasks.values())
+        for task in memory_write_task_list:
+            task.cancel()
+
         # Wait for all tasks to complete
-        all_tasks = list(self._background_worker_tasks) + response_task_list
+        all_tasks = list(self._background_worker_tasks) + response_task_list + memory_write_task_list
         await asyncio.gather(*all_tasks, return_exceptions=True)
 
     def _get_background_response_status_lock(self, response_id: str) -> asyncio.Lock:
@@ -272,6 +284,7 @@ class OpenAIResponsesImpl:
                     # Remove from tracking
                     async with self._background_response_tasks_lock:
                         self._background_response_tasks.pop(response_id, None)
+                    self._background_response_status_locks.pop(response_id, None)
                     self._background_queue.task_done()
 
     async def _prepend_previous_response(
@@ -401,8 +414,24 @@ class OpenAIResponsesImpl:
         ):
             return
 
-        create_detached_background_task(
-            self._write_conversation_memory_safe(
+        vector_store_id = (
+            memory.vector_store_id if memory and memory.vector_store_id else self.memory_config.default_vector_store_id
+        )
+        assert vector_store_id is not None
+        owner_id = resolve_memory_owner_id(memory, metadata, safety_identifier)
+        if not owner_id:
+            logger.debug("Skipping memory write", reason="missing owner")
+            return
+
+        memory_write_key = (owner_id, conversation_id, vector_store_id)
+        previous_task = self._memory_write_tasks.get(memory_write_key)
+        if previous_task is not None and not previous_task.done():
+            previous_task.cancel()
+
+        task = create_detached_background_task(
+            self._write_conversation_memory_after_delay(
+                memory_write_key=memory_write_key,
+                owner_id=owner_id,
                 conversation_id=conversation_id,
                 response_id=response_id,
                 response_status=response_status,
@@ -412,6 +441,39 @@ class OpenAIResponsesImpl:
                 safety_identifier=safety_identifier,
             )
         )
+        self._memory_write_tasks[memory_write_key] = task
+
+    async def _write_conversation_memory_after_delay(
+        self,
+        memory_write_key: tuple[str, str, str],
+        owner_id: str,
+        conversation_id: str,
+        response_id: str,
+        response_status: str | None,
+        model: str | None,
+        memory: MemoryToolConfig | None,
+        metadata: dict[str, str] | None,
+        safety_identifier: str | None,
+    ) -> None:
+        try:
+            if self.memory_config.write_debounce_seconds > 0:
+                await asyncio.sleep(self.memory_config.write_debounce_seconds)
+            await self._write_conversation_memory_safe(
+                conversation_id=conversation_id,
+                response_id=response_id,
+                response_status=response_status,
+                model=model,
+                memory=memory,
+                metadata=metadata,
+                safety_identifier=safety_identifier,
+                owner_id=owner_id,
+            )
+        except asyncio.CancelledError:
+            raise
+        finally:
+            current_task = asyncio.current_task()
+            if self._memory_write_tasks.get(memory_write_key) is current_task:
+                self._memory_write_tasks.pop(memory_write_key, None)
 
     async def _write_conversation_memory_safe(
         self,
@@ -422,6 +484,7 @@ class OpenAIResponsesImpl:
         memory: MemoryToolConfig | None,
         metadata: dict[str, str] | None,
         safety_identifier: str | None,
+        owner_id: str,
     ) -> None:
         try:
             await write_conversation_memory(
@@ -437,6 +500,7 @@ class OpenAIResponsesImpl:
                 model=model,
                 metadata=metadata,
                 safety_identifier=safety_identifier,
+                owner_id=owner_id,
             )
         except Exception as exc:
             logger.warning(
@@ -656,6 +720,8 @@ class OpenAIResponsesImpl:
         """
         response = getattr(stream_chunk, "response", None)
         response_id = getattr(response, "id", None) or getattr(orchestrator, "response_id", None)
+        if stream_chunk.type not in STREAMING_PERSISTED_EVENT_TYPES:
+            return
 
         try:
             if is_background_response and response_id:

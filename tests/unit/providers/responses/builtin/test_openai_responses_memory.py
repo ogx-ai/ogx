@@ -617,6 +617,49 @@ async def test_write_conversation_memory_uploads_and_attaches_summary():
     )
 
 
+async def test_write_conversation_memory_deletes_previous_memory_file_object():
+    inference_api = AsyncMock()
+    files_api = AsyncMock()
+    vector_io_api = AsyncMock()
+    responses_store = AsyncMock()
+    responses_store.get_conversation_messages.return_value = [OpenAIUserMessageParam(content="I prefer stacked PRs.")]
+    responses_store.get_memory_record.return_value = SimpleNamespace(file_id="file_old")
+    inference_api.openai_chat_completion.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="User prefers stacked PRs."))]
+    )
+    files_api.openai_upload_file.return_value = OpenAIFileObject(
+        id="file_new",
+        bytes=42,
+        created_at=123,
+        filename="memory.md",
+        purpose=OpenAIFilePurpose.ASSISTANTS,
+        status="uploaded",
+    )
+    vector_io_api.openai_attach_file_to_vector_store.return_value = SimpleNamespace(status="completed")
+
+    await write_conversation_memory(
+        inference_api=inference_api,
+        files_api=files_api,
+        vector_io_api=vector_io_api,
+        responses_store=responses_store,
+        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
+        request_memory=MemoryToolConfig(owner_id="user-123"),
+        conversation_id="conv_abc",
+        response_id="resp_123",
+        response_status="completed",
+        model="test-model",
+        metadata=None,
+        safety_identifier=None,
+    )
+
+    vector_io_api.openai_delete_vector_store_file.assert_awaited_once_with(
+        vector_store_id="vs_mem",
+        file_id="file_old",
+    )
+    delete_request = files_api.openai_delete_file.await_args.kwargs["request"]
+    assert delete_request.file_id == "file_old"
+
+
 async def test_memory_write_indexes_full_conversation_for_hybrid_needle_search():
     cases = build_memory_needle_cases()
     target = cases[13]
@@ -699,6 +742,7 @@ async def test_memory_write_trigger_schedules_for_completed_stored_conversation(
     conv_id = "conv_" + "c" * 48
     openai_responses_impl.memory_config.enabled = True
     openai_responses_impl.memory_config.default_vector_store_id = "vs_mem"
+    openai_responses_impl.memory_config.write_debounce_seconds = 0
     mock_conversations_api.list_items.return_value = ConversationItemList(
         data=[],
         first_id=None,
@@ -723,6 +767,82 @@ async def test_memory_write_trigger_schedules_for_completed_stored_conversation(
     assert recorded_calls[0]["conversation_id"] == conv_id
     assert recorded_calls[0]["response_status"] == "completed"
     assert recorded_calls[0]["request_memory"] == MemoryToolConfig(owner_id="user-123")
+
+
+async def test_memory_write_trigger_coalesces_pending_conversation_writes(
+    monkeypatch,
+    openai_responses_impl,
+):
+    recorded_calls = []
+
+    async def fake_write_conversation_memory(**kwargs):
+        recorded_calls.append(kwargs)
+
+    def fake_create_detached_background_task(coro):
+        return asyncio.create_task(coro)
+
+    monkeypatch.setattr(openai_responses_module, "write_conversation_memory", fake_write_conversation_memory)
+    monkeypatch.setattr(
+        openai_responses_module,
+        "create_detached_background_task",
+        fake_create_detached_background_task,
+    )
+    openai_responses_impl.memory_config.enabled = True
+    openai_responses_impl.memory_config.default_vector_store_id = "vs_mem"
+    openai_responses_impl.memory_config.write_debounce_seconds = 0.01
+
+    openai_responses_impl._schedule_memory_write(
+        conversation_id="conv_" + "g" * 48,
+        response_id="resp_first",
+        response_status="completed",
+        model="test-model",
+        memory=MemoryToolConfig(owner_id="user-123"),
+        metadata=None,
+        safety_identifier=None,
+    )
+    openai_responses_impl._schedule_memory_write(
+        conversation_id="conv_" + "g" * 48,
+        response_id="resp_second",
+        response_status="completed",
+        model="test-model",
+        memory=MemoryToolConfig(owner_id="user-123"),
+        metadata=None,
+        safety_identifier=None,
+    )
+    await asyncio.sleep(0.05)
+
+    assert len(recorded_calls) == 1
+    assert recorded_calls[0]["response_id"] == "resp_second"
+
+
+async def test_memory_write_trigger_captures_authenticated_owner_before_detaching(
+    monkeypatch,
+    openai_responses_impl,
+):
+    recorded_calls = []
+
+    async def fake_write_conversation_memory(**kwargs):
+        recorded_calls.append(kwargs)
+
+    monkeypatch.setattr(openai_responses_module, "write_conversation_memory", fake_write_conversation_memory)
+    openai_responses_impl.memory_config.enabled = True
+    openai_responses_impl.memory_config.default_vector_store_id = "vs_mem"
+    openai_responses_impl.memory_config.write_debounce_seconds = 0
+
+    with RequestProviderDataContext(user=User("auth-user", None)):
+        openai_responses_impl._schedule_memory_write(
+            conversation_id="conv_" + "h" * 48,
+            response_id="resp_auth",
+            response_status="completed",
+            model="test-model",
+            memory=MemoryToolConfig(),
+            metadata=None,
+            safety_identifier=None,
+        )
+    await asyncio.sleep(0)
+
+    assert len(recorded_calls) == 1
+    assert recorded_calls[0]["owner_id"] == "auth-user"
 
 
 async def test_memory_write_trigger_skips_when_store_false(
