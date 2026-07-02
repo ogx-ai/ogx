@@ -64,13 +64,17 @@ Configure `memory_config.default_vector_store_id` on the built-in Responses prov
 response = client.responses.create(
     model="llama-3.3-70b",
     input="Use my project preferences when answering.",
-    memory={
-        "owner_id": "user_123",
-        "max_num_results": 5,
-        "max_context_tokens": 1200,
+    extra_body={
+        "memory": {
+            "owner_id": "user_123",
+            "max_num_results": 5,
+            "max_context_tokens": 1200,
+        },
     },
 )
 ```
+
+`memory` is an OGX extension field. When using the official OpenAI Python SDK, pass it through `extra_body`; raw HTTP requests and OGX-generated clients can send `memory` as a top-level request field.
 
 When `memory_config.write_enabled` is enabled, stored conversations that complete successfully are queued for asynchronous memory materialization. Conversation messages are stored on every turn, while memory writes are debounced by `memory_config.write_debounce_seconds` so rapid turns in the same conversation and vector store coalesce into one Markdown memory file. The memory file includes the generated summary plus a searchable transcript, so hybrid search can recover details that the summary omits. Use `memory.enabled=false` on a request to skip both recall and summary writes for that response.
 
