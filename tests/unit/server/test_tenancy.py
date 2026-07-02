@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 from ogx.core.datatypes import TenancyConfig, TenancyMode
 from ogx.core.request_headers import get_authenticated_user
-from ogx.core.server.auth import TenancyMiddleware
+from ogx.core.server.middleware.auth import TenancyMiddleware
 from ogx.core.server.routes import RouteAuthInfo
 from ogx.core.server.server import ProviderDataMiddleware
 
@@ -23,7 +23,7 @@ async def test_multi_tenancy_allows_public_route_without_tenant(monkeypatch):
     middleware = TenancyMiddleware(mock_app, TenancyConfig(mode=TenancyMode.MULTI))
 
     monkeypatch.setattr(
-        "ogx.core.server.auth.find_matching_route",
+        "ogx.core.server.middleware.auth.find_matching_route",
         lambda method, path, route_impls: (None, {}, path, RouteAuthInfo(require_authentication=False)),
     )
 
@@ -40,7 +40,7 @@ async def test_multi_tenancy_rejects_private_route_without_tenant(monkeypatch):
     middleware = TenancyMiddleware(mock_app, TenancyConfig(mode=TenancyMode.MULTI))
 
     monkeypatch.setattr(
-        "ogx.core.server.auth.find_matching_route",
+        "ogx.core.server.middleware.auth.find_matching_route",
         lambda method, path, route_impls: (None, {}, path, RouteAuthInfo(require_authentication=True)),
     )
 

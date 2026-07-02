@@ -16,15 +16,15 @@ from ogx.core.datatypes import (
     AuthProviderType,
     UpstreamHeaderAuthConfig,
 )
-from ogx.core.server.auth import AuthenticationMiddleware
-from ogx.core.server.auth_providers import UpstreamHeaderAuthProvider
+from ogx.core.server.middleware.auth import AuthenticationMiddleware
+from ogx.core.server.middleware.auth_providers import UpstreamHeaderAuthProvider
 
 
 @pytest.fixture
 def suppress_auth_errors(caplog):
     """Suppress expected ERROR/WARNING logs for tests that deliberately trigger authentication errors"""
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth")
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth_providers")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth_providers")
 
 
 @pytest.fixture

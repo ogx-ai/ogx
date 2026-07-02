@@ -15,7 +15,7 @@ from ogx.core.datatypes import (
     OAuth2IntrospectionConfig,
     OAuth2TokenAuthConfig,
 )
-from ogx.core.server.auth_providers import OAuth2TokenAuthProvider
+from ogx.core.server.middleware.auth_providers import OAuth2TokenAuthProvider
 
 
 class MockResponse:

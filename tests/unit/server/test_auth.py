@@ -20,8 +20,8 @@ from ogx.core.datatypes import (
     OAuth2JWKSConfig,
     OAuth2TokenAuthConfig,
 )
-from ogx.core.server.auth import AuthenticationMiddleware
-from ogx.core.server.auth_providers import (
+from ogx.core.server.middleware.auth import AuthenticationMiddleware
+from ogx.core.server.middleware.auth_providers import (
     get_attributes_from_claims,
 )
 
@@ -29,8 +29,8 @@ from ogx.core.server.auth_providers import (
 @pytest.fixture
 def suppress_auth_errors(caplog):
     """Suppress expected ERROR/WARNING logs for tests that deliberately trigger authentication errors"""
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth")
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth_providers")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth_providers")
 
 
 class MockResponse:
@@ -184,9 +184,9 @@ def middleware_with_mocks(mock_auth_endpoint):
             return None, {}, path, webmethod
         raise ValueError("No matching route")
 
-    import ogx.core.server.auth
+    import ogx.core.server.middleware.auth
 
-    ogx.core.server.auth.find_matching_route = mock_find_matching_route
+    ogx.core.server.middleware.auth.find_matching_route = mock_find_matching_route
 
     return middleware, mock_app
 
@@ -678,7 +678,7 @@ def test_get_attributes_from_claims():
 
 def test_introspection_default_uses_system_certs():
     """Introspection should verify TLS by default (ssl_ctxt=None), not skip it (ssl_ctxt=False)."""
-    from ogx.core.server.auth_providers import OAuth2TokenAuthProvider
+    from ogx.core.server.middleware.auth_providers import OAuth2TokenAuthProvider
 
     config = OAuth2TokenAuthConfig(
         type=AuthProviderType.OAUTH2_TOKEN,
@@ -699,7 +699,7 @@ def test_introspection_default_uses_system_certs():
 @pytest.mark.parametrize("bad_algorithm", ["HS256", "none", "EdDSA"])
 def test_jwt_rejects_non_fips_algorithm(bad_algorithm, suppress_auth_errors):
     """JWT validation should reject non-FIPS algorithms like HS256, none, and EdDSA."""
-    from ogx.core.server.auth_providers import FIPS_APPROVED_JWT_ALGORITHMS
+    from ogx.core.server.middleware.auth_providers import FIPS_APPROVED_JWT_ALGORITHMS
 
     # Verify these algorithms are NOT in the allowlist
     assert bad_algorithm not in FIPS_APPROVED_JWT_ALGORITHMS
@@ -707,7 +707,7 @@ def test_jwt_rejects_non_fips_algorithm(bad_algorithm, suppress_auth_errors):
 
 def test_jwt_fips_allowlist_contents():
     """Verify the FIPS-approved JWT algorithm allowlist contains only expected asymmetric algorithms."""
-    from ogx.core.server.auth_providers import FIPS_APPROVED_JWT_ALGORITHMS
+    from ogx.core.server.middleware.auth_providers import FIPS_APPROVED_JWT_ALGORITHMS
 
     expected = {"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"}
     assert set(FIPS_APPROVED_JWT_ALGORITHMS) == expected
