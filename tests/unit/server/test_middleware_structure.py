@@ -97,7 +97,7 @@ class TestMiddlewareDirectoryLayout:
 class TestServerImportsMiddleware:
     """Verify that server.py correctly imports middleware from the new location."""
 
-    def test_server_exposes_authentication_middleware(self):
+    def test_server_module_imports_succeed(self):
         from ogx.core.server.server import ClientVersionMiddleware
 
         assert ClientVersionMiddleware is not None
