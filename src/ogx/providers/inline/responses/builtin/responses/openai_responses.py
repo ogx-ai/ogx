@@ -1028,7 +1028,7 @@ class OpenAIResponsesImpl:
                 )
                 raise InternalServerError()
             # Preserve the request mode on the terminal response object returned to the caller.
-            final_response.background = request.background
+            final_response.background = bool(request.background)
             return final_response
 
     async def _create_background_response(
