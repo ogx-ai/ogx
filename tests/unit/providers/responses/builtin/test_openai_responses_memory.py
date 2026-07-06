@@ -32,8 +32,7 @@ from ogx_api import (
     VectorStoreNotFoundError,
 )
 from ogx_api.files.models import OpenAIFilePurpose
-from ogx_api.responses.models import MemoryToolConfig
-from ogx_api.responses.models import CreateResponseRequest
+from ogx_api.responses.models import CreateResponseRequest, MemoryToolConfig
 from ogx_api.vector_io.models import VectorStoreContent, VectorStoreSearchResponse, VectorStoreSearchResponsePage
 from tests.unit.providers.responses.builtin.memory_needle_cases import (
     MemoryNeedleCase,
