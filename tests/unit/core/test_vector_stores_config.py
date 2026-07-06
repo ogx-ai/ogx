@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from ogx.core.datatypes import (
     ChunkRetrievalParams,
+    EmbeddingParams,
     QualifiedModel,
     RerankerModel,
     RewriteQueryParams,
@@ -120,6 +121,24 @@ class TestVectorStoresConfigValidation:
         assert config.default_provider_id == "test-provider"
         assert "Custom file_search" in config.file_search_params.header_template
         assert config.annotation_prompt_params.enable_annotations is False
+
+
+class TestEmbeddingParams:
+    """Test embedding input_type configuration for asymmetric models."""
+
+    def test_defaults_are_none(self):
+        """input_type values default to None so existing behavior is unchanged."""
+        config = VectorStoresConfig()
+        assert config.embedding_params.document_input_type is None
+        assert config.embedding_params.query_input_type is None
+
+    def test_can_configure_input_types(self):
+        """document/query input_type can be set for asymmetric models like nv-embedqa."""
+        config = VectorStoresConfig(
+            embedding_params=EmbeddingParams(document_input_type="passage", query_input_type="query"),
+        )
+        assert config.embedding_params.document_input_type == "passage"
+        assert config.embedding_params.query_input_type == "query"
 
 
 class TestOptionalArchitecture:

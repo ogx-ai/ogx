@@ -1375,11 +1375,18 @@ class OpenAIVectorStoreMixin(ABC):
 
                 # Generate embeddings for all chunks before insertion
 
-                # Prepare embedding request for all chunks
+                # Prepare embedding request for all chunks. Asymmetric embedding models
+                # (e.g. NVIDIA nv-embedqa) require input_type to distinguish documents from
+                # queries; when configured, forward it via the request extra body.
+                embedding_extra: dict[str, Any] = {}
+                document_input_type = self.vector_stores_config.embedding_params.document_input_type
+                if document_input_type is not None:
+                    embedding_extra["input_type"] = document_input_type
                 params = OpenAIEmbeddingsRequestWithExtraBody(
                     model=embedding_model,
                     input=[interleaved_content_as_str(c.content) for c in chunks],
                     dimensions=embedding_dimension,
+                    **embedding_extra,
                 )
                 resp = await self.inference_api.openai_embeddings(params)
 
