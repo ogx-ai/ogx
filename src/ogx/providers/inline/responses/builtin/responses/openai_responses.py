@@ -547,6 +547,7 @@ class OpenAIResponsesImpl:
                 response_id=response_id,
                 error=str(exc),
             )
+
     async def _resolve_skill_instructions(self, skill_ids: list[str]) -> list[OpenAISystemMessageParam]:
         """Resolve skill IDs and return system messages with their SKILL.md instructions.
 
