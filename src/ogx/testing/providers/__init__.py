@@ -16,11 +16,37 @@ To add a provider:
        sdk_module=mycloud_sdk,   # The SDK module (``import mycloud_sdk``)
        create_error=create_error,  # (status_code, body, message) -> Exception
    )
-3. Import the module below and add its PROVIDER to the build_providers call
+3. If the provider module imports an SDK that is a required (core) dependency,
+   import the module below and add its PROVIDER to the build_providers call.
+   If it imports an optional SDK, add it to _OPTIONAL_PROVIDERS instead so test
+   environments without that SDK can still load the registry.
 """
 
-from . import ollama, openai
+import importlib
+import importlib.util
+
+from . import openai
 from ._config import ProviderConfig, _validate_provider
+
+# Provider modules whose SDK is an optional dependency, keyed by the SDK package
+# they import at module load time. openai is a core dependency and is imported
+# directly above; these are skipped when their SDK is not installed so test
+# environments that exercise only a subset of providers need not install every
+# provider SDK.
+_OPTIONAL_PROVIDERS: dict[str, str] = {
+    "ollama": "ollama",  # provider module name -> required SDK package
+}
+
+
+def _load_optional_providers() -> list[ProviderConfig]:
+    """Import optional provider modules whose SDK is installed, skipping the rest."""
+    configs: list[ProviderConfig] = []
+    for module_name, sdk in _OPTIONAL_PROVIDERS.items():
+        if importlib.util.find_spec(sdk) is None:
+            continue
+        module = importlib.import_module(f"{__name__}.{module_name}")
+        configs.append(module.PROVIDER)
+    return configs
 
 
 def build_providers(*configs: ProviderConfig) -> dict[str, ProviderConfig]:
@@ -45,7 +71,7 @@ class GenericProviderError(Exception):
 
 PROVIDERS: dict[str, ProviderConfig] = build_providers(
     openai.PROVIDER,
-    ollama.PROVIDER,
+    *_load_optional_providers(),
 )
 
 
