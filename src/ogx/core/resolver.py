@@ -317,8 +317,7 @@ async def instantiate_providers(
         if isinstance(provider.spec, RoutingTableProviderSpec):
             inner_impls = inner_impls_by_provider_id[f"inner-{provider.spec.router_api.value}"]
 
-        sibling_impls = dict(sibling_impls_by_api.get(api_str, {}))
-        impl = await instantiate_provider(provider, deps, inner_impls, dist_registry, run_config, policy, sibling_impls)
+        impl = await instantiate_provider(provider, deps, inner_impls, dist_registry, run_config, policy)
 
         if api_str.startswith("inner-"):
             inner_impls_by_provider_id[api_str][provider.provider_id] = impl
@@ -333,6 +332,13 @@ async def instantiate_providers(
         vector_stores_routing_table = impls[Api.vector_stores]
         if hasattr(vector_stores_routing_table, "vector_io_router"):
             vector_stores_routing_table.vector_io_router = vector_io_router
+
+    # Post-instantiation: Inject complete sibling sets
+    for _api_str, siblings in sibling_impls_by_api.items():
+        for provider_id, impl in siblings.items():
+            if hasattr(impl, "set_sibling_providers"):
+                others = {k: v for k, v in siblings.items() if k != provider_id}
+                impl.set_sibling_providers(others)
 
     return impls
 
@@ -380,7 +386,6 @@ async def instantiate_provider(
     dist_registry: DistributionRegistry,
     run_config: StackConfig,
     policy: list[AccessRule],
-    sibling_impls: dict[str, Any] | None = None,
 ):
     """Instantiate a single provider, loading its module and verifying protocol compliance.
 
@@ -391,7 +396,6 @@ async def instantiate_provider(
         dist_registry: The distribution registry for resource management.
         run_config: The stack run configuration.
         policy: Access control policy rules.
-        sibling_impls: Previously instantiated providers for the same API, keyed by provider_id.
 
     Returns:
         The instantiated provider implementation.
@@ -448,11 +452,8 @@ async def instantiate_provider(
         provider_config = _inject_config_defaults(config_type, provider.config.copy())
         config = config_type(**provider_config)
         args = [config, deps]
-        sig = inspect.signature(getattr(module, method))
-        if "policy" in sig.parameters:
+        if "policy" in inspect.signature(getattr(module, method)).parameters:
             args.append(policy)
-        if "sibling_providers" in sig.parameters:
-            args.append(sibling_impls or {})
     fn = getattr(module, method)
     impl = await fn(*args)
     impl.__provider_id__ = provider.provider_id

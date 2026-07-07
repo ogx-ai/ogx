@@ -40,25 +40,27 @@ class AutoFileProcessor:
     supports a given MIME type handles it.
 
     When no ``priority`` is configured, falls back to built-in PyPDF (PDF/text)
-    and MarkItDown (office/media) backends for backward compatibility.
+    and MarkItDown (office/media) backends. This legacy behavior is deprecated
+    and will be removed in a future release.
     """
 
-    def __init__(
-        self, config: AutoFileProcessorConfig, files_api, sibling_providers: dict[str, Any] | None = None
-    ) -> None:
+    def __init__(self, config: AutoFileProcessorConfig, files_api) -> None:
         self.config = config
         self.files_api = files_api
 
         self.dispatch_map: dict[str, Any] = {}
         self.category_map: dict[str, Any] = {}
-        self.fallback_provider: Any = None
         self._using_priority = False
 
-        if config.priority and sibling_providers:
-            self._build_dispatch_map(sibling_providers, config.priority)
-            self._using_priority = True
-        else:
-            self._init_legacy_backends(config, files_api)
+        self._init_legacy_backends(config, files_api)
+
+    def set_sibling_providers(self, siblings: dict[str, Any]) -> None:
+        if not siblings:
+            return
+
+        provider_order = self.config.priority if self.config.priority else list(siblings.keys())
+        self._build_dispatch_map(siblings, provider_order)
+        self._using_priority = True
 
     def _init_legacy_backends(self, config: AutoFileProcessorConfig, files_api: Any) -> None:
         pypdf_config = PyPDFFileProcessorConfig(
@@ -75,8 +77,8 @@ class AutoFileProcessor:
         )
         self.markitdown = MarkItDownFileProcessor(markitdown_config, files_api)
 
-    def _build_dispatch_map(self, providers: dict[str, Any], priority: list[str]) -> None:
-        for provider_id in priority:
+    def _build_dispatch_map(self, providers: dict[str, Any], provider_order: list[str]) -> None:
+        for provider_id in provider_order:
             if provider_id not in providers:
                 raise ValueError(
                     f"Failed to resolve priority entry '{provider_id}': "
@@ -87,15 +89,19 @@ class AutoFileProcessor:
             provider = providers[provider_id]
 
             if not hasattr(provider, "supported_mime_types"):
-                log.warning("Provider does not declare supported_mime_types, skipping", provider_id=provider_id)
+                log.warning(
+                    "Provider does not implement supported_mime_types, skipping",
+                    provider_id=provider_id,
+                )
                 continue
 
             mime_types = provider.supported_mime_types()
 
             if mime_types is None:
-                if self.fallback_provider is None:
-                    self.fallback_provider = provider
-                    log.info("Catch-all provider registered", provider_id=provider_id)
+                log.warning(
+                    "Provider returned None from supported_mime_types, skipping",
+                    provider_id=provider_id,
+                )
                 continue
 
             for mime in mime_types:
@@ -107,9 +113,6 @@ class AutoFileProcessor:
                     self.dispatch_map[mime] = provider
 
             log.info("Provider registered", provider_id=provider_id, mime_type_count=len(mime_types))
-
-    def supported_mime_types(self) -> set[str] | None:
-        return None
 
     async def process_file(
         self,
@@ -137,10 +140,6 @@ class AutoFileProcessor:
 
         if mime_category and mime_category in self.category_map:
             result = await self.category_map[mime_category].process_file(request=request, file=file)
-            return result
-
-        if self.fallback_provider:
-            result = await self.fallback_provider.process_file(request=request, file=file)
             return result
 
         raise HTTPException(
@@ -183,8 +182,4 @@ class AutoFileProcessor:
         return "unknown"
 
     async def shutdown(self) -> None:
-        for provider in {*self.dispatch_map.values(), *self.category_map.values()}:
-            if hasattr(provider, "shutdown"):
-                await provider.shutdown()
-        if self.fallback_provider and hasattr(self.fallback_provider, "shutdown"):
-            await self.fallback_provider.shutdown()
+        pass

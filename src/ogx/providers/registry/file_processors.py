@@ -29,8 +29,9 @@ def available_providers() -> list[ProviderSpec]:
             description=(
                 "Composite file processor that dispatches to sibling providers based on file MIME "
                 "type. Configure a priority list of provider IDs; each provider declares the MIME "
-                "types it supports and the first match wins. Without a priority list, falls back to "
-                "built-in PyPDF (PDF, text) and MarkItDown (office, media) backends."
+                "types it supports and the first match wins. Unmatched types return a 422 error. "
+                "Without a priority list, falls back to built-in PyPDF (PDF, text) and MarkItDown "
+                "(office, media) backends."
             ),
         ),
         InlineProviderSpec(

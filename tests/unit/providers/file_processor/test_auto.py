@@ -117,7 +117,8 @@ async def test_priority_exact_mime_match():
     pypdf = _make_provider("pypdf", {"application/pdf", "text/*"})
 
     config = AutoFileProcessorConfig(priority=["docling", "pypdf"])
-    processor = AutoFileProcessor(config, MagicMock(), {"docling": docling, "pypdf": pypdf})
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"docling": docling, "pypdf": pypdf})
 
     file = UploadFile(filename="report.pdf", file=io.BytesIO(b"pdf data"))
     request = ProcessFileRequest()
@@ -134,7 +135,8 @@ async def test_priority_first_provider_wins():
     provider_b = _make_provider("provider_b", {"application/pdf"})
 
     config = AutoFileProcessorConfig(priority=["provider_a", "provider_b"])
-    processor = AutoFileProcessor(config, MagicMock(), {"provider_a": provider_a, "provider_b": provider_b})
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"provider_a": provider_a, "provider_b": provider_b})
 
     file = UploadFile(filename="test.pdf", file=io.BytesIO(b"pdf data"))
     request = ProcessFileRequest()
@@ -154,7 +156,8 @@ async def test_priority_fallthrough_to_second_provider():
     )
 
     config = AutoFileProcessorConfig(priority=["docling", "markitdown"])
-    processor = AutoFileProcessor(config, MagicMock(), {"docling": docling, "markitdown": markitdown})
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"docling": docling, "markitdown": markitdown})
 
     file = UploadFile(filename="data.xlsx", file=io.BytesIO(b"xlsx data"))
     request = ProcessFileRequest()
@@ -169,7 +172,8 @@ async def test_priority_wildcard_category_match():
     pypdf = _make_provider("pypdf", {"application/pdf", "text/*"})
 
     config = AutoFileProcessorConfig(priority=["pypdf"])
-    processor = AutoFileProcessor(config, MagicMock(), {"pypdf": pypdf})
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"pypdf": pypdf})
 
     file = UploadFile(filename="data.csv", file=io.BytesIO(b"a,b\n1,2"))
     request = ProcessFileRequest()
@@ -184,7 +188,8 @@ async def test_priority_exact_match_beats_wildcard():
     text_provider = _make_provider("text_provider", {"text/*"})
 
     config = AutoFileProcessorConfig(priority=["html_provider", "text_provider"])
-    processor = AutoFileProcessor(config, MagicMock(), {"html_provider": html_provider, "text_provider": text_provider})
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"html_provider": html_provider, "text_provider": text_provider})
 
     file = UploadFile(filename="page.html", file=io.BytesIO(b"<html></html>"))
     request = ProcessFileRequest()
@@ -193,34 +198,37 @@ async def test_priority_exact_match_beats_wildcard():
     assert result.metadata["processor"] == "html_provider"
 
 
-async def test_priority_catch_all_fallback():
-    """Catch-all providers (supported_mime_types=None) handle unmatched types."""
-    docling = _make_provider("docling", {"application/pdf"})
-    unstructured = _make_provider("unstructured", None)
+async def test_priority_skips_provider_returning_none():
+    """Providers returning None from supported_mime_types() are skipped."""
+    good = _make_provider("good", {"application/pdf"})
+    bad = _make_provider("bad", None)
 
-    config = AutoFileProcessorConfig(priority=["docling", "unstructured"])
-    processor = AutoFileProcessor(config, MagicMock(), {"docling": docling, "unstructured": unstructured})
+    config = AutoFileProcessorConfig(priority=["bad", "good"])
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"bad": bad, "good": good})
 
-    file = UploadFile(filename="message.eml", file=io.BytesIO(b"email data"))
+    file = UploadFile(filename="report.pdf", file=io.BytesIO(b"pdf data"))
     request = ProcessFileRequest()
     result = await processor.process_file(request, file=file)
 
-    assert result.metadata["processor"] == "unstructured"
-    docling.process_file.assert_not_called()
+    assert result.metadata["processor"] == "good"
+    bad.process_file.assert_not_called()
 
 
-async def test_priority_catch_all_handles_everything():
-    """When catch-all is the only provider, it handles all formats."""
-    unstructured = _make_provider("unstructured", None)
+async def test_priority_skips_provider_missing_method():
+    """Providers without supported_mime_types() are skipped."""
+    good = _make_provider("good", {"application/pdf"})
+    bad = MagicMock(spec=[])
 
-    config = AutoFileProcessorConfig(priority=["unstructured"])
-    processor = AutoFileProcessor(config, MagicMock(), {"unstructured": unstructured})
+    config = AutoFileProcessorConfig(priority=["bad", "good"])
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"bad": bad, "good": good})
 
-    for filename in ["report.pdf", "data.xlsx", "message.eml", "archive.7z"]:
-        file = UploadFile(filename=filename, file=io.BytesIO(b"data"))
-        request = ProcessFileRequest()
-        result = await processor.process_file(request, file=file)
-        assert result.metadata["processor"] == "unstructured"
+    file = UploadFile(filename="report.pdf", file=io.BytesIO(b"pdf data"))
+    request = ProcessFileRequest()
+    result = await processor.process_file(request, file=file)
+
+    assert result.metadata["processor"] == "good"
 
 
 async def test_priority_no_match_raises_422():
@@ -228,7 +236,8 @@ async def test_priority_no_match_raises_422():
     docling = _make_provider("docling", {"application/pdf"})
 
     config = AutoFileProcessorConfig(priority=["docling"])
-    processor = AutoFileProcessor(config, MagicMock(), {"docling": docling})
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"docling": docling})
 
     file = UploadFile(filename="message.eml", file=io.BytesIO(b"email data"))
     request = ProcessFileRequest()
@@ -243,8 +252,56 @@ async def test_priority_missing_provider_raises_error():
     pypdf = _make_provider("pypdf", {"application/pdf"})
 
     config = AutoFileProcessorConfig(priority=["pypdf", "nonexistent"])
+    processor = AutoFileProcessor(config, MagicMock())
     with pytest.raises(ValueError, match="Failed to resolve priority entry 'nonexistent'"):
-        AutoFileProcessor(config, MagicMock(), {"pypdf": pypdf})
+        processor.set_sibling_providers({"pypdf": pypdf})
+
+
+# --- Auto-discovery tests (no priority, siblings injected) ---
+
+
+async def test_autodiscover_uses_siblings_in_order():
+    """Without priority, auto discovers siblings and uses them in config order."""
+    docling = _make_provider("docling", {"application/pdf", "text/html"})
+    pypdf = _make_provider("pypdf", {"application/pdf", "text/*"})
+
+    config = AutoFileProcessorConfig()
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"docling": docling, "pypdf": pypdf})
+
+    file = UploadFile(filename="report.pdf", file=io.BytesIO(b"pdf data"))
+    request = ProcessFileRequest()
+    result = await processor.process_file(request, file=file)
+
+    assert result.metadata["processor"] == "docling"
+
+
+async def test_autodiscover_fallthrough():
+    """Auto-discovered siblings fall through to the next provider."""
+    docling = _make_provider("docling", {"application/pdf"})
+    markitdown = _make_provider("markitdown", {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+
+    config = AutoFileProcessorConfig()
+    processor = AutoFileProcessor(config, MagicMock())
+    processor.set_sibling_providers({"docling": docling, "markitdown": markitdown})
+
+    file = UploadFile(filename="data.xlsx", file=io.BytesIO(b"xlsx data"))
+    request = ProcessFileRequest()
+    result = await processor.process_file(request, file=file)
+
+    assert result.metadata["processor"] == "markitdown"
+
+
+async def test_no_siblings_stays_in_legacy_mode():
+    """Without siblings, auto stays in legacy mode."""
+    config = AutoFileProcessorConfig(priority=["docling"])
+    processor = AutoFileProcessor(config, MagicMock())
+
+    file = UploadFile(filename="readme.txt", file=io.BytesIO(b"Hello, this is plain text."))
+    request = ProcessFileRequest()
+    result = await processor.process_file(request, file=file)
+    assert result is not None
+    assert len(result.chunks) >= 1
 
 
 # --- supported_mime_types on individual providers ---
@@ -272,9 +329,3 @@ def test_markitdown_supported_mime_types():
     types = processor.supported_mime_types()
     assert types is MARKITDOWN_MIME_TYPES
     assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in types
-
-
-def test_auto_supported_mime_types():
-    config = AutoFileProcessorConfig()
-    processor = AutoFileProcessor(config, MagicMock())
-    assert processor.supported_mime_types() is None

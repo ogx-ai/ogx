@@ -20,7 +20,8 @@ class AutoFileProcessorConfig(BaseModel):
     in the priority list that supports a given MIME type wins.
 
     When no ``priority`` is configured, it falls back to built-in PyPDF (PDF and
-    text files) and MarkItDown (office, media) backends.
+    text files) and MarkItDown (office, media) backends. This legacy behavior is
+    deprecated and will be removed in a future release.
     """
 
     default_chunk_size_tokens: int = Field(
@@ -47,8 +48,7 @@ class AutoFileProcessorConfig(BaseModel):
         description=(
             "Ordered list of sibling provider IDs to dispatch to. Each provider "
             "declares the MIME types it supports; the first provider in the list "
-            "that supports a given MIME type handles it. Providers returning None "
-            "from supported_mime_types() act as catch-all fallbacks."
+            "that supports a given MIME type handles it."
         ),
     )
 
