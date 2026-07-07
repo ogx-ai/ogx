@@ -22,7 +22,13 @@ from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     _BackgroundWorkItem,
 )
 from ogx.providers.utils.responses.responses_store import _OpenAIResponseObjectWithInputAndMessages
-from ogx_api import ConflictError, OpenAIResponseError, OpenAIResponseObject
+from ogx_api import (
+    ConflictError,
+    OpenAIResponseError,
+    OpenAIResponseObject,
+    OpenAIResponseObjectStreamResponseInProgress,
+    OpenAIResponseObjectStreamResponseOutputTextDelta,
+)
 
 
 class TestBackgroundFieldInResponseObject:
@@ -218,6 +224,149 @@ class TestBackgroundResponseCancellation:
             await impl.cancel_openai_response("resp_123")
 
         impl.responses_store.update_response_object.assert_not_called()
+
+    async def test_streaming_persistence_does_not_overwrite_cancelled_response(self):
+        """Streaming snapshots must not revive a response after cancellation."""
+        impl = _make_responses_impl()
+        stored_response = _OpenAIResponseObjectWithInputAndMessages(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="cancelled",
+            output=[],
+            background=True,
+            input=[],
+            store=True,
+        )
+        stream_response = OpenAIResponseObject(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="in_progress",
+            output=[],
+            background=False,
+            store=True,
+        )
+        stream_chunk = OpenAIResponseObjectStreamResponseInProgress(response=stream_response, sequence_number=1)
+        impl.responses_store.get_response_object = AsyncMock(return_value=stored_response)
+
+        await impl._persist_streaming_state(
+            stream_chunk=stream_chunk,
+            orchestrator=object(),
+            input_items=[],
+            output_items=[],
+            is_background_response=True,
+        )
+
+        impl.responses_store.upsert_response_object.assert_not_called()
+
+    async def test_foreground_streaming_persistence_does_not_fetch_background_status(self):
+        """Foreground streams should not pay the background cancellation guard cost."""
+        impl = _make_responses_impl()
+        stream_response = OpenAIResponseObject(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="in_progress",
+            output=[],
+            background=False,
+            store=True,
+        )
+        stream_chunk = OpenAIResponseObjectStreamResponseInProgress(response=stream_response, sequence_number=1)
+        impl.responses_store.get_response_object = AsyncMock(side_effect=AssertionError("unexpected status fetch"))
+
+        await impl._persist_streaming_state(
+            stream_chunk=stream_chunk,
+            orchestrator=object(),
+            input_items=[],
+            output_items=[],
+        )
+
+        impl.responses_store.get_response_object.assert_not_called()
+        impl.responses_store.upsert_response_object.assert_awaited_once()
+
+    async def test_background_streaming_persistence_skips_status_fetch_for_unpersisted_event(self):
+        """Background cancellation guard should only poll status for events that persist."""
+        impl = _make_responses_impl()
+        stream_chunk = OpenAIResponseObjectStreamResponseOutputTextDelta(
+            content_index=0,
+            delta="hello",
+            item_id="msg_123",
+            output_index=0,
+            sequence_number=1,
+        )
+        orchestrator = type("Orchestrator", (), {"response_id": "resp_123"})()
+        impl.responses_store.get_response_object = AsyncMock(side_effect=AssertionError("unexpected status fetch"))
+
+        await impl._persist_streaming_state(
+            stream_chunk=stream_chunk,
+            orchestrator=orchestrator,
+            input_items=[],
+            output_items=[],
+            is_background_response=True,
+        )
+
+        impl.responses_store.get_response_object.assert_not_called()
+        impl.responses_store.upsert_response_object.assert_not_called()
+
+    async def test_streaming_persistence_preserves_background_flag(self):
+        """Background stream snapshots should remain cancellable after persistence."""
+        impl = _make_responses_impl()
+        stored_response = _OpenAIResponseObjectWithInputAndMessages(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="queued",
+            output=[],
+            background=True,
+            input=[],
+            store=True,
+        )
+        stream_response = OpenAIResponseObject(
+            id="resp_123",
+            created_at=1234567890,
+            model="test-model",
+            status="in_progress",
+            output=[],
+            background=False,
+            store=True,
+        )
+        stream_chunk = OpenAIResponseObjectStreamResponseInProgress(response=stream_response, sequence_number=1)
+        impl.responses_store.get_response_object = AsyncMock(return_value=stored_response)
+
+        await impl._persist_streaming_state(
+            stream_chunk=stream_chunk,
+            orchestrator=object(),
+            input_items=[],
+            output_items=[],
+            is_background_response=True,
+        )
+
+        persisted_response = impl.responses_store.upsert_response_object.call_args.kwargs["response_object"]
+        assert persisted_response.background is True
+
+    async def test_background_worker_cleans_up_status_lock(self):
+        impl = _make_responses_impl()
+        response_id = "resp-cleanup"
+        impl._get_background_response_status_lock(response_id)
+
+        async def mock_response_loop(**kwargs):
+            assert kwargs["response_id"] == response_id
+
+        with patch.object(impl, "_run_background_response_loop", side_effect=mock_response_loop):
+            worker_task = create_detached_background_task(impl._background_worker())
+            impl._background_queue.put_nowait(
+                _BackgroundWorkItem(request_context=capture_request_context(), kwargs={"response_id": response_id})
+            )
+
+            await impl._background_queue.join()
+            worker_task.cancel()
+            try:
+                await worker_task
+            except asyncio.CancelledError:
+                pass
+
+        assert response_id not in impl._background_response_status_locks
 
 
 class _CollectingExporter(SpanExporter):

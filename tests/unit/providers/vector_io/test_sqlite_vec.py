@@ -92,6 +92,33 @@ async def test_query_chunks_full_text_search(sqlite_vec_index, sample_chunks, sa
     assert len(response_no_results.chunks) == 0, f"Expected 0 results, but got {len(response_no_results.chunks)}"
 
 
+async def test_query_chunks_full_text_search_escapes_user_punctuation(
+    sqlite_vec_index, sample_chunks, sample_embeddings
+):
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=chunk.content,
+            chunk_id=chunk.chunk_id,
+            metadata=chunk.metadata,
+            chunk_metadata=chunk.chunk_metadata,
+            embedding=embedding.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=len(embedding),
+        )
+        for chunk, embedding in zip(sample_chunks, sample_embeddings, strict=False)
+    ]
+    await sqlite_vec_index.add_chunks(embedded_chunks)
+
+    response = await sqlite_vec_index.query_keyword(
+        k=3,
+        score_threshold=0.0,
+        query_string="preference: Sentence 5 - staging/database?",
+    )
+
+    assert isinstance(response, QueryChunksResponse)
+    assert len(response.chunks) > 0
+
+
 async def test_query_keyword_scores_are_positive(sqlite_vec_index, sample_chunks, sample_embeddings):
     """Test that keyword search returns positive scores (higher = more relevant).
 

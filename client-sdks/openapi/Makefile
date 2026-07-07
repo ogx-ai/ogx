@@ -33,8 +33,8 @@ PROCESSED_SPEC := openapi-hierarchical.yml
 HIERARCHY_FILE := api-hierarchy.yml
 SDK_OUTPUT_DIR := sdks/python
 
-# Extract version from root pyproject.toml
-VERSION := $(shell grep 'fallback_version' ../../pyproject.toml | cut -d'"' -f2)
+# Extract version from root pyproject.toml; override with make VERSION=X.Y.Z
+VERSION ?= $(shell grep 'fallback_version' ../../pyproject.toml | cut -d'"' -f2)
 
 .PHONY: all sdk openapi hierarchy clean help version check-generator generate-config
 

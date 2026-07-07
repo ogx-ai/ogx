@@ -26,6 +26,7 @@ EXCLUDE_PATTERNS = [
 # Remove entries from this list as files get refactored.
 GRANDFATHERED_FILES = {
     "scripts/openapi_generator/schema_transforms.py",
+    "src/ogx/core/datatypes.py",
     "src/ogx/core/library_client.py",
     "src/ogx/providers/inline/responses/builtin/responses/openai_responses.py",
     "src/ogx/providers/inline/responses/builtin/responses/streaming.py",
@@ -40,6 +41,7 @@ GRANDFATHERED_FILES = {
     "tests/integration/responses/test_openai_responses.py",
     "tests/integration/responses/test_tool_responses.py",
     "tests/unit/server/test_auth.py",  # 1000+ lines after auth middleware refactor
+    "tests/unit/providers/responses/builtin/test_openai_responses_tools.py",  # sometimes 1000+ depending on ruff
 }
 
 

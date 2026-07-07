@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
+from ogx.core.server_tls import ServerTLSConfig, validate_fips_tls
 from ogx.core.storage.datatypes import (
     KVStoreReference,
     StorageBackendType,
@@ -800,45 +801,25 @@ class RegisteredResources(BaseModel):
 class ServerConfig(BaseModel):
     """Configuration for the HTTP server including TLS and authentication."""
 
-    port: int = Field(
-        default=8321,
-        description="Port to listen on",
-        ge=1024,
-        le=65535,
-    )
-    tls_certfile: str | None = Field(
-        default=None,
-        description="Path to TLS certificate file for HTTPS",
-    )
-    tls_keyfile: str | None = Field(
-        default=None,
-        description="Path to TLS key file for HTTPS",
-    )
-    tls_cafile: str | None = Field(
-        default=None,
-        description="Path to TLS CA file for HTTPS with mutual TLS authentication",
-    )
-    auth: AuthenticationConfig | None = Field(
-        default=None,
-        description="Authentication configuration for the server",
-    )
-    tenancy: TenancyConfig = Field(
-        default_factory=TenancyConfig,
-        description="Multi-tenancy isolation configuration",
-    )
-    host: str | None = Field(
-        default=None,
-        description="The host the server should listen on",
-    )
-    workers: int = Field(
-        default=1,
-        description="Number of workers to use for the server",
-    )
+    port: int = Field(default=8321, description="Port to listen on", ge=1024, le=65535)
+    tls_certfile: str | None = Field(default=None, description="Path to TLS certificate file for HTTPS")
+    tls_keyfile: str | None = Field(default=None, description="Path to TLS key file for HTTPS")
+    tls_cafile: str | None = Field(default=None, description="Path to TLS CA file for mTLS authentication")
+    auth: AuthenticationConfig | None = Field(default=None, description="Authentication configuration")
+    tenancy: TenancyConfig = Field(default_factory=TenancyConfig, description="Multi-tenancy isolation configuration")
+    host: str | None = Field(default=None, description="The host the server should listen on")
+    workers: int = Field(default=1, description="Number of workers to use for the server")
     registry_refresh_interval_seconds: int = Field(
-        default=300,
-        description="Interval in seconds between registry refreshes for syncing model information from providers",
-        gt=0,
+        default=300, description="Interval in seconds between registry refreshes for syncing model information", gt=0
     )
+    insecure: bool = Field(default=False, description="Disable TLS enforcement. For local development only.")
+    tls_config: ServerTLSConfig | None = Field(default=None, description="TLS cipher suite configuration.")
+    hsts_max_age: int = Field(default=31536000, description="HSTS max-age in seconds (0 to disable).", ge=0)
+
+    @model_validator(mode="after")
+    def validate_tls(self) -> "ServerConfig":
+        self.tls_config = validate_fips_tls(self.insecure, self.tls_certfile, self.tls_keyfile, self.tls_config)
+        return self
 
 
 class StackConfig(BaseModel):
