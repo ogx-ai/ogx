@@ -283,6 +283,30 @@ jobs:
           suite: ${{ inputs.suite || matrix.provider.suite }}
           inference-mode: 'record-if-missing'
 
+      - name: Prepare AWS web identity for Bedrock
+        if: steps.should_run.outputs.run == 'true' && matrix.provider.setup == 'bedrock'
+        env:
+          AWS_BEDROCK_ROLE_ARN: ${{ secrets.AWS_BEDROCK_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${AWS_BEDROCK_ROLE_ARN}" ]]; then
+            echo "AWS_BEDROCK_ROLE_ARN is not configured; using Bedrock bearer token or default AWS credential chain."
+            exit 0
+          fi
+
+          token_file="${RUNNER_TEMP}/bedrock-web-identity-token"
+          curl -fsSL \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            | jq -r '.value' > "${token_file}"
+
+          {
+            echo "AWS_ROLE_ARN=${AWS_BEDROCK_ROLE_ARN}"
+            echo "AWS_WEB_IDENTITY_TOKEN_FILE=${token_file}"
+            echo "AWS_DEFAULT_REGION=us-west-2"
+          } >> "${GITHUB_ENV}"
+
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
         uses: ogx-ai/ogx/.github/actions/run-and-record-tests@e1ba4f9f10fa45750f5b4f186a0c4ae59bc93e4d
