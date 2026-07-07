@@ -37,6 +37,15 @@ DEFAULT_MEMORY_READ_PROMPT = (
     "as search results or cite them."
 )
 
+DEFAULT_MEMORY_SUMMARIZATION_PROMPT = (
+    "Create a concise long-term memory summary for this conversation.\n\n"
+    "Include stable user preferences, project context, decisions, recurring constraints, "
+    "and durable facts that would help future conversations.\n\n"
+    "Exclude secrets, access tokens, credentials, short-lived status updates, and details "
+    "that are only useful inside this single turn.\n\n"
+    "Return Markdown only."
+)
+
 
 class CompactionConfig(BaseModel):
     """Configuration for conversation compaction behavior and prompt templates."""
@@ -113,7 +122,7 @@ class CompactionConfig(BaseModel):
 
 
 class MemoryConfig(BaseModel):
-    """Configuration for Responses memory reads."""
+    """Configuration for Responses memory reads and writes."""
 
     enabled: bool = Field(
         default=False,
@@ -146,6 +155,23 @@ class MemoryConfig(BaseModel):
         default=DEFAULT_MEMORY_READ_PROMPT,
         description="Prompt text that frames retrieved memory context.",
     )
+    write_enabled: bool = Field(
+        default=True,
+        description="Whether to write conversation summaries to memory after stored responses complete.",
+    )
+    write_debounce_seconds: float = Field(
+        default=30.0,
+        ge=0,
+        description="Seconds to wait before materializing memory so rapid conversation turns coalesce into one write.",
+    )
+    summarization_prompt: str = Field(
+        default=DEFAULT_MEMORY_SUMMARIZATION_PROMPT,
+        description="Prompt template used to generate long-term memory summaries.",
+    )
+    summarization_model: str | None = Field(
+        default=None,
+        description="Model to use for memory summaries. If not set, uses the response model.",
+    )
 
 
 class ResponsesPersistenceConfig(BaseModel):
@@ -171,7 +197,7 @@ class BuiltinResponsesImplConfig(BaseModel):
 
     memory_config: MemoryConfig = Field(
         default_factory=MemoryConfig,
-        description="Configuration for Responses memory reads.",
+        description="Configuration for Responses memory reads and writes.",
     )
 
     moderation_endpoint: str | None = Field(
