@@ -25,12 +25,27 @@ from ogx_api import (
 )
 
 EMBEDDING_MODELS: dict[tuple[str, bool], "SentenceTransformer"] = {}
-EMBEDDING_MODELS_LOCK = asyncio.Lock()
+_EMBEDDING_MODELS_LOCK: asyncio.Lock | None = None
+_EMBEDDING_ENCODE_LOCK: asyncio.Lock | None = None
 
 DARWIN = "Darwin"
 
 
 log = get_logger(name=__name__, category="providers::utils")
+
+
+def _get_embedding_models_lock() -> asyncio.Lock:
+    global _EMBEDDING_MODELS_LOCK
+    if _EMBEDDING_MODELS_LOCK is None:
+        _EMBEDDING_MODELS_LOCK = asyncio.Lock()
+    return _EMBEDDING_MODELS_LOCK
+
+
+def _get_embedding_encode_lock() -> asyncio.Lock:
+    global _EMBEDDING_ENCODE_LOCK
+    if _EMBEDDING_ENCODE_LOCK is None:
+        _EMBEDDING_ENCODE_LOCK = asyncio.Lock()
+    return _EMBEDDING_ENCODE_LOCK
 
 
 class SentenceTransformerEmbeddingMixin:
@@ -55,7 +70,8 @@ class SentenceTransformerEmbeddingMixin:
 
         # Get the model and generate embeddings
         embedding_model = await self._load_sentence_transformer_model(params.model, trust_remote_code)
-        embeddings = await asyncio.to_thread(embedding_model.encode, input_list, show_progress_bar=False)
+        async with _get_embedding_encode_lock():
+            embeddings = await asyncio.to_thread(embedding_model.encode, input_list, show_progress_bar=False)
 
         # Convert embeddings to the requested format
         data = []
@@ -91,7 +107,7 @@ class SentenceTransformerEmbeddingMixin:
         if loaded_model is not None:
             return loaded_model
 
-        async with EMBEDDING_MODELS_LOCK:
+        async with _get_embedding_models_lock():
             loaded_model = EMBEDDING_MODELS.get(cache_key)
             if loaded_model is not None:
                 return loaded_model

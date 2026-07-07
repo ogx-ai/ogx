@@ -875,7 +875,7 @@ class TestErrorStreamEvent:
     async def test_error_event_terminates_stream(self, impl):
         async def failing_stream():
             raise RuntimeError("immediate failure")
-            yield  # noqa: unreachable — makes this an async generator
+            yield  # unreachable — makes this an async generator
 
         events = []
         async for event in impl._stream_openai_to_anthropic(failing_stream(), "m"):
