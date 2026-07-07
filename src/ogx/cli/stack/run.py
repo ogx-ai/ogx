@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import argparse
+import atexit
 import os
 import ssl
 import subprocess
@@ -22,7 +23,7 @@ from ogx.core.distribution import builtin_automatically_routed_apis, get_provide
 from ogx.core.resolver import validate_and_prepare_providers
 from ogx.core.server.server import remove_disabled_providers
 from ogx.core.stack import run_config_from_dynamic_config_spec
-from ogx.core.utils.config import redact_sensitive_fields
+from ogx.core.utils.config import redact_sensitive_fields, reveal_secret_fields
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR, UI_LOGS_DIR
 from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import get_logger
@@ -56,6 +57,12 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
         type=str,
         default=None,
         help="Run a stack with only a list of providers. This list is formatted like: api1=provider1,api1=provider2,api2=provider3. Where there can be multiple providers per API.",
+    )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        default=False,
+        help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
     )
     parser.add_argument(
         "--dry-run",
@@ -141,6 +148,8 @@ def _dry_run_validate(config: StackConfig, config_file: Path) -> None:
 
 
 def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    import tempfile
+
     if not config_file:
         parser.error("Config file is required")
 
@@ -149,7 +158,21 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
     config_file = resolve_config_or_distro(str(config_file))
     with open(config_file) as fp:
         config_contents = yaml.safe_load(fp)
+        if args.insecure:
+            if "server" not in config_contents:
+                config_contents["server"] = {}
+            config_contents["server"]["insecure"] = True
+
         config = parse_and_maybe_upgrade_config(config_contents)
+
+    # Write resolved config (with CLI overrides) to a temp file so
+    # create_app() workers read the final config directly from disk.
+    resolved_config = reveal_secret_fields(config.model_dump())
+    fd, resolved_path = tempfile.mkstemp(suffix=".yaml", prefix="ogx-run-")
+    resolved_file = Path(resolved_path)
+    atexit.register(lambda p=resolved_file: p.unlink(missing_ok=True))
+    with os.fdopen(fd, "w") as f:
+        yaml.dump(resolved_config, f, default_flow_style=False, sort_keys=False)
 
     env_port = os.getenv("OGX_PORT")
     port = args.port or (int(env_port) if env_port else None) or config.server.port
@@ -162,7 +185,7 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
     elif workers and workers > 1:
         host = "::"
 
-    os.environ["OGX_CONFIG"] = str(config_file)
+    os.environ["OGX_CONFIG"] = str(resolved_file)
 
     uvicorn_config = {
         "factory": True,
@@ -182,11 +205,19 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
             uvicorn_config["ssl_ca_certs"] = config.server.tls_cafile
             uvicorn_config["ssl_cert_reqs"] = ssl.CERT_REQUIRED
 
+        if config.server.tls_config and config.server.tls_config.ciphers:
+            uvicorn_config["ssl_ciphers"] = ":".join(config.server.tls_config.ciphers)
+
         logger.info(
             "HTTPS enabled with certificates", keyfile=keyfile, certfile=certfile, cafile=config.server.tls_cafile
         )
+    elif not config.server.insecure:
+        raise SystemExit("TLS required: set tls_certfile/tls_keyfile in server config or pass '--insecure' to disable.")
     else:
-        logger.info("HTTPS enabled with certificates", keyfile=keyfile, certfile=certfile)
+        logger.warning(
+            "TLS is not enabled — server will transmit data in cleartext. "
+            "Set tls_certfile and tls_keyfile in server config to enable HTTPS."
+        )
 
     logger.info("Listening on", host=host, port=port)
 

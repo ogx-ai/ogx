@@ -156,7 +156,7 @@ jobs:
 
           # avoid line breaks in the server log, especially because we grep it below.
           export OGX_LOG_WIDTH=200
-          nohup uv run ogx stack run "$run_dir/config.yaml" > server.log 2>&1 &
+          nohup uv run ogx stack run "$run_dir/config.yaml" --insecure > server.log 2>&1 &
 
       - name: Wait for OGX server to be ready
         run: |

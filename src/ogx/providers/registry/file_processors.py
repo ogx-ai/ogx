@@ -27,10 +27,11 @@ def available_providers() -> list[ProviderSpec]:
             config_class="ogx.providers.inline.file_processor.auto.AutoFileProcessorConfig",
             api_dependencies=[Api.files],
             description=(
-                "Composite file processor that automatically dispatches to the appropriate backend "
-                "based on file MIME type. Routes PDF and text files to PyPDF, and office/structured "
-                "formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. "
-                "Unsupported formats are rejected with a clear error listing the supported types."
+                "Composite file processor that dispatches to sibling providers based on file MIME "
+                "type. Configure a priority list of provider IDs; each provider declares the MIME "
+                "types it supports and the first match wins. Unmatched types return a 422 error. "
+                "Without a priority list, falls back to built-in PyPDF (PDF, text) and MarkItDown "
+                "(office, media) backends."
             ),
         ),
         InlineProviderSpec(
@@ -398,7 +399,7 @@ For faster processing with fewer formats, use `inline::docling` instead.
 ## Performance
 
 - Processing speed: ~1-2 seconds per page
-- Best for: Documents <100 pages
+- Best for: Documents under 100 pages
 - Cost: ~$0.01 per page (verify current pricing with Unstructured.io)
 
 ## Documentation

@@ -83,8 +83,15 @@ class NVIDIAInferenceAdapter(OpenAIMixin):
         dynamic_ids: Iterable[str] = []
         try:
             dynamic_ids = await super().list_provider_model_ids()
-        except Exception:
-            # If the dynamic listing fails, proceed with just configured rerank IDs
+        except Exception as e:
+            # Proceed with just the configured rerank IDs, but surface the failure so a
+            # misconfiguration (e.g. missing or invalid API key) is not silently reduced
+            # to an empty model list.
+            logger.warning(
+                "Failed to list dynamic models from NVIDIA endpoint; returning only configured rerank models",
+                base_url=str(self.config.base_url),
+                error=str(e),
+            )
             dynamic_ids = []
 
         configured_rerank_ids = list(self.config.rerank_model_to_url.keys())

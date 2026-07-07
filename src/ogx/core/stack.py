@@ -45,6 +45,7 @@ from ogx.core.storage.datatypes import (
 from ogx.core.store.registry import create_dist_registry
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
+from ogx.telemetry import initialize_telemetry
 from ogx_api import (
     Api,
     Batches,
@@ -762,6 +763,9 @@ class Stack:
     # Produces a stack of providers for the given run config. Not all APIs may be
     # asked for in the run config.
     async def initialize(self):
+        # Configure metrics export on stack bring-up (server and library modes, not list-deps).
+        initialize_telemetry()
+
         if "OGX_TEST_INFERENCE_MODE" in os.environ:
             from ogx.testing.api_recorder import setup_api_recording
 
