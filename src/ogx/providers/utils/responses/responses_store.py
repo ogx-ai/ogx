@@ -4,7 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import hashlib
+import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import AccessRule
@@ -35,6 +38,8 @@ from ogx_api import (
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 logger = get_logger(name=__name__, category="openai_responses")
+
+MEMORY_RECORDS_TABLE = "memory_records"
 
 
 def _filter_message_include_fields(
@@ -113,6 +118,19 @@ class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObjectWithInput):
     input_storage_mode: str | None = None
 
 
+@dataclass(frozen=True)
+class MemoryRecord:
+    """Current memory file mapping for one owner-scoped conversation."""
+
+    owner_id: str
+    conversation_id: str
+    vector_store_id: str
+    file_id: str
+    response_id: str
+    created_at: int
+    updated_at: int
+
+
 class ResponsesStore:
     """Persistent store for OpenAI Responses API objects with SQL-backed storage."""
 
@@ -160,6 +178,19 @@ class ResponsesStore:
             {
                 "conversation_id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
                 "messages": ColumnType.JSON,
+            },
+        )
+        await self.sql_store.create_table(
+            MEMORY_RECORDS_TABLE,
+            {
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "owner_id": ColumnType.STRING,
+                "conversation_id": ColumnType.STRING,
+                "vector_store_id": ColumnType.STRING,
+                "file_id": ColumnType.STRING,
+                "response_id": ColumnType.STRING,
+                "created_at": ColumnType.INTEGER,
+                "updated_at": ColumnType.INTEGER,
             },
         )
 
@@ -743,3 +774,57 @@ class ResponsesStore:
 
         adapter = TypeAdapter(list[OpenAIMessageParam])
         return adapter.validate_python(record["messages"])
+
+    async def upsert_memory_record(
+        self,
+        owner_id: str,
+        conversation_id: str,
+        vector_store_id: str,
+        file_id: str,
+        response_id: str,
+    ) -> None:
+        record_id = _memory_record_id(owner_id, conversation_id, vector_store_id)
+        now = int(time.time())
+        existing = await self.sql_store.fetch_one(MEMORY_RECORDS_TABLE, where={"id": record_id})
+        created_at = existing["created_at"] if existing else now
+
+        await self.sql_store.upsert(
+            table=MEMORY_RECORDS_TABLE,
+            data={
+                "id": record_id,
+                "owner_id": owner_id,
+                "conversation_id": conversation_id,
+                "vector_store_id": vector_store_id,
+                "file_id": file_id,
+                "response_id": response_id,
+                "created_at": created_at,
+                "updated_at": now,
+            },
+            conflict_columns=["id"],
+            update_columns=["file_id", "response_id", "updated_at"],
+        )
+
+    async def get_memory_record(
+        self,
+        owner_id: str,
+        conversation_id: str,
+        vector_store_id: str,
+    ) -> MemoryRecord | None:
+        record_id = _memory_record_id(owner_id, conversation_id, vector_store_id)
+        record = await self.sql_store.fetch_one(MEMORY_RECORDS_TABLE, where={"id": record_id})
+        if record is None:
+            return None
+        return MemoryRecord(
+            owner_id=record["owner_id"],
+            conversation_id=record["conversation_id"],
+            vector_store_id=record["vector_store_id"],
+            file_id=record["file_id"],
+            response_id=record["response_id"],
+            created_at=record["created_at"],
+            updated_at=record["updated_at"],
+        )
+
+
+def _memory_record_id(owner_id: str, conversation_id: str, vector_store_id: str) -> str:
+    key = "\0".join([owner_id, conversation_id, vector_store_id])
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()

@@ -29,7 +29,7 @@ PROVIDERS_SUPPORTING_MEDIA = {}  # Providers that support media input for rerank
 
 
 def skip_if_provider_doesnt_support_rerank(inference_provider_type):
-    supported_providers = {"remote::nvidia", "remote::vllm", "inline::transformers"}
+    supported_providers = {"remote::nvidia", "remote::vllm"}
     if inference_provider_type not in supported_providers:
         pytest.skip(f"{inference_provider_type} doesn't support rerank models")
 

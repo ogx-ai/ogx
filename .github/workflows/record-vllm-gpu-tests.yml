@@ -1,0 +1,429 @@
+name: vLLM GPU Recording
+
+run-name: GPU recording for gpt-oss:20b (${{ inputs.suite }} suite)
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Test suite to run'
+        required: false
+        type: choice
+        default: 'base'
+        options:
+          - base
+          - responses
+          - vllm-reasoning
+      pr_number:
+        description: 'PR number to commit recordings back to. Leave empty to use the open PR for this branch.'
+        required: false
+        type: string
+
+concurrency:
+  group: gpu-vllm-record-${{ github.run_id }}
+  cancel-in-progress: false  # Don't cancel - EC2 cleanup is critical
+
+# OIDC authentication for AWS - no long-lived credentials!
+permissions:
+  contents: read
+  pull-requests: read  # Required to locate the PR branch for the commit-recordings workflow
+  actions: read  # Required for the hosted cleanup job to watch the GPU job state
+  id-token: write  # Required for OIDC authentication to AWS
+
+jobs:
+  # Job 0: Publish PR metadata for the trusted follow-up commit workflow
+  compute-pr-info:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr-info.outputs.pr_number }}
+      pr_head_ref: ${{ steps.pr-info.outputs.pr_head_ref }}
+      pr_head_sha: ${{ steps.pr-info.outputs.pr_head_sha }}
+      pr_head_repo: ${{ steps.pr-info.outputs.pr_head_repo }}
+      is_fork_pr: ${{ steps.pr-info.outputs.is_fork_pr }}
+    steps:
+      - name: Locate PR branch
+        id: pr-info
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+        with:
+          script: |
+            const inputPrNumber = process.env.INPUT_PR_NUMBER;
+            let pr = null;
+
+            if (inputPrNumber) {
+              const response = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: Number(inputPrNumber),
+              });
+              pr = response.data;
+            } else {
+              const branch = context.ref.replace('refs/heads/', '');
+              const response = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${context.repo.owner}:${branch}`,
+                per_page: 1,
+              });
+              pr = response.data[0];
+            }
+
+            if (!pr) {
+              core.setFailed('No open PR found for this workflow run. Pass pr_number when dispatching from a non-PR branch.');
+              return;
+            }
+
+            if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed('GPU recording only supports same-repository PR branches.');
+              return;
+            }
+
+            if (pr.head.sha !== context.sha) {
+              core.setFailed(`Dispatch this workflow from the PR branch head. PR #${pr.number} is at ${pr.head.sha}, but this run is using ${context.sha}.`);
+              return;
+            }
+
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('pr_head_ref', pr.head.ref);
+            core.setOutput('pr_head_sha', pr.head.sha);
+            core.setOutput('pr_head_repo', pr.head.repo.full_name);
+            core.setOutput('is_fork_pr', String(pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`));
+
+      - name: Create PR metadata artifact
+        if: steps.pr-info.outputs.pr_number != ''
+        env:
+          PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
+          PR_HEAD_REF: ${{ steps.pr-info.outputs.pr_head_ref }}
+          PR_HEAD_SHA: ${{ steps.pr-info.outputs.pr_head_sha }}
+          PR_HEAD_REPO: ${{ steps.pr-info.outputs.pr_head_repo }}
+          IS_FORK_PR: ${{ steps.pr-info.outputs.is_fork_pr }}
+        run: |
+          mkdir -p pr-metadata
+          cat > pr-metadata/pr-info.json <<EOF
+          {
+            "pr_number": "${PR_NUMBER}",
+            "pr_head_ref": "${PR_HEAD_REF}",
+            "pr_head_sha": "${PR_HEAD_SHA}",
+            "pr_head_repo": "${PR_HEAD_REPO}",
+            "is_fork_pr": "${IS_FORK_PR}"
+          }
+          EOF
+          cat pr-metadata/pr-info.json
+
+      - name: Upload PR metadata
+        if: steps.pr-info.outputs.pr_number != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-metadata-${{ github.run_id }}
+          path: pr-metadata/
+          retention-days: 1
+
+  # Job 1: Launch GPU EC2 instance with multi-AZ fallback
+  start-gpu-runner:
+    needs: compute-pr-info
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.start-ec2-runner.outputs.label }}
+      instance-id: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate GPU runner configuration
+        env:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+          AWS_EC2_AMI_US_EAST_2: ${{ vars.AWS_EC2_AMI_US_EAST_2 }}
+          SUBNET_US_EAST_2A: ${{ vars.SUBNET_US_EAST_2A }}
+          SUBNET_US_EAST_2B: ${{ vars.SUBNET_US_EAST_2B }}
+          SUBNET_US_EAST_2C: ${{ vars.SUBNET_US_EAST_2C }}
+          SECURITY_GROUP_ID_US_EAST_2: ${{ vars.SECURITY_GROUP_ID_US_EAST_2 }}
+        run: |
+          missing=()
+          for name in \
+            AWS_ROLE_ARN \
+            RELEASE_PAT \
+            AWS_EC2_AMI_US_EAST_2 \
+            SUBNET_US_EAST_2A \
+            SUBNET_US_EAST_2B \
+            SUBNET_US_EAST_2C \
+            SECURITY_GROUP_ID_US_EAST_2; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing required GPU runner configuration: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+          role-session-name: GitHubActions-vLLM-GPU-${{ github.run_id }}
+
+      - name: Start EC2 runner
+        id: start-ec2-runner
+        uses: ./.github/actions/launch-gpu-runner
+        with:
+          mode: start
+          github-token: ${{ secrets.RELEASE_PAT }}
+          instance-type: g6.2xlarge
+          aws-region: us-east-2
+          availability-zones-config: |
+            [
+              {"imageId": "${{ vars.AWS_EC2_AMI_US_EAST_2 }}", "subnetId": "${{ vars.SUBNET_US_EAST_2A }}", "securityGroupId": "${{ vars.SECURITY_GROUP_ID_US_EAST_2 }}"},
+              {"imageId": "${{ vars.AWS_EC2_AMI_US_EAST_2 }}", "subnetId": "${{ vars.SUBNET_US_EAST_2B }}", "securityGroupId": "${{ vars.SECURITY_GROUP_ID_US_EAST_2 }}"},
+              {"imageId": "${{ vars.AWS_EC2_AMI_US_EAST_2 }}", "subnetId": "${{ vars.SUBNET_US_EAST_2C }}", "securityGroupId": "${{ vars.SECURITY_GROUP_ID_US_EAST_2 }}"}
+            ]
+          ec2-instance-tags: |
+            [
+              {"Key": "Name", "Value": "llamastack-vllm-gpu-runner"},
+              {"Key": "Project", "Value": "llama-stack"},
+              {"Key": "Purpose", "Value": "vllm-gpu-recording"},
+              {"Key": "Model", "Value": "gpt-oss:20b"},
+              {"Key": "GitHubRepository", "Value": "${{ github.repository }}"},
+              {"Key": "GitHubRef", "Value": "${{ github.ref }}"},
+              {"Key": "GitHubRunId", "Value": "${{ github.run_id }}"},
+              {"Key": "ManagedBy", "Value": "GitHub-Actions"}
+            ]
+
+      - name: Runner launch summary
+        run: |
+          if [ -z "${{ steps.start-ec2-runner.outputs.ec2-instance-id }}" ] || [ -z "${{ steps.start-ec2-runner.outputs.label }}" ]; then
+            echo "Failed to launch GPU runner with a usable instance id and runner label"
+            exit 1
+          fi
+          echo "GPU runner launched successfully"
+          echo "  Instance ID: ${{ steps.start-ec2-runner.outputs.ec2-instance-id }}"
+          echo "  Runner Label: ${{ steps.start-ec2-runner.outputs.label }}"
+          echo "  Model: gpt-oss:20b"
+          echo "  Instance Type: g6.2xlarge"
+
+  # Job 2: Run vLLM tests on GPU runner
+  record-vllm-tests:
+    needs: [start-gpu-runner, compute-pr-info]
+    runs-on: ${{ needs.start-gpu-runner.outputs.label }}
+    permissions: {}  # CRITICAL: No permissions - prevents secret theft from untrusted code
+    env:
+      TMPDIR: /home/tmp
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Setup environment
+        run: |
+          mkdir -p /home/tmp
+          echo "=== System Information ==="
+          cat /etc/os-release
+          echo ""
+          echo "=== Disk Space ==="
+          df -h
+          echo ""
+          echo "=== Memory ==="
+          free -h
+          echo ""
+          echo "=== GPU Information ==="
+          nvidia-smi
+
+      - name: Setup vLLM GPU
+        uses: ./.github/actions/setup-vllm-gpu
+        with:
+          model: 'gpt-oss:20b'
+          port: '8000'
+          gpu-memory-utilization: '0.85'
+          max-model-len: '8192'
+          quantization: 'none'
+          vllm-version: '0.22.1'
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: '3.12'
+          client-version: 'latest'
+          setup: 'vllm-gpu-gpt-oss'
+          suite: ${{ inputs.suite }}
+          inference-mode: 'record'
+          enable-hf-cache: 'false'
+
+      - name: Select vLLM-compatible pytest pattern
+        id: test-pattern
+        shell: bash
+        run: |
+          case "${{ inputs.suite }}" in
+            base)
+              pattern="not (test_openai_completion_guided_choice or test_multiple_tools_with_different_schemas or test_mcp_invocation)"
+              ;;
+            responses)
+              pattern="not (file_search or mcp or tool or compact or conversation or test_include_logprobs_with_web_search or test_openai_response_with_small_max_output_tokens or test_openai_response_with_max_output_tokens or test_openai_response_streaming_invalid_base64_image_failure_code_is_spec_compliant or test_openai_response_with_parallel_tool_calls_enabled or test_openai_response_background_completes)"
+              ;;
+            *)
+              pattern=""
+              ;;
+          esac
+          echo "pattern=${pattern}" >> "$GITHUB_OUTPUT"
+
+      - name: Run integration tests (record mode)
+        uses: ./.github/actions/run-and-record-tests
+        with:
+          stack-config: 'server:ci-tests'
+          setup: 'vllm-gpu-gpt-oss'
+          inference-mode: 'record'
+          suite: ${{ inputs.suite }}
+          pattern: ${{ steps.test-pattern.outputs.pattern }}
+          skip-commit: 'true'  # Don't commit here - upload as artifacts
+
+      - name: Upload recordings as artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: recordings-vllm-gpu-gpt-oss-${{ inputs.suite }}-${{ github.run_id }}-${{ github.run_attempt || '1' }}
+          path: |
+            tests/integration/recordings/
+            tests/integration/*/recordings/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload vLLM logs
+        if: always()
+        run: |
+          if [ -f /tmp/vllm-server.log ]; then
+            cat /tmp/vllm-server.log
+          fi
+
+      - name: Disk space after tests
+        if: always()
+        run: |
+          echo "=== Disk Space After Tests ==="
+          df -h
+
+  # Job 3: Stop GPU EC2 instance (ALWAYS runs for cleanup)
+  stop-gpu-runner:
+    needs: start-gpu-runner
+    runs-on: ubuntu-latest
+    if: ${{ always() }}  # CRITICAL: Always cleanup, even on failure or cancellation
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials via OIDC
+        if: needs.start-gpu-runner.outputs.instance-id != ''
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-2
+          role-session-name: GitHubActions-vLLM-GPU-Cleanup-${{ github.run_id }}
+
+      - name: Wait for GPU test job before cleanup
+        if: needs.start-gpu-runner.outputs.instance-id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECORD_JOB_NAME: record-vllm-tests
+          RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          queued_deadline=$((SECONDS + 1200))
+          absolute_deadline=$((SECONDS + 7200))
+
+          while true; do
+            job_status="$(
+              gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/jobs" --paginate \
+                --jq ".jobs[] | select(.name == \"${RECORD_JOB_NAME}\") | [.status, (.conclusion // \"\")] | @tsv" \
+                | tail -n 1
+            )"
+
+            status="$(printf '%s' "$job_status" | cut -f1)"
+            conclusion="$(printf '%s' "$job_status" | cut -f2)"
+
+            if [ "$status" = "completed" ]; then
+              echo "GPU test job completed with conclusion: ${conclusion:-unknown}"
+              break
+            fi
+
+            if [ -z "$status" ]; then
+              echo "Waiting for GPU test job to be created..."
+            else
+              echo "GPU test job status: $status"
+            fi
+
+            if [ "$status" != "in_progress" ] && [ "$SECONDS" -ge "$queued_deadline" ]; then
+              echo "GPU test job did not start within 20 minutes; cleaning up the EC2 runner."
+              break
+            fi
+
+            if [ "$SECONDS" -ge "$absolute_deadline" ]; then
+              echo "GPU test job exceeded the 2 hour cleanup deadline; cleaning up the EC2 runner."
+              break
+            fi
+
+            sleep 30
+          done
+
+      - name: Stop EC2 runner
+        if: needs.start-gpu-runner.outputs.instance-id != ''
+        uses: ./.github/actions/launch-gpu-runner
+        with:
+          mode: stop
+          github-token: ${{ secrets.RELEASE_PAT }}
+          aws-region: us-east-2
+          label: ${{ needs.start-gpu-runner.outputs.label }}
+          ec2-instance-id: ${{ needs.start-gpu-runner.outputs.instance-id }}
+
+      - name: Cleanup summary
+        if: needs.start-gpu-runner.outputs.instance-id != ''
+        run: |
+          echo "GPU runner terminated successfully"
+          echo "  Instance ID: ${{ needs.start-gpu-runner.outputs.instance-id }}"
+
+      - name: Cleanup skipped
+        if: needs.start-gpu-runner.outputs.instance-id == ''
+        run: |
+          echo "No EC2 instance id was produced by start-gpu-runner; nothing to terminate."
+
+  # Job 4: Summary and next steps
+  summary:
+    needs: [start-gpu-runner, record-vllm-tests, stop-gpu-runner]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Workflow summary
+        run: |
+          {
+            echo "## vLLM GPU Recording Summary"
+            echo ""
+            echo "**Model**: gpt-oss:20b"
+            echo "**Instance Type**: g6.2xlarge"
+            echo "**Test Suite**: ${{ inputs.suite }}"
+            echo ""
+
+            if [ "${{ needs.record-vllm-tests.result }}" == "success" ]; then
+              echo "**Test Status**: Successful"
+              echo ""
+              echo "Recordings have been uploaded as artifacts. The trusted Commit Recordings workflow will commit them back to the PR branch when PR metadata is available."
+            else
+              echo "**Test Status**: Failed"
+              echo ""
+              echo "Check the test logs for errors."
+            fi
+
+            echo ""
+            echo "**Cleanup Status**: ${{ needs.stop-gpu-runner.result == 'success' && 'Instance terminated' || 'Check manually' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check for cleanup issues
+        if: needs.stop-gpu-runner.result != 'success'
+        run: |
+          echo "::warning::EC2 instance cleanup may have failed! Check AWS console for orphaned instances."
+          echo "Instance ID: ${{ needs.start-gpu-runner.outputs.instance-id }}"

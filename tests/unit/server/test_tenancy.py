@@ -18,36 +18,37 @@ async def _receive():
 
 
 async def test_multi_tenancy_allows_public_route_without_tenant(monkeypatch):
-    app = AsyncMock()
+    mock_app = AsyncMock()
     send = AsyncMock()
-    middleware = TenancyMiddleware(app, TenancyConfig(mode=TenancyMode.MULTI), impls={})
+    middleware = TenancyMiddleware(mock_app, TenancyConfig(mode=TenancyMode.MULTI))
 
-    monkeypatch.setattr("ogx.core.server.auth.initialize_route_impls", lambda impls: {})
     monkeypatch.setattr(
         "ogx.core.server.auth.find_matching_route",
         lambda method, path, route_impls: (None, {}, path, RouteAuthInfo(require_authentication=False)),
     )
 
-    await middleware({"type": "http", "method": "GET", "path": "/v1/health"}, _receive, send)
+    scope = {"type": "http", "method": "GET", "path": "/v1/health", "app": mock_app}
+    await middleware(scope, _receive, send)
 
-    app.assert_awaited_once()
+    mock_app.assert_awaited_once()
     send.assert_not_awaited()
 
 
 async def test_multi_tenancy_rejects_private_route_without_tenant(monkeypatch):
-    app = AsyncMock()
+    mock_app = AsyncMock()
     send = AsyncMock()
-    middleware = TenancyMiddleware(app, TenancyConfig(mode=TenancyMode.MULTI), impls={})
+    middleware = TenancyMiddleware(mock_app, TenancyConfig(mode=TenancyMode.MULTI))
 
-    monkeypatch.setattr("ogx.core.server.auth.initialize_route_impls", lambda impls: {})
     monkeypatch.setattr(
         "ogx.core.server.auth.find_matching_route",
         lambda method, path, route_impls: (None, {}, path, RouteAuthInfo(require_authentication=True)),
     )
 
-    await middleware({"type": "http", "method": "GET", "path": "/v1/models"}, _receive, send)
+    scope = {"type": "http", "method": "GET", "path": "/v1/models", "app": mock_app}
 
-    app.assert_not_awaited()
+    await middleware(scope, _receive, send)
+
+    mock_app.assert_not_awaited()
     assert send.await_args_list[0].args[0]["status"] == 401
 
 

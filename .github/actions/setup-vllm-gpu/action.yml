@@ -1,0 +1,244 @@
+name: 'Setup vLLM GPU'
+description: 'Install vLLM with GPU support and start vLLM server with gpt-oss:20b'
+
+inputs:
+  model:
+    description: 'Model to serve (e.g., gpt-oss:20b, Qwen/Qwen3-0.6B)'
+    required: false
+    default: 'gpt-oss:20b'
+  port:
+    description: 'Port for vLLM server'
+    required: false
+    default: '8000'
+  gpu-memory-utilization:
+    description: 'GPU memory utilization (0.0-1.0)'
+    required: false
+    default: '0.85'
+  max-model-len:
+    description: 'Maximum model context length'
+    required: false
+    default: '8192'
+  quantization:
+    description: 'Optional vLLM quantization method (awq, gptq, or none)'
+    required: false
+    default: 'none'
+  vllm-version:
+    description: 'vLLM version to install, or latest for the newest available release'
+    required: false
+    default: '0.22.1'
+
+outputs:
+  vllm-url:
+    description: 'URL of the vLLM server'
+    value: 'http://localhost:${{ inputs.port }}/v1'
+  model-name:
+    description: 'Name of the model being served'
+    value: ${{ inputs.model }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Verify GPU availability
+      shell: bash
+      run: |
+        echo "=== GPU Information ==="
+        nvidia-smi
+        echo ""
+        echo "=== CUDA Version ==="
+        nvcc --version || echo "nvcc not found in PATH"
+        echo ""
+        echo "=== Environment ==="
+        echo "CUDA_HOME: ${CUDA_HOME:-not set}"
+        echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH:-not set}"
+
+    - name: Configure CUDA environment
+      shell: bash
+      run: |
+        if [ -z "${CUDA_HOME:-}" ]; then
+          if [ -d /usr/local/cuda-13.0 ]; then
+            export CUDA_HOME=/usr/local/cuda-13.0
+          elif [ -d /usr/local/cuda ]; then
+            export CUDA_HOME=/usr/local/cuda
+          elif [ -d /usr/local/cuda-12.8 ]; then
+            export CUDA_HOME=/usr/local/cuda-12.8
+          elif [ -d /usr/local/cuda-12.4 ]; then
+            export CUDA_HOME=/usr/local/cuda-12.4
+          else
+            export CUDA_HOME=/usr/local/cuda
+          fi
+        fi
+        echo "CUDA_HOME=${CUDA_HOME}" >> $GITHUB_ENV
+
+        export LD_LIBRARY_PATH="/usr/lib64:${LD_LIBRARY_PATH:-}:${CUDA_HOME}/lib64"
+        echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
+
+        export PATH="${CUDA_HOME}/bin:${PATH}"
+        echo "PATH=${PATH}" >> $GITHUB_ENV
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244 # v7.1.4
+      with:
+        enable-cache: ${{ env.UV_NO_CACHE != 'true' }}
+
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        # Create virtual environment
+        uv venv --python 3.12 /tmp/vllm-env
+        source /tmp/vllm-env/bin/activate
+
+    - name: Install vLLM with GPU support
+      shell: bash
+      env:
+        VLLM_VERSION: ${{ inputs.vllm-version }}
+      run: |
+        source /tmp/vllm-env/bin/activate
+
+        echo "=== Installing vLLM with CUDA support ==="
+        if [ "$VLLM_VERSION" = "latest" ]; then
+          uv pip install --no-config vllm "prometheus-fastapi-instrumentator==8.0.2" --torch-backend=auto
+        else
+          uv pip install --no-config "vllm==$VLLM_VERSION" "prometheus-fastapi-instrumentator==8.0.2" --torch-backend=auto
+        fi
+
+        echo "=== Verifying installation ==="
+        python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+        python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+        python -c "import torch; print(f'CUDA device count: {torch.cuda.device_count()}')"
+        vllm --version
+
+    - name: Resolve model identifier
+      shell: bash
+      env:
+        MODEL: ${{ inputs.model }}
+      run: |
+        source /tmp/vllm-env/bin/activate
+
+        LOAD_MODEL="$MODEL"
+        SERVED_MODEL_NAME="$MODEL"
+
+        case "$MODEL" in
+          gpt-oss:20b)
+            LOAD_MODEL="openai/gpt-oss-20b"
+            ;;
+        esac
+
+        echo "VLLM_LOAD_MODEL=$LOAD_MODEL" >> $GITHUB_ENV
+        echo "VLLM_SERVED_MODEL_NAME=$SERVED_MODEL_NAME" >> $GITHUB_ENV
+        echo "Resolved load model: $LOAD_MODEL"
+        echo "Served model name: $SERVED_MODEL_NAME"
+
+    - name: Start vLLM server
+      shell: bash
+      env:
+        MODEL: ${{ inputs.model }}
+        PORT: ${{ inputs.port }}
+        GPU_MEM: ${{ inputs.gpu-memory-utilization }}
+        MAX_LEN: ${{ inputs.max-model-len }}
+        QUANT: ${{ inputs.quantization }}
+        VLLM_LOAD_MODEL: ${{ env.VLLM_LOAD_MODEL }}
+        VLLM_SERVED_MODEL_NAME: ${{ env.VLLM_SERVED_MODEL_NAME }}
+      run: |
+        source /tmp/vllm-env/bin/activate
+
+        echo "=== Starting vLLM server ==="
+        echo "Model: $MODEL"
+        echo "Load Model: $VLLM_LOAD_MODEL"
+        echo "Port: $PORT"
+        echo "GPU Memory Utilization: $GPU_MEM"
+        echo "Max Model Length: $MAX_LEN"
+        echo "Quantization: $QUANT"
+        echo ""
+
+        # Build vLLM command
+        VLLM_CMD="vllm serve $VLLM_LOAD_MODEL \
+          --host 0.0.0.0 \
+          --port $PORT \
+          --tensor-parallel-size 1 \
+          --gpu-memory-utilization $GPU_MEM \
+          --max-model-len $MAX_LEN \
+          --enable-auto-tool-choice \
+          --tool-call-parser openai \
+          --served-model-name $VLLM_SERVED_MODEL_NAME \
+          --dtype auto"
+
+        # Add quantization if specified
+        if [ "$QUANT" != "none" ]; then
+          VLLM_CMD="$VLLM_CMD --quantization $QUANT"
+        fi
+
+        echo "Command: $VLLM_CMD"
+        echo ""
+
+        # Start vLLM in background
+        $VLLM_CMD > /tmp/vllm-server.log 2>&1 &
+        VLLM_PID=$!
+        echo "vLLM server started with PID: $VLLM_PID"
+        echo "VLLM_PID=$VLLM_PID" >> $GITHUB_ENV
+
+        # Save PID for cleanup
+        echo $VLLM_PID > /tmp/vllm.pid
+
+    - name: Wait for vLLM server to be ready
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+      run: |
+        echo "=== Waiting for vLLM server to be ready ==="
+        echo "Health check URL: http://localhost:$PORT/health"
+        echo ""
+
+        # Wait up to 10 minutes for server to be ready
+        timeout 600 bash -c "
+          until curl -f http://localhost:$PORT/health > /dev/null 2>&1; do
+            echo \"Waiting for vLLM server... (checking http://localhost:$PORT/health)\"
+
+            # Check if process is still running
+            if ! kill -0 \$VLLM_PID 2>/dev/null; then
+              echo \"ERROR: vLLM process died!\"
+              echo \"Last 50 lines of vLLM log:\"
+              tail -n 50 /tmp/vllm-server.log
+              exit 1
+            fi
+
+            sleep 5
+          done
+        " || {
+          echo "ERROR: vLLM server failed to start within 10 minutes"
+          echo "=== vLLM Server Log ==="
+          cat /tmp/vllm-server.log
+          exit 1
+        }
+
+        echo "✓ vLLM server is ready!"
+        echo ""
+        echo "=== Testing models endpoint ==="
+        curl -sS -f http://localhost:$PORT/v1/models | python3 -m json.tool
+
+        echo ""
+        echo "=== Testing chat completion endpoint ==="
+        if [ -z "${VLLM_SERVED_MODEL_NAME:-}" ]; then
+          echo "ERROR: VLLM_SERVED_MODEL_NAME is not set"
+          exit 1
+        fi
+        cat > /tmp/vllm-smoke-request.json <<EOF
+        {"model":"${VLLM_SERVED_MODEL_NAME}","messages":[{"role":"user","content":"Reply with ok."}],"max_tokens":8,"temperature":0}
+        EOF
+        curl -sS -f http://localhost:$PORT/v1/chat/completions \
+          -H "Content-Type: application/json" \
+          -d @/tmp/vllm-smoke-request.json \
+          | python3 -m json.tool
+
+    - name: Display server information
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+        MODEL: ${{ inputs.model }}
+      run: |
+        echo "=== vLLM Server Information ==="
+        echo "URL: http://localhost:$PORT/v1"
+        echo "Model: $MODEL"
+        echo "Health: http://localhost:$PORT/health"
+        echo "Models: http://localhost:$PORT/v1/models"
+        echo ""
+        echo "Server is ready for testing!"
