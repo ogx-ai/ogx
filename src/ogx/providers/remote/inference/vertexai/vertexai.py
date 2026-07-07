@@ -202,29 +202,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 exc_info=True,
             )
 
-    def _reset_client(self) -> None:
-        """Reset cached client and HTTP options after a temporary event loop exits.
-
-        When StackApp.__init__ runs stack.initialize() inside a temporary event
-        loop (via ThreadPoolExecutor), model listing may trigger lazy client
-        creation via _get_client().  The Google genai Client eagerly creates an
-        internal httpx.AsyncClient bound to the temporary loop.  After the
-        temporary loop is closed, the cached client holds connections tied to
-        the dead loop, causing ``RuntimeError: Event loop is closed`` on the
-        first inference request.
-
-        This method clears the cached client without awaiting async close
-        (the temporary loop is already terminated) so that a fresh client is
-        created on the next _get_client() call — this time on uvicorn's
-        request-handling event loop.
-
-        Compare ``reset_sqlstore_engines()`` which serves the same purpose for
-        SQL engines.
-        """
-        self._default_client = None
-        self._http_options = None
-        self._http_options_initialized = False
-
     async def shutdown(self) -> None:
         await self._close_managed_httpx_client()
         self._http_options = None

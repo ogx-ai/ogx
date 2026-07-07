@@ -466,6 +466,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
             port=args.port,
             enable_ui=args.enable_ui,
             providers=None,
+            insecure=False,  # todo: add ability to run in secure FIPS mode
         ),
     }
 
