@@ -3,7 +3,7 @@ slug: ogx-multi-tenant-capabilities
 title: "Multi-Tenant AI Infrastructure with OGX: Tenant Isolation, ABAC, and Defense in Depth"
 authors: [leseb]
 tags: [ogx, multi-tenancy, access-control, security, enterprise]
-date: 2026-07-07
+date: 2026-07-14
 ---
 
 Most AI gateway projects solve for single-user or single-team setups. Point your SDK at the server, get completions back. That works until your platform team needs to serve multiple tenants from the same OGX instance without them seeing each other's models, vector stores, conversations, or RAG data.
