@@ -4,7 +4,7 @@ import styles from './styles.module.css';
 const EXAMPLES = [
   {
     label: 'Server',
-    command: "uvx --from 'ogx[starter]' ogx stack run starter",
+    command: "uvx --from 'ogx[starter]' ogx run starter",
     tokens: [
       { text: 'uvx', style: 'tokenBinary' },
       { text: '--from', style: 'tokenFlag' },

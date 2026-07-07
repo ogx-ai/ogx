@@ -31,6 +31,12 @@ DEFAULT_SUMMARY_PREFIX = (
     "use the information in this summary to assist with your own analysis:"
 )
 
+DEFAULT_MEMORY_READ_PROMPT = (
+    "These are concise summaries of previous conversations for this owner. Use them "
+    "only as contextual recall. They may be stale or incomplete. Do not mention them "
+    "as search results or cite them."
+)
+
 
 class CompactionConfig(BaseModel):
     """Configuration for conversation compaction behavior and prompt templates."""
@@ -106,6 +112,42 @@ class CompactionConfig(BaseModel):
         return v
 
 
+class MemoryConfig(BaseModel):
+    """Configuration for Responses memory reads."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Responses memory reads. Disabled by default because memory is an alpha feature.",
+    )
+    default_vector_store_id: str | None = Field(
+        default=None,
+        description="Default vector store containing conversation memory files.",
+    )
+    owner_metadata_key: str = Field(
+        default="owner_id",
+        description="Vector-store file attribute key used for owner scoping.",
+    )
+    memory_metadata_key: str = Field(
+        default="memory",
+        description="Vector-store file attribute key used to identify memory files.",
+    )
+    max_num_results: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Default maximum memory chunks to retrieve.",
+    )
+    max_context_tokens: int = Field(
+        default=1200,
+        ge=1,
+        description="Default approximate token budget for injected memory context.",
+    )
+    read_prompt_template: str = Field(
+        default=DEFAULT_MEMORY_READ_PROMPT,
+        description="Prompt text that frames retrieved memory context.",
+    )
+
+
 class ResponsesPersistenceConfig(BaseModel):
     """Nested persistence configuration for the responses provider."""
 
@@ -125,6 +167,11 @@ class BuiltinResponsesImplConfig(BaseModel):
     compaction_config: CompactionConfig = Field(
         default_factory=CompactionConfig,
         description="Configuration for conversation compaction behavior and prompt templates",
+    )
+
+    memory_config: MemoryConfig = Field(
+        default_factory=MemoryConfig,
+        description="Configuration for Responses memory reads.",
     )
 
     moderation_endpoint: str | None = Field(

@@ -23,7 +23,7 @@ from ogx.core.task import (
     create_detached_background_task,
 )
 from ogx.log import get_logger
-from ogx.providers.inline.responses.builtin.config import CompactionConfig
+from ogx.providers.inline.responses.builtin.config import CompactionConfig, MemoryConfig
 from ogx.providers.utils.responses.responses_store import (
     ResponsesStore,
     _OpenAIResponseObjectWithInputAndMessages,
@@ -43,6 +43,7 @@ from ogx_api import (
     ListItemsRequest,
     ListOpenAIResponseInputItem,
     ListOpenAIResponseObject,
+    MemoryToolConfig,
     OpenAIChatCompletionContentPartParam,
     OpenAICompactedResponse,
     OpenAIDeleteResponseObject,
@@ -79,10 +80,12 @@ from ogx_api import (
 )
 from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier
 
+from .memory import resolve_memory_context
 from .streaming import StreamingResponseOrchestrator
 from .tool_executor import ToolExecutor
 from .types import ChatCompletionContext, ToolContext
 from .utils import (
+    APPROX_CHARS_PER_TOKEN,
     convert_response_content_to_chat_content,
     convert_response_input_to_chat_messages,
     convert_response_text_to_chat_response_format,
@@ -121,6 +124,7 @@ class OpenAIResponsesImpl:
         moderation_headers: dict[str, str] | None = None,
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
+        memory_config: MemoryConfig | None = None,
     ):
         self.inference_api = inference_api
         self.tool_groups_api = tool_groups_api
@@ -141,6 +145,7 @@ class OpenAIResponsesImpl:
         self.connectors_api = connectors_api
 
         self.compaction_config = compaction_config or CompactionConfig()
+        self.memory_config = memory_config or MemoryConfig()
         self._background_queue: asyncio.Queue[_BackgroundWorkItem] = asyncio.Queue(maxsize=BACKGROUND_QUEUE_MAX_SIZE)
         self._background_worker_tasks: set[asyncio.Task] = set()
         self._background_response_tasks: dict[str, asyncio.Task] = {}
@@ -341,6 +346,16 @@ class OpenAIResponsesImpl:
             messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
 
         return all_input, messages, tool_context, previous_usage
+
+    @staticmethod
+    def _insert_memory_context(messages: list[OpenAIMessageParam], memory_context: str) -> None:
+        insert_at = 0
+        for index, message in enumerate(messages):
+            if getattr(message, "role", None) not in {"system", "developer"}:
+                break
+            insert_at = index + 1
+
+        messages.insert(insert_at, OpenAISystemMessageParam(content=memory_context))
 
     async def _prepend_prompt(
         self,
@@ -650,6 +665,7 @@ class OpenAIResponsesImpl:
         extra_body: dict | None = None,
         stream_options: ResponseStreamOptions | None = None,
         context_management: list | None = None,
+        memory: MemoryToolConfig | None = None,
     ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
         stream = bool(stream)
         background = bool(background)
@@ -735,6 +751,7 @@ class OpenAIResponsesImpl:
                 presence_penalty=presence_penalty,
                 extra_body=extra_body,
                 context_management=context_management,
+                memory=memory,
             )
 
         stream_gen = self._create_streaming_response(
@@ -768,6 +785,7 @@ class OpenAIResponsesImpl:
             extra_body=extra_body,
             stream_options=stream_options,
             context_management=context_management,
+            memory=memory,
         )
 
         if stream:
@@ -855,6 +873,7 @@ class OpenAIResponsesImpl:
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         context_management: list | None = None,
+        memory: MemoryToolConfig | None = None,
     ) -> OpenAIResponseObject:
         """Create a response that processes in the background.
 
@@ -934,6 +953,7 @@ class OpenAIResponsesImpl:
                         presence_penalty=presence_penalty,
                         extra_body=extra_body,
                         context_management=context_management,
+                        memory=memory,
                     ),
                 )
             )
@@ -973,6 +993,7 @@ class OpenAIResponsesImpl:
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         context_management: list | None = None,
+        memory: MemoryToolConfig | None = None,
     ) -> None:
         """Inner loop for background response processing, separated for timeout wrapping."""
         # Check if response was cancelled before starting
@@ -1014,6 +1035,7 @@ class OpenAIResponsesImpl:
             presence_penalty=presence_penalty,
             extra_body=extra_body,
             context_management=context_management,
+            memory=memory,
         )
 
         result_response = None
@@ -1088,6 +1110,7 @@ class OpenAIResponsesImpl:
         extra_body: dict | None = None,
         stream_options: ResponseStreamOptions | None = None,
         context_management: list | None = None,
+        memory: MemoryToolConfig | None = None,
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
         # These should never be None when called from create_openai_response (which sets defaults)
         # but we assert here to help mypy understand the types
@@ -1115,6 +1138,17 @@ class OpenAIResponsesImpl:
 
         # Prepend reusable prompt (if provided)
         await self._prepend_prompt(messages, prompt)
+
+        memory_context = await resolve_memory_context(
+            vector_io_api=self.vector_io_api,
+            memory_config=self.memory_config,
+            request_memory=memory,
+            input=input,
+            metadata=metadata,
+            safety_identifier=safety_identifier,
+        )
+        if memory_context:
+            self._insert_memory_context(messages, memory_context)
 
         # Structured outputs
         response_format = await convert_response_text_to_chat_response_format(text)
@@ -1480,9 +1514,9 @@ class OpenAIResponsesImpl:
 
     def _estimate_tokens_by_chars(self, input: str | list[OpenAIResponseInput]) -> int:
         if isinstance(input, str):
-            return max(1, len(input) // 4)
+            return max(1, len(input) // APPROX_CHARS_PER_TOKEN)
         total_chars = sum(len(s) for s in self._extract_text_segments(input))
-        return max(1, total_chars // 4)
+        return max(1, total_chars // APPROX_CHARS_PER_TOKEN)
 
     async def _maybe_auto_compact(
         self,

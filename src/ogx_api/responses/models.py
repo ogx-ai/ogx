@@ -11,7 +11,7 @@ using Pydantic with Field descriptions for OpenAPI schema generation.
 """
 
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +27,7 @@ from ogx_api.openai_responses import (
     ResponseTruncation,
 )
 from ogx_api.schema_utils import flatten_nullable_remove_default, remove_default_from_schema, remove_null_from_anyof
+from ogx_api.vector_io.models import SearchRankingOptions
 
 
 class ResponseItemInclude(StrEnum):
@@ -73,6 +74,48 @@ class ContextManagement(BaseModel):
     )
     compact_threshold: int | None = Field(
         default=None, description="Token threshold at which compaction should be triggered."
+    )
+
+
+class MemoryToolConfig(BaseModel):
+    """Configuration for Responses memory retrieval."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to retrieve memory context for this response.",
+    )
+    owner_id: str | None = Field(
+        default=None,
+        description="Stable owner identifier used to scope memory retrieval.",
+    )
+    vector_store_id: str | None = Field(
+        default=None,
+        description="Memory vector store override. Defaults to the server memory vector store.",
+    )
+    max_num_results: int | None = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Maximum memory chunks to retrieve.",
+    )
+    max_context_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="Approximate token budget for injected memory context.",
+    )
+    filters: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Additional vector-store filters combined with the required owner filter. "
+            "Use the vector store filter shape, such as {'type': 'eq', 'key': ..., 'value': ...} "
+            "or {'type': 'and', 'filters': [...]}."
+        ),
+    )
+    ranking_options: SearchRankingOptions | None = Field(
+        default=None,
+        description="Ranking options for memory vector-store search.",
     )
 
 
@@ -215,6 +258,10 @@ class CreateResponseRequest(BaseModel):
     context_management: list[ContextManagement] | None = Field(
         default=None,
         description="Context management configuration. When set with type 'compaction', automatically compacts conversation history when token count exceeds the compact_threshold.",
+    )
+    memory: MemoryToolConfig | None = Field(
+        default=None,
+        description="Controls owner-scoped memory retrieval for this response.",
     )
 
 

@@ -318,7 +318,8 @@ class MilvusIndex(EmbeddingIndex):
         reranker_params: dict[str, Any] | None = None,
         filters: Filter | None = None,
     ) -> QueryChunksResponse:
-        if self.use_native_hybrid:
+        weighted_rrf = reranker_type != RERANKER_TYPE_WEIGHTED and bool((reranker_params or {}).get("weights"))
+        if self.use_native_hybrid and not weighted_rrf:
             return await self._query_hybrid_native(
                 embedding, query_string, k, score_threshold, reranker_type, reranker_params, filters
             )
@@ -354,7 +355,14 @@ class MilvusIndex(EmbeddingIndex):
 
         if reranker_type == RERANKER_TYPE_WEIGHTED:
             alpha = (reranker_params or {}).get("alpha", 0.5)
-            rerank = WeightedRanker(alpha, 1 - alpha)
+            weights = (reranker_params or {}).get("weights")
+            if isinstance(weights, dict):
+                vector_weight = float(weights.get("vector", 0.0))
+                keyword_weight = float(weights.get("keyword", 0.0))
+            else:
+                vector_weight = alpha
+                keyword_weight = 1 - alpha
+            rerank = WeightedRanker(vector_weight, keyword_weight)
         else:
             impact_factor = (reranker_params or {}).get("impact_factor", 60.0)
             rerank = RRFRanker(impact_factor)
