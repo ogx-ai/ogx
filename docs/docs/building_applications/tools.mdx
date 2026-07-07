@@ -54,6 +54,38 @@ Features:
 - Configurable query generation
 - Context retrieval with token limits
 
+### Memory Alpha
+
+Responses memory is an alpha feature built on vector stores and file search retrieval, but it is not exposed to the model as a visible tool call. OGX retrieves memory summaries from a configured memory vector store, injects them as hidden context, and does not emit `file_search_call` items, annotations, or citations for those memories.
+
+Configure `memory_config.default_vector_store_id` on the built-in Responses provider to point at the vector store that stores memory files. Memory reads and writes are always scoped by an owner identifier and OGX skips memory retrieval when it cannot resolve one. In authenticated deployments, OGX derives the owner from the authenticated user principal, such as the OAuth2 JWT `sub` claim or the configured upstream auth principal header.
+
+```python
+response = client.responses.create(
+    model="llama-3.3-70b",
+    input="Use my project preferences when answering.",
+)
+```
+
+If you need per-request memory tuning with the official OpenAI Python SDK, pass the OGX extension through `extra_body`:
+
+```python
+response = client.responses.create(
+    model="llama-3.3-70b",
+    input="Use my project preferences when answering.",
+    extra_body={
+        "memory": {
+            "max_num_results": 5,
+            "max_context_tokens": 1200,
+        },
+    },
+)
+```
+
+`memory` is an OGX extension field. Raw HTTP requests and OGX-generated clients can send `memory` as a top-level request field. Request-supplied `memory.owner_id`, `safety_identifier`, `metadata.owner_id`, and `metadata.user_id` are fallbacks for deployments without an authenticated principal; they do not override the authenticated user principal when auth is enabled.
+
+When `memory_config.write_enabled` is enabled, stored conversations that complete successfully are queued for asynchronous memory materialization. Conversation messages are stored on every turn, while memory writes are debounced by `memory_config.write_debounce_seconds` so rapid turns in the same conversation and vector store coalesce into one Markdown memory file. The memory file includes the generated summary plus a searchable transcript, so hybrid search can recover details that the summary omits. Use `memory.enabled=false` on a request to skip both recall and summary writes for that response.
+
 ## Model Context Protocol (MCP)
 
 [MCP](https://github.com/modelcontextprotocol) is an upcoming, popular standard for tool discovery and execution. It is a protocol that allows tools to be dynamically discovered from an MCP endpoint and can be used to extend the agent's capabilities.

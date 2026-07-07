@@ -20,12 +20,12 @@ server/
 ### Server Startup
 
 1. `main()` in `server.py` resolves the config, creates a `StackApp` (subclass of `FastAPI`).
-2. `StackApp.__init__` creates and initializes a `Stack` instance (provider resolution, resource registration).
-3. The lifespan context starts background tasks (e.g., periodic registry refresh).
+2. The lifespan context awaits `stack.initialize()` (provider resolution, resource registration), then registers routers.
+3. The lifespan starts background tasks (e.g., periodic registry refresh).
 
 ### Route Registration
 
-Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-discovers router factories by scanning `ogx_api.<api>.fastapi_routes` modules for `create_router` functions. At startup, `server.py` calls `build_fastapi_router()` for each enabled API and includes the resulting router in the FastAPI app. External APIs can also register router factories via `register_external_api_routers()`.
+Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-discovers router factories by scanning `ogx_api.<api>.fastapi_routes` modules for `create_router` functions. During lifespan startup, `server.py` calls `build_fastapi_router()` for each enabled API and includes the resulting router in the FastAPI app. External APIs can also register router factories via `register_external_api_routers()`.
 
 ### Middleware
 
