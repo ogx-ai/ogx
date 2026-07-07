@@ -14,6 +14,7 @@ from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
 from ogx.log import get_logger
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
+from ogx.providers.utils.inference.http_client import build_network_client_kwargs
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
     Model,
@@ -105,7 +106,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
 
     async def _exchange_iam_token(self, api_key: str) -> str:
         try:
-            async with httpx.AsyncClient() as http_client:
+            async with httpx.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
                 resp = await http_client.post(
                     "https://iam.cloud.ibm.com/identity/token",
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -240,7 +241,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
     async def _fetch_model_specs(self) -> list[dict[str, Any]]:
         """Retrieve foundation model specifications from the WatsonX API."""
         url = f"{str(self.config.base_url)}/ml/v1/foundation_model_specs?version={WATSONX_API_VERSION}"
-        async with httpx.AsyncClient() as http_client:
+        async with httpx.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
             response = await http_client.get(url, headers={"Content-Type": "application/json"}, timeout=30)
             response.raise_for_status()
             data = response.json()
