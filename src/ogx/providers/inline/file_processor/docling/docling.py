@@ -14,12 +14,15 @@ from typing import Any
 
 from docling.chunking import HybridChunker
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions, VlmPipelineOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions, VlmConvertOptions, VlmPipelineOptions
+from docling.datamodel.vlm_engine_options import ApiVlmEngineOptions, VlmEngineType
 from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.vlm_pipeline import VlmPipeline
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from fastapi import UploadFile
 
 from ogx.log import get_logger
+from ogx.providers.inline.file_processor.docling.vlm_engine import OgxInferenceVlmEngine
 from ogx.providers.inline.file_processor.zip_utils import validate_zip_content
 from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
@@ -56,37 +59,25 @@ class DoclingFileProcessor:
             return self._build_vlm_converter()
 
         if self.config.vlm_model and not self.inference_api:
-            log.warning(
-                "VLM model configured but no inference API available, falling back to standard pipeline",
-                vlm_model=self.config.vlm_model,
+            raise ValueError(
+                f"vlm_model '{self.config.vlm_model}' is configured but no inference provider is available. "
+                "Register an inference provider or remove vlm_model from the docling config."
             )
 
         pipeline_options = PdfPipelineOptions(do_ocr=self.config.do_ocr)
         return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)})
 
     def _build_vlm_converter(self) -> DocumentConverter:
-        from docling.datamodel.pipeline_options import VlmConvertOptions
-        from docling.datamodel.vlm_engine_options import ApiVlmEngineOptions, VlmEngineType
-        from docling.pipeline.vlm_pipeline import VlmPipeline
-
-        from .vlm_engine import OgxInferenceVlmEngine
-
         assert self.config.vlm_model is not None
 
-        try:
-            vlm_options = VlmConvertOptions.from_preset(
-                self.config.vlm_preset,
-                engine_options=ApiVlmEngineOptions(engine_type=VlmEngineType.API_OPENAI),
-            )
-        except KeyError:
-            log.error(
-                "Invalid VLM preset, falling back to standard pipeline",
-                vlm_preset=self.config.vlm_preset,
-            )
-            pipeline_options = PdfPipelineOptions(do_ocr=self.config.do_ocr)
-            return DocumentConverter(
-                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-            )
+        available_presets = list(VlmConvertOptions._presets.keys())
+        if self.config.vlm_preset not in available_presets:
+            raise ValueError(f"Invalid vlm_preset '{self.config.vlm_preset}'. Available presets: {available_presets}")
+
+        vlm_options = VlmConvertOptions.from_preset(
+            self.config.vlm_preset,
+            engine_options=ApiVlmEngineOptions(engine_type=VlmEngineType.API_OPENAI),
+        )
 
         vlm_pipeline_options = VlmPipelineOptions(
             vlm_options=vlm_options,
