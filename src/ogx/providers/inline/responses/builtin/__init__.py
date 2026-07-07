@@ -29,6 +29,7 @@ async def get_provider_impl(
         deps[Api.files],
         deps[Api.connectors],
         policy,
+        skills_api=deps.get(Api.skills),
     )
     await impl.initialize()
     return impl

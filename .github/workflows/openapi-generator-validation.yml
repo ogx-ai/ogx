@@ -187,7 +187,7 @@ jobs:
 
       - name: Generate Python SDK
         working-directory: client-sdks/openapi
-        run: make sdk OPEN=1
+        run: make sdk OPEN=0
 
       - name: Validate generated SDK
         working-directory: client-sdks/openapi
@@ -217,14 +217,14 @@ jobs:
 
       - name: Install generated SDK
         run: |
-          echo "Reinstalling OpenAPI-generated SDK (ogx_open_client)..."
-          uv pip uninstall ogx-open-client || true
+          echo "Reinstalling OpenAPI-generated SDK (ogx_client)..."
+          uv pip uninstall ogx-client || true
 
           # Install SDK using uv pip
           uv pip install -e client-sdks/openapi/sdks/python
 
           echo "Verifying installation..."
-          uv run python -c "import ogx_open_client; print(f'Installed: {ogx_open_client.__name__}')"
+          uv run python -c "import ogx_client; print(f'Installed: {ogx_client.__name__}')"
 
       - name: Setup Ollama (for integration tests)
         if: runner.os == 'Linux'
@@ -242,7 +242,7 @@ jobs:
             || echo "::warning::Some integration tests failed - this may indicate SDK compatibility issues"
 
           # Show which SDK is actually being used
-          uv run python -c "import ogx_open_client; import inspect; print(f'SDK location: {inspect.getfile(ogx_open_client)}')"
+          uv run python -c "import ogx_client; import inspect; print(f'SDK location: {inspect.getfile(ogx_client)}')"
 
       - name: Summary
         if: runner.os == 'Linux'
@@ -255,5 +255,5 @@ jobs:
             echo "✅ Integration tests executed (check logs for results)"
             echo ""
             echo "**Platform**: ${{ matrix.os }}"
-            echo "**Package**: ogx_open_client (OpenAPI-generated)"
+            echo "**Package**: ogx_client (OpenAPI-generated)"
           } >> "$GITHUB_STEP_SUMMARY"
