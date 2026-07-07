@@ -25,6 +25,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseObject,
     OpenAIResponseObjectStreamResponseFailed,
 )
+from ogx_api.responses.models import CreateResponseRequest
 from ogx_api.tools import ToolDef, ToolInvocationResult
 
 
@@ -55,11 +56,9 @@ async def test_failed_stream_persists_non_system_messages(openai_responses_impl,
         FakeOrchestrator,
     ):
         stream = await openai_responses_impl.create_openai_response(
-            input=input_text,
-            model=model,
-            instructions="system instructions",
-            stream=True,
-            store=True,
+            CreateResponseRequest(
+                input=input_text, model=model, instructions="system instructions", stream=True, store=True
+            )
         )
         chunks = [chunk async for chunk in stream]
 
@@ -124,10 +123,7 @@ async def test_failed_stream_raises_internal_server_error_in_non_streaming_mode(
     ):
         with pytest.raises(InternalServerError) as exc_info:
             await openai_responses_impl.create_openai_response(
-                input="Hello",
-                model=model,
-                stream=False,
-                store=False,
+                CreateResponseRequest(input="Hello", model=model, stream=False, store=False)
             )
 
     # The provider message is surfaced to the caller: response.failed errors are
@@ -290,11 +286,13 @@ async def test_agent_loop_incomplete_due_to_max_output_tokens(
 
     # Execute with max_output_tokens that will be exceeded after first tool call
     result = await openai_responses_impl.create_openai_response(
-        input="Test input",
-        model=model,
-        max_output_tokens=max_output_tokens,
-        tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
-        stream=True,
+        CreateResponseRequest(
+            input="Test input",
+            model=model,
+            max_output_tokens=max_output_tokens,
+            tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
+            stream=True,
+        )
     )
 
     # Collect all events
@@ -364,10 +362,9 @@ async def test_agent_loop_incomplete_due_to_max_iterations(
 
     # Execute with tool configuration
     result = await openai_responses_impl.create_openai_response(
-        input="Test input",
-        model=model,
-        tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
-        stream=True,
+        CreateResponseRequest(
+            input="Test input", model=model, tools=[OpenAIResponseInputToolWebSearch(type="web_search")], stream=True
+        )
     )
 
     # Collect all events
@@ -423,9 +420,7 @@ async def test_agent_loop_incomplete_due_to_length_finish_reason(openai_response
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input="Test input",
-        model=model,
-        stream=True,
+        CreateResponseRequest(input="Test input", model=model, stream=True)
     )
 
     # Collect all events

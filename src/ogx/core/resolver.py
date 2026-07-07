@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import graphlib
 import importlib
 import importlib.metadata
 import inspect
@@ -343,36 +344,30 @@ def topological_sort(
 
     Returns:
         A flattened list of (api_name, provider) tuples in dependency order.
+
+    Raises:
+        RuntimeError: If there is a circular dependency between providers.
     """
-
-    def dfs(kv, visited: set[str], stack: list[str]):
-        api_str, providers = kv
-        visited.add(api_str)
-
-        deps = []
-        for provider in providers:
-            for dep in provider.spec.deps__:
-                deps.append(dep)
-
-        for dep in deps:
-            if dep not in visited and dep in providers_with_specs:
-                dfs((dep, providers_with_specs[dep]), visited, stack)
-
-        stack.append(api_str)
-
-    visited: set[str] = set()
-    stack: list[str] = []
+    ts: graphlib.TopologicalSorter[str] = graphlib.TopologicalSorter()
 
     for api_str, providers in providers_with_specs.items():
-        if api_str not in visited:
-            dfs((api_str, providers), visited, stack)
+        deps = set()
+        for provider in providers:
+            for dep in provider.spec.deps__:
+                if dep in providers_with_specs:
+                    deps.add(dep)
+        ts.add(api_str, *deps)
 
-    flattened = []
-    for api_str in stack:
-        for provider in providers_with_specs[api_str]:
-            flattened.append((api_str, provider))
+    try:
+        flattened = []
+        for api_str in ts.static_order():
+            for provider in providers_with_specs[api_str]:
+                flattened.append((api_str, provider))
 
-    return flattened
+        return flattened
+    except graphlib.CycleError as e:
+        cycle: list[str] = e.args[1] if len(e.args) > 1 else []
+        raise RuntimeError(f"Failed to sort providers: circular dependency detected involving APIs {cycle}") from e
 
 
 async def instantiate_provider(

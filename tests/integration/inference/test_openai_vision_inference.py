@@ -28,7 +28,7 @@ async def test_openai_chat_completion_image_url(openai_client, vision_model_id):
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": "https://raw.githubusercontent.com/meta-llama/ogx/main/tests/integration/inference/dog.png"
+                    "url": "https://raw.githubusercontent.com/ogx-ai/ogx/main/tests/integration/inference/dog.png"
                 },
             },
             {

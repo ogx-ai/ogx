@@ -15,4 +15,7 @@ from ogx_api.internal.sqlstore import (
 )
 
 from .authorized_sqlstore import authorized_sqlstore as authorized_sqlstore
+from .authorized_sqlstore import get_default_tenancy_config as get_default_tenancy_config
+from .authorized_sqlstore import set_default_tenancy_config as set_default_tenancy_config
+from .authorized_sqlstore import set_default_tenancy_mode as set_default_tenancy_mode
 from .sqlstore import *  # noqa: F401,F403

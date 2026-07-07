@@ -13,6 +13,7 @@ from fastapi import Response, UploadFile
 
 from ogx.core.storage.kvstore import KVStore
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx_api.files import (
     DeleteFileRequest,
     Files,
@@ -294,7 +295,7 @@ class BuiltinSkillsImpl(Skills):
 
         resp = await self.files_api.openai_retrieve_file_content(RetrieveFileContentRequest(file_id=file_id))
         return Response(
-            content=resp.body,
+            content=await response_body_bytes(resp),
             media_type="application/zip",
             headers={"Content-Disposition": f'attachment; filename="{skill_id}_v{version}.zip"'},
         )

@@ -27,9 +27,12 @@ core/
 ## Request Lifecycle
 
 1. `server.py` receives an HTTP request and dispatches to the correct handler.
-2. The handler calls a **Router** (e.g., `InferenceRouter`) which consults the **RoutingTable** to find the provider for the requested resource.
-3. The router delegates to the provider implementation.
-4. The provider either computes locally (inline) or calls an external service (remote).
+2. Authentication middleware validates the token, extracts the user identity and `tenant_id`.
+3. Tenancy middleware enforces the configured mode (disabled/single/multi) and stores `tenant_id` in the request scope.
+4. The handler calls a **Router** (e.g., `InferenceRouter`) which consults the **RoutingTable** to find the provider for the requested resource.
+5. The router delegates to the provider implementation.
+6. The provider either computes locally (inline) or calls an external service (remote).
+7. Storage operations go through `AuthorizedSqlStore`, which applies tenant isolation (`WHERE tenant_id = ?`) before ABAC policy checks.
 
 ## Key Classes
 

@@ -32,7 +32,7 @@ jobs:
         env:
           OGX_LOG_FILE: "server.log"
         run: |
-          nohup uv run ogx stack run tests/external/config.yaml > server.log 2>&1 &
+          nohup uv run ogx stack run tests/external/config.yaml --insecure > server.log 2>&1 &
 
       - name: Wait for OGX server to be ready
         run: |

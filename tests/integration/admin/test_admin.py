@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from ogx_client import OgxClient
+from ogx_open_client import OgxClient
 
 from ogx.core.library_client import OGXAsLibraryClient
 

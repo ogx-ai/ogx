@@ -10,6 +10,9 @@ from anthropic import AsyncAnthropic
 
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api.inference.models import (
+    OpenAIChatCompletion,
+    OpenAIChatCompletionChunk,
+    OpenAIChatCompletionRequestWithExtraBody,
     OpenAICompletion,
     OpenAICompletionRequestWithExtraBody,
 )
@@ -41,6 +44,19 @@ class AnthropicInferenceAdapter(OpenAIMixin):
     async def list_provider_model_ids(self) -> Iterable[str]:
         api_key = self._get_api_key_from_config_or_provider_data()
         return [m.id async for m in AsyncAnthropic(api_key=api_key).models.list()]
+
+    async def openai_chat_completion(
+        self,
+        params: OpenAIChatCompletionRequestWithExtraBody,
+    ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
+        # Anthropic rejects parameters: {} but OpenAI accepts it
+        if params.tools:
+            for tool in params.tools:
+                func = tool.get("function", {})
+                p = func.get("parameters")
+                if isinstance(p, dict) and not p:
+                    func["parameters"] = {"type": "object"}
+        return await super().openai_chat_completion(params)
 
     async def openai_completion(
         self,

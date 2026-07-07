@@ -16,6 +16,7 @@ from fastapi import HTTPException, UploadFile
 from pypdf import PdfReader
 
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx.providers.utils.memory.vector_store import make_overlapped_chunks
 from ogx_api.file_processors import ProcessFileResponse
 from ogx_api.files import RetrieveFileContentRequest, RetrieveFileRequest
@@ -69,7 +70,7 @@ class PyPDFFileProcessor:
             content_response = await self.files_api.openai_retrieve_file_content(
                 RetrieveFileContentRequest(file_id=file_id)
             )
-            content = content_response.body
+            content = await response_body_bytes(content_response)
 
         mime_type, _ = mimetypes.guess_type(filename)
         mime_category = mime_type.split("/")[0] if (mime_type and "/" in mime_type) else None
@@ -102,7 +103,13 @@ class PyPDFFileProcessor:
         reader = PdfReader(pdf_bytes)
 
         if reader.is_encrypted:
-            raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported")
+            try:
+                if not reader.decrypt(""):
+                    raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported")
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(status_code=422, detail="Password-protected PDFs are not supported") from None
 
         text_content, failed_pages = self._extract_pdf_text(reader)
 
