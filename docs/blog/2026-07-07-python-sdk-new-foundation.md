@@ -28,7 +28,18 @@ Three things drove the decision (see the [original discussion](https://github.co
 
 ## What it means for you
 
-For most codebases, migrating is a search-and-replace. The main change is the import path for types:
+For most codebases, migrating is a search-and-replace.
+
+### What's different at a glance
+
+- **Import paths**: `ogx_client.types` is now `ogx_client.models`, with a flat namespace (no more `types.shared`, `types.chat`, etc.)
+- **Type names**: some types were renamed -- `OpenAI` prefix and `Object` suffix added to align with the OpenAPI spec
+- **Pagination**: auto-paginating iterators are gone; list endpoints return one page at a time
+- **Removed client features**: `client.copy()`, `client.with_raw_response`, `client.with_streaming_response`, and `file_from_path` are no longer available
+- **Exception attributes**: `e.status_code` is now `e.status`; `e.response` is no longer available (use `e.headers`, `e.body` directly)
+- **Python 3.12+** and **Pydantic 2.x** are now required
+
+The main change is the import path for types:
 
 ```python
 # Before (<= 1.1.3)
@@ -49,4 +60,4 @@ Some type names also changed — resource types gained an `OpenAI` prefix or `Ob
 
 ### Full migration guide
 
-For the complete reference — including all type name mappings, pagination changes, removed client features, and exception attribute differences — see [Migrating to ogx_client 1.1.4: The Complete Reference](./2026-07-01-python-sdk-migration-guide.md).
+For the complete reference — including all type name mappings, pagination changes, removed client features, and exception attribute differences — see [Migrating to ogx_client 1.1.4: The Complete Reference](/docs/references/python_sdk_reference/migration).

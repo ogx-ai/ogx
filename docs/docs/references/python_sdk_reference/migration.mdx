@@ -1,14 +1,9 @@
 ---
-slug: python-sdk-migration-guide
 title: "Migrating to ogx_client 1.1.4: The Complete Reference"
-authors: [aegeiger, ogx-team]
-tags: [python, sdk, migration, tutorial]
-date: 2026-07-01
+sidebar_label: "Migration Guide (1.1.4)"
 ---
 
-This is the complete migration reference for moving from `ogx_client` <= 1.1.3 (Stainless-generated) to `ogx_client` >= 1.1.4 (OpenAPI-generator-generated). For background on why we made this change, see [The OGX Python SDK Has a New Foundation](./2026-07-01-python-sdk-new-foundation.md).
-
-<!--truncate-->
+This is the complete migration reference for moving from `ogx_client` <= 1.1.3 (Stainless-generated) to `ogx_client` >= 1.1.4 (OpenAPI-generator-generated). For background on why we made this change, see [The OGX Python SDK Has a New Foundation](https://ogx-ai.github.io/blog/python-sdk-new-foundation).
 
 ## TL;DR
 
@@ -210,32 +205,27 @@ types are the same -- only the class names changed. Here are the patterns:
 
 ---
 
-## 3. Environment Variables
+## 3. Environment Variables and `api_key`
 
-**Affects you if** your code uses `OGX_CLIENT_BASE_URL` or
-`OGX_CLIENT_CUSTOM_HEADERS` environment variables.
+**No migration needed.** >= 1.1.4 reads the same environment variables as
+<= 1.1.3:
 
-`ogx_client` <= 1.1.3 auto-read environment variables. >= 1.1.4 reads
-none of them:
+| Environment Variable | Behavior |
+|---------------------|----------|
+| `OGX_CLIENT_BASE_URL` | Auto-inferred for `base_url` |
+| `OGX_CLIENT_CUSTOM_HEADERS` | Parsed and merged into default headers |
+| `OGX_CLIENT_API_KEY` | Sets `Authorization: Bearer <key>` header |
 
-| Environment Variable | <= 1.1.3 | >= 1.1.4 |
-|---------------------|----------|----------|
-| `OGX_CLIENT_BASE_URL` | Auto-inferred for `base_url` | **Not read** |
-| `OGX_CLIENT_CUSTOM_HEADERS` | Parsed and merged into default headers | **Not read** |
-
-- **`OGX_CLIENT_BASE_URL`**: pass `base_url=` explicitly instead.
-- **`OGX_CLIENT_CUSTOM_HEADERS`**: pass `default_headers=` explicitly instead
-  (accepts a `dict`, not the newline-separated string format the env var used).
-
-If you need to keep using env vars, read them yourself:
+The `api_key` constructor parameter also works the same way. When provided
+(via constructor arg or `OGX_CLIENT_API_KEY` env var), it sets an
+`Authorization: Bearer` header. Constructor args take precedence over env
+vars.
 
 ```python
-import os
-from ogx_client import OgxClient
-
-client = OgxClient(
-    base_url=os.environ.get("OGX_CLIENT_BASE_URL", "http://localhost:8321"),
-)
+# All of these work in >= 1.1.4 just as they did in <= 1.1.3
+client = OgxClient(base_url="http://localhost:8321")
+client = OgxClient(api_key="my-key")
+client = OgxClient(base_url="http://localhost:8321", api_key="my-key")
 ```
 
 ---
@@ -479,7 +469,9 @@ client = OgxClient(configuration=config)
 
 | Parameter | <= 1.1.3 | >= 1.1.4 |
 |-----------|----------|----------|
-| `base_url` | Direct param | Supported via `**kwargs` (forwarded to `Configuration`) |
+| `base_url` | Direct param | Direct param (forwarded to `Configuration`) |
+| `api_key` | Direct param (sets `Authorization: Bearer` header) | Direct param (same behavior) |
+| `default_headers` | Direct param | Direct param |
 | `timeout` | Direct param (`float \| Timeout`) | Via `**kwargs` or `Configuration(timeout=...)` |
 | `max_retries` | Direct param (default: 2) | Via `**kwargs` or `Configuration(retries=...)` |
 | `http_client` | Direct param (`httpx.Client`) | Not supported |
@@ -688,7 +680,6 @@ client.
 
 **If applicable:**
 
-- [ ] Read env vars explicitly if you relied on `OGX_CLIENT_BASE_URL` / `OGX_CLIENT_CUSTOM_HEADERS`
 - [ ] Replace `client.with_raw_response` with `*_with_http_info()` methods
 - [ ] Replace `client.copy()` / `client.with_options()` with new client creation
 - [ ] Add manual pagination if you relied on `SyncOpenAICursorPage` auto-pagination
