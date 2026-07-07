@@ -38,6 +38,17 @@ from lib.utils import setup_logging
     default=False,
     help="Disable thinking/reasoning mode for models that support it (e.g. vLLM reasoning models)",
 )
+@click.option(
+    "--chunking-strategy",
+    type=click.Choice(["auto", "contextual"]),
+    default="auto",
+    help="Chunking strategy for file ingestion (contextual uses LLM to situate chunks)",
+)
+@click.option(
+    "--contextual-model",
+    default="openai/gpt-4.1-mini",
+    help="LLM model for contextual chunking (e.g. openai/gpt-4.1-mini)",
+)
 def main(
     benchmark: str,
     dataset: str | None,
@@ -53,12 +64,28 @@ def main(
     batch_api: bool,
     batch_id: str | None,
     disable_thinking: bool,
+    chunking_strategy: str,
+    contextual_model: str | None,
 ):
     setup_logging(verbose)
+
+    if chunking_strategy == "contextual" and not contextual_model:
+        click.echo("Note: using server-configured default model for contextual chunking")
 
     rag_dir = Path(__file__).resolve().parent
     data_dir = data_dir or str(rag_dir / "data")
     label = backend_label(base_url)
+
+    # Build chunking_strategy dict for the API
+    chunking_strategy_dict = None
+    if chunking_strategy == "contextual":
+        contextual_config = {}
+        if contextual_model:
+            contextual_config["model_id"] = contextual_model
+        chunking_strategy_dict = {
+            "type": "contextual",
+            "contextual": contextual_config,
+        }
 
     # Default output dir
     if not output_dir:
@@ -67,6 +94,8 @@ def main(
             parts.append(dataset)
         if search_mode:
             parts.append(search_mode)
+        if chunking_strategy == "contextual":
+            parts.append("contextual")
         output_dir = str(rag_dir / "results" / "/".join(parts))
 
     client = create_client(base_url=base_url)
@@ -87,6 +116,7 @@ def main(
         "use_batch_api": batch_api,
         "batch_id": batch_id,
         "extra_body": extra_body,
+        "chunking_strategy": chunking_strategy_dict,
     }
 
     if benchmark == "beir":
@@ -124,6 +154,7 @@ def main(
     click.echo(f"Benchmark: {benchmark}" + (f" / {dataset}" if dataset else ""))
     click.echo(f"Backend:   {label} ({base_url})")
     click.echo(f"Search:    {search_mode or 'default'}")
+    click.echo(f"Chunking:  {chunking_strategy}" + (f" ({contextual_model})" if contextual_model else ""))
     click.echo(f"Model:     {model}")
     click.echo(f"{'=' * 60}")
     for key, value in sorted(metrics.items()):
