@@ -29,6 +29,7 @@ from ogx_api import (
     OpenAICompletion,
     OpenAICompletionChoice,
     OpenAICompletionRequestWithExtraBody,
+    OpenAIDeveloperMessageParam,
 )
 
 # These are unit test for the remote vllm provider
@@ -123,6 +124,82 @@ async def test_health_status_no_static_api_key(vllm_inference_adapter):
 
         # Verify the response
         assert health_response["status"] == HealthStatus.OK
+
+
+async def test_openai_chat_completion_converts_developer_messages_for_vllm(vllm_inference_adapter):
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        return_value=OpenAIChatCompletion(
+            id="chatcmpl-test",
+            created=1,
+            model="mock-model",
+            choices=[
+                OpenAIChoice(
+                    message=OpenAIChatCompletionResponseMessage(content="ok"),
+                    finish_reason="stop",
+                    index=0,
+                )
+            ],
+        )
+    )
+    vllm_inference_adapter.model_store.has_model.return_value = False
+
+    params = OpenAIChatCompletionRequestWithExtraBody(
+        model="mock-model",
+        messages=[
+            {"role": "developer", "content": "Answer only in rhymes.", "name": "codex"},
+            {"role": "user", "content": "What is the capital of France?"},
+        ],
+        stream=False,
+    )
+
+    with patch.object(VLLMInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_property:
+        mock_client_property.return_value = mock_client
+        await vllm_inference_adapter.openai_chat_completion(params)
+
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["messages"] == [
+        {"role": "system", "content": "Answer only in rhymes.", "name": "codex"},
+        {"role": "user", "content": "What is the capital of France?"},
+    ]
+
+
+async def test_openai_chat_completion_converts_typed_developer_messages_for_vllm(vllm_inference_adapter):
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        return_value=OpenAIChatCompletion(
+            id="chatcmpl-test",
+            created=1,
+            model="mock-model",
+            choices=[
+                OpenAIChoice(
+                    message=OpenAIChatCompletionResponseMessage(content="ok"),
+                    finish_reason="stop",
+                    index=0,
+                )
+            ],
+        )
+    )
+    vllm_inference_adapter.model_store.has_model.return_value = False
+
+    params = OpenAIChatCompletionRequestWithExtraBody(
+        model="mock-model",
+        messages=[
+            OpenAIDeveloperMessageParam(content="Answer only in rhymes.", name="codex"),
+            {"role": "user", "content": "What is the capital of France?"},
+        ],
+        stream=False,
+    )
+
+    with patch.object(VLLMInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_property:
+        mock_client_property.return_value = mock_client
+        await vllm_inference_adapter.openai_chat_completion(params)
+
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["messages"] == [
+        {"role": "system", "content": "Answer only in rhymes.", "name": "codex"},
+        {"role": "user", "content": "What is the capital of France?"},
+    ]
 
 
 async def test_openai_chat_completion_is_async(vllm_inference_adapter):

@@ -16,8 +16,6 @@ providers:
       tls_verify: ${env.VLLM_TLS_VERIFY:=true}
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
-  - provider_id: transformers
-    provider_type: inline::transformers
   vector_io:
   - provider_id: ${env.ENABLE_CHROMADB:+chromadb}
     provider_type: remote::chromadb
@@ -96,7 +94,7 @@ registered_resources:
     model_type: embedding
   - metadata: {}
     model_id: Qwen/Qwen3-Reranker-0.6B
-    provider_id: transformers
+    provider_id: sentence-transformers
     model_type: rerank
   vector_stores: []
 server:

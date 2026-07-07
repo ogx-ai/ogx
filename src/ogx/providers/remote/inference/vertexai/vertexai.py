@@ -192,9 +192,9 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             # Don't create the client here - it will be created lazily on first use
             # This avoids calling _ensure_http_options() in the temporary startup event loop
             logger.info(
-                "VertexAI provider initialized for project=%s location=%s (client will be created on first use)",
-                self.config.project,
-                self.config.location,
+                "VertexAI provider initialized (client will be created on first use)",
+                project=self.config.project,
+                location=self.config.location,
             )
         except Exception:
             logger.warning(
@@ -265,8 +265,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             await self.list_models()
         except Exception:
             logger.warning(
-                "Failed to list VertexAI models for availability check; accepting model '%s' without validation.",
-                model,
+                "Failed to list VertexAI models for availability check; accepting model without validation.",
+                model=model,
                 exc_info=True,
             )
             return True
@@ -315,7 +315,30 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 access_token = self.config.auth_credential.get_secret_value() if self.config.auth_credential else None
                 return self._create_client(project=project, location=location, access_token=access_token)
 
-        # Lazily create the default client on first use
+        # Lazily create the default client on first use.
+        # If we already have a cached client, verify it is still usable before
+        # returning it — a previous request may have left connections tied to an
+        # event loop that is now closed (e.g., after a temporary startup loop).
+        if self._default_client is not None:
+            try:
+                # Touch the underlying httpx client to detect event loop binding
+                # issues.  If the client was created in a now-closed loop,
+                # accessing its transport raises RuntimeError.
+                if self._http_options is not None:
+                    _client = getattr(self._http_options, "httpx_async_client", None)
+                    if _client is not None and _client.is_closed:
+                        logger.info(
+                            "VertexAI default client transport is closed; recreating",
+                            project=self.config.project,
+                        )
+                        self._default_client = None
+            except RuntimeError:
+                logger.warning(
+                    "VertexAI default client is bound to a closed event loop; recreating",
+                    project=self.config.project,
+                )
+                self._default_client = None
+
         if self._default_client is None:
             access_token = self.config.auth_credential.get_secret_value() if self.config.auth_credential else None
             try:
@@ -386,8 +409,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             provider_model_ids = await self.list_provider_model_ids()
         except Exception:
             logger.error(
-                "%s.list_provider_model_ids() failed",
-                self.__class__.__name__,
+                "Failed to list provider model IDs",
+                provider=self.__class__.__name__,
                 exc_info=True,
             )
             raise
@@ -907,8 +930,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         # passthrough. Log and ignore extra body parameters rather than silently dropping.
         if params.model_extra:
             logger.debug(
-                "VertexAI embeddings does not support extra body parameters; model_extra will be ignored: %s",
-                list(params.model_extra.keys()),
+                "VertexAI embeddings does not support extra body parameters; model_extra will be ignored",
+                ignored_keys=list(params.model_extra.keys()),
             )
 
         provider_model_id = await self._get_provider_model_id(params.model)

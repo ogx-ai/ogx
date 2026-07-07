@@ -93,7 +93,7 @@ class TestOpenAIFilesAPI:
         assert result.purpose == OpenAIFilePurpose.ASSISTANTS
         assert result.bytes == len(sample_text_file.content)
         assert result.created_at > 0
-        assert result.expires_at is not None and result.expires_at > result.created_at
+        assert result.expires_at == result.created_at + files_provider.config.ttl_secs
 
     async def test_upload_different_purposes(self, files_provider, sample_text_file):
         """Test uploading files with different purposes."""
@@ -299,6 +299,26 @@ class TestOpenAIFilesAPI:
         # Verify it's gone from listing
         files_list = await files_provider.openai_list_files(request=ListFilesRequest())
         assert len(files_list.data) == 0
+
+    async def test_expired_file_is_unavailable(self, files_provider, sample_text_file, monkeypatch):
+        """Test expired files are hidden and deleted on access."""
+        now = 1_000
+        monkeypatch.setattr(files_provider, "_now", lambda: now)
+
+        uploaded_file = await files_provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS), file=sample_text_file
+        )
+        assert uploaded_file.expires_at == now + files_provider.config.ttl_secs
+
+        now = uploaded_file.expires_at + 1
+
+        files_list = await files_provider.openai_list_files(request=ListFilesRequest())
+        assert files_list.data == []
+
+        with pytest.raises(ResourceNotFoundError, match="not found"):
+            await files_provider.openai_retrieve_file(request=RetrieveFileRequest(file_id=uploaded_file.id))
+
+        assert not files_provider._get_file_path(uploaded_file.id).exists()
 
     async def test_multiple_files_operations(self, files_provider, sample_text_file, sample_json_file):
         """Test operations with multiple files."""

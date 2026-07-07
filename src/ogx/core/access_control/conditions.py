@@ -11,6 +11,7 @@ class User(Protocol):
     """Protocol for user identity with principal and attribute information."""
 
     principal: str
+    tenant_id: str | None
     attributes: dict[str, list[str]] | None
 
 
@@ -46,6 +47,8 @@ class UserInOwnersList:
             return None
 
     def matches(self, resource: ProtectedResource, user: User) -> bool:
+        if not _same_tenant_scope(resource, user):
+            return False
         defined = self.owners_values(resource)
         if not defined:
             return False
@@ -68,6 +71,8 @@ class UserNotInOwnersList(UserInOwnersList):
         super().__init__(name)
 
     def matches(self, resource: ProtectedResource, user: User) -> bool:
+        if has_tenant_scope_mismatch(resource, user):
+            return False
         return not super().matches(resource, user)
 
     def __repr__(self) -> str:
@@ -108,7 +113,7 @@ class UserIsOwner:
     """Condition that checks if the user is the owner of the resource."""
 
     def matches(self, resource: ProtectedResource, user: User) -> bool:
-        return resource.owner.principal == user.principal if resource.owner else False
+        return _same_principal_and_tenant(resource, user)
 
     def __repr__(self) -> str:
         return "user is owner"
@@ -118,6 +123,8 @@ class UserIsNotOwner:
     """Condition that checks if the user is NOT the owner of the resource."""
 
     def matches(self, resource: ProtectedResource, user: User) -> bool:
+        if has_tenant_scope_mismatch(resource, user):
+            return False
         return not resource.owner or resource.owner.principal != user.principal
 
     def __repr__(self) -> str:
@@ -132,6 +139,26 @@ class ResourceIsUnowned:
 
     def __repr__(self) -> str:
         return "resource is unowned"
+
+
+def _same_tenant_scope(resource: ProtectedResource, user: User) -> bool:
+    return not has_tenant_scope_mismatch(resource, user)
+
+
+def has_tenant_scope_mismatch(resource: ProtectedResource, user: User) -> bool:
+    if not resource.owner:
+        return False
+    owner_tenant_id = resource.owner.tenant_id
+    user_tenant_id = user.tenant_id
+    if not owner_tenant_id or not user_tenant_id:
+        return False
+    return owner_tenant_id != user_tenant_id
+
+
+def _same_principal_and_tenant(resource: ProtectedResource, user: User) -> bool:
+    if not resource.owner or resource.owner.principal != user.principal:
+        return False
+    return _same_tenant_scope(resource, user)
 
 
 def parse_condition(condition: str) -> Condition:

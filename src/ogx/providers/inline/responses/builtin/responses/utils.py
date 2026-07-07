@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator, Sequence
 
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import AssistantMessageWithReasoning
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx_api import (
     Files,
     Inference,
@@ -63,6 +64,8 @@ from ogx_api import (
     RetrieveFileRequest,
 )
 
+APPROX_CHARS_PER_TOKEN = 4
+
 
 async def extract_bytes_from_file(file_id: str, files_api: Files) -> bytes:
     """
@@ -75,7 +78,7 @@ async def extract_bytes_from_file(file_id: str, files_api: Files) -> bytes:
     """
     try:
         response = await files_api.openai_retrieve_file_content(RetrieveFileContentRequest(file_id=file_id))
-        return bytes(response.body)
+        return await response_body_bytes(response)
     except Exception as e:
         raise ValueError(f"Failed to retrieve file content for file_id '{file_id}': {str(e)}") from e
 

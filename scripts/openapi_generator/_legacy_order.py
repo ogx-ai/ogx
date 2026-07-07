@@ -358,6 +358,7 @@ LEGACY_TAGS = [
         "name": "Tools",
         "x-displayName": "Tools",
     },
+    {"description": "OpenAI-compatible vector store management and search.", "name": "Vector Stores"},
     {"description": "", "name": "VectorIO"},
     {
         "description": "OpenAI Responses API for agent orchestration with tool use, multi-turn conversations, and background processing.",
@@ -385,6 +386,7 @@ LEGACY_TAG_ORDER = [
     "ToolGroups",
     "ToolRuntime",
     "Tools",
+    "Vector Stores",
     "VectorIO",
 ]
 
@@ -410,6 +412,7 @@ LEGACY_TAG_GROUPS = [
             "ToolGroups",
             "ToolRuntime",
             "Tools",
+            "Vector Stores",
             "VectorIO",
         ],
     }

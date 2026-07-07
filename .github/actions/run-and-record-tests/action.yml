@@ -62,30 +62,35 @@ runs:
         INPUT_PATTERN: ${{ inputs.pattern }}
         INPUT_TEXT_MODEL: ${{ inputs.text-model }}
       run: |
-        SCRIPT_ARGS="--stack-config ${INPUT_STACK_CONFIG} --inference-mode ${INPUT_INFERENCE_MODE}"
+        SCRIPT_ARGS=(
+          --stack-config "${INPUT_STACK_CONFIG}"
+          --inference-mode "${INPUT_INFERENCE_MODE}"
+        )
 
         # Add optional arguments only if they are provided
         if [ -n "${INPUT_SETUP}" ]; then
-          SCRIPT_ARGS="${SCRIPT_ARGS} --setup ${INPUT_SETUP}"
+          SCRIPT_ARGS+=(--setup "${INPUT_SETUP}")
         fi
         if [ -n "${INPUT_SUITE}" ]; then
-          SCRIPT_ARGS="${SCRIPT_ARGS} --suite ${INPUT_SUITE}"
+          SCRIPT_ARGS+=(--suite "${INPUT_SUITE}")
         fi
         if [ -n "${INPUT_SUBDIRS}" ]; then
-          SCRIPT_ARGS="${SCRIPT_ARGS} --subdirs ${INPUT_SUBDIRS}"
+          SCRIPT_ARGS+=(--subdirs "${INPUT_SUBDIRS}")
         fi
         if [ -n "${INPUT_PATTERN}" ]; then
-          SCRIPT_ARGS="${SCRIPT_ARGS} --pattern ${INPUT_PATTERN}"
+          SCRIPT_ARGS+=(--pattern "${INPUT_PATTERN}")
         fi
         if [ -n "${INPUT_TEXT_MODEL}" ]; then
-          SCRIPT_ARGS="${SCRIPT_ARGS} --text-model ${INPUT_TEXT_MODEL}"
+          SCRIPT_ARGS+=(--text-model "${INPUT_TEXT_MODEL}")
         fi
 
         echo "=== Running command ==="
-        echo "uv run --no-sync ./scripts/integration-tests.sh $SCRIPT_ARGS"
+        printf 'uv run --no-sync ./scripts/integration-tests.sh'
+        printf ' %q' "${SCRIPT_ARGS[@]}"
+        printf '\n'
         echo ""
 
-        uv run --no-sync ./scripts/integration-tests.sh $SCRIPT_ARGS | tee "pytest-${INPUT_INFERENCE_MODE}.log"
+        uv run --no-sync ./scripts/integration-tests.sh "${SCRIPT_ARGS[@]}" | tee "pytest-${INPUT_INFERENCE_MODE}.log"
 
 
     - name: Commit and push recordings

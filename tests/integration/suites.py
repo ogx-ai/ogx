@@ -97,6 +97,16 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
+    "vllm-gpu-gpt-oss": Setup(
+        name="vllm-gpu",
+        description="vLLM GPU provider with gpt-oss:20b reasoning model",
+        env={
+            "VLLM_URL": "http://localhost:8000/v1",
+        },
+        defaults={
+            "text_model": "vllm/gpt-oss:20b",
+        },
+    ),
     "ollama-reasoning": Setup(
         name="ollama",
         description="Local Ollama provider with a reasoning-capable model (deepseek-r1)",

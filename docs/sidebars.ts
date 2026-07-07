@@ -191,7 +191,6 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'providers/inference/index' },
           items: [
             'providers/inference/inline_sentence-transformers',
-            'providers/inference/inline_transformers',
             'providers/inference/remote_anthropic',
             'providers/inference/remote_azure',
             'providers/inference/remote_bedrock',
@@ -252,6 +251,7 @@ const sidebars: SidebarsConfig = {
             'providers/tool_runtime/remote_bing-search',
             'providers/tool_runtime/remote_brave-search',
             'providers/tool_runtime/remote_model-context-protocol',
+            'providers/tool_runtime/remote_nimble-search',
             'providers/tool_runtime/remote_tavily-search',
             'providers/tool_runtime/remote_wolfram-alpha'
           ],

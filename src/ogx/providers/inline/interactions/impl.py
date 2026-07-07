@@ -298,7 +298,6 @@ class BuiltinInteractionsImpl(Interactions):
                 logger.error(
                     "Passthrough request failed",
                     status_code=resp.status_code,
-                    response_body=resp.text[:500],
                     url=url,
                 )
                 return JSONResponse(content=resp.json(), status_code=resp.status_code)
