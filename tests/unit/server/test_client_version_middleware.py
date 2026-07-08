@@ -39,11 +39,27 @@ def test_client_version_uses_ogx_api_package(monkeypatch):
 
 
 def test_client_version_rejects_incompatible_major_minor(monkeypatch):
-    client, _ = _client(monkeypatch, api_version="1.1.4.dev0")
+    client, _ = _client(monkeypatch, api_version="1.1.4")
 
     response = client.get("/test", headers={"x-ogx-client-version": "1.2.0"})
 
     assert response.status_code == 426
     assert response.json()["error"]["message"] == (
-        "Client version 1.2.0 is not compatible with server version 1.1.4.dev0. Please update your client."
+        "Client version 1.2.0 is not compatible with server version 1.1.4. Please update your client."
     )
+
+
+def test_client_version_allows_dev_version_mismatch(monkeypatch):
+    client, _ = _client(monkeypatch, api_version="0.5.4.dev42+g9a763bd8b")
+
+    response = client.get("/test", headers={"x-ogx-client-version": "1.1.1.dev0"})
+
+    assert response.status_code == 200
+
+
+def test_client_version_allows_invalid_version_header(monkeypatch):
+    client, _ = _client(monkeypatch, api_version="1.1.4")
+
+    response = client.get("/test", headers={"x-ogx-client-version": "not-a-version"})
+
+    assert response.status_code == 200

@@ -236,7 +236,8 @@ class StreamingResponseOrchestrator:
         max_infer_iters: int,
         tool_executor,  # Will be the tool execution logic from the main class
         instructions: str | None,
-        moderation_endpoint: str | None,
+        skills: list[str] | None = None,
+        moderation_endpoint: str | None = None,
         moderation_headers: dict[str, str] | None = None,
         enable_guardrails: bool = False,
         connectors_api: Connectors | None = None,
@@ -274,6 +275,7 @@ class StreamingResponseOrchestrator:
         self.previous_response_id = previous_response_id
         # System message that is inserted into the model's context
         self.instructions = instructions
+        self.skills = skills
         # Whether to allow more than one function tool call generated per turn.
         self.parallel_tool_calls = parallel_tool_calls
         # Max number of total calls to built-in tools that can be processed in a response
@@ -390,6 +392,7 @@ class StreamingResponseOrchestrator:
             incomplete_details=incomplete_details,
             usage=self.accumulated_usage,
             instructions=self.instructions,
+            skills=self.skills,
             prompt=self.prompt,
             parallel_tool_calls=self.parallel_tool_calls if self.parallel_tool_calls is not None else True,
             max_tool_calls=self.max_tool_calls,

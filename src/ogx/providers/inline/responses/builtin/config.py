@@ -31,6 +31,21 @@ DEFAULT_SUMMARY_PREFIX = (
     "use the information in this summary to assist with your own analysis:"
 )
 
+DEFAULT_MEMORY_READ_PROMPT = (
+    "These are concise summaries of previous conversations for this owner. Use them "
+    "only as contextual recall. They may be stale or incomplete. Do not mention them "
+    "as search results or cite them."
+)
+
+DEFAULT_MEMORY_SUMMARIZATION_PROMPT = (
+    "Create a concise long-term memory summary for this conversation.\n\n"
+    "Include stable user preferences, project context, decisions, recurring constraints, "
+    "and durable facts that would help future conversations.\n\n"
+    "Exclude secrets, access tokens, credentials, short-lived status updates, and details "
+    "that are only useful inside this single turn.\n\n"
+    "Return Markdown only."
+)
+
 
 class CompactionConfig(BaseModel):
     """Configuration for conversation compaction behavior and prompt templates."""
@@ -106,6 +121,59 @@ class CompactionConfig(BaseModel):
         return v
 
 
+class MemoryConfig(BaseModel):
+    """Configuration for Responses memory reads and writes."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable Responses memory reads. Disabled by default because memory is an alpha feature.",
+    )
+    default_vector_store_id: str | None = Field(
+        default=None,
+        description="Default vector store containing conversation memory files.",
+    )
+    owner_metadata_key: str = Field(
+        default="owner_id",
+        description="Vector-store file attribute key used for owner scoping.",
+    )
+    memory_metadata_key: str = Field(
+        default="memory",
+        description="Vector-store file attribute key used to identify memory files.",
+    )
+    max_num_results: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Default maximum memory chunks to retrieve.",
+    )
+    max_context_tokens: int = Field(
+        default=1200,
+        ge=1,
+        description="Default approximate token budget for injected memory context.",
+    )
+    read_prompt_template: str = Field(
+        default=DEFAULT_MEMORY_READ_PROMPT,
+        description="Prompt text that frames retrieved memory context.",
+    )
+    write_enabled: bool = Field(
+        default=True,
+        description="Whether to write conversation summaries to memory after stored responses complete.",
+    )
+    write_debounce_seconds: float = Field(
+        default=30.0,
+        ge=0,
+        description="Seconds to wait before materializing memory so rapid conversation turns coalesce into one write.",
+    )
+    summarization_prompt: str = Field(
+        default=DEFAULT_MEMORY_SUMMARIZATION_PROMPT,
+        description="Prompt template used to generate long-term memory summaries.",
+    )
+    summarization_model: str | None = Field(
+        default=None,
+        description="Model to use for memory summaries. If not set, uses the response model.",
+    )
+
+
 class ResponsesPersistenceConfig(BaseModel):
     """Nested persistence configuration for the responses provider."""
 
@@ -125,6 +193,11 @@ class BuiltinResponsesImplConfig(BaseModel):
     compaction_config: CompactionConfig = Field(
         default_factory=CompactionConfig,
         description="Configuration for conversation compaction behavior and prompt templates",
+    )
+
+    memory_config: MemoryConfig = Field(
+        default_factory=MemoryConfig,
+        description="Configuration for Responses memory reads and writes.",
     )
 
     moderation_endpoint: str | None = Field(

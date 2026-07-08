@@ -39,6 +39,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseText,
     OpenAIResponseTextFormat,
 )
+from ogx_api.responses.models import CreateResponseRequest
 from ogx_api.tools import ToolDef, ToolInvocationResult
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
@@ -55,11 +56,7 @@ async def test_create_openai_response_with_max_output_tokens_non_streaming(
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        max_output_tokens=max_tokens,
-        stream=False,
-        store=True,
+        CreateResponseRequest(input=input_text, model=model, max_output_tokens=max_tokens, stream=False, store=True)
     )
 
     # Verify response includes the max_output_tokens
@@ -92,11 +89,7 @@ async def test_create_openai_response_with_max_output_tokens_streaming(
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        max_output_tokens=max_tokens,
-        stream=True,
-        store=True,
+        CreateResponseRequest(input=input_text, model=model, max_output_tokens=max_tokens, stream=True, store=True)
     )
 
     # Collect all chunks
@@ -134,10 +127,7 @@ async def test_create_openai_response_with_max_output_tokens_boundary_value(open
 
     # Execute with minimum valid value
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        max_output_tokens=16,
-        stream=False,
+        CreateResponseRequest(input=input_text, model=model, max_output_tokens=16, stream=False)
     )
 
     # Verify it accepts 16
@@ -181,17 +171,19 @@ async def test_create_openai_response_with_max_output_tokens_and_tools(openai_re
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        max_output_tokens=max_tokens,
-        stream=False,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_weather",
-                description="Get weather information",
-                parameters={"location": "string"},
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            max_output_tokens=max_tokens,
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get weather information",
+                    parameters={"location": "string"},
+                )
+            ],
+        )
     )
 
     # Verify max_output_tokens is preserved
@@ -305,13 +297,15 @@ async def test_params_passed_through_full_chain_to_backend_service(
             mock_chat_completions.return_value = mock_response
 
         result = await openai_responses_impl.create_openai_response(
-            **{
-                "input": "Test message",
-                "model": "fake-model",
-                "stream": stream,
-                "store": store,
-                param_name: param_value,
-            }
+            CreateResponseRequest(
+                **{
+                    "input": "Test message",
+                    "model": "fake-model",
+                    "stream": stream,
+                    "store": store,
+                    param_name: param_value,
+                }
+            )
         )
         if stream:
             chunks = [chunk async for chunk in result]
@@ -355,11 +349,9 @@ async def test_create_openai_response_with_truncation_disabled_streaming(
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        truncation=ResponseTruncation.disabled,
-        stream=True,
-        store=True,
+        CreateResponseRequest(
+            input=input_text, model=model, truncation=ResponseTruncation.disabled, stream=True, store=True
+        )
     )
 
     # Collect all chunks
@@ -395,11 +387,9 @@ async def test_create_openai_response_with_truncation_auto_streaming(
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        truncation=ResponseTruncation.auto,
-        stream=True,
-        store=True,
+        CreateResponseRequest(
+            input=input_text, model=model, truncation=ResponseTruncation.auto, stream=True, store=True
+        )
     )
 
     # Collect all chunks
@@ -456,11 +446,13 @@ async def test_create_openai_response_with_prompt_cache_key_and_previous_respons
 
     # Create a new response with the same cache key
     result = await openai_responses_impl.create_openai_response(
-        input="Second question",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        previous_response_id="resp-prev-123",
-        prompt_cache_key="conversation-cache-001",
-        store=True,
+        CreateResponseRequest(
+            input="Second question",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            previous_response_id="resp-prev-123",
+            prompt_cache_key="conversation-cache-001",
+            store=True,
+        )
     )
 
     # Verify cache key is preserved
@@ -486,10 +478,7 @@ async def test_create_openai_response_with_service_tier(openai_responses_impl, m
 
     # Execute - non-streaming to get final response directly
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        service_tier=service_tier,
-        stream=False,
+        CreateResponseRequest(input=input_text, model=model, service_tier=service_tier, stream=False)
     )
 
     # Verify service_tier is preserved in the response (as string)
@@ -529,10 +518,7 @@ async def test_create_openai_response_service_tier_auto_transformation(openai_re
 
     # Execute with "auto" service tier
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        service_tier=ServiceTier.auto,
-        stream=False,
+        CreateResponseRequest(input=input_text, model=model, service_tier=ServiceTier.auto, stream=False)
     )
 
     # Verify the response has the actual tier from provider, not "auto"
@@ -586,10 +572,7 @@ async def test_create_openai_response_service_tier_propagation_streaming(openai_
 
     # Execute with "auto" but provider returns "priority"
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        service_tier=ServiceTier.auto,
-        stream=True,
+        CreateResponseRequest(input=input_text, model=model, service_tier=ServiceTier.auto, stream=True)
     )
 
     # Collect all chunks
@@ -616,22 +599,14 @@ async def test_create_openai_response_with_top_logprobs_boundary_values(
     # Test with minimum value (0)
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        top_logprobs=0,
-        stream=False,
-        store=True,
+        CreateResponseRequest(input=input_text, model=model, top_logprobs=0, stream=False, store=True)
     )
     assert result.top_logprobs == 0
 
     # Test with maximum value (20)
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        top_logprobs=20,
-        stream=False,
-        store=True,
+        CreateResponseRequest(input=input_text, model=model, top_logprobs=20, stream=False, store=True)
     )
     assert result.top_logprobs == 20
 
@@ -645,9 +620,7 @@ async def test_create_openai_response_with_frequency_penalty_default(openai_resp
 
     # Execute without frequency_penalty
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=False,
+        CreateResponseRequest(input=input_text, model=model, stream=False)
     )
 
     # Verify response has 0.0 for frequency_penalty (non-null default for OpenResponses conformance)
@@ -669,9 +642,7 @@ async def test_create_openai_response_with_presence_penalty_default(openai_respo
 
     # Execute without presence_penalty
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=False,
+        CreateResponseRequest(input=input_text, model=model, stream=False)
     )
 
     # Verify presence_penalty is 0.0 (non-null default for OpenResponses conformance)
@@ -730,19 +701,21 @@ async def test_hallucinated_tool_call_does_not_cause_500(openai_responses_impl, 
     # The response should complete without raising InternalServerError, and the hallucinated
     # call should appear in the output as a function_call item so the client can handle it.
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_weather",
-                description="Get current temperature for a given location.",
-                parameters={
-                    "type": "object",
-                    "properties": {"location": {"type": "string"}},
-                    "required": ["location"],
-                },
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get current temperature for a given location.",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                )
+            ],
+        )
     )
 
     assert result is not None
@@ -914,10 +887,7 @@ async def test_create_openai_response_with_stream_options_merges_with_default(
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream_options=stream_options,
-        stream=True,
+        CreateResponseRequest(input=input_text, model=model, stream_options=stream_options, stream=True)
     )
 
     # Collect chunks (consume the async iterator)
@@ -943,10 +913,7 @@ async def test_create_openai_response_with_empty_stream_options(openai_responses
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream_options=stream_options,
-        stream=True,
+        CreateResponseRequest(input=input_text, model=model, stream_options=stream_options, stream=True)
     )
 
     # Collect chunks (consume the async iterator)

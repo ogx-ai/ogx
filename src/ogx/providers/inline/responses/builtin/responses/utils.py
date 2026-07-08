@@ -64,6 +64,8 @@ from ogx_api import (
     RetrieveFileRequest,
 )
 
+APPROX_CHARS_PER_TOKEN = 4
+
 
 async def extract_bytes_from_file(file_id: str, files_api: Files) -> bytes:
     """
