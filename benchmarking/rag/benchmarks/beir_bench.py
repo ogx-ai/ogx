@@ -82,6 +82,7 @@ class BEIRBenchmark(BenchmarkRunner):
             vector_store_name=f"beir-{self.dataset}",
             checkpoint_path=checkpoint_path,
             resume=self.resume,
+            chunking_strategy=self.chunking_strategy,
         )
 
     def evaluate(self) -> dict:

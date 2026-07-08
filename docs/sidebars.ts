@@ -334,6 +334,7 @@ const sidebars: SidebarsConfig = {
         'references/ogx_cli_reference/index',
         'references/ogx_client_cli_reference',
         'references/python_sdk_reference/index',
+        'references/python_sdk_reference/migration',
       ],
     },
   ],

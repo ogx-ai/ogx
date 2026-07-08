@@ -144,3 +144,73 @@ class TestPrometheusExposition:
         assert 'api="models"' in output
         assert 'status="success"' in output
         assert "3.0" in output
+
+
+class TestResourceAttributes:
+    """setup_telemetry() must populate OTel Resource attributes from environment variables."""
+
+    def _get_created_provider(self, monkeypatch):
+        """Helper: run setup_telemetry() with a fresh provider path and return the MeterProvider."""
+        monkeypatch.setenv("OGX_METRICS_ENDPOINT_ENABLED", "1")
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+        monkeypatch.setattr("opentelemetry.exporter.prometheus.PrometheusMetricReader", InMemoryMetricReader)
+
+        set_calls: list = []
+        monkeypatch.setattr(otel_metrics, "get_meter_provider", object)
+        monkeypatch.setattr(otel_metrics, "set_meter_provider", set_calls.append)
+
+        setup_telemetry()
+
+        assert len(set_calls) == 1
+        provider = set_calls[0]
+        return provider
+
+    def test_namespace_from_otel_service_namespace(self, monkeypatch):
+        monkeypatch.setenv("OTEL_SERVICE_NAMESPACE", "prod-ns")
+        monkeypatch.delenv("NAMESPACE", raising=False)
+        provider = self._get_created_provider(monkeypatch)
+        assert provider._sdk_config.resource.attributes["service.namespace"] == "prod-ns"
+        provider.shutdown()
+
+    def test_namespace_falls_back_to_namespace_env(self, monkeypatch):
+        monkeypatch.delenv("OTEL_SERVICE_NAMESPACE", raising=False)
+        monkeypatch.setenv("NAMESPACE", "k8s-downward-ns")
+        provider = self._get_created_provider(monkeypatch)
+        assert provider._sdk_config.resource.attributes["service.namespace"] == "k8s-downward-ns"
+        provider.shutdown()
+
+    def test_otel_service_namespace_takes_precedence(self, monkeypatch):
+        monkeypatch.setenv("OTEL_SERVICE_NAMESPACE", "otel-ns")
+        monkeypatch.setenv("NAMESPACE", "k8s-ns")
+        provider = self._get_created_provider(monkeypatch)
+        assert provider._sdk_config.resource.attributes["service.namespace"] == "otel-ns"
+        provider.shutdown()
+
+    def test_cluster_id_set(self, monkeypatch):
+        monkeypatch.setenv("CLUSTER_ID", "cluster-abc-123")
+        monkeypatch.delenv("OTEL_SERVICE_NAMESPACE", raising=False)
+        monkeypatch.delenv("NAMESPACE", raising=False)
+        provider = self._get_created_provider(monkeypatch)
+        assert provider._sdk_config.resource.attributes["k8s.cluster.uid"] == "cluster-abc-123"
+        provider.shutdown()
+
+    def test_attributes_omitted_when_unset(self, monkeypatch):
+        monkeypatch.delenv("OTEL_SERVICE_NAMESPACE", raising=False)
+        monkeypatch.delenv("NAMESPACE", raising=False)
+        monkeypatch.delenv("CLUSTER_ID", raising=False)
+        provider = self._get_created_provider(monkeypatch)
+        attrs = dict(provider._sdk_config.resource.attributes)
+        assert "service.namespace" not in attrs
+        assert "k8s.cluster.uid" not in attrs
+        assert "service.name" in attrs
+        provider.shutdown()
+
+    def test_empty_string_treated_as_unset(self, monkeypatch):
+        monkeypatch.setenv("OTEL_SERVICE_NAMESPACE", "  ")
+        monkeypatch.setenv("NAMESPACE", "")
+        monkeypatch.setenv("CLUSTER_ID", "  ")
+        provider = self._get_created_provider(monkeypatch)
+        attrs = dict(provider._sdk_config.resource.attributes)
+        assert "service.namespace" not in attrs
+        assert "k8s.cluster.uid" not in attrs
+        provider.shutdown()

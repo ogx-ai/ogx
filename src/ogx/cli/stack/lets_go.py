@@ -29,6 +29,7 @@ from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
 from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
+from ogx.core.server_tls import generate_self_signed_cert
 from ogx.core.stack import extract_env_var_references, replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.core.utils.dynamic import instantiate_class_type
@@ -202,6 +203,12 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
         "--debug",
         action="store_true",
         help="Enable debug logging during provider scanning and server startup.",
+    )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        default=False,
+        help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
     )
 
 
@@ -455,6 +462,15 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
 
     config_dict = run_config.model_dump(mode="json")
 
+    if not args.insecure:
+        cert_path, key_path = generate_self_signed_cert(distro_dir)
+        if "server" not in config_dict:
+            config_dict["server"] = {}
+        config_dict["server"]["tls_certfile"] = str(cert_path)
+        config_dict["server"]["tls_keyfile"] = str(key_path)
+        config_dict["server"]["insecure"] = False
+        cprint(f"  ✓ Generated self-signed TLS certificate → {cert_path}", color="green")
+
     config_file = distro_dir / "config.yaml"
     logger.info("Writing generated config to", config_file=config_file)
     with open(config_file, "w") as f:
@@ -466,7 +482,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
             port=args.port,
             enable_ui=args.enable_ui,
             providers=None,
-            insecure=False,  # todo: add ability to run in secure FIPS mode
+            insecure=args.insecure,
         ),
     }
 

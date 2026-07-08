@@ -35,6 +35,19 @@ from .config import DoclingFileProcessorConfig
 
 log = get_logger(name=__name__, category="providers::file_processors")
 
+DOCLING_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    "text/html",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/bmp",
+    "image/tiff",
+    "image/webp",
+}
+
 
 class DoclingFileProcessor:
     """Docling-based file processor with structure-aware chunking.
@@ -54,6 +67,9 @@ class DoclingFileProcessor:
             format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
         )
         self._converter_lock = threading.Lock()
+
+    def supported_mime_types(self) -> set[str] | None:
+        return DOCLING_MIME_TYPES
 
     async def process_file(
         self,
