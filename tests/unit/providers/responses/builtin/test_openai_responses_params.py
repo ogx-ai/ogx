@@ -844,8 +844,8 @@ async def test_hallucinated_tool_call_retries_exhausted(openai_responses_impl, m
     should stop with status 'incomplete' instead of looping forever.
     """
     from ogx.providers.inline.responses.builtin.responses.streaming import (
-        StreamingResponseOrchestrator,
         _MAX_HALLUCINATED_TOOL_RETRIES,
+        StreamingResponseOrchestrator,
     )
 
     model = "meta-llama/Llama-3.1-8B-Instruct"
