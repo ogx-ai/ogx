@@ -143,7 +143,17 @@ def setup_telemetry() -> None:
             logger.info("OpenTelemetry metrics scrape reader configured")
 
         service_name = os.environ.get("OTEL_SERVICE_NAME", "ogx")
-        resource = Resource(attributes={"service.name": service_name})
+        attributes: dict[str, str] = {"service.name": service_name}
+
+        namespace = os.environ.get("OTEL_SERVICE_NAMESPACE", "").strip() or os.environ.get("NAMESPACE", "").strip()
+        if namespace:
+            attributes["service.namespace"] = namespace
+
+        cluster_id = os.environ.get("CLUSTER_ID", "").strip()
+        if cluster_id:
+            attributes["k8s.cluster.uid"] = cluster_id
+
+        resource = Resource(attributes=attributes)
 
         provider = MeterProvider(resource=resource, metric_readers=metric_readers)
         metrics.set_meter_provider(provider)
