@@ -22,7 +22,7 @@ from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.distributions.template import DistributionTemplate, RunConfigSettings
 from ogx.providers.inline.file_processor.auto.config import AutoFileProcessorConfig
 from ogx.providers.inline.files.localfs.config import LocalfsFilesImplConfig
-from ogx.providers.inline.inference.sentence_transformers import (
+from ogx.providers.inline.inference.hf_sentence_transformers import (
     SentenceTransformersInferenceConfig,
 )
 from ogx.providers.inline.skills.builtin.config import BuiltinSkillsConfig
