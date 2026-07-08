@@ -44,7 +44,7 @@ def available_providers() -> list[ProviderSpec]:
                 Api.files,
                 Api.connectors,
             ],
-            optional_api_dependencies=[],
+            optional_api_dependencies=[Api.skills],
             description="Meta's reference implementation of an agent system that can use tools, access vector databases, and perform complex reasoning tasks.",
         ),
     ]

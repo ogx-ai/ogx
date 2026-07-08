@@ -7,6 +7,7 @@
 from ogx_api.openai_responses import (
     OpenAIResponseInputToolWebSearch,
 )
+from ogx_api.responses.models import CreateResponseRequest
 from ogx_api.tools import ToolDef, ToolInvocationResult
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
@@ -45,10 +46,9 @@ async def test_web_search_output_includes_action_with_sources(openai_responses_i
     ]
 
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        temperature=0.1,
-        tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
+        CreateResponseRequest(
+            input=input_text, model=model, temperature=0.1, tools=[OpenAIResponseInputToolWebSearch(type="web_search")]
+        )
     )
 
     # Find the web search tool call in output
@@ -85,17 +85,19 @@ async def test_web_search_with_filters_and_location(openai_responses_impl, mock_
     """Test that web search filters and user_location are passed to invoke_tool."""
     _setup_web_search_mocks(openai_responses_impl, mock_inference_api)
     await openai_responses_impl.create_openai_response(
-        input="What is the capital of Ireland?",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        temperature=0.1,
-        tools=[
-            OpenAIResponseInputToolWebSearch(
-                type="web_search",
-                search_context_size="high",
-                filters={"allowed_domains": ["arxiv.org", "scholar.google.com"]},
-                user_location={"type": "approximate", "country": "US", "city": "San Francisco"},
-            )
-        ],
+        CreateResponseRequest(
+            input="What is the capital of Ireland?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            temperature=0.1,
+            tools=[
+                OpenAIResponseInputToolWebSearch(
+                    type="web_search",
+                    search_context_size="high",
+                    filters={"allowed_domains": ["arxiv.org", "scholar.google.com"]},
+                    user_location={"type": "approximate", "country": "US", "city": "San Francisco"},
+                )
+            ],
+        )
     )
     call_kwargs = openai_responses_impl.tool_runtime_api.invoke_tool.call_args.kwargs["kwargs"]
     assert call_kwargs["query"] == "What is the capital of Ireland?"
@@ -109,10 +111,12 @@ async def test_web_search_without_config_passes_only_query(openai_responses_impl
     """Test that web search without filters/location only passes query."""
     _setup_web_search_mocks(openai_responses_impl, mock_inference_api)
     await openai_responses_impl.create_openai_response(
-        input="What is the capital of Ireland?",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        temperature=0.1,
-        tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
+        CreateResponseRequest(
+            input="What is the capital of Ireland?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            temperature=0.1,
+            tools=[OpenAIResponseInputToolWebSearch(type="web_search")],
+        )
     )
     call_kwargs = openai_responses_impl.tool_runtime_api.invoke_tool.call_args.kwargs["kwargs"]
     assert call_kwargs["query"] == "What is the capital of Ireland?"
