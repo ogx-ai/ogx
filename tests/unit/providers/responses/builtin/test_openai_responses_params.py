@@ -794,9 +794,11 @@ async def test_hallucinated_tool_call_retries_when_no_client_tools(openai_respon
 
     with patch.object(StreamingResponseOrchestrator, "_process_tools", patched_process_tools):
         result = await openai_responses_impl.create_openai_response(
-            input="List services in demo-app",
-            model=model,
-            tools=[mcp_tool],
+            CreateResponseRequest(
+                input="List services in demo-app",
+                model=model,
+                tools=[mcp_tool],
+            )
         )
 
     assert result is not None
@@ -865,9 +867,11 @@ async def test_hallucinated_tool_call_retries_exhausted(openai_responses_impl, m
 
     with patch.object(StreamingResponseOrchestrator, "_process_tools", patched_process_tools):
         result = await openai_responses_impl.create_openai_response(
-            input="List services in demo-app",
-            model=model,
-            tools=[mcp_tool],
+            CreateResponseRequest(
+                input="List services in demo-app",
+                model=model,
+                tools=[mcp_tool],
+            )
         )
 
     assert result is not None
