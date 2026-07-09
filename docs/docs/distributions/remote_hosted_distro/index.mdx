@@ -2,10 +2,10 @@
 
 Remote-hosted distributions are OGX endpoints hosted by partners that you can connect to directly.
 
-| Distribution | Description |
-|-------------|-------------|
-| [watsonx](./watsonx) | IBM watsonx-backed distribution (`remote::watsonx`) |
-| [OCI](./oci) | Oracle Cloud Infrastructure-backed distribution (`remote::oci`) |
+| Distribution | Endpoint | Inference |
+|-------------|----------|-----------|
+| Together | [https://llama-stack.together.ai](https://llama-stack.together.ai) | remote::together |
+| Fireworks | [https://llama-stack-preview.fireworks.ai](https://llama-stack-preview.fireworks.ai) | remote::fireworks |
 
 ## Connecting
 
@@ -15,8 +15,8 @@ Point any OpenAI-compatible client at the endpoint:
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://your-endpoint/v1",
-    api_key="your-api-key",
+    base_url="https://llama-stack.together.ai/v1",
+    api_key="your-together-api-key",
 )
 
 response = client.chat.completions.create(
@@ -30,6 +30,6 @@ Or use the CLI:
 
 ```bash
 pip install ogx-client
-ogx-client configure --endpoint https://your-endpoint
+ogx-client configure --endpoint https://llama-stack.together.ai
 ogx-client models list
 ```
