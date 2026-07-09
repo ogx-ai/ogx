@@ -75,9 +75,9 @@ class DoclingFileProcessor:
             return self._build_vlm_converter()
 
         if self.config.vlm_model and not self.inference_api:
-            raise ValueError(
-                f"vlm_model '{self.config.vlm_model}' is configured but no inference provider is available. "
-                "Register an inference provider or remove vlm_model from the docling config."
+            log.warning(
+                "vlm_model is configured but no inference provider is available, falling back to standard pipeline",
+                vlm_model=self.config.vlm_model,
             )
 
         pipeline_options = PdfPipelineOptions(do_ocr=self.config.do_ocr)
