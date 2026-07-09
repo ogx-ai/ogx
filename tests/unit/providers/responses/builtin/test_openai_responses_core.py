@@ -114,6 +114,58 @@ async def test_create_openai_response_with_string_input(openai_responses_impl, m
     assert isinstance(final_response.output[0], OpenAIResponseMessage)
 
 
+async def test_create_openai_response_does_not_mutate_request_include(openai_responses_impl, mock_inference_api):
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+    request = CreateResponseRequest(
+        input="What is the capital of Ireland?",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        stream=False,
+        include=[ResponseItemInclude.reasoning_encrypted_content, ResponseItemInclude.file_search_call_results],
+    )
+
+    result = await openai_responses_impl.create_openai_response(request)
+
+    assert result.status == "completed"
+    assert request.include == [
+        ResponseItemInclude.reasoning_encrypted_content,
+        ResponseItemInclude.file_search_call_results,
+    ]
+
+
+async def test_streaming_response_does_not_mutate_request_skills(
+    openai_responses_impl,
+    mock_inference_api,
+    mock_responses_store,
+):
+    previous_response = _OpenAIResponseObjectWithInputAndMessages(
+        id="resp_previous",
+        created_at=1234567890,
+        model="test-model",
+        status="completed",
+        output=[],
+        input=[],
+        messages=[],
+        skills=["skill-previous"],
+        store=True,
+    )
+    mock_responses_store.get_response_object.return_value = previous_response
+    request = CreateResponseRequest(
+        input="continue",
+        model="test-model",
+        previous_response_id="resp_previous",
+        stream=True,
+    )
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+    openai_responses_impl.skills_api = AsyncMock()
+    openai_responses_impl._resolve_skill_instructions = AsyncMock(return_value=[])
+    result = await openai_responses_impl.create_openai_response(request)
+    chunks = [chunk async for chunk in result]
+
+    assert chunks[-1].type == "response.completed"
+    assert request.skills is None
+
+
 async def test_create_openai_response_with_multiple_messages(openai_responses_impl, mock_inference_api, mock_files_api):
     """Test creating an OpenAI response with multiple messages."""
     # Setup
