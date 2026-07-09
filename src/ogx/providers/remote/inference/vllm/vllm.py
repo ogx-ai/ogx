@@ -17,7 +17,9 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
-from ogx.providers.utils.inference.anthropic_translation import parse_anthropic_sse_event
+from ogx.providers.utils.inference.anthropic_translation import (
+    passthrough_anthropic_stream,
+)
 from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
@@ -238,8 +240,6 @@ class VLLMInferenceAdapter(OpenAIMixin):
         params: AnthropicCreateMessageRequest,
     ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
         """Handle Anthropic Messages via native /v1/messages endpoint."""
-        import json
-
         url = f"{self.get_base_url()}/v1/messages"
         body = params.model_dump(exclude_none=True)
         body["model"] = params.model
@@ -253,24 +253,14 @@ class VLLMInferenceAdapter(OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         if params.stream:
+            client_kwargs = self._build_httpx_client_kwargs()
 
-            async def _stream() -> AsyncIterator[AnthropicStreamEvent]:
-                async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async def _stream_ctx():
+                async with httpx.AsyncClient(**client_kwargs) as client:
                     async with client.stream("POST", url, json=body, headers=headers, timeout=300) as resp:
-                        resp.raise_for_status()
-                        event_type: str | None = None
-                        async for line in resp.aiter_lines():
-                            line = line.strip()
-                            if line.startswith("event: "):
-                                event_type = line[7:]
-                            elif line.startswith("data: ") and event_type:
-                                data = json.loads(line[6:])
-                                event = parse_anthropic_sse_event(event_type, data)
-                                if event:
-                                    yield event
-                                event_type = None
+                        return resp
 
-            return _stream()
+            return passthrough_anthropic_stream(_stream_ctx)
 
         async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
             resp = await client.post(url, json=body, headers=headers, timeout=300)

@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 from ogx.log import get_logger
@@ -488,3 +489,40 @@ def parse_anthropic_sse_event(event_type: str, data: dict[str, Any]) -> Anthropi
     if event_type == "error":
         return ErrorStreamEvent(error=_AnthropicErrorDetail(**data["error"]))
     return None
+
+
+StreamResponseCtx = Callable[[], Awaitable[AbstractAsyncContextManager[Any]]]
+
+
+async def passthrough_anthropic_stream(event_stream_fn: StreamResponseCtx) -> AsyncIterator[AnthropicStreamEvent]:
+    """Stream SSE events from any Anthropic-compatible provider.
+
+    Parses raw SSE lines and converts them to ``AnthropicStreamEvent`` objects
+    via the existing :func:`parse_anthropic_sse_event` helper.
+
+    Parameters
+    ----------
+    event_stream_fn:
+        A zero-argument callable that returns an *awaitable* yielding an async
+        context manager wrapping an ``httpx.Response``.  Typical usage::
+
+            async def fn():
+                async with httpx.AsyncClient(timeout=300) as client:
+                    async with client.stream("POST", url, json=body) as resp:
+                        return resp
+            async for event in passthrough_anthropic_stream(fn): ...
+    """
+    response_ctx = await event_stream_fn()
+    async with response_ctx as resp:
+        resp.raise_for_status()
+        event_type: str | None = None
+        async for line in resp.aiter_lines():
+            line = line.strip()
+            if line.startswith("event: "):
+                event_type = line[7:]
+            elif line.startswith("data: ") and event_type:
+                data = json.loads(line[6:])
+                event = parse_anthropic_sse_event(event_type, data)
+                if event:
+                    yield event
+                event_type = None
