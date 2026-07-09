@@ -6,8 +6,11 @@
 
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
+from typing import Any
 
+import httpx
 from ollama import AsyncClient as AsyncOllamaClient
 
 from ogx.log import get_logger
@@ -15,6 +18,7 @@ from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
 from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
+from ogx.providers.utils.inference.anthropic_translation import parse_anthropic_sse_event
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
     HealthResponse,
@@ -26,6 +30,14 @@ from ogx_api import (
     OpenAIChatCompletionWithReasoning,
     OpenAIMessageParam,
     UnsupportedModelError,
+)
+from ogx_api.messages.models import (
+    ANTHROPIC_VERSION,
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
 )
 
 logger = get_logger(name=__name__, category="inference::ollama")
@@ -136,6 +148,87 @@ class OllamaInferenceAdapter(OpenAIMixin):
                 )
 
         return _wrap_chunks()
+
+    def _get_ollama_base_url(self) -> str:
+        """Get the Ollama base URL without trailing /v1 suffix."""
+        base_url_str = str(self.config.base_url)
+        if base_url_str.endswith("/v1"):
+            return base_url_str[:-3]
+        return base_url_str
+
+    async def _passthrough_anthropic_messages(
+        self,
+        request: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Forward the request directly to Ollama's /v1/messages endpoint."""
+        url = f"{self._get_ollama_base_url()}/v1/messages"
+        body = request.model_dump(exclude_none=True)
+        body["model"] = request.model
+        headers = {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+        }
+
+        api_key = self._get_api_key_from_config_or_provider_data() or "no-key-required"
+        headers["x-api-key"] = api_key
+
+        if request.stream:
+            return self._passthrough_anthropic_stream(url, headers, body)
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            resp = await client.post(url, json=body, headers=headers)
+            resp.raise_for_status()
+            return AnthropicMessageResponse(**resp.json())
+
+    async def _passthrough_anthropic_stream(
+        self,
+        url: str,
+        headers: dict[str, str],
+        body: dict[str, Any],
+    ) -> AsyncIterator[AnthropicStreamEvent]:
+        """Stream SSE events directly from Ollama."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            async with client.stream("POST", url, json=body, headers=headers) as resp:
+                resp.raise_for_status()
+                event_type: str | None = None
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if line.startswith("event: "):
+                        event_type = line[7:]
+                    elif line.startswith("data: ") and event_type:
+                        data = json.loads(line[6:])
+                        event = parse_anthropic_sse_event(event_type, data)
+                        if event:
+                            yield event
+                        event_type = None
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Handle Anthropic Messages via native /v1/messages endpoint."""
+        return await self._passthrough_anthropic_messages(params)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        """Forward count_tokens to Ollama's /v1/messages/count_tokens endpoint."""
+        url = f"{self._get_ollama_base_url()}/v1/messages/count_tokens"
+        body = params.model_dump(exclude_none=True)
+        body["model"] = params.model
+        headers = {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+        }
+
+        api_key = self._get_api_key_from_config_or_provider_data() or "no-key-required"
+        headers["x-api-key"] = api_key
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            resp = await client.post(url, json=body, headers=headers)
+            resp.raise_for_status()
+            return AnthropicCountTokensResponse(**resp.json())
 
     async def initialize(self) -> None:
         logger.info("checking connectivity to Ollama", base_url=self.config.base_url)

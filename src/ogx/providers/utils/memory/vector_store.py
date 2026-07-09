@@ -243,6 +243,10 @@ class EmbeddingIndex(ABC):
 
     @abstractmethod
     async def add_chunks(self, embedded_chunks: list[EmbeddedChunk]):
+        """Add embedded chunks to the index using upsert semantics.
+
+        If a chunk with the same ID already exists, it is replaced.
+        """
         raise NotImplementedError()
 
     @abstractmethod
