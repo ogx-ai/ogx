@@ -650,7 +650,21 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         self,
         params: AnthropicCountTokensRequest,
     ) -> AnthropicCountTokensResponse:
-        raise NotImplementedError("anthropic_count_tokens via translation not yet implemented")
+        msg_request = AnthropicCreateMessageRequest.model_construct(
+            model=params.model,
+            messages=params.messages,
+            max_tokens=1,
+            system=params.system,
+            tools=params.tools,
+            stream=False,
+        )
+
+        result = await self.anthropic_messages(msg_request)
+
+        if not isinstance(result, AnthropicMessageResponse):
+            raise RuntimeError("Failed to count tokens: expected non-streaming response, got streaming")
+
+        return AnthropicCountTokensResponse(input_tokens=result.usage.input_tokens)
 
     #
     # The model_dump implementations are to avoid serializing the extra fields,
