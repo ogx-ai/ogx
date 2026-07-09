@@ -47,8 +47,8 @@ def available_providers() -> list[ProviderSpec]:
                 # safe and fast file format for storing and loading tensors
                 "safetensors",
             ],
-            module="ogx.providers.inline.inference.sentence_transformers",
-            config_class="ogx.providers.inline.inference.sentence_transformers.config.SentenceTransformersInferenceConfig",
+            module="ogx.providers.inline.inference.hf_sentence_transformers",
+            config_class="ogx.providers.inline.inference.hf_sentence_transformers.config.SentenceTransformersInferenceConfig",
             description="Sentence Transformers inference provider for text embeddings and similarity search.",
         ),
         RemoteProviderSpec(
@@ -189,10 +189,10 @@ def available_providers() -> list[ProviderSpec]:
             provider_data_validator="ogx.providers.remote.inference.vertexai.config.VertexAIProviderDataValidator",
             description="""Google Vertex AI inference provider enables you to use Google's Gemini models through Google Cloud's Vertex AI platform, providing several advantages:
 
-• Enterprise-grade security: Uses Google Cloud's security controls and IAM
-• Better integration: Seamless integration with other Google Cloud services
-• Advanced features: Access to additional Vertex AI features like model tuning and monitoring
-• Authentication: Uses Google Cloud Application Default Credentials (ADC) instead of API keys
+â¢ Enterprise-grade security: Uses Google Cloud's security controls and IAM
+â¢ Better integration: Seamless integration with other Google Cloud services
+â¢ Advanced features: Access to additional Vertex AI features like model tuning and monitoring
+â¢ Authentication: Uses Google Cloud Application Default Credentials (ADC) instead of API keys
 
 Configuration:
 - Set VERTEX_AI_PROJECT environment variable (required)

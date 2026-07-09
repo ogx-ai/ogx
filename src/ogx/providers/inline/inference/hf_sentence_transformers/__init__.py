@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from ogx.providers.inline.inference.sentence_transformers.config import (
+from ogx.providers.inline.inference.hf_sentence_transformers.config import (
     SentenceTransformersInferenceConfig,
 )
 
@@ -15,7 +15,7 @@ async def get_provider_impl(
     config: SentenceTransformersInferenceConfig,
     _deps: dict[str, Any],
 ):
-    from .sentence_transformers import SentenceTransformersInferenceImpl
+    from .hf_sentence_transformers import SentenceTransformersInferenceImpl
 
     impl = SentenceTransformersInferenceImpl(config)
     await impl.initialize()
