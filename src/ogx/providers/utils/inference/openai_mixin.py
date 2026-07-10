@@ -44,6 +44,13 @@ from ogx_api import (
     OpenAIMessageParam,
     validate_embeddings_input_is_text,
 )
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 logger = get_logger(name=__name__, category="providers::utils")
 
@@ -616,6 +623,34 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
     async def should_refresh_models(self) -> bool:
         return self.config.refresh_models
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Handle Anthropic Messages API via translation to OpenAI chat completions."""
+        from ogx.providers.utils.inference.anthropic_translation import (
+            anthropic_request_to_openai,
+            openai_response_to_anthropic,
+            openai_stream_to_anthropic,
+        )
+
+        openai_params = anthropic_request_to_openai(params)
+        openai_params.model = await self._get_provider_model_id(openai_params.model)
+        self._validate_model_allowed(openai_params.model)
+
+        result = await self.openai_chat_completion(openai_params)
+
+        if isinstance(result, AsyncIterator):
+            return openai_stream_to_anthropic(result, params.model)
+
+        return openai_response_to_anthropic(result, params.model)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        raise NotImplementedError("anthropic_count_tokens via translation not yet implemented")
 
     #
     # The model_dump implementations are to avoid serializing the extra fields,

@@ -245,7 +245,7 @@ First, pull the models and start Ollama, then run the OGX starter distribution p
 ```bash
 ollama pull llama3.1:8b
 ollama pull gpt-oss:20b
-OLLAMA_URL=http://localhost:11434/v1 uv run --with ogx ogx stack run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run --with ogx ogx run starter
 ```
 
 The `OLLAMA_URL` environment variable tells the starter distribution to use Ollama as its inference provider. The server starts on `http://localhost:8321` by default.

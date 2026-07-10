@@ -20,12 +20,12 @@ server/
 ### Server Startup
 
 1. `main()` in `server.py` resolves the config, creates a `StackApp` (subclass of `FastAPI`).
-2. `StackApp.__init__` creates and initializes a `Stack` instance (provider resolution, resource registration).
-3. The lifespan context starts background tasks (e.g., periodic registry refresh).
+2. The lifespan context awaits `stack.initialize()` (provider resolution, resource registration), then registers routers.
+3. The lifespan starts background tasks (e.g., periodic registry refresh).
 
 ### Route Registration
 
-Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-discovers router factories by scanning `ogx_api.<api>.fastapi_routes` modules for `create_router` functions. At startup, `server.py` calls `build_fastapi_router()` for each enabled API and includes the resulting router in the FastAPI app. External APIs can also register router factories via `register_external_api_routers()`.
+Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-discovers router factories by scanning `ogx_api.<api>.fastapi_routes` modules for `create_router` functions. During lifespan startup, `server.py` calls `build_fastapi_router()` for each enabled API and includes the resulting router in the FastAPI app. External APIs can also register router factories via `register_external_api_routers()`.
 
 ### Middleware
 
@@ -35,6 +35,28 @@ Routes are defined as native FastAPI routers. `fastapi_router_registry.py` auto-
 - **`RouteAuthorizationMiddleware`** (`auth.py`): Enforces route-level access policies based on user roles.
 - **`ClientVersionMiddleware`** (`server.py`): Rejects requests from clients with incompatible major.minor versions.
 - **`ProviderDataMiddleware`** (`server.py`): Sets up request context for provider data propagation and test context.
+
+### Metrics Export
+
+OTel metrics can be exported two ways, independently and simultaneously:
+
+- **OTLP push** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to push metrics to an OTel Collector.
+- **Metrics scrape endpoint** — set `OGX_METRICS_ENDPOINT_ENABLED` (`1`/`true`/`yes`/`on`) to
+  expose all metrics in Prometheus exposition format, suitable for scrape-based monitoring
+  systems. Metrics are served by a standalone HTTP server on a dedicated port
+  (`OGX_METRICS_PORT`, default `9464`; bind address `OGX_METRICS_HOST`, default `127.0.0.1`),
+  separate from the main API. It binds to loopback by default; set `OGX_METRICS_HOST` (e.g.
+  `0.0.0.0`) to expose it to other hosts or pods. Keeping the scrape endpoint off the API
+  port means collectors need no API authentication and the metrics are not reachable by
+  regular API consumers.
+
+Telemetry is configured by `ogx.telemetry.initialize_telemetry()`, called from
+`Stack.initialize()` (server and library modes). It does not run at import, so non-serving
+commands (e.g. `ogx stack list-deps`) neither configure telemetry nor open a network port.
+When ogx is launched under `opentelemetry-instrument`, the auto-instrumentation owns the
+global `MeterProvider` and manages OTLP export; in that case the scrape reader is added to
+the existing provider instead of installing a competing one, so ogx metrics still reach the
+scrape endpoint.
 
 ### Response Handling
 

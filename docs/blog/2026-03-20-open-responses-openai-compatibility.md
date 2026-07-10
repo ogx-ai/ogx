@@ -200,7 +200,7 @@ ollama run gpt-oss:20b
 
 # Launch OGX with the starter distribution
 
-OLLAMA_URL=http://localhost:11434/v1 uv run ogx stack run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run ogx run starter
 ```
 
 ```python

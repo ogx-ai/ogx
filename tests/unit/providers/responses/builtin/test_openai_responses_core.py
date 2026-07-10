@@ -41,6 +41,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseText,
     OpenAIResponseTextFormat,
 )
+from ogx_api.responses.models import CreateResponseRequest
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
 
@@ -55,10 +56,12 @@ async def test_create_openai_response_with_string_input(openai_responses_impl, m
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        temperature=0.1,
-        stream=True,  # Enable streaming to test content part events
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            temperature=0.1,
+            stream=True,  # Enable streaming to test content part events
+        )
     )
 
     # For streaming response, collect all chunks
@@ -111,6 +114,58 @@ async def test_create_openai_response_with_string_input(openai_responses_impl, m
     assert isinstance(final_response.output[0], OpenAIResponseMessage)
 
 
+async def test_create_openai_response_does_not_mutate_request_include(openai_responses_impl, mock_inference_api):
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+    request = CreateResponseRequest(
+        input="What is the capital of Ireland?",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        stream=False,
+        include=[ResponseItemInclude.reasoning_encrypted_content, ResponseItemInclude.file_search_call_results],
+    )
+
+    result = await openai_responses_impl.create_openai_response(request)
+
+    assert result.status == "completed"
+    assert request.include == [
+        ResponseItemInclude.reasoning_encrypted_content,
+        ResponseItemInclude.file_search_call_results,
+    ]
+
+
+async def test_streaming_response_does_not_mutate_request_skills(
+    openai_responses_impl,
+    mock_inference_api,
+    mock_responses_store,
+):
+    previous_response = _OpenAIResponseObjectWithInputAndMessages(
+        id="resp_previous",
+        created_at=1234567890,
+        model="test-model",
+        status="completed",
+        output=[],
+        input=[],
+        messages=[],
+        skills=["skill-previous"],
+        store=True,
+    )
+    mock_responses_store.get_response_object.return_value = previous_response
+    request = CreateResponseRequest(
+        input="continue",
+        model="test-model",
+        previous_response_id="resp_previous",
+        stream=True,
+    )
+
+    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+    openai_responses_impl.skills_api = AsyncMock()
+    openai_responses_impl._resolve_skill_instructions = AsyncMock(return_value=[])
+    result = await openai_responses_impl.create_openai_response(request)
+    chunks = [chunk async for chunk in result]
+
+    assert chunks[-1].type == "response.completed"
+    assert request.skills is None
+
+
 async def test_create_openai_response_with_multiple_messages(openai_responses_impl, mock_inference_api, mock_files_api):
     """Test creating an OpenAI response with multiple messages."""
     # Setup
@@ -133,9 +188,7 @@ async def test_create_openai_response_with_multiple_messages(openai_responses_im
 
     # Execute
     await openai_responses_impl.create_openai_response(
-        input=input_messages,
-        model=model,
-        temperature=0.1,
+        CreateResponseRequest(input=input_messages, model=model, temperature=0.1)
     )
 
     # Verify the the correct messages were sent to the inference API i.e.
@@ -305,9 +358,7 @@ async def test_create_openai_response_with_instructions(openai_responses_impl, m
 
     # Execute
     await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        instructions=instructions,
+        CreateResponseRequest(input=input_text, model=model, instructions=instructions)
     )
 
     # Verify
@@ -344,9 +395,7 @@ async def test_create_openai_response_with_instructions_and_multiple_messages(
 
     # Execute
     await openai_responses_impl.create_openai_response(
-        input=input_messages,
-        model=model,
-        instructions=instructions,
+        CreateResponseRequest(input=input_messages, model=model, instructions=instructions)
     )
 
     # Verify
@@ -408,7 +457,9 @@ async def test_create_openai_response_with_instructions_and_previous_response(
 
     # Execute
     await openai_responses_impl.create_openai_response(
-        input="Which is the largest?", model=model, instructions=instructions, previous_response_id="123"
+        CreateResponseRequest(
+            input="Which is the largest?", model=model, instructions=instructions, previous_response_id="123"
+        )
     )
 
     # Verify
@@ -471,7 +522,9 @@ async def test_create_openai_response_with_previous_response_instructions(
 
     # Execute
     await openai_responses_impl.create_openai_response(
-        input="Which is the largest?", model=model, instructions=instructions, previous_response_id="123"
+        CreateResponseRequest(
+            input="Which is the largest?", model=model, instructions=instructions, previous_response_id="123"
+        )
     )
 
     # Verify
@@ -680,10 +733,7 @@ async def test_store_response_uses_incremental_input_with_previous_response(
 
     # Execute - Create response with previous_response_id
     result = await openai_responses_impl.create_openai_response(
-        input=current_input,
-        model=model,
-        previous_response_id="resp-previous-123",
-        store=True,
+        CreateResponseRequest(input=current_input, model=model, previous_response_id="resp-previous-123", store=True)
     )
 
     store_call_args = mock_responses_store.upsert_response_object.call_args
@@ -750,11 +800,13 @@ async def test_store_response_disables_incremental_input_when_auto_compaction_ap
     openai_responses_impl._maybe_auto_compact = AsyncMock(return_value=compacted_input)
 
     await openai_responses_impl.create_openai_response(
-        input="Now what is 3+3?",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        previous_response_id="resp-previous-123",
-        context_management=[{"type": "compaction", "compact_threshold": 1}],
-        store=True,
+        CreateResponseRequest(
+            input="Now what is 3+3?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            previous_response_id="resp-previous-123",
+            context_management=[{"type": "compaction", "compact_threshold": 1}],
+            store=True,
+        )
     )
 
     openai_responses_impl._maybe_auto_compact.assert_awaited_once()
@@ -796,9 +848,7 @@ async def test_create_openai_response_with_text_format(
 
     # Execute
     _result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        text=text_format,
+        CreateResponseRequest(input=input_text, model=model, text=text_format)
     )
 
     # Verify
@@ -817,9 +867,7 @@ async def test_create_openai_response_with_invalid_text_format(openai_responses_
     # Execute
     with pytest.raises(ValueError):
         _result = await openai_responses_impl.create_openai_response(
-            input=input_text,
-            model=model,
-            text=OpenAIResponseText(format={"type": "invalid"}),
+            CreateResponseRequest(input=input_text, model=model, text=OpenAIResponseText(format={"type": "invalid"}))
         )
 
 
@@ -842,11 +890,7 @@ async def test_create_openai_response_with_output_types_as_input(
 
     # Create a response with store=True to trigger the storage path
     result = await openai_responses_impl.create_openai_response(
-        input="What's the weather?",
-        model=model,
-        stream=True,
-        temperature=0.1,
-        store=True,
+        CreateResponseRequest(input="What's the weather?", model=model, stream=True, temperature=0.1, store=True)
     )
 
     # Consume the stream
