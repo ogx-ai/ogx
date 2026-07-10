@@ -20,7 +20,7 @@ constraint-dependencies = [
     "langsmith>=0.8.18",
     "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
     "msgpack>=1.2.1",
-    "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
+    "pillow>=12.3.0",                  # CVE-2026-42311: PSD RCE; CVE-2026-55379/55380/54060: font/GD DoS
     "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
     "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
     "pydantic-settings>=2.14.2",
@@ -110,7 +110,7 @@ starter = [
     "langdetect",
     "markitdown[all]",
     "matplotlib",
-    "nltk>=3.9.4",
+    "nltk>=3.10.0",                                      # CVE-2026-54293/CVE-2026-12243: path traversal in nltk.data.load()
     "numpy",
     "ollama",
     "pandas",
@@ -192,7 +192,7 @@ type_checking = [
     "mcp>=1.23.0,<2.0",
     "ollama",
     "langchain-openai>=1.2.2",
-    "langchain-core",
+    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
     "langgraph",
     "ogx-open-client>=1.0.2",
 ]
@@ -234,7 +234,7 @@ test = [
     "datasets>=4.0.0",
     "elasticsearch>=8.16.0, <9.0.0",
     "google-genai>=1.69.0,<2",
-    "langchain-core",
+    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
     "langchain-openai>=1.2.2",
     "langgraph",
     "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
