@@ -241,6 +241,12 @@ class SentenceTransformersInferenceImpl(
             return value.text
         raise ValueError(f"Unsupported content type for reranking: {type(value)}. Only text is supported.")
 
+    async def anthropic_messages(self, params: Any) -> None:
+        raise NotImplementedError("SentenceTransformers provider does not support Anthropic messages")
+
+    async def anthropic_count_tokens(self, params: Any) -> None:
+        raise NotImplementedError("SentenceTransformers provider does not support Anthropic token counting")
+
     def format_instruction(self, instruction: str, query: str, document: str) -> str:
         """Format a query-document pair with instruction for the reranker model.
 

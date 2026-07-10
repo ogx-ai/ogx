@@ -15,7 +15,11 @@ from opentelemetry import metrics
 from ogx.core.datatypes import AccessRule
 from ogx.log import get_logger
 from ogx.providers.utils.responses.responses_store import ResponsesStore
-from ogx.telemetry.constants import RESPONSES_PARAMETER_USAGE_TOTAL
+from ogx.telemetry.constants import (
+    RESPONSES_AGENTIC_CALLS_TOTAL,
+    RESPONSES_PARAMETER_USAGE_TOTAL,
+    RESPONSES_TOOL_TYPES_USED_TOTAL,
+)
 from ogx_api import (
     CancelResponseRequest,
     CompactResponseRequest,
@@ -39,6 +43,7 @@ from ogx_api import (
     ToolGroups,
     ToolRuntime,
     VectorIO,
+    WebSearchToolTypes,
 )
 
 from .config import BuiltinResponsesImplConfig
@@ -54,6 +59,18 @@ _parameter_usage_total = _meter.create_counter(
     unit="1",
 )
 
+_tool_types_used_total = _meter.create_counter(
+    name=RESPONSES_TOOL_TYPES_USED_TOTAL,
+    description="Counts tool types present in Responses API calls",
+    unit="1",
+)
+
+_agentic_calls_total = _meter.create_counter(
+    name=RESPONSES_AGENTIC_CALLS_TOTAL,
+    description="Total Responses API calls that include tools (agentic calls)",
+    unit="1",
+)
+
 _REQUIRED_FIELDS = {"input", "model"}
 
 
@@ -62,6 +79,21 @@ def _record_parameter_usage(request: CreateResponseRequest, operation: str) -> N
     declared_fields = set(request.model_fields.keys())
     for field_name in (request.model_fields_set & declared_fields) - _REQUIRED_FIELDS:
         _parameter_usage_total.add(1, {"operation": operation, "parameter": field_name})
+
+
+def _record_tool_usage(request: CreateResponseRequest) -> None:
+    """Record tool type usage and agentic call counts."""
+    if not request.tools:
+        return
+    _agentic_calls_total.add(1)
+    seen_types: set[str] = set()
+    for tool in request.tools:
+        tool_type = tool.type
+        if tool_type in WebSearchToolTypes:
+            tool_type = "web_search"
+        if tool_type not in seen_types:
+            seen_types.add(tool_type)
+            _tool_types_used_total.add(1, {"tool_type": tool_type})
 
 
 class BuiltinResponsesImpl(Responses):
@@ -140,6 +172,7 @@ class BuiltinResponsesImpl(Responses):
         yielding response stream events (streaming).
         """
         _record_parameter_usage(request, operation="create_response")
+        _record_tool_usage(request)
         assert self.openai_responses_impl is not None, "OpenAI responses not initialized"
         result = await self.openai_responses_impl.create_openai_response(request)
         return result

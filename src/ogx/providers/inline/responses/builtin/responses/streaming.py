@@ -128,6 +128,8 @@ tracer = trace.get_tracer(__name__)
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
 _SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
 
+_MAX_HALLUCINATED_TOOL_RETRIES = 3
+
 _GUARDRAIL_BATCH_CHARS = 200
 
 # Maps OpenAI Chat Completions error codes to Responses API error codes
@@ -483,6 +485,7 @@ class StreamingResponseOrchestrator:
                 chat_tool_choice = processed_tool_choice.model_dump()
 
         n_iter = 0
+        n_hallucinated_retries = 0
         messages = self.ctx.messages.copy()
         final_status = "completed"
         incomplete_reason: str | None = None
@@ -617,6 +620,7 @@ class StreamingResponseOrchestrator:
                     non_function_tool_calls,
                     approvals,
                     next_turn_messages,
+                    has_hallucinated_retries,
                 ) = self._separate_tool_calls(current_response, messages, completion_result_data.reasoning_content)
                 # add any approval requests required
                 for tool_call in approvals:
@@ -697,8 +701,21 @@ class StreamingResponseOrchestrator:
                 ):
                     yield stream_event
                 messages = next_turn_messages
-                if not function_tool_calls and not non_function_tool_calls:
+                if not function_tool_calls and not non_function_tool_calls and not has_hallucinated_retries:
                     break
+
+                if has_hallucinated_retries:
+                    n_hallucinated_retries += 1
+                    if n_hallucinated_retries >= _MAX_HALLUCINATED_TOOL_RETRIES:
+                        logger.warning(
+                            "Exiting inference loop; model keeps hallucinating tool names",
+                            retries=n_hallucinated_retries,
+                        )
+                        final_status = "incomplete"
+                        incomplete_reason = "max_iterations_exceeded"
+                        break
+                else:
+                    n_hallucinated_retries = 0
 
                 if function_tool_calls:
                     logger.info("Exiting inference loop since there is a function (client-side) tool call")
@@ -775,12 +792,19 @@ class StreamingResponseOrchestrator:
 
     def _separate_tool_calls(
         self, current_response, messages, reasoning_content: str | None = None
-    ) -> tuple[list, list, list, list]:
-        """Separate tool calls into function and non-function categories."""
+    ) -> tuple[list, list, list, list, bool]:
+        """Separate tool calls into function and non-function categories.
+
+        Returns (function_tool_calls, non_function_tool_calls, approvals,
+        next_turn_messages, has_hallucinated_retries).  The last flag is True
+        when the model hallucinated a tool name in a server-only loop and an
+        error was fed back — the caller should re-enter the inference loop.
+        """
         function_tool_calls = []
         non_function_tool_calls = []
         approvals = []
         next_turn_messages = messages.copy()
+        has_hallucinated_retries = False
 
         for choice in current_response.choices:
             # Convert response message to input message format for multi-turn.
@@ -814,16 +838,40 @@ class StreamingResponseOrchestrator:
                         and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES
                         and tool_call.function.name not in self.mcp_tool_to_server
                     ):
-                        # The model called a tool name that is neither a registered function tool,
-                        # nor a server-side built-in, nor an MCP tool — it hallucinated a name.
-                        # Return it to the client as a function_call output item rather than
-                        # crashing the server with an unhandled ValueError.
-                        logger.warning(
-                            "Model called unrecognized tool ; treating as a client-side function call.",
-                            name=tool_call.function.name,
-                        )
-                        function_tool_calls.append(tool_call)
-                        executed_tool_calls.append(tool_call)
+                        # The model hallucinated a tool name — it doesn't match
+                        # any registered function tool, server-side built-in, or
+                        # MCP tool.
+                        has_client_tools = any(t.type == "function" for t in self.ctx.response_tools)
+                        if has_client_tools:
+                            # A client is expected to handle function calls, so
+                            # surface the hallucinated name as a client-side
+                            # function call to avoid a server 500.
+                            logger.warning(
+                                "Model called unrecognized tool; treating as a client-side function call",
+                                name=tool_call.function.name,
+                            )
+                            function_tool_calls.append(tool_call)
+                            executed_tool_calls.append(tool_call)
+                        else:
+                            # Server-only loop — no client will ever supply a
+                            # result for this call. Feed an error back to the
+                            # model so it can self-correct on the next iteration.
+                            logger.warning(
+                                "Model called unrecognized tool; returning error to model",
+                                name=tool_call.function.name,
+                            )
+                            available = sorted(self.mcp_tool_to_server.keys())
+                            next_turn_messages.append(
+                                OpenAIToolMessageParam(
+                                    tool_call_id=tool_call.id,
+                                    content=(
+                                        f"Error: tool '{tool_call.function.name}' is not available. "
+                                        f"Available tools are: {', '.join(available)}. "
+                                        "Please use one of these tools instead."
+                                    ),
+                                )
+                            )
+                            has_hallucinated_retries = True
                     else:
                         if self._approval_required(tool_call.function.name):
                             approval_response = self.ctx.approval_response(
@@ -855,7 +903,7 @@ class StreamingResponseOrchestrator:
                     else:
                         next_turn_messages.pop()
 
-        return function_tool_calls, non_function_tool_calls, approvals, next_turn_messages
+        return function_tool_calls, non_function_tool_calls, approvals, next_turn_messages, has_hallucinated_retries
 
     def _accumulate_chunk_usage(self, chunk: OpenAIChatCompletionChunk) -> None:
         """Accumulate usage from a streaming chunk into the response usage format."""
