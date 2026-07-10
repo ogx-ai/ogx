@@ -126,11 +126,40 @@ class MemoryConfig(BaseModel):
 
     enabled: bool = Field(
         default=False,
-        description="Enable Responses memory reads. Disabled by default because memory is an alpha feature.",
+        description="Enable Responses memory reads and writes. Disabled by default because memory is an alpha feature.",
     )
     default_vector_store_id: str | None = Field(
         default=None,
-        description="Default vector store containing conversation memory files.",
+        description=(
+            "Optional explicit vector store containing conversation memory files. "
+            "If unset, OGX can lazily create one internal default memory vector store per namespace."
+        ),
+    )
+    auto_create_default_vector_store: bool = Field(
+        default=True,
+        description=(
+            "Automatically create one internal default memory vector store per namespace when memory is enabled "
+            "and default_vector_store_id is not configured."
+        ),
+    )
+    default_vector_store_namespace: str = Field(
+        default="default",
+        description="Namespace used to separate internal default memory vector store mappings.",
+    )
+    default_vector_store_provider_id: str | None = Field(
+        default=None,
+        description=(
+            "Optional vector_io provider id to use when creating internal default memory vector stores. "
+            "If unset, OGX uses the stack-level default vector store provider."
+        ),
+    )
+    default_vector_store_admin_principal: str = Field(
+        default="ogx:system:responses-memory",
+        description="Internal principal used to own default memory vector stores.",
+    )
+    default_vector_store_admin_attributes: dict[str, list[str]] = Field(
+        default_factory=lambda: {"roles": ["admin"]},
+        description="Access attributes stamped on default memory vector stores so admin users can inspect them.",
     )
     owner_metadata_key: str = Field(
         default="owner_id",
@@ -171,6 +200,16 @@ class MemoryConfig(BaseModel):
     summarization_model: str | None = Field(
         default=None,
         description="Model to use for memory summaries. If not set, uses the response model.",
+    )
+    max_summary_messages: int = Field(
+        default=100,
+        ge=1,
+        description="Maximum number of recent conversation messages used when generating a memory summary.",
+    )
+    max_transcript_chars: int = Field(
+        default=20000,
+        ge=1,
+        description="Maximum number of characters stored in the searchable transcript section of a memory file.",
     )
 
 

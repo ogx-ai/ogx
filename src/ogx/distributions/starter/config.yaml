@@ -93,7 +93,7 @@ providers:
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config:
-      trust_remote_code: false
+      trust_remote_code: true
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -209,6 +209,8 @@ providers:
           backend: sql_default
           max_write_queue_size: 10000
           num_writers: 4
+      memory_config:
+        default_vector_store_provider_id: sqlite-vec
   skills:
   - provider_id: builtin
     provider_type: inline::builtin

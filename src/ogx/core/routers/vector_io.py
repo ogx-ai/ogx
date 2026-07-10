@@ -18,6 +18,7 @@ from ogx.telemetry.vector_io_metrics import (
     create_vector_metric_attributes,
     vector_chunks_processed_total,
     vector_deletes_total,
+    vector_documents_retrieved_total,
     vector_files_total,
     vector_insert_duration,
     vector_inserts_total,
@@ -239,6 +240,7 @@ class VectorIORouter(VectorIO):
             duration = time.perf_counter() - start_time
             success_attrs = {**metric_attrs, "status": "success"}
             vector_queries_total.add(1, success_attrs)
+            vector_documents_retrieved_total.add(len(result.chunks), success_attrs)
             vector_retrieval_duration.record(duration, metric_attrs)
             return result
         except asyncio.CancelledError:
@@ -503,6 +505,7 @@ class VectorIORouter(VectorIO):
             duration = time.perf_counter() - start_time
             success_attrs = {**metric_attrs, "status": "success"}
             vector_queries_total.add(1, success_attrs)
+            vector_documents_retrieved_total.add(len(result.data), success_attrs)
             vector_retrieval_duration.record(duration, metric_attrs)
             return result
         except asyncio.CancelledError:

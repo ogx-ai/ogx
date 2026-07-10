@@ -147,10 +147,10 @@ class MilvusIndex(EmbeddingIndex):
                 }
             )
         try:
-            await asyncio.to_thread(self.client.insert, self.collection_name, data=data)
+            await asyncio.to_thread(self.client.upsert, self.collection_name, data=data)
         except Exception as e:
             logger.error(
-                "Error inserting chunks into Milvus collection", collection_name=self.collection_name, error=str(e)
+                "Failed to upsert chunks into Milvus collection", collection_name=self.collection_name, error=str(e)
             )
             raise e
 

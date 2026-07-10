@@ -66,6 +66,9 @@ def search_queries(
         for item in response.data:
             file_id = item.file_id
             doc_id = mapping.doc_id(file_id)
+            if doc_id is None and hasattr(item, "attributes") and item.attributes:
+                file_id = item.attributes.get("file_id", file_id)
+                doc_id = mapping.doc_id(file_id)
             if doc_id is None:
                 logger.debug(f"Unknown file_id {file_id} in search results")
                 continue
