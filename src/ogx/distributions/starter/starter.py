@@ -16,6 +16,7 @@ from ogx.core.datatypes import (
     RerankerModel,
     VectorStoresConfig,
 )
+from ogx.core.storage.datatypes import ResponsesStoreReference
 from ogx.core.storage.kvstore.config import PostgresKVStoreConfig
 from ogx.core.storage.sqlstore.sqlstore import PostgresSqlStoreConfig
 from ogx.core.utils.dynamic import instantiate_class_type
@@ -169,7 +170,22 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
     embedding_provider = Provider(
         provider_id="sentence-transformers",
         provider_type="inline::sentence-transformers",
-        config=SentenceTransformersInferenceConfig.sample_run_config(),
+        config=SentenceTransformersInferenceConfig(trust_remote_code=True).model_dump(),
+    )
+    responses_provider = Provider(
+        provider_id="builtin",
+        provider_type="inline::builtin",
+        config={
+            "persistence": {
+                "responses": ResponsesStoreReference(
+                    backend="sql_default",
+                    table_name="responses",
+                ).model_dump(exclude_none=True),
+            },
+            "memory_config": {
+                "default_vector_store_provider_id": "sqlite-vec",
+            },
+        },
     )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
@@ -240,6 +256,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 config=InfinispanVectorIOConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
         ],
+        "responses": [responses_provider],
         "files": [files_provider],
         "skills": [
             Provider(

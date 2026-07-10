@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import re
 from types import SimpleNamespace
 from typing import Any
@@ -13,8 +14,9 @@ import pytest
 
 from ogx.core.access_control.access_control import AccessDeniedError
 from ogx.core.datatypes import User
-from ogx.core.request_headers import RequestProviderDataContext
+from ogx.core.request_headers import RequestProviderDataContext, get_authenticated_user
 from ogx.providers.inline.responses.builtin.config import MemoryConfig
+from ogx.providers.inline.responses.builtin.responses import memory as memory_module
 from ogx.providers.inline.responses.builtin.responses.memory import (
     build_memory_filters,
     extract_memory_query,
@@ -28,7 +30,6 @@ from ogx_api import (
     OpenAIMessageParam,
     OpenAIResponseInputMessageContentText,
     OpenAIResponseMessage,
-    OpenAIUserMessageParam,
     VectorStoreNotFoundError,
 )
 from ogx_api.files.models import OpenAIFilePurpose
@@ -48,6 +49,7 @@ class InMemoryConversationStore:
             case.conversation.conversation_id: case.conversation.messages_for_summary for case in cases
         }
         self.memory_records: dict[tuple[str, str, str], str] = {}
+        self.default_memory_vector_store_id = "vs_mem"
 
     async def get_conversation_messages(self, conversation_id: str) -> list[OpenAIMessageParam] | None:
         return self.messages_by_conversation_id.get(conversation_id)
@@ -69,6 +71,20 @@ class InMemoryConversationStore:
         response_id: str,
     ) -> None:
         self.memory_records[(owner_id, conversation_id, vector_store_id)] = file_id
+
+    async def get_default_memory_vector_store(
+        self,
+        namespace: str,
+    ) -> SimpleNamespace:
+        return SimpleNamespace(vector_store_id=self.default_memory_vector_store_id)
+
+    async def upsert_default_memory_vector_store(
+        self,
+        namespace: str,
+        vector_store_id: str,
+        provider_id: str | None,
+    ) -> None:
+        self.default_memory_vector_store_id = vector_store_id
 
 
 class SummaryQueueInference:
@@ -153,6 +169,50 @@ class InMemoryHybridVectorIoApi:
         )
 
 
+class InMemoryDefaultVectorStoreMapping:
+    def __init__(self) -> None:
+        self.record: SimpleNamespace | None = None
+        self.get_calls: list[str] = []
+        self.claim_calls: list[str] = []
+        self.delete_calls: list[str] = []
+        self.upsert_calls: list[SimpleNamespace] = []
+
+    async def get_default_memory_vector_store(self, namespace: str) -> SimpleNamespace | None:
+        self.get_calls.append(namespace)
+        return self.record
+
+    async def claim_default_memory_vector_store(self, namespace: str) -> bool:
+        self.claim_calls.append(namespace)
+        if self.record is not None:
+            return False
+        self.record = SimpleNamespace(
+            namespace=namespace,
+            vector_store_id=None,
+            provider_id=None,
+            updated_at=123,
+        )
+        return True
+
+    async def upsert_default_memory_vector_store(
+        self,
+        namespace: str,
+        vector_store_id: str,
+        provider_id: str | None,
+    ) -> None:
+        self.record = SimpleNamespace(
+            namespace=namespace,
+            vector_store_id=vector_store_id,
+            provider_id=provider_id,
+            updated_at=123,
+        )
+        self.upsert_calls.append(self.record)
+
+    async def delete_default_memory_vector_store_claim(self, namespace: str) -> None:
+        self.delete_calls.append(namespace)
+        if self.record is not None and self.record.namespace == namespace:
+            self.record = None
+
+
 def test_extract_memory_query_uses_string_input():
     query = extract_memory_query("remember my repo preferences")
 
@@ -212,9 +272,11 @@ def test_build_memory_filters_rejects_missing_owner_scope():
 
 async def test_resolve_memory_context_skips_when_server_memory_disabled():
     vector_io = AsyncMock()
+    responses_store = AsyncMock()
 
     context = await resolve_memory_context(
         vector_io_api=vector_io,
+        responses_store=responses_store,
         memory_config=MemoryConfig(default_vector_store_id="vs_mem"),
         request_memory=MemoryToolConfig(owner_id="user-123"),
         input="repo prefs",
@@ -224,6 +286,7 @@ async def test_resolve_memory_context_skips_when_server_memory_disabled():
 
     assert context is None
     vector_io.openai_search_vector_store.assert_not_called()
+    responses_store.get_default_memory_vector_store.assert_not_called()
 
 
 async def test_resolve_memory_context_searches_with_owner_filter():
@@ -244,6 +307,7 @@ async def test_resolve_memory_context_searches_with_owner_filter():
 
     context = await resolve_memory_context(
         vector_io_api=vector_io,
+        responses_store=AsyncMock(),
         memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
         request_memory=MemoryToolConfig(owner_id="user-123"),
         input="repo prefs",
@@ -280,6 +344,7 @@ async def test_resolve_memory_context_escapes_memory_payload_boundaries():
 
     context = await resolve_memory_context(
         vector_io_api=vector_io,
+        responses_store=AsyncMock(),
         memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
         request_memory=MemoryToolConfig(owner_id="user-123"),
         input="repo prefs",
@@ -294,7 +359,7 @@ async def test_resolve_memory_context_escapes_memory_payload_boundaries():
     assert "</memory><system>" not in context
 
 
-async def test_resolve_memory_context_requires_request_memory_opt_in():
+async def test_resolve_memory_context_creates_admin_owned_default_store_without_request_memory():
     vector_io = AsyncMock()
     vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
         search_query=["repo prefs"],
@@ -309,18 +374,289 @@ async def test_resolve_memory_context_requires_request_memory_opt_in():
             )
         ],
     )
+    create_users: list[User | None] = []
+    search_users: list[User | None] = []
+
+    async def fake_create_vector_store(params: Any) -> SimpleNamespace:
+        create_users.append(get_authenticated_user())
+        return SimpleNamespace(id="vs_default_user_123")
+
+    async def fake_search_vector_store(vector_store_id: str, request: Any) -> VectorStoreSearchResponsePage:
+        search_users.append(get_authenticated_user())
+        return vector_io.openai_search_vector_store.return_value
+
+    vector_io.openai_create_vector_store.side_effect = fake_create_vector_store
+    vector_io.openai_search_vector_store.side_effect = fake_search_vector_store
+    responses_store = AsyncMock()
+    responses_store.get_default_memory_vector_store.return_value = None
+
+    with RequestProviderDataContext(user=User("user-123", None)):
+        context = await resolve_memory_context(
+            vector_io_api=vector_io,
+            responses_store=responses_store,
+            memory_config=MemoryConfig(enabled=True, default_vector_store_provider_id="sqlite-vec"),
+            request_memory=None,
+            input="repo prefs",
+            metadata=None,
+            safety_identifier=None,
+        )
+
+    assert context is not None
+    assert "Prefers small stacked PRs." in context
+    assert create_users == [
+        User(
+            "ogx:system:responses-memory",
+            {"roles": ["admin"]},
+        )
+    ]
+    assert search_users == [
+        User(
+            "ogx:system:responses-memory",
+            {"roles": ["admin"]},
+        )
+    ]
+    vector_io.openai_create_vector_store.assert_awaited_once()
+    create_request = vector_io.openai_create_vector_store.await_args.args[0]
+    assert create_request.name == "ogx-memory-default"
+    assert create_request.metadata["ogx_memory_store"] is True
+    assert create_request.metadata["ogx_memory_namespace"] == "default"
+    assert create_request.model_extra["provider_id"] == "sqlite-vec"
+    responses_store.upsert_default_memory_vector_store.assert_awaited_once_with(
+        namespace="default",
+        vector_store_id="vs_default_user_123",
+        provider_id="sqlite-vec",
+    )
+    vector_io.openai_search_vector_store.assert_awaited_once()
+    assert vector_io.openai_search_vector_store.await_args.kwargs["vector_store_id"] == "vs_default_user_123"
+
+
+async def test_resolve_memory_context_reuses_shadow_store_across_owners_with_owner_filters():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"owner_id": "user-a", "memory": True},
+                content=[VectorStoreContent(type="text", text="Shared shadow store memory.")],
+            )
+        ],
+    )
+    vector_io.openai_create_vector_store.return_value = SimpleNamespace(id="vs_shadow")
+    responses_store = InMemoryDefaultVectorStoreMapping()
+
+    with RequestProviderDataContext(user=User("user-a", None)):
+        await resolve_memory_context(
+            vector_io_api=vector_io,
+            responses_store=responses_store,
+            memory_config=MemoryConfig(enabled=True),
+            request_memory=None,
+            input="repo prefs",
+            metadata=None,
+            safety_identifier=None,
+        )
+
+    with RequestProviderDataContext(user=User("user-b", None)):
+        await resolve_memory_context(
+            vector_io_api=vector_io,
+            responses_store=responses_store,
+            memory_config=MemoryConfig(enabled=True),
+            request_memory=None,
+            input="repo prefs",
+            metadata=None,
+            safety_identifier=None,
+        )
+
+    vector_io.openai_create_vector_store.assert_awaited_once()
+    assert responses_store.get_calls == ["default", "default", "default"]
+    assert len(responses_store.upsert_calls) == 1
+    assert responses_store.upsert_calls[0].namespace == "default"
+    assert responses_store.upsert_calls[0].vector_store_id == "vs_shadow"
+    assert responses_store.upsert_calls[0].provider_id is None
+    search_calls = vector_io.openai_search_vector_store.await_args_list
+    assert [call.kwargs["vector_store_id"] for call in search_calls] == ["vs_shadow", "vs_shadow"]
+    assert search_calls[0].kwargs["request"].filters["filters"][1] == {
+        "type": "eq",
+        "key": "owner_id",
+        "value": "user-a",
+    }
+    assert search_calls[1].kwargs["request"].filters["filters"][1] == {
+        "type": "eq",
+        "key": "owner_id",
+        "value": "user-b",
+    }
+
+
+async def test_resolve_memory_context_uses_admin_context_for_configured_default_store():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"owner_id": "user-123", "memory": True},
+                content=[VectorStoreContent(type="text", text="Configured default memory.")],
+            )
+        ],
+    )
+    search_users: list[User | None] = []
+
+    async def fake_search_vector_store(vector_store_id: str, request: Any) -> VectorStoreSearchResponsePage:
+        search_users.append(get_authenticated_user())
+        return vector_io.openai_search_vector_store.return_value
+
+    vector_io.openai_search_vector_store.side_effect = fake_search_vector_store
+
+    with RequestProviderDataContext(user=User("user-123", None)):
+        context = await resolve_memory_context(
+            vector_io_api=vector_io,
+            responses_store=AsyncMock(),
+            memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_configured"),
+            request_memory=None,
+            input="repo prefs",
+            metadata=None,
+            safety_identifier=None,
+        )
+
+    assert context is not None
+    assert "Configured default memory." in context
+    assert search_users == [
+        User(
+            "ogx:system:responses-memory",
+            {"roles": ["admin"]},
+        )
+    ]
+    vector_io.openai_search_vector_store.assert_awaited_once()
+    assert vector_io.openai_search_vector_store.await_args.kwargs["vector_store_id"] == "vs_configured"
+
+
+async def test_resolve_memory_context_creates_one_shadow_store_for_concurrent_first_users():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[],
+    )
+
+    async def fake_create_vector_store(params: Any) -> SimpleNamespace:
+        await asyncio.sleep(0.01)
+        return SimpleNamespace(id=f"vs_shadow_{vector_io.openai_create_vector_store.await_count}")
+
+    vector_io.openai_create_vector_store.side_effect = fake_create_vector_store
+    responses_store = InMemoryDefaultVectorStoreMapping()
+
+    await asyncio.gather(
+        resolve_memory_context(
+            vector_io_api=vector_io,
+            responses_store=responses_store,
+            memory_config=MemoryConfig(enabled=True),
+            request_memory=MemoryToolConfig(owner_id="user-a"),
+            input="repo prefs",
+            metadata=None,
+            safety_identifier=None,
+        ),
+        resolve_memory_context(
+            vector_io_api=vector_io,
+            responses_store=responses_store,
+            memory_config=MemoryConfig(enabled=True),
+            request_memory=MemoryToolConfig(owner_id="user-b"),
+            input="repo prefs",
+            metadata=None,
+            safety_identifier=None,
+        ),
+    )
+
+    vector_io.openai_create_vector_store.assert_awaited_once()
+    assert responses_store.record is not None
+    assert responses_store.record.vector_store_id == "vs_shadow_1"
+    search_calls = vector_io.openai_search_vector_store.await_args_list
+    assert [call.kwargs["vector_store_id"] for call in search_calls] == ["vs_shadow_1", "vs_shadow_1"]
+
+
+async def test_resolve_memory_context_recovers_stale_default_store_claim(monkeypatch):
+    monkeypatch.setattr(memory_module, "_DEFAULT_MEMORY_VECTOR_STORE_WAIT_ATTEMPTS", 1)
+    monkeypatch.setattr(memory_module, "_DEFAULT_MEMORY_VECTOR_STORE_WAIT_SECONDS", 0)
+    monkeypatch.setattr(memory_module, "_DEFAULT_MEMORY_VECTOR_STORE_STALE_CLAIM_SECONDS", 1)
+
+    vector_io = AsyncMock()
+    vector_io.openai_create_vector_store.return_value = SimpleNamespace(id="vs_recovered")
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"owner_id": "user-123", "memory": True},
+                content=[VectorStoreContent(type="text", text="Recovered memory.")],
+            )
+        ],
+    )
+    responses_store = InMemoryDefaultVectorStoreMapping()
+    responses_store.record = SimpleNamespace(
+        namespace="default",
+        vector_store_id=None,
+        provider_id=None,
+        updated_at=0,
+    )
 
     context = await resolve_memory_context(
         vector_io_api=vector_io,
-        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
-        request_memory=None,
+        responses_store=responses_store,
+        memory_config=MemoryConfig(enabled=True),
+        request_memory=MemoryToolConfig(owner_id="user-123"),
         input="repo prefs",
         metadata=None,
-        safety_identifier="user-123",
+        safety_identifier=None,
     )
 
-    assert context is None
-    vector_io.openai_search_vector_store.assert_not_called()
+    assert context is not None
+    assert "Recovered memory." in context
+    assert responses_store.delete_calls == ["default"]
+    vector_io.openai_create_vector_store.assert_awaited_once()
+    assert responses_store.record is not None
+    assert responses_store.record.vector_store_id == "vs_recovered"
+
+
+async def test_resolve_memory_context_uses_request_vector_store_without_default_lookup():
+    vector_io = AsyncMock()
+    vector_io.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["repo prefs"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file_1",
+                filename="memory.md",
+                score=0.9,
+                attributes={"owner_id": "user-123", "memory": True},
+                content=[VectorStoreContent(type="text", text="Prefers explicit stores.")],
+            )
+        ],
+    )
+    responses_store = AsyncMock()
+
+    context = await resolve_memory_context(
+        vector_io_api=vector_io,
+        responses_store=responses_store,
+        memory_config=MemoryConfig(enabled=True),
+        request_memory=MemoryToolConfig(owner_id="user-123", vector_store_id="vs_request"),
+        input="repo prefs",
+        metadata=None,
+        safety_identifier=None,
+    )
+
+    assert context is not None
+    assert "Prefers explicit stores." in context
+    responses_store.get_default_memory_vector_store.assert_not_called()
+    vector_io.openai_create_vector_store.assert_not_called()
+    assert vector_io.openai_search_vector_store.await_args.kwargs["vector_store_id"] == "vs_request"
 
 
 async def test_resolve_memory_context_skips_without_user_query():
@@ -536,129 +872,6 @@ async def test_memory_disabled_does_not_search(
     _chunks = [chunk async for chunk in result]
 
     mock_vector_io_api.openai_search_vector_store.assert_not_called()
-
-
-async def test_write_conversation_memory_skips_without_conversation():
-    inference_api = AsyncMock()
-    files_api = AsyncMock()
-    vector_io_api = AsyncMock()
-    responses_store = AsyncMock()
-
-    await write_conversation_memory(
-        inference_api=inference_api,
-        files_api=files_api,
-        vector_io_api=vector_io_api,
-        responses_store=responses_store,
-        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
-        request_memory=MemoryToolConfig(owner_id="user-123"),
-        conversation_id=None,
-        response_id="resp_123",
-        response_status="completed",
-        model="test-model",
-        metadata=None,
-        safety_identifier=None,
-    )
-
-    inference_api.openai_chat_completion.assert_not_called()
-    files_api.openai_upload_file.assert_not_called()
-    vector_io_api.openai_attach_file_to_vector_store.assert_not_called()
-
-
-async def test_write_conversation_memory_uploads_and_attaches_summary():
-    inference_api = AsyncMock()
-    files_api = AsyncMock()
-    vector_io_api = AsyncMock()
-    responses_store = AsyncMock()
-    responses_store.get_conversation_messages.return_value = [OpenAIUserMessageParam(content="I prefer stacked PRs.")]
-    responses_store.get_memory_record.return_value = None
-    inference_api.openai_chat_completion.return_value = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="User prefers stacked PRs."))]
-    )
-    files_api.openai_upload_file.return_value = OpenAIFileObject(
-        id="file_new",
-        bytes=42,
-        created_at=123,
-        filename="memory.md",
-        purpose=OpenAIFilePurpose.ASSISTANTS,
-        status="uploaded",
-    )
-    vector_io_api.openai_attach_file_to_vector_store.return_value = SimpleNamespace(status="completed")
-
-    await write_conversation_memory(
-        inference_api=inference_api,
-        files_api=files_api,
-        vector_io_api=vector_io_api,
-        responses_store=responses_store,
-        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
-        request_memory=MemoryToolConfig(owner_id="user-123"),
-        conversation_id="conv_abc",
-        response_id="resp_123",
-        response_status="completed",
-        model="test-model",
-        metadata=None,
-        safety_identifier=None,
-    )
-
-    upload_file = files_api.openai_upload_file.call_args.kwargs["file"]
-    uploaded_content = upload_file.file.getvalue().decode("utf-8")
-    assert "User prefers stacked PRs." in uploaded_content
-
-    attach_request = vector_io_api.openai_attach_file_to_vector_store.call_args.kwargs["request"]
-    assert attach_request.file_id == "file_new"
-    assert attach_request.attributes["memory"] is True
-    assert attach_request.attributes["owner_id"] == "user-123"
-    assert attach_request.attributes["conversation_id"] == "conv_abc"
-    assert attach_request.attributes["response_id"] == "resp_123"
-    responses_store.upsert_memory_record.assert_awaited_once_with(
-        owner_id="user-123",
-        conversation_id="conv_abc",
-        vector_store_id="vs_mem",
-        file_id="file_new",
-        response_id="resp_123",
-    )
-
-
-async def test_write_conversation_memory_deletes_previous_memory_file_object():
-    inference_api = AsyncMock()
-    files_api = AsyncMock()
-    vector_io_api = AsyncMock()
-    responses_store = AsyncMock()
-    responses_store.get_conversation_messages.return_value = [OpenAIUserMessageParam(content="I prefer stacked PRs.")]
-    responses_store.get_memory_record.return_value = SimpleNamespace(file_id="file_old")
-    inference_api.openai_chat_completion.return_value = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="User prefers stacked PRs."))]
-    )
-    files_api.openai_upload_file.return_value = OpenAIFileObject(
-        id="file_new",
-        bytes=42,
-        created_at=123,
-        filename="memory.md",
-        purpose=OpenAIFilePurpose.ASSISTANTS,
-        status="uploaded",
-    )
-    vector_io_api.openai_attach_file_to_vector_store.return_value = SimpleNamespace(status="completed")
-
-    await write_conversation_memory(
-        inference_api=inference_api,
-        files_api=files_api,
-        vector_io_api=vector_io_api,
-        responses_store=responses_store,
-        memory_config=MemoryConfig(enabled=True, default_vector_store_id="vs_mem"),
-        request_memory=MemoryToolConfig(owner_id="user-123"),
-        conversation_id="conv_abc",
-        response_id="resp_123",
-        response_status="completed",
-        model="test-model",
-        metadata=None,
-        safety_identifier=None,
-    )
-
-    vector_io_api.openai_delete_vector_store_file.assert_awaited_once_with(
-        vector_store_id="vs_mem",
-        file_id="file_old",
-    )
-    delete_request = files_api.openai_delete_file.await_args.kwargs["request"]
-    assert delete_request.file_id == "file_old"
 
 
 async def test_memory_write_indexes_full_conversation_for_hybrid_needle_search():
