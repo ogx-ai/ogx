@@ -14,6 +14,7 @@ inline/
   tool_runtime/        # Tool runtime (RAG context retrieval)
   files/               # File storage and management
   file_processor/      # File processing (text extraction, etc.)
+  skills/              # Skills API (versioned skill bundle management)
   __init__.py
 ```
 
@@ -29,3 +30,4 @@ Their factory function is typically named `get_provider_impl()` and returns an i
 - **`inference/sentence_transformers`** -- Runs embedding models using the sentence-transformers library.
 - **`inference/transformers`** -- Runs Llama models locally using the transformers library.
 - **`vector_io/sqlite_vec`** -- SQLite-based vector storage using the sqlite-vec extension.
+- **`skills/builtin`** -- Manages versioned skill bundles (zip archives with SKILL.md manifests). Stores bundles via the Files API and metadata in KVStore.

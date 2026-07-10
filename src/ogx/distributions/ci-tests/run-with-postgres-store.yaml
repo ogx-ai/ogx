@@ -94,8 +94,6 @@ providers:
     provider_type: inline::sentence-transformers
     config:
       trust_remote_code: true
-  - provider_id: transformers
-    provider_type: inline::transformers
   - provider_id: ${env.WATSONX_API_KEY:+watsonx}
     provider_type: remote::watsonx
     config:
@@ -217,6 +215,8 @@ providers:
           backend: sql_default
           max_write_queue_size: 10000
           num_writers: 4
+      memory_config:
+        default_vector_store_provider_id: sqlite-vec
   skills:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -346,7 +346,7 @@ vector_stores:
     provider_id: sentence-transformers
     model_id: nomic-ai/nomic-embed-text-v1.5
   default_reranker_model:
-    provider_id: transformers
+    provider_id: sentence-transformers
     model_id: Qwen/Qwen3-Reranker-0.6B
   file_search_params:
     header_template: 'file_search tool found {num_chunks} chunks:

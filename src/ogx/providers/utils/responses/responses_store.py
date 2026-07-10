@@ -4,7 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import hashlib
+import time
 from collections.abc import Sequence
+from dataclasses import dataclass
+
+from sqlalchemy.exc import IntegrityError
 
 from ogx.core.access_control.datatypes import Action
 from ogx.core.datatypes import AccessRule
@@ -35,6 +40,9 @@ from ogx_api import (
 from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 logger = get_logger(name=__name__, category="openai_responses")
+
+MEMORY_RECORDS_TABLE = "memory_records"
+DEFAULT_MEMORY_VECTOR_STORES_TABLE = "default_memory_vector_stores"
 
 
 def _filter_message_include_fields(
@@ -113,6 +121,30 @@ class _OpenAIResponseObjectWithInputAndMessages(OpenAIResponseObjectWithInput):
     input_storage_mode: str | None = None
 
 
+@dataclass(frozen=True)
+class MemoryRecord:
+    """Current memory file mapping for one owner-scoped conversation."""
+
+    owner_id: str
+    conversation_id: str
+    vector_store_id: str
+    file_id: str
+    response_id: str
+    created_at: int
+    updated_at: int
+
+
+@dataclass(frozen=True)
+class DefaultMemoryVectorStoreRecord:
+    """Default memory vector store mapping for one memory namespace."""
+
+    namespace: str
+    vector_store_id: str | None
+    provider_id: str | None
+    created_at: int
+    updated_at: int
+
+
 class ResponsesStore:
     """Persistent store for OpenAI Responses API objects with SQL-backed storage."""
 
@@ -160,6 +192,30 @@ class ResponsesStore:
             {
                 "conversation_id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
                 "messages": ColumnType.JSON,
+            },
+        )
+        await self.sql_store.create_table(
+            MEMORY_RECORDS_TABLE,
+            {
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "owner_id": ColumnType.STRING,
+                "conversation_id": ColumnType.STRING,
+                "vector_store_id": ColumnType.STRING,
+                "file_id": ColumnType.STRING,
+                "response_id": ColumnType.STRING,
+                "created_at": ColumnType.INTEGER,
+                "updated_at": ColumnType.INTEGER,
+            },
+        )
+        await self.sql_store.create_table(
+            DEFAULT_MEMORY_VECTOR_STORES_TABLE,
+            {
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "namespace": ColumnType.STRING,
+                "vector_store_id": ColumnType.STRING,
+                "provider_id": ColumnType.STRING,
+                "created_at": ColumnType.INTEGER,
+                "updated_at": ColumnType.INTEGER,
             },
         )
 
@@ -512,10 +568,17 @@ class ResponsesStore:
         parent_response_id = parent_response.id
 
         # Use the underlying SQL store so children hidden by READ policy are still
-        # materialized before parent deletion.
+        # materialized before parent deletion. Tenant filter is still applied to
+        # prevent cross-tenant data leakage.
+        from ogx.core.request_headers import get_authenticated_user
+
+        current_user = get_authenticated_user()
+        tenant_where, tenant_params = self.sql_store._build_tenant_filter(current_user)
         rows = await self.sql_store.sql_store.fetch_all(
             table=self.reference.table_name,
             where={"previous_response_id": parent_response_id},
+            where_sql=tenant_where if tenant_where != "1=1" else None,
+            where_sql_params=tenant_params if tenant_params else None,
         )
 
         for row in rows.data:
@@ -544,7 +607,8 @@ class ResponsesStore:
                 child_data.pop("input_storage_mode", None)
 
             # This write is an internal side effect of deleting the parent response.
-            # It must not require UPDATE permission on child rows.
+            # It must not require UPDATE permission on child rows but is still
+            # scoped to the current tenant.
             await self.sql_store.sql_store.update(
                 self.reference.table_name,
                 data={
@@ -555,6 +619,8 @@ class ResponsesStore:
                     "response_object": child_data,
                 },
                 where={"id": child_response.id},
+                where_sql=tenant_where if tenant_where != "1=1" else None,
+                where_sql_params=tenant_params if tenant_params else None,
             )
 
     async def delete_response_object(self, response_id: str) -> OpenAIDeleteResponseObject:
@@ -733,3 +799,141 @@ class ResponsesStore:
 
         adapter = TypeAdapter(list[OpenAIMessageParam])
         return adapter.validate_python(record["messages"])
+
+    async def upsert_memory_record(
+        self,
+        owner_id: str,
+        conversation_id: str,
+        vector_store_id: str,
+        file_id: str,
+        response_id: str,
+    ) -> None:
+        record_id = _memory_record_id(owner_id, conversation_id, vector_store_id)
+        now = int(time.time())
+
+        await self.sql_store.upsert(
+            table=MEMORY_RECORDS_TABLE,
+            data={
+                "id": record_id,
+                "owner_id": owner_id,
+                "conversation_id": conversation_id,
+                "vector_store_id": vector_store_id,
+                "file_id": file_id,
+                "response_id": response_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+            conflict_columns=["id"],
+            update_columns=["file_id", "response_id", "updated_at"],
+        )
+
+    async def get_memory_record(
+        self,
+        owner_id: str,
+        conversation_id: str,
+        vector_store_id: str,
+    ) -> MemoryRecord | None:
+        record_id = _memory_record_id(owner_id, conversation_id, vector_store_id)
+        record = await self.sql_store.fetch_one(MEMORY_RECORDS_TABLE, where={"id": record_id})
+        if record is None:
+            return None
+        return MemoryRecord(
+            owner_id=record["owner_id"],
+            conversation_id=record["conversation_id"],
+            vector_store_id=record["vector_store_id"],
+            file_id=record["file_id"],
+            response_id=record["response_id"],
+            created_at=record["created_at"],
+            updated_at=record["updated_at"],
+        )
+
+    async def upsert_default_memory_vector_store(
+        self,
+        namespace: str,
+        vector_store_id: str,
+        provider_id: str | None,
+    ) -> None:
+        record_id = _default_memory_vector_store_record_id(namespace)
+        now = int(time.time())
+
+        await self.sql_store.upsert(
+            table=DEFAULT_MEMORY_VECTOR_STORES_TABLE,
+            data={
+                "id": record_id,
+                "namespace": namespace,
+                "vector_store_id": vector_store_id,
+                "provider_id": provider_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+            conflict_columns=["id"],
+            update_columns=["vector_store_id", "provider_id", "updated_at"],
+        )
+
+    async def claim_default_memory_vector_store(self, namespace: str) -> bool:
+        record_id = _default_memory_vector_store_record_id(namespace)
+        now = int(time.time())
+
+        try:
+            await self.sql_store.insert(
+                table=DEFAULT_MEMORY_VECTOR_STORES_TABLE,
+                data={
+                    "id": record_id,
+                    "namespace": namespace,
+                    "vector_store_id": None,
+                    "provider_id": None,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
+        except IntegrityError as exc:
+            error_message = str(exc.orig) if exc.orig else str(exc)
+            if _is_unique_constraint_error(error_message):
+                return False
+            raise
+
+        return True
+
+    async def delete_default_memory_vector_store_claim(self, namespace: str) -> None:
+        await self.sql_store.delete(
+            table=DEFAULT_MEMORY_VECTOR_STORES_TABLE,
+            where={"id": _default_memory_vector_store_record_id(namespace)},
+        )
+
+    async def get_default_memory_vector_store(
+        self,
+        namespace: str,
+    ) -> DefaultMemoryVectorStoreRecord | None:
+        record_id = _default_memory_vector_store_record_id(namespace)
+        record = await self.sql_store.fetch_one(DEFAULT_MEMORY_VECTOR_STORES_TABLE, where={"id": record_id})
+        if record is None:
+            return None
+        return DefaultMemoryVectorStoreRecord(
+            namespace=record["namespace"],
+            vector_store_id=record["vector_store_id"],
+            provider_id=record["provider_id"],
+            created_at=record["created_at"],
+            updated_at=record["updated_at"],
+        )
+
+
+def _memory_record_id(owner_id: str, conversation_id: str, vector_store_id: str) -> str:
+    key = "\0".join([owner_id, conversation_id, vector_store_id])
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def _default_memory_vector_store_record_id(namespace: str) -> str:
+    return namespace
+
+
+def _is_unique_constraint_error(error_message: str) -> bool:
+    error_lower = error_message.lower()
+    return any(
+        indicator in error_lower
+        for indicator in [
+            "unique constraint failed",
+            "duplicate key",
+            "unique violation",
+            "duplicate entry",
+        ]
+    )

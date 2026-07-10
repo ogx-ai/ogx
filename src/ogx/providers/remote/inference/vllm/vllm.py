@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 from collections.abc import AsyncIterator
 from functools import cache
+from typing import Any
 from urllib.parse import urljoin
 
 import httpx
@@ -16,6 +17,7 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
+from ogx.providers.utils.inference.anthropic_translation import parse_anthropic_sse_event
 from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
@@ -32,10 +34,20 @@ from ogx_api import (
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionWithReasoning,
+    OpenAIDeveloperMessageParam,
+    OpenAISystemMessageParam,
     RerankData,
     RerankResponse,
 )
 from ogx_api.inference import RerankRequest
+from ogx_api.messages.models import (
+    ANTHROPIC_VERSION,
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 from .config import VLLMInferenceAdapterConfig
 
@@ -60,6 +72,20 @@ def _models_dev_index() -> dict[str, _models_dev.Model]:
 
 def _lookup_models_dev(identifier: str) -> _models_dev.Model | None:
     return _models_dev_index().get(identifier)
+
+
+def _convert_developer_messages(messages: list[Any]) -> list[Any]:
+    converted_messages: list[Any] = []
+    for message in messages:
+        if isinstance(message, OpenAIDeveloperMessageParam):
+            converted_messages.append(OpenAISystemMessageParam(content=message.content, name=message.name))
+        elif isinstance(message, dict) and message.get("role") == "developer":
+            converted_message = message.copy()
+            converted_message["role"] = "system"
+            converted_messages.append(converted_message)
+        else:
+            converted_messages.append(message)
+    return converted_messages
 
 
 class VLLMInferenceAdapter(OpenAIMixin):
@@ -150,6 +176,8 @@ class VLLMInferenceAdapter(OpenAIMixin):
         if params.max_tokens is None and self.config.max_tokens:
             params.max_tokens = self.config.max_tokens
 
+        params.messages = _convert_developer_messages(params.messages)
+
         return await super().openai_chat_completion(params)
 
     def _prepare_reasoning_params(self, params: OpenAIChatCompletionRequestWithExtraBody) -> None:
@@ -204,6 +232,72 @@ class VLLMInferenceAdapter(OpenAIMixin):
                 )
 
         return _wrap_chunks()
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Handle Anthropic Messages via native /v1/messages endpoint."""
+        import json
+
+        url = f"{self.get_base_url()}/v1/messages"
+        body = params.model_dump(exclude_none=True)
+        body["model"] = params.model
+        headers = {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+        }
+
+        api_key = self._get_api_key_from_config_or_provider_data()
+        if api_key and api_key != "NO KEY REQUIRED":
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        if params.stream:
+
+            async def _stream() -> AsyncIterator[AnthropicStreamEvent]:
+                async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+                    async with client.stream("POST", url, json=body, headers=headers, timeout=300) as resp:
+                        resp.raise_for_status()
+                        event_type: str | None = None
+                        async for line in resp.aiter_lines():
+                            line = line.strip()
+                            if line.startswith("event: "):
+                                event_type = line[7:]
+                            elif line.startswith("data: ") and event_type:
+                                data = json.loads(line[6:])
+                                event = parse_anthropic_sse_event(event_type, data)
+                                if event:
+                                    yield event
+                                event_type = None
+
+            return _stream()
+
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            resp = await client.post(url, json=body, headers=headers, timeout=300)
+            resp.raise_for_status()
+            return AnthropicMessageResponse(**resp.json())
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        """Forward count_tokens to vLLM's /v1/messages/count_tokens endpoint."""
+        url = f"{self.get_base_url()}/v1/messages/count_tokens"
+        body = params.model_dump(exclude_none=True)
+        body["model"] = params.model
+        headers = {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+        }
+
+        api_key = self._get_api_key_from_config_or_provider_data()
+        if api_key and api_key != "NO KEY REQUIRED":
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            resp = await client.post(url, json=body, headers=headers, timeout=30)
+            resp.raise_for_status()
+            return AnthropicCountTokensResponse(**resp.json())
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # vLLM's /v1/models response does not expose a model task/type field,

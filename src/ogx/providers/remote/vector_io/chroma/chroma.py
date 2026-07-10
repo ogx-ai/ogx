@@ -83,7 +83,9 @@ class ChromaIndex(EmbeddingIndex):
 
         ids = [f"{c.metadata.get('document_id', '')}:{c.chunk_id}" for c in chunks]
         await maybe_await(
-            self.collection.add(documents=[chunk.model_dump_json() for chunk in chunks], embeddings=embeddings, ids=ids)
+            self.collection.upsert(
+                documents=[chunk.model_dump_json() for chunk in chunks], embeddings=embeddings, ids=ids
+            )
         )
 
     async def query_vector(

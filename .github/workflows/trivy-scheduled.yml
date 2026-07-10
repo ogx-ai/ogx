@@ -1,0 +1,101 @@
+name: Trivy Scheduled Security Scan
+
+on:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  repo-scan:
+    name: Repository scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'vuln'
+          format: 'sarif'
+          output: 'trivy-scheduled-vuln.sarif'
+          exit-code: '0'
+          trivy-config: 'trivy.yaml'
+
+      - name: Upload vulnerability results to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-scheduled-vuln.sarif'
+          category: 'trivy-scheduled-vuln'
+
+      - name: Run Trivy secret scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'secret'
+          format: 'sarif'
+          output: 'trivy-scheduled-secret.sarif'
+          exit-code: '0'
+
+      - name: Upload secret results to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-scheduled-secret.sarif'
+          category: 'trivy-scheduled-secret'
+
+      - name: Run Trivy misconfiguration scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          scanners: 'misconfig'
+          format: 'sarif'
+          output: 'trivy-scheduled-misconfig.sarif'
+          exit-code: '0'
+
+      - name: Upload misconfiguration results to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-scheduled-misconfig.sarif'
+          category: 'trivy-scheduled-misconfig'
+
+  image-scan:
+    name: Scan ${{ matrix.distro }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - starter
+          - postgres-demo
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Scan published image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'ogxai/distribution-${{ matrix.distro }}:latest'
+          scan-type: 'image'
+          scanners: 'vuln'
+          format: 'sarif'
+          output: 'trivy-image-${{ matrix.distro }}.sarif'
+          exit-code: '0'
+          trivy-config: 'trivy.yaml'
+
+      - name: Upload image scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image-${{ matrix.distro }}.sarif'
+          category: 'trivy-scheduled-image-${{ matrix.distro }}'

@@ -16,6 +16,7 @@ from ogx.core.datatypes import (
     RerankerModel,
     VectorStoresConfig,
 )
+from ogx.core.storage.datatypes import ResponsesStoreReference
 from ogx.core.storage.kvstore.config import PostgresKVStoreConfig
 from ogx.core.storage.sqlstore.sqlstore import PostgresSqlStoreConfig
 from ogx.core.utils.dynamic import instantiate_class_type
@@ -24,9 +25,6 @@ from ogx.providers.inline.file_processor.auto.config import AutoFileProcessorCon
 from ogx.providers.inline.files.localfs.config import LocalfsFilesImplConfig
 from ogx.providers.inline.inference.sentence_transformers import (
     SentenceTransformersInferenceConfig,
-)
-from ogx.providers.inline.inference.transformers.config import (
-    TransformersInferenceConfig,
 )
 from ogx.providers.inline.skills.builtin.config import BuiltinSkillsConfig
 from ogx.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
@@ -134,7 +132,6 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "inference": [BuildProvider(provider_type=p.provider_type, module=p.module) for p in remote_inference_providers]
         + [
             BuildProvider(provider_type="inline::sentence-transformers"),
-            BuildProvider(provider_type="inline::transformers"),
         ],
         "vector_io": [
             BuildProvider(provider_type="inline::faiss"),
@@ -173,17 +170,27 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
     embedding_provider = Provider(
         provider_id="sentence-transformers",
         provider_type="inline::sentence-transformers",
-        config=SentenceTransformersInferenceConfig.sample_run_config(),
+        config=SentenceTransformersInferenceConfig(trust_remote_code=True).model_dump(),
     )
-    reranker_provider = Provider(
-        provider_id="transformers",
-        provider_type="inline::transformers",
-        config=TransformersInferenceConfig.sample_run_config(),
+    responses_provider = Provider(
+        provider_id="builtin",
+        provider_type="inline::builtin",
+        config={
+            "persistence": {
+                "responses": ResponsesStoreReference(
+                    backend="sql_default",
+                    table_name="responses",
+                ).model_dump(exclude_none=True),
+            },
+            "memory_config": {
+                "default_vector_store_provider_id": "sqlite-vec",
+            },
+        },
     )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
     default_overrides = {
-        "inference": remote_inference_providers + [embedding_provider, reranker_provider],
+        "inference": remote_inference_providers + [embedding_provider],
         "vector_io": [
             Provider(
                 provider_id="faiss",
@@ -249,6 +256,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 config=InfinispanVectorIOConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
         ],
+        "responses": [responses_provider],
         "files": [files_provider],
         "skills": [
             Provider(
@@ -321,7 +329,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 model_id="nomic-ai/nomic-embed-text-v1.5",
             ),
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         ),

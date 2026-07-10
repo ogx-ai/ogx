@@ -18,9 +18,6 @@ providers:
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config: {}
-  - provider_id: transformers
-    provider_type: inline::transformers
-    config: {}
   vector_io:
   - provider_id: ${env.ENABLE_CHROMADB:+chromadb}
     provider_type: remote::chromadb
@@ -126,5 +123,5 @@ vector_stores:
     provider_id: sentence-transformers
     model_id: nomic-ai/nomic-embed-text-v1.5
   default_reranker_model:
-    provider_id: transformers
+    provider_id: sentence-transformers
     model_id: Qwen/Qwen3-Reranker-0.6B
