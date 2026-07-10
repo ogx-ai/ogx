@@ -433,32 +433,31 @@ class OpenAIResponsesImpl:
             or (memory is not None and not memory.enabled)
             or response_status != "completed"
             or not conversation_id
-            or not (
-                memory.vector_store_id
-                if memory and memory.vector_store_id
-                else self.memory_config.default_vector_store_id
-            )
         ):
             return
 
         vector_store_id = (
             memory.vector_store_id if memory and memory.vector_store_id else self.memory_config.default_vector_store_id
         )
-        assert vector_store_id is not None
+        if vector_store_id is None and not self.memory_config.auto_create_default_vector_store:
+            return
+        memory_write_vector_store_key = vector_store_id or "__default__"
         owner_id = resolve_memory_owner_id(memory, metadata, safety_identifier)
         if not owner_id:
             logger.debug("Skipping memory write", reason="missing owner")
             return
 
-        memory_write_key = (owner_id, conversation_id, vector_store_id)
+        memory_write_key = (owner_id, conversation_id, memory_write_vector_store_key)
         previous_task = self._memory_write_tasks.get(memory_write_key)
         if previous_task is not None and not previous_task.done():
             if memory_write_key not in self._active_memory_write_keys:
                 previous_task.cancel()
 
+        request_context = capture_request_context()
         task = create_detached_background_task(
             self._write_conversation_memory_after_delay(
                 memory_write_key=memory_write_key,
+                request_context=request_context,
                 owner_id=owner_id,
                 conversation_id=conversation_id,
                 response_id=response_id,
@@ -474,6 +473,7 @@ class OpenAIResponsesImpl:
     async def _write_conversation_memory_after_delay(
         self,
         memory_write_key: tuple[str, str, str],
+        request_context: RequestContext,
         owner_id: str,
         conversation_id: str,
         response_id: str,
@@ -484,23 +484,24 @@ class OpenAIResponsesImpl:
         safety_identifier: str | None,
     ) -> None:
         try:
-            if self.memory_config.write_debounce_seconds > 0:
-                await asyncio.sleep(self.memory_config.write_debounce_seconds)
-            async with self._get_memory_write_lock(memory_write_key):
-                self._active_memory_write_keys.add(memory_write_key)
-                try:
-                    await self._write_conversation_memory_safe(
-                        conversation_id=conversation_id,
-                        response_id=response_id,
-                        response_status=response_status,
-                        model=model,
-                        memory=memory,
-                        metadata=metadata,
-                        safety_identifier=safety_identifier,
-                        owner_id=owner_id,
-                    )
-                finally:
-                    self._active_memory_write_keys.discard(memory_write_key)
+            with activate_request_context(request_context):
+                if self.memory_config.write_debounce_seconds > 0:
+                    await asyncio.sleep(self.memory_config.write_debounce_seconds)
+                async with self._get_memory_write_lock(memory_write_key):
+                    self._active_memory_write_keys.add(memory_write_key)
+                    try:
+                        await self._write_conversation_memory_safe(
+                            conversation_id=conversation_id,
+                            response_id=response_id,
+                            response_status=response_status,
+                            model=model,
+                            memory=memory,
+                            metadata=metadata,
+                            safety_identifier=safety_identifier,
+                            owner_id=owner_id,
+                        )
+                    finally:
+                        self._active_memory_write_keys.discard(memory_write_key)
         except asyncio.CancelledError:
             raise
         finally:
@@ -926,7 +927,9 @@ class OpenAIResponsesImpl:
 
         # Filter out unsupported include items instead of rejecting the request
         if request.include:
-            request.include = [item for item in request.include if str(item) != "reasoning.encrypted_content"]
+            include = [item for item in request.include if str(item) != "reasoning.encrypted_content"]
+            if include != request.include:
+                request = request.model_copy(update={"include": include})
 
         # Validate MCP tools: ensure Authorization header is not passed via headers dict
         if request.tools:
@@ -1067,6 +1070,7 @@ class OpenAIResponsesImpl:
             previous_response_id=request.previous_response_id,
             prompt=request.prompt,
             temperature=request.temperature,
+            top_p=request.top_p,
             text=request.text if request.text else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
             tools=[],  # Will be populated when processing completes
             tool_choice=request.tool_choice,
@@ -1074,6 +1078,8 @@ class OpenAIResponsesImpl:
             skills=request.skills,
             max_tool_calls=request.max_tool_calls,
             reasoning=request.reasoning,
+            prompt_cache_key=request.prompt_cache_key,
+            top_logprobs=request.top_logprobs,
             metadata=request.metadata,
             safety_identifier=request.safety_identifier,
             store=request.store if request.store is not None else True,
@@ -1102,6 +1108,7 @@ class OpenAIResponsesImpl:
                         conversation=request.conversation,
                         store=request.store,
                         temperature=request.temperature,
+                        top_p=request.top_p,
                         frequency_penalty=request.frequency_penalty,
                         text=request.text,
                         tool_choice=request.tool_choice,
@@ -1113,10 +1120,12 @@ class OpenAIResponsesImpl:
                         max_tool_calls=request.max_tool_calls,
                         reasoning=request.reasoning,
                         max_output_tokens=request.max_output_tokens,
+                        prompt_cache_key=request.prompt_cache_key,
                         service_tier=request.service_tier,
                         metadata=request.metadata,
                         safety_identifier=request.safety_identifier,
                         truncation=request.truncation,
+                        top_logprobs=request.top_logprobs,
                         presence_penalty=request.presence_penalty,
                         context_management=request.context_management,
                         memory=request.memory,
@@ -1143,6 +1152,7 @@ class OpenAIResponsesImpl:
         conversation: str | None = None,
         store: bool | None = True,
         temperature: float | None = None,
+        top_p: float | None = None,
         frequency_penalty: float | None = None,
         text: OpenAIResponseText | None = None,
         tool_choice: OpenAIResponseInputToolChoice | None = None,
@@ -1154,10 +1164,12 @@ class OpenAIResponsesImpl:
         max_tool_calls: int | None = None,
         reasoning: OpenAIResponseReasoning | None = None,
         max_output_tokens: int | None = None,
+        prompt_cache_key: str | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
         safety_identifier: str | None = None,
         truncation: ResponseTruncation | None = None,
+        top_logprobs: int | None = None,
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         context_management: list | None = None,
@@ -1186,6 +1198,7 @@ class OpenAIResponsesImpl:
             previous_response_id=previous_response_id,
             store=store if store is not None else True,
             temperature=temperature,
+            top_p=top_p,
             frequency_penalty=frequency_penalty,
             text=text,
             tools=tools,
@@ -1196,11 +1209,13 @@ class OpenAIResponsesImpl:
             max_tool_calls=max_tool_calls,
             reasoning=reasoning,
             max_output_tokens=max_output_tokens,
+            prompt_cache_key=prompt_cache_key,
             service_tier=service_tier,
             metadata=metadata,
             safety_identifier=safety_identifier,
             include=include,
             truncation=truncation,
+            top_logprobs=top_logprobs,
             response_id=response_id,
             presence_penalty=presence_penalty,
             extra_body=extra_body,
@@ -1281,8 +1296,7 @@ class OpenAIResponsesImpl:
         )
 
         # Inherit skills from previous response if not explicitly provided
-        if request.skills is None and inherited_skills:
-            request.skills = inherited_skills
+        effective_skills = request.skills if request.skills is not None else inherited_skills
 
         # Auto-compact if context_management is configured (runs on resolved history, not just new input)
         compacted_history_applied = False
@@ -1299,10 +1313,10 @@ class OpenAIResponsesImpl:
             messages.insert(0, OpenAISystemMessageParam(content=request.instructions))
 
         # Inject skill instructions after user instructions
-        if request.skills:
+        if effective_skills:
             if not self.skills_api:
                 raise ServiceNotEnabledError("skills")
-            skill_messages = await self._resolve_skill_instructions(request.skills)
+            skill_messages = await self._resolve_skill_instructions(effective_skills)
             insert_idx = 1 if request.instructions else 0
             for i, msg in enumerate(skill_messages):
                 messages.insert(insert_idx + i, msg)
@@ -1312,6 +1326,7 @@ class OpenAIResponsesImpl:
 
         memory_context = await resolve_memory_context(
             vector_io_api=self.vector_io_api,
+            responses_store=self.responses_store,
             memory_config=self.memory_config,
             request_memory=request.memory,
             input=request.input,
@@ -1362,7 +1377,7 @@ class OpenAIResponsesImpl:
                 prompt=request.prompt,
                 prompt_cache_key=request.prompt_cache_key,
                 previous_response_id=request.previous_response_id,
-                skills=request.skills,
+                skills=effective_skills,
                 text=text,
                 max_infer_iters=request.max_infer_iters,
                 parallel_tool_calls=request.parallel_tool_calls,

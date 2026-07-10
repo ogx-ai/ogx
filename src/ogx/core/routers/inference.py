@@ -62,6 +62,13 @@ from ogx_api import (
     RoutingTable,
 )
 from ogx_api.inference.models import RerankRequest
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 logger = get_logger(name=__name__, category="core::routers")
 
@@ -331,6 +338,22 @@ class InferenceRouter(Inference):
         response = await provider.openai_embeddings(params)
         response.model = request_model_id
         return response
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_messages(params)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_count_tokens(params)
 
     async def list_chat_completions(
         self,

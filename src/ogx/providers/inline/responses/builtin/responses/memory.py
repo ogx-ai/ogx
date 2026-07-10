@@ -4,14 +4,18 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import io
 import time
+from contextlib import AbstractContextManager, nullcontext
+from dataclasses import dataclass
 from html import escape
 from typing import Any
 
 from fastapi import UploadFile
 
-from ogx.core.request_headers import get_authenticated_user
+from ogx.core.datatypes import User
+from ogx.core.request_headers import PROVIDER_DATA_VAR, RequestProviderDataContext, get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.config import MemoryConfig
 from ogx.providers.utils.responses.responses_store import ResponsesStore
@@ -19,6 +23,7 @@ from ogx_api import (
     DeleteFileRequest,
     Files,
     Inference,
+    OpenAICreateVectorStoreRequestWithExtraBody,
     OpenAIFileUploadPurpose,
     OpenAIMessageParam,
     OpenAIResponseInput,
@@ -37,6 +42,18 @@ from .utils import APPROX_CHARS_PER_TOKEN
 logger = get_logger(name=__name__, category="openai_responses::memory")
 
 _TRUNCATION_SUFFIX = "[truncated]"
+_DEFAULT_MEMORY_VECTOR_STORE_LOCKS: dict[str, asyncio.Lock] = {}
+_DEFAULT_MEMORY_VECTOR_STORE_WAIT_ATTEMPTS = 100
+_DEFAULT_MEMORY_VECTOR_STORE_WAIT_SECONDS = 0.05
+_DEFAULT_MEMORY_VECTOR_STORE_STALE_CLAIM_SECONDS = 300
+
+
+@dataclass(frozen=True)
+class MemoryVectorStoreReference:
+    """Resolved memory vector store and whether it is an internal backing store."""
+
+    vector_store_id: str
+    internal: bool
 
 
 def extract_memory_query(input: str | list[OpenAIResponseInput]) -> str | None:
@@ -80,22 +97,11 @@ async def resolve_memory_context(
     input: str | list[OpenAIResponseInput],
     metadata: dict[str, str] | None,
     safety_identifier: str | None,
+    responses_store: ResponsesStore | None = None,
 ) -> str | None:
     if not memory_config.enabled:
         return None
-    if request_memory is None:
-        logger.debug("Skipping memory retrieval", reason="missing request opt-in")
-        return None
-    if not request_memory.enabled:
-        return None
-
-    vector_store_id = (
-        request_memory.vector_store_id
-        if request_memory.vector_store_id is not None
-        else memory_config.default_vector_store_id
-    )
-    if not vector_store_id:
-        logger.debug("Skipping memory retrieval", reason="missing vector store")
+    if request_memory is not None and not request_memory.enabled:
         return None
 
     owner_id = resolve_memory_owner_id(request_memory, metadata, safety_identifier)
@@ -103,37 +109,52 @@ async def resolve_memory_context(
         logger.debug("Skipping memory retrieval", reason="missing owner")
         return None
 
-    filters = build_memory_filters(memory_config, owner_id, request_memory.filters)
+    vector_store = await resolve_memory_vector_store(
+        vector_io_api=vector_io_api,
+        responses_store=responses_store,
+        memory_config=memory_config,
+        request_memory=request_memory,
+        owner_id=owner_id,
+    )
+    if vector_store is None:
+        logger.debug("Skipping memory retrieval", reason="missing vector store")
+        return None
+
+    request_filters = request_memory.filters if request_memory is not None else None
+    filters = build_memory_filters(memory_config, owner_id, request_filters)
     max_num_results = (
-        request_memory.max_num_results if request_memory.max_num_results is not None else memory_config.max_num_results
+        request_memory.max_num_results
+        if request_memory is not None and request_memory.max_num_results is not None
+        else memory_config.max_num_results
     )
     max_context_tokens = (
         request_memory.max_context_tokens
-        if request_memory.max_context_tokens is not None
+        if request_memory is not None and request_memory.max_context_tokens is not None
         else memory_config.max_context_tokens
     )
-    ranking_options = request_memory.ranking_options
+    ranking_options = request_memory.ranking_options if request_memory is not None else None
     query = extract_memory_query(input)
     if query is None:
         logger.debug("Skipping memory retrieval", reason="missing query text")
         return None
 
     try:
-        search_response = await vector_io_api.openai_search_vector_store(
-            vector_store_id=vector_store_id,
-            request=OpenAISearchVectorStoreRequest(
-                query=query,
-                filters=filters,
-                max_num_results=max_num_results,
-                ranking_options=ranking_options,
-                rewrite_query=False,
-                search_mode="hybrid",
-            ),
-        )
+        with _memory_access_context(memory_config, vector_store.internal):
+            search_response = await vector_io_api.openai_search_vector_store(
+                vector_store_id=vector_store.vector_store_id,
+                request=OpenAISearchVectorStoreRequest(
+                    query=query,
+                    filters=filters,
+                    max_num_results=max_num_results,
+                    ranking_options=ranking_options,
+                    rewrite_query=False,
+                    search_mode="hybrid",
+                ),
+            )
     except VectorStoreNotFoundError as exc:
         logger.warning(
             "Failed to retrieve memory context because vector store was not found",
-            vector_store_id=vector_store_id,
+            vector_store_id=vector_store.vector_store_id,
             error=str(exc),
         )
         return None
@@ -146,6 +167,172 @@ async def resolve_memory_context(
         results=search_response.data,
         max_context_tokens=max_context_tokens,
     )
+
+
+async def resolve_memory_vector_store_id(
+    vector_io_api: VectorIO,
+    responses_store: ResponsesStore | None,
+    memory_config: MemoryConfig,
+    request_memory: MemoryToolConfig | None,
+    owner_id: str,
+) -> str | None:
+    vector_store = await resolve_memory_vector_store(
+        vector_io_api=vector_io_api,
+        responses_store=responses_store,
+        memory_config=memory_config,
+        request_memory=request_memory,
+        owner_id=owner_id,
+    )
+    return vector_store.vector_store_id if vector_store is not None else None
+
+
+async def resolve_memory_vector_store(
+    vector_io_api: VectorIO,
+    responses_store: ResponsesStore | None,
+    memory_config: MemoryConfig,
+    request_memory: MemoryToolConfig | None,
+    owner_id: str,
+) -> MemoryVectorStoreReference | None:
+    if request_memory is not None and request_memory.vector_store_id:
+        return MemoryVectorStoreReference(vector_store_id=request_memory.vector_store_id, internal=False)
+    if memory_config.default_vector_store_id:
+        return MemoryVectorStoreReference(vector_store_id=memory_config.default_vector_store_id, internal=True)
+    if not memory_config.auto_create_default_vector_store:
+        return None
+    if responses_store is None:
+        logger.debug("Skipping default memory vector store creation", reason="missing responses store")
+        return None
+
+    namespace = memory_config.default_vector_store_namespace
+    with _memory_admin_context(memory_config):
+        existing = await responses_store.get_default_memory_vector_store(
+            namespace=namespace,
+        )
+    if existing is not None and existing.vector_store_id is not None:
+        return MemoryVectorStoreReference(vector_store_id=existing.vector_store_id, internal=True)
+
+    async with _default_memory_vector_store_lock(namespace):
+        with _memory_admin_context(memory_config):
+            existing = await responses_store.get_default_memory_vector_store(
+                namespace=namespace,
+            )
+        if existing is not None and existing.vector_store_id is not None:
+            return MemoryVectorStoreReference(vector_store_id=existing.vector_store_id, internal=True)
+        if _is_stale_default_memory_vector_store_claim(existing):
+            with _memory_admin_context(memory_config):
+                await responses_store.delete_default_memory_vector_store_claim(namespace=namespace)
+
+        with _memory_admin_context(memory_config):
+            claimed = await responses_store.claim_default_memory_vector_store(namespace=namespace)
+        if not claimed:
+            return await _wait_for_default_memory_vector_store(
+                vector_io_api=vector_io_api,
+                responses_store=responses_store,
+                memory_config=memory_config,
+                namespace=namespace,
+            )
+
+        return await _create_default_memory_vector_store(
+            vector_io_api=vector_io_api,
+            responses_store=responses_store,
+            memory_config=memory_config,
+            namespace=namespace,
+        )
+
+
+async def _create_default_memory_vector_store(
+    vector_io_api: VectorIO,
+    responses_store: ResponsesStore,
+    memory_config: MemoryConfig,
+    namespace: str,
+) -> MemoryVectorStoreReference:
+    try:
+        with _memory_admin_context(memory_config):
+            vector_store = await vector_io_api.openai_create_vector_store(
+                OpenAICreateVectorStoreRequestWithExtraBody.model_validate(
+                    {
+                        "name": f"ogx-memory-{namespace}",
+                        "metadata": {
+                            "ogx_memory_store": True,
+                            "ogx_memory_namespace": namespace,
+                        },
+                        "provider_id": memory_config.default_vector_store_provider_id,
+                    }
+                )
+            )
+
+        provider_id = memory_config.default_vector_store_provider_id
+        vector_store_metadata = getattr(vector_store, "metadata", None)
+        if isinstance(vector_store_metadata, dict):
+            provider_id_value = vector_store_metadata.get("provider_id")
+            if isinstance(provider_id_value, str):
+                provider_id = provider_id_value
+
+        with _memory_admin_context(memory_config):
+            await responses_store.upsert_default_memory_vector_store(
+                namespace=namespace,
+                vector_store_id=vector_store.id,
+                provider_id=provider_id,
+            )
+    except Exception:
+        with _memory_admin_context(memory_config):
+            await responses_store.delete_default_memory_vector_store_claim(namespace=namespace)
+        raise
+    return MemoryVectorStoreReference(vector_store_id=vector_store.id, internal=True)
+
+
+def _is_stale_default_memory_vector_store_claim(record: Any | None) -> bool:
+    if record is None or getattr(record, "vector_store_id", None) is not None:
+        return False
+
+    updated_at = getattr(record, "updated_at", None)
+    if not isinstance(updated_at, int | float):
+        return False
+    return time.time() - updated_at >= _DEFAULT_MEMORY_VECTOR_STORE_STALE_CLAIM_SECONDS
+
+
+async def _wait_for_default_memory_vector_store(
+    vector_io_api: VectorIO,
+    responses_store: ResponsesStore,
+    memory_config: MemoryConfig,
+    namespace: str,
+) -> MemoryVectorStoreReference | None:
+    for _ in range(_DEFAULT_MEMORY_VECTOR_STORE_WAIT_ATTEMPTS):
+        await asyncio.sleep(_DEFAULT_MEMORY_VECTOR_STORE_WAIT_SECONDS)
+        with _memory_admin_context(memory_config):
+            existing = await responses_store.get_default_memory_vector_store(namespace=namespace)
+        if existing is not None and existing.vector_store_id is not None:
+            return MemoryVectorStoreReference(vector_store_id=existing.vector_store_id, internal=True)
+        if _is_stale_default_memory_vector_store_claim(existing):
+            with _memory_admin_context(memory_config):
+                await responses_store.delete_default_memory_vector_store_claim(namespace=namespace)
+                claimed = await responses_store.claim_default_memory_vector_store(namespace=namespace)
+            if claimed:
+                return await _create_default_memory_vector_store(
+                    vector_io_api=vector_io_api,
+                    responses_store=responses_store,
+                    memory_config=memory_config,
+                    namespace=namespace,
+                )
+            logger.warning(
+                "Failed to recover stale default memory vector store claim",
+                namespace=namespace,
+            )
+            return None
+
+    logger.warning(
+        "Failed to resolve default memory vector store before timeout",
+        namespace=namespace,
+    )
+    return None
+
+
+def _default_memory_vector_store_lock(namespace: str) -> asyncio.Lock:
+    lock = _DEFAULT_MEMORY_VECTOR_STORE_LOCKS.get(namespace)
+    if lock is None:
+        lock = asyncio.Lock()
+        _DEFAULT_MEMORY_VECTOR_STORE_LOCKS[namespace] = lock
+    return lock
 
 
 async def write_conversation_memory(
@@ -173,18 +360,20 @@ async def write_conversation_memory(
     if request_memory is not None and not request_memory.enabled:
         return
 
-    vector_store_id = (
-        request_memory.vector_store_id
-        if request_memory is not None and request_memory.vector_store_id is not None
-        else memory_config.default_vector_store_id
-    )
-    if not vector_store_id:
-        logger.debug("Skipping memory write", reason="missing vector store")
-        return
-
     owner_id = _normalize_owner_id(owner_id) or resolve_memory_owner_id(request_memory, metadata, safety_identifier)
     if not owner_id:
         logger.debug("Skipping memory write", reason="missing owner")
+        return
+
+    vector_store = await resolve_memory_vector_store(
+        vector_io_api=vector_io_api,
+        responses_store=responses_store,
+        memory_config=memory_config,
+        request_memory=request_memory,
+        owner_id=owner_id,
+    )
+    if vector_store is None:
+        logger.debug("Skipping memory write", reason="missing vector store")
         return
 
     summarization_model = memory_config.summarization_model or model
@@ -201,11 +390,12 @@ async def write_conversation_memory(
     if not messages:
         logger.debug("Skipping memory write without conversation messages", conversation_id=conversation_id)
         return
+    bounded_messages = _limit_memory_summary_messages(messages, memory_config.max_summary_messages)
 
     summary_text = await _generate_memory_summary(
         inference_api=inference_api,
         model=summarization_model,
-        messages=messages,
+        messages=bounded_messages,
         summarization_prompt=memory_config.summarization_prompt,
     )
     if not summary_text:
@@ -215,11 +405,12 @@ async def write_conversation_memory(
     created_at = int(time.time())
     markdown = _format_memory_markdown(
         summary_text=summary_text,
-        messages=messages,
+        messages=bounded_messages,
         owner_id=owner_id,
         conversation_id=conversation_id,
         response_id=response_id,
         created_at=created_at,
+        max_transcript_chars=memory_config.max_transcript_chars,
     )
     markdown_bytes = markdown.encode("utf-8")
     upload = UploadFile(
@@ -227,43 +418,45 @@ async def write_conversation_memory(
         filename=f"{conversation_id}.memory.md",
         size=len(markdown_bytes),
     )
-    uploaded_file = await files_api.openai_upload_file(
-        request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS),
-        file=upload,
-    )
+    with _memory_access_context(memory_config, vector_store.internal):
+        uploaded_file = await files_api.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFileUploadPurpose.ASSISTANTS),
+            file=upload,
+        )
 
-    attached_file = await vector_io_api.openai_attach_file_to_vector_store(
-        vector_store_id=vector_store_id,
-        request=OpenAIAttachFileRequest(
-            file_id=uploaded_file.id,
-            attributes={
-                memory_config.memory_metadata_key: True,
-                memory_config.owner_metadata_key: owner_id,
-                "conversation_id": conversation_id,
-                "response_id": response_id,
-                "created_at": float(created_at),
-            },
-        ),
-    )
+        attached_file = await vector_io_api.openai_attach_file_to_vector_store(
+            vector_store_id=vector_store.vector_store_id,
+            request=OpenAIAttachFileRequest(
+                file_id=uploaded_file.id,
+                attributes={
+                    memory_config.memory_metadata_key: True,
+                    memory_config.owner_metadata_key: owner_id,
+                    "conversation_id": conversation_id,
+                    "response_id": response_id,
+                    "created_at": float(created_at),
+                },
+            ),
+        )
     if getattr(attached_file, "status", None) == "failed":
         logger.warning(
             "Failed to write memory summary",
             reason="vector store attachment failed",
-            vector_store_id=vector_store_id,
+            vector_store_id=vector_store.vector_store_id,
             file_id=uploaded_file.id,
         )
-        await _delete_uploaded_memory_file(files_api=files_api, file_id=uploaded_file.id)
+        with _memory_access_context(memory_config, vector_store.internal):
+            await _delete_uploaded_memory_file(files_api=files_api, file_id=uploaded_file.id)
         return
 
     previous_record = await responses_store.get_memory_record(
         owner_id=owner_id,
         conversation_id=conversation_id,
-        vector_store_id=vector_store_id,
+        vector_store_id=vector_store.vector_store_id,
     )
     await responses_store.upsert_memory_record(
         owner_id=owner_id,
         conversation_id=conversation_id,
-        vector_store_id=vector_store_id,
+        vector_store_id=vector_store.vector_store_id,
         file_id=uploaded_file.id,
         response_id=response_id,
     )
@@ -272,8 +465,10 @@ async def write_conversation_memory(
         await _delete_previous_memory_file(
             files_api=files_api,
             vector_io_api=vector_io_api,
-            vector_store_id=vector_store_id,
+            vector_store_id=vector_store.vector_store_id,
             file_id=previous_record.file_id,
+            memory_config=memory_config,
+            use_admin_context=vector_store.internal,
         )
 
 
@@ -302,21 +497,24 @@ async def _delete_previous_memory_file(
     vector_io_api: VectorIO,
     vector_store_id: str,
     file_id: str,
+    memory_config: MemoryConfig,
+    use_admin_context: bool,
 ) -> None:
-    try:
-        await vector_io_api.openai_delete_vector_store_file(
-            vector_store_id=vector_store_id,
-            file_id=file_id,
-        )
-    except Exception as exc:
-        logger.warning(
-            "Failed to delete previous memory file from vector store",
-            vector_store_id=vector_store_id,
-            file_id=file_id,
-            error=str(exc),
-        )
+    with _memory_access_context(memory_config, use_admin_context):
+        try:
+            await vector_io_api.openai_delete_vector_store_file(
+                vector_store_id=vector_store_id,
+                file_id=file_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to delete previous memory file from vector store",
+                vector_store_id=vector_store_id,
+                file_id=file_id,
+                error=str(exc),
+            )
 
-    await _delete_uploaded_memory_file(files_api=files_api, file_id=file_id)
+        await _delete_uploaded_memory_file(files_api=files_api, file_id=file_id)
 
 
 async def _delete_uploaded_memory_file(files_api: Files, file_id: str) -> None:
@@ -335,6 +533,24 @@ def _normalize_owner_id(owner_id: str | None) -> str | None:
         return None
     owner_id = owner_id.strip()
     return owner_id or None
+
+
+def _memory_admin_context(memory_config: MemoryConfig) -> RequestProviderDataContext:
+    provider_data = PROVIDER_DATA_VAR.get()
+    copied_provider_data = dict(provider_data) if isinstance(provider_data, dict) else None
+    return RequestProviderDataContext(
+        provider_data=copied_provider_data,
+        user=User(
+            memory_config.default_vector_store_admin_principal,
+            memory_config.default_vector_store_admin_attributes,
+        ),
+    )
+
+
+def _memory_access_context(memory_config: MemoryConfig, use_admin_context: bool) -> AbstractContextManager[None]:
+    if use_admin_context:
+        return _memory_admin_context(memory_config)
+    return nullcontext()
 
 
 async def _generate_memory_summary(
@@ -360,6 +576,13 @@ async def _generate_memory_summary(
     return ""
 
 
+def _limit_memory_summary_messages(
+    messages: list[OpenAIMessageParam],
+    max_summary_messages: int,
+) -> list[OpenAIMessageParam]:
+    return messages[-max_summary_messages:]
+
+
 def _format_memory_markdown(
     summary_text: str,
     messages: list[OpenAIMessageParam],
@@ -367,8 +590,9 @@ def _format_memory_markdown(
     conversation_id: str,
     response_id: str,
     created_at: int,
+    max_transcript_chars: int,
 ) -> str:
-    transcript = _format_memory_transcript(messages)
+    transcript = _format_memory_transcript(messages, max_transcript_chars=max_transcript_chars)
     return (
         "# Conversation Memory\n\n"
         f"- owner_id: {owner_id}\n"
@@ -382,13 +606,13 @@ def _format_memory_markdown(
     )
 
 
-def _format_memory_transcript(messages: list[OpenAIMessageParam]) -> str:
+def _format_memory_transcript(messages: list[OpenAIMessageParam], max_transcript_chars: int) -> str:
     lines: list[str] = []
     for message in messages:
         text = _message_content_to_text(message.content).strip()
         if text:
             lines.append(f"- {message.role}: {text}")
-    return "\n".join(lines)
+    return _truncate_text("\n".join(lines), max_transcript_chars)
 
 
 def _message_content_to_text(content: Any) -> str:
@@ -427,6 +651,8 @@ def _format_memory_context(
     closing = "</memories>"
     snippets: list[str] = []
     used_chars = len(opening) + len(closing) + 1
+    if _estimate_tokens_for_chars(used_chars) > max_context_tokens:
+        return None
 
     for result in results:
         snippet = _format_memory_result(len(snippets) + 1, result)
@@ -476,6 +702,8 @@ def _estimate_tokens_for_chars(char_count: int) -> int:
 
 
 def _truncate_text(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
     if max_chars <= len(_TRUNCATION_SUFFIX):
         return _TRUNCATION_SUFFIX.strip()
     return text[: max_chars - len(_TRUNCATION_SUFFIX)].rstrip() + _TRUNCATION_SUFFIX

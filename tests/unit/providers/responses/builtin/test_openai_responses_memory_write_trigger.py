@@ -8,7 +8,7 @@ import asyncio
 from types import SimpleNamespace
 
 from ogx.core.datatypes import User
-from ogx.core.request_headers import RequestProviderDataContext
+from ogx.core.request_headers import RequestProviderDataContext, get_authenticated_user
 from ogx.providers.inline.responses.builtin.responses import openai_responses as openai_responses_module
 from ogx_api import ConversationItemList
 from ogx_api.responses.models import CreateResponseRequest, MemoryToolConfig
@@ -66,6 +66,44 @@ async def test_memory_write_trigger_schedules_for_completed_stored_conversation(
     assert recorded_calls[0]["conversation_id"] == conv_id
     assert recorded_calls[0]["response_status"] == "completed"
     assert recorded_calls[0]["request_memory"] == MemoryToolConfig(owner_id="user-123")
+
+
+async def test_memory_write_trigger_schedules_with_default_store_when_no_vector_store(
+    monkeypatch,
+    openai_responses_impl,
+):
+    recorded_calls = []
+
+    async def fake_write_conversation_memory(**kwargs):
+        recorded_calls.append(kwargs)
+
+    def fake_create_detached_background_task(coro):
+        return asyncio.create_task(coro)
+
+    monkeypatch.setattr(openai_responses_module, "write_conversation_memory", fake_write_conversation_memory)
+    monkeypatch.setattr(
+        openai_responses_module,
+        "create_detached_background_task",
+        fake_create_detached_background_task,
+    )
+    openai_responses_impl.memory_config.enabled = True
+    openai_responses_impl.memory_config.default_vector_store_id = None
+    openai_responses_impl.memory_config.write_debounce_seconds = 0
+
+    openai_responses_impl._schedule_memory_write(
+        conversation_id="conv_" + "j" * 48,
+        response_id="resp_default",
+        response_status="completed",
+        model="test-model",
+        memory=None,
+        metadata=None,
+        safety_identifier="user-123",
+    )
+    await asyncio.sleep(0)
+
+    assert len(recorded_calls) == 1
+    assert recorded_calls[0]["request_memory"] is None
+    assert recorded_calls[0]["owner_id"] == "user-123"
 
 
 async def test_memory_write_trigger_coalesces_pending_conversation_writes(
@@ -216,6 +254,39 @@ async def test_memory_write_trigger_captures_authenticated_owner_before_detachin
 
     assert len(recorded_calls) == 1
     assert recorded_calls[0]["owner_id"] == "auth-user"
+
+
+async def test_memory_write_trigger_restores_request_context_for_external_store_write(
+    monkeypatch,
+    openai_responses_impl,
+):
+    observed_users: list[User | None] = []
+
+    async def fake_write_conversation_memory(**kwargs):
+        observed_users.append(get_authenticated_user())
+
+    monkeypatch.setattr(openai_responses_module, "write_conversation_memory", fake_write_conversation_memory)
+    openai_responses_impl.memory_config.enabled = True
+    openai_responses_impl.memory_config.default_vector_store_id = None
+    openai_responses_impl.memory_config.write_debounce_seconds = 0
+
+    with RequestProviderDataContext(user=User("auth-user", {"roles": ["user"]})):
+        openai_responses_impl._schedule_memory_write(
+            conversation_id="conv_" + "k" * 48,
+            response_id="resp_auth_context",
+            response_status="completed",
+            model="test-model",
+            memory=MemoryToolConfig(vector_store_id="vs_external"),
+            metadata=None,
+            safety_identifier=None,
+        )
+
+    for _ in range(10):
+        if observed_users:
+            break
+        await asyncio.sleep(0)
+
+    assert observed_users == [User("auth-user", {"roles": ["user"]})]
 
 
 async def test_memory_write_trigger_skips_when_store_false(
