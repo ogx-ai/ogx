@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 STAINLESS_DIR := ../stainless
-PYTHON := uv run --no-project python
+PYTHON := uv run --no-project --with ruamel.yaml python
 # Auto-detect openapi-generator command (npm installs as openapi-generator-cli, brew as openapi-generator)
 OPENAPI_GENERATOR := $(shell command -v openapi-generator-cli 2>/dev/null || command -v openapi-generator 2>/dev/null || echo openapi-generator-cli)
 
