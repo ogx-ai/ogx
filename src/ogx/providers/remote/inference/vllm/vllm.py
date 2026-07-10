@@ -17,9 +17,7 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
-from ogx.providers.utils.inference.anthropic_translation import (
-    passthrough_anthropic_stream,
-)
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
@@ -253,14 +251,12 @@ class VLLMInferenceAdapter(OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         if params.stream:
-            client_kwargs = self._build_httpx_client_kwargs()
-
-            async def _stream_ctx():
-                async with httpx.AsyncClient(**client_kwargs) as client:
-                    async with client.stream("POST", url, json=body, headers=headers, timeout=300) as resp:
-                        return resp
-
-            return passthrough_anthropic_stream(_stream_ctx)
+            return passthrough_anthropic_stream(
+                url=url,
+                req_body=body,
+                headers=headers,
+                httpx_client_kwargs=self._build_httpx_client_kwargs(),
+            )
 
         async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
             resp = await client.post(url, json=body, headers=headers, timeout=300)

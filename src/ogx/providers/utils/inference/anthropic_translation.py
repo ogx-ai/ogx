@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import AbstractAsyncContextManager
+from collections.abc import AsyncIterator
 from typing import Any
+
+import httpx
 
 from ogx.log import get_logger
 from ogx_api import (
@@ -491,38 +492,46 @@ def parse_anthropic_sse_event(event_type: str, data: dict[str, Any]) -> Anthropi
     return None
 
 
-StreamResponseCtx = Callable[[], Awaitable[AbstractAsyncContextManager[Any]]]
+async def passthrough_anthropic_stream(
+    *,
+    url: str,
+    req_body: dict[str, Any],
+    headers: dict[str, str],
+    httpx_client_kwargs: dict[str, Any] | None = None,
+    timeout: float = 300.0,
+) -> AsyncIterator[AnthropicStreamEvent]:
+    """Yield SSE events from any Anthropic-compatible streaming provider.
 
-
-async def passthrough_anthropic_stream(event_stream_fn: StreamResponseCtx) -> AsyncIterator[AnthropicStreamEvent]:
-    """Stream SSE events from any Anthropic-compatible provider.
-
-    Parses raw SSE lines and converts them to ``AnthropicStreamEvent`` objects
-    via the existing :func:`parse_anthropic_sse_event` helper.
+    Creates an ``httpx.AsyncClient`` internally and manages the request/response
+    lifecycle.  The caller is responsible for providing correct ``url``,
+    ``req_body``, and ``headers`` (including authentication).
 
     Parameters
     ----------
-    event_stream_fn:
-        A zero-argument callable that returns an *awaitable* yielding an async
-        context manager wrapping an ``httpx.Response``.  Typical usage::
-
-            async def fn():
-                async with httpx.AsyncClient(timeout=300) as client:
-                    async with client.stream("POST", url, json=body) as resp:
-                        return resp
-            async for event in passthrough_anthropic_stream(fn): ...
+    url:
+        Target endpoint URL (e.g. ``https://ollama:11434/v1/messages``).
+    req_body:
+        JSON request body to send (typically ``request.model_dump(exclude_none=True)``).
+    headers:
+        HTTP request headers (content-type, anthropic-version, x-api-key, etc.).
+    httpx_client_kwargs:
+        Extra keyword arguments forwarded to ``httpx.AsyncClient`` constructor.
+        Used by providers like vLLM to inject TLS / proxy / network config.
+    timeout:
+        Default timeout for the client (seconds).
     """
-    response_ctx = await event_stream_fn()
-    async with response_ctx as resp:
-        resp.raise_for_status()
-        event_type: str | None = None
-        async for line in resp.aiter_lines():
-            line = line.strip()
-            if line.startswith("event: "):
-                event_type = line[7:]
-            elif line.startswith("data: ") and event_type:
-                data = json.loads(line[6:])
-                event = parse_anthropic_sse_event(event_type, data)
-                if event:
-                    yield event
-                event_type = None
+    client_kwargs = httpx_client_kwargs or {}
+    async with httpx.AsyncClient(timeout=timeout, **client_kwargs) as client:
+        async with client.stream("POST", url, json=req_body, headers=headers) as resp:
+            resp.raise_for_status()
+            event_type: str | None = None
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if line.startswith("event: "):
+                    event_type = line[7:]
+                elif line.startswith("data: ") and event_type:
+                    data = json.loads(line[6:])
+                    event = parse_anthropic_sse_event(event_type, data)
+                    if event:
+                        yield event
+                    event_type = None

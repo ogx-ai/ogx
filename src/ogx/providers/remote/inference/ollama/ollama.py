@@ -17,9 +17,7 @@ from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
 from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
-from ogx.providers.utils.inference.anthropic_translation import (
-    passthrough_anthropic_stream,
-)
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
     HealthResponse,
@@ -188,13 +186,11 @@ class OllamaInferenceAdapter(OpenAIMixin):
         body: dict[str, Any],
     ) -> AsyncIterator[AnthropicStreamEvent]:
         """Yield SSE events from an Anthropic-compatible provider via passthrough."""
-
-        async def _stream_ctx():
-            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-                async with client.stream("POST", url, json=body, headers=headers) as resp:
-                    return resp
-
-        async for event in passthrough_anthropic_stream(_stream_ctx):
+        async for event in passthrough_anthropic_stream(
+            url=url,
+            req_body=body,
+            headers=headers,
+        ):
             yield event
 
     async def anthropic_messages(
