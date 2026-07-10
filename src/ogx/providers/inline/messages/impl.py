@@ -435,6 +435,7 @@ class BuiltinMessagesImpl(Messages):
     _NATIVE_MESSAGES_MODULES = {
         "ogx.providers.remote.inference.ollama",
         "ogx.providers.remote.inference.vllm",
+        "ogx.providers.remote.inference.meta",
     }
 
     async def _get_passthrough_url(self, model: str) -> str | None:
