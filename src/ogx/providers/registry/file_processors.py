@@ -94,6 +94,7 @@ or `remote::docling-serve` instead.
             module="ogx.providers.inline.file_processor.docling",
             config_class="ogx.providers.inline.file_processor.docling.DoclingFileProcessorConfig",
             api_dependencies=[Api.files],
+            optional_api_dependencies=[Api.inference],
             description="""
 [Docling](https://github.com/docling-project/docling) is a layout-aware, structure-preserving
 document parser for OGX. Unlike simple text extraction, Docling understands document
@@ -106,6 +107,8 @@ preserves semantic boundaries. It supports PDF, DOCX, PPTX, HTML, and images.
 - **Layout preservation** — tables, lists, and nested structures are converted to Markdown
 - **Multi-format support** — PDF, DOCX, PPTX, HTML, and images
 - **Better RAG quality** — structured chunks with heading metadata produce more relevant retrieval results
+- **VLM-based processing** — optionally route Vision Language Model inference through the stack's model-serving
+  infrastructure for richer document understanding (layout analysis, OCR via vision models)
 
 ## Usage
 
@@ -125,6 +128,24 @@ file_processors:
     provider_type: inline::docling
     config: {}
 ```
+
+### Enabling VLM Processing
+
+To enable VLM-based document processing, set `vlm_model` to a vision model registered with the
+stack's inference API. The VLM pipeline routes inference through the stack's model-serving
+infrastructure — no separate GPU resources are needed for document processing.
+
+```yaml
+file_processors:
+  - provider_id: docling
+    provider_type: inline::docling
+    config:
+      vlm_model: granite-docling-258M
+      vlm_preset: granite_docling
+```
+
+When `vlm_model` is not set or no inference provider is available, the processor gracefully
+degrades to the standard non-VLM pipeline.
 
 ## Installation
 

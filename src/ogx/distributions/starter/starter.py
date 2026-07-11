@@ -72,6 +72,7 @@ ENABLED_INFERENCE_PROVIDERS = [
     "nvidia",
     "bedrock",
     "azure",
+    "meta",
 ]
 
 INFERENCE_PROVIDER_IDS = {
@@ -372,6 +373,10 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
             "GROQ_API_KEY": (
                 "",
                 "Groq API Key",
+            ),
+            "META_API_KEY": (
+                "",
+                "Meta AI API Key",
             ),
             "ANTHROPIC_API_KEY": (
                 "",
