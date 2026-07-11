@@ -4,15 +4,13 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import json
 from collections.abc import AsyncIterator
-from typing import Any
 
 import httpx
 
 from ogx.log import get_logger
 from ogx.providers.remote.inference.meta.config import MetaConfig
-from ogx.providers.utils.inference.anthropic_translation import parse_anthropic_sse_event
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api.messages.models import (
     ANTHROPIC_VERSION,
@@ -65,34 +63,12 @@ class MetaInferenceAdapter(OpenAIMixin):
         }
 
         if request.stream:
-            return self._passthrough_anthropic_stream(url, headers, body)
+            return passthrough_anthropic_stream(url=url, req_body=body, headers=headers)
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             resp = await client.post(url, json=body, headers=headers)
             resp.raise_for_status()
             return AnthropicMessageResponse(**resp.json())
-
-    async def _passthrough_anthropic_stream(
-        self,
-        url: str,
-        headers: dict[str, str],
-        body: dict[str, Any],
-    ) -> AsyncIterator[AnthropicStreamEvent]:
-        """Stream SSE events directly from Meta."""
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            async with client.stream("POST", url, json=body, headers=headers) as resp:
-                resp.raise_for_status()
-                event_type: str | None = None
-                async for line in resp.aiter_lines():
-                    line = line.strip()
-                    if line.startswith("event: "):
-                        event_type = line[7:]
-                    elif line.startswith("data: ") and event_type:
-                        data = json.loads(line[6:])
-                        event = parse_anthropic_sse_event(event_type, data)
-                        if event:
-                            yield event
-                        event_type = None
 
     async def anthropic_messages(
         self,
