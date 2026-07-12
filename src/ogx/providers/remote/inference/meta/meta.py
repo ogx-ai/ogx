@@ -11,6 +11,9 @@ import httpx
 from ogx.log import get_logger
 from ogx.providers.remote.inference.meta.config import MetaConfig
 from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
+from ogx.providers.utils.inference.http_client import (
+    build_network_client_kwargs as _build_network_client_kwargs,
+)
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api.messages.models import (
     ANTHROPIC_VERSION,
@@ -48,6 +51,13 @@ class MetaInferenceAdapter(OpenAIMixin):
             base_url = base_url[:-3]
         return base_url
 
+    def _build_httpx_client_kwargs(self) -> dict:
+        """Build httpx.AsyncClient kwargs that honour network/TLS configuration."""
+        kwargs = _build_network_client_kwargs(self.config.network)
+        if not kwargs:
+            kwargs["verify"] = self.shared_ssl_context
+        return kwargs
+
     async def _passthrough_anthropic_messages(
         self,
         request: AnthropicCreateMessageRequest,
@@ -63,9 +73,14 @@ class MetaInferenceAdapter(OpenAIMixin):
         }
 
         if request.stream:
-            return passthrough_anthropic_stream(url=url, req_body=body, headers=headers)
+            return passthrough_anthropic_stream(
+                url=url,
+                req_body=body,
+                headers=headers,
+                httpx_client_kwargs=self._build_httpx_client_kwargs(),
+            )
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0), **self._build_httpx_client_kwargs()) as client:
             resp = await client.post(url, json=body, headers=headers)
             resp.raise_for_status()
             return AnthropicMessageResponse(**resp.json())
@@ -91,7 +106,7 @@ class MetaInferenceAdapter(OpenAIMixin):
             "x-api-key": self._get_api_key_from_config_or_provider_data() or "no-key-required",
         }
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0), **self._build_httpx_client_kwargs()) as client:
             resp = await client.post(url, json=body, headers=headers)
             resp.raise_for_status()
             return AnthropicCountTokensResponse(**resp.json())
