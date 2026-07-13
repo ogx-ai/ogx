@@ -650,7 +650,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         self,
         params: AnthropicCountTokensRequest,
     ) -> AnthropicCountTokensResponse:
-        msg_request = AnthropicCreateMessageRequest.model_construct(
+        msg_request = AnthropicCreateMessageRequest(
             model=params.model,
             messages=params.messages,
             max_tokens=1,
