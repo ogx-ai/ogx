@@ -171,7 +171,9 @@ jobs:
       - name: Setup TypeScript client
         if: ${{ matrix.client == 'server' }}
         id: setup-ts-client
-        uses: llamastack/llama-stack/.github/actions/setup-typescript-client@2b0ece2628d4edc18912ffb7fbbb014da08a37ad
+        # Use the local action so the release branch pins the TypeScript client
+        # checkout to the matching release branch (still named llama-stack-client).
+        uses: ./.github/actions/setup-typescript-client
         with:
           client-version: ${{ matrix.client-version }}
 
