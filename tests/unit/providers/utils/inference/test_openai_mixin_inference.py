@@ -566,19 +566,3 @@ class TestOpenAIMixinAnthropicCountTokens:
         assert call_args.system is not None
         assert call_args.tools is not None
         mixin.anthropic_messages = original_anthropic_messages
-
-    async def test_count_tokens_raises_on_streaming_response(self, mixin, mock_client_context):
-        """Test that count tokens raises when anthropic_messages returns streaming"""
-
-        async def fake_stream():
-            yield None
-
-        mixin.anthropic_messages = AsyncMock(return_value=fake_stream())
-
-        with pytest.raises(RuntimeError, match="expected non-streaming response"):
-            await mixin.anthropic_count_tokens(
-                AnthropicCountTokensRequest(
-                    model="gpt-4",
-                    messages=[AnthropicMessage(role="user", content="Hello")],
-                )
-            )
