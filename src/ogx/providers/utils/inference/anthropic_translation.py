@@ -18,6 +18,8 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
+import httpx
+
 from ogx.log import get_logger
 from ogx_api import (
     OpenAIChatCompletion,
@@ -488,3 +490,48 @@ def parse_anthropic_sse_event(event_type: str, data: dict[str, Any]) -> Anthropi
     if event_type == "error":
         return ErrorStreamEvent(error=_AnthropicErrorDetail(**data["error"]))
     return None
+
+
+async def passthrough_anthropic_stream(
+    *,
+    url: str,
+    req_body: dict[str, Any],
+    headers: dict[str, str],
+    httpx_client_kwargs: dict[str, Any] | None = None,
+    timeout: float = 300.0,
+) -> AsyncIterator[AnthropicStreamEvent]:
+    """Yield SSE events from any Anthropic-compatible streaming provider.
+
+    Creates an ``httpx.AsyncClient`` internally and manages the request/response
+    lifecycle.  The caller is responsible for providing correct ``url``,
+    ``req_body``, and ``headers`` (including authentication).
+
+    Parameters
+    ----------
+    url:
+        Target endpoint URL (e.g. ``https://ollama:11434/v1/messages``).
+    req_body:
+        JSON request body to send (typically ``request.model_dump(exclude_none=True)``).
+    headers:
+        HTTP request headers (content-type, anthropic-version, x-api-key, etc.).
+    httpx_client_kwargs:
+        Extra keyword arguments forwarded to ``httpx.AsyncClient`` constructor.
+        Used by providers like vLLM to inject TLS / proxy / network config.
+    timeout:
+        Default timeout for the client (seconds).
+    """
+    client_kwargs = httpx_client_kwargs or {}
+    async with httpx.AsyncClient(timeout=timeout, **client_kwargs) as client:
+        async with client.stream("POST", url, json=req_body, headers=headers) as resp:
+            resp.raise_for_status()
+            event_type: str | None = None
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if line.startswith("event: "):
+                    event_type = line[7:]
+                elif line.startswith("data: ") and event_type:
+                    data = json.loads(line[6:])
+                    event = parse_anthropic_sse_event(event_type, data)
+                    if event:
+                        yield event
+                    event_type = None

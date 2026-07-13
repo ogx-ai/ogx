@@ -480,10 +480,20 @@ class TestApiKeyHeader:
             assert "x-api-key" in headers
 
 
+@pytest.fixture
+def mock_passthrough(monkeypatch):
+    mock = MagicMock()
+    monkeypatch.setattr(
+        "ogx.providers.remote.inference.meta.meta.passthrough_anthropic_stream",
+        mock,
+    )
+    return mock
+
+
 class TestPassthroughStreamNetworkKwargs:
     """Tests that streaming passthrough passes httpx kwargs."""
 
-    async def test_stream_true_calls_passthrough_method(self):
+    async def test_stream_calls_passthrough_anthropic_stream_with_kwargs(self, mock_passthrough):
         config = MetaConfig(
             base_url="https://api.meta.ai/v1",
             network={"tls": {"verify": False}},
@@ -496,21 +506,25 @@ class TestPassthroughStreamNetworkKwargs:
             return
             yield
 
-        with patch.object(adapter, "_passthrough_anthropic_stream", return_value=empty_gen()):
-            request = AnthropicCreateMessageRequest(
-                messages=[{"role": "user", "content": "Hi"}],
-                model="test-model",
-                max_tokens=256,
-                stream=True,
-            )
+        mock_passthrough.return_value = empty_gen()
 
-            result = await adapter.anthropic_messages(request)
-            events = []
-            async for event in result:
-                events.append(event)
+        request = AnthropicCreateMessageRequest(
+            messages=[{"role": "user", "content": "Hi"}],
+            model="test-model",
+            max_tokens=256,
+            stream=True,
+        )
 
-            assert adapter._passthrough_anthropic_stream.called
-            assert adapter._passthrough_anthropic_stream.call_args[1].get("timeout") == 300.0
+        result = await adapter.anthropic_messages(request)
+        events = []
+        async for event in result:
+            events.append(event)
+
+        mock_passthrough.assert_called_once()
+        call_kwargs = mock_passthrough.call_args.kwargs
+        assert call_kwargs["url"] == "https://api.meta.ai/v1/messages"
+        assert call_kwargs["req_body"]["model"] == "test-model"
+        assert call_kwargs["httpx_client_kwargs"]["verify"] is False
 
     async def test_stream_uses_shared_ssl_context_by_default(self):
         """Without network config, _build_httpx_client_kwargs should return shared_ssl_context as verify."""

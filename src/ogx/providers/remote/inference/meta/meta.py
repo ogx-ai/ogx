@@ -4,15 +4,13 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import json
 from collections.abc import AsyncIterator
-from typing import Any
 
 import httpx
 
 from ogx.log import get_logger
 from ogx.providers.remote.inference.meta.config import MetaConfig
-from ogx.providers.utils.inference.anthropic_translation import parse_anthropic_sse_event
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
@@ -75,35 +73,17 @@ class MetaInferenceAdapter(OpenAIMixin):
         }
 
         if request.stream:
-            return self._passthrough_anthropic_stream(url, headers, body, timeout=300.0)
+            return passthrough_anthropic_stream(
+                url=url,
+                req_body=body,
+                headers=headers,
+                httpx_client_kwargs=self._build_httpx_client_kwargs(),
+            )
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0), **self._build_httpx_client_kwargs()) as client:
             resp = await client.post(url, json=body, headers=headers)
             resp.raise_for_status()
             return AnthropicMessageResponse(**resp.json())
-
-    async def _passthrough_anthropic_stream(
-        self,
-        url: str,
-        headers: dict[str, str],
-        body: dict[str, Any],
-        timeout: float = 300.0,
-    ) -> AsyncIterator[AnthropicStreamEvent]:
-        """Stream SSE events directly from Meta."""
-        async with httpx.AsyncClient(timeout=timeout, **self._build_httpx_client_kwargs()) as client:
-            async with client.stream("POST", url, json=body, headers=headers) as resp:
-                resp.raise_for_status()
-                event_type: str | None = None
-                async for line in resp.aiter_lines():
-                    line = line.strip()
-                    if line.startswith("event: "):
-                        event_type = line[7:]
-                    elif line.startswith("data: ") and event_type:
-                        data = json.loads(line[6:])
-                        event = parse_anthropic_sse_event(event_type, data)
-                        if event:
-                            yield event
-                        event_type = None
 
     async def anthropic_messages(
         self,

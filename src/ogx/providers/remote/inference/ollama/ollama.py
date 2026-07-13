@@ -6,7 +6,6 @@
 
 
 import asyncio
-import json
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -18,7 +17,7 @@ from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
 from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
-from ogx.providers.utils.inference.anthropic_translation import parse_anthropic_sse_event
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
     HealthResponse,
@@ -186,21 +185,13 @@ class OllamaInferenceAdapter(OpenAIMixin):
         headers: dict[str, str],
         body: dict[str, Any],
     ) -> AsyncIterator[AnthropicStreamEvent]:
-        """Stream SSE events directly from Ollama."""
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            async with client.stream("POST", url, json=body, headers=headers) as resp:
-                resp.raise_for_status()
-                event_type: str | None = None
-                async for line in resp.aiter_lines():
-                    line = line.strip()
-                    if line.startswith("event: "):
-                        event_type = line[7:]
-                    elif line.startswith("data: ") and event_type:
-                        data = json.loads(line[6:])
-                        event = parse_anthropic_sse_event(event_type, data)
-                        if event:
-                            yield event
-                        event_type = None
+        """Yield SSE events from an Anthropic-compatible provider via passthrough."""
+        async for event in passthrough_anthropic_stream(
+            url=url,
+            req_body=body,
+            headers=headers,
+        ):
+            yield event
 
     async def anthropic_messages(
         self,
