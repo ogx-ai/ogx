@@ -18,7 +18,10 @@ runs:
       uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         repository: llamastack/llama-stack-client-typescript
-        ref: main
+        # This is a release branch: pin to the matching release branch of the
+        # client repo, whose package is still named "llama-stack-client".
+        # The client repo's main branch has been renamed to "ogx-client".
+        ref: release-0.7.x
         path: .ts-client-checkout
 
     - name: Set TS_CLIENT_PATH
