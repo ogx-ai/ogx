@@ -661,9 +661,6 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
         result = await self.anthropic_messages(msg_request)
 
-        if not isinstance(result, AnthropicMessageResponse):
-            raise RuntimeError("Failed to count tokens: expected non-streaming response, got streaming")
-
         return AnthropicCountTokensResponse(input_tokens=result.usage.input_tokens)
 
     #
