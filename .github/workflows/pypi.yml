@@ -244,11 +244,7 @@ jobs:
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
-          # TEMPORARY: skip ogx-client-typescript until external repo has release branch
-          if [ "$PACKAGE" == "ogx-client-typescript" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping $PACKAGE (temporarily disabled)"
-          elif [ "$PACKAGES" == "all" ]; then
+          if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -767,10 +763,9 @@ jobs:
       matrix:
         include:
           # Order matters! Dependencies are published first
-          # TEMPORARY: ogx-client-typescript disabled until external repo has release-1.2.x branch
-          # - package: ogx-client-typescript
-          #   registry: npm
-          #   type: external
+          - package: ogx-client-typescript
+            registry: npm
+            type: external
           - package: ogx-client
             registry: pypi
             type: openapi-sdk
@@ -790,11 +785,7 @@ jobs:
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
-          # TEMPORARY: skip ogx-client-typescript until external repo has release branch
-          if [ "$PACKAGE" == "ogx-client-typescript" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping publish for $PACKAGE (temporarily disabled)"
-          elif [ "$PACKAGES" == "all" ]; then
+          if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
