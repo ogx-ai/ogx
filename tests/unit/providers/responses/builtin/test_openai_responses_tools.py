@@ -1012,3 +1012,106 @@ async def test_function_tool_strict_false_included(openai_responses_impl, mock_i
     tool_function = params.tools[0]["function"]
     assert "strict" in tool_function, "strict field should be included when explicitly set to False"
     assert tool_function["strict"] is False, "strict field should be False"
+
+
+async def test_file_search_citation_populated_when_model_cites_inline(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """Regression test for annotations never being populated for file_search results.
+
+    Round 1: the model calls file_search. Round 2: the model answers, citing the
+    retrieved file with the instructed `<|file-id|>` marker. The final response's
+    output_text annotations should contain a matching file_citation.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            )
+        ],
+    )
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        fake_stream("file_search_final_answer_completion.yaml"),
+    ]
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+        )
+    )
+
+    messages = [item for item in result.output if isinstance(item, OpenAIResponseMessage)]
+    assert len(messages) == 1
+    text_content = messages[0].content[0]
+    assert text_content.text == "Global warming is caused by greenhouse gases."
+    assert len(text_content.annotations) == 1
+    assert text_content.annotations[0].file_id == "file-abc123"
+    assert text_content.annotations[0].filename == "climate.pdf"
+
+
+async def test_file_search_citation_falls_back_when_model_does_not_cite(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """When a weak/local model ignores the citation-marker instruction entirely, the
+    response should still attribute the answer to the retrieved file(s) rather than
+    returning empty annotations despite file_search having been used successfully.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            )
+        ],
+    )
+
+    async def uncited_final_answer():
+        yield ChatCompletionChunk(
+            id="chat-completion-458",
+            created=1234567892,
+            model="ollama/llama3.2:3b",
+            object="chat.completion.chunk",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        role="assistant",
+                        content="Global warming is caused by greenhouse gases trapping heat.",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+        )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        uncited_final_answer(),
+    ]
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+        )
+    )
+
+    messages = [item for item in result.output if isinstance(item, OpenAIResponseMessage)]
+    assert len(messages) == 1
+    text_content = messages[0].content[0]
+    assert text_content.text == "Global warming is caused by greenhouse gases trapping heat."
+    assert len(text_content.annotations) == 1
+    assert text_content.annotations[0].file_id == "file-abc123"
+    assert text_content.annotations[0].filename == "climate.pdf"

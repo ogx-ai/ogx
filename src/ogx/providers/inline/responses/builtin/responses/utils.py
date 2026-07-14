@@ -116,7 +116,7 @@ async def convert_chat_choice_to_response_message(
     """Convert an OpenAI Chat Completion choice into an OpenAI Response output message."""
     output_content = choice.message.content or ""
 
-    annotations, clean_text = _extract_citations_from_text(output_content, citation_files or {})
+    annotations, clean_text = extract_citations_from_text(output_content, citation_files or {})
     logprobs = choice.logprobs.content if choice.logprobs and choice.logprobs.content else []
 
     return OpenAIResponseMessage(
@@ -485,13 +485,20 @@ def _extract_citations_from_text(
     """Extract citation markers from text and create annotations
 
     Args:
-        text: The text containing citation markers like [file-Cn3MSNn72ENTiiq11Qda4A]
+        text: The text containing citation markers like <|file-Cn3MSNn72ENTiiq11Qda4A|>.
+            The primary marker format is `<|file-id|>`, but `[file-id]` and `(file-id)`
+            are also accepted since weaker models often approximate the instructed
+            format rather than reproduce it exactly.
         citation_files: Dictionary mapping file_id to filename
 
     Returns:
         Tuple of (annotations_list, clean_text_without_markers)
     """
-    file_id_regex = re.compile(r"<\|(?P<file_id>file-[A-Za-z0-9_-]+)\|>")
+    file_id_regex = re.compile(
+        r"<\|(?P<file_id_pipe>file-[A-Za-z0-9_-]+)\|>"
+        r"|\[(?P<file_id_bracket>file-[A-Za-z0-9_-]+)\]"
+        r"|\((?P<file_id_paren>file-[A-Za-z0-9_-]+)\)"
+    )
 
     annotations = []
     parts = []
@@ -509,7 +516,7 @@ def _extract_citations_from_text(
         parts.append(prefix)
         total_len += len(prefix)
 
-        fid = m.group(1)
+        fid = m.group("file_id_pipe") or m.group("file_id_bracket") or m.group("file_id_paren")
         if fid in citation_files:
             annotations.append(
                 OpenAIResponseAnnotationFileCitation(
@@ -524,6 +531,33 @@ def _extract_citations_from_text(
     parts.append(text[last_end:])
     cleaned_text = "".join(parts)
     return annotations, cleaned_text
+
+
+def extract_citations_from_text(
+    text: str, citation_files: dict[str, str]
+) -> tuple[list[OpenAIResponseAnnotationFileCitation], str]:
+    """Extract citation markers from text, with a fallback for models that don't cite inline.
+
+    Delegates to `_extract_citations_from_text` for marker-based extraction. Some models
+    (particularly small/local ones served e.g. via Ollama) don't reliably reproduce the
+    inline citation marker even when instructed to. If file_search actually retrieved
+    documents for this response, attribute the answer to those files rather than silently
+    returning no annotations just because the model didn't echo the marker.
+
+    Args:
+        text: The text possibly containing citation markers.
+        citation_files: Dictionary mapping file_id to filename for files retrieved this turn.
+
+    Returns:
+        Tuple of (annotations_list, clean_text_without_markers)
+    """
+    annotations, clean_text = _extract_citations_from_text(text, citation_files)
+    if not annotations and citation_files:
+        annotations = [
+            OpenAIResponseAnnotationFileCitation(file_id=file_id, filename=filename, index=len(clean_text))
+            for file_id, filename in citation_files.items()
+        ]
+    return annotations, clean_text
 
 
 def is_function_tool_call(

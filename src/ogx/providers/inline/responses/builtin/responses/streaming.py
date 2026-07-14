@@ -115,6 +115,7 @@ from .types import (
 from .utils import (
     convert_chat_choice_to_response_message,
     convert_mcp_tool_choice,
+    extract_citations_from_text,
     is_function_tool_call,
     run_guardrails,
     should_summarize_reasoning,
@@ -1369,6 +1370,7 @@ class StreamingResponseOrchestrator:
         # Emit content_part.done event if text content was streamed (before content gets cleared)
         if content_part_emitted:
             final_text = "".join(chat_response_content)
+            part_annotations, part_clean_text = extract_citations_from_text(final_text, self.citation_files)
             self.sequence_number += 1
             yield OpenAIResponseObjectStreamResponseContentPartDone(
                 content_index=content_index,
@@ -1376,7 +1378,8 @@ class StreamingResponseOrchestrator:
                 item_id=message_item_id,
                 output_index=message_output_index,
                 part=OpenAIResponseContentPartOutputText(
-                    text=final_text,
+                    text=part_clean_text,
+                    annotations=list(part_annotations),
                     logprobs=[],
                 ),
                 sequence_number=self.sequence_number,
@@ -1411,10 +1414,11 @@ class StreamingResponseOrchestrator:
             content_parts = []
             if content_part_emitted:
                 final_text = "".join(chat_response_content)
+                final_annotations, final_clean_text = extract_citations_from_text(final_text, self.citation_files)
                 content_parts.append(
                     OpenAIResponseOutputMessageContentOutputText(
-                        text=final_text,
-                        annotations=[],
+                        text=final_clean_text,
+                        annotations=list(final_annotations),
                         logprobs=chat_response_logprobs if chat_response_logprobs else [],
                     )
                 )
