@@ -162,15 +162,15 @@ async def kvstore_impl(reference: KVStoreReference) -> KVStore:
 
         impl: KVStore
         if isinstance(config, RedisKVStoreConfig):
-            from .redis import RedisKVStoreImpl  # type: ignore[attr-defined]
+            from .redis import RedisKVStoreImpl
 
             impl = RedisKVStoreImpl(config)
         elif isinstance(config, SqliteKVStoreConfig):
-            from .sqlite import SqliteKVStoreImpl  # type: ignore[attr-defined]
+            from .sqlite import SqliteKVStoreImpl
 
             impl = SqliteKVStoreImpl(config)
         elif isinstance(config, PostgresKVStoreConfig):
-            from .postgres import PostgresKVStoreImpl  # type: ignore[attr-defined]
+            from .postgres import PostgresKVStoreImpl
 
             impl = PostgresKVStoreImpl(config)
         elif isinstance(config, MongoDBKVStoreConfig):
