@@ -245,13 +245,9 @@ class VLLMInferenceAdapter(OpenAIMixin):
         params: AnthropicCreateMessageRequest,
     ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
         """Handle Anthropic Messages via native /v1/messages endpoint."""
-<<<<<<< HEAD
         import json
 
-        url = f"{self.get_base_url()}/v1/messages"
-=======
         url = f"{self._get_base_url_without_version()}/v1/messages"
->>>>>>> 4c9184ef (fix(inference): strip duplicate /v1 prefix in vLLM Anthropic message URLs (#6294))
         body = params.model_dump(exclude_none=True)
         body["model"] = params.model
         headers = {
