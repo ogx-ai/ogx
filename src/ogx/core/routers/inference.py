@@ -22,6 +22,7 @@ from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.telemetry.inference_metrics import (
     create_inference_metric_attributes,
     inference_duration,
+    inference_model_type_used_total,
     inference_time_to_first_token,
     inference_tokens_per_second,
 )
@@ -61,6 +62,13 @@ from ogx_api import (
     RoutingTable,
 )
 from ogx_api.inference.models import RerankRequest
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 logger = get_logger(name=__name__, category="core::routers")
 
@@ -170,7 +178,11 @@ class InferenceRouter(Inference):
         self,
         params: RerankRequest,
     ) -> RerankResponse:
+        request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.rerank)
+        inference_model_type_used_total.add(
+            1, {"type": "reranker", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
         return await provider.rerank(params)
 
@@ -186,6 +198,9 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         if params.stream:
@@ -207,6 +222,9 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         # Use the OpenAI client for a bit of extra input validation without
@@ -288,7 +306,11 @@ class InferenceRouter(Inference):
         handles mapping reasoning fields to/from the provider's format.
         If the provider doesn't support reasoning, raises an error.
         """
+        request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
         # Not all providers implement openai_chat_completions_with_reasoning.
         # the Responses layer catches them and falls back to regular CC
@@ -308,11 +330,30 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.embedding)
+        inference_model_type_used_total.add(
+            1, {"type": "embedding", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         response = await provider.openai_embeddings(params)
         response.model = request_model_id
         return response
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_messages(params)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_count_tokens(params)
 
     async def list_chat_completions(
         self,

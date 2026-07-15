@@ -9,11 +9,11 @@ import os
 import sys
 import traceback
 import warnings
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
 from importlib.metadata import version as parse_version
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import yaml
@@ -88,7 +88,7 @@ def _format_google_error_response(status_code: int, message: str) -> JSONRespons
 
 def _is_interactions_path(request: Request) -> bool:
     """Check if the request targets the Google Interactions API."""
-    return request.url.path.startswith("/v1alpha/interactions")
+    return bool(request.url.path.startswith("/v1alpha/interactions"))
 
 
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -190,11 +190,11 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
     logger.debug("Serving APIs", apis=list(apis_to_serve))
 
     # Start the registry refresh background task
-    app.stack.create_registry_refresh_task()  # type: ignore[no-untyped-call]
+    app.stack.create_registry_refresh_task()
 
     yield
     logger.info("Shutting down")
-    await app.stack.shutdown()  # type: ignore[no-untyped-call]
+    await app.stack.shutdown()
 
 
 async def _send_error_response(send: Send, status: int, message: str) -> None:
@@ -220,7 +220,7 @@ class HSTSMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         if scope["type"] == "http":
 
-            async def send_with_hsts(message: dict[str, Any]) -> None:
+            async def send_with_hsts(message: MutableMapping[str, Any]) -> None:
                 if message["type"] == "http.response.start":
                     headers = list(message.get("headers", []))
                     headers.append([b"strict-transport-security", self.hsts_value])
@@ -290,7 +290,7 @@ class ProviderDataMiddleware:
                         sync_test_context_from_provider_data,
                     )
 
-                    test_context_token = sync_test_context_from_provider_data()  # type: ignore[no-untyped-call]
+                    test_context_token = sync_test_context_from_provider_data()
                     reset_fn = reset_test_context
                 try:
                     return await self.app(scope, receive, send)
@@ -381,6 +381,13 @@ class ZstdDecompressionMiddleware:
                     message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
                 )
 
+            if decompressed_body is None:
+                return await _send_error_response(
+                    send,
+                    status=500,
+                    message="Failed to decompress request body",
+                )
+
             # Strip content-encoding header and update content-length
             new_headers = [
                 (k, v) for k, v in scope["headers"] if k.lower() not in (b"content-encoding", b"content-length")
@@ -393,12 +400,14 @@ class ZstdDecompressionMiddleware:
             # responses stay alive until the client actually disconnects.
             body_sent = False
 
-            async def receive_decompressed() -> dict:  # type: ignore[type-arg]
+            async def receive_decompressed() -> MutableMapping[str, Any]:
                 nonlocal body_sent
                 if not body_sent:
                     body_sent = True
                     return {"type": "http.request", "body": decompressed_body, "more_body": False}
-                return await receive()
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
 
             return await self.app(scope, receive_decompressed, send)
         except Exception as e:
@@ -407,12 +416,14 @@ class ZstdDecompressionMiddleware:
             # Replay the original compressed body since decompression failed
             body_sent = False
 
-            async def receive_original() -> dict:  # type: ignore[type-arg]
+            async def receive_original() -> MutableMapping[str, Any]:
                 nonlocal body_sent
                 if not body_sent:
                     body_sent = True
                     return {"type": "http.request", "body": compressed_body, "more_body": False}
-                return await receive()
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
 
             return await self.app(scope, receive_original, send)
 

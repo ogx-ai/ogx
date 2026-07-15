@@ -22,6 +22,7 @@ from opentelemetry.metrics import Counter, Histogram
 from .constants import (
     VECTOR_CHUNKS_PROCESSED_TOTAL,
     VECTOR_DELETES_TOTAL,
+    VECTOR_DOCUMENTS_RETRIEVED_TOTAL,
     VECTOR_FILES_TOTAL,
     VECTOR_INSERT_DURATION,
     VECTOR_INSERTS_TOTAL,
@@ -67,6 +68,12 @@ vector_files_total: Counter = meter.create_counter(
 vector_chunks_processed_total: Counter = meter.create_counter(
     name=VECTOR_CHUNKS_PROCESSED_TOTAL,
     description="Total number of chunks processed across all insert operations",
+    unit="1",
+)
+
+vector_documents_retrieved_total: Counter = meter.create_counter(
+    name=VECTOR_DOCUMENTS_RETRIEVED_TOTAL,
+    description="Total number of documents/chunks retrieved across query operations",
     unit="1",
 )
 

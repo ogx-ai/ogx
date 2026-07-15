@@ -56,9 +56,11 @@ Features:
 
 ### Memory Alpha
 
-Responses memory is an alpha feature built on vector stores and file search retrieval, but it is not exposed to the model as a visible tool call. OGX retrieves memory summaries from a configured memory vector store, injects them as hidden context, and does not emit `file_search_call` items, annotations, or citations for those memories.
+Responses memory is an alpha feature built on vector stores and file search retrieval, but it is not exposed to the model as a visible tool call. OGX retrieves memory summaries from an internal memory vector store, injects them as hidden context, and does not emit `file_search_call` items, annotations, or citations for those memories.
 
-Configure `memory_config.default_vector_store_id` on the built-in Responses provider to point at the vector store that stores memory files. Memory reads and writes are always scoped by an owner identifier and OGX skips memory retrieval when it cannot resolve one. In authenticated deployments, OGX derives the owner from the authenticated user principal, such as the OAuth2 JWT `sub` claim or the configured upstream auth principal header.
+Memory is disabled by default. When `memory_config.enabled` is true, OGX lazily creates one internal shadow memory vector store per `memory_config.default_vector_store_namespace` and reuses that mapping across restarts. Memory files in that shared store are tagged with the resolved owner id, and memory retrieval always applies the owner filter before injecting context. The default store is created under the internal `memory_config.default_vector_store_admin_principal` with admin-scoped access attributes, so it is not exposed to ordinary users through the vector store APIs. Admin users with matching ABAC can still inspect it. Deployments that need an explicit backing store can continue to configure `memory_config.default_vector_store_id`.
+
+Memory reads and writes are always scoped by an owner identifier and OGX skips memory retrieval when it cannot resolve one. In authenticated deployments, OGX derives the owner from the authenticated user principal, such as the OAuth2 JWT `sub` claim or the configured upstream auth principal header.
 
 ```python
 response = client.responses.create(
@@ -84,7 +86,7 @@ response = client.responses.create(
 
 `memory` is an OGX extension field. Raw HTTP requests and OGX-generated clients can send `memory` as a top-level request field. Request-supplied `memory.owner_id`, `safety_identifier`, `metadata.owner_id`, and `metadata.user_id` are fallbacks for deployments without an authenticated principal; they do not override the authenticated user principal when auth is enabled.
 
-When `memory_config.write_enabled` is enabled, stored conversations that complete successfully are queued for asynchronous memory materialization. Conversation messages are stored on every turn, while memory writes are debounced by `memory_config.write_debounce_seconds` so rapid turns in the same conversation and vector store coalesce into one Markdown memory file. The memory file includes the generated summary plus a searchable transcript, so hybrid search can recover details that the summary omits. Use `memory.enabled=false` on a request to skip both recall and summary writes for that response.
+When `memory_config.write_enabled` is enabled, stored conversations that complete successfully are queued for asynchronous memory materialization. Conversation messages are stored on every turn, while memory writes are debounced by `memory_config.write_debounce_seconds` so rapid turns in the same conversation and memory backing store coalesce into one Markdown memory file. The memory file includes the generated summary plus a searchable transcript, so hybrid search can recover details that the summary omits. Use `memory.enabled=false` on a request to skip both recall and summary writes for that response.
 
 ## Model Context Protocol (MCP)
 
