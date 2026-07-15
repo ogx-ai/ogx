@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from tiktoken import get_encoding
 
-from ogx.core.datatypes import EmbeddingParams, RerankerModel, VectorStoresConfig
+from ogx.core.datatypes import RerankerModel, VectorStoresConfig
 from ogx.providers.utils.memory.vector_store import (
     VectorStoreWithIndex,
     _validate_embedding,
@@ -547,9 +547,9 @@ class TestNeuralRerank:
 
 
 class TestQueryEmbeddingInputType:
-    """Query-side embedding requests forward input_type only when configured (issue #5755)."""
+    """Query-side embedding requests forward input_type only when it is in the query params (issue #5755)."""
 
-    def _make_store(self, vector_stores_config=None):
+    def _make_store(self):
         mock_vector_store = MagicMock()
         mock_vector_store.embedding_model = "nvidia/llama-3.2-nv-embedqa-1b-v2"
         mock_vector_store.embedding_dimension = 3
@@ -565,20 +565,21 @@ class TestQueryEmbeddingInputType:
             vector_store=mock_vector_store,
             index=mock_index,
             inference_api=mock_inference_api,
-            vector_stores_config=vector_stores_config,
+            vector_stores_config=None,
         )
 
-    async def test_query_input_type_forwarded_when_configured(self):
-        config = VectorStoresConfig(embedding_params=EmbeddingParams(query_input_type="query"))
-        store = self._make_store(vector_stores_config=config)
+    async def test_query_input_type_forwarded_from_params(self):
+        store = self._make_store()
 
-        await store.query_chunks(QueryChunksRequest(vector_store_id="test-store", query="hello"))
+        await store.query_chunks(
+            QueryChunksRequest(vector_store_id="test-store", query="hello", params={"input_type": "query"})
+        )
 
         embeddings_request = store.inference_api.openai_embeddings.call_args.args[0]
         assert embeddings_request.model_extra == {"input_type": "query"}
 
     async def test_no_input_type_by_default(self):
-        store = self._make_store(vector_stores_config=None)
+        store = self._make_store()
 
         await store.query_chunks(QueryChunksRequest(vector_store_id="test-store", query="hello"))
 

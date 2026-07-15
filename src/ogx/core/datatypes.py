@@ -665,26 +665,6 @@ class ContextualRetrievalParams(BaseModel):
     )
 
 
-class EmbeddingParams(BaseModel):
-    """Configuration for embedding request parameters used during RAG ingestion and search.
-
-    Asymmetric embedding models (e.g. NVIDIA ``nv-embedqa``) require an ``input_type``
-    parameter that distinguishes documents from queries. These values are forwarded to
-    the inference provider via the embeddings request extra body. Both default to None,
-    which sends no ``input_type`` and preserves existing behavior for symmetric models
-    and providers (such as OpenAI) that reject the parameter.
-    """
-
-    document_input_type: str | None = Field(
-        default=None,
-        description="Value for the embeddings 'input_type' parameter when embedding document chunks during ingestion. Typically 'passage' for asymmetric models. None sends no input_type.",
-    )
-    query_input_type: str | None = Field(
-        default=None,
-        description="Value for the embeddings 'input_type' parameter when embedding search queries. Typically 'query' for asymmetric models. None sends no input_type.",
-    )
-
-
 class VectorStoresConfig(BaseModel):
     """Configuration for vector stores in the stack."""
 
@@ -732,10 +712,6 @@ class VectorStoresConfig(BaseModel):
     contextual_retrieval_params: ContextualRetrievalParams = Field(
         default_factory=ContextualRetrievalParams,
         description="Configuration for contextual retrieval during file ingestion.",
-    )
-    embedding_params: EmbeddingParams = Field(
-        default_factory=EmbeddingParams,
-        description="Configuration for embedding request parameters (e.g. input_type for asymmetric models).",
     )
 
 

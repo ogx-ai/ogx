@@ -133,9 +133,13 @@ class TestOpenAIVectorStoreMixin:
         assert "FileProcessor API is required" in result.last_error.message
 
     async def _attach_and_capture_embeddings_request(
-        self, mock_inference_api, mock_files_api, mock_kvstore, vector_stores_config
+        self, mock_inference_api, mock_files_api, mock_kvstore, input_type=None
     ):
-        """Run ingestion with one chunk and return the embeddings request that was built."""
+        """Run ingestion with one chunk and return the embeddings request that was built.
+
+        input_type, when given, is stored in the vector store metadata as it would be
+        after creation from the request extra body.
+        """
         from ogx.core.datatypes import VectorStoresConfig
         from ogx_api import Chunk, ChunkMetadata
 
@@ -165,10 +169,12 @@ class TestOpenAIVectorStoreMixin:
             kvstore=mock_kvstore,
             file_processor_api=mock_file_processor_api,
         )
-        mixin.vector_stores_config = vector_stores_config or VectorStoresConfig()
+        mixin.vector_stores_config = VectorStoresConfig()
 
         store_info = _make_store_info()
         store_info["metadata"] = {"embedding_model": "nvidia/llama-3.2-nv-embedqa-1b-v2", "embedding_dimension": 3}
+        if input_type is not None:
+            store_info["metadata"]["input_type"] = input_type
         mixin.openai_vector_stores["vs"] = store_info
 
         await mixin.openai_attach_file_to_vector_store(
@@ -178,22 +184,19 @@ class TestOpenAIVectorStoreMixin:
         mock_inference_api.openai_embeddings.assert_called_once()
         return mock_inference_api.openai_embeddings.call_args.args[0]
 
-    async def test_document_input_type_forwarded_when_configured(
+    async def test_input_type_forwarded_when_store_configured(
         self, mock_inference_api, mock_files_api, mock_kvstore
     ):
-        """Ingestion forwards document_input_type via the embeddings extra body when configured (issue #5755)."""
-        from ogx.core.datatypes import EmbeddingParams, VectorStoresConfig
-
-        config = VectorStoresConfig(embedding_params=EmbeddingParams(document_input_type="passage"))
+        """Ingestion forwards the store's input_type via the embeddings extra body (issue #5755)."""
         request = await self._attach_and_capture_embeddings_request(
-            mock_inference_api, mock_files_api, mock_kvstore, config
+            mock_inference_api, mock_files_api, mock_kvstore, input_type="passage"
         )
         assert request.model_extra == {"input_type": "passage"}
 
     async def test_no_input_type_by_default(self, mock_inference_api, mock_files_api, mock_kvstore):
         """Ingestion sends no input_type by default, preserving behavior for symmetric models."""
         request = await self._attach_and_capture_embeddings_request(
-            mock_inference_api, mock_files_api, mock_kvstore, None
+            mock_inference_api, mock_files_api, mock_kvstore, input_type=None
         )
         assert "input_type" not in (request.model_extra or {})
 
