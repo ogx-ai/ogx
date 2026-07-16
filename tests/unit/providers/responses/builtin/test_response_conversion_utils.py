@@ -109,9 +109,7 @@ class TestConvertChatChoiceToResponseMessage:
             index=0,
         )
 
-        result = await convert_chat_choice_to_response_message(
-            choice, citation_files={"file-abc123": "climate.pdf"}
-        )
+        result = await convert_chat_choice_to_response_message(choice, citation_files={"file-abc123": "climate.pdf"})
 
         assert isinstance(result.content[0], OpenAIResponseOutputMessageContentOutputText)
         assert result.content[0].text == "Global warming is caused by greenhouse gases trapping heat."
@@ -863,6 +861,24 @@ class TestExtractCitationsFromTextWithFallback:
         annotations, cleaned_text = extract_citations_from_text(text, citation_files)
 
         assert cleaned_text == text
+        assert len(annotations) == 1
+        assert annotations[0].file_id == "file-abc123"
+        assert annotations[0].filename == "climate.pdf"
+        assert annotations[0].index == len(cleaned_text)
+
+    def test_fallback_cites_only_single_highest_scoring_file(self):
+        """When several files were retrieved but the model cited none of them, we should
+
+        attribute the answer to only the top-ranked file rather than every file retrieved
+        this turn, since the retrieval set doesn't imply the whole answer draws equally on
+        all of them. tool_executor.py orders citation_files by descending score, so the
+        fallback picks the first entry.
+        """
+        text = "Global warming is caused by greenhouse gases."
+        citation_files = {"file-abc123": "climate.pdf", "file-def456": "unrelated.pdf"}
+
+        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+
         assert len(annotations) == 1
         assert annotations[0].file_id == "file-abc123"
         assert annotations[0].filename == "climate.pdf"

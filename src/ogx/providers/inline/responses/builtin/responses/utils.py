@@ -541,22 +541,23 @@ def extract_citations_from_text(
     Delegates to `_extract_citations_from_text` for marker-based extraction. Some models
     (particularly small/local ones served e.g. via Ollama) don't reliably reproduce the
     inline citation marker even when instructed to. If file_search actually retrieved
-    documents for this response, attribute the answer to those files rather than silently
-    returning no annotations just because the model didn't echo the marker.
+    documents for this response, attribute the answer to the single most relevant one
+    rather than silently returning no annotations just because the model didn't echo the
+    marker. Attributing every retrieved file would imply the whole answer draws equally
+    on all of them, which usually isn't true and isn't what OpenAI's API does.
 
     Args:
         text: The text possibly containing citation markers.
-        citation_files: Dictionary mapping file_id to filename for files retrieved this turn.
+        citation_files: Dictionary mapping file_id to filename for files retrieved this turn,
+            ordered by descending relevance score (see tool_executor.py).
 
     Returns:
         Tuple of (annotations_list, clean_text_without_markers)
     """
     annotations, clean_text = _extract_citations_from_text(text, citation_files)
     if not annotations and citation_files:
-        annotations = [
-            OpenAIResponseAnnotationFileCitation(file_id=file_id, filename=filename, index=len(clean_text))
-            for file_id, filename in citation_files.items()
-        ]
+        file_id, filename = next(iter(citation_files.items()))
+        annotations = [OpenAIResponseAnnotationFileCitation(file_id=file_id, filename=filename, index=len(clean_text))]
     return annotations, clean_text
 
 
