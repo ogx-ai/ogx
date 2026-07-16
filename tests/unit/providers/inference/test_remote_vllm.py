@@ -625,6 +625,86 @@ class TestRerankTLSAndAuth:
             assert headers.get("Authorization") == "Bearer provider-data-token"
 
 
+class TestBaseUrlVersionStripping:
+    """Regression tests for double /v1/v1/ path bug (issue #6290)."""
+
+    @pytest.mark.parametrize(
+        "base_url, expected",
+        [
+            ("http://localhost:8000/v1", "http://localhost:8000"),
+            ("http://localhost:8000/v1/", "http://localhost:8000"),
+            ("http://localhost:8000", "http://localhost:8000"),
+            ("http://localhost:8000/", "http://localhost:8000"),
+        ],
+    )
+    def test_get_base_url_without_version(self, base_url, expected):
+        config = VLLMInferenceAdapterConfig(base_url=base_url)
+        adapter = VLLMInferenceAdapter(config=config)
+        assert adapter._get_base_url_without_version() == expected
+
+    async def test_anthropic_messages_no_double_v1(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://localhost:8000/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "hello"}],
+                "model": "test-model",
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            }
+            mock_client_instance = MagicMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+            from ogx_api.messages.models import AnthropicCreateMessageRequest
+
+            request = AnthropicCreateMessageRequest(
+                model="test-model",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+            )
+            await adapter.anthropic_messages(request)
+
+            url_called = mock_client_instance.post.call_args[0][0]
+            assert url_called == "http://localhost:8000/v1/messages"
+            assert "/v1/v1/" not in url_called
+
+    async def test_anthropic_count_tokens_no_double_v1(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://localhost:8000/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {"input_tokens": 10}
+            mock_client_instance = MagicMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+            from ogx_api.messages.models import AnthropicCountTokensRequest
+
+            request = AnthropicCountTokensRequest(
+                model="test-model",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            await adapter.anthropic_count_tokens(request)
+
+            url_called = mock_client_instance.post.call_args[0][0]
+            assert url_called == "http://localhost:8000/v1/messages/count_tokens"
+            assert "/v1/v1/" not in url_called
+
+
 class TestFairnessHeaderPropagation:
     """Tests for llm-d fairness header injection via _get_extra_request_headers."""
 

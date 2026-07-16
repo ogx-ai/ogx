@@ -112,6 +112,7 @@ starter = [
     "markitdown[all]",
     "matplotlib",
     "nltk>=3.10.0",                                      # CVE-2026-54293/CVE-2026-12243: path traversal in nltk.data.load()
+    "neo4j",
     "numpy",
     "ollama",
     "pandas",
@@ -191,6 +192,7 @@ type_checking = [
     "faiss-cpu",
     "lm-format-enforcer",
     "mcp>=1.23.0,<2.0",
+    "neo4j",
     "ollama",
     "langchain-openai>=1.2.2",
     "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
@@ -203,6 +205,7 @@ test-common = [
     "asyncpg>=0.29.0",
     "chardet",
     "mcp>=1.23.0,<2.0",
+    "neo4j",
     "pgvector>=0.3.0",
     "psycopg2-binary>=2.9.0",
     "pypdf>=6.13.3",
@@ -368,6 +371,7 @@ convention = "google"
 "src/ogx/distributions/**/*.py" = ["S106"] # Env var template defaults (e.g. ${env.PGVECTOR_PASSWORD:=})
 "src/ogx/providers/remote/inference/databricks/config.py" = ["S107"] # Env var template defaults in sample_run_config
 "src/ogx/providers/remote/inference/gemini/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/vector_io/neo4j/config.py" = ["S107"] # Env var template defaults in sample_run_config
 "src/ogx/providers/remote/vector_io/pgvector/config.py" = ["S107"] # Env var template defaults in sample_run_config
 "src/ogx/providers/remote/inference/oci/auth.py" = ["S106"] # pass_phrase="none" placeholder
 "src/ogx/cli/**/*.py" = ["S603", "S607"] # CLI tools legitimately invoke subprocesses
@@ -404,10 +408,6 @@ exclude = [
     # These files have some type hints but fail strict type checking due to
     # incomplete annotations, Any usage, or other strict mode violations.
     #
-    # Core files (3 files)
-    "^src/ogx/core/server/routes\\.py$",
-    "^src/ogx/core/server/server\\.py$",
-    "^src/ogx/core/store/registry\\.py$",
     # CLI files (7 files)
     "^src/ogx/cli/stack/_list_deps\\.py$",
     "^src/ogx/cli/stack/list_apis\\.py$",

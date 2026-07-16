@@ -42,6 +42,7 @@ GRANDFATHERED_FILES = {
     "tests/integration/responses/test_tool_responses.py",
     "tests/unit/server/test_auth.py",  # 1000+ lines after auth middleware refactor
     "tests/unit/providers/responses/builtin/test_openai_responses_tools.py",  # sometimes 1000+ depending on ruff
+    "src/ogx/core/stack.py",  # 1000+ lines after type fixes
 }
 
 

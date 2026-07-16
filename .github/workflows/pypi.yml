@@ -245,11 +245,7 @@ jobs:
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
-          # TEMPORARY: skip ogx-client-typescript until external repo has release branch
-          if [ "$PACKAGE" == "ogx-client-typescript" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping $PACKAGE (temporarily disabled)"
-          elif [ "$PACKAGES" == "all" ]; then
+          if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -790,11 +786,7 @@ jobs:
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
-          # TEMPORARY: skip ogx-client-typescript until external repo has release branch
-          if [ "$PACKAGE" == "ogx-client-typescript" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping publish for $PACKAGE (temporarily disabled)"
-          elif [ "$PACKAGES" == "all" ]; then
+          if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"

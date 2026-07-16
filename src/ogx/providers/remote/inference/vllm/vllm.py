@@ -233,12 +233,19 @@ class VLLMInferenceAdapter(OpenAIMixin):
 
         return _wrap_chunks()
 
+    def _get_base_url_without_version(self) -> str:
+        """Get the base URL with any trailing /v1 suffix removed."""
+        base_url = str(self.get_base_url()).rstrip("/")
+        if base_url.endswith("/v1"):
+            base_url = base_url[:-3]
+        return base_url
+
     async def anthropic_messages(
         self,
         params: AnthropicCreateMessageRequest,
     ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
         """Handle Anthropic Messages via native /v1/messages endpoint."""
-        url = f"{self.get_base_url()}/v1/messages"
+        url = f"{self._get_base_url_without_version()}/v1/messages"
         body = params.model_dump(exclude_none=True)
         body["model"] = params.model
         headers = {
@@ -268,7 +275,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
         params: AnthropicCountTokensRequest,
     ) -> AnthropicCountTokensResponse:
         """Forward count_tokens to vLLM's /v1/messages/count_tokens endpoint."""
-        url = f"{self.get_base_url()}/v1/messages/count_tokens"
+        url = f"{self._get_base_url_without_version()}/v1/messages/count_tokens"
         body = params.model_dump(exclude_none=True)
         body["model"] = params.model
         headers = {
@@ -353,7 +360,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
         #   "To indicate that the rerank API is not part of the standard OpenAI API,
         #    we have located it at `/rerank`. Please update your client accordingly.
         #    (Note: Conforms to JinaAI rerank API)" - vLLM 0.15.1
-        endpoint = self.get_base_url().replace("/v1", "") + "/rerank"  # TODO: find a better solution
+        endpoint = self._get_base_url_without_version() + "/rerank"
 
         headers: dict[str, str] = {}
         api_key = self._get_api_key_from_config_or_provider_data()

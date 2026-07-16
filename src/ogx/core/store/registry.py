@@ -6,6 +6,7 @@
 
 import asyncio
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Protocol
 
@@ -53,7 +54,7 @@ def _parse_registry_values(values: list[str]) -> list[RoutableObjectWithProvider
     all_objects = []
     for value in values:
         try:
-            obj = pydantic.TypeAdapter(RoutableObjectWithProvider).validate_json(value)
+            obj: RoutableObjectWithProvider = pydantic.TypeAdapter(RoutableObjectWithProvider).validate_json(value)
             all_objects.append(obj)
         except pydantic.ValidationError as e:
             logger.error("Error parsing registry value", raw_value=value, error=str(e))
@@ -153,7 +154,7 @@ class CachedDiskDistributionRegistry(DiskDistributionRegistry):
         self._last_refresh_time = 0.0
 
     @asynccontextmanager
-    async def _locked_cache(self):
+    async def _locked_cache(self) -> AsyncIterator[dict[tuple[str, str], RoutableObjectWithProvider]]:
         """Context manager for safely accessing the cache with a lock."""
         async with self._cache_lock:
             yield self.cache
