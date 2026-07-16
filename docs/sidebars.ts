@@ -83,6 +83,7 @@ const sidebars: SidebarsConfig = {
             'concepts/vector_stores_configuration',
           ],
         },
+        'concepts/compression_configuration',
         'concepts/distributions',
         'concepts/resources',
       ],

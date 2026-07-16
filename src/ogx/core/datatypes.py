@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
 
+import tiktoken
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
@@ -715,6 +716,105 @@ class VectorStoresConfig(BaseModel):
     )
 
 
+DEFAULT_COMPRESSION_SUMMARIZATION_PROMPT = (
+    "You are compressing older parts of a conversation to save context space. Summarize the "
+    "conversation turns provided below into a concise handoff note for the same assistant to "
+    "continue the conversation. Preserve important facts, decisions, user preferences, and any "
+    "outstanding tasks. Omit pleasantries and redundant detail."
+)
+
+
+class CompressionConfig(BaseModel):
+    """Configuration for request-side context compression and output token capping,
+    applied uniformly to every inference call via InferenceRouter."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable request-side context compression and output token capping. Disabled by default.",
+    )
+    max_context_tokens: int | None = Field(
+        default=None,
+        description=(
+            "Token budget for outgoing messages. When exceeded (after dedup/truncation), the oldest "
+            "conversation turns are windowed out (and optionally summarized). None disables windowing."
+        ),
+    )
+    dedupe_tool_outputs: bool = Field(
+        default=True,
+        description="Collapse exact-duplicate tool-call outputs to a short placeholder before sending to the model.",
+    )
+    max_tool_output_tokens: int | None = Field(
+        default=None,
+        description="Truncate any single tool output exceeding this many tokens. None disables truncation.",
+    )
+    summarize_dropped_turns: bool = Field(
+        default=False,
+        description="Summarize windowed-out turns via an LLM call instead of silently dropping them.",
+    )
+    summarization_model: str | None = Field(
+        default=None,
+        description="Model used to summarize dropped turns. If not set, uses the same model as the request.",
+    )
+    summarization_prompt: str = Field(
+        default=DEFAULT_COMPRESSION_SUMMARIZATION_PROMPT,
+        description="Prompt used to instruct the model to summarize windowed-out conversation turns.",
+    )
+    max_output_tokens: int | None = Field(
+        default=None,
+        description="Default cap applied to max_tokens/max_completion_tokens when the request leaves both unset.",
+    )
+    tokenizer_encoding: str | None = Field(
+        default=None,
+        description=(
+            "Default tiktoken encoding name for token counting (e.g. 'o200k_base', 'cl100k_base'). "
+            "Applied as a server-level default. If not set, encoding is resolved from the model name "
+            "via tiktoken, then model-family prefix mappings, then character-based estimation."
+        ),
+    )
+    model_tokenizer_mappings: dict[str, str] = Field(
+        default_factory=lambda: {
+            "llama": "cl100k_base",
+            "mistral": "cl100k_base",
+            "claude": "cl100k_base",
+            "gemma": "cl100k_base",
+            "qwen": "cl100k_base",
+            "phi": "cl100k_base",
+            "deepseek": "cl100k_base",
+        },
+        description=(
+            "Map model name prefixes to tiktoken encoding names. Used as a heuristic fallback when "
+            "tiktoken cannot resolve the model name directly. Matching is case-insensitive on the "
+            "model name after stripping any provider prefix (e.g., 'ollama/llama3.2:3b' matches 'llama')."
+        ),
+    )
+
+    @field_validator("tokenizer_encoding")
+    @classmethod
+    def validate_tokenizer_encoding(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                tiktoken.get_encoding(v)
+            except ValueError:
+                raise ValueError(
+                    f"Failed to resolve tokenizer_encoding '{v}'. "
+                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base')."
+                ) from None
+        return v
+
+    @field_validator("model_tokenizer_mappings")
+    @classmethod
+    def validate_model_tokenizer_mappings(cls, v: dict[str, str]) -> dict[str, str]:
+        for prefix, enc_name in v.items():
+            try:
+                tiktoken.get_encoding(enc_name)
+            except ValueError:
+                raise ValueError(
+                    f"Failed to resolve model_tokenizer_mappings['{prefix}'] = '{enc_name}'. "
+                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base')."
+                ) from None
+        return v
+
+
 class QuotaPeriod(StrEnum):
     """Time period for request quota enforcement."""
 
@@ -889,6 +989,11 @@ can be instantiated multiple times (with different configs) if necessary.
     vector_stores: VectorStoresConfig | None = Field(
         default=None,
         description="Configuration for vector stores, including default embedding model",
+    )
+
+    compression: CompressionConfig | None = Field(
+        default=None,
+        description="Configuration for request-side context compression and output token capping applied to all inference calls.",
     )
 
     connectors: list[ConnectorInput] = Field(
