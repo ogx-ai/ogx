@@ -40,7 +40,7 @@ class GeminiInferenceAdapter(OpenAIMixin):
 
         The AsyncOpenAI client sends this as ``Authorization: Bearer <value>``,
         which Google's OpenAI-compatible endpoint accepts for both API keys and
-        OAuth access tokens.  ``access_token`` takes precedence when set.
+        OAuth access tokens.  ``api_key`` and ``access_token`` are mutually exclusive.
         """
         if self.config.access_token:
             return self.config.access_token.get_secret_value()
