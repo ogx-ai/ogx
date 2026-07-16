@@ -135,6 +135,30 @@ class TimeoutConfig(BaseModel):
     )
 
 
+class LimitsConfig(BaseModel):
+    """HTTP connection pool limits, matching httpx.Limits.
+
+    Defaults match httpx's own defaults, so setting one field doesn't leave the others
+    unbounded.
+    """
+
+    max_connections: int | None = Field(
+        default=100,
+        ge=1,
+        description="Maximum number of concurrent connections in the pool. None means no limit.",
+    )
+    max_keepalive_connections: int | None = Field(
+        default=20,
+        ge=0,
+        description="Maximum number of idle keep-alive connections to retain. None means no limit.",
+    )
+    keepalive_expiry: float | None = Field(
+        default=5.0,
+        ge=0,
+        description="Time in seconds to keep idle keep-alive connections open before closing them. None means no expiry.",
+    )
+
+
 class NetworkConfig(BaseModel):
     """Network configuration for remote provider connections."""
 
@@ -153,6 +177,10 @@ class NetworkConfig(BaseModel):
     headers: dict[str, str] | None = Field(
         default=None,
         description="Additional HTTP headers to include in all requests.",
+    )
+    limits: LimitsConfig | None = Field(
+        default=None,
+        description="HTTP connection pool limits (max connections, keepalive connections, keepalive expiry). None uses httpx's own defaults.",
     )
 
 
