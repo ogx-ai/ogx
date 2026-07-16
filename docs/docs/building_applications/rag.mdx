@@ -182,6 +182,99 @@ OGX provides OpenAI-compatible RAG capabilities through:
 - **Files API**: Document upload and processing using OpenAI's file format
 - **Responses API**: Enhanced chat completions with agentic tool calling via file search
 
+## GraphRAG with Neo4j
+
+Standard RAG retrieves chunks that are semantically or lexically similar to a
+query. GraphRAG starts with those same vector or keyword results, then follows
+relationships in a graph to find related chunks that may not contain the query
+terms themselves. This is useful for questions that depend on shared entities,
+references, or multi-hop relationships across documents.
+
+OGX provides GraphRAG through the `remote::neo4j` VectorIO provider. The
+provider performs the initial vector, keyword, or hybrid search in Neo4j, then
+expands the result through connected chunk nodes. In the deterministic example
+below, standard retrieval returns a Python chunk, while GraphRAG can also return
+a machine-learning chunk connected through the `python` entity.
+
+### Configure Neo4j
+
+Start Neo4j locally:
+
+```bash
+docker run -d --name ogx-neo4j \
+  -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=neo4j/ogxpassword \
+  neo4j:2025.10
+```
+
+Add a Neo4j provider to your stack configuration and enable graph retrieval:
+
+```yaml
+providers:
+  vector_io:
+    - provider_id: neo4j
+      provider_type: remote::neo4j
+      config:
+        uri: ${env.NEO4J_URI:=bolt://localhost:7687}
+        user: ${env.NEO4J_USER:=neo4j}
+        password: ${env.NEO4J_PASSWORD:=}
+        database: ${env.NEO4J_DATABASE:=neo4j}
+        graph_retrieval_enabled: true
+        graph_expansion_depth: 2
+        graph_max_neighbors: 10
+        graph_expansion_weight: 0.15
+        persistence:
+          backend: kv_default
+          namespace: vector_io::neo4j
+```
+
+For the local container above, set `NEO4J_PASSWORD=ogxpassword` before starting
+OGX. Use a secret manager or an environment-specific secret in production.
+
+The provider supports vector, keyword, and hybrid search. `graph_expansion_depth`
+is limited to three hops, and `graph_relationship_types` can restrict traversal
+to selected relationship types. Neighbors receive a score based on the seed
+chunk score multiplied by `graph_expansion_weight`.
+
+### Index Documents and Add Relationships
+
+Create and populate the vector store using the normal Files and Vector Stores
+APIs. Select Neo4j when creating the store:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="none")
+vector_store = client.vector_stores.create(
+    name="knowledge-graph",
+    extra_body={"provider_id": "neo4j"},
+)
+
+# Upload files and attach them to vector_store as shown above.
+```
+
+OGX stores chunks and their embeddings, but it does not infer entities or
+relationships for you. Add graph structure with the Neo4j driver or
+`cypher-shell`. Chunk labels are derived from the vector store identifier; for
+example, a store with the identifier `vs_demo` uses the `OGXChunk_vs_demo` label:
+
+```cypher
+MERGE (python:Entity {name: 'python'})
+MATCH (python_chunk:OGXChunk_vs_demo {chunk_id: 'chunk-python'})
+MATCH (ml_chunk:OGXChunk_vs_demo {chunk_id: 'chunk-ml'})
+MERGE (python_chunk)-[:MENTIONS]->(python)
+MERGE (ml_chunk)-[:MENTIONS]->(python)
+```
+
+Use the same Vector Stores search or Responses `file_search` workflow after
+relationships are present. With `graph_retrieval_enabled: false`, retrieval is
+standard RAG. With it enabled, the Neo4j provider expands the initial results
+through the graph and returns the highest-scoring seed and related chunks.
+
+GraphRAG quality depends on the graph structure: add relationships that encode
+meaningful connections, keep traversal depth and neighbor limits bounded, and
+compare results against standard retrieval before enabling it broadly.
+
 ## Configuring Default Embedding Models
 
 To enable automatic vector store creation without specifying embedding models, configure a default embedding model in your config.yaml like so:

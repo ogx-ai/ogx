@@ -12,7 +12,7 @@ import aiosqlite
 from ogx.log import get_logger
 from ogx_api.internal.kvstore import KVStore
 
-from ..config import SqliteKVStoreConfig  # type: ignore[attr-defined]
+from ..config import SqliteKVStoreConfig
 
 logger = get_logger(name=__name__, category="providers::utils")
 
