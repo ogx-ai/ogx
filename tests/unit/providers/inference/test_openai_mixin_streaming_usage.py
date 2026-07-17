@@ -29,9 +29,10 @@ Specific tests:
 from collections.abc import AsyncIterator
 from typing import Any
 
-from openai.types import CompletionUsage
+from openai.types import Completion, CompletionUsage
 from openai.types.chat import ChatCompletionChunk
 from openai.types.chat.chat_completion_chunk import Choice, ChoiceDelta
+from openai.types.completion_choice import CompletionChoice
 
 
 def _make_content_chunk(
@@ -298,6 +299,134 @@ class TestFixStreamingUsage:
         final = collected[-1]
         assert final.id == "my-id"
         assert final.model == "gemini-2.5-pro"
+
+
+def _make_text_completion_chunk(
+    text: str,
+    chunk_id: str = "cmpl-1",
+    model: str = "gemini-2.5-flash",
+    finish_reason: str | None = None,
+    usage: CompletionUsage | None = None,
+) -> Completion:
+    # Intermediate stream chunks have finish_reason=None; the SDK parses stream
+    # events leniently (construct), so mirror that here.
+    choice = CompletionChoice.model_construct(text=text, finish_reason=finish_reason, index=0, logprobs=None)
+    return Completion(
+        id=chunk_id,
+        choices=[choice],
+        created=1000,
+        model=model,
+        object="text_completion",
+        usage=usage,
+    )
+
+
+class TestFixStreamingUsageTextCompletion:
+    """coalesce_streaming_usage=True on the legacy /v1/completions stream.
+
+    The final usage-only chunk must be a Completion (object='text_completion'),
+    not a ChatCompletionChunk — OpenAI SDK clients parse every event of a
+    text-completion stream as Completion and fail validation otherwise.
+    """
+
+    def _make_stub(self) -> Any:
+        from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+
+        class _Stub(OpenAIMixin):
+            config: Any = None
+            coalesce_streaming_usage: bool = True
+            overwrite_completion_id: bool = False
+
+            def get_base_url(self):
+                return "https://example.com"
+
+        stub = _Stub.model_construct()
+        stub.coalesce_streaming_usage = True
+        stub.overwrite_completion_id = False
+        return stub
+
+    async def test_fix_completion_stream_yields_only_text_completion_chunks(self):
+        """Every yielded chunk, including the final usage chunk, is a text_completion."""
+        usage = CompletionUsage(prompt_tokens=9, completion_tokens=5, total_tokens=14)
+        chunks = [
+            _make_text_completion_chunk("hello", usage=usage),
+            _make_text_completion_chunk(" world", finish_reason="stop", usage=usage),
+        ]
+
+        async def _fake_stream():
+            for c in chunks:
+                yield c
+
+        stub = self._make_stub()
+        result = await stub._postprocess_chunk(_fake_stream(), stream=True, is_chat=False)
+        collected = await _collect(result)
+
+        assert len(collected) == 3
+        for chunk in collected:
+            assert isinstance(chunk, Completion), f"got {type(chunk).__name__}"
+            assert chunk.object == "text_completion"
+
+    async def test_fix_completion_stream_final_chunk_carries_usage(self):
+        """Usage is stripped from content chunks and delivered on a final Completion chunk."""
+        usage = CompletionUsage(prompt_tokens=9, completion_tokens=5, total_tokens=14)
+        chunks = [
+            _make_text_completion_chunk("hello", usage=usage),
+            _make_text_completion_chunk(" world", finish_reason="stop", usage=usage),
+        ]
+
+        async def _fake_stream():
+            for c in chunks:
+                yield c
+
+        stub = self._make_stub()
+        result = await stub._postprocess_chunk(_fake_stream(), stream=True, is_chat=False)
+        collected = await _collect(result)
+
+        assert all(c.usage is None for c in collected[:-1])
+        final = collected[-1]
+        assert final.choices == []
+        assert final.id == "cmpl-1"
+        assert final.model == "gemini-2.5-flash"
+        assert final.usage is not None
+        assert final.usage.prompt_tokens == 9
+        assert final.usage.completion_tokens == 5
+        assert final.usage.total_tokens == 14
+
+    async def test_fix_completion_stream_no_usage_no_extra_chunk(self):
+        """No synthetic chunk is appended when no incoming chunk carries usage."""
+        chunks = [
+            _make_text_completion_chunk("hello"),
+            _make_text_completion_chunk(" world", finish_reason="stop"),
+        ]
+
+        async def _fake_stream():
+            for c in chunks:
+                yield c
+
+        stub = self._make_stub()
+        result = await stub._postprocess_chunk(_fake_stream(), stream=True, is_chat=False)
+        collected = await _collect(result)
+
+        assert len(collected) == 2
+        assert all(isinstance(c, Completion) for c in collected)
+
+    async def test_chat_stream_final_chunk_still_chat_completion_chunk(self):
+        """The chat path is unchanged: final usage chunk stays a ChatCompletionChunk."""
+        usage = CompletionUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+        chunks = [_make_stop_chunk(usage=usage)]
+
+        async def _fake_stream():
+            for c in chunks:
+                yield c
+
+        stub = self._make_stub()
+        result = await stub._postprocess_chunk(_fake_stream(), stream=True)
+        collected = await _collect(result)
+
+        final = collected[-1]
+        assert isinstance(final, ChatCompletionChunk)
+        assert final.object == "chat.completion.chunk"
+        assert final.usage.total_tokens == 15
 
 
 class TestGeminiAdapterFlag:

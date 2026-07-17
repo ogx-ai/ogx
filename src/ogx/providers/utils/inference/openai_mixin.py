@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
+from openai.types import Completion
 from openai.types.chat import ChatCompletionChunk
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -325,7 +326,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             raise ValueError(f"Model {model} has no provider_resource_id")
         return model_obj.provider_resource_id
 
-    async def _postprocess_chunk(self, resp: Any, stream: bool | None) -> Any:
+    async def _postprocess_chunk(self, resp: Any, stream: bool | None, is_chat: bool = True) -> Any:
         if stream:
             new_id = f"cltsd-{uuid.uuid4()}" if self.overwrite_completion_id else None
             fix_usage = self.coalesce_streaming_usage
@@ -346,14 +347,24 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                         chunk.usage = None
                     yield chunk
                 if fix_usage and last_usage is not None:
-                    yield ChatCompletionChunk(
-                        id=last_id,
-                        choices=[],
-                        created=last_created,
-                        model=last_model,
-                        object="chat.completion.chunk",
-                        usage=last_usage,
-                    )
+                    if is_chat:
+                        yield ChatCompletionChunk(
+                            id=last_id,
+                            choices=[],
+                            created=last_created,
+                            model=last_model,
+                            object="chat.completion.chunk",
+                            usage=last_usage,
+                        )
+                    else:
+                        yield Completion(
+                            id=last_id,
+                            choices=[],
+                            created=last_created,
+                            model=last_model,
+                            object="text_completion",
+                            usage=last_usage,
+                        )
 
             return _gen()
         else:
@@ -402,7 +413,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             completion_kwargs["extra_headers"] = extra_headers
         resp = await self.client.completions.create(**completion_kwargs)
 
-        return await self._postprocess_chunk(resp, params.stream)  # type: ignore[no-any-return]
+        return await self._postprocess_chunk(resp, params.stream, is_chat=False)  # type: ignore[no-any-return]
 
     async def openai_chat_completion(
         self,
