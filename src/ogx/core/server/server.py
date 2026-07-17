@@ -486,6 +486,13 @@ def create_app() -> StackApp:
 
     validate_auth_security(config)
 
+    if not (config.server.auth and config.server.auth.provider_config):
+        logger.warning(
+            "Authentication is not configured. All API endpoints are accessible without credentials. "
+            "See https://ogx-ai.github.io/docs/distributions/configuration#authentication-configuration"
+            " to configure authentication.",
+        )
+
     if config.server.auth:
         # Add route authorization middleware if route_policy is configured
         # This can work independently of authentication
