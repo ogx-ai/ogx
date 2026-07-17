@@ -113,6 +113,7 @@ from .types import (
     ChatCompletionResult,
 )
 from .utils import (
+    StreamingCitationCleaner,
     convert_chat_choice_to_response_message,
     convert_mcp_tool_choice,
     extract_citations_from_text,
@@ -1104,6 +1105,10 @@ class StreamingResponseOrchestrator:
         refusal_text_accumulated = []
         pending_guardrail_events: list[OpenAIResponseObjectStream] = []
         chars_since_last_check = 0
+        # Cleans citation markers out of delta text as it streams, so a client
+        # reconstructing output from deltas sees the same text as content_part.done /
+        # output_item.done (which clean the fully accumulated text once streaming ends).
+        citation_cleaner = StreamingCitationCleaner(self.citation_files)
 
         async for raw_chunk in completion_result:
             # Providers returning OpenAIChatCompletionChunkWithReasoning wrap
@@ -1166,21 +1171,27 @@ class StreamingResponseOrchestrator:
                             ),
                             sequence_number=self.sequence_number,
                         )
-                    self.sequence_number += 1
+                    # Withhold citation markers (and any text that might still turn into
+                    # one) from the delta stream, so it stays consistent with the cleaned
+                    # text in content_part.done / output_item.done below. A marker split
+                    # across chunk boundaries can cause this to yield nothing for a chunk.
+                    cleaned_delta = citation_cleaner.feed(chunk_choice.delta.content)
+                    if cleaned_delta:
+                        self.sequence_number += 1
 
-                    text_delta_event = OpenAIResponseObjectStreamResponseOutputTextDelta(
-                        content_index=content_index,
-                        delta=chunk_choice.delta.content,
-                        item_id=message_item_id,
-                        logprobs=chunk_logprobs if chunk_logprobs is not None else [],
-                        output_index=message_output_index,
-                        sequence_number=self.sequence_number,
-                    )
-                    # Buffer text delta events for guardrail check
-                    if self.enable_guardrails:
-                        pending_guardrail_events.append(text_delta_event)
-                    else:
-                        yield text_delta_event
+                        text_delta_event = OpenAIResponseObjectStreamResponseOutputTextDelta(
+                            content_index=content_index,
+                            delta=cleaned_delta,
+                            item_id=message_item_id,
+                            logprobs=chunk_logprobs if chunk_logprobs is not None else [],
+                            output_index=message_output_index,
+                            sequence_number=self.sequence_number,
+                        )
+                        # Buffer text delta events for guardrail check
+                        if self.enable_guardrails:
+                            pending_guardrail_events.append(text_delta_event)
+                        else:
+                            yield text_delta_event
 
                 # Collect content for final response
                 content_delta = chunk_choice.delta.content or ""
@@ -1369,6 +1380,23 @@ class StreamingResponseOrchestrator:
 
         # Emit content_part.done event if text content was streamed (before content gets cleared)
         if content_part_emitted:
+            # Flush any text the citation cleaner was still withholding (e.g. a marker-like
+            # sequence that never completed) so delta-reconstructed text catches up with
+            # the cleaned text below before the round closes out. Guardrail buffering
+            # doesn't apply here: the moderation check above already ran over the full raw
+            # accumulated text, which includes whatever this flush contains.
+            flushed_delta = citation_cleaner.flush()
+            if flushed_delta:
+                self.sequence_number += 1
+                yield OpenAIResponseObjectStreamResponseOutputTextDelta(
+                    content_index=content_index,
+                    delta=flushed_delta,
+                    item_id=message_item_id,
+                    logprobs=[],
+                    output_index=message_output_index,
+                    sequence_number=self.sequence_number,
+                )
+
             final_text = "".join(chat_response_content)
             part_annotations, part_clean_text = extract_citations_from_text(final_text, self.citation_files)
             self.sequence_number += 1

@@ -840,12 +840,24 @@ class TestExtractCitationsFromText:
         assert cleaned_text == "Fact one. Fact two."
         assert [a.file_id for a in annotations] == ["file-abc123", "file-def456"]
 
-    def test_extract_citations_ignores_unknown_file_ids(self):
+    def test_extract_citations_preserves_unknown_file_id_markers(self):
+        """Regression test: a marker whose file id isn't in citation_files (e.g. stale or
+        mismatched) must not be silently deleted from the user-visible text — only markers
+        for recognized files are stripped out, since those become real annotations instead.
+        """
         text = "Some fact <|file-unknown|>."
         annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
 
         assert annotations == []
-        assert cleaned_text == "Some fact."
+        assert cleaned_text == "Some fact <|file-unknown|>."
+
+    def test_extract_citations_preserves_unknown_marker_alongside_known_one(self):
+        """A mix of a known and an unknown marker: only the known one is stripped/cited."""
+        text = "Cited fact <|file-abc123|>. Uncited fact <|file-unknown|>."
+        annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
+
+        assert [a.file_id for a in annotations] == ["file-abc123"]
+        assert cleaned_text == "Cited fact. Uncited fact <|file-unknown|>."
 
 
 class TestExtractCitationsFromTextWithFallback:
