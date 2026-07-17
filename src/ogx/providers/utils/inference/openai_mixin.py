@@ -18,6 +18,7 @@ from openai.types.chat import ChatCompletionChunk
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.log import get_logger
 from ogx.providers.utils.inference.http_client import (
     _merge_network_config_into_client,
@@ -128,6 +129,10 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     _cached_client_key: tuple[str, str] | None = PrivateAttr(default=None)
     _superseded_clients: list[AsyncOpenAI] = PrivateAttr(default_factory=list)
 
+    # these are injected by the distribution system at runtime to provide model registry functionality
+    __provider_id__: str
+    model_store: ModelsRoutingTable | None = None
+
     def get_api_key(self) -> str | None:
         """
         Get the API key.
@@ -186,14 +191,14 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """
         if metadata := self.embedding_model_metadata.get(identifier):
             return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                provider_id=self.__provider_id__,
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.embedding,
                 metadata=metadata,
             )
         return Model(
-            provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+            provider_id=self.__provider_id__,
             provider_resource_id=identifier,
             identifier=identifier,
             model_type=ModelType.llm,
@@ -315,11 +320,13 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         :return: The provider-specific model ID (e.g., "gpt-4")
         """
         # self.model_store is injected by the distribution system at runtime
-        if not await self.model_store.has_model(model):  # type: ignore[attr-defined]
+        assert self.model_store is not None
+
+        if not await self.model_store.has_model(model):
             return model
 
         # Look up the registered model to get the provider-specific model ID
-        model_obj: Model = await self.model_store.get_model(model)  # type: ignore[attr-defined]
+        model_obj: Model = await self.model_store.get_model(model)
         # provider_resource_id is str | None, but we expect it to be str for OpenAI calls
         if model_obj.provider_resource_id is None:
             raise ValueError(f"Model {model} has no provider_resource_id")
@@ -551,7 +558,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             return model
 
         if not await self.check_model_availability(model.provider_model_id):
-            raise ValueError(f"Model {model.provider_model_id} is not available from provider {self.__provider_id__}")  # type: ignore[attr-defined]
+            raise ValueError(f"Model {model.provider_model_id} is not available from provider {self.__provider_id__}")
         return model
 
     async def unregister_model(self, model_id: str) -> None:
@@ -612,7 +619,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """
         # First check if the model is pre-registered in the model store
         if hasattr(self, "model_store") and self.model_store:
-            qualified_model = f"{self.__provider_id__}/{model}"  # type: ignore[attr-defined]
+            qualified_model = f"{self.__provider_id__}/{model}"
             if await self.model_store.has_model(qualified_model):
                 return True
 
@@ -660,6 +667,11 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         )
 
         result = await self.anthropic_messages(msg_request)
+
+        # narrow the from AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]
+        # to AnthropicMessageResponse for type checking
+        if not isinstance(result, AnthropicMessageResponse):
+            raise RuntimeError("Received streaming response from non-streaming request")
 
         return AnthropicCountTokensResponse(input_tokens=result.usage.input_tokens)
 

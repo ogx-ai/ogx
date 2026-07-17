@@ -218,9 +218,12 @@ class VLLMInferenceAdapter(OpenAIMixin):
         params.messages = mapped_messages
 
         result = await self.openai_chat_completion(params)
+        # narrow the result type to AsyncIterator for the reasoning wrapper below
+        if not isinstance(result, AsyncIterator):
+            raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
         async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:  # type: ignore[union-attr]
+            async for chunk in result:
                 reasoning = None
                 for choice in chunk.choices or []:
                     reasoning = getattr(choice.delta, "reasoning", None) or getattr(
@@ -317,7 +320,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
                     identifier=identifier,
                 )
             return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                provider_id=self.__provider_id__,
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.embedding,
@@ -325,7 +328,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
             )
         if "rerank" in identifier.lower():
             return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                provider_id=self.__provider_id__,
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.rerank,

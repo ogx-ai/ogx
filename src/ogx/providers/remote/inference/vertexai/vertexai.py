@@ -140,7 +140,7 @@ class GeminiCompletionSamplingParams(BaseModel):
 class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     """Inference adapter for Google Vertex AI platform."""
 
-    # extra="allow" lets the routing infra inject model_store, __provider_id__, etc.
+    # extra="allow" lets the routing infra inject model_store, __provider_spec__, etc.
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
     config: VertexAIConfig
@@ -155,6 +155,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         "models/text-embedding-004": {"embedding_dimension": 768, "context_length": 2048},
         "models/gemini-embedding-001": {"embedding_dimension": 3072, "context_length": 2048},
     }
+
+    __provider_id__: str  # automatically set by the resolver when instantiating the provider
 
     async def _close_managed_httpx_client(self) -> None:
         if self._http_options is None:
@@ -211,9 +213,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     async def register_model(self, model: Model) -> Model:
         provider_resource_id = model.provider_resource_id or model.identifier
         if not await self.check_model_availability(provider_resource_id):
-            raise ValueError(
-                f"Model {provider_resource_id} is not available from provider {self.__provider_id__}"  # type: ignore[attr-defined]
-            )
+            raise ValueError(f"Model {provider_resource_id} is not available from provider {self.__provider_id__}")
         return model
 
     async def unregister_model(self, model_id: str) -> None:
@@ -422,7 +422,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 continue
             if metadata := self.embedding_model_metadata.get(provider_model_id):
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.embedding,
@@ -430,7 +430,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 )
             else:
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.llm,
