@@ -221,6 +221,9 @@ class InferenceRouter(Inference):
     ) -> AsyncIterator[OpenAICompletion]:
         """Yield streamed completion chunks with the requested model id restored."""
         async for chunk in response:
+            # Skip None chunks, mirroring stream_tokens_and_compute_metrics_openai_chat
+            if chunk is None:
+                continue
             chunk.model = fully_qualified_model_id
             yield chunk
 

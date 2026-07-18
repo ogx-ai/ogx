@@ -120,6 +120,105 @@ async def test_openai_completion_streaming_rewrites_model_id(mock_llm_routing_ta
     assert called_params.model == "test-llm-model"
 
 
+async def test_openai_completion_streaming_empty_stream(mock_llm_routing_table):
+    """A provider stream that yields no chunks produces an empty stream without errors."""
+    routing_table, mock_provider = mock_llm_routing_table
+    router = InferenceRouter(routing_table=routing_table)
+
+    async def provider_stream():
+        return
+        yield  # unreachable; makes this function an async generator
+
+    mock_provider.openai_completion = AsyncMock(return_value=provider_stream())
+
+    params = OpenAICompletionRequestWithExtraBody(
+        model="test_provider/test-llm-model",
+        prompt="Say hello",
+        stream=True,
+    )
+
+    stream = await router.openai_completion(params)
+    chunks = [chunk async for chunk in stream]
+
+    assert chunks == []
+
+
+async def test_openai_completion_streaming_model_id_already_correct(mock_llm_routing_table):
+    """Chunks that already carry the fully qualified model id are passed through unchanged."""
+    routing_table, mock_provider = mock_llm_routing_table
+    router = InferenceRouter(routing_table=routing_table)
+
+    async def provider_stream():
+        yield _make_completion_chunk("Hello", model="test_provider/test-llm-model")
+
+    mock_provider.openai_completion = AsyncMock(return_value=provider_stream())
+
+    params = OpenAICompletionRequestWithExtraBody(
+        model="test_provider/test-llm-model",
+        prompt="Say hello",
+        stream=True,
+    )
+
+    stream = await router.openai_completion(params)
+    chunks = [chunk async for chunk in stream]
+
+    assert len(chunks) == 1
+    assert chunks[0].model == "test_provider/test-llm-model"
+    assert chunks[0].choices[0].text == "Hello"
+
+
+async def test_openai_completion_streaming_skips_none_chunks(mock_llm_routing_table):
+    """None chunks from a provider are skipped, mirroring the chat streaming path."""
+    routing_table, mock_provider = mock_llm_routing_table
+    router = InferenceRouter(routing_table=routing_table)
+
+    async def provider_stream():
+        yield _make_completion_chunk("Hello", model="test-llm-model")
+        yield None
+        yield _make_completion_chunk(" world", model="test-llm-model")
+
+    mock_provider.openai_completion = AsyncMock(return_value=provider_stream())
+
+    params = OpenAICompletionRequestWithExtraBody(
+        model="test_provider/test-llm-model",
+        prompt="Say hello",
+        stream=True,
+    )
+
+    stream = await router.openai_completion(params)
+    chunks = [chunk async for chunk in stream]
+
+    assert [chunk.model for chunk in chunks] == ["test_provider/test-llm-model", "test_provider/test-llm-model"]
+    assert [choice.text for chunk in chunks for choice in chunk.choices] == ["Hello", " world"]
+
+
+async def test_openai_completion_streaming_propagates_provider_errors(mock_llm_routing_table):
+    """Errors raised by the provider mid-stream propagate to the caller after earlier chunks are delivered."""
+    routing_table, mock_provider = mock_llm_routing_table
+    router = InferenceRouter(routing_table=routing_table)
+
+    async def provider_stream():
+        yield _make_completion_chunk("Hello", model="test-llm-model")
+        raise RuntimeError("provider stream failed")
+
+    mock_provider.openai_completion = AsyncMock(return_value=provider_stream())
+
+    params = OpenAICompletionRequestWithExtraBody(
+        model="test_provider/test-llm-model",
+        prompt="Say hello",
+        stream=True,
+    )
+
+    stream = await router.openai_completion(params)
+    chunks = []
+    with pytest.raises(RuntimeError, match="provider stream failed"):
+        async for chunk in stream:
+            chunks.append(chunk)
+
+    assert len(chunks) == 1
+    assert chunks[0].model == "test_provider/test-llm-model"
+
+
 async def test_openai_completion_non_streaming_rewrites_model_id(mock_llm_routing_table):
     """Non-streaming /v1/completions responses report the requested model id (regression guard)."""
     routing_table, mock_provider = mock_llm_routing_table
