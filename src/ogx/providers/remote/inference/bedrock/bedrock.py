@@ -157,9 +157,12 @@ class BedrockInferenceAdapter(OpenAIMixin):
         if not self._bedrock_config.has_bearer_token():
             self._sigv4_http_client = self._build_sigv4_http_client()
             # separate boto3 client for the bedrock control-plane API (ListFoundationModels)
-            from ogx.providers.utils.bedrock.client import create_bedrock_client
+            try:
+                from ogx.providers.utils.bedrock.client import create_bedrock_client
 
-            self._bedrock_client = create_bedrock_client(self._bedrock_config, "bedrock")
+                self._bedrock_client = create_bedrock_client(self._bedrock_config, "bedrock")
+            except Exception:
+                logger.debug("Could not create Bedrock control-plane client, model discovery will be skipped")
 
     def get_api_key(self) -> str | None:
         if self._should_use_sigv4():
