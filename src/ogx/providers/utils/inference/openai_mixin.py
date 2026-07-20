@@ -76,8 +76,10 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
     Expected Dependencies:
     - self.model_store: Injected by the OGX distribution system at runtime.
-      This provides model registry functionality for looking up registered models.
-      The model_store is set in routing_tables/common.py during provider initialization.
+      Used by check_model_availability() to check pre-registered models. Model name ->
+      provider model id resolution is NOT done here: InferenceRouter resolves params.model
+      to the provider_resource_id before calling any provider method, so provider code can
+      assume params.model is already the provider-specific id.
     """
 
     # Allow extra fields so the routing infra can inject model_store, __provider_id__, etc.
@@ -309,29 +311,6 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 f"Allowed models: {self.config.allowed_models}"
             )
 
-    async def _get_provider_model_id(self, model: str) -> str:
-        """
-        Get the provider-specific model ID from the model store.
-
-        This is a utility method that looks up the registered model and returns
-        the provider_resource_id that should be used for actual API calls.
-
-        :param model: The registered model name/identifier
-        :return: The provider-specific model ID (e.g., "gpt-4")
-        """
-        # self.model_store is injected by the distribution system at runtime
-        assert self.model_store is not None
-
-        if not await self.model_store.has_model(model):
-            return model
-
-        # Look up the registered model to get the provider-specific model ID
-        model_obj: Model = await self.model_store.get_model(model)
-        # provider_resource_id is str | None, but we expect it to be str for OpenAI calls
-        if model_obj.provider_resource_id is None:
-            raise ValueError(f"Model {model} has no provider_resource_id")
-        return model_obj.provider_resource_id
-
     async def _postprocess_chunk(self, resp: Any, stream: bool | None) -> Any:
         if stream:
             new_id = f"cltsd-{uuid.uuid4()}" if self.overwrite_completion_id else None
@@ -380,7 +359,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             params.stream_options, params.stream or False, self.supports_stream_options
         )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
 
         completion_kwargs = await prepare_openai_completion_params(
@@ -423,7 +402,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             params.stream_options, params.stream or False, self.supports_stream_options
         )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
 
         messages = params.messages
@@ -494,7 +473,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         if not self.supports_tokenized_embeddings_input:
             validate_embeddings_input_is_text(params)
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
 
         # Build request params conditionally to avoid NotGiven/Omit type mismatch
@@ -643,7 +622,6 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         )
 
         openai_params = anthropic_request_to_openai(params)
-        openai_params.model = await self._get_provider_model_id(openai_params.model)
         self._validate_model_allowed(openai_params.model)
 
         result = await self.openai_chat_completion(openai_params)

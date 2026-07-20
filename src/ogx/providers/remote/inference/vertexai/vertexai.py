@@ -364,16 +364,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 ) from None
         return self._default_client
 
-    async def _get_provider_model_id(self, model: str) -> str:
-        # model_store is injected at runtime by the routing infra
-        if hasattr(self, "model_store") and self.model_store and await self.model_store.has_model(model):  # type: ignore[attr-defined]
-            model_obj: Model = await self.model_store.get_model(model)  # type: ignore[attr-defined]
-            if model_obj.provider_resource_id is None:
-                raise ValueError(f"Model {model} has no provider_resource_id")
-            return model_obj.provider_resource_id
-
-        return model
-
     async def list_provider_model_ids(self) -> list[str]:
         """List model IDs available from the configured Vertex AI project.
 
@@ -759,7 +749,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 
@@ -843,7 +833,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         prompts = self._validate_completion_prompt(params.prompt)
         self._warn_unsupported_completion_params(params)
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
         config = self._build_completion_config(params)
@@ -934,7 +924,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 ignored_keys=list(params.model_extra.keys()),
             )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 

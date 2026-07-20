@@ -257,10 +257,6 @@ async def test_params_passed_through_full_chain_to_backend_service(
     openai_adapter = OpenAIInferenceAdapter(config=config)
     openai_adapter.provider_data_api_key_field = None
 
-    mock_model_store = AsyncMock()
-    mock_model_store.has_model = AsyncMock(return_value=False)
-    openai_adapter.model_store = mock_model_store
-
     openai_responses_impl = OpenAIResponsesImpl(
         inference_api=openai_adapter,
         tool_groups_api=AsyncMock(),
