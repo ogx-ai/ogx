@@ -31,6 +31,8 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_max_output_tokens(self, openai_client, text_model_id):
         """Test OpenAI response with max_output_tokens parameter."""
+        if text_model_id.startswith("watsonx/"):
+            pytest.skip("WatsonX does not support max_output_tokens parameter")
         response = openai_client.responses.create(
             model=text_model_id,
             input=[{"role": "user", "content": "What are the 5 Ds of dodgeball?"}],
@@ -43,6 +45,8 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_small_max_output_tokens(self, openai_client, text_model_id):
         """Test response with very small max_output_tokens to trigger potential truncation."""
+        if text_model_id.startswith("watsonx/"):
+            pytest.skip("WatsonX does not support max_output_tokens parameter")
         response = openai_client.responses.create(
             model=text_model_id,
             input=[
@@ -101,6 +105,8 @@ class TestOpenAIResponses:
         self, openai_client, text_model_id
     ):
         """Verify invalid base64 image input becomes response.failed with a spec-compliant error code."""
+        if text_model_id.startswith("watsonx/"):
+            pytest.skip("WatsonX text model does not support image inputs")
         if text_model_id.startswith("ollama/"):
             # In some replay environments, Ollama models may not be exposed via `models.list()`.
             available_model_ids = {m.id for m in openai_client.models.list()}
@@ -445,6 +451,8 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_parallel_tool_calls_disabled(self, openai_client, text_model_id):
         """Test that parallel_tool_calls=False produces only one function call."""
+        if text_model_id.startswith("watsonx/"):
+            pytest.skip("WatsonX does not support parallel_tool_calls parameter")
         response = openai_client.responses.create(
             model=text_model_id,
             input="What is the weather in Paris and the current time in London?",
@@ -461,6 +469,8 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_parallel_tool_calls_disabled_streaming(self, openai_client, text_model_id):
         """Test parallel_tool_calls disabled in streaming mode with function tools."""
+        if text_model_id.startswith("watsonx/"):
+            pytest.skip("WatsonX does not support parallel_tool_calls parameter")
         stream = openai_client.responses.create(
             model=text_model_id,
             input="What is the weather in Paris and the current time in London?",
@@ -524,6 +534,8 @@ class TestOpenAIResponses:
 
     def test_openai_response_background_completes(self, openai_client, text_model_id):
         """Test that a background response eventually completes."""
+        if text_model_id.startswith("watsonx/"):
+            pytest.skip("WatsonX rate limits cause background responses to fail")
         response = openai_client.responses.create(
             model=text_model_id,
             input="Say hello",

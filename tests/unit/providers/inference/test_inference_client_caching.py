@@ -149,9 +149,8 @@ def test_openai_provider_data_used(config_cls, adapter_cls, provider_data_valida
         ),
     ],
 )
-def test_litellm_provider_data_used(config_cls, adapter_cls, provider_data_validator: str):
-    """Validate data for LiteLLM-based providers.  Similar to test_openai_provider_data_used, but without the
-    assumption that there is an OpenAI-compatible client object."""
+def test_watsonx_provider_data_used(config_cls, adapter_cls, provider_data_validator: str):
+    """Validate that WatsonX picks up API key from provider data headers."""
 
     inference_adapter = adapter_cls(config=config_cls(base_url="http://fake"))
 
@@ -162,4 +161,4 @@ def test_litellm_provider_data_used(config_cls, adapter_cls, provider_data_valid
         with request_provider_data_context(
             {"x-llamastack-provider-data": json.dumps({inference_adapter.provider_data_api_key_field: api_key})}
         ):
-            assert inference_adapter.get_api_key() == api_key
+            assert inference_adapter._get_api_key_from_config_or_provider_data() == api_key

@@ -6,6 +6,8 @@
 
 import json
 
+import pytest
+
 
 def test_json_schema_string_types(responses_client, text_model_id):
     """Test json schema with string types."""
@@ -42,6 +44,8 @@ def test_json_schema_string_types(responses_client, text_model_id):
 
 def test_json_schema_integer_types(responses_client, text_model_id):
     """Test json schema with integer types."""
+    if text_model_id.startswith("watsonx/"):
+        pytest.skip("WatsonX model does not reliably produce valid structured JSON output")
     text_format = {
         "type": "json_schema",
         "name": "PersonAge",
@@ -71,6 +75,8 @@ def test_json_schema_integer_types(responses_client, text_model_id):
 
 def test_json_schema_boolean_types(responses_client, text_model_id):
     """Test json schema with boolean types."""
+    if text_model_id.startswith("watsonx/"):
+        pytest.skip("WatsonX model does not reliably produce valid structured JSON output")
     text_format = {
         "type": "json_schema",
         "name": "UserStatus",
@@ -102,6 +108,8 @@ def test_json_schema_boolean_types(responses_client, text_model_id):
 
 def test_json_schema_float_types(responses_client, text_model_id):
     """Test json schema with float types."""
+    if text_model_id.startswith("watsonx/"):
+        pytest.skip("WatsonX model does not reliably produce valid structured JSON output")
     text_format = {
         "type": "json_schema",
         "name": "ProductPrice",
@@ -131,6 +139,8 @@ def test_json_schema_float_types(responses_client, text_model_id):
 
 def test_json_schema_array_of_strings(responses_client, text_model_id):
     """Test json schema with an array of strings."""
+    if text_model_id.startswith("watsonx/"):
+        pytest.skip("WatsonX model does not reliably produce valid structured JSON output")
     text_format = {
         "type": "json_schema",
         "name": "PersonSkills",
