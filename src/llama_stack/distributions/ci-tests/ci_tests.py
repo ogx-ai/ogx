@@ -42,7 +42,6 @@ def get_distribution_template() -> DistributionTemplate:
         model_type=ModelType.llm,
     )
 
-
     # Add conditional authentication config (disabled by default for CI tests)
     # This tests the conditional auth provider feature and provides a template for users
     # To enable: export AUTH_PROVIDER=enabled and configure the auth env vars
@@ -80,7 +79,6 @@ def get_distribution_template() -> DistributionTemplate:
 
         # Add WatsonX inference provider
         run_config.provider_overrides["inference"].append(watsonx_provider)
-
 
         # Add conditional auth config
         run_config.auth_config = auth_config
