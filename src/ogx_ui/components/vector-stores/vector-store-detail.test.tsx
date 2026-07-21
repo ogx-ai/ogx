@@ -149,9 +149,35 @@ describe("VectorStoreDetailView", () => {
         provider_vector_db_id: "test_db_id",
       },
     };
+    const mockFiles: VectorStoreFile[] = [
+      {
+        id: "file_1",
+        status: "completed",
+        created_at: 1710000001,
+        usage_bytes: 0,
+      },
+      {
+        id: "file_2",
+        status: "completed",
+        created_at: 1710000002,
+        usage_bytes: 0,
+      },
+      {
+        id: "file_3",
+        status: "completed",
+        created_at: 1710000003,
+        usage_bytes: 0,
+      },
+    ];
 
     test("renders store properties correctly", () => {
-      render(<VectorStoreDetailView {...defaultProps} store={mockStore} />);
+      render(
+        <VectorStoreDetailView
+          {...defaultProps}
+          store={mockStore}
+          files={mockFiles}
+        />
+      );
 
       expect(screen.getByText("Vector Store Details")).toBeInTheDocument();
       expect(screen.getByText("vs_123")).toBeInTheDocument();
@@ -313,9 +339,23 @@ describe("VectorStoreDetailView", () => {
       usage_bytes: 1024,
       metadata: {},
     };
+    const mockFiles: VectorStoreFile[] = [
+      {
+        id: "file_layout",
+        status: "completed",
+        created_at: 1710000001,
+        usage_bytes: 0,
+      },
+    ];
 
     test("renders main content and sidebar in correct layout", () => {
-      render(<VectorStoreDetailView {...defaultProps} store={mockStore} />);
+      render(
+        <VectorStoreDetailView
+          {...defaultProps}
+          store={mockStore}
+          files={mockFiles}
+        />
+      );
 
       expect(screen.getByText("Files")).toBeInTheDocument();
 

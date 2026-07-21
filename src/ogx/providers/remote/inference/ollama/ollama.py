@@ -47,9 +47,6 @@ class OllamaInferenceAdapter(OpenAIMixin):
 
     config: OllamaImplConfig
 
-    # automatically set by the resolver when instantiating the provider
-    __provider_id__: str
-
     embedding_model_metadata: dict[str, dict[str, int]] = {
         "all-minilm:l6-v2": {
             "embedding_dimension": 384,

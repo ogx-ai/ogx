@@ -25,6 +25,7 @@ import {
   VectorStoreEditor,
   VectorStoreFormData,
 } from "@/components/vector-stores/vector-store-editor";
+import { buildVectorStoreParams } from "@/components/vector-stores/vector-store-params";
 
 export default function VectorStoresPage() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export default function VectorStoresPage() {
     hasMore,
     error,
     loadMore,
+    refetch,
   } = usePagination<VectorStore>({
     limit: 20,
     order: "desc",
@@ -130,27 +132,12 @@ export default function VectorStoresPage() {
         return;
       }
 
-      const createParams: Record<string, unknown> = {
-        name: formData.name || undefined,
-      };
-
-      if (formData.provider_id) {
-        createParams.provider_id = formData.provider_id;
-      }
-      if (formData.embedding_model) {
-        createParams.embedding_model = formData.embedding_model;
-      }
-      if (formData.embedding_dimension) {
-        createParams.embedding_dimension = formData.embedding_dimension;
-      }
-
-      await client.vectorStores.create(createParams);
+      await client.vectorStores.create(buildVectorStoreParams(formData));
+      refetch();
 
       // Show success state with close button
       setShowSuccessState(true);
-      setModalError(
-        "✅ Vector store created successfully! You can close this modal and refresh the page to see changes."
-      );
+      setModalError("✅ Vector store created successfully!");
     } catch (err: unknown) {
       console.error("Failed to create vector store:", err);
       const errorMessage =
