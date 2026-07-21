@@ -10,7 +10,13 @@ import pytest
 
 from ogx.providers.remote.inference.anthropic.anthropic import AnthropicInferenceAdapter
 from ogx.providers.remote.inference.anthropic.config import AnthropicConfig
-from ogx_api.inference.models import OpenAIChatCompletionRequestWithExtraBody
+from ogx_api.inference.models import (
+    OpenAIChatCompletionRequestWithExtraBody,
+    OpenAIResponseFormatJSONSchema,
+    OpenAIUserMessageParam,
+)
+
+MIXIN_PATH = "ogx.providers.utils.inference.openai_mixin.OpenAIMixin.openai_chat_completion"
 
 
 @pytest.fixture
@@ -40,3 +46,29 @@ async def test_empty_tool_parameters_normalized(adapter, input_params, expected_
         await adapter.openai_chat_completion(params)
 
     assert params.tools[0]["function"]["parameters"] == expected_params
+
+
+def _request(strict=...):
+    json_schema = {"name": "s", "schema": {"type": "object"}}
+    if strict is not ...:
+        json_schema["strict"] = strict
+    return OpenAIChatCompletionRequestWithExtraBody(
+        model="claude-sonnet-4-6",
+        messages=[OpenAIUserMessageParam(role="user", content="hi")],
+        response_format=OpenAIResponseFormatJSONSchema(json_schema=json_schema),
+    )
+
+
+@pytest.mark.parametrize(
+    "given, expected",
+    [(..., False), (None, False), (True, True), (False, False)],
+)
+async def test_json_schema_strict_defaulted_for_anthropic(given, expected):
+    adapter = AnthropicInferenceAdapter(config=AnthropicConfig(api_key="test"))
+    params = _request(strict=given)
+
+    with patch(MIXIN_PATH, new=AsyncMock(return_value=None)) as mock_super:
+        await adapter.openai_chat_completion(params)
+
+    forwarded = mock_super.call_args.args[0]
+    assert forwarded.response_format.json_schema["strict"] is expected

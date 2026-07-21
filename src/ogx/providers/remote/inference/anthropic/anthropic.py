@@ -15,6 +15,7 @@ from ogx_api.inference.models import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAICompletion,
     OpenAICompletionRequestWithExtraBody,
+    OpenAIResponseFormatJSONSchema,
 )
 
 from .config import AnthropicConfig
@@ -56,6 +57,13 @@ class AnthropicInferenceAdapter(OpenAIMixin):
                 p = func.get("parameters")
                 if isinstance(p, dict) and not p:
                     func["parameters"] = {"type": "object"}
+        # Anthropic's OpenAI-compatible endpoint requires
+        # response_format.json_schema.strict to be present, while OpenAI treats
+        # an omitted value as false. Default it here so the field is not dropped
+        # during serialization.
+        if isinstance(params.response_format, OpenAIResponseFormatJSONSchema):
+            if params.response_format.json_schema.get("strict") is None:
+                params.response_format.json_schema["strict"] = False
         return await super().openai_chat_completion(params)
 
     async def openai_completion(
