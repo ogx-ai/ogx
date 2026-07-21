@@ -37,6 +37,15 @@ DEFAULT_MEMORY_READ_PROMPT = (
     "as search results or cite them."
 )
 
+DEFAULT_MEMORY_SUMMARIZATION_PROMPT = (
+    "Create a concise long-term memory summary for this conversation.\n\n"
+    "Include stable user preferences, project context, decisions, recurring constraints, "
+    "and durable facts that would help future conversations.\n\n"
+    "Exclude secrets, access tokens, credentials, short-lived status updates, and details "
+    "that are only useful inside this single turn.\n\n"
+    "Return Markdown only."
+)
+
 
 class CompactionConfig(BaseModel):
     """Configuration for conversation compaction behavior and prompt templates."""
@@ -113,15 +122,44 @@ class CompactionConfig(BaseModel):
 
 
 class MemoryConfig(BaseModel):
-    """Configuration for Responses memory reads."""
+    """Configuration for Responses memory reads and writes."""
 
     enabled: bool = Field(
         default=False,
-        description="Enable Responses memory reads. Disabled by default because memory is an alpha feature.",
+        description="Enable Responses memory reads and writes. Disabled by default because memory is an alpha feature.",
     )
     default_vector_store_id: str | None = Field(
         default=None,
-        description="Default vector store containing conversation memory files.",
+        description=(
+            "Optional explicit vector store containing conversation memory files. "
+            "If unset, OGX can lazily create one internal default memory vector store per namespace."
+        ),
+    )
+    auto_create_default_vector_store: bool = Field(
+        default=True,
+        description=(
+            "Automatically create one internal default memory vector store per namespace when memory is enabled "
+            "and default_vector_store_id is not configured."
+        ),
+    )
+    default_vector_store_namespace: str = Field(
+        default="default",
+        description="Namespace used to separate internal default memory vector store mappings.",
+    )
+    default_vector_store_provider_id: str | None = Field(
+        default=None,
+        description=(
+            "Optional vector_io provider id to use when creating internal default memory vector stores. "
+            "If unset, OGX uses the stack-level default vector store provider."
+        ),
+    )
+    default_vector_store_admin_principal: str = Field(
+        default="ogx:system:responses-memory",
+        description="Internal principal used to own default memory vector stores.",
+    )
+    default_vector_store_admin_attributes: dict[str, list[str]] = Field(
+        default_factory=lambda: {"roles": ["admin"]},
+        description="Access attributes stamped on default memory vector stores so admin users can inspect them.",
     )
     owner_metadata_key: str = Field(
         default="owner_id",
@@ -145,6 +183,33 @@ class MemoryConfig(BaseModel):
     read_prompt_template: str = Field(
         default=DEFAULT_MEMORY_READ_PROMPT,
         description="Prompt text that frames retrieved memory context.",
+    )
+    write_enabled: bool = Field(
+        default=True,
+        description="Whether to write conversation summaries to memory after stored responses complete.",
+    )
+    write_debounce_seconds: float = Field(
+        default=30.0,
+        ge=0,
+        description="Seconds to wait before materializing memory so rapid conversation turns coalesce into one write.",
+    )
+    summarization_prompt: str = Field(
+        default=DEFAULT_MEMORY_SUMMARIZATION_PROMPT,
+        description="Prompt template used to generate long-term memory summaries.",
+    )
+    summarization_model: str | None = Field(
+        default=None,
+        description="Model to use for memory summaries. If not set, uses the response model.",
+    )
+    max_summary_messages: int = Field(
+        default=100,
+        ge=1,
+        description="Maximum number of recent conversation messages used when generating a memory summary.",
+    )
+    max_transcript_chars: int = Field(
+        default=20000,
+        ge=1,
+        description="Maximum number of characters stored in the searchable transcript section of a memory file.",
     )
 
 
@@ -171,7 +236,7 @@ class BuiltinResponsesImplConfig(BaseModel):
 
     memory_config: MemoryConfig = Field(
         default_factory=MemoryConfig,
-        description="Configuration for Responses memory reads.",
+        description="Configuration for Responses memory reads and writes.",
     )
 
     moderation_endpoint: str | None = Field(

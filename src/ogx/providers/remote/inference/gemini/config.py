@@ -59,7 +59,7 @@ class GeminiConfig(RemoteInferenceProviderConfig):
     def sample_run_config(
         cls,
         api_key: str = "${env.GEMINI_API_KEY:=}",
-        access_token: str = "${env.GEMINI_ACCESS_TOKEN:=}",
+        access_token: str = "${env.GEMINI_ACCESS_TOKEN:=}",  # noqa: S107
         project: str = "${env.GEMINI_AI_PROJECT:=}",
         **kwargs,
     ) -> dict[str, Any]:

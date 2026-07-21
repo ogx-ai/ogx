@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from ogx.core.datatypes import StackConfig
+from ogx.core.datatypes import Api, StackConfig
 from ogx.core.server.fastapi_router_registry import (
     _ROUTER_FACTORIES,
     build_fastapi_router,
@@ -20,7 +20,6 @@ from ogx.core.utils.config import redact_sensitive_fields
 from ogx.log import get_logger
 from ogx_api import (
     Admin,
-    Api,
     HealthInfo,
     HealthResponse,
     HealthStatus,
@@ -54,7 +53,7 @@ class AdminImplConfig(BaseModel):
     config: StackConfig
 
 
-async def get_provider_impl(config: AdminImplConfig, deps: dict[str, Any]) -> "AdminImpl":
+async def get_provider_impl(config: AdminImplConfig, deps: dict[Api, Any]) -> "AdminImpl":
     """Create and initialize an AdminImpl instance.
 
     Args:
@@ -72,7 +71,7 @@ async def get_provider_impl(config: AdminImplConfig, deps: dict[str, Any]) -> "A
 class AdminImpl(Admin):
     """Implementation of the Admin API providing provider management, route listing, health, and version endpoints."""
 
-    def __init__(self, config: AdminImplConfig, deps: dict[str, Any]) -> None:
+    def __init__(self, config: AdminImplConfig, deps: dict[Api, Any]) -> None:
         self.config = config
         self.deps = deps
 
@@ -235,7 +234,7 @@ class AdminImpl(Admin):
 
     @property
     def _connectors(self) -> Connectors:
-        return cast(Connectors, self.deps[Api.connectors.value])
+        return cast(Connectors, self.deps[Api.connectors])
 
     # Connector delegation methods
     async def list_connectors(self) -> ListConnectorsResponse:
@@ -254,7 +253,7 @@ class AdminImpl(Admin):
 
     @property
     def _tool_groups(self) -> ToolGroups:
-        return cast(ToolGroups, self.deps[Api.tool_groups.value])
+        return cast(ToolGroups, self.deps[Api.tool_groups])
 
     async def list_tools(self, request: ListToolsRequest) -> ListToolDefsResponse:
         return await self._tool_groups.list_tools(request)

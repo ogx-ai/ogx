@@ -70,6 +70,7 @@ SETUP_PROVIDER_ALIASES = {
 # integration-test setups yet, so they are intentionally excluded from this doc.
 INTENTIONALLY_UNMAPPED_REGISTRY_PROVIDERS = {
     "mistral",
+    "meta",
     "nvidia",
     "oci",
     "passthrough",

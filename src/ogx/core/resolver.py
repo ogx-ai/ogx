@@ -294,6 +294,7 @@ async def instantiate_providers(
     """Instantiates providers asynchronously while managing dependencies."""
     impls: dict[Api, Any] = internal_impls.copy() if internal_impls else {}
     inner_impls_by_provider_id: dict[str, dict[str, Any]] = {f"inner-{x.value}": {} for x in router_apis}
+    sibling_impls_by_api: dict[str, dict[str, Any]] = {}
     for api_str, provider in sorted_providers:
         # Skip providers that are not enabled
         if provider.provider_id is None:
@@ -323,6 +324,7 @@ async def instantiate_providers(
         else:
             api = Api(api_str)
             impls[api] = impl
+            sibling_impls_by_api.setdefault(api_str, {})[provider.provider_id] = impl
 
     # Post-instantiation: Inject VectorIORouter into VectorStoresRoutingTable
     if Api.vector_io in impls and Api.vector_stores in impls:
@@ -330,6 +332,13 @@ async def instantiate_providers(
         vector_stores_routing_table = impls[Api.vector_stores]
         if hasattr(vector_stores_routing_table, "vector_io_router"):
             vector_stores_routing_table.vector_io_router = vector_io_router
+
+    # Post-instantiation: Inject complete sibling sets
+    for _api_str, siblings in sibling_impls_by_api.items():
+        for provider_id, impl in siblings.items():
+            if hasattr(impl, "set_sibling_providers"):
+                others = {k: v for k, v in siblings.items() if k != provider_id}
+                impl.set_sibling_providers(others)
 
     return impls
 

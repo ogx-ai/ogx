@@ -11,40 +11,9 @@ from ogx.core.datatypes import (
     StackConfig,
 )
 from ogx.core.stack import cast_distro_name_to_string, replace_env_vars
-from ogx.core.utils.dynamic import instantiate_class_type
-from ogx.core.utils.prompt_for_config import prompt_for_config
 from ogx.log import get_logger
-from ogx_api import ProviderSpec
 
 logger = get_logger(name=__name__, category="core")
-
-
-def configure_single_provider(registry: dict[str, ProviderSpec], provider: Provider) -> Provider:
-    """Interactively configure a single provider by prompting for its config values.
-
-    Args:
-        registry: Dictionary mapping provider types to their specifications.
-        provider: The provider to configure.
-
-    Returns:
-        A new Provider instance with the user-provided configuration.
-    """
-    provider_spec = registry[provider.provider_type]
-    config_type = instantiate_class_type(provider_spec.config_class)
-    try:
-        if provider.config:
-            existing = config_type(**provider.config)
-        else:
-            existing = None
-    except Exception:
-        existing = None
-
-    cfg = prompt_for_config(config_type, existing)
-    return Provider(
-        provider_id=provider.provider_id,
-        provider_type=provider.provider_type,
-        config=cfg.model_dump(),
-    )
 
 
 def upgrade_from_routing_table(

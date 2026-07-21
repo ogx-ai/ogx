@@ -91,11 +91,10 @@ def mixin():
     config = RemoteInferenceProviderConfig()
     mixin_instance = OpenAIMixinImpl(config=config)
 
-    # Mock model_store with async methods
+    # Mock model_store, used by check_model_availability() to look up pre-registered models.
+    # Model name -> provider model id resolution no longer goes through model_store; the router
+    # resolves params.model to the provider_resource_id before calling the mixin.
     mock_model_store = AsyncMock()
-    mock_model = MagicMock()
-    mock_model.provider_resource_id = "test-provider-resource-id"
-    mock_model_store.get_model = AsyncMock(return_value=mock_model)
     mock_model_store.has_model = AsyncMock(return_value=False)  # Default to False, tests can override
     mixin_instance.model_store = mock_model_store
 
