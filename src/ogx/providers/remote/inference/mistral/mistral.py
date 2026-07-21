@@ -5,6 +5,10 @@
 # the root directory of this source tree.
 
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx_api import (
+    OpenAIEmbeddingsRequestWithExtraBody,
+    OpenAIEmbeddingsResponse,
+)
 
 from .config import MistralImplConfig
 
@@ -27,3 +31,18 @@ class MistralInferenceAdapter(OpenAIMixin):
 
     def get_base_url(self) -> str:
         return str(self.config.base_url)
+
+    async def openai_embeddings(
+        self,
+        params: OpenAIEmbeddingsRequestWithExtraBody,
+    ) -> OpenAIEmbeddingsResponse:
+        """Mistral's embeddings endpoint does not support encoding_format.
+
+        Mistral accepts the param but ignores it, always returning a list of
+        floats.  Rather than silently accepting a misleading parameter, we
+        reject base64 requests explicitly so users get a clear error.
+        """
+        if params.encoding_format == "base64":
+            raise ValueError("Mistral's embeddings endpoint does not support encoding_format='base64'.")
+
+        return await super().openai_embeddings(params)

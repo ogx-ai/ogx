@@ -5,11 +5,14 @@
 # the root directory of this source tree.
 
 import os
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from ogx.core.stack import replace_env_vars
 from ogx.providers.remote.inference.mistral.config import MistralImplConfig
 from ogx.providers.remote.inference.mistral.mistral import MistralInferenceAdapter
+from ogx_api import OpenAIEmbeddingsRequestWithExtraBody
 
 
 class TestMistralConfig:
@@ -48,3 +51,21 @@ class TestMistralConfig:
         adapter = MistralInferenceAdapter(config=config)
         assert adapter.provider_data_api_key_field == "mistral_api_key"
         assert "mistral-embed" in adapter.embedding_model_metadata
+
+    async def test_base64_encoding_format_raises_value_error(self):
+        """Mistral's embeddings endpoint does not support encoding_format='base64'."""
+        config = MistralImplConfig(api_key="test-key", base_url="https://api.mistral.ai/v1")
+        adapter = MistralInferenceAdapter(config=config)
+        adapter.provider_data_api_key_field = None
+        adapter.model_store = AsyncMock()
+        adapter.model_store.has_model = AsyncMock(return_value=True)
+        adapter.model_store.get_model = AsyncMock()
+
+        params = OpenAIEmbeddingsRequestWithExtraBody(
+            model="mistral-embed",
+            input="hello world",
+            encoding_format="base64",
+        )
+
+        with pytest.raises(ValueError, match="does not support encoding_format='base64'"):
+            await adapter.openai_embeddings(params)
