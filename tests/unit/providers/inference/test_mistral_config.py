@@ -12,7 +12,10 @@ import pytest
 from ogx.core.stack import replace_env_vars
 from ogx.providers.remote.inference.mistral.config import MistralImplConfig
 from ogx.providers.remote.inference.mistral.mistral import MistralInferenceAdapter
-from ogx_api import OpenAIEmbeddingsRequestWithExtraBody
+from ogx_api import (
+    OpenAICompletionRequestWithExtraBody,
+    OpenAIEmbeddingsRequestWithExtraBody,
+)
 
 
 class TestMistralConfig:
@@ -69,3 +72,13 @@ class TestMistralConfig:
 
         with pytest.raises(ValueError, match="does not support encoding_format='base64'"):
             await adapter.openai_embeddings(params)
+
+    async def test_legacy_completions_endpoint_not_supported(self):
+        """Mistral does not support the legacy /v1/completions endpoint."""
+        config = MistralImplConfig(api_key="test-key", base_url="https://api.mistral.ai/v1")
+        adapter = MistralInferenceAdapter(config=config)
+
+        params = OpenAICompletionRequestWithExtraBody(model="mistral-small", prompt="Hello")
+
+        with pytest.raises(NotImplementedError, match="does not support /v1/completions endpoint"):
+            await adapter.openai_completion(params)
