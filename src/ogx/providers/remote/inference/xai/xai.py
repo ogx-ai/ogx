@@ -4,8 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from collections.abc import AsyncIterator
+
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
+    OpenAICompletion,
+    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
 )
@@ -32,5 +36,13 @@ class XAIInferenceAdapter(OpenAIMixin):
         self,
         params: OpenAIEmbeddingsRequestWithExtraBody,
     ) -> OpenAIEmbeddingsResponse:
-        # xAI does not expose an embeddings endpoint.
-        raise NotImplementedError()
+        raise NotImplementedError("xAI does not expose an embeddings endpoint.")
+
+    async def openai_completion(
+        self,
+        params: OpenAICompletionRequestWithExtraBody,
+    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
+        """xAI does not support the legacy /v1/completions endpoint."""
+        raise NotImplementedError(
+            "xAI does not support /v1/completions endpoint. Only /v1/chat/completions is supported."
+        )

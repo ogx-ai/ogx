@@ -12,6 +12,7 @@ import pytest
 from ogx.core.stack import replace_env_vars
 from ogx.providers.remote.inference.xai.config import XAIImplConfig
 from ogx.providers.remote.inference.xai.xai import XAIInferenceAdapter
+from ogx_api import OpenAICompletionRequestWithExtraBody
 
 
 class TestXAIConfig:
@@ -51,5 +52,16 @@ class TestXAIConfig:
     async def test_embeddings_not_supported(self):
         config = XAIImplConfig(api_key="test-key")
         adapter = XAIInferenceAdapter(config=config)
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="does not expose an embeddings endpoint"):
             await adapter.openai_embeddings(None)  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_legacy_completions_endpoint_not_supported(self):
+        """xAI does not support the legacy /v1/completions endpoint."""
+        config = XAIImplConfig(api_key="test-key")
+        adapter = XAIInferenceAdapter(config=config)
+
+        params = OpenAICompletionRequestWithExtraBody(model="grok-4", prompt="Hello")
+
+        with pytest.raises(NotImplementedError, match="does not support /v1/completions endpoint"):
+            await adapter.openai_completion(params)
