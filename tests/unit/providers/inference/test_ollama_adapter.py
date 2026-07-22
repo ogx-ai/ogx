@@ -11,7 +11,6 @@ from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
 from ogx.providers.remote.inference.ollama.ollama import OllamaInferenceAdapter
 from ogx.providers.utils.inference.openai_compat import prepare_openai_completion_params
 from ogx_api import (
-    Model,
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIUserMessageParam,
@@ -27,12 +26,6 @@ async def test_openai_chat_completions_with_reasoning_keeps_messages_typed():
     """Ollama should remap reasoning fields without widening messages to raw dicts."""
     adapter = OllamaInferenceAdapter(config=OllamaImplConfig(base_url="http://localhost:11434/v1"))
     adapter.__provider_id__ = "ollama"
-    adapter.model_store = AsyncMock()
-    adapter.model_store.get_model.return_value = Model(
-        identifier="test-model",
-        provider_id="ollama",
-        provider_resource_id="test-model",
-    )
 
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=_empty_stream())

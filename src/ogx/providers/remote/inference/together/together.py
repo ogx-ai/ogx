@@ -89,7 +89,7 @@ class TogetherInferenceAdapter(OpenAIMixin, NeedsRequestProviderData):
 
         # Cast encoding_format to match OpenAI SDK's expected Literal type
         response = await self.client.embeddings.create(
-            model=await self._get_provider_model_id(params.model),
+            model=params.model,
             input=params.input,
             encoding_format=cast(Any, params.encoding_format),
         )

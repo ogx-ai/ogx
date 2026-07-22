@@ -183,7 +183,7 @@ def create_router(impl: Messages) -> APIRouter:
         "/messages/count_tokens",
         response_model=AnthropicCountTokensResponse,
         summary="Count tokens in a message.",
-        description="Count the number of tokens in a message request.",
+        description="Count the number of tokens in a message request. For some providers, this will cost input tokens and 1 output token.",
         responses={
             200: {"description": "Token count for the request."},
         },

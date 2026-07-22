@@ -31,6 +31,36 @@ from .config import UnstructuredFileProcessorConfig
 
 log = get_logger(name=__name__, category="providers::file_processors")
 
+UNSTRUCTURED_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/msword",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.ms-excel",
+    "application/rtf",
+    "application/epub+zip",
+    "text/html",
+    "text/plain",
+    "text/csv",
+    "text/markdown",
+    "text/xml",
+    "application/json",
+    "application/xml",
+    "message/rfc822",
+    "application/vnd.ms-outlook",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/bmp",
+    "image/tiff",
+    "image/webp",
+    "audio/mpeg",
+    "audio/x-wav",
+    "audio/mp4",
+}
+
 
 class UnstructuredFileProcessor:
     """Local Unstructured file processor supporting 65+ formats.
@@ -53,6 +83,9 @@ class UnstructuredFileProcessor:
         self.config = config
         self.files_api = files_api
         self._partition_lock = threading.Lock()
+
+    def supported_mime_types(self) -> set[str]:
+        return UNSTRUCTURED_MIME_TYPES
 
     async def process_file(
         self,
