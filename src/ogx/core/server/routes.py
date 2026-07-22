@@ -105,6 +105,20 @@ def find_matching_route(method: str, path: str, route_impls: RouteImpls) -> Rout
     raise ValueError(f"No endpoint found for {path}")
 
 
+def _collect_api_routes(routes: list[Any]) -> list[APIRoute]:
+    """Collect all APIRoute objects, recursing into included routers."""
+    api_routes: list[APIRoute] = []
+    for route in routes:
+        if isinstance(route, APIRoute):
+            api_routes.append(route)
+        elif hasattr(route, "original_router"):
+            # FastAPI >= 0.137 wraps include_router() results in _IncludedRouter
+            api_routes.extend(_collect_api_routes(route.original_router.routes))
+        elif hasattr(route, "routes"):
+            api_routes.extend(_collect_api_routes(route.routes))
+    return api_routes
+
+
 def build_route_impls_from_routes(routes: list[Any]) -> RouteImpls:
     """Build RouteImpls from mounted FastAPI routes.
 
@@ -119,9 +133,7 @@ def build_route_impls_from_routes(routes: list[Any]) -> RouteImpls:
         RouteImpls mapping method -> path regex -> (endpoint, path, RouteAuthInfo)
     """
     route_impls: RouteImpls = {}
-    for route in routes:
-        if not isinstance(route, APIRoute):
-            continue
+    for route in _collect_api_routes(routes):
         methods = [m for m in (route.methods or []) if m != "HEAD"]
         if not methods:
             continue

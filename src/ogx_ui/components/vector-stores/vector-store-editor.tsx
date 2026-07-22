@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useAuthClient } from "@/hooks/use-auth-client";
 import type { Model } from "ogx-client/resources/models";
+import { normalizeModelList } from "./model-list";
 
 export interface VectorStoreFormData {
   name: string;
@@ -43,8 +44,8 @@ export function VectorStoreEditor({
   const [formData, setFormData] = useState<VectorStoreFormData>(
     initialData || {
       name: "",
-      embedding_model: "",
-      embedding_dimension: 768,
+      embedding_model: undefined,
+      embedding_dimension: undefined,
       provider_id: "",
     }
   );
@@ -62,19 +63,10 @@ export function VectorStoreEditor({
       try {
         setModelsLoading(true);
         setModelsError(null);
-        const modelList = await client.models.list();
+        const modelList: Model[] = normalizeModelList(
+          await client.models.list()
+        );
         setModels(modelList);
-
-        // Set default embedding model if available
-        const embeddingModelsList = modelList.filter(model => {
-          return model.custom_metadata?.model_type === "embedding";
-        });
-        if (embeddingModelsList.length > 0 && !formData.embedding_model) {
-          setFormData(prev => ({
-            ...prev,
-            embedding_model: embeddingModelsList[0].id,
-          }));
-        }
       } catch (err) {
         console.error("Failed to load models:", err);
         setModelsError(
@@ -86,7 +78,7 @@ export function VectorStoreEditor({
     };
 
     fetchModels();
-  }, [client, formData.embedding_model]);
+  }, [client]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +122,7 @@ export function VectorStoreEditor({
               </div>
             ) : (
               <Select
-                value={formData.embedding_model}
+                value={formData.embedding_model ?? ""}
                 onValueChange={value =>
                   setFormData({ ...formData, embedding_model: value })
                 }
@@ -170,7 +162,7 @@ export function VectorStoreEditor({
                   embedding_dimension: parseInt(e.target.value) || 768,
                 })
               }
-              placeholder="768"
+              placeholder="Use server default"
             />
           </div>
 

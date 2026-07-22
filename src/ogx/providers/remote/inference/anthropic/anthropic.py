@@ -20,6 +20,15 @@ from ogx_api.inference.models import (
 from .config import AnthropicConfig
 
 
+def _make_schema_strict(schema: dict) -> None:
+    """Recursively add additionalProperties: false to all object schemas for strict mode compliance."""
+    if schema.get("type") == "object":
+        if "additionalProperties" not in schema:
+            schema["additionalProperties"] = False
+        for prop in (schema.get("properties") or {}).values():
+            _make_schema_strict(prop)
+
+
 class AnthropicInferenceAdapter(OpenAIMixin):
     """Inference adapter for Anthropic Claude models."""
 
@@ -56,6 +65,18 @@ class AnthropicInferenceAdapter(OpenAIMixin):
                 p = func.get("parameters")
                 if isinstance(p, dict) and not p:
                     func["parameters"] = {"type": "object"}
+        if (
+            params.response_format
+            and hasattr(params.response_format, "json_schema")
+            and params.response_format.json_schema
+        ):
+            js = params.response_format.json_schema
+            # Anthropic requires strict: true for json_schema response format
+            if js.get("strict") is None:
+                js["strict"] = True
+            schema = js.get("schema")
+            if js["strict"] and isinstance(schema, dict):
+                _make_schema_strict(schema)
         return await super().openai_chat_completion(params)
 
     async def openai_completion(

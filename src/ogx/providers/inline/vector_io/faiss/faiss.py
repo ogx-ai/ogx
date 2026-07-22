@@ -8,6 +8,8 @@ import asyncio
 import base64
 import io
 import json
+import os
+import sys
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +27,12 @@ def _get_faiss() -> Any:
     with _faiss_lock:
         if _faiss is not None:
             return _faiss
+        # faiss links against OpenMP; on macOS another dependency (e.g. torch,
+        # scipy) may already have loaded libomp, causing a fatal duplicate-
+        # runtime crash (OMP Error #15: "found libomp already initialized").
+        if sys.platform == "darwin":
+            os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+            logger.debug("Set KMP_DUPLICATE_LIB_OK=TRUE to avoid duplicate libomp crash")
         import faiss  # type: ignore[import-untyped]
 
         _faiss = faiss

@@ -88,7 +88,10 @@ class MemoryToolConfig(BaseModel):
     )
     owner_id: str | None = Field(
         default=None,
-        description="Stable owner identifier used to scope memory retrieval.",
+        description=(
+            "Fallback owner identifier used to scope memory retrieval when no authenticated "
+            "user principal is available."
+        ),
     )
     vector_store_id: str | None = Field(
         default=None,
@@ -136,6 +139,10 @@ class CreateResponseRequest(BaseModel):
         default=None, description="Prompt object with ID, version, and variables."
     )
     instructions: str | None = Field(default=None, description="Instructions to guide the model's behavior.")
+    skills: list[str] | None = Field(
+        default=None,
+        description="List of skill IDs whose SKILL.md instructions are injected into the model's context.",
+    )
     parallel_tool_calls: bool | None = Field(
         default=True,
         description="Whether to enable parallel tool calls.",

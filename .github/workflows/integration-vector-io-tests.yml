@@ -38,7 +38,7 @@ jobs:
     strategy:
       matrix:
         # Use a smaller set of providers on PRs to reduce runner contention
-        vector-io-provider: ${{ github.event_name == 'pull_request' && fromJSON('["inline::faiss", "inline::sqlite-vec", "remote::pgvector"]') || fromJSON('["inline::faiss", "inline::sqlite-vec", "inline::milvus", "remote::chromadb", "remote::pgvector", "remote::weaviate", "remote::qdrant", "remote::elasticsearch", "remote::infinispan"]') }}
+        vector-io-provider: ${{ github.event_name == 'pull_request' && fromJSON('["inline::faiss", "inline::sqlite-vec", "remote::pgvector", "remote::neo4j"]') || fromJSON('["inline::faiss", "inline::sqlite-vec", "inline::milvus", "remote::chromadb", "remote::pgvector", "remote::weaviate", "remote::qdrant", "remote::elasticsearch", "remote::infinispan", "remote::neo4j"]') }}
         python-version: ${{ github.event.schedule == '0 0 * * 1' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
       fail-fast: false # we want to run all tests regardless of failure
 
@@ -80,6 +80,30 @@ jobs:
             -e POSTGRES_DB=ogx \
             -p 5432:5432 \
             pgvector/pgvector:pg17
+
+      - name: Start Neo4j
+        if: matrix.vector-io-provider == 'remote::neo4j'
+        run: |
+          docker run --rm -d \
+            --name neo4j \
+            -p 7474:7474 -p 7687:7687 \
+            -e NEO4J_AUTH=neo4j/ogxpassword \
+            neo4j:2025.10
+
+      - name: Wait for Neo4j to be ready
+        if: matrix.vector-io-provider == 'remote::neo4j'
+        run: |
+          echo "Waiting for Neo4j to be ready..."
+          for _ in {1..60}; do
+            if docker exec neo4j cypher-shell -u neo4j -p ogxpassword 'RETURN 1 AS ok' >/dev/null 2>&1; then
+              echo "Neo4j is ready!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Neo4j failed to start"
+          docker logs neo4j
+          exit 1
 
       - name: Wait for PGVector to be ready
         if: matrix.vector-io-provider == 'remote::pgvector'
@@ -239,6 +263,10 @@ jobs:
           INFINISPAN_URL: ${{ matrix.vector-io-provider == 'remote::infinispan' && 'http://localhost:11222' || '' }}
           INFINISPAN_USERNAME: ${{ matrix.vector-io-provider == 'remote::infinispan' && 'admin' || '' }}
           INFINISPAN_PASSWORD: ${{ matrix.vector-io-provider == 'remote::infinispan' && 'password' || '' }}
+          NEO4J_URI: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'bolt://localhost:7687' || '' }}
+          NEO4J_USER: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'neo4j' || '' }}
+          NEO4J_PASSWORD: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'ogxpassword' || '' }}
+          NEO4J_DATABASE: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'neo4j' || '' }}
         run: |
           uv run --no-sync \
             pytest -sv --stack-config="files=inline::localfs,inference=inline::sentence-transformers?trust_remote_code=true,vector_io=${{ matrix.vector-io-provider }},file_processors=inline::pypdf" \
@@ -274,6 +302,11 @@ jobs:
         if: ${{ always() && matrix.vector-io-provider == 'remote::infinispan' }}
         run: |
           docker logs infinispan > infinispan.log
+
+      - name: Write Neo4j logs to file
+        if: ${{ always() && matrix.vector-io-provider == 'remote::neo4j' }}
+        run: |
+          docker logs neo4j > neo4j.log
 
       - name: Upload all logs to artifacts
         if: ${{ always() }}

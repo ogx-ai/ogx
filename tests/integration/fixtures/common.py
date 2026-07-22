@@ -182,7 +182,7 @@ def client_with_models(
     model_ids = {m.id for m in client.models.list().data}
 
     if text_model_id and text_model_id not in model_ids:
-        raise ValueError(f"text_model_id {text_model_id} not found")
+        raise ValueError(f"text_model_id {text_model_id} not found in {model_ids}")
     if vision_model_id and vision_model_id not in model_ids:
         raise ValueError(f"vision_model_id {vision_model_id} not found")
     if judge_model_id and judge_model_id not in model_ids:

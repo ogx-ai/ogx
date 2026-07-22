@@ -165,7 +165,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 1
         assert len(result_messages) == 2
@@ -184,7 +184,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 3
         assert len(result_messages) == 2, (
@@ -205,7 +205,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 2
         assert "user_msg" in result_messages
@@ -227,7 +227,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 0
         assert len(result_messages) == 2
@@ -258,7 +258,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 1
         assert non_function[0].id == "call_1"
@@ -286,7 +286,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time, tc_news])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 1
@@ -320,7 +320,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 1
         assert len(approvals) == 0
@@ -353,7 +353,7 @@ class TestMixedApproval:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, _, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, _, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert result_messages[0] == "system_msg"
         assert result_messages[1] == "user_msg"
@@ -374,7 +374,7 @@ class TestAllExecuted:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 0
@@ -400,7 +400,7 @@ class TestAllExecuted:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 0

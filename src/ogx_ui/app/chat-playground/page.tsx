@@ -26,6 +26,11 @@ import {
   removeConversation,
   updateConversation,
 } from "@/lib/conversation-history";
+import { filterModels, parseModelAllowlist } from "@/lib/model-filter";
+
+const configuredModelIds = parseModelAllowlist(
+  process.env.NEXT_PUBLIC_OGX_UI_ALLOWED_MODELS
+);
 
 type ModelWithMeta = Model & {
   custom_metadata?: Record<string, unknown>;
@@ -140,7 +145,17 @@ function ChatPlaygroundContent() {
         );
 
         llmModels.sort((a, b) => a.id.localeCompare(b.id));
-        setModels(llmModels);
+        const visibleModels = filterModels(llmModels, configuredModelIds);
+        setModels(visibleModels);
+        setSelectedModel(currentModel => {
+          if (
+            currentModel &&
+            visibleModels.some(model => model.id === currentModel)
+          ) {
+            return currentModel;
+          }
+          return visibleModels[0]?.id ?? "";
+        });
       } catch (err) {
         console.error("Error fetching models:", err);
         setModelsError("Failed to load models");
@@ -713,6 +728,13 @@ function ChatPlaygroundContent() {
                 </Select>
                 {modelsError && (
                   <p className="text-destructive text-xs mt-1">{modelsError}</p>
+                )}
+                {!isModelsLoading && !modelsError && models.length === 0 && (
+                  <p className="text-muted-foreground text-xs mt-1">
+                    {configuredModelIds.length > 0
+                      ? "No models matched the configured allowlist."
+                      : "No models available."}
+                  </p>
                 )}
               </div>
 

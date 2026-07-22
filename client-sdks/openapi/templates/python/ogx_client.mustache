@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import httpx
 import json
+import os
 
 from typing import Any, Mapping
 from ._version import __version__
@@ -15,6 +16,23 @@ from {{packageName}}.async_api_client import AsyncApiClient
 from {{packageName}}.configuration import Configuration
 {{#apiInfo}}{{#apis}}from {{apiPackage}}.{{classFilename}} import {{classname}}
 {{/apis}}{{/apiInfo}}
+
+
+def _parse_custom_headers_env() -> dict[str, str]:
+    """Parse the OGX_CLIENT_CUSTOM_HEADERS environment variable.
+
+    Format: newline-separated ``Header-Name: value`` pairs.
+    Lines without a colon are silently skipped.
+    """
+    raw = os.environ.get("OGX_CLIENT_CUSTOM_HEADERS")
+    if raw is None:
+        return {}
+    parsed: dict[str, str] = {}
+    for line in raw.split("\n"):
+        colon = line.find(":")
+        if colon >= 0:
+            parsed[line[:colon].strip()] = line[colon + 1:].strip()
+    return parsed
 
 
 class OgxClient:
@@ -50,14 +68,39 @@ class OgxClient:
         Initialize the OgxClient.
 
         Args:
-            configuration: Configuration object or string URL. If string, creates Configuration with that host.
-                          If None, uses default configuration.
+            configuration: Configuration object or string URL. If string, creates
+                Configuration with that host. If None, uses default configuration.
             header_name: Optional header name for authentication.
             header_value: Optional header value for authentication.
             cookie: Optional cookie string for authentication.
-            api_key: Optional API key (stored for compatibility with stainless SDK consumers).
+            default_headers: Optional mapping of default HTTP headers. Overrides
+                headers from the ``OGX_CLIENT_CUSTOM_HEADERS`` env var for
+                duplicate keys.
+            provider_data: Optional provider data dict, serialised as JSON in the
+                ``X-OGX-Provider-Data`` header.
+            api_key: Optional API key. When set, an ``Authorization: Bearer <key>``
+                header is added (overriding any Authorization header from
+                *default_headers* or the environment). Falls back to the
+                ``OGX_CLIENT_API_KEY`` environment variable when *None*.
+
+        Environment variables:
+            OGX_CLIENT_API_KEY: Fallback API key when *api_key* is not supplied.
+            OGX_CLIENT_BASE_URL: Fallback base URL when neither *configuration*
+                nor *base_url*/*host* kwargs are supplied.
+            OGX_CLIENT_CUSTOM_HEADERS: Newline-separated ``Header-Name: value``
+                pairs added as default headers (constructor *default_headers*
+                override for duplicate keys).
         """
+        # Resolve api_key: constructor arg > OGX_CLIENT_API_KEY env > None
+        if api_key is None:
+            api_key = os.environ.get("OGX_CLIENT_API_KEY")
         self.api_key = api_key
+
+        # Resolve base_url from OGX_CLIENT_BASE_URL env if not provided
+        if configuration is None and "base_url" not in kwargs and "host" not in kwargs:
+            env_base_url = os.environ.get("OGX_CLIENT_BASE_URL")
+            if env_base_url is not None:
+                kwargs["base_url"] = env_base_url
 
         # Handle string URL as configuration
         if isinstance(configuration, str):
@@ -86,9 +129,12 @@ class OgxClient:
         elif hasattr(self.api_client, '_client'):
             self.api_client._client._parent_client = self
 
-        # Compatibility with stainless
-        custom_headers = default_headers or {}
+        # Build headers: env custom headers as base, constructor default_headers
+        # override for duplicate keys, api_key-derived Authorization trumps all
+        custom_headers = {**_parse_custom_headers_env(), **(default_headers or {})}
         custom_headers["X-OGX-Client-Version"] = __version__
+        if api_key is not None:
+            custom_headers["Authorization"] = f"Bearer {api_key}"
         if provider_data is not None:
             custom_headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
 
@@ -140,6 +186,8 @@ class AsyncOgxClient:
         header_name: str | None = None,
         header_value: str | None = None,
         cookie: str | None = None,
+        default_headers: Mapping[str, str] | None = None,
+        provider_data: Mapping[str, Any] | None = None,
         api_key: str | None = None,
         **kwargs,
     ) -> None:
@@ -147,14 +195,39 @@ class AsyncOgxClient:
         Initialize the AsyncOgxClient.
 
         Args:
-            configuration: Configuration object or string URL. If string, creates Configuration with that host.
-                          If None, uses default configuration.
+            configuration: Configuration object or string URL. If string, creates
+                Configuration with that host. If None, uses default configuration.
             header_name: Optional header name for authentication.
             header_value: Optional header value for authentication.
             cookie: Optional cookie string for authentication.
-            api_key: Optional API key (stored for compatibility with stainless SDK consumers).
+            default_headers: Optional mapping of default HTTP headers. Overrides
+                headers from the ``OGX_CLIENT_CUSTOM_HEADERS`` env var for
+                duplicate keys.
+            provider_data: Optional provider data dict, serialised as JSON in the
+                ``X-OGX-Provider-Data`` header.
+            api_key: Optional API key. When set, an ``Authorization: Bearer <key>``
+                header is added (overriding any Authorization header from
+                *default_headers* or the environment). Falls back to the
+                ``OGX_CLIENT_API_KEY`` environment variable when *None*.
+
+        Environment variables:
+            OGX_CLIENT_API_KEY: Fallback API key when *api_key* is not supplied.
+            OGX_CLIENT_BASE_URL: Fallback base URL when neither *configuration*
+                nor *base_url*/*host* kwargs are supplied.
+            OGX_CLIENT_CUSTOM_HEADERS: Newline-separated ``Header-Name: value``
+                pairs added as default headers (constructor *default_headers*
+                override for duplicate keys).
         """
+        # Resolve api_key: constructor arg > OGX_CLIENT_API_KEY env > None
+        if api_key is None:
+            api_key = os.environ.get("OGX_CLIENT_API_KEY")
         self.api_key = api_key
+
+        # Resolve base_url from OGX_CLIENT_BASE_URL env if not provided
+        if configuration is None and "base_url" not in kwargs and "host" not in kwargs:
+            env_base_url = os.environ.get("OGX_CLIENT_BASE_URL")
+            if env_base_url is not None:
+                kwargs["base_url"] = env_base_url
 
         # Handle string URL as configuration
         if isinstance(configuration, str):
@@ -181,6 +254,18 @@ class AsyncOgxClient:
             self.api_client.rest_client._parent_client = self
         elif hasattr(self.api_client, '_client'):
             self.api_client._client._parent_client = self
+
+        # Build headers: env custom headers as base, constructor default_headers
+        # override for duplicate keys, api_key-derived Authorization trumps all
+        custom_headers = {**_parse_custom_headers_env(), **(default_headers or {})}
+        custom_headers["X-OGX-Client-Version"] = __version__
+        if api_key is not None:
+            custom_headers["Authorization"] = f"Bearer {api_key}"
+        if provider_data is not None:
+            custom_headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
+
+        for header_k, header_v in custom_headers.items():
+            self.api_client.set_default_header(header_k, header_v)
 
         # Initialize all API instances
 {{#apiInfo}}{{#apis}}        self.{{baseName}} = {{classname}}(self.api_client)
