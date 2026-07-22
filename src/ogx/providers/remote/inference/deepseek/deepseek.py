@@ -4,8 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from collections.abc import AsyncIterator
+
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
+    OpenAICompletion,
+    OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
 )
@@ -32,5 +36,18 @@ class DeepSeekInferenceAdapter(OpenAIMixin):
         self,
         params: OpenAIEmbeddingsRequestWithExtraBody,
     ) -> OpenAIEmbeddingsResponse:
-        # DeepSeek does not expose an embeddings endpoint.
-        raise NotImplementedError()
+        raise NotImplementedError("DeepSeek does not expose an embeddings endpoint.")
+
+    async def openai_completion(
+        self,
+        params: OpenAICompletionRequestWithExtraBody,
+    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
+        """DeepSeek does not support the legacy /v1/completions endpoint.
+
+        DeepSeek's completion API exists only as a beta FIM feature behind a
+        separate base URL (https://api.deepseek.com/beta), so it is not
+        reachable through this adapter's standard API surface.
+        """
+        raise NotImplementedError(
+            "DeepSeek does not support /v1/completions endpoint. Only /v1/chat/completions is supported."
+        )

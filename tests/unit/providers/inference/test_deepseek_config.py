@@ -12,6 +12,7 @@ import pytest
 from ogx.core.stack import replace_env_vars
 from ogx.providers.remote.inference.deepseek.config import DeepSeekImplConfig
 from ogx.providers.remote.inference.deepseek.deepseek import DeepSeekInferenceAdapter
+from ogx_api import OpenAICompletionRequestWithExtraBody
 
 
 class TestDeepSeekConfig:
@@ -54,5 +55,16 @@ class TestDeepSeekConfig:
     async def test_embeddings_not_supported(self):
         config = DeepSeekImplConfig(api_key="test-key")
         adapter = DeepSeekInferenceAdapter(config=config)
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="does not expose an embeddings endpoint"):
             await adapter.openai_embeddings(None)  # type: ignore[arg-type]
+
+    @pytest.mark.asyncio
+    async def test_legacy_completions_endpoint_not_supported(self):
+        """DeepSeek does not support the legacy /v1/completions endpoint."""
+        config = DeepSeekImplConfig(api_key="test-key")
+        adapter = DeepSeekInferenceAdapter(config=config)
+
+        params = OpenAICompletionRequestWithExtraBody(model="deepseek-chat", prompt="Hello")
+
+        with pytest.raises(NotImplementedError, match="does not support /v1/completions endpoint"):
+            await adapter.openai_completion(params)
