@@ -65,6 +65,18 @@ _UNTRUSTED_TOOL_OUTPUT_HEADER = (
 _UNTRUSTED_TOOL_OUTPUT_FOOTER = "</untrusted_tool_output>"
 
 
+def _escape_delimiter_collisions(text: str) -> str:
+    """Neutralize any occurrence of our own delimiter tags inside untrusted
+    content. Without this, content containing a literal
+    "</untrusted_tool_output>" could close the delimited block early and make
+    injected text that follows look like it is outside the untrusted region --
+    defeating the wrapping this function exists to provide.
+    """
+    return text.replace("<untrusted_tool_output>", "&lt;untrusted_tool_output&gt;").replace(
+        "</untrusted_tool_output>", "&lt;/untrusted_tool_output&gt;"
+    )
+
+
 def _wrap_untrusted_tool_output(msg_content: str | list[Any]) -> str | list[Any]:
     """Delimit tool-returned content that originates from an untrusted external
     source (web search results, indexed file contents) so the model can
@@ -72,14 +84,16 @@ def _wrap_untrusted_tool_output(msg_content: str | list[Any]) -> str | list[Any]
     are passed through unchanged.
     """
     if isinstance(msg_content, str):
-        return f"{_UNTRUSTED_TOOL_OUTPUT_HEADER}\n{msg_content}\n{_UNTRUSTED_TOOL_OUTPUT_FOOTER}"
+        safe_content = _escape_delimiter_collisions(msg_content)
+        return f"{_UNTRUSTED_TOOL_OUTPUT_HEADER}\n{safe_content}\n{_UNTRUSTED_TOOL_OUTPUT_FOOTER}"
 
     wrapped: list[Any] = []
     for part in msg_content:
         if isinstance(part, OpenAIChatCompletionContentPartTextParam):
+            safe_text = _escape_delimiter_collisions(part.text)
             wrapped.append(
                 OpenAIChatCompletionContentPartTextParam(
-                    text=f"{_UNTRUSTED_TOOL_OUTPUT_HEADER}\n{part.text}\n{_UNTRUSTED_TOOL_OUTPUT_FOOTER}"
+                    text=f"{_UNTRUSTED_TOOL_OUTPUT_HEADER}\n{safe_text}\n{_UNTRUSTED_TOOL_OUTPUT_FOOTER}"
                 )
             )
         else:
@@ -572,7 +586,11 @@ class ToolExecutor:
 
         # Build input message
         input_message: OpenAIToolMessageParam | None = None
-        if result and (result_content := getattr(result, "content", None)):
+        # Use "is not None" rather than truthiness: a successful tool call can
+        # legitimately return empty content (e.g. a search with zero results),
+        # and treating that the same as "no result" produced a false "Tool
+        # execution failed" message even when has_error is False.
+        if result is not None and (result_content := getattr(result, "content", None)) is not None:
             # all the mypy contortions here are still unsatisfactory with random Any typing
             if isinstance(result_content, str):
                 msg_content: str | list[Any] = result_content
