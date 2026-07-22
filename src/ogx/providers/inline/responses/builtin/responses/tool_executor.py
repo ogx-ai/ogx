@@ -6,6 +6,7 @@
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -65,16 +66,28 @@ _UNTRUSTED_TOOL_OUTPUT_HEADER = (
 _UNTRUSTED_TOOL_OUTPUT_FOOTER = "</untrusted_tool_output>"
 
 
+_DELIMITER_COLLISION_RE = re.compile(r"</?untrusted_tool_output>", re.IGNORECASE)
+
+
 def _escape_delimiter_collisions(text: str) -> str:
     """Neutralize any occurrence of our own delimiter tags inside untrusted
     content. Without this, content containing a literal
     "</untrusted_tool_output>" could close the delimited block early and make
     injected text that follows look like it is outside the untrusted region --
     defeating the wrapping this function exists to provide.
+
+    Matching is case-insensitive on the exact tag text, since case variation
+    (e.g. "</UNTRUSTED_TOOL_OUTPUT>") is a trivial, well-known way to evade a
+    naive case-sensitive string match. This is not a complete defense --
+    whitespace-padded variants (e.g. "< /untrusted_tool_output >") or
+    Unicode-homoglyph tricks are not caught -- but those require the model
+    itself to recognize a visually/structurally distorted tag as a real
+    delimiter, which is a materially harder and lower-probability attack than
+    the exact-text-modulo-case copy this closes. Treated as a documented,
+    known limitation rather than a blocker; a more robust defense (e.g. a
+    per-request random delimiter token) is a reasonable follow-up.
     """
-    return text.replace("<untrusted_tool_output>", "&lt;untrusted_tool_output&gt;").replace(
-        "</untrusted_tool_output>", "&lt;/untrusted_tool_output&gt;"
-    )
+    return _DELIMITER_COLLISION_RE.sub(lambda m: m.group(0).replace("<", "&lt;").replace(">", "&gt;"), text)
 
 
 def _wrap_untrusted_tool_output(msg_content: str | list[Any]) -> str | list[Any]:
