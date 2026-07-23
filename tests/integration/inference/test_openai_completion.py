@@ -108,6 +108,7 @@ def skip_if_doesnt_support_n(client_with_models, model_id):
         "remote::cerebras",
         "remote::databricks",  # Bad request: parameter "n" must be equal to 1 for streaming mode
         "remote::watsonx",
+        "remote::deepseek",  # n > 1 is not supported
     ):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support n param.")
 
