@@ -8,6 +8,9 @@ from collections.abc import AsyncIterator
 
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
+    OpenAIChatCompletion,
+    OpenAIChatCompletionChunk,
+    OpenAIChatCompletionRequestWithExtraBody,
     OpenAICompletion,
     OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
@@ -31,6 +34,16 @@ class DeepSeekInferenceAdapter(OpenAIMixin):
 
     def get_base_url(self) -> str:
         return str(self.config.base_url)
+
+    async def openai_chat_completion(
+        self,
+        params: OpenAIChatCompletionRequestWithExtraBody,
+    ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
+        if params.response_format is not None and params.response_format.type == "json_schema":
+            raise ValueError(
+                "DeepSeek does not support response_format type 'json_schema'. Use 'json_object' or 'text' instead."
+            )
+        return await super().openai_chat_completion(params)
 
     async def openai_embeddings(
         self,
