@@ -28,6 +28,9 @@ from ogx_api.openai_responses import (
     OpenAIResponseInputToolMCP,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseMessage,
+    OpenAIResponseObjectStreamResponseContentPartDone,
+    OpenAIResponseObjectStreamResponseOutputItemDone,
+    OpenAIResponseObjectStreamResponseOutputTextDelta,
     WebSearchToolTypes,
 )
 from ogx_api.responses.models import CreateResponseRequest
@@ -1012,3 +1015,275 @@ async def test_function_tool_strict_false_included(openai_responses_impl, mock_i
     tool_function = params.tools[0]["function"]
     assert "strict" in tool_function, "strict field should be included when explicitly set to False"
     assert tool_function["strict"] is False, "strict field should be False"
+
+
+async def test_file_search_citation_populated_when_model_cites_inline(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """Regression test for annotations never being populated for file_search results.
+
+    Round 1: the model calls file_search. Round 2: the model answers, citing the
+    retrieved file with the instructed `<|file-id|>` marker. The final response's
+    output_text annotations should contain a matching file_citation.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            )
+        ],
+    )
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        fake_stream("file_search_final_answer_completion.yaml"),
+    ]
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+        )
+    )
+
+    messages = [item for item in result.output if isinstance(item, OpenAIResponseMessage)]
+    assert len(messages) == 1
+    text_content = messages[0].content[0]
+    assert text_content.text == "Global warming is caused by greenhouse gases."
+    assert len(text_content.annotations) == 1
+    assert text_content.annotations[0].file_id == "file-abc123"
+    assert text_content.annotations[0].filename == "climate.pdf"
+
+
+async def test_file_search_citation_falls_back_when_model_does_not_cite(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """When a weak/local model ignores the citation-marker instruction entirely, the
+    response should still attribute the answer to the single highest-scoring retrieved
+    file rather than returning empty annotations, and rather than citing every file
+    retrieved this turn (which would overstate how many sources actually back the answer).
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            ),
+            VectorStoreSearchResponse(
+                file_id="file-def456",
+                filename="unrelated.pdf",
+                score=0.3,
+                content=[VectorStoreContent(type="text", text="Some other, less relevant chunk.")],
+            ),
+        ],
+    )
+
+    async def uncited_final_answer():
+        yield ChatCompletionChunk(
+            id="chat-completion-458",
+            created=1234567892,
+            model="ollama/llama3.2:3b",
+            object="chat.completion.chunk",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        role="assistant",
+                        content="Global warming is caused by greenhouse gases trapping heat.",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+        )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        uncited_final_answer(),
+    ]
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+        )
+    )
+
+    messages = [item for item in result.output if isinstance(item, OpenAIResponseMessage)]
+    assert len(messages) == 1
+    text_content = messages[0].content[0]
+    assert text_content.text == "Global warming is caused by greenhouse gases trapping heat."
+    assert len(text_content.annotations) == 1
+    assert text_content.annotations[0].file_id == "file-abc123"
+    assert text_content.annotations[0].filename == "climate.pdf"
+
+
+async def test_file_search_citation_falls_back_when_model_does_not_cite_streaming(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """Same scenario as test_file_search_citation_falls_back_when_model_does_not_cite, but
+    driven through the actual `stream=True` SSE path rather than the aggregated response.
+
+    The two non-streaming citation tests above only ever inspect the final aggregated
+    OpenAIResponseObject; they never consume the raw event stream, so they never exercise
+    (i.e. assert against) the content_part.done / output_item.done events built directly in
+    streaming.py's per-chunk processing loop. This drives the same fixtures through
+    `request.stream=True` and asserts those streamed events themselves carry the
+    single-highest-scoring-file fallback citation, not one annotation per retrieved file.
+    Two files are retrieved (with different scores) so that "cite only the best one" is
+    actually distinguishable from the old "cite every retrieved file" behavior.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            ),
+            VectorStoreSearchResponse(
+                file_id="file-def456",
+                filename="unrelated.pdf",
+                score=0.3,
+                content=[VectorStoreContent(type="text", text="Some other, less relevant chunk.")],
+            ),
+        ],
+    )
+
+    async def uncited_final_answer():
+        yield ChatCompletionChunk(
+            id="chat-completion-458",
+            created=1234567892,
+            model="ollama/llama3.2:3b",
+            object="chat.completion.chunk",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        role="assistant",
+                        content="Global warming is caused by greenhouse gases trapping heat.",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+        )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        uncited_final_answer(),
+    ]
+
+    stream = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+            stream=True,
+        )
+    )
+
+    content_part_done_events = []
+    output_item_done_message_events = []
+    async for event in stream:
+        if isinstance(event, OpenAIResponseObjectStreamResponseContentPartDone):
+            content_part_done_events.append(event)
+        elif isinstance(event, OpenAIResponseObjectStreamResponseOutputItemDone) and isinstance(
+            event.item, OpenAIResponseMessage
+        ):
+            output_item_done_message_events.append(event)
+
+    # The final answer round is the only one that streams actual text content.
+    final_content_part_events = [e for e in content_part_done_events if e.part.text]
+    assert len(final_content_part_events) == 1
+    part = final_content_part_events[0].part
+    assert part.text == "Global warming is caused by greenhouse gases trapping heat."
+    assert len(part.annotations) == 1
+    assert part.annotations[0].file_id == "file-abc123"
+    assert part.annotations[0].filename == "climate.pdf"
+
+    final_output_item_events = [e for e in output_item_done_message_events if e.item.content]
+    assert len(final_output_item_events) == 1
+    item_content = final_output_item_events[0].item.content[0]
+    assert item_content.text == "Global warming is caused by greenhouse gases trapping heat."
+    assert len(item_content.annotations) == 1
+    assert item_content.annotations[0].file_id == "file-abc123"
+    assert item_content.annotations[0].filename == "climate.pdf"
+
+
+async def test_streaming_deltas_stay_consistent_with_final_text_when_marker_split_across_chunks(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """Regression test: text delta events must stay consistent with the cleaned text in
+    content_part.done, even when a citation marker is split across multiple raw provider
+    chunks (a real possibility with live token-by-token streaming). Concatenating every
+    delta's text must reproduce exactly the cleaned final text, and no individual delta may
+    ever leak a fragment of the raw marker syntax.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            )
+        ],
+    )
+
+    async def split_marker_final_answer():
+        # "<|file-abc123|>" is deliberately split across three separate chunk deltas.
+        chunks_content = ["Global warming is caused by greenhouse gases ", "<|file-abc", "123|>", "."]
+        for i, delta_text in enumerate(chunks_content):
+            yield ChatCompletionChunk(
+                id="chat-completion-999",
+                created=1234567893,
+                model="ollama/llama3.2:3b",
+                object="chat.completion.chunk",
+                choices=[
+                    Choice(
+                        index=0,
+                        delta=ChoiceDelta(role="assistant", content=delta_text),
+                        finish_reason="stop" if i == len(chunks_content) - 1 else None,
+                    )
+                ],
+            )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        split_marker_final_answer(),
+    ]
+
+    stream = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+            stream=True,
+        )
+    )
+
+    delta_texts = []
+    content_part_done_text = None
+    async for event in stream:
+        if isinstance(event, OpenAIResponseObjectStreamResponseOutputTextDelta):
+            delta_texts.append(event.delta)
+            assert "<|file-" not in event.delta, "raw marker syntax must never leak into a delta"
+            assert "|>" not in event.delta, "raw marker syntax must never leak into a delta"
+        elif isinstance(event, OpenAIResponseObjectStreamResponseContentPartDone) and event.part.text:
+            content_part_done_text = event.part.text
+
+    assert content_part_done_text == "Global warming is caused by greenhouse gases."
+    assert "".join(delta_texts) == content_part_done_text

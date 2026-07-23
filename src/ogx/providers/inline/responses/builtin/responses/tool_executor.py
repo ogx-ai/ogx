@@ -221,8 +221,11 @@ class ToolExecutor:
         )
 
         # handling missing attributes for old versions
+        # Iterate in descending score order so that when a model doesn't cite inline and
+        # extract_citations_from_text falls back to a single file, it picks the most relevant
+        # one: dict insertion order determines which file_id lands first.
         citation_files = {}
-        for result in search_results:
+        for result in sorted(search_results, key=lambda r: r.score, reverse=True):
             file_id = result.file_id
             if not file_id and result.attributes:
                 file_id = result.attributes.get("document_id")
@@ -233,7 +236,8 @@ class ToolExecutor:
             if not filename:
                 filename = "unknown"
 
-            citation_files[file_id] = filename
+            if file_id not in citation_files:
+                citation_files[file_id] = filename
 
         # Cast to proper InterleavedContent type (list invariance)
         return ToolInvocationResult(
