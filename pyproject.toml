@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-fallback_version = "1.1.4.dev0"
+fallback_version = "1.2.1.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
@@ -23,7 +23,7 @@ constraint-dependencies = [
     "msgpack>=1.2.1",
     "pillow>=12.3.0",                  # CVE-2026-42311: PSD RCE; CVE-2026-55379/55380/54060: font/GD DoS
     "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
-    "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
+    "pyasn1>=0.6.4",                   # CVE-2026-30922: DoS via unbounded recursion
     "pydantic-settings>=2.14.2",
     "python-engineio>=4.13.2",
     "python-multipart>=0.0.31",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
@@ -80,14 +80,14 @@ dependencies = [
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "mcp>=1.23.0,<2.0",                                # for connectors
+    "mcp>=1.28.1,<2.0",                                # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
     "models-dev>=1.0.398",
 ]
 
 [project.optional-dependencies]
 client = [
-    "ogx-client>=1.1.3", # Optional for library-only usage
+    "ogx-client>=1.2.0", # Optional for library-only usage
 ]
 openclient = [
     "ogx-open-client>=1.0.2",
@@ -128,12 +128,12 @@ starter = [
     "safetensors",
     "scikit-learn",
     "scipy",
-    "sentence-transformers>=5.5.1",
+    "sentence-transformers>=5.6.0",
     "sentencepiece",
     "sqlite-vec",
     "together>=2",
     "tokenizers",
-    "torch",
+    "torch>=2.13.0",
     "tqdm",
     "tree_sitter",
     "unstructured-client>=0.25.0",
@@ -159,7 +159,7 @@ dev = [
     "openapi-spec-validator>=0.9.0",
     "ogx-open-client>=1.0.2",
     "boto3>=1.43.18",
-    "torch>=2.6.0",
+    "torch>=2.13.0",
 ]
 # Type checking dependencies - includes type stubs and optional runtime dependencies
 # needed for complete mypy coverage across all optional features
@@ -191,7 +191,7 @@ type_checking = [
     "sqlite-vec",
     "faiss-cpu",
     "lm-format-enforcer",
-    "mcp>=1.23.0,<2.0",
+    "mcp>=1.28.1,<2.0",
     "neo4j",
     "ollama",
     "langchain-openai>=1.2.2",
@@ -204,7 +204,7 @@ test-common = [
     "aiosqlite",
     "asyncpg>=0.29.0",
     "chardet",
-    "mcp>=1.23.0,<2.0",
+    "mcp>=1.28.1,<2.0",
     "neo4j",
     "pgvector>=0.3.0",
     "psycopg2-binary>=2.9.0",
@@ -245,7 +245,7 @@ test = [
     "pymilvus>=2.6.2",
     "qdrant-client",
     "requests",
-    "torch>=2.6.0",
+    "torch>=2.13.0",
     "torchvision>=0.27.0",
     "transformers",
     "weaviate-client>=4.16.4",

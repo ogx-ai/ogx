@@ -63,6 +63,16 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.inference,
+            adapter_type="mistral",
+            provider_type="remote::mistral",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.mistral",
+            config_class="ogx.providers.remote.inference.mistral.MistralImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.mistral.config.MistralProviderDataValidator",
+            description="Mistral AI inference provider for accessing Mistral models via the Mistral API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
             adapter_type="ollama",
             provider_type="remote::ollama",
             pip_packages=["ollama", "aiohttp", "h11>=0.16.0"],

@@ -4,12 +4,20 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
 import type { VectorStoreFile } from "ogx-client/resources/vector-stores/files";
+import type { File as UploadedFile } from "ogx-client/resources/files";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAuthClient } from "@/hooks/use-auth-client";
 import { Edit2, Plus, Trash2, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getAvailableFiles } from "./available-files";
 import {
   DetailLoadingView,
   DetailErrorView,
@@ -61,6 +69,41 @@ export function VectorStoreDetailView({
   const [isAttaching, setIsAttaching] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachSuccess, setAttachSuccess] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isLoadingUploadedFiles, setIsLoadingUploadedFiles] = useState(true);
+  const [uploadedFilesError, setUploadedFilesError] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadUploadedFiles = async () => {
+      try {
+        setIsLoadingUploadedFiles(true);
+        setUploadedFilesError(null);
+        const response = await client.files.list();
+        if (isMounted) {
+          setUploadedFiles(response.data);
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          setUploadedFilesError(
+            err instanceof Error ? err.message : "Failed to load uploaded files"
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingUploadedFiles(false);
+        }
+      }
+    };
+
+    loadUploadedFiles();
+    return () => {
+      isMounted = false;
+    };
+  }, [client]);
 
   // Handle ESC key to close modal
   useEffect(() => {
@@ -154,7 +197,17 @@ export function VectorStoreDetailView({
     setAttachSuccess(null);
 
     try {
-      await client.vectorStores.files.create(id, { file_id: trimmedId });
+      const result = (await client.vectorStores.files.create(id, {
+        file_id: trimmedId,
+      })) as unknown as {
+        status?: string;
+        last_error?: { message?: string } | null;
+      };
+      if (result.status === "failed") {
+        throw new Error(
+          result.last_error?.message || `Failed to attach file ${trimmedId}`
+        );
+      }
       setAttachSuccess(`File ${trimmedId} attached successfully.`);
       setAttachFileId("");
       onFilesChanged?.();
@@ -167,6 +220,8 @@ export function VectorStoreDetailView({
       setIsAttaching(false);
     }
   };
+
+  const availableFiles = getAvailableFiles(uploadedFiles, files);
 
   if (errorStore) {
     return (
@@ -197,23 +252,49 @@ export function VectorStoreDetailView({
           <div className="space-y-2">
             <label className="text-sm font-medium">Attach File</label>
             <div className="flex gap-2">
-              <Input
-                placeholder="Enter file ID to attach..."
-                value={attachFileId}
-                onChange={e => {
-                  setAttachFileId(e.target.value);
-                  setAttachError(null);
-                  setAttachSuccess(null);
-                }}
-                disabled={isAttaching}
-                className="flex-1 font-mono text-sm"
-                onKeyDown={e => {
-                  if (e.key === "Enter") handleAttachFile();
-                }}
-              />
+              {isLoadingUploadedFiles ? (
+                <div className="flex-1 text-sm text-muted-foreground p-2">
+                  Loading uploaded files...
+                </div>
+              ) : uploadedFilesError ? (
+                <div className="flex-1 text-destructive text-sm p-2">
+                  Error loading uploaded files: {uploadedFilesError}
+                </div>
+              ) : availableFiles.length === 0 ? (
+                <div className="flex-1 text-sm text-muted-foreground p-2">
+                  No unattached files available.
+                </div>
+              ) : (
+                <Select
+                  value={attachFileId}
+                  onValueChange={value => {
+                    setAttachFileId(value);
+                    setAttachError(null);
+                    setAttachSuccess(null);
+                  }}
+                  disabled={isAttaching}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select an uploaded file" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFiles.map(file => (
+                      <SelectItem key={file.id} value={file.id}>
+                        {file.filename || file.id} ({file.id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button
                 onClick={handleAttachFile}
-                disabled={!attachFileId.trim() || isAttaching}
+                disabled={
+                  !attachFileId.trim() ||
+                  isAttaching ||
+                  isLoadingUploadedFiles ||
+                  !!uploadedFilesError ||
+                  availableFiles.length === 0
+                }
                 size="sm"
               >
                 {isAttaching ? (
@@ -348,7 +429,7 @@ export function VectorStoreDetailView({
         value={new Date(store.created_at * 1000).toLocaleString()}
       />
       <PropertyItem label="Status" value={store.status} />
-      <PropertyItem label="Total Files" value={store.file_counts.total} />
+      <PropertyItem label="Total Files" value={files.length} />
       <PropertyItem label="Usage Bytes" value={store.usage_bytes} />
       <PropertyItem
         label="Provider ID"
