@@ -307,6 +307,7 @@ async def convert_response_input_to_chat_messages(
         for input_item in input:
             if isinstance(input_item, OpenAIResponseInputFunctionToolCallOutput):
                 tool_call_results[input_item.call_id] = await _build_tool_result_messages(input_item, files_api)
+        had_tool_call_results = bool(tool_call_results)
 
         for i, input_item in enumerate(input):
             if isinstance(input_item, OpenAIResponseInputFunctionToolCallOutput):
@@ -381,9 +382,9 @@ async def convert_response_input_to_chat_messages(
                     raise ValueError(
                         f"OGX OpenAI Responses does not yet support message role '{input_item.role}' in this context"
                     )
-                # Skip user messages that duplicate the last user message in previous_messages
-                # This handles cases where input includes context for function_call_outputs
-                if previous_messages and input_item.role == "user":
+                # Skip user messages that duplicate the last user message in previous_messages,
+                # but only when function_call_outputs are present (the user resent context for them)
+                if previous_messages and input_item.role == "user" and had_tool_call_results:
                     last_user_msg = None
                     for prev_msg in reversed(previous_messages):
                         if isinstance(prev_msg, OpenAIUserMessageParam):

@@ -220,6 +220,11 @@ exec $CMD_PREFIX "$CLI_NAME" stack run --insecure "$@"
 EOF
 RUN chmod +x /usr/local/bin/ogx-entrypoint.sh
 
-RUN mkdir -p "/.${CLI_NAME}" /.cache && chmod -R g+rw /app "/.${CLI_NAME}" /.cache
+RUN mkdir -p "/.${CLI_NAME}" /.cache && \
+    chmod -R g+rw /app "/.${CLI_NAME}" /.cache && \
+    chown -R 1001:0 /app "/.${CLI_NAME}" /.cache
+
+ENV HOME=/
+USER 1001
 
 ENTRYPOINT ["/usr/local/bin/ogx-entrypoint.sh"]

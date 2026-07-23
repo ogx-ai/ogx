@@ -4,15 +4,14 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import sys
-from types import ModuleType
 from unittest.mock import MagicMock
 
 import pytest
 
-from ogx.providers.utils.inference.embedding_mixin import (
+from ogx.providers.inline.inference.sentence_transformers.config import SentenceTransformersInferenceConfig
+from ogx.providers.inline.inference.sentence_transformers.sentence_transformers import (
     EMBEDDING_MODELS,
-    SentenceTransformerEmbeddingMixin,
+    SentenceTransformersInferenceImpl,
 )
 from ogx_api import OpenAIEmbeddingsRequestWithExtraBody, validate_embeddings_input_is_text
 
@@ -65,17 +64,6 @@ class TestEmbeddingValidation:
             assert model in error_msg
 
 
-class FakeConfig:
-    def __init__(self, trust_remote_code: bool):
-        self.trust_remote_code = trust_remote_code
-
-
-class FakeProvider(SentenceTransformerEmbeddingMixin):
-    def __init__(self, trust_remote_code: bool):
-        self.config = FakeConfig(trust_remote_code)
-        self.model_store = MagicMock()
-
-
 @pytest.fixture()
 def clear_embedding_cache():
     EMBEDDING_MODELS.clear()
@@ -84,8 +72,11 @@ def clear_embedding_cache():
 
 
 @pytest.fixture()
-def mock_sentence_transformers():
+def mock_torch_st():
     """Inject fake torch and sentence_transformers modules so _load_model() doesn't need real deps."""
+    import sys
+    from types import ModuleType
+
     calls = []
 
     def fake_constructor(model_name, trust_remote_code=False):
@@ -99,40 +90,49 @@ def mock_sentence_transformers():
     fake_torch = ModuleType("torch")
     fake_torch.set_num_threads = MagicMock()
 
-    originals = {}
-    for mod_name, fake in [("sentence_transformers", fake_st_module), ("torch", fake_torch)]:
-        originals[mod_name] = sys.modules.get(mod_name)
-        sys.modules[mod_name] = fake
+    original_st = sys.modules.get("sentence_transformers")
+    original_torch = sys.modules.get("torch")
+
+    sys.modules["sentence_transformers"] = fake_st_module
+    sys.modules["torch"] = fake_torch
 
     yield calls
 
-    for mod_name, orig in originals.items():
-        if orig is None:
-            sys.modules.pop(mod_name, None)
-        else:
-            sys.modules[mod_name] = orig
+    if original_st is None:
+        sys.modules.pop("sentence_transformers", None)
+    else:
+        sys.modules["sentence_transformers"] = original_st
+
+    if original_torch is None:
+        sys.modules.pop("torch", None)
+    else:
+        sys.modules["torch"] = original_torch
 
 
 class TestEmbeddingCacheTrustRemoteCode:
     async def test_different_trust_remote_code_values_get_separate_cache_entries(
-        self, clear_embedding_cache, mock_sentence_transformers
+        self, clear_embedding_cache, mock_torch_st
     ):
-        provider_trusted = FakeProvider(trust_remote_code=True)
-        provider_untrusted = FakeProvider(trust_remote_code=False)
+        provider_trusted = SentenceTransformersInferenceImpl(
+            SentenceTransformersInferenceConfig(trust_remote_code=True)
+        )
+        provider_untrusted = SentenceTransformersInferenceImpl(
+            SentenceTransformersInferenceConfig(trust_remote_code=False)
+        )
 
         model_a = await provider_trusted._load_sentence_transformer_model("test-model", trust_remote_code=True)
         model_b = await provider_untrusted._load_sentence_transformer_model("test-model", trust_remote_code=False)
 
-        assert len(mock_sentence_transformers) == 2
-        assert mock_sentence_transformers[0]["trust_remote_code"] is True
-        assert mock_sentence_transformers[1]["trust_remote_code"] is False
+        assert len(mock_torch_st) == 2
+        assert mock_torch_st[0]["trust_remote_code"] is True
+        assert mock_torch_st[1]["trust_remote_code"] is False
         assert model_a is not model_b
 
-    async def test_same_trust_remote_code_uses_cache(self, clear_embedding_cache, mock_sentence_transformers):
-        provider = FakeProvider(trust_remote_code=True)
+    async def test_same_trust_remote_code_uses_cache(self, clear_embedding_cache, mock_torch_st):
+        provider = SentenceTransformersInferenceImpl(SentenceTransformersInferenceConfig(trust_remote_code=True))
 
         model_a = await provider._load_sentence_transformer_model("test-model", trust_remote_code=True)
         model_b = await provider._load_sentence_transformer_model("test-model", trust_remote_code=True)
 
-        assert len(mock_sentence_transformers) == 1
+        assert len(mock_torch_st) == 1
         assert model_a is model_b
