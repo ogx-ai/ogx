@@ -51,14 +51,12 @@ class TestDeepSeekConfig:
         adapter = DeepSeekInferenceAdapter(config=config)
         assert adapter.provider_data_api_key_field == "deepseek_api_key"
 
-    @pytest.mark.asyncio
     async def test_embeddings_not_supported(self):
         config = DeepSeekImplConfig(api_key="test-key")
         adapter = DeepSeekInferenceAdapter(config=config)
         with pytest.raises(NotImplementedError, match="does not expose an embeddings endpoint"):
             await adapter.openai_embeddings(None)  # type: ignore[arg-type]
 
-    @pytest.mark.asyncio
     async def test_legacy_completions_endpoint_not_supported(self):
         """DeepSeek does not support the legacy /v1/completions endpoint."""
         config = DeepSeekImplConfig(api_key="test-key")
