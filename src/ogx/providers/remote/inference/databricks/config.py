@@ -39,7 +39,7 @@ class DatabricksImplConfig(RemoteInferenceProviderConfig):
     def sample_run_config(
         cls,
         base_url: str = "${env.DATABRICKS_HOST:=}",
-        api_token: str = "${env.DATABRICKS_TOKEN:=}",
+        api_token: str = "${env.DATABRICKS_TOKEN:=}",  # noqa: S107
         **kwargs: Any,
     ) -> dict[str, Any]:
         return {

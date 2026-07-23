@@ -142,7 +142,6 @@ async def test_openai_chat_completion_converts_developer_messages_for_vllm(vllm_
             ],
         )
     )
-    vllm_inference_adapter.model_store.has_model.return_value = False
 
     params = OpenAIChatCompletionRequestWithExtraBody(
         model="mock-model",
@@ -180,7 +179,6 @@ async def test_openai_chat_completion_converts_typed_developer_messages_for_vllm
             ],
         )
     )
-    vllm_inference_adapter.model_store.has_model.return_value = False
 
     params = OpenAIChatCompletionRequestWithExtraBody(
         model="mock-model",
