@@ -98,7 +98,10 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
 
         second_call = mock_inference_api.openai_chat_completion.call_args_list[1]
         second_params = second_call.args[0]
-        assert second_params.messages[-1].content == "Dublin"
+        # web_search results are wrapped in untrusted-content delimiters (#6263)
+        # before being fed back to the model -- the raw content is no longer
+        # passed through verbatim.
+        assert "Dublin" in second_params.messages[-1].content
         assert second_params.temperature == 0.1
 
         openai_responses_impl.tool_groups_api.get_tool.assert_called_once_with("web_search")
