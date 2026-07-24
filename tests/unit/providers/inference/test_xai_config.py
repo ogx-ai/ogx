@@ -48,14 +48,12 @@ class TestXAIConfig:
         adapter = XAIInferenceAdapter(config=config)
         assert adapter.provider_data_api_key_field == "xai_api_key"
 
-    @pytest.mark.asyncio
     async def test_embeddings_not_supported(self):
         config = XAIImplConfig(api_key="test-key")
         adapter = XAIInferenceAdapter(config=config)
         with pytest.raises(NotImplementedError, match="does not expose an embeddings endpoint"):
             await adapter.openai_embeddings(None)  # type: ignore[arg-type]
 
-    @pytest.mark.asyncio
     async def test_legacy_completions_endpoint_not_supported(self):
         """xAI does not support the legacy /v1/completions endpoint."""
         config = XAIImplConfig(api_key="test-key")
