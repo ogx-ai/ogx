@@ -73,6 +73,16 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.inference,
+            adapter_type="deepseek",
+            provider_type="remote::deepseek",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.deepseek",
+            config_class="ogx.providers.remote.inference.deepseek.DeepSeekImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.deepseek.config.DeepSeekProviderDataValidator",
+            description="DeepSeek inference provider for accessing DeepSeek models via the DeepSeek API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
             adapter_type="xai",
             provider_type="remote::xai",
             pip_packages=[],

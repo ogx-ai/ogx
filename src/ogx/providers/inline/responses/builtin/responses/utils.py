@@ -116,7 +116,7 @@ async def convert_chat_choice_to_response_message(
     """Convert an OpenAI Chat Completion choice into an OpenAI Response output message."""
     output_content = choice.message.content or ""
 
-    annotations, clean_text = _extract_citations_from_text(output_content, citation_files or {})
+    annotations, clean_text = extract_citations_from_text(output_content, citation_files or {})
     logprobs = choice.logprobs.content if choice.logprobs and choice.logprobs.content else []
 
     return OpenAIResponseMessage(
@@ -480,19 +480,41 @@ async def get_message_type_by_role(role: str) -> type[OpenAIMessageParam] | None
     return role_to_type.get(role)  # type: ignore[return-value]  # Pydantic models use ModelMetaclass
 
 
+CITATION_MARKER_REGEX = re.compile(
+    r"<\|(?P<file_id_pipe>file-[A-Za-z0-9_-]+)\|>"
+    r"|\[(?P<file_id_bracket>file-[A-Za-z0-9_-]+)\]"
+    r"|\((?P<file_id_paren>file-[A-Za-z0-9_-]+)\)"
+)
+
+# Matches an in-progress citation marker at the very end of a string, including a possible
+# single space right before it (since a known marker's preceding space gets dropped by
+# _extract_citations_from_text, and that only happens correctly if the space and the
+# marker end up cleaned together — see StreamingCitationCleaner). Also matches a bare
+# trailing space on its own, since it might turn out to precede a marker in the next
+# chunk. Used to withhold text from streamed deltas until either a marker completes (and
+# gets cleaned) or a later chunk proves it wasn't a marker after all (and gets flushed
+# through as literal text).
+_PENDING_CITATION_MARKER_TAIL_REGEX = re.compile(
+    r"(?: ?<(?:\|(?:file-[A-Za-z0-9_-]*)?)?| ?\[(?:file-[A-Za-z0-9_-]*)?| ?\((?:file-[A-Za-z0-9_-]*)?| )$"
+)
+
+
 def _extract_citations_from_text(
     text: str, citation_files: dict[str, str]
 ) -> tuple[list[OpenAIResponseAnnotationFileCitation], str]:
     """Extract citation markers from text and create annotations
 
     Args:
-        text: The text containing citation markers like [file-Cn3MSNn72ENTiiq11Qda4A]
+        text: The text containing citation markers like <|file-Cn3MSNn72ENTiiq11Qda4A|>.
+            The primary marker format is `<|file-id|>`, but `[file-id]` and `(file-id)`
+            are also accepted since weaker models often approximate the instructed
+            format rather than reproduce it exactly.
         citation_files: Dictionary mapping file_id to filename
 
     Returns:
         Tuple of (annotations_list, clean_text_without_markers)
     """
-    file_id_regex = re.compile(r"<\|(?P<file_id>file-[A-Za-z0-9_-]+)\|>")
+    file_id_regex = CITATION_MARKER_REGEX
 
     annotations = []
     parts = []
@@ -503,15 +525,19 @@ def _extract_citations_from_text(
         # segment before the marker
         prefix = text[last_end : m.start()]
 
-        # drop one space if it exists (since marker is at sentence end)
-        if prefix.endswith(" "):
+        fid = m.group("file_id_pipe") or m.group("file_id_bracket") or m.group("file_id_paren")
+        is_known = fid in citation_files
+
+        # drop one space if it exists (since marker is at sentence end); only do this when
+        # the marker itself is about to be removed below, otherwise we'd merge the prefix
+        # and the marker text together with no space between them
+        if is_known and prefix.endswith(" "):
             prefix = prefix[:-1]
 
         parts.append(prefix)
         total_len += len(prefix)
 
-        fid = m.group(1)
-        if fid in citation_files:
+        if is_known:
             annotations.append(
                 OpenAIResponseAnnotationFileCitation(
                     file_id=fid,
@@ -519,12 +545,90 @@ def _extract_citations_from_text(
                     index=total_len,  # index points to punctuation
                 )
             )
+        else:
+            # Unrecognized marker (e.g. a stale/mismatched file id): preserve it verbatim
+            # rather than silently deleting user-visible text we can't actually attribute.
+            marker_text = m.group(0)
+            parts.append(marker_text)
+            total_len += len(marker_text)
 
         last_end = m.end()
 
     parts.append(text[last_end:])
     cleaned_text = "".join(parts)
     return annotations, cleaned_text
+
+
+def extract_citations_from_text(
+    text: str, citation_files: dict[str, str]
+) -> tuple[list[OpenAIResponseAnnotationFileCitation], str]:
+    """Extract citation markers from text, with a fallback for models that don't cite inline.
+
+    Delegates to `_extract_citations_from_text` for marker-based extraction. Some models
+    (particularly small/local ones served e.g. via Ollama) don't reliably reproduce the
+    inline citation marker even when instructed to. If file_search actually retrieved
+    documents for this response, attribute the answer to the single most relevant one
+    rather than silently returning no annotations just because the model didn't echo the
+    marker. Attributing every retrieved file would imply the whole answer draws equally
+    on all of them, which usually isn't true and isn't what OpenAI's API does.
+
+    Args:
+        text: The text possibly containing citation markers.
+        citation_files: Dictionary mapping file_id to filename for files retrieved this turn,
+            ordered by descending relevance score (see tool_executor.py).
+
+    Returns:
+        Tuple of (annotations_list, clean_text_without_markers)
+    """
+    annotations, clean_text = _extract_citations_from_text(text, citation_files)
+    if not annotations and citation_files:
+        file_id, filename = next(iter(citation_files.items()))
+        annotations = [OpenAIResponseAnnotationFileCitation(file_id=file_id, filename=filename, index=len(clean_text))]
+    return annotations, clean_text
+
+
+class StreamingCitationCleaner:
+    """Incrementally strips citation markers from streamed text deltas.
+
+    content_part.done / output_item.done events clean the fully accumulated text via
+    `extract_citations_from_text`. Without this, delta events would carry the raw,
+    unprocessed text (markers and all), so a client that reconstructs output purely from
+    deltas would end up disagreeing with the final payload. Feeding every delta through
+    this cleaner keeps the two consistent.
+
+    Markers can be split across chunk boundaries (e.g. one chunk ends in "<|file-abc" and
+    the next starts with "123|>"), so a marker-looking sequence at the end of the buffered
+    text is withheld until it either completes (and gets cleaned) or a later feed()/flush()
+    call proves it wasn't a marker after all (and gets emitted as literal text).
+
+    Note: this only cleans complete markers, so if a space that would normally be dropped
+    before a marker (see `_extract_citations_from_text`) lands in a different feed() call
+    than the marker itself, that single space is not retroactively removed. This is a
+    minor cosmetic difference from the final text, not a correctness issue.
+    """
+
+    def __init__(self, citation_files: dict[str, str]):
+        self._citation_files = citation_files
+        self._buffer = ""
+
+    def feed(self, delta: str) -> str:
+        """Feed newly arrived raw text; return the portion now safe to emit to the client."""
+        self._buffer += delta
+        pending_match = _PENDING_CITATION_MARKER_TAIL_REGEX.search(self._buffer)
+        safe_upto = pending_match.start() if pending_match else len(self._buffer)
+        safe_text, self._buffer = self._buffer[:safe_upto], self._buffer[safe_upto:]
+        if not safe_text:
+            return ""
+        _, cleaned = _extract_citations_from_text(safe_text, self._citation_files)
+        return cleaned
+
+    def flush(self) -> str:
+        """Flush any remaining buffered text once no more input is coming this round."""
+        if not self._buffer:
+            return ""
+        _, cleaned = _extract_citations_from_text(self._buffer, self._citation_files)
+        self._buffer = ""
+        return cleaned
 
 
 def is_function_tool_call(

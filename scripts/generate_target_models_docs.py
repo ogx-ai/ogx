@@ -69,6 +69,7 @@ SETUP_PROVIDER_ALIASES = {
 # These inference providers exist in the registry but do not have named
 # integration-test setups yet, so they are intentionally excluded from this doc.
 INTENTIONALLY_UNMAPPED_REGISTRY_PROVIDERS = {
+    "deepseek",
     "mistral",
     "meta",
     "nvidia",
