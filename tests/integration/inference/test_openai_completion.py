@@ -57,6 +57,7 @@ def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id)
         "remote::llama-openai-compat",
         "remote::watsonx",  # WatsonX only has /v1/chat/completions, no /v1/completions
         "remote::deepseek",  # DeepSeek does not support /v1/completions
+        "remote::xai",  # xAI does not support /v1/completions
     ):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support OpenAI completions.")
 
