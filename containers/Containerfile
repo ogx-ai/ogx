@@ -27,6 +27,10 @@ ARG PYPI_VERSION=""
 ARG TEST_PYPI_VERSION=""
 ARG KEEP_WORKSPACE=""
 ARG DISTRO_NAME="starter"
+# Tolerate failures of the OpenTelemetry per-library bootstrap. This release
+# branch is a pre-rename backfill whose pinned deps can conflict with the latest
+# auto-instrumentation packages.
+ARG OTEL_BEST_EFFORT="1"
 ARG RUN_CONFIG_PATH=""
 ARG UV_HTTP_TIMEOUT=500
 ARG UV_EXTRA_INDEX_URL=""
@@ -130,10 +134,20 @@ RUN set -eux; \
         printf '%s\n' "$deps" | xargs -L1 uv pip install --no-cache; \
     fi
 
-# Install OpenTelemetry auto-instrumentation support
+# Install OpenTelemetry auto-instrumentation support.
+# The base distro/exporter install is required. The per-library bootstrap
+# (opentelemetry-bootstrap -a install) selects the latest instrumentation
+# packages, which can conflict with the pinned dependencies of older releases.
 RUN set -eux; \
     pip install --no-cache opentelemetry-distro opentelemetry-exporter-otlp; \
-    opentelemetry-bootstrap -a install
+    if ! opentelemetry-bootstrap -a install; then \
+        if [ "$OTEL_BEST_EFFORT" = "1" ]; then \
+            echo "opentelemetry-bootstrap failed; continuing without full auto-instrumentation (OTEL_BEST_EFFORT=1)" >&2; \
+        else \
+            echo "opentelemetry-bootstrap failed" >&2; \
+            exit 1; \
+        fi; \
+    fi
 
 # Cleanup
 RUN set -eux; \

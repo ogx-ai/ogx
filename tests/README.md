@@ -26,7 +26,7 @@ This gives you:
 
 You can run the unit tests with:
 ```bash
-uv run --group unit pytest -sv tests/unit/
+uv run --group test --group unit pytest -sv tests/unit/
 ```
 
 For running integration tests, you must provide a few things:

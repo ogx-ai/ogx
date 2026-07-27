@@ -255,6 +255,11 @@ jobs:
             # Explicit override from workflow_dispatch
             echo "ref=${{ inputs.client_ref }}" >> $GITHUB_OUTPUT
             echo "Using explicit client_ref: ${{ inputs.client_ref }}"
+          elif [[ "$GITHUB_BASE_REF" == release-* ]]; then
+            # Pull request targeting a release branch — GITHUB_REF is refs/pull/N/merge,
+            # so use the PR base branch name to pick the matching client release branch.
+            echo "ref=$GITHUB_BASE_REF" >> $GITHUB_OUTPUT
+            echo "Using PR base release branch: $GITHUB_BASE_REF"
           elif [[ "$GITHUB_REF" == refs/heads/release-* ]]; then
             # Running on a release branch — use the same branch name in client repos
             BRANCH="${GITHUB_REF#refs/heads/}"

@@ -25,6 +25,7 @@ if [ $FOUND_PYTHON -ne 0 ]; then
      uv python install "$PYTHON_VERSION"
 fi
 
-# Run unit tests with coverage
-uv run --python "$PYTHON_VERSION" --with-editable . --group unit \
+# Run unit tests with coverage. The shared `test` group provides core provider
+# dependencies, and `unit` layers on unit-only extras.
+uv run --python "$PYTHON_VERSION" --with-editable . --group test --group unit \
     coverage run --source=src/llama_stack -m pytest -s -v tests/unit/ "$@"
