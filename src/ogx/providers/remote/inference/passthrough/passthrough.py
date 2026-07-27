@@ -87,9 +87,13 @@ class PassthroughInferenceAdapter(NeedsRequestProviderData, Inference):
         # This avoids the "passthrough" sentinel that would send a spurious
         # Authorization: Bearer passthrough to every downstream, even when
         # forward_headers only targets non-auth headers like X-Tenant-ID.
+        # _enforce_credentials=False is required for openai>=2.34.0, which added a
+        # constructor-level credentials check that rejects api_key="". This parameter
+        # is available in all versions OGX requires (>=2.41.0).
         return AsyncOpenAI(
             base_url=f"{base_url.rstrip('/')}/v1",
             api_key="",
+            _enforce_credentials=False,
             default_headers=request_headers or None,
         )
 
