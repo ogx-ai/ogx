@@ -41,7 +41,7 @@ dependencies = [
     "llama-stack-api",                                # API and provider specifications (local dev via tool.uv.sources)
     "openai>=2.5.0",
     "prompt-toolkit",
-    "python-dotenv",
+    "python-dotenv>=1.2.2",                           # CVE-2026-28684: arbitrary file overwrite via symlink following
     "pyjwt[crypto]>=2.12.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
     "pydantic>=2.11.9",
     "rich",
@@ -60,7 +60,7 @@ dependencies = [
     "starlette>=0.49.1",
     "psycopg2-binary",
     "tornado>=6.5.3",
-    "urllib3>=2.6.3",
+    "urllib3>=2.7.0",                                 # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
     "oracledb>=3.4.1",
     "oci>=2.165.0",
     "numpy>=2.3.2",
