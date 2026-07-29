@@ -16,6 +16,7 @@ from ogx.telemetry.vector_io_metrics import (
     create_vector_metric_attributes,
     vector_chunks_processed_total,
     vector_deletes_total,
+    vector_documents_retrieved_total,
     vector_files_total,
     vector_insert_duration,
     vector_inserts_total,
@@ -70,6 +71,7 @@ class TestVectorMetricInstruments:
             vector_stores_total,
             vector_files_total,
             vector_chunks_processed_total,
+            vector_documents_retrieved_total,
         ]:
             assert counter is not None
             assert hasattr(counter, "add")
@@ -93,6 +95,7 @@ class TestVectorMetricInstruments:
         vector_stores_total.add(1, attrs)
         vector_files_total.add(1, attrs)
         vector_chunks_processed_total.add(10, attrs)
+        vector_documents_retrieved_total.add(3, attrs)
 
     def test_histograms_can_record(self):
         attrs = create_vector_metric_attributes(
@@ -111,6 +114,7 @@ class TestVectorMetricsConstants:
         from ogx.telemetry.constants import (
             VECTOR_CHUNKS_PROCESSED_TOTAL,
             VECTOR_DELETES_TOTAL,
+            VECTOR_DOCUMENTS_RETRIEVED_TOTAL,
             VECTOR_FILES_TOTAL,
             VECTOR_INSERT_DURATION,
             VECTOR_INSERTS_TOTAL,
@@ -126,6 +130,7 @@ class TestVectorMetricsConstants:
             VECTOR_STORES_TOTAL,
             VECTOR_FILES_TOTAL,
             VECTOR_CHUNKS_PROCESSED_TOTAL,
+            VECTOR_DOCUMENTS_RETRIEVED_TOTAL,
         ]:
             assert name.startswith("ogx.")
             assert "vector_io" in name
@@ -214,6 +219,7 @@ class TestVectorIORouterMetricsIntegration:
     async def test_query_chunks_records_metrics(self):
         router, mock_rt = self._create_mock_router()
         mock_result = MagicMock()
+        mock_result.chunks = [MagicMock() for _ in range(7)]
         mock_rt.query_chunks = AsyncMock(return_value=mock_result)
 
         mock_request = MagicMock()
@@ -223,6 +229,7 @@ class TestVectorIORouterMetricsIntegration:
 
         with (
             patch.object(vector_queries_total, "add") as mock_counter,
+            patch.object(vector_documents_retrieved_total, "add") as mock_docs,
             patch.object(vector_retrieval_duration, "record") as mock_duration,
         ):
             result = await router.query_chunks(mock_request)
@@ -234,11 +241,15 @@ class TestVectorIORouterMetricsIntegration:
             assert attrs["operation"] == "query"
             assert attrs["search_mode"] == "vector"
 
+            mock_docs.assert_called_once()
+            assert mock_docs.call_args[0][0] == 7
+
             mock_duration.assert_called_once()
 
     async def test_search_vector_store_records_metrics(self):
         router, mock_rt = self._create_mock_router()
         mock_result = MagicMock()
+        mock_result.data = [MagicMock() for _ in range(4)]
         mock_rt.openai_search_vector_store = AsyncMock(return_value=mock_result)
 
         mock_request = MagicMock()
@@ -249,6 +260,7 @@ class TestVectorIORouterMetricsIntegration:
 
         with (
             patch.object(vector_queries_total, "add") as mock_counter,
+            patch.object(vector_documents_retrieved_total, "add") as mock_docs,
             patch.object(vector_retrieval_duration, "record") as mock_duration,
         ):
             result = await router.openai_search_vector_store("vs_test", mock_request)
@@ -259,6 +271,9 @@ class TestVectorIORouterMetricsIntegration:
             assert attrs["status"] == "success"
             assert attrs["operation"] == "search"
             assert attrs["search_mode"] == "hybrid"
+
+            mock_docs.assert_called_once()
+            assert mock_docs.call_args[0][0] == 4
 
             mock_duration.assert_called_once()
 

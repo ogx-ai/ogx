@@ -6,7 +6,7 @@ inputs:
     required: false
     default: "3.12"
   client-version:
-    description: The ogx-client-python version to test against (latest or published)
+    description: Which ogx-client to test against — 'latest' generates the SDK in-repo from client-sdks/openapi, 'published' uses the PyPI release
     required: false
     default: "latest"
   sdk_install_url:
@@ -46,7 +46,7 @@ runs:
         # Install specific client version after sync if needed
         if [ "${{ steps.client-config.outputs.install-after-sync }}" = "true" ]; then
           echo "Installing ogx-client from: ${{ steps.client-config.outputs.install-source }}"
-          uv pip install ${{ steps.client-config.outputs.install-source }}
+          uv pip install --upgrade ${{ steps.client-config.outputs.install-source }}
         fi
 
         echo "Installed ogx packages"

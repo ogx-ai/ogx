@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from fastapi import Response, UploadFile
+from fastapi.responses import StreamingResponse
 
 if TYPE_CHECKING:
     from mypy_boto3_s3.client import S3Client
@@ -73,33 +75,36 @@ def _create_s3_client(config: S3FilesImplConfig) -> "S3Client":
 
 
 async def _create_bucket_if_not_exists(client: "S3Client", config: S3FilesImplConfig) -> None:
-    try:
-        client.head_bucket(Bucket=config.bucket_name)
-    except ClientError as e:
-        error_code = e.response["Error"]["Code"]
-        if error_code == "404":
-            if not config.auto_create_bucket:
-                raise RuntimeError(
-                    f"S3 bucket '{config.bucket_name}' does not exist. "
-                    f"Either create the bucket manually or set 'auto_create_bucket: true' in your configuration."
-                ) from e
-            try:
-                # For us-east-1, we can't specify LocationConstraint
-                if config.region == "us-east-1":
-                    client.create_bucket(Bucket=config.bucket_name)
-                else:
-                    client.create_bucket(
-                        Bucket=config.bucket_name,
-                        CreateBucketConfiguration=cast(Any, {"LocationConstraint": config.region}),
-                    )
-            except ClientError as create_error:
-                raise RuntimeError(
-                    f"Failed to create S3 bucket '{config.bucket_name}': {create_error}"
-                ) from create_error
-        elif error_code == "403":
-            raise RuntimeError(f"Access denied to S3 bucket '{config.bucket_name}'") from e
-        else:
-            raise RuntimeError(f"Failed to access S3 bucket '{config.bucket_name}': {e}") from e
+    def _check_and_create() -> None:
+        try:
+            client.head_bucket(Bucket=config.bucket_name)
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            if error_code == "404":
+                if not config.auto_create_bucket:
+                    raise RuntimeError(
+                        f"S3 bucket '{config.bucket_name}' does not exist. "
+                        f"Either create the bucket manually or set 'auto_create_bucket: true' in your configuration."
+                    ) from e
+                try:
+                    # For us-east-1, we can't specify LocationConstraint
+                    if config.region == "us-east-1":
+                        client.create_bucket(Bucket=config.bucket_name)
+                    else:
+                        client.create_bucket(
+                            Bucket=config.bucket_name,
+                            CreateBucketConfiguration=cast(Any, {"LocationConstraint": config.region}),
+                        )
+                except ClientError as create_error:
+                    raise RuntimeError(
+                        f"Failed to create S3 bucket '{config.bucket_name}': {create_error}"
+                    ) from create_error
+            elif error_code == "403":
+                raise RuntimeError(f"Access denied to S3 bucket '{config.bucket_name}'") from e
+            else:
+                raise RuntimeError(f"Failed to access S3 bucket '{config.bucket_name}': {e}") from e
+
+    await asyncio.to_thread(_check_and_create)
 
 
 def _make_file_object(
@@ -164,7 +169,8 @@ class S3FilesImpl(Files):
     async def _delete_file(self, file_id: str) -> None:
         """Delete a file from S3 and the database."""
         try:
-            self.client.delete_object(
+            await asyncio.to_thread(
+                self.client.delete_object,
                 Bucket=self._config.bucket_name,
                 Key=file_id,
             )
@@ -184,7 +190,7 @@ class S3FilesImpl(Files):
         self._client = _create_s3_client(self._config)
         await _create_bucket_if_not_exists(self._client, self._config)
 
-        self._sql_store = authorized_sqlstore(self._config.metadata_store, self.policy)
+        self._sql_store = await authorized_sqlstore(self._config.metadata_store, self.policy)
         await self._sql_store.create_table(
             "openai_files",
             {
@@ -251,7 +257,8 @@ class S3FilesImpl(Files):
         await self.sql_store.insert("openai_files", entry)
 
         try:
-            self.client.put_object(
+            await asyncio.to_thread(
+                self.client.put_object,
                 Bucket=self._config.bucket_name,
                 Key=file_id,
                 Body=content,
@@ -319,20 +326,29 @@ class S3FilesImpl(Files):
         row = await self._get_file(file_id)
 
         try:
-            response = self.client.get_object(
+            s3_response = await asyncio.to_thread(
+                self.client.get_object,
                 Bucket=self._config.bucket_name,
                 Key=row["id"],
             )
-            # TODO: can we stream this instead of loading it into memory
-            content = response["Body"].read()
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":
                 await self._delete_file(file_id)
                 raise OpenAIFileObjectNotFoundError(file_id) from e
             raise RuntimeError(f"Failed to download file from S3: {e}") from e
 
-        return Response(
-            content=content,
+        chunk_size = 1024 * 1024
+
+        def _stream_body():
+            body = s3_response["Body"]
+            try:
+                while chunk := body.read(chunk_size):
+                    yield chunk
+            finally:
+                body.close()
+
+        return StreamingResponse(
+            content=_stream_body(),
             media_type="application/octet-stream",
             headers={
                 "Content-Disposition": f'attachment; filename="{sanitize_content_disposition_filename(row["filename"])}"'

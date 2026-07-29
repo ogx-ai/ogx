@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncGenerator
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Any
 
 _MISSING = object()
@@ -25,7 +25,7 @@ def preserve_contexts_async_generator[T](
     async def wrapper() -> AsyncGenerator[T, None]:
         while True:
             previous_values: dict[ContextVar[Any], object] = {}
-            tokens: dict[ContextVar[Any], object] = {}
+            tokens: dict[ContextVar[Any], Token[Any]] = {}
 
             # Restore ALL context values before any await and capture previous state
             # This is needed to propagate context across async generator boundaries
@@ -39,14 +39,14 @@ def preserve_contexts_async_generator[T](
             def _restore_context_var(
                 context_var: ContextVar[Any],
                 *,
-                _tokens: dict[ContextVar[Any], object] = tokens,
+                _tokens: dict[ContextVar[Any], Token[Any]] = tokens,
                 _prev: dict[ContextVar[Any], object] = previous_values,
             ) -> None:
-                token = _tokens.get(context_var)
+                token: Token[Any] | None = _tokens.get(context_var)
                 previous_value = _prev.get(context_var, _MISSING)
                 if token is not None:
                     try:
-                        context_var.reset(token)  # type: ignore[arg-type]
+                        context_var.reset(token)
                         return
                     except (RuntimeError, ValueError):
                         pass

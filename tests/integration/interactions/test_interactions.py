@@ -27,9 +27,29 @@ def _suppress_experimental_warning():
 def _get_text_output(interaction):
     """Extract the first text output, skipping any thought content."""
     for output in interaction.outputs:
-        if output.type == "text":
+        if _get_field(output, "type") == "text":
             return output
     return None
+
+
+def _get_field(value, key, default=None):
+    """Get a field from either an SDK object or a dict payload."""
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _get_event_type(event):
+    """Get a canonical event type string across google-genai versions."""
+    return _get_field(event, "event_type", type(event).__name__)
+
+
+def _get_content_delta_text(event):
+    """Extract text from a content.delta event for both SDK object styles."""
+    delta = _get_field(event, "delta")
+    if delta is None:
+        return None
+    return _get_field(delta, "text")
 
 
 def test_interactions_non_streaming_basic(genai_client, text_model_id):
@@ -43,8 +63,10 @@ def test_interactions_non_streaming_basic(genai_client, text_model_id):
     assert interaction.status == "completed", f"Status should be 'completed', got: {interaction.status}"
     assert len(interaction.outputs) > 0, "Expected at least one output"
     text_output = _get_text_output(interaction)
-    assert text_output is not None, f"Expected a text output, got types: {[o.type for o in interaction.outputs]}"
-    assert len(text_output.text) > 0
+    assert text_output is not None, (
+        f"Expected a text output, got types: {[_get_field(o, 'type') for o in interaction.outputs]}"
+    )
+    assert len(_get_field(text_output, "text", "")) > 0
     assert interaction.usage.total_input_tokens > 0
     assert interaction.usage.total_output_tokens > 0
     assert (
@@ -64,7 +86,7 @@ def test_interactions_non_streaming_system_instruction(genai_client, text_model_
     assert len(interaction.outputs) > 0
     text_output = _get_text_output(interaction)
     assert text_output is not None
-    assert len(text_output.text) > 0
+    assert len(_get_field(text_output, "text", "")) > 0
 
 
 def test_interactions_non_streaming_multi_turn(genai_client, text_model_id):
@@ -82,7 +104,7 @@ def test_interactions_non_streaming_multi_turn(genai_client, text_model_id):
     assert len(interaction.outputs) > 0
     text_output = _get_text_output(interaction)
     assert text_output is not None
-    assert "alice" in text_output.text.lower()
+    assert "alice" in _get_field(text_output, "text", "").lower()
 
 
 def test_interactions_non_streaming_generation_config(genai_client, text_model_id):
@@ -100,7 +122,7 @@ def test_interactions_non_streaming_generation_config(genai_client, text_model_i
     assert len(interaction.outputs) > 0
     text_output = _get_text_output(interaction)
     assert text_output is not None
-    assert len(text_output.text) > 0
+    assert len(_get_field(text_output, "text", "")) > 0
 
 
 def test_interactions_non_streaming_response_shape(genai_client, text_model_id):
@@ -131,25 +153,28 @@ def test_interactions_streaming_basic(genai_client, text_model_id):
     interaction_id = None
 
     for event in stream:
-        event_name = type(event).__name__
-        event_types.append(event_name)
+        event_type = _get_event_type(event)
+        event_types.append(event_type)
 
-        if event_name == "InteractionStartEvent" and hasattr(event, "interaction") and event.interaction:
-            interaction_id = event.interaction.id
+        if event_type == "interaction.start":
+            interaction = _get_field(event, "interaction")
+            interaction_id = _get_field(interaction, "id")
 
-        if event_name == "ContentDelta" and hasattr(event, "delta") and event.delta and hasattr(event.delta, "text"):
-            text_parts.append(event.delta.text)
+        if event_type == "content.delta":
+            text = _get_content_delta_text(event)
+            if text:
+                text_parts.append(text)
 
     full_text = "".join(text_parts)
     assert len(full_text) > 0, "Streaming should produce text"
     assert interaction_id is not None, "Should have received an interaction ID"
 
     # Verify event sequence contains expected types
-    assert "InteractionStartEvent" in event_types
-    assert "ContentStart" in event_types
-    assert "ContentDelta" in event_types
-    assert "ContentStop" in event_types
-    assert "InteractionCompleteEvent" in event_types
+    assert "interaction.start" in event_types
+    assert "content.start" in event_types
+    assert "content.delta" in event_types
+    assert "content.stop" in event_types
+    assert "interaction.complete" in event_types
 
 
 def test_interactions_streaming_text_concatenation(genai_client, text_model_id):
@@ -162,9 +187,10 @@ def test_interactions_streaming_text_concatenation(genai_client, text_model_id):
 
     text_parts = []
     for event in stream:
-        if type(event).__name__ == "ContentDelta" and hasattr(event, "delta") and event.delta:
-            if hasattr(event.delta, "text"):
-                text_parts.append(event.delta.text)
+        if _get_event_type(event) == "content.delta":
+            text = _get_content_delta_text(event)
+            if text:
+                text_parts.append(text)
 
     full_text = "".join(text_parts)
     assert len(full_text) > 0
@@ -179,23 +205,21 @@ def test_interactions_streaming_event_order(genai_client, text_model_id):
     )
 
     events = list(stream)
-    event_names = [type(e).__name__ for e in events]
-    assert len(events) >= 4, f"Expected at least 4 events, got {len(events)}: {event_names}"
+    event_types = [_get_event_type(e) for e in events]
+    assert len(events) >= 4, f"Expected at least 4 events, got {len(events)}: {event_types}"
 
     # Verify all required event types are present
-    required = ["InteractionStartEvent", "ContentStart", "ContentDelta", "ContentStop", "InteractionCompleteEvent"]
+    required = ["interaction.start", "content.start", "content.delta", "content.stop", "interaction.complete"]
     for req in required:
-        assert req in event_names, f"Missing required event type {req}, got: {event_names}"
+        assert req in event_types, f"Missing required event type {req}, got: {event_types}"
 
     # Verify relative ordering: start before content, content before complete
     def _first(name):
-        return event_names.index(name)
+        return event_types.index(name)
 
-    assert _first("InteractionStartEvent") < _first("ContentStart"), "InteractionStartEvent should precede ContentStart"
-    assert _first("ContentStart") < _first("ContentDelta"), "ContentStart should precede ContentDelta"
-    assert _first("ContentStop") < _first("InteractionCompleteEvent"), (
-        "ContentStop should precede InteractionCompleteEvent"
-    )
+    assert _first("interaction.start") < _first("content.start"), "interaction.start should precede content.start"
+    assert _first("content.start") < _first("content.delta"), "content.start should precede content.delta"
+    assert _first("content.stop") < _first("interaction.complete"), "content.stop should precede interaction.complete"
 
 
 def test_interactions_tool_calling_function_call_output(genai_client, text_model_id):
@@ -226,15 +250,15 @@ def test_interactions_tool_calling_function_call_output(genai_client, text_model
     assert len(interaction.outputs) > 0
 
     # Model should produce a function_call output
-    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    function_calls = [o for o in interaction.outputs if _get_field(o, "type") == "function_call"]
     if not function_calls:
         pytest.skip("Model answered directly without calling the tool")
 
     fc = function_calls[0]
-    assert fc.name == "get_weather"
-    assert fc.id is not None
+    assert _get_field(fc, "name") == "get_weather"
+    assert _get_field(fc, "id") is not None
     # SDK uses 'arguments' attribute for function call args
-    fc_args = getattr(fc, "arguments", None) or getattr(fc, "args", None) or {}
+    fc_args = _get_field(fc, "arguments") or _get_field(fc, "args") or {}
     assert isinstance(fc_args, dict)
 
 
@@ -269,12 +293,14 @@ def test_interactions_tool_calling_round_trip(genai_client, text_model_id):
         ],
     )
 
-    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    function_calls = [o for o in interaction.outputs if _get_field(o, "type") == "function_call"]
     if not function_calls:
         pytest.skip("Model answered directly without calling the tool")
 
     fc = function_calls[0]
-    fc_args = getattr(fc, "arguments", None) or getattr(fc, "args", None) or {}
+    fc_args = _get_field(fc, "arguments") or _get_field(fc, "args") or {}
+    fc_id = _get_field(fc, "id")
+    fc_name = _get_field(fc, "name")
 
     # Step 2: Send function_response and get a final text answer
     interaction2 = genai_client.interactions.create(
@@ -286,8 +312,8 @@ def test_interactions_tool_calling_round_trip(genai_client, text_model_id):
                 "content": [
                     {
                         "type": "function_call",
-                        "id": fc.id,
-                        "name": fc.name,
+                        "id": fc_id,
+                        "name": fc_name,
                         "arguments": fc_args,
                     }
                 ],
@@ -297,8 +323,8 @@ def test_interactions_tool_calling_round_trip(genai_client, text_model_id):
                 "content": [
                     {
                         "type": "function_result",
-                        "call_id": fc.id,
-                        "name": fc.name,
+                        "call_id": fc_id,
+                        "name": fc_name,
                         "result": {"temperature_celsius": 22, "condition": "Cloudy"},
                     }
                 ],
@@ -324,7 +350,7 @@ def test_interactions_tool_calling_round_trip(genai_client, text_model_id):
     )
 
     assert interaction2.status == "completed"
-    text_outputs = [o for o in interaction2.outputs if o.type == "text"]
+    text_outputs = [o for o in interaction2.outputs if _get_field(o, "type") == "text"]
     assert len(text_outputs) > 0, "Expected a text response after providing function result"
 
 
@@ -366,10 +392,10 @@ def test_interactions_tool_calling_multiple_tools(genai_client, text_model_id):
     assert interaction.status in ("completed", "requires_action")
     assert len(interaction.outputs) > 0
 
-    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    function_calls = [o for o in interaction.outputs if _get_field(o, "type") == "function_call"]
     if function_calls:
         # If the model called a tool, it should have picked get_time
-        assert function_calls[0].name == "get_time"
+        assert _get_field(function_calls[0], "name") == "get_time"
 
 
 def test_interactions_no_tools_no_function_call(genai_client, text_model_id):
@@ -380,7 +406,7 @@ def test_interactions_no_tools_no_function_call(genai_client, text_model_id):
     )
 
     assert interaction.status == "completed"
-    function_calls = [o for o in interaction.outputs if o.type == "function_call"]
+    function_calls = [o for o in interaction.outputs if _get_field(o, "type") == "function_call"]
     assert len(function_calls) == 0, "Should not produce function_call without tools"
 
 

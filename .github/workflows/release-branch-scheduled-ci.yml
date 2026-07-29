@@ -99,7 +99,9 @@ jobs:
         branch: ${{ fromJSON(needs.discover-branches.outputs.branches) }}
         client: [library, docker, server]
         python-version: ["3.12"]
-        node-version: [22]
+        # Pinned to 22.22 due to node-fetch v2 "Premature close" regression in 22.23.0
+        # (nodejs/node#63989). Unpin once a patched 22.x ships with nodejs/node#64004.
+        node-version: ['22.22']
         client-version: ["latest"]
     steps:
       - name: Checkout ${{ matrix.branch }}
@@ -173,7 +175,7 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: ${{ matrix.python-version }}
           activate-environment: true

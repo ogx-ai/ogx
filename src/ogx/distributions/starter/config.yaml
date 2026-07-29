@@ -8,6 +8,7 @@ apis:
 - interactions
 - messages
 - responses
+- skills
 - tool_runtime
 - vector_io
 providers:
@@ -43,7 +44,7 @@ providers:
   - provider_id: bedrock
     provider_type: remote::bedrock
     config:
-      api_key: ${env.AWS_BEARER_TOKEN_BEDROCK:=}
+      aws_bedrock_bearer_token: ${env.AWS_BEDROCK_BEARER_TOKEN:=}
       region_name: ${env.AWS_DEFAULT_REGION:=us-east-2}
       aws_role_arn: ${env.AWS_ROLE_ARN:=}
       aws_web_identity_token_file: ${env.AWS_WEB_IDENTITY_TOKEN_FILE:=}
@@ -77,6 +78,11 @@ providers:
     config:
       base_url: https://api.groq.com/openai/v1
       api_key: ${env.GROQ_API_KEY:=}
+  - provider_id: meta
+    provider_type: remote::meta
+    config:
+      base_url: https://api.meta.ai/v1
+      api_key: ${env.META_API_KEY:=}
   - provider_id: sambanova
     provider_type: remote::sambanova
     config:
@@ -92,9 +98,7 @@ providers:
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config:
-      trust_remote_code: false
-  - provider_id: transformers
-    provider_type: inline::transformers
+      trust_remote_code: true
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -196,6 +200,10 @@ providers:
   messages:
   - provider_id: builtin
     provider_type: inline::builtin
+    config:
+      kvstore:
+        namespace: message_batches
+        backend: kv_default
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -206,6 +214,15 @@ providers:
           backend: sql_default
           max_write_queue_size: 10000
           num_writers: 4
+      memory_config:
+        default_vector_store_provider_id: sqlite-vec
+  skills:
+  - provider_id: builtin
+    provider_type: inline::builtin
+    config:
+      persistence:
+        namespace: skills
+        backend: kv_default
   tool_runtime:
   - provider_id: brave-search
     provider_type: remote::brave-search
@@ -217,6 +234,12 @@ providers:
     config:
       api_key: ${env.TAVILY_SEARCH_API_KEY:=}
       max_results: 3
+  - provider_id: nimble-search
+    provider_type: remote::nimble-search
+    config:
+      api_key: ${env.NIMBLE_API_KEY:=}
+      max_results: 3
+      search_depth: lite
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
@@ -271,7 +294,7 @@ registered_resources:
     provider_id: all
     provider_model_id: auto
     model_type: llm
-  vector_dbs: []
+  vector_stores: []
 server:
   port: 8321
 vector_stores:
@@ -280,7 +303,7 @@ vector_stores:
     provider_id: sentence-transformers
     model_id: nomic-ai/nomic-embed-text-v1.5
   default_reranker_model:
-    provider_id: transformers
+    provider_id: sentence-transformers
     model_id: Qwen/Qwen3-Reranker-0.6B
   file_search_params:
     header_template: 'file_search tool found {num_chunks} chunks:

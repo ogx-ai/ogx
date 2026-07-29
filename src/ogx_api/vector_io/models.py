@@ -498,8 +498,9 @@ class SearchRankingOptions(BaseModel):
         Keys can be "vector", "keyword", "neural". Values should sum to 1.0.
         Used when combining algorithm-based reranking with neural reranking.
         Example: {"vector": 0.3, "keyword": 0.3, "neural": 0.4}
-    :param model: (Optional) Model identifier for neural reranker (e.g., "transformers/Qwen/Qwen3-Reranker-0.6B").
-        Required when ranker="neural" or when weights contains "neural".
+    :param model: (Optional) Model identifier for neural reranker
+        (e.g., "sentence-transformers/Qwen/Qwen3-Reranker-0.6B"). Required when ranker="neural" or when
+        weights contains "neural".
     """
 
     ranker: str | None = None

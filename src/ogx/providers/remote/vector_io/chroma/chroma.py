@@ -83,7 +83,9 @@ class ChromaIndex(EmbeddingIndex):
 
         ids = [f"{c.metadata.get('document_id', '')}:{c.chunk_id}" for c in chunks]
         await maybe_await(
-            self.collection.add(documents=[chunk.model_dump_json() for chunk in chunks], embeddings=embeddings, ids=ids)
+            self.collection.upsert(
+                documents=[chunk.model_dump_json() for chunk in chunks], embeddings=embeddings, ids=ids
+            )
         )
 
     async def query_vector(
@@ -267,7 +269,7 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         if self.config.metadata_store:
             from ogx.core.storage.sqlstore import authorized_sqlstore
 
-            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         if isinstance(self.config, RemoteChromaVectorIOConfig):
             log.info(f"Connecting to Chroma server at: {self.config.url}")

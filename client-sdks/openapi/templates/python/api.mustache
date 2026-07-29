@@ -38,7 +38,7 @@ class {{classname}}:
         self.api_client = api_client
         self.logger = logging.getLogger({{classname}}.__name__)
 
-        # Child API attributes (set by LlamaStackClient based on x-nesting-path)
+        # Child API attributes (set by OgxClient based on x-nesting-path)
 {{#operation}}{{#vendorExtensions.x-nesting-path}}{{#-first}}{{#tags}}{{#-first}}{{#vendorExtensions.x-nesting-path}}{{^-last}}        self.{{.}}: Any | None = None  # Next in nesting path
 {{/-last}}{{/vendorExtensions.x-nesting-path}}{{/-first}}{{/tags}}{{/-first}}{{/vendorExtensions.x-nesting-path}}{{/operation}}
 

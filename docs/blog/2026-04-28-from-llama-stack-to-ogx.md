@@ -138,6 +138,6 @@ The rename clears the way for the project to grow in the direction it's already 
 
 The name is new. The mission is sharper. The server is the same one you've been using — just with a name that finally matches what it does.
 
-Get started at [ogx-ai.github.io/docs](https://ogx-ai.github.io/docs), or join the conversation on [Discord](https://discord.gg/ZAFjsrcw).
+Get started at [ogx-ai.github.io/docs](https://ogx-ai.github.io/docs), or join the conversation on [Discord](https://discord.gg/bUYRqEvK6).
 
 — Charlie, Francisco, Matt, Raghu, Seb

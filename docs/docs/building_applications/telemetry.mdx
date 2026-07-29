@@ -34,7 +34,7 @@ uv run opentelemetry-instrument \
     --metrics_exporter otlp \
     --service_name ogx-server \
     -- \
-    ogx stack run starter
+    ogx run starter
 ```
 
 This sends traces and metrics to an OTLP collector on port 4318. The next section shows how to set up the full observability stack.
@@ -272,9 +272,29 @@ Jaeger ingests traces only, not logs. If you set `OTEL_LOGS_EXPORTER=otlp` and p
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(none)* | OTLP endpoint URL. Metrics and traces are only exported when set. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Transport protocol for OTLP export |
 | `OTEL_SERVICE_NAME` | `ogx` | Service name tag on all telemetry data |
+| `OTEL_SERVICE_NAMESPACE` | *(none)* | Namespace identity for this OGX instance (e.g. the Kubernetes namespace). Falls back to `NAMESPACE` env var if unset. |
+| `NAMESPACE` | *(none)* | Kubernetes namespace (typically injected via the downward API). Used as fallback when `OTEL_SERVICE_NAMESPACE` is not set. |
+| `CLUSTER_ID` | *(none)* | Cluster identity for multi-cluster metric aggregation. Sets the `k8s.cluster.uid` OTel Resource attribute. |
 | `OTEL_METRIC_EXPORT_INTERVAL` | `60000` | Metric export interval in milliseconds |
 | `OTEL_PYTHON_DISABLED_INSTRUMENTATIONS` | *(none)* | Comma-separated list of instrumentors to disable |
 | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | `false` | Capture prompt/response text as log events |
+
+## Resource identity attributes
+
+OGX attaches [OTel Resource attributes](https://opentelemetry.io/docs/specs/semconv/resource/) to
+all metrics emitted by the MeterProvider. These attributes identify the OGX instance and appear on
+both the OTLP push and Prometheus scrape export paths.
+
+| Resource attribute | Source env var | Use case |
+|---|---|---|
+| `service.name` | `OTEL_SERVICE_NAME` (default `ogx`) | Identifies the service in dashboards and traces |
+| `service.namespace` | `OTEL_SERVICE_NAMESPACE` or `NAMESPACE` | Distinguishes OGX instances in multi-namespace Kubernetes deployments |
+| `k8s.cluster.uid` | `CLUSTER_ID` | Distinguishes clusters when aggregating metrics from multiple clusters into a single monitoring backend |
+
+All identity attributes are optional. When an env var is unset or empty, the corresponding attribute
+is omitted — it does not appear as an empty string. The `NAMESPACE` env var is typically injected by
+the Kubernetes downward API (`fieldRef: metadata.namespace`) and requires no manual configuration.
+
 
 ## Known issues
 

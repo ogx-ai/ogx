@@ -38,7 +38,10 @@ def upstream_header_app():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -62,7 +65,10 @@ def upstream_header_app_no_attributes():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -424,7 +430,10 @@ def test_attribute_headers_middleware_integration(upstream_header_app):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():

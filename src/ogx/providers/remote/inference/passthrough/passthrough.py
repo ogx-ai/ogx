@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncIterator
+from typing import cast
 
 from openai import AsyncOpenAI
 
@@ -18,10 +19,19 @@ from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionRequestWithExtraBody,
+    OpenAIChatCompletionWithReasoning,
     OpenAICompletion,
     OpenAICompletionRequestWithExtraBody,
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIEmbeddingsResponse,
+)
+from ogx_api.inference.models import OpenAIChatCompletionChunkWithReasoning
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
 )
 
 from .config import PassthroughImplConfig
@@ -31,6 +41,8 @@ logger = get_logger(__name__, category="inference")
 
 class PassthroughInferenceAdapter(NeedsRequestProviderData, Inference):
     """Inference adapter that forwards requests to any OpenAI-compatible endpoint."""
+
+    __provider_id__: str
 
     def __init__(self, config: PassthroughImplConfig) -> None:
         self.config = config
@@ -87,9 +99,13 @@ class PassthroughInferenceAdapter(NeedsRequestProviderData, Inference):
         # This avoids the "passthrough" sentinel that would send a spurious
         # Authorization: Bearer passthrough to every downstream, even when
         # forward_headers only targets non-auth headers like X-Tenant-ID.
+        # _enforce_credentials=False is required for openai>=2.34.0, which added a
+        # constructor-level credentials check that rejects api_key="". This parameter
+        # is available in all versions OGX requires (>=2.41.0).
         return AsyncOpenAI(
             base_url=f"{base_url.rstrip('/')}/v1",
             api_key="",
+            _enforce_credentials=False,
             default_headers=request_headers or None,
         )
 
@@ -121,8 +137,9 @@ class PassthroughInferenceAdapter(NeedsRequestProviderData, Inference):
 
         if provider_data is None:
             provider_data = self.get_request_provider_data()
-        passthrough_api_key = getattr(provider_data, "passthrough_api_key", None)
+        passthrough_api_key: str | None = getattr(provider_data, "passthrough_api_key", None)
         if passthrough_api_key is not None:
+            provider_data_api_key: str
             if hasattr(passthrough_api_key, "get_secret_value"):
                 provider_data_api_key = passthrough_api_key.get_secret_value()
             else:
@@ -156,7 +173,7 @@ class PassthroughInferenceAdapter(NeedsRequestProviderData, Inference):
         if params.stream:
             return wrap_async_stream(response)
 
-        return response  # type: ignore[return-value]
+        return cast(OpenAICompletion | AsyncIterator[OpenAICompletion], response)
 
     async def openai_chat_completion(
         self,
@@ -170,7 +187,20 @@ class PassthroughInferenceAdapter(NeedsRequestProviderData, Inference):
         if params.stream:
             return wrap_async_stream(response)
 
-        return response  # type: ignore[return-value]
+        return cast(OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk], response)
+
+    async def openai_chat_completions_with_reasoning(
+        self, params: OpenAIChatCompletionRequestWithExtraBody
+    ) -> OpenAIChatCompletionWithReasoning | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
+        raise NotImplementedError("openai_chat_completions_with_reasoning is not implemented")
+
+    async def anthropic_messages(
+        self, params: AnthropicCreateMessageRequest
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        raise NotImplementedError("anthropic_messages is not implemented")
+
+    async def anthropic_count_tokens(self, params: AnthropicCountTokensRequest) -> AnthropicCountTokensResponse:
+        raise NotImplementedError("anthropic_count_tokens is not implemented")
 
     async def openai_embeddings(
         self,

@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import argparse
+import atexit
 import os
 import ssl
 import subprocess
@@ -17,7 +18,12 @@ import yaml
 from termcolor import cprint
 
 from ogx.cli.subcommand import Subcommand
+from ogx.core.datatypes import StackConfig
+from ogx.core.distribution import builtin_automatically_routed_apis, get_provider_registry
+from ogx.core.resolver import validate_and_prepare_providers
+from ogx.core.server.server import remove_disabled_providers
 from ogx.core.stack import run_config_from_dynamic_config_spec
+from ogx.core.utils.config import redact_sensitive_fields, reveal_secret_fields
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR, UI_LOGS_DIR
 from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import get_logger
@@ -39,7 +45,7 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
         "--port",
         type=int,
         help="Port to run the server on. It can also be passed via the env var OGX_PORT.",
-        default=int(os.getenv("OGX_PORT", 8321)),
+        default=None,
     )
     parser.add_argument(
         "--enable-ui",
@@ -52,6 +58,17 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Run a stack with only a list of providers. This list is formatted like: api1=provider1,api1=provider2,api2=provider3. Where there can be multiple providers per API.",
     )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        default=False,
+        help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate the config without starting the server.",
+    )
 
 
 def run_stack_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -59,13 +76,13 @@ def run_stack_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
 
     from ogx.core.configure import parse_and_maybe_upgrade_config
 
-    if args.enable_ui:
-        _start_ui_development_server(args.port)
+    if args.enable_ui and not args.dry_run:
+        env_port = os.getenv("OGX_PORT")
+        ui_port = args.port or (int(env_port) if env_port else None) or 8321
+        _start_ui_development_server(ui_port)
 
     if args.config:
         try:
-            from ogx.core.utils.config_resolution import resolve_config_or_distro
-
             config_file = resolve_config_or_distro(args.config)
         except ValueError as e:
             parser.error(str(e))
@@ -106,10 +123,33 @@ def run_stack_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
         except AttributeError as e:
             parser.error(f"failed to parse config file '{config_file}':\n {e}")
 
+    if args.dry_run:
+        if not config_file:
+            parser.error("--dry-run requires a config file or --providers")
+        _dry_run_validate(config, config_file)
+        return
+
     _uvicorn_run(config_file, args, parser)
 
 
+def _dry_run_validate(config: StackConfig, config_file: Path) -> None:
+    routed_apis = builtin_automatically_routed_apis()
+    validate_and_prepare_providers(
+        run_config=config,
+        provider_registry=get_provider_registry(),
+        routing_table_apis={x.routing_table_api for x in routed_apis},
+        router_apis={x.router_api for x in routed_apis},
+    )
+    logger.info("Config validation passed", config_file=config_file)
+
+    safe_config = redact_sensitive_fields(config.model_dump(mode="json"))
+    clean_config = remove_disabled_providers(safe_config)
+    print(yaml.dump(clean_config, indent=2, default_flow_style=False, sort_keys=False))
+
+
 def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    import tempfile
+
     if not config_file:
         parser.error("Config file is required")
 
@@ -118,10 +158,26 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
     config_file = resolve_config_or_distro(str(config_file))
     with open(config_file) as fp:
         config_contents = yaml.safe_load(fp)
+        if args.insecure:
+            if "server" not in config_contents:
+                config_contents["server"] = {}
+            config_contents["server"]["insecure"] = True
+
         config = parse_and_maybe_upgrade_config(config_contents)
 
-    port = args.port or config.server.port
-    workers = config.server.workers
+    # Write resolved config (with CLI overrides) to a temp file so
+    # create_app() workers read the final config directly from disk.
+    resolved_config = reveal_secret_fields(config.model_dump())
+    fd, resolved_path = tempfile.mkstemp(suffix=".yaml", prefix="ogx-run-")
+    resolved_file = Path(resolved_path)
+    atexit.register(lambda p=resolved_file: p.unlink(missing_ok=True))
+    with os.fdopen(fd, "w") as f:
+        yaml.dump(resolved_config, f, default_flow_style=False, sort_keys=False)
+
+    env_port = os.getenv("OGX_PORT")
+    port = args.port or (int(env_port) if env_port else None) or config.server.port
+    env_workers = os.getenv("OGX_WORKERS")
+    workers = (int(env_workers) if env_workers else None) or config.server.workers
 
     host = ""
     if config.server.host:
@@ -129,7 +185,7 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
     elif workers and workers > 1:
         host = "::"
 
-    os.environ["OGX_CONFIG"] = str(config_file)
+    os.environ["OGX_CONFIG"] = str(resolved_file)
 
     uvicorn_config = {
         "factory": True,
@@ -149,11 +205,19 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
             uvicorn_config["ssl_ca_certs"] = config.server.tls_cafile
             uvicorn_config["ssl_cert_reqs"] = ssl.CERT_REQUIRED
 
+        if config.server.tls_config and config.server.tls_config.ciphers:
+            uvicorn_config["ssl_ciphers"] = ":".join(config.server.tls_config.ciphers)
+
         logger.info(
             "HTTPS enabled with certificates", keyfile=keyfile, certfile=certfile, cafile=config.server.tls_cafile
         )
+    elif not config.server.insecure:
+        raise SystemExit("TLS required: set tls_certfile/tls_keyfile in server config or pass '--insecure' to disable.")
     else:
-        logger.info("HTTPS enabled with certificates", keyfile=keyfile, certfile=certfile)
+        logger.warning(
+            "TLS is not enabled — server will transmit data in cleartext. "
+            "Set tls_certfile and tls_keyfile in server config to enable HTTPS."
+        )
 
     logger.info("Listening on", host=host, port=port)
 

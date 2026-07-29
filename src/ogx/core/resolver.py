@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import graphlib
 import importlib
 import importlib.metadata
 import inspect
@@ -42,6 +43,7 @@ from ogx_api import (
     ProviderSpec,
     RemoteProviderSpec,
     Responses,
+    Skills,
     ToolGroups,
     ToolGroupsProtocolPrivate,
     ToolRuntime,
@@ -89,6 +91,7 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.connectors: Connectors,
         Api.messages: Messages,
         Api.interactions: Interactions,
+        Api.skills: Skills,
     }
 
     if external_apis:
@@ -132,7 +135,6 @@ def additional_protocols_map() -> dict[Api, Any]:
     }
 
 
-# TODO: make all this naming far less atrocious. Provider. ProviderSpec. ProviderWithSpec. WTF!
 class ProviderWithSpec(Provider):
     """A Provider paired with its resolved ProviderSpec for instantiation."""
 
@@ -292,6 +294,7 @@ async def instantiate_providers(
     """Instantiates providers asynchronously while managing dependencies."""
     impls: dict[Api, Any] = internal_impls.copy() if internal_impls else {}
     inner_impls_by_provider_id: dict[str, dict[str, Any]] = {f"inner-{x.value}": {} for x in router_apis}
+    sibling_impls_by_api: dict[str, dict[str, Any]] = {}
     for api_str, provider in sorted_providers:
         # Skip providers that are not enabled
         if provider.provider_id is None:
@@ -321,6 +324,7 @@ async def instantiate_providers(
         else:
             api = Api(api_str)
             impls[api] = impl
+            sibling_impls_by_api.setdefault(api_str, {})[provider.provider_id] = impl
 
     # Post-instantiation: Inject VectorIORouter into VectorStoresRoutingTable
     if Api.vector_io in impls and Api.vector_stores in impls:
@@ -328,6 +332,13 @@ async def instantiate_providers(
         vector_stores_routing_table = impls[Api.vector_stores]
         if hasattr(vector_stores_routing_table, "vector_io_router"):
             vector_stores_routing_table.vector_io_router = vector_io_router
+
+    # Post-instantiation: Inject complete sibling sets
+    for _api_str, siblings in sibling_impls_by_api.items():
+        for provider_id, impl in siblings.items():
+            if hasattr(impl, "set_sibling_providers"):
+                others = {k: v for k, v in siblings.items() if k != provider_id}
+                impl.set_sibling_providers(others)
 
     return impls
 
@@ -342,36 +353,30 @@ def topological_sort(
 
     Returns:
         A flattened list of (api_name, provider) tuples in dependency order.
+
+    Raises:
+        RuntimeError: If there is a circular dependency between providers.
     """
-
-    def dfs(kv, visited: set[str], stack: list[str]):
-        api_str, providers = kv
-        visited.add(api_str)
-
-        deps = []
-        for provider in providers:
-            for dep in provider.spec.deps__:
-                deps.append(dep)
-
-        for dep in deps:
-            if dep not in visited and dep in providers_with_specs:
-                dfs((dep, providers_with_specs[dep]), visited, stack)
-
-        stack.append(api_str)
-
-    visited: set[str] = set()
-    stack: list[str] = []
+    ts: graphlib.TopologicalSorter[str] = graphlib.TopologicalSorter()
 
     for api_str, providers in providers_with_specs.items():
-        if api_str not in visited:
-            dfs((api_str, providers), visited, stack)
+        deps = set()
+        for provider in providers:
+            for dep in provider.spec.deps__:
+                if dep in providers_with_specs:
+                    deps.add(dep)
+        ts.add(api_str, *deps)
 
-    flattened = []
-    for api_str in stack:
-        for provider in providers_with_specs[api_str]:
-            flattened.append((api_str, provider))
+    try:
+        flattened = []
+        for api_str in ts.static_order():
+            for provider in providers_with_specs[api_str]:
+                flattened.append((api_str, provider))
 
-    return flattened
+        return flattened
+    except graphlib.CycleError as e:
+        cycle: list[str] = e.args[1] if len(e.args) > 1 else []
+        raise RuntimeError(f"Failed to sort providers: circular dependency detected involving APIs {cycle}") from e
 
 
 async def instantiate_provider(
@@ -401,10 +406,29 @@ async def instantiate_provider(
 
     logger.debug("Instantiating provider", provider_id=provider.provider_id, module=provider_spec.module)
     module = importlib.import_module(provider_spec.module)
+
+    def _inject_config_defaults(config_type: type[Any], provider_config: dict[str, Any]) -> dict[str, Any]:
+        fields = getattr(config_type, "__fields__", None)
+        if fields is None:
+            return provider_config
+
+        # Inject vector_stores_config for providers that need it (introspection-based).
+        # Only inject if vector_stores is provided, otherwise let default_factory handle it.
+        if "vector_stores_config" in fields and run_config.vector_stores is not None:
+            provider_config["vector_stores_config"] = run_config.vector_stores
+
+        # Inject metadata_store from server stores config when not explicitly configured.
+        if "metadata_store" in fields:
+            if provider_config.get("metadata_store") is None and run_config.storage.stores.vector_stores is not None:
+                provider_config["metadata_store"] = run_config.storage.stores.vector_stores.model_dump()
+
+        return provider_config
+
     args = []
     if isinstance(provider_spec, RemoteProviderSpec):
         config_type = instantiate_class_type(provider_spec.config_class)
-        config = config_type(**provider.config)
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
+        config = config_type(**provider_config)
 
         method = "get_adapter_impl"
         args = [config, deps]
@@ -424,15 +448,8 @@ async def instantiate_provider(
         args = [provider_spec.api, inner_impls, deps, dist_registry, policy]
     else:
         method = "get_provider_impl"
-        provider_config = provider.config.copy()
-
-        # Inject vector_stores_config for providers that need it (introspection-based)
         config_type = instantiate_class_type(provider_spec.config_class)
-        if hasattr(config_type, "__fields__") and "vector_stores_config" in config_type.__fields__:
-            # Only inject if vector_stores is provided, otherwise let default_factory handle it
-            if run_config.vector_stores is not None:
-                provider_config["vector_stores_config"] = run_config.vector_stores
-
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
         config = config_type(**provider_config)
         args = [config, deps]
         if "policy" in inspect.signature(getattr(module, method)).parameters:

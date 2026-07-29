@@ -1,0 +1,62 @@
+name: Responses API - Codex CLI Smoke Test
+
+run-name: Manually drive the real Codex CLI against /v1/responses
+
+on:
+  # Keep this manual until local providers can complete a clean Codex turn.
+  # See https://github.com/ogx-ai/ogx/issues/6069.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CODEX_CLI_VERSION: '0.136.0'
+  CODEX_SMOKE_TEXT_MODEL: 'ollama/llama3.2:1b'
+
+jobs:
+  codex-cli-smoke:
+    name: Codex CLI smoke (ollama, live)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # Live mode (not replay) so the Ollama backend is provisioned and the
+      # real Codex CLI traffic reaches a real model through /v1/responses.
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: '3.12'
+          client-version: 'latest'
+          setup: 'ollama'
+          suite: 'responses'
+          inference-mode: 'live'
+
+      - name: Install Codex CLI
+        run: |
+          npm install -g "@openai/codex@${CODEX_CLI_VERSION}"
+          codex --version
+
+      - name: Pull Codex smoke model
+        run: docker exec ollama ollama pull "${CODEX_SMOKE_TEXT_MODEL#ollama/}"
+
+      - name: Run Codex CLI smoke test
+        uses: ./.github/actions/run-and-record-tests
+        env:
+          OGX_ENABLE_CODEX_CLI_SMOKE: '1'
+        with:
+          stack-config: 'server:ci-tests'
+          setup: 'ollama'
+          suite: 'responses'
+          inference-mode: 'live'
+          pattern: 'test_codex_cli_smoke_uses_generated_ogx_profile'
+          text-model: ${{ env.CODEX_SMOKE_TEXT_MODEL }}

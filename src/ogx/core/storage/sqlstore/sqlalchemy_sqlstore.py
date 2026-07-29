@@ -29,10 +29,10 @@ from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from ogx.core.storage.datatypes import PostgresSqlStoreConfig, SqlAlchemySqlStoreConfig
+from ogx.core.storage.datatypes import PostgresSqlStoreConfig, SqlAlchemySqlStoreConfig, SqliteSqlStoreConfig
 from ogx.log import get_logger
 from ogx_api import PaginatedResponse
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation, SqlStore
 
 logger = get_logger(name=__name__, category="providers::utils")
 
@@ -45,6 +45,19 @@ TYPE_MAPPING: dict[ColumnType, Any] = {
     ColumnType.TEXT: Text,
     ColumnType.JSON: JSON,
 }
+
+
+def _sqlalchemy_column(
+    column_name: str,
+    column_type: ColumnType,
+    primary_key: bool = False,
+    nullable: bool = True,
+) -> Column[Any]:
+    sqlalchemy_type = TYPE_MAPPING.get(column_type)
+    if not sqlalchemy_type:
+        raise ValueError(f"Unsupported column type '{column_type}' for column '{column_name}'.")
+
+    return Column(column_name, sqlalchemy_type, primary_key=primary_key, nullable=nullable)
 
 
 def _build_where_expr(column: ColumnElement[Any], value: Any) -> ColumnElement[Any]:
@@ -76,7 +89,7 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
     def __init__(self, config: SqlAlchemySqlStoreConfig) -> None:
         self.config = config
-        self._is_sqlite_backend = "sqlite" in self.config.engine_str
+        self._is_sqlite_backend = isinstance(self.config, SqliteSqlStoreConfig)
         self._engine: AsyncEngine | None = None  # Lazy initialization
         self.async_session: async_sessionmaker[AsyncSession] | None = None
         self.metadata = MetaData()
@@ -174,18 +187,20 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 is_primary_key = col_props.primary_key
                 is_nullable = col_props.nullable
 
-            sqlalchemy_type = TYPE_MAPPING.get(col_type)
-            if not sqlalchemy_type:
-                raise ValueError(f"Unsupported column type '{col_type}' for column '{col_name}'.")
-
             sqlalchemy_columns.append(
-                Column(col_name, sqlalchemy_type, primary_key=is_primary_key, nullable=is_nullable)
+                _sqlalchemy_column(col_name, col_type, primary_key=is_primary_key, nullable=is_nullable)
             )
 
         # Register table in metadata - actual creation happens in _ensure_engine()
         if table not in self.metadata.tables:
             Table(table, self.metadata, *sqlalchemy_columns)
-        # If table already exists in metadata, we're done (no need to recreate)
+
+            # If engine is already running, create the new table immediately.
+            # _ensure_engine() only calls create_all once, so tables registered
+            # after that first call would never be physically created.
+            if self._engine is not None:
+                async with self._engine.begin() as conn:
+                    await conn.run_sync(self.metadata.create_all, checkfirst=True)
 
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
@@ -200,6 +215,8 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         data: Mapping[str, Any],
         conflict_columns: list[str],
         update_columns: list[str] | None = None,
+        update_where_sql: str | None = None,
+        update_where_sql_params: Mapping[str, Any] | None = None,
     ) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
         assert self.async_session is not None  # _ensure_engine guarantees this
@@ -213,7 +230,17 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         update_mapping = {col: getattr(insert_stmt.excluded, col) for col in update_columns}
         conflict_cols = [table_obj.c[col] for col in conflict_columns]
 
-        stmt = insert_stmt.on_conflict_do_update(index_elements=conflict_cols, set_=update_mapping)
+        update_where = None
+        if update_where_sql:
+            update_where = text(update_where_sql)
+            if update_where_sql_params:
+                update_where = update_where.bindparams(**update_where_sql_params)
+
+        stmt = insert_stmt.on_conflict_do_update(
+            index_elements=conflict_cols,
+            set_=update_mapping,
+            where=update_where,
+        )
 
         async with self.async_session() as session:
             await session.execute(stmt)
@@ -268,8 +295,14 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 if cursor_key_column not in table_obj.c:
                     raise ValueError(f"Cursor key column '{cursor_key_column}' not found in table '{table}'")
 
-                # Get cursor value for the order column
+                # Get cursor value for the order column, scoped by the same
+                # access filters as the main query to prevent cross-tenant leaks
                 cursor_query = select(table_obj.c[order_column]).where(table_obj.c[cursor_key_column] == cursor_id)
+                if where_sql:
+                    cursor_clause = text(where_sql)
+                    if where_sql_params:
+                        cursor_clause = cursor_clause.bindparams(**where_sql_params)
+                    cursor_query = cursor_query.where(cursor_clause)
                 cursor_result = await session.execute(cursor_query)
                 cursor_row = cursor_result.fetchone()
 
@@ -363,6 +396,26 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             await session.execute(stmt, data)
             await session.commit()
 
+    def _build_delete_statement(
+        self,
+        table: str,
+        where: Mapping[str, Any],
+        where_sql: str | None = None,
+        where_sql_params: Mapping[str, Any] | None = None,
+    ) -> tuple[Any, Mapping[str, Any] | None]:
+        if not where:
+            raise ValueError("where is required for delete")
+
+        stmt = self.metadata.tables[table].delete()
+        for key, value in where.items():
+            stmt = stmt.where(_build_where_expr(self.metadata.tables[table].c[key], value))
+        if where_sql:
+            clause = text(where_sql)
+            if where_sql_params:
+                clause = clause.bindparams(**where_sql_params)
+            stmt = stmt.where(clause)
+        return stmt, where_sql_params
+
     async def delete(
         self,
         table: str,
@@ -372,20 +425,27 @@ class SqlAlchemySqlStoreImpl(SqlStore):
     ) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
         assert self.async_session is not None  # _ensure_engine guarantees this
-        if not where:
-            raise ValueError("where is required for delete")
+        async with self.async_session() as session:
+            stmt, params = self._build_delete_statement(table, where, where_sql, where_sql_params)
+            await session.execute(stmt, params)
+            await session.commit()
+
+    async def delete_many(self, operations: Sequence[DeleteOperation]) -> None:
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self.async_session is not None  # _ensure_engine guarantees this
+        if not operations:
+            return
 
         async with self.async_session() as session:
-            stmt = self.metadata.tables[table].delete()
-            for key, value in where.items():
-                stmt = stmt.where(_build_where_expr(self.metadata.tables[table].c[key], value))
-            if where_sql:
-                clause = text(where_sql)
-                if where_sql_params:
-                    clause = clause.bindparams(**where_sql_params)
-                stmt = stmt.where(clause)
-            await session.execute(stmt)
-            await session.commit()
+            async with session.begin():
+                for operation in operations:
+                    stmt, params = self._build_delete_statement(
+                        operation.table,
+                        operation.where,
+                        operation.where_sql,
+                        operation.where_sql_params,
+                    )
+                    await session.execute(stmt, params)
 
     async def add_column_if_not_exists(
         self,
@@ -395,6 +455,7 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         nullable: bool = True,
     ) -> None:
         """Queue a column to be added when engine is created, or add it now if engine exists."""
+        self._add_column_to_metadata(table, column_name, column_type, nullable)
         if self._engine is None:
             # Engine not created yet - queue this column addition for later
             if table not in self._pending_columns:
@@ -403,6 +464,16 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         else:
             # Engine already exists - add column immediately
             await self._add_column_now(table, column_name, column_type, nullable)
+
+    def _add_column_to_metadata(
+        self,
+        table: str,
+        column_name: str,
+        column_type: ColumnType,
+        nullable: bool = True,
+    ) -> None:
+        if table in self.metadata.tables and column_name not in self.metadata.tables[table].c:
+            self.metadata.tables[table].append_column(_sqlalchemy_column(column_name, column_type, nullable=nullable))
 
     async def _add_column_now(
         self,
@@ -432,18 +503,18 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 if not table_exists or column_exists:
                     return
 
-                sqlalchemy_type = TYPE_MAPPING.get(column_type)
-                if not sqlalchemy_type:
-                    raise ValueError(f"Unsupported column type '{column_type}' for column '{column_name}'.")
-
                 # Create the ALTER TABLE statement
                 # Note: We need to get the dialect-specific type name
                 dialect = self._engine.dialect
-                type_impl = sqlalchemy_type()
+                type_impl = TYPE_MAPPING[column_type]()
                 compiled_type = type_impl.compile(dialect=dialect)
 
                 nullable_clause = "" if nullable else " NOT NULL"
-                add_column_sql = text(f"ALTER TABLE {table} ADD COLUMN {column_name} {compiled_type}{nullable_clause}")
+                quoted_table = f'"{table}"' if not self._is_sqlite_backend else table
+                quoted_column = f'"{column_name}"' if not self._is_sqlite_backend else column_name
+                add_column_sql = text(
+                    f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} {compiled_type}{nullable_clause}"
+                )
 
                 await conn.execute(add_column_sql)
         except Exception as e:

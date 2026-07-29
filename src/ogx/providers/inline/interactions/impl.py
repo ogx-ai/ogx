@@ -31,7 +31,7 @@ from ogx.core.datatypes import AccessRule
 from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.utils.inference.http_client import build_network_client_kwargs
-from ogx.providers.utils.inference.model_registry import NetworkConfig
+from ogx.providers.utils.inference.network_config import NetworkConfig
 from ogx.providers.utils.interactions.interactions_store import InteractionsStore
 from ogx_api import (
     Inference,
@@ -298,7 +298,6 @@ class BuiltinInteractionsImpl(Interactions):
                 logger.error(
                     "Passthrough request failed",
                     status_code=resp.status_code,
-                    response_body=resp.text[:500],
                     url=url,
                 )
                 return JSONResponse(content=resp.json(), status_code=resp.status_code)

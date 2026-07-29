@@ -36,7 +36,7 @@ jobs:
           fetch-depth: ${{ github.actor == 'dependabot[bot]' && 0 || 2 }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.12'
           cache: pip
@@ -52,7 +52,7 @@ jobs:
           cache-dependency-path: 'src/ogx_ui/'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 
       - name: Install npm dependencies
         run: npm ci
@@ -62,7 +62,7 @@ jobs:
         run: python -m pip install 'pre-commit>=4.4.0'
 
       - name: Cache pre-commit
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
@@ -163,7 +163,7 @@ jobs:
           # Install specific client version after sync if needed
           if [ "${{ steps.client-config.outputs.install-after-sync }}" = "true" ]; then
             echo "Installing ogx-client from: ${{ steps.client-config.outputs.install-source }}"
-            uv pip install ${{ steps.client-config.outputs.install-source }}
+            uv pip install --upgrade ${{ steps.client-config.outputs.install-source }}
           fi
 
       - name: Run mypy (full type_checking)

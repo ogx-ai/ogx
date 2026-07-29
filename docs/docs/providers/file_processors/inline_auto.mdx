@@ -1,5 +1,5 @@
 ---
-description: "Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Routes PDF and text files to PyPDF, and office/structured formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. Unsupported formats are rejected with a clear error listing the supported types."
+description: "Composite file processor that dispatches to sibling providers based on file MIME type. Configure a priority list of provider IDs; each provider declares the MIME types it supports and the first match wins. Unmatched types return a 422 error. Without a priority list, falls back to built-in PyPDF (PDF, text) and MarkItDown (office, media) backends."
 sidebar_label: Auto
 title: inline::auto
 ---
@@ -8,7 +8,7 @@ title: inline::auto
 
 ## Description
 
-Composite file processor that automatically dispatches to the appropriate backend based on file MIME type. Routes PDF and text files to PyPDF, and office/structured formats (DOCX, PPTX, XLSX, HTML, JSON, XML) to MarkItDown when installed. Unsupported formats are rejected with a clear error listing the supported types.
+Composite file processor that dispatches to sibling providers based on file MIME type. Configure a priority list of provider IDs; each provider declares the MIME types it supports and the first match wins. Unmatched types return a 422 error. Without a priority list, falls back to built-in PyPDF (PDF, text) and MarkItDown (office, media) backends.
 
 ## Configuration
 
@@ -18,6 +18,7 @@ Composite file processor that automatically dispatches to the appropriate backen
 | `default_chunk_overlap_tokens` | `int` | No | 400 | Default chunk overlap in tokens when chunking_strategy type is 'auto' |
 | `extract_metadata` | `bool` | No | True | Whether to extract PDF metadata (title, author, etc.) |
 | `clean_text` | `bool` | No | True | Whether to clean extracted text (remove extra whitespace, normalize line breaks) |
+| `priority` | `list[str]` | No | [] | Ordered list of sibling provider IDs to dispatch to. Each provider declares the MIME types it supports; the first provider in the list that supports a given MIME type handles it. |
 
 ## Sample Configuration
 

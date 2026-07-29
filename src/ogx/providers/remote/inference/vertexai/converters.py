@@ -236,8 +236,8 @@ def _convert_user_message(msg: dict[str, Any]) -> dict[str, Any]:
                     parts.append(inline)
             else:
                 logger.warning(
-                    "Unsupported content part type '%s' in user message; skipping",
-                    part_type,
+                    "Unsupported content part type in user message; skipping",
+                    part_type=part_type,
                 )
 
     return {"role": "user", "parts": parts}

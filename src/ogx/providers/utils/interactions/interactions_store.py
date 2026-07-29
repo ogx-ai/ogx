@@ -30,7 +30,7 @@ class InteractionsStore:
 
     async def initialize(self) -> None:
         """Create the interactions table if it does not exist."""
-        self.sql_store = authorized_sqlstore(self.reference, self.policy)
+        self.sql_store = await authorized_sqlstore(self.reference, self.policy)
         await self.sql_store.create_table(
             self.reference.table_name,
             {

@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from ogx.core.storage.datatypes import PostgresKVStoreConfig
 
@@ -26,7 +27,7 @@ def _make_config(namespace: str | None = None, table_name: str = "test_kvstore")
         port=5432,
         db="testdb",
         user="testuser",
-        password="testpass",
+        password=SecretStr("testpass"),
         table_name=table_name,
         namespace=namespace,
     )

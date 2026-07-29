@@ -21,16 +21,17 @@ class AsyncStream(Generic[T]):
     def __init__(
         self,
         response: httpx.Response,
-        client: AsyncApiClient,
+        client: AsyncApiClient | None = None,
         *,
         cast_to: type[T] | None = None,
         decoder: Callable[[str], T] | None = None,
+        **kwargs: Any,
     ) -> None:
         """
         Initialize AsyncStream.
 
         :param response: httpx.Response object with streaming enabled
-        :param client: AsyncApiClient instance
+        :param client: AsyncApiClient instance (optional for library client usage)
         :param cast_to: Optional type to cast streamed data to
         :param decoder: Optional custom decoder function
         """

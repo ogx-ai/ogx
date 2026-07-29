@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
@@ -18,15 +19,35 @@ from ogx.core.access_control.access_control import (
 )
 from ogx.core.access_control.conditions import ProtectedResource
 from ogx.core.access_control.datatypes import AccessRule, Action, Scope
-from ogx.core.datatypes import User
+from ogx.core.datatypes import TenancyConfig, TenancyMode, User
 from ogx.core.request_headers import get_authenticated_user
 from ogx.core.storage.datatypes import SqlStoreReference, StorageBackendType
 from ogx.core.storage.sqlstore.sqlstore import _sqlstore_impl
 from ogx.log import get_logger
-from ogx_api import PaginatedResponse
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, SqlStore
+from ogx_api import ConflictError, PaginatedResponse
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation, SqlStore
 
 logger = get_logger(name=__name__, category="providers::utils")
+
+_default_tenancy_config: TenancyConfig = TenancyConfig()
+
+
+def set_default_tenancy_config(config: TenancyConfig) -> None:
+    """Set the process-wide tenancy config. Called once during stack initialization."""
+    global _default_tenancy_config
+    _default_tenancy_config = config
+
+
+def get_default_tenancy_config() -> TenancyConfig:
+    """Return the process-wide tenancy config set during stack initialization."""
+    return _default_tenancy_config
+
+
+def set_default_tenancy_mode(mode: TenancyMode) -> None:
+    """Set the process-wide tenancy mode. Called once during stack initialization."""
+    global _default_tenancy_config
+    _default_tenancy_config = TenancyConfig.model_construct(mode=mode, default_tenant_id=None)
+
 
 # Hardcoded copy of the default policy that our SQL filtering implements
 # WARNING: If default_policy() changes, this constant must be updated accordingly
@@ -56,20 +77,29 @@ SQL_OPTIMIZED_POLICY = [
 ]
 
 
-def _enhance_item_with_access_control(item: Mapping[str, Any], current_user: User | None) -> Mapping[str, Any]:
-    """Add access control attributes to a data item."""
+def _enhance_item_with_access_control(
+    item: Mapping[str, Any],
+    current_user: User | None,
+    tenancy_mode: TenancyMode = TenancyMode.DISABLED,
+    default_tenant_id: str | None = None,
+) -> Mapping[str, Any]:
+    """Add access control and tenant attributes to a data item."""
     enhanced = dict(item)
+    # Never trust client-supplied access control fields.
+    enhanced.pop("owner_principal", None)
+    enhanced.pop("access_attributes", None)
+    if tenancy_mode != TenancyMode.DISABLED:
+        enhanced.pop("tenant_id", None)
     if current_user:
         enhanced["owner_principal"] = current_user.principal
         enhanced["access_attributes"] = current_user.attributes
+        if tenancy_mode != TenancyMode.DISABLED:
+            enhanced["tenant_id"] = current_user.tenant_id or default_tenant_id or ""
     else:
-        # IMPORTANT: Use empty string and null value (not None) to match public access filter
-        # The public access filter in _get_public_access_conditions() expects:
-        # - owner_principal = '' (empty string)
-        # - access_attributes = null (JSON null, which serializes to the string 'null')
-        # Setting them to None (SQL NULL) will cause rows to be filtered out on read.
         enhanced["owner_principal"] = ""
-        enhanced["access_attributes"] = None  # Pydantic/JSON will serialize this as JSON null
+        enhanced["access_attributes"] = None
+        if tenancy_mode != TenancyMode.DISABLED:
+            enhanced["tenant_id"] = default_tenant_id or ""
     return enhanced
 
 
@@ -82,12 +112,17 @@ class SqlRecord(ProtectedResource):
         self.owner = owner
 
 
-def authorized_sqlstore(reference: SqlStoreReference, policy: list[AccessRule]) -> "AuthorizedSqlStore":
+async def authorized_sqlstore(
+    reference: SqlStoreReference, policy: list[AccessRule], tenancy_mode: TenancyMode | None = None
+) -> "AuthorizedSqlStore":
     """Create an AuthorizedSqlStore from a store reference and access policy.
 
     This is the only supported way to obtain a SQL store for API use.
+    When tenancy_mode is None, uses the process-wide default set during initialization.
     """
-    return AuthorizedSqlStore(_sqlstore_impl(reference), policy)
+    mode = tenancy_mode if tenancy_mode is not None else _default_tenancy_config.mode
+    default_tenant_id = _default_tenancy_config.default_tenant_id if tenancy_mode is None else None
+    return AuthorizedSqlStore(await _sqlstore_impl(reference), policy, mode, default_tenant_id)
 
 
 class AuthorizedSqlStore:
@@ -98,15 +133,25 @@ class AuthorizedSqlStore:
     access control policies, user attribute capture, and SQL filtering optimization.
     """
 
-    def __init__(self, sql_store: SqlStore, policy: list[AccessRule]):
+    def __init__(
+        self,
+        sql_store: SqlStore,
+        policy: list[AccessRule],
+        tenancy_mode: TenancyMode = TenancyMode.DISABLED,
+        default_tenant_id: str | None = None,
+    ):
         """
         Initialize the authorization layer.
 
         :param sql_store: Base SqlStore implementation to wrap
         :param policy: Access control policy to use for authorization
+        :param tenancy_mode: Tenancy isolation mode
+        :param default_tenant_id: Tenant ID for requestless writes in single-tenant mode
         """
         self.sql_store = sql_store
         self.policy = policy
+        self.tenancy_mode = tenancy_mode
+        self.default_tenant_id = default_tenant_id
         self._detect_database_type()
         self._validate_sql_optimized_policy()
 
@@ -142,19 +187,110 @@ class AuthorizedSqlStore:
             enhanced_schema["access_attributes"] = ColumnType.JSON
         if "owner_principal" not in enhanced_schema:
             enhanced_schema["owner_principal"] = ColumnType.STRING
+        if self.tenancy_mode != TenancyMode.DISABLED and "tenant_id" not in enhanced_schema:
+            enhanced_schema["tenant_id"] = ColumnType.STRING
 
         await self.sql_store.create_table(table, enhanced_schema)
         await self.sql_store.add_column_if_not_exists(table, "access_attributes", ColumnType.JSON)
         await self.sql_store.add_column_if_not_exists(table, "owner_principal", ColumnType.STRING)
+        if self.tenancy_mode != TenancyMode.DISABLED:
+            await self.sql_store.add_column_if_not_exists(table, "tenant_id", ColumnType.STRING)
+            if self.tenancy_mode == TenancyMode.SINGLE and self.default_tenant_id:
+                await self.sql_store.update(
+                    table,
+                    {"tenant_id": self.default_tenant_id},
+                    where={"tenant_id": None},
+                )
+
+    async def add_column_if_not_exists(
+        self,
+        table: str,
+        column_name: str,
+        column_type: ColumnType,
+        nullable: bool = True,
+    ) -> None:
+        """Expose schema migration helper from the wrapped SQL store."""
+        await self.sql_store.add_column_if_not_exists(table, column_name, column_type, nullable)
+
+    async def check_access_for_rows(
+        self,
+        table: str,
+        where: Mapping[str, Any],
+        action: Action,
+    ) -> None:
+        """Validate authorization for matching rows without mutating data."""
+        current_user = get_authenticated_user()
+        await self._check_access_for_rows(table, where, action, current_user)
+
+    def _build_tenant_filter(self, current_user: User | None) -> tuple[str, dict[str, Any]]:
+        """Non-bypassable tenant partition filter. Applied before ABAC."""
+        if self.tenancy_mode == TenancyMode.DISABLED:
+            return "1=1", {}
+        if not current_user or not current_user.tenant_id:
+            if self.tenancy_mode == TenancyMode.SINGLE and self.default_tenant_id:
+                return "tenant_id = :_tenant_id_filter", {"_tenant_id_filter": self.default_tenant_id}
+            return "1=0", {}
+        return "tenant_id = :_tenant_id_filter", {"_tenant_id_filter": current_user.tenant_id}
+
+    def _tenant_id_for_current_context(self, current_user: User | None) -> str | None:
+        if self.tenancy_mode == TenancyMode.DISABLED:
+            return None
+        if current_user and current_user.tenant_id:
+            return current_user.tenant_id
+        if self.tenancy_mode == TenancyMode.SINGLE:
+            return self.default_tenant_id
+        return None
+
+    def _user_for_policy(self, current_user: User | None) -> User | None:
+        if self.tenancy_mode != TenancyMode.DISABLED or current_user is None:
+            return current_user
+        return User(principal=current_user.principal, attributes=current_user.attributes)
+
+    async def _check_tenant_conflict_for_upsert(
+        self,
+        table: str,
+        conflict_where: Mapping[str, Any],
+        current_user: User | None,
+    ) -> None:
+        if self.tenancy_mode == TenancyMode.DISABLED or not conflict_where:
+            return
+
+        current_tenant_id = self._tenant_id_for_current_context(current_user)
+        rows = await self.sql_store.fetch_all(table=table, where=conflict_where)
+        for row in rows.data:
+            if row.get("tenant_id") != current_tenant_id:
+                raise ConflictError(
+                    f"Failed to upsert row in {table}: conflict columns match an existing row in another tenant"
+                )
+
+    def _combine_where_clauses(self, *clauses: tuple[str, dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+        """Combine multiple SQL WHERE clauses with AND."""
+        parts = []
+        params: dict[str, Any] = {}
+        for sql, sql_params in clauses:
+            if sql and sql != "1=1":
+                parts.append(f"({sql})")
+                params.update(sql_params)
+        if not parts:
+            return "1=1", {}
+        return " AND ".join(parts), params
 
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         """Insert a row or batch of rows with automatic access control attribute capture."""
         current_user = get_authenticated_user()
         enhanced_data: Mapping[str, Any] | Sequence[Mapping[str, Any]]
         if isinstance(data, Mapping):
-            enhanced_data = _enhance_item_with_access_control(data, current_user)
+            enhanced_data = _enhance_item_with_access_control(
+                data,
+                current_user,
+                self.tenancy_mode,
+                self.default_tenant_id,
+            )
         else:
-            enhanced_data = [_enhance_item_with_access_control(item, current_user) for item in data]
+            enhanced_data = [
+                _enhance_item_with_access_control(item, current_user, self.tenancy_mode, self.default_tenant_id)
+                for item in data
+            ]
         await self.sql_store.insert(table, enhanced_data)
 
     async def upsert(
@@ -164,14 +300,44 @@ class AuthorizedSqlStore:
         conflict_columns: list[str],
         update_columns: list[str] | None = None,
     ) -> None:
-        """Upsert a row with automatic access control attribute capture."""
+        """Upsert a row with access control enforcement.
+
+        Verifies the current user has UPDATE permission on any existing row
+        matching the conflict columns before upserting. Original ownership is
+        preserved on conflict - upserting a record does not transfer ownership
+        to the caller.
+        """
         current_user = get_authenticated_user()
-        enhanced_data = _enhance_item_with_access_control(data, current_user)
+
+        conflict_where = {col: data[col] for col in conflict_columns if col in data}
+        if conflict_where:
+            await self._check_access_for_rows(table, conflict_where, Action.UPDATE, current_user)
+            await self._check_tenant_conflict_for_upsert(table, conflict_where, current_user)
+
+        enhanced_data = _enhance_item_with_access_control(
+            data,
+            current_user,
+            self.tenancy_mode,
+            self.default_tenant_id,
+        )
+
+        frozen_fields = {"owner_principal", "access_attributes"}
+        if self.tenancy_mode != TenancyMode.DISABLED:
+            frozen_fields.add("tenant_id")
+        if update_columns is not None:
+            update_columns = [c for c in update_columns if c not in frozen_fields]
+        else:
+            update_columns = [c for c in enhanced_data.keys() if c not in conflict_columns and c not in frozen_fields]
+
+        tenant_update_where, tenant_update_params = self._build_tenant_filter(current_user)
+
         await self.sql_store.upsert(
             table=table,
             data=enhanced_data,
             conflict_columns=conflict_columns,
             update_columns=update_columns,
+            update_where_sql=tenant_update_where if tenant_update_where != "1=1" else None,
+            update_where_sql_params=tenant_update_params if tenant_update_params else None,
         )
 
     async def fetch_all(
@@ -184,34 +350,43 @@ class AuthorizedSqlStore:
         action: Action = Action.READ,
     ) -> PaginatedResponse:
         """Fetch all rows with automatic access control filtering."""
+        current_user = get_authenticated_user()
         access_where, access_params = self._build_access_control_where_clause(self.policy)
+        tenant_where, tenant_params = self._build_tenant_filter(current_user)
+        combined_where, combined_params = self._combine_where_clauses(
+            (access_where, access_params),
+            (tenant_where, tenant_params),
+        )
         rows = await self.sql_store.fetch_all(
             table=table,
             where=where,
-            where_sql=access_where,
-            where_sql_params=access_params,
+            where_sql=combined_where,
+            where_sql_params=combined_params,
             limit=limit,
             order_by=order_by,
             cursor=cursor,
         )
 
-        current_user = get_authenticated_user()
         filtered_rows = []
+        policy_user = self._user_for_policy(current_user)
 
         for row in rows.data:
             stored_access_attrs = row.get("access_attributes")
             stored_owner_principal = row.get("owner_principal")
 
             record_id = row.get("id", "unknown")
-            # Create owner as None if owner_principal is empty/missing, matching ResourceWithOwner behavior
             owner = (
-                User(principal=stored_owner_principal, attributes=stored_access_attrs)
+                User(
+                    principal=stored_owner_principal,
+                    attributes=stored_access_attrs,
+                    tenant_id=row.get("tenant_id") if self.tenancy_mode != TenancyMode.DISABLED else None,
+                )
                 if stored_owner_principal
                 else None
             )
             sql_record = SqlRecord(str(record_id), table, owner)
 
-            if is_action_allowed(self.policy, action, sql_record, current_user):
+            if is_action_allowed(self.policy, action, sql_record, policy_user):
                 filtered_rows.append(row)
 
         return PaginatedResponse(
@@ -250,17 +425,35 @@ class AuthorizedSqlStore:
         enhanced_data = dict(data)
         enhanced_data.pop("owner_principal", None)
         enhanced_data.pop("access_attributes", None)
+        if self.tenancy_mode != TenancyMode.DISABLED:
+            enhanced_data.pop("tenant_id", None)
         if not enhanced_data:
             return
 
+        tenant_where, tenant_params = self._build_tenant_filter(current_user)
+
         if self._can_apply_sql_policy_filter_for_mutations(current_user):
             access_where, access_params = self._build_access_control_where_clause(self.policy)
+            combined_where, combined_params = self._combine_where_clauses(
+                (access_where, access_params),
+                (tenant_where, tenant_params),
+            )
             await self.sql_store.update(
                 table,
                 enhanced_data,
                 where,
-                where_sql=access_where,
-                where_sql_params=access_params,
+                where_sql=combined_where,
+                where_sql_params=combined_params,
+            )
+            return
+
+        if tenant_where != "1=1":
+            await self.sql_store.update(
+                table,
+                enhanced_data,
+                where,
+                where_sql=tenant_where,
+                where_sql_params=tenant_params,
             )
             return
 
@@ -275,17 +468,59 @@ class AuthorizedSqlStore:
         current_user = get_authenticated_user()
         await self._check_access_for_rows(table, where, Action.DELETE, current_user)
 
+        tenant_where, tenant_params = self._build_tenant_filter(current_user)
+
         if self._can_apply_sql_policy_filter_for_mutations(current_user):
             access_where, access_params = self._build_access_control_where_clause(self.policy)
+            combined_where, combined_params = self._combine_where_clauses(
+                (access_where, access_params),
+                (tenant_where, tenant_params),
+            )
             await self.sql_store.delete(
                 table,
                 where,
-                where_sql=access_where,
-                where_sql_params=access_params,
+                where_sql=combined_where,
+                where_sql_params=combined_params,
+            )
+            return
+
+        if tenant_where != "1=1":
+            await self.sql_store.delete(
+                table,
+                where,
+                where_sql=tenant_where,
+                where_sql_params=tenant_params,
             )
             return
 
         await self.sql_store.delete(table, where)
+
+    async def delete_many(self, operations: Sequence[DeleteOperation]) -> None:
+        """Delete multiple row sets atomically with access control enforcement."""
+        if not operations:
+            return
+
+        current_user = get_authenticated_user()
+        for operation in operations:
+            await self._check_access_for_rows(operation.table, operation.where, Action.DELETE, current_user)
+
+        if self._can_apply_sql_policy_filter_for_mutations(current_user):
+            access_where, access_params = self._build_access_control_where_clause(self.policy)
+            filtered_operations = [
+                DeleteOperation(
+                    table=operation.table,
+                    where=operation.where,
+                    where_sql=(
+                        access_where if operation.where_sql is None else f"({operation.where_sql}) AND ({access_where})"
+                    ),
+                    where_sql_params={**(operation.where_sql_params or {}), **access_params},
+                )
+                for operation in operations
+            ]
+            await self.sql_store.delete_many(filtered_operations)
+            return
+
+        await self.sql_store.delete_many(operations)
 
     async def _check_access_for_rows(
         self,
@@ -295,21 +530,32 @@ class AuthorizedSqlStore:
         current_user: User | None,
     ) -> None:
         """Fetch rows matching `where` and verify the user has permission for `action` on each."""
-        rows = await self.sql_store.fetch_all(table=table, where=where)
+        tenant_where, tenant_params = self._build_tenant_filter(current_user)
+        rows = await self.sql_store.fetch_all(
+            table=table,
+            where=where,
+            where_sql=tenant_where if tenant_where != "1=1" else None,
+            where_sql_params=tenant_params if tenant_params else None,
+        )
+        policy_user = self._user_for_policy(current_user)
         for row in rows.data:
             record_id = row.get("id", "unknown")
             stored_owner_principal = row.get("owner_principal")
             stored_access_attrs = row.get("access_attributes")
 
             owner = (
-                User(principal=stored_owner_principal, attributes=stored_access_attrs)
+                User(
+                    principal=stored_owner_principal,
+                    attributes=stored_access_attrs,
+                    tenant_id=row.get("tenant_id") if self.tenancy_mode != TenancyMode.DISABLED else None,
+                )
                 if stored_owner_principal
                 else None
             )
             sql_record = SqlRecord(str(record_id), table, owner)
 
-            if not is_action_allowed(self.policy, action, sql_record, current_user):
-                raise AccessDeniedError(action.value, sql_record, current_user)
+            if not is_action_allowed(self.policy, action, sql_record, policy_user):
+                raise AccessDeniedError(action.value, sql_record, policy_user)
 
     def _can_apply_sql_policy_filter_for_mutations(self, current_user: User | None) -> bool:
         """Return whether SQL-level policy filtering can be safely applied to update/delete."""
@@ -370,6 +616,28 @@ class AuthorizedSqlStore:
         else:
             raise ValueError(f"Unsupported database type: {self.database_type}")
 
+    def _json_array_contains_value(self, column: str, path: str, param_name: str, value: str) -> tuple[str, Any]:
+        """Generate SQL condition and bind param for checking if a JSON array contains an exact value.
+
+        Args:
+            column: The JSON column name
+            path: The JSON path to the array (e.g., 'roles', 'teams')
+            param_name: Name for the bind parameter
+            value: The exact value to check for in the array
+
+        Returns:
+            A tuple of (sql_condition, param_value)
+        """
+        self._validate_json_path(path)
+        if self.database_type == StorageBackendType.SQL_POSTGRES.value:
+            sql = f"CAST({column}->'{path}' AS jsonb) @> CAST(:{param_name} AS jsonb)"
+            return sql, json.dumps([value])
+        elif self.database_type == StorageBackendType.SQL_SQLITE.value:
+            sql = f"EXISTS (SELECT 1 FROM json_each(json_extract({column}, '$.{path}')) WHERE value = :{param_name})"
+            return sql, value
+        else:
+            raise ValueError(f"Unsupported database type: {self.database_type}")
+
     def _get_public_access_conditions(self) -> list[str]:
         """Get the SQL conditions for public access.
 
@@ -404,9 +672,11 @@ class AuthorizedSqlStore:
                         value_conditions = []
                         for j, value in enumerate(user_values):
                             param_name = f"attr_{attr_key}_{j}"
-                            json_text = self._json_extract_text("access_attributes", attr_key)
-                            value_conditions.append(f"({json_text} LIKE :{param_name})")
-                            params[param_name] = f'%"{value}"%'
+                            condition, param_value = self._json_array_contains_value(
+                                "access_attributes", attr_key, param_name, value
+                            )
+                            value_conditions.append(f"({condition})")
+                            params[param_name] = param_value
 
                         if value_conditions:
                             base_conditions.append(f"({' OR '.join(value_conditions)})")

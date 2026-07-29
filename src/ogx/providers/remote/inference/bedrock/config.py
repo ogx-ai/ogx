@@ -6,17 +6,29 @@
 
 import os
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import AliasChoices, BaseModel, Field, SecretStr
 
 from ogx.providers.utils.bedrock.config import BedrockBaseConfig
+
+
+def _bedrock_bearer_token_from_env() -> SecretStr | None:
+    token = os.getenv("AWS_BEDROCK_BEARER_TOKEN") or os.getenv("AWS_BEARER_TOKEN_BEDROCK")
+    if token is None:
+        return None
+    return SecretStr(token)
 
 
 class BedrockProviderDataValidator(BaseModel):
     """Validates provider-specific request data for AWS Bedrock inference."""
 
-    aws_bearer_token_bedrock: SecretStr | None = Field(
+    aws_bedrock_bearer_token: SecretStr | None = Field(
         default=None,
-        description="API Key (Bearer token) for Amazon Bedrock",
+        alias="aws_bedrock_bearer_token",
+        validation_alias=AliasChoices("aws_bedrock_bearer_token", "aws_bearer_token_bedrock"),
+        description=(
+            "Optional per-request bearer token for Amazon Bedrock's OpenAI-compatible runtime. "
+            "Leave unset to use the server's AWS credential chain instead."
+        ),
     )
 
 
@@ -24,9 +36,13 @@ class BedrockConfig(BedrockBaseConfig):
     """Configuration for the AWS Bedrock inference provider."""
 
     auth_credential: SecretStr | None = Field(
-        default=None,
-        description="Authentication credential for the provider",
-        alias="api_key",
+        default_factory=_bedrock_bearer_token_from_env,
+        alias="aws_bedrock_bearer_token",
+        validation_alias=AliasChoices("aws_bedrock_bearer_token", "aws_bearer_token_bedrock", "api_key"),
+        description=(
+            "Optional bearer token for Amazon Bedrock's OpenAI-compatible runtime. "
+            "Leave unset to use the server's AWS credential chain (recommended)."
+        ),
     )
     # Override region_name to default to us-east-2 when unset
     region_name: str | None = Field(
@@ -44,7 +60,7 @@ class BedrockConfig(BedrockBaseConfig):
     @classmethod
     def sample_run_config(cls, **kwargs):
         return {
-            "api_key": "${env.AWS_BEARER_TOKEN_BEDROCK:=}",
+            "aws_bedrock_bearer_token": "${env.AWS_BEDROCK_BEARER_TOKEN:=}",
             "region_name": "${env.AWS_DEFAULT_REGION:=us-east-2}",
             "aws_role_arn": "${env.AWS_ROLE_ARN:=}",
             "aws_web_identity_token_file": "${env.AWS_WEB_IDENTITY_TOKEN_FILE:=}",

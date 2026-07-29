@@ -135,6 +135,7 @@ def create_router(impl: Admin) -> APIRouter:
         response_model=ListConnectorsResponse,
         summary="List all connectors.",
         description="List all configured connectors.",
+        tags=["Connectors"],
     )
     async def list_connectors() -> ListConnectorsResponse:
         return await impl.list_connectors()
@@ -144,6 +145,7 @@ def create_router(impl: Admin) -> APIRouter:
         response_model=ToolDef,
         summary="Get a tool by name from a connector.",
         description="Get a tool definition by its name from a connector.",
+        tags=["Connectors"],
     )
     async def get_connector_tool(
         connector_id: Annotated[str, Path(description="Identifier for the connector")],
@@ -158,6 +160,7 @@ def create_router(impl: Admin) -> APIRouter:
         response_model=ListToolsResponse,
         summary="List tools from a connector.",
         description="List all tools available from a connector.",
+        tags=["Connectors"],
     )
     async def list_connector_tools(
         request: Annotated[ListConnectorToolsRequest, Depends(list_connector_tools_request)],
@@ -170,6 +173,7 @@ def create_router(impl: Admin) -> APIRouter:
         response_model=Connector,
         summary="Get a connector by its ID.",
         description="Get a connector by its ID.",
+        tags=["Connectors"],
     )
     async def get_connector(
         request: Annotated[GetConnectorRequest, Depends(get_connector_request)],

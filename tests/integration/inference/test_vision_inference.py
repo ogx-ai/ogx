@@ -115,7 +115,7 @@ def test_image_chat_completion_multiple_images(client_with_models, vision_model_
     if stream:
         message_content = ""
         for chunk in response:
-            message_content += chunk.choices[0].delta.content
+            message_content += chunk.choices[0].delta.content or ""
     else:
         message_content = response.choices[0].message.content
     assert len(message_content) > 0
@@ -135,7 +135,7 @@ def test_image_chat_completion_multiple_images(client_with_models, vision_model_
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": multi_image_data[2],
+                        "url": multi_image_url[2],
                     },
                 },
                 {"type": "text", "text": "How about this one?"},
@@ -150,7 +150,7 @@ def test_image_chat_completion_multiple_images(client_with_models, vision_model_
     if stream:
         message_content = ""
         for chunk in response:
-            message_content += chunk.event.delta.text
+            message_content += chunk.choices[0].delta.content or ""
     else:
         message_content = response.choices[0].message.content
     assert len(message_content) > 0
@@ -180,7 +180,9 @@ def test_image_chat_completion_streaming(client_with_models, vision_model_id):
     )
     streamed_content = ""
     for chunk in response:
-        streamed_content += chunk.choices[0].delta.content.lower()
+        delta_content = chunk.choices[0].delta.content
+        if delta_content:
+            streamed_content += delta_content.lower()
     assert len(streamed_content) > 0
     assert any(expected in streamed_content for expected in {"dog", "puppy", "pup"})
 

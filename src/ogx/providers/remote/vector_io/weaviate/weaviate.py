@@ -131,7 +131,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             if doc.metadata.distance is None:
@@ -201,7 +201,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             score = doc.metadata.score if doc.metadata.score is not None else 0.0
@@ -275,7 +275,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             score = doc.metadata.score if doc.metadata.score is not None else 0.0
@@ -312,15 +312,17 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
 
     def _get_client(self) -> weaviate.WeaviateClient:
         if "localhost" in self.config.weaviate_cluster_url:
-            log.info("Using Weaviate locally in container")
             host, port = self.config.weaviate_cluster_url.split(":")
-            key = "local_test"
+            key = f"local::{host}::{port}"
+            if key in self.client_cache:
+                return self.client_cache[key]
+            log.info("Using Weaviate locally in container")
             client = weaviate.connect_to_local(host=host, port=port)
         else:
-            log.info("Using Weaviate remote cluster with URL")
             key = f"{self.config.weaviate_cluster_url}::{self.config.weaviate_api_key}"
             if key in self.client_cache:
                 return self.client_cache[key]
+            log.info("Using Weaviate remote cluster with URL")
             client = weaviate.connect_to_weaviate_cloud(
                 cluster_url=self.config.weaviate_cluster_url,
                 auth_credentials=Auth.api_key(self.config.weaviate_api_key),
@@ -340,7 +342,7 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         if self.config.metadata_store:
             from ogx.core.storage.sqlstore import authorized_sqlstore
 
-            self.metadata_store = authorized_sqlstore(self.config.metadata_store, self._policy)
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         # Load existing vector DB definitions
         if self.kvstore is not None:

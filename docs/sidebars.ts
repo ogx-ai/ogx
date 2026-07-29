@@ -97,6 +97,7 @@ const sidebars: SidebarsConfig = {
         'distributions/list_of_distributions',
         'distributions/building_distro',
         'distributions/customizing_run_yaml',
+        'distributions/openai_compatible_gateways',
         'distributions/importing_as_library',
         'distributions/configuration',
         'distributions/starting_ogx_server',
@@ -191,7 +192,6 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'providers/inference/index' },
           items: [
             'providers/inference/inline_sentence-transformers',
-            'providers/inference/inline_transformers',
             'providers/inference/remote_anthropic',
             'providers/inference/remote_azure',
             'providers/inference/remote_bedrock',
@@ -252,6 +252,7 @@ const sidebars: SidebarsConfig = {
             'providers/tool_runtime/remote_bing-search',
             'providers/tool_runtime/remote_brave-search',
             'providers/tool_runtime/remote_model-context-protocol',
+            'providers/tool_runtime/remote_nimble-search',
             'providers/tool_runtime/remote_tavily-search',
             'providers/tool_runtime/remote_wolfram-alpha'
           ],
@@ -298,6 +299,7 @@ const sidebars: SidebarsConfig = {
         'building_applications/playground',
         'building_applications/claude_code_integration',
         'building_applications/codex_cli_integration',
+        'building_applications/opencode_integration',
       ],
     },
     {
@@ -333,6 +335,7 @@ const sidebars: SidebarsConfig = {
         'references/ogx_cli_reference/index',
         'references/ogx_client_cli_reference',
         'references/python_sdk_reference/index',
+        'references/python_sdk_reference/migration',
       ],
     },
   ],
