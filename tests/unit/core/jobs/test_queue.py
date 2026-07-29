@@ -8,7 +8,11 @@
 
 import time
 
+import pytest
+
 from ogx.core.jobs.queue import JobQueue
+from ogx.core.storage.datatypes import SqliteSqlStoreConfig
+from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
 from ogx_api.common.job_types import JobStatus
 
 
@@ -150,3 +154,32 @@ async def test_list_filters_by_api(queue: JobQueue):
 
     listed = await queue.list(api="file_processors")
     assert {r.job_id for r in listed} == {first.job_id, second.job_id}
+
+
+async def test_second_process_must_initialize_before_querying(tmp_path):
+    """A worker attaches to the server's existing table with its own empty metadata.
+
+    SqlStore learns a table's schema only by declaring it, so a fresh process must
+    call initialize() before any query — otherwise every operation raises KeyError
+    on the table name. This is what the worker loop relies on at startup.
+    """
+    db_path = str(tmp_path / "shared-jobs.db")
+
+    server_store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=db_path))
+    server_queue = JobQueue(server_store, table_name="jobs", lease_ttl_seconds=60)
+    await server_queue.initialize()
+    record = await _enqueue(server_queue)
+
+    # A distinct store over the same DB stands in for the worker process.
+    worker_store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=db_path))
+    worker_queue = JobQueue(worker_store, table_name="jobs", lease_ttl_seconds=60)
+    with pytest.raises(KeyError):
+        await worker_queue.lease("worker-A")
+
+    await worker_queue.initialize()
+    leased = await worker_queue.lease("worker-A")
+    assert leased is not None
+    assert leased.job_id == record.job_id
+
+    await server_store.shutdown()
+    await worker_store.shutdown()

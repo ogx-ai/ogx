@@ -20,6 +20,7 @@ import importlib
 import multiprocessing as mp
 import os
 import socket
+import traceback
 from multiprocessing.synchronize import Event as EventType
 
 from pydantic import BaseModel, Field
@@ -103,6 +104,10 @@ async def _run_worker(config: WorkerConfig, stop_event: EventType) -> None:
     register_sqlstore_backends(config.backends)
     store = await get_system_sqlstore(SqlStoreReference(backend=config.jobs_backend, table_name=config.jobs_table))
     queue = JobQueue(store, config.jobs_table, config.lease_ttl_seconds)
+    # The table already exists (the server created it), but SqlStore only learns a
+    # table's schema by declaring it, and this is a fresh process with empty
+    # metadata. Without this every query raises KeyError on the table name.
+    await queue.initialize()
 
     impls: dict[str, object] = {}
     for descriptor in config.descriptors:
@@ -129,8 +134,10 @@ def _worker_main(config: WorkerConfig, stop_event: EventType) -> None:
     """Process entrypoint (must be module-level for the spawn start method)."""
     try:
         asyncio.run(_run_worker(config, stop_event))
-    except Exception:
-        logger.error("Worker process crashed", exc_info=True)
+    except Exception as e:
+        # The traceback is formatted into the message because this is the only
+        # record of a child's death: the parent sees an exit code, not the error.
+        logger.error("Worker process crashed", error=str(e), traceback=traceback.format_exc())
 
 
 class WorkerPool:
