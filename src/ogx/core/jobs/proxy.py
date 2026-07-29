@@ -35,6 +35,10 @@ logger = get_logger(name=__name__, category="core::jobs")
 _POLL_INTERVAL_SECONDS = 0.5
 _BLOCKING_TIMEOUT_SECONDS = 1800
 
+# The queue is unbounded and long-lived, so an uncapped list would grow without
+# limit. Callers that want a different page size pass one explicitly.
+DEFAULT_LIST_LIMIT = 100
+
 
 class JobBackedProxy:
     """Base class for proxies that dispatch provider methods to worker processes.
@@ -70,7 +74,16 @@ class JobBackedProxy:
         record's ``result`` to their own response type.
         """
         record = await self._enqueue(method, payload)
-        deadline = asyncio.get_event_loop().time() + timeout_seconds
+        return await self._wait(record, timeout_seconds=timeout_seconds)
+
+    async def _wait(self, record: JobRecord, timeout_seconds: int = _BLOCKING_TIMEOUT_SECONDS) -> JobRecord:
+        """Poll an already-enqueued job until it reaches a terminal state.
+
+        Split out from :meth:`_run_blocking` so callers that need to do their own
+        cleanup around the enqueue (staging artifacts, say) can keep that handling
+        scoped to the enqueue itself rather than to the whole wait.
+        """
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
         while True:
             current = await self.job_queue.get(record.job_id)
             if current is not None and current.is_terminal:
@@ -79,7 +92,7 @@ class JobBackedProxy:
                 if current.status == JobStatus.cancelled:
                     raise RuntimeError(f"Failed to execute job '{record.job_id}': job was cancelled")
                 raise RuntimeError(f"Failed to execute job '{record.job_id}': {current.error or 'unknown error'}")
-            if asyncio.get_event_loop().time() > deadline:
+            if asyncio.get_running_loop().time() > deadline:
                 raise TimeoutError(f"Failed to execute job '{record.job_id}': did not finish within {timeout_seconds}s")
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)
 
@@ -89,8 +102,8 @@ class JobBackedProxy:
     async def _cancel(self, job_id: str) -> JobRecord | None:
         return await self.job_queue.cancel(job_id)
 
-    async def _list(self) -> list[JobRecord]:
-        return await self.job_queue.list(api=self.api)
+    async def _list(self, limit: int = DEFAULT_LIST_LIMIT) -> list[JobRecord]:
+        return await self.job_queue.list(api=self.api, limit=limit)
 
 
 # A factory builds an API's proxy from the provider id, the shared queue, and the

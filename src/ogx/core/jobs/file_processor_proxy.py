@@ -20,6 +20,7 @@ from typing import Any
 
 from fastapi import UploadFile
 
+from ogx.log import get_logger
 from ogx_api import Api, Files
 from ogx_api.file_processors import (
     ListProcessFileJobsResponse,
@@ -27,11 +28,13 @@ from ogx_api.file_processors import (
     ProcessFileRequest,
     ProcessFileResponse,
 )
-from ogx_api.files import OpenAIFileUploadPurpose, UploadFileRequest
+from ogx_api.files import DeleteFileRequest, OpenAIFileUploadPurpose, UploadFileRequest
 
 from .models import JobRecord
 from .proxy import JobBackedProxy, register_worker_proxy
 from .queue import JobQueue
+
+logger = get_logger(name=__name__, category="core::jobs")
 
 PROCESS_FILE_METHOD = "process_file"
 
@@ -43,15 +46,36 @@ class FileProcessorJobProxy(JobBackedProxy):
         super().__init__(api=Api.file_processors.value, provider_id=provider_id, job_queue=job_queue)
         self.files_api = files_api
 
-    async def _build_payload(self, request: ProcessFileRequest, file: UploadFile | None) -> dict:
-        """Stage a direct upload into Files (so the worker can read it by id) and serialize."""
+    async def _submit(self, request: ProcessFileRequest, file: UploadFile | None) -> JobRecord:
+        """Stage a direct upload into Files (so the worker can read it by id), then enqueue.
+
+        Staging happens before the enqueue, so a failed enqueue would otherwise
+        leave the uploaded file behind with nothing referencing it. Cleanup is
+        scoped to that window only: once the job is queued the file belongs to the
+        job and must outlive this call.
+        """
+        staged_file_id: str | None = None
         if file is not None:
             uploaded = await self.files_api.openai_upload_file(
                 UploadFileRequest(purpose=OpenAIFileUploadPurpose.USER_DATA),
                 file,
             )
+            staged_file_id = uploaded.id
             request = request.model_copy(update={"file_id": uploaded.id})
-        return {"request": request.model_dump(mode="json")}
+
+        try:
+            return await self._enqueue(PROCESS_FILE_METHOD, {"request": request.model_dump(mode="json")})
+        except Exception:
+            if staged_file_id is not None:
+                await self._discard_staged_file(staged_file_id)
+            raise
+
+    async def _discard_staged_file(self, file_id: str) -> None:
+        """Best-effort removal of a staged upload whose job never made it onto the queue."""
+        try:
+            await self.files_api.openai_delete_file(DeleteFileRequest(file_id=file_id))
+        except Exception as e:
+            logger.warning("Failed to delete orphaned staged file", file_id=file_id, error=str(e))
 
     @staticmethod
     def _to_job(record: JobRecord) -> ProcessFileJob:
@@ -70,16 +94,15 @@ class FileProcessorJobProxy(JobBackedProxy):
         file: UploadFile | None = None,
     ) -> ProcessFileResponse:
         """Deprecated blocking surface: enqueue and wait for the worker's result."""
-        record = await self._run_blocking(PROCESS_FILE_METHOD, await self._build_payload(request, file))
-        return ProcessFileResponse.model_validate(record.result)
+        completed = await self._wait(await self._submit(request, file))
+        return ProcessFileResponse.model_validate(completed.result)
 
     async def create_process_file_job(
         self,
         request: ProcessFileRequest,
         file: UploadFile | None = None,
     ) -> ProcessFileJob:
-        record = await self._enqueue(PROCESS_FILE_METHOD, await self._build_payload(request, file))
-        return self._to_job(record)
+        return self._to_job(await self._submit(request, file))
 
     async def retrieve_process_file_job(self, job_id: str) -> ProcessFileJob:
         record = await self._get(job_id)

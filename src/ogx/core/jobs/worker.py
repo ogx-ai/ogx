@@ -16,6 +16,7 @@ off-box workers reachable later without changing the control plane.
 """
 
 import asyncio
+import importlib
 import multiprocessing as mp
 import os
 import socket
@@ -56,7 +57,7 @@ async def _build_impl(descriptor: ProviderDescriptor) -> object:
     for dep_api, dep_descriptor in descriptor.dependencies.items():
         deps[Api(dep_api)] = await _build_impl(dep_descriptor)
 
-    module = __import__(descriptor.module, fromlist=["__name__"])
+    module = importlib.import_module(descriptor.module)
     config_type = instantiate_class_type(descriptor.config_class)
     config = config_type(**descriptor.config)
     fn = getattr(module, descriptor.method)

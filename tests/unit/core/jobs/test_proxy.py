@@ -23,14 +23,18 @@ class _FakeUploaded:
 
 
 class _FakeFilesApi:
-    """Records uploads and hands back a deterministic file id."""
+    """Records uploads and deletions, and hands back a deterministic file id."""
 
     def __init__(self):
         self.uploads = []
+        self.deleted = []
 
     async def openai_upload_file(self, request, file):
         self.uploads.append((request, file))
         return _FakeUploaded(id="file-staged-123")
+
+    async def openai_delete_file(self, request):
+        self.deleted.append(request.file_id)
 
 
 def _result_payload() -> dict:
@@ -52,6 +56,32 @@ async def test_create_job_stages_direct_upload(proxy: FileProcessorJobProxy, que
     record = await queue.get(job.job_id)
     # The enqueued payload references the staged file id, never raw bytes.
     assert record.payload["request"]["file_id"] == "file-staged-123"
+
+
+async def test_failed_enqueue_cleans_up_staged_upload(proxy: FileProcessorJobProxy, queue: JobQueue):
+    """A staged upload must not be orphaned when the job never reaches the queue."""
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("db is down")
+
+    queue.enqueue = boom
+
+    with pytest.raises(RuntimeError, match="db is down"):
+        await proxy.create_process_file_job(ProcessFileRequest(), file=object())
+
+    assert proxy.files_api.deleted == ["file-staged-123"]
+
+
+async def test_failed_enqueue_without_upload_deletes_nothing(proxy: FileProcessorJobProxy, queue: JobQueue):
+    async def boom(*args, **kwargs):
+        raise RuntimeError("db is down")
+
+    queue.enqueue = boom
+
+    with pytest.raises(RuntimeError, match="db is down"):
+        await proxy.create_process_file_job(ProcessFileRequest(file_id="existing"), file=None)
+
+    assert proxy.files_api.deleted == []
 
 
 async def test_create_job_with_file_id_does_not_upload(proxy: FileProcessorJobProxy, queue: JobQueue):

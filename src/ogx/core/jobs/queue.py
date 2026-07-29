@@ -118,7 +118,15 @@ class JobQueue:
         return None
 
     async def _try_claim(self, record: JobRecord, worker_id: str, now: int) -> bool:
-        """Issue the guarded claim UPDATE. Returns False if the row was already taken."""
+        """Issue the guarded claim UPDATE.
+
+        The return value only reports whether the statement executed, not whether
+        it matched a row: ``SqlStore.update()`` succeeds silently when the guard
+        excludes every row, so a losing racer still gets ``True`` here. Exclusion
+        is established by the caller's read-back in :meth:`lease`, which requires
+        ``lease_owner == worker_id``; the guard on this UPDATE is what makes that
+        read-back decisive, since only one racer's write can satisfy it.
+        """
         try:
             await self.sql_store.update(
                 self.table_name,
@@ -204,10 +212,13 @@ class JobQueue:
         return await self.get(job_id)
 
     async def reclaim_stale(self) -> int:
-        """Reset in-progress jobs with expired leases back to scheduled.
+        """Return in-progress jobs with expired leases to the pool.
 
         Called on startup so work that was running when the server died is picked
-        up again rather than lost. Returns the number of jobs reclaimed.
+        up again rather than lost. Jobs that have already used all their attempts
+        are marked ``failed`` instead of rescheduled, matching the budget that
+        :meth:`fail` enforces on the normal path. Returns the number of jobs
+        reclaimed (rescheduled plus terminally failed).
         """
         now = int(time.time())
         stale = await self.sql_store.fetch_all(
@@ -215,19 +226,29 @@ class JobQueue:
             where_sql="status = :in_progress AND lease_expires_at < :now",
             where_sql_params={"in_progress": JobStatus.in_progress.value, "now": now},
         )
+        rescheduled = 0
+        exhausted = 0
         for row in stale.data:
-            await self.sql_store.update(
-                self.table_name,
-                data={
+            if row["attempts"] >= row["max_attempts"]:
+                data = {
+                    "status": JobStatus.failed.value,
+                    "lease_owner": None,
+                    "lease_expires_at": 0,
+                    "error": "Failed to complete job: worker lease expired and no attempts remain",
+                    "updated_at": now,
+                }
+                exhausted += 1
+            else:
+                data = {
                     "status": JobStatus.scheduled.value,
                     "lease_owner": None,
                     "lease_expires_at": 0,
                     "updated_at": now,
-                },
-                where={"job_id": row["job_id"]},
-            )
+                }
+                rescheduled += 1
+            await self.sql_store.update(self.table_name, data=data, where={"job_id": row["job_id"]})
         if stale.data:
-            logger.info("Reclaimed stale jobs on startup", count=len(stale.data))
+            logger.info("Reclaimed stale jobs on startup", rescheduled=rescheduled, failed=exhausted)
         return len(stale.data)
 
     async def get(self, job_id: str) -> JobRecord | None:

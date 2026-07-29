@@ -97,7 +97,7 @@ async def test_cancel_in_progress_then_complete_is_discarded(queue: JobQueue):
 
 
 async def test_reclaim_stale_returns_expired_lease_to_scheduled(queue: JobQueue):
-    record = await _enqueue(queue)
+    record = await _enqueue(queue, max_attempts=2)
     leased = await queue.lease("worker-A")
     # Force the lease to look expired.
     await queue.sql_store.update(
@@ -109,6 +109,23 @@ async def test_reclaim_stale_returns_expired_lease_to_scheduled(queue: JobQueue)
     reclaimed = await queue.reclaim_stale()
     assert reclaimed == 1
     assert (await queue.get(record.job_id)).status == JobStatus.scheduled
+
+
+async def test_reclaim_stale_fails_job_with_no_attempts_left(queue: JobQueue):
+    """An expired lease on a job that already spent its budget is terminal, not a retry."""
+    record = await _enqueue(queue, max_attempts=1)
+    leased = await queue.lease("worker-A")
+    await queue.sql_store.update(
+        queue.table_name,
+        data={"lease_expires_at": int(time.time()) - 1},
+        where={"job_id": leased.job_id},
+    )
+
+    assert await queue.reclaim_stale() == 1
+    reclaimed = await queue.get(record.job_id)
+    assert reclaimed.status == JobStatus.failed
+    assert "no attempts remain" in reclaimed.error
+    assert reclaimed.lease_owner is None
 
 
 async def test_lease_reclaims_expired_in_progress_job(queue: JobQueue):
