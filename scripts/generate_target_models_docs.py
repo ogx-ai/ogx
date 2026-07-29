@@ -74,7 +74,6 @@ INTENTIONALLY_UNMAPPED_REGISTRY_PROVIDERS = {
     "meta",
     "nvidia",
     "oci",
-    "passthrough",
     "runpod",
     "sambanova",
 }
