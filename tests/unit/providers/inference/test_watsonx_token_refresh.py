@@ -48,7 +48,7 @@ async def test_refresh_iam_token_deduplicates_concurrent_failures(monkeypatch):
 
 async def test_iam_token_exchange_applies_network_tls_config(monkeypatch):
     """IAM token exchange builds its httpx client with the provider's network config (issue #6251)."""
-    from ogx.providers.utils.inference.model_registry import NetworkConfig, TLSConfig
+    from ogx.providers.utils.inference.network_config import NetworkConfig, TLSConfig
 
     adapter = WatsonXInferenceAdapter(
         config=WatsonXConfig(

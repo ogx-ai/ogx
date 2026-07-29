@@ -14,7 +14,7 @@ import httpx
 from openai._base_client import DefaultAsyncHttpxClient
 
 from ogx.log import get_logger
-from ogx.providers.utils.inference.model_registry import (
+from ogx.providers.utils.inference.network_config import (
     LimitsConfig,
     NetworkConfig,
     ProxyConfig,

@@ -15,7 +15,7 @@ from google.genai import types as genai_types
 
 from ogx.log import get_logger
 from ogx.providers.utils.inference.http_client import _build_limits, _build_proxy_mounts, _build_ssl_context
-from ogx.providers.utils.inference.model_registry import NetworkConfig, TimeoutConfig, TLSConfig
+from ogx.providers.utils.inference.network_config import NetworkConfig, TimeoutConfig, TLSConfig
 
 logger = get_logger(__name__, category="inference")
 

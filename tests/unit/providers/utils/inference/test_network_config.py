@@ -21,10 +21,12 @@ from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
 from ogx.providers.utils.inference.model_registry import (
+    RemoteInferenceProviderConfig,
+)
+from ogx.providers.utils.inference.network_config import (
     LimitsConfig,
     NetworkConfig,
     ProxyConfig,
-    RemoteInferenceProviderConfig,
     TimeoutConfig,
     TLSConfig,
 )

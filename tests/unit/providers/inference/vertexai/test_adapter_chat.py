@@ -15,7 +15,7 @@ import pytest
 
 from ogx.providers.remote.inference.vertexai.config import VertexAIConfig
 from ogx.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter, _build_http_options
-from ogx.providers.utils.inference.model_registry import (
+from ogx.providers.utils.inference.network_config import (
     LimitsConfig,
     NetworkConfig,
     ProxyConfig,
