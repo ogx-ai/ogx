@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -27,4 +27,4 @@ fi
 
 # Run unit tests with coverage
 uv run --python "$PYTHON_VERSION" --with-editable . --group unit \
-    coverage run --source=src/llama_stack -m pytest -s -v tests/unit/ "$@"
+    coverage run --source=src/ogx -m pytest -s -v tests/unit/ "$@"

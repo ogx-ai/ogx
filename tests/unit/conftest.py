@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -12,8 +12,8 @@ import pytest
 
 
 def pytest_sessionstart(session) -> None:
-    if "LLAMA_STACK_LOGGING" not in os.environ:
-        os.environ["LLAMA_STACK_LOGGING"] = "all=WARNING"
+    if "OGX_LOGGING" not in os.environ:
+        os.environ["OGX_LOGGING"] = "all=WARNING"
 
     # Silence common deprecation spam during unit tests.
     warnings.filterwarnings("ignore", category=DeprecationWarning)

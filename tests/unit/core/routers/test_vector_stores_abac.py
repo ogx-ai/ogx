@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,13 +11,15 @@ This test suite verifies that all vector store operations properly enforce
 authorization checks through the router -> routing table -> ABAC flow.
 """
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from llama_stack.core.routers.vector_io import VectorIORouter
-from llama_stack.core.routing_tables.vector_stores import VectorStoresRoutingTable
-from llama_stack_api import (
+from ogx.core.access_control.access_control import AccessDeniedError
+from ogx.core.routers.vector_io import VectorIORouter
+from ogx.core.routing_tables.vector_stores import VectorStoresRoutingTable
+from ogx_api import (
+    Api,
     ChunkMetadata,
     EmbeddedChunk,
     InsertChunksRequest,
@@ -51,6 +53,9 @@ class MockDistRegistry:
     def get_cached(self, type_name: str, identifier: str):
         return None
 
+    async def register(self, obj):
+        pass
+
 
 @pytest.fixture
 def mock_provider():
@@ -63,6 +68,9 @@ def mock_provider():
         return_value=VectorStoreObject(
             id="vs_123",
             created_at=1234567890,
+            name="test",
+            usage_bytes=0,
+            status="completed",
             file_counts=VectorStoreFileCounts(completed=0, cancelled=0, failed=0, in_progress=0, total=0),
         )
     )
@@ -70,6 +78,9 @@ def mock_provider():
         return_value=VectorStoreObject(
             id="vs_123",
             created_at=1234567890,
+            name="test",
+            usage_bytes=0,
+            status="completed",
             file_counts=VectorStoreFileCounts(completed=0, cancelled=0, failed=0, in_progress=0, total=0),
         )
     )
@@ -85,11 +96,12 @@ def mock_provider():
             ),
             created_at=1234567890,
             status="completed",
+            usage_bytes=0,
             vector_store_id="vs_123",
         )
     )
     provider.openai_list_files_in_vector_store = AsyncMock(
-        return_value=VectorStoreListFilesResponse(data=[], has_more=False)
+        return_value=VectorStoreListFilesResponse(data=[], first_id="", last_id="", has_more=False)
     )
     provider.openai_retrieve_vector_store_file = AsyncMock(
         return_value=VectorStoreFileObject(
@@ -99,6 +111,7 @@ def mock_provider():
             ),
             created_at=1234567890,
             status="completed",
+            usage_bytes=0,
             vector_store_id="vs_123",
         )
     )
@@ -110,6 +123,7 @@ def mock_provider():
             ),
             created_at=1234567890,
             status="completed",
+            usage_bytes=0,
             vector_store_id="vs_123",
         )
     )
@@ -135,7 +149,7 @@ def mock_provider():
         )
     )
     provider.openai_list_files_in_vector_store_file_batch = AsyncMock(
-        return_value=VectorStoreFilesListInBatchResponse(data=[], has_more=False)
+        return_value=VectorStoreFilesListInBatchResponse(data=[], first_id="", last_id="", has_more=False)
     )
     provider.openai_cancel_vector_store_file_batch = AsyncMock(
         return_value=VectorStoreFileBatchObject(
@@ -166,8 +180,8 @@ def router_with_real_routing_table(mock_provider):
 
     # Mock get_object_by_identifier to return a mock vector store object
     # This is needed by assert_action_allowed to check permissions
-    from llama_stack.core.datatypes import VectorStoreWithOwner
-    from llama_stack_api import ResourceType
+    from ogx.core.datatypes import VectorStoreWithOwner
+    from ogx_api import ResourceType
 
     mock_vector_store = VectorStoreWithOwner(
         identifier="vs_123",
@@ -466,3 +480,64 @@ async def test_operations_fail_before_provider_when_unauthorized(router_with_rea
     mock_provider.openai_retrieve_vector_store_file_batch.assert_not_called()
     mock_provider.openai_list_files_in_vector_store_file_batch.assert_not_called()
     mock_provider.openai_cancel_vector_store_file_batch.assert_not_called()
+
+
+async def test_register_object_enforces_abac_on_create():
+    """Test that register_object checks is_action_allowed('create', ...) and rejects unauthorized users.
+
+    This verifies the actual ABAC enforcement mechanism that protects vector store creation,
+    which differs from other operations that use assert_action_allowed.
+    """
+    from ogx.core.access_control.datatypes import AccessRule, Scope
+    from ogx.core.datatypes import User, VectorStoreWithOwner
+    from ogx_api import ResourceType
+
+    creating_user = User(principal="creating-user", attributes=None)
+    attacking_user = User(principal="attacking-user", attributes=None)
+
+    policy = [
+        AccessRule(
+            permit=Scope(principal="creating-user", actions=["create"]),
+        ),
+    ]
+
+    mock_provider = Mock()
+    mock_provider.__provider_spec__ = Mock()
+    mock_provider.__provider_spec__.api = Api.vector_io
+    mock_provider.register_vector_store = AsyncMock(side_effect=lambda obj: obj)
+    mock_provider._ensure_openai_metadata_exists = AsyncMock()
+    mock_dist_registry = MockDistRegistry()
+
+    def make_routing_table():
+        return VectorStoresRoutingTable(
+            impls_by_provider_id={"test-provider": mock_provider},
+            dist_registry=mock_dist_registry,
+            policy=policy,
+        )
+
+    def make_obj():
+        return VectorStoreWithOwner(
+            identifier="vs_new",
+            provider_id="test-provider",
+            provider_resource_id="vs_new",
+            type=ResourceType.vector_store,
+            embedding_model="test-model",
+            embedding_dimension=768,
+        )
+
+    # creating-user is permitted by the policy
+    with patch(
+        "ogx.core.routing_tables.common.get_authenticated_user",
+        return_value=creating_user,
+    ):
+        routing_table = make_routing_table()
+        await routing_table.register_object(make_obj())
+
+    # attacking-user is not permitted by the policy
+    with patch(
+        "ogx.core.routing_tables.common.get_authenticated_user",
+        return_value=attacking_user,
+    ):
+        routing_table = make_routing_table()
+        with pytest.raises(AccessDeniedError):
+            await routing_table.register_object(make_obj())

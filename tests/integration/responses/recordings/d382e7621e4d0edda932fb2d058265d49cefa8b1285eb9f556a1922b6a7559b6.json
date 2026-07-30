@@ -1,0 +1,73 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_single_message[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello!"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-d382e7621e4d",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "**Context Checkpoint Compaction: Handoff Summary**\n\n**Current Progress and Key Decisions:**\n- Initiated context checkpoint compaction to streamline conversation flow.\n- Prioritized removing redundant or irrelevant information to maintain clarity.\n- User prefers succinct responses with a focus on actionable insights.\n- Maintained critical context necessary for understanding ongoing tasks.\n\n**Important Context, Constraints, and User Preferences:**\n- User emphasizes brevity and directness; extraneous information should be omitted.\n- Ensure that any technical terms or specific jargon remain clear and consistent.\n- Preserve user\u2019s prior input and preferences relating to structure and format.\n\n**Remaining Tasks and Next Steps:**\n1. Continue the compaction process while preserving all relevant information.\n2. Ensure any removed content does not disrupt the logical progression of the task.\n3. Verify user preferences are consistently applied in all further communications.\n\n**Critical Data, Examples, or References Needed:**\n- Access to previous conversation logs to maintain continuity.\n- User\u2019s stated preferences from initial interactions as a reference.\n- Any specific examples/examples used previously in context that may require reference.\n\nBy following this summary, the next LLM will be well-equipped to seamlessly continue the context checkpoint compaction task, ensuring alignment with user preferences and maintaining the integrity of the conversation's progression.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_b3cac885ff",
+        "usage": {
+          "completion_tokens": 256,
+          "prompt_tokens": 102,
+          "total_tokens": 358,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

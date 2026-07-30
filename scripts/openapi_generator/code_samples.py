@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -47,6 +47,14 @@ client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 completion = client.chat.completions.retrieve("completion_id")
 print(completion)
 """,
+    ("/v1/chat/completions/{completion_id}/messages", "get"): """\
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
+
+messages = client.chat.completions.messages.list(completion_id="completion_id")
+print(messages.data)
+""",
     # --- Completions ---
     ("/v1/completions", "post"): """\
 from openai import OpenAI
@@ -67,7 +75,7 @@ client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 
 response = client.embeddings.create(
     model="all-MiniLM-L6-v2",
-    input="Llama Stack is awesome",
+    input="OGX is awesome",
 )
 print(response.data[0].embedding[:5])
 """,
@@ -393,12 +401,143 @@ client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 
 results = client.vector_stores.search(
     vector_store_id="vs_abc123",
-    query="What is Llama Stack?",
+    query="What is OGX?",
 )
 for result in results:
     print(result)
 """,
 }
+
+# Google GenAI SDK code samples for Interactions API endpoints.
+_GOOGLE_CODE_SAMPLES: dict[tuple[str, str], str] = {
+    ("/v1/models", "get"): """\
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    api_key="fake",
+    http_options=types.HttpOptions(
+        base_url="http://localhost:8321",
+        api_version="v1",
+    ),
+)
+for model in client.models.list():
+    print(model.name)
+""",
+    ("/v1/models/{model_id}", "get"): """\
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    api_key="fake",
+    http_options=types.HttpOptions(
+        base_url="http://localhost:8321",
+        api_version="v1",
+    ),
+)
+model = client.models.get(model="openai/gpt-4o")
+print(model.name)
+""",
+    ("/v1alpha/interactions", "post"): """\
+from google import genai
+from google.genai import types
+
+client = genai.Client(
+    api_key="fake",
+    http_options=types.HttpOptions(
+        base_url="http://localhost:8321",
+        api_version="v1alpha",
+    ),
+)
+interaction = client.interactions.create(
+    model="meta-llama/Llama-3.1-8B-Instruct",
+    input="What is the capital of France?",
+)
+print(interaction.outputs[0].text)
+""",
+}
+
+
+# Anthropic SDK code samples for the Messages API endpoints.
+_ANTHROPIC_CODE_SAMPLES: dict[tuple[str, str], list[dict[str, str]]] = {
+    ("/v1/models", "get"): [
+        {
+            "lang": "Anthropic",
+            "label": "Anthropic",
+            "source": """\
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+models = client.models.list()
+for model in models:
+    print(model.id)""",
+        },
+    ],
+    ("/v1/models/{model_id}", "get"): [
+        {
+            "lang": "Anthropic",
+            "label": "Anthropic",
+            "source": """\
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+model = client.models.retrieve("openai/gpt-4o")
+print(model.id)""",
+        },
+    ],
+    ("/v1/messages", "post"): [
+        {
+            "lang": "Anthropic",
+            "label": "Anthropic",
+            "source": """\
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+message = client.messages.create(
+    model="llama-3.3-70b",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "What is OGX?"}
+    ],
+)
+
+print(message.content[0].text)""",
+        },
+    ],
+}
+
+
+def _add_anthropic_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
+    """Add x-codeSamples with Anthropic SDK examples to Anthropic-compatible endpoints."""
+    paths = openapi_schema.get("paths", {})
+    samples_added = 0
+
+    for (path, method), samples in _ANTHROPIC_CODE_SAMPLES.items():
+        if path not in paths:
+            continue
+        if method not in paths[path]:
+            continue
+
+        operation = paths[path][method]
+        if "x-codeSamples" not in operation:
+            operation["x-codeSamples"] = []
+        operation["x-codeSamples"].extend(samples)
+        samples_added += len(samples)
+
+    print(f"Added Anthropic SDK code samples to {samples_added} operations")
+    return openapi_schema
 
 
 def _add_openai_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
@@ -413,7 +552,7 @@ def _add_openai_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
             continue
 
         code_sample = {
-            "lang": "Python",
+            "lang": "OpenAI",
             "label": "OpenAI",
             "source": source_code.rstrip("\n"),
         }
@@ -425,4 +564,31 @@ def _add_openai_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         samples_added += 1
 
     print(f"Added OpenAI Python code samples to {samples_added} operations")
+    return openapi_schema
+
+
+def _add_google_code_samples(openapi_schema: dict[str, Any]) -> dict[str, Any]:
+    """Add x-codeSamples with Google GenAI SDK examples to Interactions API endpoints."""
+    paths = openapi_schema.get("paths", {})
+    samples_added = 0
+
+    for (path, method), source_code in _GOOGLE_CODE_SAMPLES.items():
+        if path not in paths:
+            continue
+        if method not in paths[path]:
+            continue
+
+        code_sample = {
+            "lang": "Google",
+            "label": "Google",
+            "source": source_code.rstrip("\n"),
+        }
+
+        operation = paths[path][method]
+        if "x-codeSamples" not in operation:
+            operation["x-codeSamples"] = []
+        operation["x-codeSamples"].append(code_sample)
+        samples_added += 1
+
+    print(f"Added Google GenAI Python code samples to {samples_added} operations")
     return openapi_schema

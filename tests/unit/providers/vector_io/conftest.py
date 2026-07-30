@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,19 +9,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
-from psycopg2 import sql
 
-from llama_stack.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore import register_kvstore_backends
-from llama_stack.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
-from llama_stack.providers.inline.vector_io.faiss.faiss import FaissIndex, FaissVectorIOAdapter
-from llama_stack.providers.inline.vector_io.qdrant.config import QdrantVectorIOConfig
-from llama_stack.providers.inline.vector_io.sqlite_vec import SQLiteVectorIOConfig
-from llama_stack.providers.inline.vector_io.sqlite_vec.sqlite_vec import SQLiteVecIndex, SQLiteVecVectorIOAdapter
-from llama_stack.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex, PGVectorVectorIOConfig
-from llama_stack.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex, PGVectorVectorIOAdapter
-from llama_stack.providers.remote.vector_io.qdrant.qdrant import QdrantIndex, QdrantVectorIOAdapter
-from llama_stack_api import Chunk, ChunkMetadata, QueryChunksResponse, VectorStore, VectorStoreNotFoundError
+from ogx.core.storage.datatypes import KVStoreReference, SqliteKVStoreConfig
+from ogx.core.storage.kvstore import register_kvstore_backends
+from ogx.providers.inline.vector_io.faiss.config import FaissVectorIOConfig
+from ogx.providers.inline.vector_io.faiss.faiss import FaissIndex, FaissVectorIOAdapter
+from ogx.providers.inline.vector_io.qdrant.config import QdrantVectorIOConfig
+from ogx.providers.inline.vector_io.sqlite_vec import SQLiteVectorIOConfig
+from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import SQLiteVecIndex, SQLiteVecVectorIOAdapter
+from ogx.providers.remote.vector_io.pgvector.config import PGVectorHNSWVectorIndex, PGVectorVectorIOConfig
+from ogx.providers.remote.vector_io.pgvector.pgvector import PGVectorIndex, PGVectorVectorIOAdapter
+from ogx.providers.remote.vector_io.qdrant.qdrant import QdrantIndex, QdrantVectorIOAdapter
+from ogx_api import Chunk, ChunkMetadata, QueryChunksResponse, VectorStoreNotFoundError
+from ogx_api.vector_stores import VectorStore
 
 EMBEDDING_DIMENSION = 768
 COLLECTION_PREFIX = "test_collection"
@@ -47,7 +47,7 @@ def sample_chunks():
     """Generates chunks that force multiple batches for a single document to expose ID conflicts."""
     import time
 
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     n, k = 10, 3
     sample = [
@@ -221,22 +221,38 @@ async def faiss_vec_adapter(unique_kvstore_config, mock_inference_api, embedding
     await adapter.shutdown()
 
 
+def _make_mock_asyncpg_pool():
+    """Create a mock asyncpg pool with acquire() as async context manager."""
+    pool = MagicMock()
+    mock_conn = MagicMock()
+    mock_conn.execute = AsyncMock()
+    mock_conn.executemany = AsyncMock()
+    mock_conn.fetch = AsyncMock(return_value=[])
+    mock_conn.fetchrow = AsyncMock(return_value=None)
+    mock_conn.fetchval = AsyncMock(return_value=None)
+    tx_acm = AsyncMock()
+    tx_acm.__aenter__ = AsyncMock(return_value=None)
+    tx_acm.__aexit__ = AsyncMock(return_value=False)
+    mock_conn.transaction = MagicMock(return_value=tx_acm)
+
+    # Make pool.acquire() return an async context manager yielding mock_conn
+    acm = AsyncMock()
+    acm.__aenter__ = AsyncMock(return_value=mock_conn)
+    acm.__aexit__ = AsyncMock(return_value=False)
+    pool.acquire = MagicMock(return_value=acm)
+    pool.close = AsyncMock()
+
+    return pool, mock_conn
+
+
 @pytest.fixture
-def mock_psycopg2_connection():
-    connection = MagicMock()
-    cursor = MagicMock()
-
-    cursor.__enter__ = MagicMock(return_value=cursor)
-    cursor.__exit__ = MagicMock()
-
-    connection.cursor.return_value = cursor
-
-    return connection, cursor
+def mock_asyncpg_pool():
+    return _make_mock_asyncpg_pool()
 
 
 @pytest.fixture
-async def pgvector_vec_index(embedding_dimension, mock_psycopg2_connection):
-    connection, cursor = mock_psycopg2_connection
+async def pgvector_vec_index(embedding_dimension, mock_asyncpg_pool):
+    pool, mock_conn = mock_asyncpg_pool
 
     vector_store = VectorStore(
         identifier="test-vector-db",
@@ -246,33 +262,31 @@ async def pgvector_vec_index(embedding_dimension, mock_psycopg2_connection):
         provider_resource_id="pgvector:test-vector-db",
     )
 
-    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.psycopg2"):
-        with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.execute_values"):
-            index = PGVectorIndex(
-                vector_store,
-                embedding_dimension,
-                connection,
-                distance_metric="COSINE",
-                vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=40),
-            )
-            index.table_name = "vs_test_vector_db"
-            index._table_sql = sql.Identifier("vs_test_vector_db")
-            index._test_chunks = []
-            original_add_chunks = index.add_chunks
+    pool_factory = AsyncMock(return_value=pool)
+    index = PGVectorIndex(
+        vector_store,
+        embedding_dimension,
+        pool_factory=pool_factory,
+        distance_metric="COSINE",
+        vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=40),
+    )
+    index.table_name = "vs_test_vector_db"
+    index._quoted_table = '"vs_test_vector_db"'
+    index._test_chunks = []
+    original_add_chunks = index.add_chunks
 
-            async def mock_add_chunks(embedded_chunks):
-                index._test_chunks = list(embedded_chunks)
-                # Call original method with correct signature (only embedded_chunks)
-                await original_add_chunks(embedded_chunks)
+    async def mock_add_chunks(embedded_chunks):
+        index._test_chunks = list(embedded_chunks)
+        await original_add_chunks(embedded_chunks)
 
-            index.add_chunks = mock_add_chunks
+    index.add_chunks = mock_add_chunks
 
-            async def mock_query_vector(embedding, k, score_threshold):
-                embedded_chunks = index._test_chunks[:k] if hasattr(index, "_test_chunks") else []
-                scores = [1.0] * len(embedded_chunks)
-                return QueryChunksResponse(chunks=embedded_chunks, scores=scores)
+    async def mock_query_vector(embedding, k, score_threshold):
+        embedded_chunks = index._test_chunks[:k] if hasattr(index, "_test_chunks") else []
+        scores = [1.0] * len(embedded_chunks)
+        return QueryChunksResponse(chunks=embedded_chunks, scores=scores)
 
-            index.query_vector = mock_query_vector
+    index.query_vector = mock_query_vector
 
     yield index
 
@@ -292,56 +306,69 @@ async def pgvector_vec_adapter(unique_kvstore_config, mock_inference_api, embedd
 
     adapter = PGVectorVectorIOAdapter(config, mock_inference_api, None)
 
-    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.psycopg2.connect") as mock_connect:
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-        mock_cursor.__exit__ = MagicMock()
-        mock_conn.cursor.return_value = mock_cursor
-        mock_conn.autocommit = True
-        mock_connect.return_value = mock_conn
+    mock_pool, mock_conn = _make_mock_asyncpg_pool()
+
+    mock_standalone_conn = AsyncMock()
+    mock_standalone_conn.execute = AsyncMock()
+    mock_standalone_conn.close = AsyncMock()
+
+    with patch(
+        "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.connect",
+        new_callable=AsyncMock,
+    ) as mock_connect:
+        mock_connect.return_value = mock_standalone_conn
 
         with patch(
-            "llama_stack.providers.remote.vector_io.pgvector.pgvector.check_extension_version"
-        ) as mock_check_version:
-            mock_check_version.return_value = "0.5.1"
+            "ogx.providers.remote.vector_io.pgvector.pgvector.asyncpg.create_pool",
+            new_callable=AsyncMock,
+        ) as mock_create_pool:
+            mock_create_pool.return_value = mock_pool
 
-            with patch("llama_stack.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
-                mock_kvstore = AsyncMock()
-                mock_kvstore_impl.return_value = mock_kvstore
+            with patch(
+                "ogx.providers.remote.vector_io.pgvector.pgvector.check_extension_version",
+                new_callable=AsyncMock,
+            ) as mock_check_version:
+                mock_check_version.return_value = "0.5.1"
 
-                with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
-                    with patch("llama_stack.providers.remote.vector_io.pgvector.pgvector.upsert_models"):
-                        await adapter.initialize()
-                        adapter.conn = mock_conn
+                with patch("ogx.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
+                    mock_kvstore = AsyncMock()
+                    mock_kvstore_impl.return_value = mock_kvstore
 
-                        async def mock_insert_chunks(request):
-                            index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
-                            if not index:
-                                raise VectorStoreNotFoundError(request.vector_store_id)
-                            await index.insert_chunks(request)
+                    with patch.object(adapter, "initialize_openai_vector_stores", new_callable=AsyncMock):
+                        with patch(
+                            "ogx.providers.remote.vector_io.pgvector.pgvector.upsert_models",
+                            new_callable=AsyncMock,
+                        ):
+                            await adapter.initialize()
+                            adapter.pool = mock_pool
 
-                        adapter.insert_chunks = mock_insert_chunks
+                            async def mock_insert_chunks(request):
+                                index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
+                                if not index:
+                                    raise VectorStoreNotFoundError(request.vector_store_id)
+                                await index.insert_chunks(request)
 
-                        async def mock_query_chunks(request):
-                            index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
-                            if not index:
-                                raise VectorStoreNotFoundError(request.vector_store_id)
-                            return await index.query_chunks(request)
+                            adapter.insert_chunks = mock_insert_chunks
 
-                        adapter.query_chunks = mock_query_chunks
+                            async def mock_query_chunks(request):
+                                index = await adapter._get_and_cache_vector_store_index(request.vector_store_id)
+                                if not index:
+                                    raise VectorStoreNotFoundError(request.vector_store_id)
+                                return await index.query_chunks(request)
 
-                        test_vector_store = VectorStore(
-                            identifier=f"pgvector_test_collection_{random.randint(1, 1_000_000)}",
-                            provider_id="test_provider",
-                            embedding_model="test_model",
-                            embedding_dimension=embedding_dimension,
-                        )
-                        await adapter.register_vector_store(test_vector_store)
-                        adapter.test_collection_id = test_vector_store.identifier
+                            adapter.query_chunks = mock_query_chunks
 
-                        yield adapter
-                        await adapter.shutdown()
+                            test_vector_store = VectorStore(
+                                identifier=f"pgvector_test_collection_{random.randint(1, 1_000_000)}",
+                                provider_id="test_provider",
+                                embedding_model="test_model",
+                                embedding_dimension=embedding_dimension,
+                            )
+                            await adapter.register_vector_store(test_vector_store)
+                            adapter.test_collection_id = test_vector_store.identifier
+
+                            yield adapter
+                            await adapter.shutdown()
 
 
 @pytest.fixture
@@ -355,7 +382,13 @@ async def qdrant_vec_index(embedding_dimension):
     mock_client.delete_collection = AsyncMock()
 
     collection_name = f"test-qdrant-collection-{random.randint(1, 1000000)}"
-    index = QdrantIndex(mock_client, collection_name)
+    test_vector_store = VectorStore(
+        identifier=collection_name,
+        provider_id="test_provider",
+        embedding_model="test_model",
+        embedding_dimension=embedding_dimension,
+    )
+    index = QdrantIndex(mock_client, test_vector_store)
     index._test_chunks = []
 
     async def mock_add_chunks(embedded_chunks):
@@ -407,10 +440,10 @@ async def qdrant_vec_adapter(unique_kvstore_config, mock_inference_api, embeddin
     mock_client.close = AsyncMock()
     mock_client.upsert = AsyncMock()
 
-    with patch("llama_stack.providers.remote.vector_io.qdrant.qdrant.AsyncQdrantClient") as mock_client_class:
+    with patch("ogx.providers.remote.vector_io.qdrant.qdrant.AsyncQdrantClient") as mock_client_class:
         mock_client_class.return_value = mock_client
 
-        with patch("llama_stack.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
+        with patch("ogx.core.storage.kvstore.kvstore_impl") as mock_kvstore_impl:
             mock_kvstore = AsyncMock()
             mock_kvstore.values_in_range.return_value = []
             mock_kvstore_impl.return_value = mock_kvstore

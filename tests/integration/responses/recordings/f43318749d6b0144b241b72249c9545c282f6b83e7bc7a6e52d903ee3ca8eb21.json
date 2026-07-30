@@ -1,0 +1,85 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_double_compaction[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Topic A discussion"
+        },
+        {
+          "role": "assistant",
+          "content": "**Handoff Summary: Context Checkpoint**\n\n1. **Current Progress & Key Decisions**:  \n   - The user requested a discussion about \"Topic A,\" but no further details or clarification about \"Topic A\" were provided yet.  \n   - Conversation context is still in the exploratory phase with no specific direction or subtopics identified.  \n\n2. **Important Context, Constraints, or Preferences**:  \n   - User\u2019s intent or goals for discussing \"Topic A\" remain unclear.  \n   - No specific examples, preferences, or constraints have been provided.  \n\n3. **Next Steps**:  \n   - Seek clarification from the user on their desired focus for \"Topic A\". \n   - Determine any specific queries, subtopics, or goals they have in mind.  \n\n4. **Critical Data, Examples, or References Needed**:  \n   - User to define or elaborate on \"Topic A\" to proceed with a meaningful discussion or support.  \n\n**Actionable Follow-Up**: Please clarify the scope or specific aspect of \"Topic A\" you'd like to discuss or address further for continued assistance. "
+        },
+        {
+          "role": "user",
+          "content": "Topic B discussion"
+        },
+        {
+          "role": "assistant",
+          "content": "Response about B"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a concise handoff summary of the conversation so far. Include:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-f43318749d6b",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### **Handoff Summary:**\n\n#### **1. Current Progress & Key Decisions:**\n- The user has initiated a discussion about \"Topic A\" and \"Topic B\" but has not provided details or clarified the scope of either topic.\n- No specific preferences, context, or subtopics have been established yet.\n\n#### **2. Important Context, Constraints, or User Preferences:**\n- User's intent for both topics remains ambiguous.\n- The conversation is in an exploratory phase with no specific guidance provided.\n\n#### **3. What Remains to Be Done (Next Steps):**\n- Request clarification on:\n  - The scope and intent of \"Topic A\" and \"Topic B.\"\n  - Any specific questions, subtopics, or outcomes the user is seeking.\n- Provide tailored, relevant discussion or insights once further details are received.\n\n#### **4. Critical Data, Examples, or References Needed:**\n- User must define \"Topic A\" and \"Topic B\" to proceed effectively.\n\n**Actionable Follow-Up:** Ask the user to elaborate on their goals or the key aspects they\u2019d like to explore in \"Topic A\" and \"Topic B.\"",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 232,
+          "prompt_tokens": 337,
+          "total_tokens": 569,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

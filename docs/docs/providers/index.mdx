@@ -1,31 +1,43 @@
 ---
 title: API Providers
-description: Ecosystem of providers for swapping implementations across the same API
+description: 50+ pluggable providers across inference, vector stores, tools, and file storage
 sidebar_label: Overview
 sidebar_position: 1
 ---
 
+import { ProviderGrid, ProviderReference } from '@site/src/components/ProviderGrid';
+
 # API Providers
 
-Llama Stack lets you swap out different implementations for the same API. Providers come in two types:
+OGX composes 23 inference providers, 15 vector stores, 6 tool runtimes, and 3 file storage options into a single deployable server. No other open-source project covers this surface area in one process.
+
+Providers come in two types:
 
 - **Remote**: adapts an external service (Ollama, OpenAI, vLLM, Bedrock, etc.)
-- **Inline**: runs in-process within Llama Stack (FAISS, sentence-transformers, Llama Guard, etc.)
+- **Inline**: runs in-process within OGX (FAISS, sentence-transformers, file-search, etc.)
 
-At least one inline provider exists for each API so you can run a fully featured stack locally.
+:::info
+At least one inline provider exists for each API so you can run a fully featured stack locally without any external dependencies.
+:::
 
-## Provider Categories
+## Provider categories
 
-| Category | Examples | Docs |
-|----------|----------|------|
-| **Inference** | Ollama, vLLM, OpenAI, Bedrock, Anthropic, Gemini, WatsonX, and more | [Inference Providers](/docs/providers/inference/) |
-| **Vector IO** | FAISS, SQLite-Vec, ChromaDB, Qdrant, Milvus, PGVector, Weaviate | [Vector IO Providers](/docs/providers/vector_io/) |
-| **Safety** | Llama Guard, Prompt Guard, Code Scanner, Bedrock Guardrails | [Safety Providers](/docs/providers/safety/) |
-| **Tool Runtime** | File Search, Brave Search, Tavily, MCP, Wolfram Alpha | [Tool Runtime Providers](/docs/providers/tool_runtime/) |
-| **Files** | Local filesystem, S3 | [Files Providers](/docs/providers/files/) |
-| **DatasetIO** | Local filesystem, HuggingFace | [DatasetIO Providers](/docs/providers/datasetio/) |
-| **External** | Build your own provider | [External Providers Guide](/docs/providers/external/) |
+<ProviderGrid />
+
+## Reference
+
+<ProviderReference />
+
+## Why this matters
+
+Gateways like LiteLLM route inference requests to multiple providers. That's useful, but inference routing is one API.
+
+OGX composes the full application: an agent running on the Responses API can call a model via any inference provider, search documents in any vector store, invoke tools via MCP, and stream the result back. All in one server process, all through OpenAI-compatible endpoints.
+
+The composition is the hard part. Making inference + vector stores + files + tools + agentic orchestration work together correctly across dozens of provider combinations is what takes years, not months.
 
 ## OpenAI Compatibility
 
-Llama Stack implements the OpenAI API. See the [OpenAI compatibility guide](/docs/api-openai/) and [known Responses API limitations](/docs/providers/openai_responses_limitations).
+OGX is OpenAI-first. The primary API surface implements the OpenAI spec. An Anthropic Messages adapter (`/v1/messages`) translates to the inference API for teams that use the Anthropic SDK.
+
+See the [OpenAI compatibility guide](/docs/api-openai/) and [known Responses API limitations](/docs/providers/openai_responses_limitations).

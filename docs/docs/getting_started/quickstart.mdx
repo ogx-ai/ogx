@@ -1,5 +1,5 @@
 ---
-description: Get up and running with Llama Stack in under a minute.
+description: Get up and running with OGX in under a minute.
 sidebar_label: Quickstart
 sidebar_position: 1
 title: Quickstart
@@ -19,7 +19,8 @@ Install [Ollama](https://ollama.com/download), then pull a model and start the s
 
 ```bash
 ollama pull llama3.2:3b
-uvx --from 'llama-stack[starter]' llama stack run starter
+export OLLAMA_URL=http://localhost:11434/v1
+uvx --from 'ogx[starter]' ogx run starter
 ```
 
 </TabItem>
@@ -27,7 +28,20 @@ uvx --from 'llama-stack[starter]' llama stack run starter
 
 ```bash
 export OPENAI_API_KEY=sk-xxx
-uvx --from 'llama-stack[starter]' llama stack run starter
+uvx --from 'ogx[starter]' ogx run starter
+```
+
+</TabItem>
+<TabItem value="docker" label="Docker">
+
+Run a pre-built container image from [Docker Hub](https://hub.docker.com/r/ogxai/distribution-starter):
+
+```bash
+docker run -it \
+  -p 8321:8321 \
+  -v ~/.ogx:/root/.ogx \
+  -e OLLAMA_URL=http://host.docker.internal:11434 \
+  ogxai/distribution-starter
 ```
 
 </TabItem>
@@ -38,12 +52,56 @@ The `uvx` command above is great for trying things out. For a real project, inst
 
 ```bash
 uv init my-ai-app && cd my-ai-app
-uv add 'llama-stack[starter]' openai
-uv run llama stack run starter
+uv add 'ogx[starter]' openai
+export OLLAMA_URL=http://localhost:11434/v1
+uv run ogx run starter
 ```
 :::
 
 The server is now running at `http://localhost:8321`. You can use any OpenAI-compatible client.
+
+## Verify it works
+
+Before writing any code, confirm the server is healthy and models are registered:
+
+<Tabs>
+<TabItem value="curl" label="curl" default>
+
+```bash
+curl -s http://localhost:8321/v1/models | python -m json.tool
+```
+
+</TabItem>
+<TabItem value="python" label="Python">
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
+
+for model in client.models.list():
+    print(model.id)
+```
+
+</TabItem>
+</Tabs>
+
+You should see output listing available models, for example:
+
+```json
+{
+    "data": [
+        {
+            "id": "ollama/llama3.2:3b",
+            "object": "model",
+            "owned_by": "ogx",
+            ...
+        }
+    ]
+}
+```
+
+If the list is empty or the command fails, check the [Troubleshooting](#troubleshooting) section below.
 
 ## Try it out
 
@@ -55,8 +113,8 @@ from openai import OpenAI
 client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
 
 response = client.responses.create(
-    model="llama3.2:3b",
-    input="What is Llama Stack?",
+    model="ollama/llama3.2:3b",
+    input="What is OGX?",
 )
 print(response.output_text)
 ```
@@ -88,7 +146,7 @@ vector_store = client.vector_stores.create(
 
 # Ask questions with file search
 response = client.responses.create(
-    model="llama3.2:3b",
+    model="ollama/llama3.2:3b",
     input="Summarize the key points",
     tools=[{
         "type": "file_search",
@@ -100,9 +158,42 @@ print(response.output_text)
 
 That's it. Same OpenAI SDK, local model, your own vector store.
 
-## Next steps
+## Troubleshooting
 
-- [Detailed Tutorial](./detailed_tutorial) - deeper dive into all APIs
-- [Building Applications](../building_applications) - RAG, agents, tool calling
-- [Providers](../providers) - swap to vLLM, Bedrock, Azure, and more
-- [API Reference](../api-overview) - full endpoint documentation
+<details>
+<summary><strong>Port already in use</strong></summary>
+
+If you see `Address already in use`, another process is using port 8321. Either stop it or run on a different port:
+
+```bash
+uvx --from 'ogx[starter]' ogx run starter --port 8322
+```
+
+</details>
+
+<details>
+<summary><strong>Connection refused</strong></summary>
+
+If `curl` returns `Connection refused`, the server has not finished starting. Wait a few seconds for model registration to complete, then try again. Check the terminal where you started the server for errors.
+
+</details>
+
+<details>
+<summary><strong>Model not found</strong></summary>
+
+If the API returns an error about a model not being found, make sure you pulled the model first. For Ollama:
+
+```bash
+ollama pull llama3.2:3b
+```
+
+Then restart the OGX server. You can verify available models with `curl http://localhost:8321/v1/models`.
+
+</details>
+
+## What's next?
+
+- [Use the OpenAI SDK](/docs/api-openai) - full compatibility guide
+- [Try the Responses API](../building_applications/agent) - build agents with tool calling
+- [Add vector search](../building_applications/rag) - RAG with file search and vector stores
+- [See all providers](../providers) - swap to vLLM, Bedrock, Azure, and more

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,7 +11,7 @@ from locust import HttpUser, task
 
 class ChatCompletionUser(HttpUser):
     """
-    Locust user for straightline performance testing of the Llama Stack server.
+    Locust user for straightline performance testing of the OGX server.
 
     Sends chat completion requests continuously without delays to measure
     maximum throughput and minimal latency of the inference API.

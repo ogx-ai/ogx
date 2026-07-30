@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from llama_stack.providers.inline.responses.builtin.responses.streaming import _VALID_RESPONSE_ERROR_CODES
+from ogx.providers.inline.responses.builtin.responses.streaming import _VALID_RESPONSE_ERROR_CODES
 
 
 class StreamingValidator:

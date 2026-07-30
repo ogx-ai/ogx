@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 
-from llama_stack_api import Conversation, ConversationItem, ConversationItemList
+from ogx_api import Conversation, ConversationItem, ConversationItemList
 
 
 def test_conversation_model_defaults():
@@ -41,9 +41,9 @@ def test_openai_client_compatibility():
 
 
 def test_conversation_item_list():
-    item_list = ConversationItemList(data=[])
+    item_list = ConversationItemList(data=[], first_id="", last_id="", has_more=False)
     assert item_list.object == "list"
     assert item_list.data == []
-    assert item_list.first_id is None
-    assert item_list.last_id is None
+    assert item_list.first_id == ""
+    assert item_list.last_id == ""
     assert item_list.has_more is False

@@ -1,0 +1,85 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_roundtrip[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "We're building a book tracker app with FastAPI."
+        },
+        {
+          "role": "assistant",
+          "content": "Great choice! Use SQLite for the database."
+        },
+        {
+          "role": "user",
+          "content": "What tables do we need?"
+        },
+        {
+          "role": "assistant",
+          "content": "Users, Books, and ReadingStatus tables."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a concise handoff summary of the conversation so far. Include:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-02353ad89b7f",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary: Book Tracker App with FastAPI\n\n#### **Progress and Key Decisions**\n- **App Description:** A book tracker app is being developed using FastAPI.\n- **Database:** SQLite has been chosen as the database.\n- **Schema Design:** Initial table requirements identified\u2014`Users`, `Books`, and `ReadingStatus`.\n\n#### **Context and Constraints**\n- Focus is on simplicity and functionality (FastAPI + SQLite).\n- No additional preferences, constraints, or specific requirements have been shared yet.\n\n#### **Next Steps**\n1. Define the database schema:\n   - Determine fields and relationships for `Users`, `Books`, and `ReadingStatus` tables.\n   - Consider relationships (e.g., one-to-many between Users and ReadingStatus, and between Books and ReadingStatus).\n2. Set up FastAPI project structure:\n   - Define models, database setup, and API routes.\n3. Design API endpoints:\n   - Example: User registration, book tracking, updating reading status.\n4. Discuss further app requirements: features, authentication, or UI.\n\n#### **Critical Data/References**\n- Specify required fields for tables (e.g., `Books` might need title, author, genre; `ReadingStatus` might need progress percentage).\n- Any authentication or user management needs? (e.g., OAuth2, JWT).\n\nLet me know if you'd like help designing the schema, setting up the project, or moving forward with implementation!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 290,
+          "prompt_tokens": 139,
+          "total_tokens": 429,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

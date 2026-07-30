@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,9 +8,9 @@
 
 import tempfile
 
-from llama_stack.core.storage.datatypes import SqliteKVStoreConfig
-from llama_stack.core.storage.kvstore.kvstore import InmemoryKVStoreImpl
-from llama_stack.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
+from ogx.core.storage.datatypes import SqliteKVStoreConfig
+from ogx.core.storage.kvstore.kvstore import InmemoryKVStoreImpl
+from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
 
 
 class TestKVStoreDelete:

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -18,8 +18,8 @@ import time
 
 import pytest
 
-from llama_stack_api import ChunkMetadata, EmbeddedChunk
-from llama_stack_api.filters import ComparisonFilter, CompoundFilter
+from ogx_api import ChunkMetadata, EmbeddedChunk
+from ogx_api.filters import ComparisonFilter, CompoundFilter
 
 from ..conftest import vector_provider_wrapper
 
@@ -44,7 +44,7 @@ def filter_test_chunks(embedding_dimension):
     """Create test chunks with varied metadata for filter testing."""
     import numpy as np
 
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     # Create chunks with diverse metadata for comprehensive filter testing
     chunks_data = [

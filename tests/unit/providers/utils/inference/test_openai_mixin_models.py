@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
-from llama_stack.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
-from llama_stack_api import (
+from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
+from ogx_api import (
     Model,
     ModelType,
     OpenAIChatCompletionRequestWithExtraBody,
@@ -176,7 +176,7 @@ class TestOpenAIMixinImagePreprocessing:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         with patch.object(type(mixin), "client", new_callable=PropertyMock, return_value=mock_client):
-            with patch("llama_stack.providers.utils.inference.openai_mixin.localize_image_content") as mock_localize:
+            with patch("ogx.providers.utils.inference.openai_mixin.localize_image_content") as mock_localize:
                 mock_localize.return_value = (b"fake_image_data", "jpeg")
 
                 params = OpenAIChatCompletionRequestWithExtraBody(model="test-model", messages=[message])
@@ -211,7 +211,7 @@ class TestOpenAIMixinImagePreprocessing:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         with patch.object(type(mixin), "client", new_callable=PropertyMock, return_value=mock_client):
-            with patch("llama_stack.providers.utils.inference.openai_mixin.localize_image_content") as mock_localize:
+            with patch("ogx.providers.utils.inference.openai_mixin.localize_image_content") as mock_localize:
                 params = OpenAIChatCompletionRequestWithExtraBody(model="test-model", messages=[message])
                 await mixin.openai_chat_completion(params)
 

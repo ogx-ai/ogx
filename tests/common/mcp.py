@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -171,7 +171,7 @@ def make_mcp_server(
     from starlette.responses import Response
     from starlette.routing import Mount, Route
 
-    from llama_stack.log import get_logger
+    from ogx.log import get_logger
 
     server = FastMCP("FastMCP Test Server", log_level="WARNING")
 
@@ -253,7 +253,7 @@ def make_mcp_server(
     # - For docker mode: use host.docker.internal (container needs to reach host)
     import os
 
-    mcp_host = os.environ.get("LLAMA_STACK_TEST_MCP_HOST", "localhost")
+    mcp_host = os.environ.get("OGX_TEST_MCP_HOST", "localhost")
     server_url = f"http://{mcp_host}:{port}/sse"
     logger.debug(f"Waiting for MCP server to listen on port {port} (accessible via {mcp_host})")
 

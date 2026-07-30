@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,25 +6,25 @@
 
 import pytest
 
-from llama_stack.core.stack import replace_env_vars
-from llama_stack.providers.remote.inference.anthropic import AnthropicConfig
-from llama_stack.providers.remote.inference.azure import AzureConfig
-from llama_stack.providers.remote.inference.bedrock import BedrockConfig
-from llama_stack.providers.remote.inference.cerebras import CerebrasImplConfig
-from llama_stack.providers.remote.inference.databricks import DatabricksImplConfig
-from llama_stack.providers.remote.inference.fireworks import FireworksImplConfig
-from llama_stack.providers.remote.inference.gemini import GeminiConfig
-from llama_stack.providers.remote.inference.groq import GroqConfig
-from llama_stack.providers.remote.inference.llama_openai_compat import LlamaCompatConfig
-from llama_stack.providers.remote.inference.nvidia import NVIDIAConfig
-from llama_stack.providers.remote.inference.ollama import OllamaImplConfig
-from llama_stack.providers.remote.inference.openai import OpenAIConfig
-from llama_stack.providers.remote.inference.runpod import RunpodImplConfig
-from llama_stack.providers.remote.inference.sambanova import SambaNovaImplConfig
-from llama_stack.providers.remote.inference.together import TogetherImplConfig
-from llama_stack.providers.remote.inference.vertexai import VertexAIConfig
-from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
-from llama_stack.providers.remote.inference.watsonx import WatsonXConfig
+from ogx.core.stack import replace_env_vars
+from ogx.providers.remote.inference.anthropic import AnthropicConfig
+from ogx.providers.remote.inference.azure import AzureConfig
+from ogx.providers.remote.inference.bedrock import BedrockConfig
+from ogx.providers.remote.inference.cerebras import CerebrasImplConfig
+from ogx.providers.remote.inference.databricks import DatabricksImplConfig
+from ogx.providers.remote.inference.fireworks import FireworksImplConfig
+from ogx.providers.remote.inference.gemini import GeminiConfig
+from ogx.providers.remote.inference.groq import GroqConfig
+from ogx.providers.remote.inference.llama_openai_compat import LlamaCompatConfig
+from ogx.providers.remote.inference.nvidia import NVIDIAConfig
+from ogx.providers.remote.inference.ollama import OllamaImplConfig
+from ogx.providers.remote.inference.openai import OpenAIConfig
+from ogx.providers.remote.inference.runpod import RunpodImplConfig
+from ogx.providers.remote.inference.sambanova import SambaNovaImplConfig
+from ogx.providers.remote.inference.together import TogetherImplConfig
+from ogx.providers.remote.inference.vertexai import VertexAIConfig
+from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+from ogx.providers.remote.inference.watsonx import WatsonXConfig
 
 
 class TestRemoteInferenceProviderConfig:

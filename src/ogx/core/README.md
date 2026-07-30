@@ -1,0 +1,42 @@
+# core
+
+Server core for OGX: routing, provider resolution, storage, and the FastAPI server.
+
+## Directory Structure
+
+```text
+core/
+  server/              # FastAPI server, auth middleware, quota middleware
+  routers/             # API-specific routers (inference, vector_io, tool_runtime)
+  routing_tables/      # Resource-to-provider mapping tables
+  storage/             # KVStore and SqlStore backends
+  store/               # Distribution registry (persists registered resources)
+  access_control/      # Access control policy enforcement
+  conversations/       # Conversation service (persistence for chat threads)
+  prompts/             # Prompt service (prompt template management)
+  utils/               # Config resolution, context propagation, dynamic import
+  resolver.py          # Provider resolution engine: validate, sort, instantiate
+  distribution.py      # Provider registry loading, API enumeration
+  stack.py             # Stack class: initialization, resource registration, lifecycle
+  datatypes.py         # Core data types (StackConfig, Provider, RoutableObject, etc.)
+  library_client.py    # In-process client (no server needed)
+  build.py             # Build config handling for container images
+  configure.py         # Interactive configuration wizard
+```
+
+## Request Lifecycle
+
+1. `server.py` receives an HTTP request and dispatches to the correct handler.
+2. Authentication middleware validates the token, extracts the user identity and `tenant_id`.
+3. Tenancy middleware enforces the configured mode (disabled/single/multi) and stores `tenant_id` in the request scope.
+4. The handler calls a **Router** (e.g., `InferenceRouter`) which consults the **RoutingTable** to find the provider for the requested resource.
+5. The router delegates to the provider implementation.
+6. The provider either computes locally (inline) or calls an external service (remote).
+7. Storage operations go through `AuthorizedSqlStore`, which applies tenant isolation (`WHERE tenant_id = ?`) before ABAC policy checks.
+
+## Key Classes
+
+- `Stack` (`stack.py`) -- Orchestrates initialization: loads config, resolves providers, registers resources, starts background tasks.
+- `resolve_impls()` (`resolver.py`) -- The provider resolution engine. Validates providers against the registry, sorts by dependency order, instantiates each one.
+- `CommonRoutingTableImpl` (`routing_tables/common.py`) -- Base class for all routing tables. Manages the mapping from resource identifiers to provider implementations.
+- `DistributionRegistry` (`store/`) -- Persistent registry of all resources (models, vector stores, tool groups, etc.) across providers.

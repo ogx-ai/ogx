@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -297,7 +297,7 @@ class AsyncAgent:
         """Construct an async Agent backed by the responses + conversations APIs.
 
         Args:
-            client: An async OpenAI-compatible client (e.g., openai.AsyncOpenAI() or AsyncLlamaStackClient).
+            client: An async OpenAI-compatible client (e.g., openai.AsyncOpenAI() or AsyncOgxClient).
                     The client must support the responses and conversations APIs.
         """
         self.client = client

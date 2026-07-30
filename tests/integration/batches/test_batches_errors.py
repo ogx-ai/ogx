@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 """
-Error handling and edge case tests for the Llama Stack batch processing functionality.
+Error handling and edge case tests for the OGX batch processing functionality.
 
 This module focuses exclusively on testing error conditions, validation failures,
 and edge cases for batch operations to ensure robust error handling and graceful

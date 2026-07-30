@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,7 +11,7 @@ import pytest
 import yaml
 from openai import OpenAI
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
 # --- Helper Functions ---
 
@@ -104,15 +104,15 @@ def model_mapping(provider, providers_model_mapping):
 
 @pytest.fixture(scope="session")
 def openai_client(base_url, api_key, provider):
-    # Simplify running against a local Llama Stack
+    # Simplify running against a local OGX
     if base_url and "localhost" in base_url and not api_key:
         api_key = "empty"
     if provider.startswith("stack:"):
         parts = provider.split(":")
         if len(parts) != 2:
-            raise ValueError(f"Invalid config for Llama Stack: {provider}, it must be of the form 'stack:<config>'")
+            raise ValueError(f"Invalid config for OGX: {provider}, it must be of the form 'stack:<config>'")
         config = parts[1]
-        client = LlamaStackAsLibraryClient(config, skip_logger_removal=True)
+        client = OGXAsLibraryClient(config, skip_logger_removal=True)
         return client
 
     client = OpenAI(

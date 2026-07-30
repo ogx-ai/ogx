@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -18,6 +18,33 @@ import yaml
 from openapi_spec_validator import validate_spec
 from openapi_spec_validator.exceptions import OpenAPISpecValidatorError
 
+
+def _fix_compact_request_schema(openapi_schema: dict[str, Any]) -> None:
+    """Align CompactResponseRequest with OpenAI's CompactResponseMethodPublicBody.
+
+    Fixes two structural mismatches:
+    1. model: inject a ModelIdsResponses $ref so the anyOf variant count matches
+    2. input: nest string + array variants inside a oneOf wrapper
+    """
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    props = schemas.get("CompactResponseRequest", {}).get("properties", {})
+    if not props:
+        return
+
+    model_prop = props.get("model")
+    if isinstance(model_prop, dict) and "anyOf" in model_prop:
+        if not any(isinstance(v, dict) and "ModelIdsResponses" in v.get("$ref", "") for v in model_prop["anyOf"]):
+            schemas.setdefault("ModelIdsResponses", {"type": "string", "description": "Model identifier."})
+            model_prop["anyOf"].insert(0, {"$ref": "#/components/schemas/ModelIdsResponses"})
+
+    input_prop = props.get("input")
+    if isinstance(input_prop, dict) and "anyOf" in input_prop:
+        non_null = [v for v in input_prop["anyOf"] if not (isinstance(v, dict) and v.get("type") == "null")]
+        null_items = [v for v in input_prop["anyOf"] if isinstance(v, dict) and v.get("type") == "null"]
+        if len(non_null) >= 2 and null_items:
+            input_prop["anyOf"] = [{"oneOf": non_null}] + null_items
+
+
 from ._legacy_order import (
     LEGACY_OPERATION_KEYS,
     LEGACY_PATH_ORDER,
@@ -30,50 +57,20 @@ from ._legacy_order import (
 
 
 def _dedupe_create_response_request_input_union_for_stainless(openapi_schema: dict[str, Any]) -> dict[str, Any]:
-    """Deduplicate inline unions in `CreateResponseRequest.input` for Stainless.
+    """Deduplicate inline unions in request `input` properties for Stainless.
 
     The stable OpenAPI spec intentionally preserves legacy structure for oasdiff
     compatibility, but Stainless codegen treats duplicated inline unions as separate
     types and can generate name clashes.
 
     This transform is intended to run only on the combined (stainless) spec.
+    It handles both CreateResponseRequest and CompactResponseRequest which share
+    the same OpenAIResponseInput union type with duplicate OpenAIResponseMessage refs.
     """
     if "components" not in openapi_schema or "schemas" not in openapi_schema["components"]:
         return openapi_schema
 
     schemas = openapi_schema["components"]["schemas"]
-    create_request = schemas.get("CreateResponseRequest")
-    if not isinstance(create_request, dict):
-        return openapi_schema
-
-    properties = create_request.get("properties")
-    if not isinstance(properties, dict):
-        return openapi_schema
-
-    input_prop = properties.get("input")
-    if not isinstance(input_prop, dict):
-        return openapi_schema
-
-    any_of = input_prop.get("anyOf")
-    if not isinstance(any_of, list):
-        return openapi_schema
-
-    array_schema: dict[str, Any] | None = None
-    for item in any_of:
-        if isinstance(item, dict) and (item.get("type") == "array" or "items" in item):
-            array_schema = item
-            break
-
-    if array_schema is None:
-        return openapi_schema
-
-    items_schema = array_schema.get("items")
-    if not isinstance(items_schema, dict):
-        return openapi_schema
-
-    items_any_of = items_schema.get("anyOf")
-    if not isinstance(items_any_of, list):
-        return openapi_schema
 
     def _collect_refs(obj: Any, refs: set[str]) -> None:
         if isinstance(obj, dict):
@@ -89,27 +86,62 @@ def _dedupe_create_response_request_input_union_for_stainless(openapi_schema: di
     def _is_direct_ref_item(item: dict[str, Any]) -> bool:
         if "$ref" not in item:
             return False
-        # Direct refs are the sibling entries like: {$ref: ..., title: ...}
-        # Union/nesting containers also include oneOf/anyOf/items/etc.
         container_keys = {"oneOf", "anyOf", "items", "properties", "additionalProperties"}
         return not any(key in item for key in container_keys)
 
-    refs_in_nested_unions: set[str] = set()
-    for item in items_any_of:
-        if isinstance(item, dict) and not _is_direct_ref_item(item):
-            _collect_refs(item, refs_in_nested_unions)
+    def _dedupe_input_union(schema_name: str) -> None:
+        request_schema = schemas.get(schema_name)
+        if not isinstance(request_schema, dict):
+            return
 
-    if not refs_in_nested_unions:
-        return openapi_schema
+        properties = request_schema.get("properties")
+        if not isinstance(properties, dict):
+            return
 
-    # Remove sibling direct refs that are duplicates of refs found elsewhere
-    deduplicated: list[Any] = []
-    for item in items_any_of:
-        if isinstance(item, dict) and _is_direct_ref_item(item) and item["$ref"] in refs_in_nested_unions:
-            continue
-        deduplicated.append(item)
+        input_prop = properties.get("input")
+        if not isinstance(input_prop, dict):
+            return
 
-    items_schema["anyOf"] = deduplicated
+        any_of = input_prop.get("anyOf")
+        if not isinstance(any_of, list):
+            return
+
+        array_schema: dict[str, Any] | None = None
+        for item in any_of:
+            if isinstance(item, dict) and (item.get("type") == "array" or "items" in item):
+                array_schema = item
+                break
+
+        if array_schema is None:
+            return
+
+        items_schema = array_schema.get("items")
+        if not isinstance(items_schema, dict):
+            return
+
+        items_any_of = items_schema.get("anyOf")
+        if not isinstance(items_any_of, list):
+            return
+
+        refs_in_nested_unions: set[str] = set()
+        for item in items_any_of:
+            if isinstance(item, dict) and not _is_direct_ref_item(item):
+                _collect_refs(item, refs_in_nested_unions)
+
+        if not refs_in_nested_unions:
+            return
+
+        deduplicated: list[Any] = []
+        for item in items_any_of:
+            if isinstance(item, dict) and _is_direct_ref_item(item) and item["$ref"] in refs_in_nested_unions:
+                continue
+            deduplicated.append(item)
+
+        items_schema["anyOf"] = deduplicated
+
+    _dedupe_input_union("CreateResponseRequest")
+    _dedupe_input_union("CompactResponseRequest")
+
     return openapi_schema
 
 
@@ -244,9 +276,9 @@ def _extract_duplicate_union_types(openapi_schema: dict[str, Any]) -> dict[str, 
     output_union_schema_name = "OpenAIResponseMessageOutputUnion"
     output_union_title = None
 
-    # Get the union type from OpenAIResponseObjectWithInput-Output.input.items.anyOf
-    if "OpenAIResponseObjectWithInput-Output" in schemas:
-        schema = schemas["OpenAIResponseObjectWithInput-Output"]
+    # Get the union type from OpenAIResponseObjectWithInput.input.items.anyOf
+    if "OpenAIResponseObjectWithInput" in schemas:
+        schema = schemas["OpenAIResponseObjectWithInput"]
         if isinstance(schema, dict) and "properties" in schema:
             input_prop = schema["properties"].get("input")
             if isinstance(input_prop, dict) and "items" in input_prop:
@@ -297,6 +329,46 @@ def _extract_duplicate_union_types(openapi_schema: dict[str, Any]) -> dict[str, 
                 if isinstance(items, dict) and "anyOf" in items:
                     # Replace with reference
                     data_prop["items"] = {"$ref": f"#/components/schemas/{output_union_schema_name}"}
+
+    # Replace the same union in OpenAICompactedResponse.output.items.anyOf
+    if "OpenAICompactedResponse" in schemas and output_union_schema_name in schemas:
+        schema = schemas["OpenAICompactedResponse"]
+        if isinstance(schema, dict) and "properties" in schema:
+            output_prop = schema["properties"].get("output")
+            if isinstance(output_prop, dict) and "items" in output_prop:
+                items = output_prop["items"]
+                if isinstance(items, dict) and "anyOf" in items:
+                    # Replace with reference
+                    output_prop["items"] = {"$ref": f"#/components/schemas/{output_union_schema_name}"}
+
+    # Extract the response output union type (used in OpenAIResponseObject.output and
+    # OpenAIResponseObjectWithInput.output). Both schemas have identical inline oneOf unions
+    # which causes Stainless to generate duplicate type names like
+    # "ResponseListResponseInputOpenAIResponseMessageOutput".
+    response_output_union_name = "OpenAIResponseOutputItem"
+
+    # Extract from OpenAIResponseObject.output first to create the shared schema
+    if "OpenAIResponseObject" in schemas:
+        schema = schemas["OpenAIResponseObject"]
+        if isinstance(schema, dict) and "properties" in schema:
+            output_prop = schema["properties"].get("output")
+            if isinstance(output_prop, dict) and "items" in output_prop:
+                items = output_prop["items"]
+                if isinstance(items, dict) and "oneOf" in items:
+                    if response_output_union_name not in schemas:
+                        schemas[response_output_union_name] = copy.deepcopy(items)
+                        schemas[response_output_union_name]["x-stainless-naming"] = response_output_union_name
+                    output_prop["items"] = {"$ref": f"#/components/schemas/{response_output_union_name}"}
+
+    # Replace the same union in OpenAIResponseObjectWithInput.output
+    if "OpenAIResponseObjectWithInput" in schemas and response_output_union_name in schemas:
+        schema = schemas["OpenAIResponseObjectWithInput"]
+        if isinstance(schema, dict) and "properties" in schema:
+            output_prop = schema["properties"].get("output")
+            if isinstance(output_prop, dict) and "items" in output_prop:
+                items = output_prop["items"]
+                if isinstance(items, dict) and "oneOf" in items:
+                    output_prop["items"] = {"$ref": f"#/components/schemas/{response_output_union_name}"}
 
     # Extract the Input union type (used in _responses_Request.input.anyOf[1].items.anyOf)
     input_union_schema_name = "OpenAIResponseMessageInputUnion"

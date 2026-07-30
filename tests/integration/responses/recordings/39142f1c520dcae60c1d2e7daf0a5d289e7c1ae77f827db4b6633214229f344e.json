@@ -1,0 +1,138 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_basic_conversation[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Help me plan a Python web app."
+        },
+        {
+          "role": "assistant",
+          "content": "I suggest FastAPI with SQLite."
+        },
+        {
+          "role": "user",
+          "content": "Add authentication too."
+        },
+        {
+          "role": "assistant",
+          "content": "Use OAuth2 with JWT tokens."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-39142f1c520d",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary: Python Web App Development Plan\n\n#### **1. Current Progress and Key Decisions**\n- **Framework:** We chose **FastAPI** for building the web app due to its speed, modern features, and suitability for APIs.\n- **Database:** Decided on **SQLite** for its simplicity and suitability for small-to-medium-scale apps.\n- **Authentication:** Determined that **OAuth2 with JWT (JSON Web Token)** is the preferred approach for secure user authentication.\n\n#### **2. Important Context, Constraints, or User Preferences**\n- The user wants a simple yet scalable architecture suitable for quick development.\n- Authentication is required, specifically token-based (JWT) with OAuth2 workflows.\n- Defaults to FastAPI and SQLite unless requirements change.\n- Project scope assumes basic setup with potential future expansions not specified yet.\n\n#### **3. What Remains to Be Done (Next Steps)**\n1. **Database Design:**\n   - Define database schema (e.g., `User` table with fields like `id`, `username`, `hashed_password`, etc.).\n2. **Authentication Implementation:**\n   - Integrate OAuth2 with JWT in FastAPI.\n   - Establish routes for login, registration, and token refreshing.\n3. **Core API Endpoints:**\n   - Define and plan core app functionality routes (TBD based on the user\u2019s goals, e.g., CRUD endpoints).\n4. **Project Structure:**\n   - Code organization (e.g., splitting into `main.py`, `/models`, `/routes`, `/auth`, etc.).\n5. **Test and Documentation:**\n   - Add testing suite (e.g., `pytest`) and auto-generate FastAPI docs with OpenAPI.\n\n#### **4. Critical Data, Examples, or References**\n- Refer to [FastAPI OAuth2 with Password (and Hashing), Bearer with JWT Tokens](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/) for implementation details.\n- Example database schema:\n  ```sql\n  CREATE TABLE users (\n      id INTEGER PRIMARY KEY,\n      username TEXT UNIQUE NOT NULL,\n      hashed_password TEXT NOT NULL\n  );\n  ```\n- Example FastAPI project structure:\n  ```\n  /app\n    \u251c\u2500\u2500 main.py\n    \u251c\u2500\u2500 models/\n    \u251c\u2500\u2500 routes/\n    \u251c\u2500\u2500 auth/\n    \u251c\u2500\u2500 db.py\n  ```\n\nThis summary outlines progress, context, and next steps for seamless continuation.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            },
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "protected_material_code": {
+                "filtered": false,
+                "detected": false
+              },
+              "protected_material_text": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": null,
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 497,
+          "prompt_tokens": 138,
+          "total_tokens": 635,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "prompt_filter_results": [
+          {
+            "prompt_index": 0,
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "jailbreak": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

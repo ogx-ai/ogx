@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_double_compaction[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Topic A discussion"
+        },
+        {
+          "role": "assistant",
+          "content": "Response about A"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-fba0daba0302",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary: CONTEXT CHECKPOINT COMPACTION\n\n#### Current Progress and Key Decisions Made:\n- **Analysis Initiated**: The process of context checkpoint compaction has begun, focusing on streamlining large datasets without losing crucial information.\n- **Key Decisions**:\n  - Prioritized high-relevance context data to retain essential insights.\n  - Implemented a systematic categorization to facilitate future data retrieval.\n  - Decided to preserve user-specific preferences for data presentation.\n\n#### Important Context, Constraints, or User Preferences:\n- **Context**: The task involves reducing data size while maintaining a high level of information integrity and accessibility.\n- **Constraints**:\n  - Must adhere to a maximum data size of 50% of the original dataset.\n  - Ensure compatibility with existing data frameworks and systems.\n- **User Preferences**:\n  - Preference for visual data summaries over textual ones.\n  - Emphasis on retaining decision-making rationale within the dataset.\n\n#### What Remains to Be Done (Clear Next Steps):\n1. **Data Compaction**:\n   - Continue reducing the dataset while verifying the retention of key information.\n   - Validate compaction results against the benchmark set by user preferences.\n2. **Quality Assurance**:\n   - Conduct a thorough review to ensure no critical data is lost.\n   - Engage with user feedback to confirm satisfaction with the compaction results.\n3. **Documentation**:\n   - Update documentation reflecting any changes made to the data structure.\n   - Include concise justifications for data retention decisions as per user preferences.\n\n#### Critical Data, Examples, or References Needed to Continue:\n- **Templates/Examples**: Use previous successful compaction models as a reference (e.g., Project Omega Datasets).\n- **References**:\n  - Industry standards for data compaction to ensure best practices are followed.\n  - User feedback logs from previous checkpoints to understand recurring preferences or issues.\n- **Data Access**: Ensure all necessary permissions and access rights for completing the compaction are secured.\n\nThis summary is designed to ensure the next language model can seamlessly pick up from this checkpoint and maintain continuity and quality in the context checkpoint compaction task.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_b3cac885ff",
+        "usage": {
+          "completion_tokens": 433,
+          "prompt_tokens": 110,
+          "total_tokens": 543,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

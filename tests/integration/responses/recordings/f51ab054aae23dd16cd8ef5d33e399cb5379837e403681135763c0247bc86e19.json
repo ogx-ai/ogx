@@ -1,0 +1,115 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_roundtrip[openai_client-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "We're building a book tracker app with FastAPI."
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Great choice! Use SQLite for the database."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What tables do we need?"
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Users, Books, and ReadingStatus tables."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+            }
+          ]
+        }
+      ],
+      "config": {}
+    },
+    "endpoint": "/generate_content",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": {
+      "sdk_http_response": {
+        "headers": {
+          "Content-Type": "application/json; charset=UTF-8",
+          "Vary": "Origin, X-Origin, Referer",
+          "Content-Encoding": "gzip",
+          "Date": "Thu, 09 Apr 2026 14:34:19 GMT",
+          "Server": "scaffolding on HTTPServer2",
+          "X-XSS-Protection": "0",
+          "X-Frame-Options": "SAMEORIGIN",
+          "X-Content-Type-Options": "nosniff",
+          "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "```json\n{\n  \"handoff_summary\": {\n    \"project\": \"Book Tracker App (FastAPI)\",\n    \"current_progress\": \"Initial database schema design. We've identified the core tables.\",\n    \"key_decisions\": [\n      \"Using FastAPI for the application framework.\",\n      \"Using SQLite as the database.\"\n    ],\n    \"important_context\": [\n      \"User wants a simple, functional book tracker.\",\n      \"Focus on core features: tracking books read, user profiles, and reading status.\"\n    ],\n    \"constraints\": [\n      \"SQLite limitation: No concurrent writes for production\",\n      \"Performance is not a critical concern for initial development, but scalability might become relevant later.\"\n    ],\n    \"user_preferences\": [\n      \"Simple to use, functional, and easy to understand.\"\n    ],\n    \"remaining_tasks\": [\n      \"Define the columns/fields for each table: Users, Books, and ReadingStatus.\",\n      \"Determine the data types for each column.\",\n      \"Establish primary keys and foreign key relationships between tables.\",\n      \"Generate example SQL CREATE TABLE statements for each table.\"\n    ],\n    \"critical_data\": {\n      \"tables\": [\n        \"Users\",\n        \"Books\",\n        \"ReadingStatus\"\n      ]\n    },\n    \"example_data\": null,\n    \"references\": null\n  }\n}\n```\n"
+              }
+            ],
+            "role": "model"
+          },
+          "finish_reason": "STOP",
+          "avg_logprobs": -0.41991539123340155
+        }
+      ],
+      "create_time": "2026-04-09T14:34:17.181216Z",
+      "model_version": "gemini-2.0-flash",
+      "response_id": "6bjXaeCHC5SgmPUPp7r9yAU",
+      "usage_metadata": {
+        "candidates_token_count": 313,
+        "candidates_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 313
+          }
+        ],
+        "prompt_token_count": 126,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 126
+          }
+        ],
+        "total_token_count": 439,
+        "traffic_type": "ON_DEMAND"
+      },
+      "automatic_function_calling_history": []
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

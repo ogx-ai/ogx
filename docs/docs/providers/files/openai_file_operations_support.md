@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides a comprehensive overview of file operations and Vector Store API support across all available vector store providers in Llama Stack. As of release 0.2.24, the following providers support full file operations integration.
+This document provides a comprehensive overview of file operations and Vector Store API support across all available vector store providers in OGX. As of release 0.2.24, the following providers support full file operations integration.
 
 ## Supported Providers
 
@@ -133,7 +133,7 @@ vector_io:
     config:
       kvstore:
         type: sqlite
-        db_path: ~/.llama/faiss_store.db
+        db_path: ~/.ogx/faiss_store.db
 ```
 
 ### With FileResponse Support
@@ -145,16 +145,16 @@ vector_io:
     config:
       kvstore:
         type: sqlite
-        db_path: ~/.llama/faiss_store.db
+        db_path: ~/.ogx/faiss_store.db
 
 files:
   - provider_id: local-files
     provider_type: inline::localfs
     config:
-      storage_dir: ~/.llama/files
+      storage_dir: ~/.ogx/files
       metadata_store:
         type: sqlite
-        db_path: ~/.llama/files_metadata.db
+        db_path: ~/.ogx/files_metadata.db
 ```
 
 ## Usage Examples
@@ -162,9 +162,9 @@ files:
 ### Python Client
 
 ```python
-from llama_stack import LlamaStackClient
+from ogx import OgxClient
 
-client = LlamaStackClient("http://localhost:8000")
+client = OgxClient("http://localhost:8000")
 
 # Create vector store
 vector_store = client.vector_stores.create(name="documents")
@@ -288,4 +288,4 @@ Planned improvements for file operations support:
 - **API Reference**: Files API
 - **Provider Docs**: [Vector Store Providers](../vector_io/)
 - **Examples**: [Getting Started](../../getting_started/)
-- **Community**: [GitHub Issues](https://github.com/meta-llama/llama-stack/issues)
+- **Community**: [GitHub Issues](https://github.com/ogx-ai/ogx/issues)

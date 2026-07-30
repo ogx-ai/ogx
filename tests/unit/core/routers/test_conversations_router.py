@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from llama_stack.core.server.fastapi_router_registry import build_fastapi_router
-from llama_stack_api import Api
-from llama_stack_api.conversations import Conversations
+from ogx.core.server.fastapi_router_registry import build_fastapi_router
+from ogx_api import Api
+from ogx_api.conversations import Conversations
 
 
 def test_consecutive_errors_keep_connection_alive():

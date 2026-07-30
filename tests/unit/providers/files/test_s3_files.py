@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,10 +9,11 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError
 
-from llama_stack_api import (
+from ogx_api import (
     DeleteFileRequest,
     ListFilesRequest,
     OpenAIFilePurpose,
+    OpenAIFileUploadPurpose,
     ResourceNotFoundError,
     RetrieveFileContentRequest,
     RetrieveFileRequest,
@@ -76,7 +77,10 @@ class TestS3FilesImpl:
             request=RetrieveFileContentRequest(file_id=uploaded.id)
         )
 
-        assert response.body == sample_text_file.content
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+        assert body == sample_text_file.content
         assert response.headers["Content-Disposition"] == f'attachment; filename="{sample_text_file.filename}"'
 
     async def test_delete_file(self, s3_provider, sample_text_file, s3_config, s3_client):
@@ -209,7 +213,7 @@ class TestS3FilesImpl:
         files_list = await s3_provider.openai_list_files(request=ListFilesRequest())
         assert len(files_list.data) == 0, "No file metadata should remain after failed upload"
 
-    @pytest.mark.parametrize("purpose", [p for p in OpenAIFilePurpose if p != OpenAIFilePurpose.BATCH])
+    @pytest.mark.parametrize("purpose", [p for p in OpenAIFileUploadPurpose if p != OpenAIFileUploadPurpose.BATCH])
     async def test_default_no_expiration(self, s3_provider, sample_text_file, purpose):
         """Test that by default files have no expiration."""
         sample_text_file.filename = "test_default_no_expiration"
@@ -239,7 +243,7 @@ class TestS3FilesImpl:
 
             mock_now.return_value = 0
 
-            from llama_stack_api import ExpiresAfter
+            from ogx_api import ExpiresAfter
 
             sample_text_file.filename = "test_expired_file"
             uploaded = await s3_provider.openai_upload_file(
@@ -273,7 +277,7 @@ class TestS3FilesImpl:
 
     async def test_unsupported_expires_after_anchor(self, s3_provider, sample_text_file):
         """Unsupported anchor value should raise ValueError."""
-        from llama_stack_api import ExpiresAfter
+        from ogx_api import ExpiresAfter
 
         sample_text_file.filename = "test_unsupported_expires_after_anchor"
 
@@ -286,7 +290,7 @@ class TestS3FilesImpl:
 
     async def test_nonint_expires_after_seconds(self, s3_provider, sample_text_file):
         """Non-integer seconds in expires_after should raise ValueError."""
-        from llama_stack_api import ExpiresAfter
+        from ogx_api import ExpiresAfter
 
         sample_text_file.filename = "test_nonint_expires_after_seconds"
 
@@ -299,7 +303,7 @@ class TestS3FilesImpl:
 
     async def test_expires_after_seconds_out_of_bounds(self, s3_provider, sample_text_file):
         """Seconds outside allowed range should raise ValueError."""
-        from llama_stack_api import ExpiresAfter
+        from ogx_api import ExpiresAfter
 
         with pytest.raises(ValueError, match="greater than or equal to 3600"):
             await s3_provider.openai_upload_file(

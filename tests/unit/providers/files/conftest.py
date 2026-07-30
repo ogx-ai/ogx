@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,9 +8,9 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from llama_stack.core.storage.datatypes import SqliteSqlStoreConfig, SqlStoreReference
-from llama_stack.core.storage.sqlstore.sqlstore import register_sqlstore_backends
-from llama_stack.providers.remote.files.s3 import S3FilesImplConfig, get_adapter_impl
+from ogx.core.storage.datatypes import SqliteSqlStoreConfig, SqlStoreReference
+from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
+from ogx.providers.remote.files.s3 import S3FilesImplConfig, get_adapter_impl
 
 
 class MockUploadFile:

@@ -1,0 +1,195 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-mantle.us-east-2.api.aws/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant that summarizes reasoning traces."
+        },
+        {
+          "role": "user",
+          "content": "Summarize the following chain-of-thought reasoning in one or two sentences. Focus only on the final conclusion and the most important reasoning step.\n\nReasoning:\nThe user asks: \"What is 2 + 2? Think step by step.\" That is a simple arithmetic addition. But the user specifically says \"Think step by step.\" The user may simply want the answer 4 but broken down step by step. The user is likely wanting to see a demonstration of step-by-step reasoning. Let's provide a step-by-step explanation: first represent numbers, then addition... Provide a short step-by-step explanation. The user expects \"2 + 2 = 4\", but illustrate why it's 4. Provide step by step: 2 + 2 = 4. Possibly show a bit of base-10 addition. Could also show how we evaluate each digit.\n\nBut since the request is trivial, no content issues. It's straightforward.\n\nWe'll produce a short answer with step-by-step explanation. \nUser might also be Q/A \"What is 2 + 2?\" The answer: 4. Step by step: Start with 2, add 2, resulting in 4. \nWe should be mindful to obey policy: is no conflict. It's trivial. \nWe can also answer \"2 + 2 = 4.\" But we should abide by \"Think step by step\" so we give a step-by-step explanation. \nWe must keep the answer in a single answer. Use plain text. \nWe'll produce the step-by-step reasoning:\n\n1. Starting with first number 2.\n2. Identify that you need to add a second number 2 to it.\n3. Each number is a single digit. Add them: 2 + 2 => 4.\n4. So the final result is 4.\n\nWe can support with addition. \nWe should respond.\n\nCheck if there is any further nuance? The user might want to see them doing a carry? There's no carry because 2 + 2 is 4. \n\nWe can provide the step explanation. \nOk. Provide answer."
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.3
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.5.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-6ca7dee24696",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "9jGdKSxpEsshXorycLT8B4PK1KekfQmOo7YhcvAU82bPAjHPrEm7rvYAmbLVsDhs1CVAMubvjGrPaY5Zp6zjP0kniZrhlKy1Os7fRzSYy1LPxY"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-6ca7dee24696",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null,
+                "reasoning": "The user wants a short step-by-step explanation of 2+2. The final conclusion is 4. The key reasoning step is adding the two single-digit numbers. So summary: The user asks to think step by step, so we explain that adding 2 and 2 yields 4."
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "nYZQIeUgA6DFEpy5GQlJOX6VNUN46uxVF6rcTYqXhKBnrHHHnVIcNkiRd7aKWQ4I6OaRIQ"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-6ca7dee24696",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "dCK0l2RP9oq3s7ZZH2k2s1ncSjuSANWeX8sCS5TkbvVVrlVj9sGkcgukr9cN8tawTYcUEwTRKYw"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-6ca7dee24696",
+          "choices": [
+            {
+              "delta": {
+                "content": "The user wants a step\u2011by\u2011step explanation of 2\u202f+\u202f2, and the final conclusion is that the sum is 4. The key reasoning step is simply adding the two single\u2011digit numbers: 2\u202f+\u202f2\u202f=\u202f4.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "cIJGuZXejXHr9iz5MlT78S0HLorZsPYVMDD6PkiwWM9CDMSmjpjL9PhR5wa"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-6ca7dee24696",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "hU3BWU0IrvbVjJSdUWwMjpKiSPsYYsbNkMCW"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-6ca7dee24696",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 125,
+            "prompt_tokens": 505,
+            "total_tokens": 630,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 96
+            }
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

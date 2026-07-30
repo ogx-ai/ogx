@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,12 +10,12 @@ import time
 import numpy as np
 import pytest
 
-from llama_stack.providers.inline.vector_io.sqlite_vec.sqlite_vec import (
+from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import (
     SQLiteVecIndex,
     SQLiteVecVectorIOAdapter,
     _create_sqlite_connection,
 )
-from llama_stack_api import Chunk, ChunkMetadata, EmbeddedChunk, QueryChunksResponse
+from ogx_api import Chunk, ChunkMetadata, EmbeddedChunk, QueryChunksResponse
 
 # This test is a unit test for the SQLiteVecVectorIOAdapter class. This should only contain
 # tests which are specific to this class. More general (API-level) tests should be placed in
@@ -90,6 +90,64 @@ async def test_query_chunks_full_text_search(sqlite_vec_index, sample_chunks, sa
 
     assert isinstance(response_no_results, QueryChunksResponse)
     assert len(response_no_results.chunks) == 0, f"Expected 0 results, but got {len(response_no_results.chunks)}"
+
+
+async def test_query_chunks_full_text_search_escapes_user_punctuation(
+    sqlite_vec_index, sample_chunks, sample_embeddings
+):
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=chunk.content,
+            chunk_id=chunk.chunk_id,
+            metadata=chunk.metadata,
+            chunk_metadata=chunk.chunk_metadata,
+            embedding=embedding.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=len(embedding),
+        )
+        for chunk, embedding in zip(sample_chunks, sample_embeddings, strict=False)
+    ]
+    await sqlite_vec_index.add_chunks(embedded_chunks)
+
+    response = await sqlite_vec_index.query_keyword(
+        k=3,
+        score_threshold=0.0,
+        query_string="preference: Sentence 5 - staging/database?",
+    )
+
+    assert isinstance(response, QueryChunksResponse)
+    assert len(response.chunks) > 0
+
+
+async def test_query_keyword_scores_are_positive(sqlite_vec_index, sample_chunks, sample_embeddings):
+    """Test that keyword search returns positive scores (higher = more relevant).
+
+    FTS5 BM25 internally returns negative scores (more negative = more relevant),
+    but query_keyword must negate them so downstream consumers like RRF can sort
+    descending (higher = better) without inverting the ranking.
+    """
+    embedded_chunks = [
+        EmbeddedChunk(
+            content=chunk.content,
+            chunk_id=chunk.chunk_id,
+            metadata=chunk.metadata,
+            chunk_metadata=chunk.chunk_metadata,
+            embedding=embedding.tolist(),
+            embedding_model="test-embedding-model",
+            embedding_dimension=len(embedding),
+        )
+        for chunk, embedding in zip(sample_chunks, sample_embeddings, strict=False)
+    ]
+    await sqlite_vec_index.add_chunks(embedded_chunks)
+
+    response = await sqlite_vec_index.query_keyword(k=5, score_threshold=0.0, query_string="Sentence 5")
+    assert len(response.chunks) > 0, "Expected at least one result"
+    for score in response.scores:
+        assert score > 0, f"Keyword score should be positive (higher = more relevant), got {score}"
+    # Scores should be in descending order (most relevant first)
+    assert all(response.scores[i] >= response.scores[i + 1] for i in range(len(response.scores) - 1)), (
+        "Keyword scores should be in descending order"
+    )
 
 
 async def test_query_chunks_hybrid(sqlite_vec_index, sample_chunks, sample_embeddings):
@@ -640,7 +698,7 @@ async def test_query_chunks_hybrid_tie_breaking(
     sqlite_vec_index, sample_embeddings, embedding_dimension, tmp_path_factory
 ):
     """Test tie-breaking and determinism when scores are equal."""
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     # Create two chunks with the same content and embedding
     chunk1_id = generate_chunk_id("docA", "identical")
@@ -732,3 +790,23 @@ async def test_query_chunks_hybrid_tie_breaking(
         "docA",
         "docB",
     }
+
+
+def test_create_sqlite_connection_sets_wal_pragmas(tmp_path):
+    """Verify that new connections use WAL mode, busy_timeout, and synchronous=NORMAL."""
+    db_path = str(tmp_path / "test_pragmas.db")
+    connection = _create_sqlite_connection(db_path)
+    cur = connection.cursor()
+
+    cur.execute("PRAGMA journal_mode")
+    assert cur.fetchone()[0].lower() == "wal"
+
+    cur.execute("PRAGMA busy_timeout")
+    assert cur.fetchone()[0] == 5000
+
+    cur.execute("PRAGMA synchronous")
+    # NORMAL = 1
+    assert cur.fetchone()[0] == 1
+
+    cur.close()
+    connection.close()

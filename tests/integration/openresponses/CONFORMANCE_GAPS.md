@@ -1,6 +1,6 @@
 # OpenResponses Conformance Gaps
 
-Tracked by: <https://github.com/llamastack/llama-stack/issues/4818>
+Tracked by: <https://github.com/ogx-ai/ogx/issues/4818>
 
 All 6 conformance tests currently fail at the **Zod schema validation step** —
 `responseResourceSchema.safeParse(rawData)` rejects the response before semantic
@@ -12,7 +12,7 @@ three groups.
 ## Group 1: Fields missing entirely from `OpenAIResponseObject`
 
 These fields don't exist in
-`src/llama_stack_api/openai_responses.py::OpenAIResponseObject` at all.
+`src/ogx_api/openai_responses.py::OpenAIResponseObject` at all.
 The OpenResponses spec requires them as non-nullable numbers.
 
 | Field | Spec (Zod) | Fix |
@@ -21,17 +21,17 @@ The OpenResponses spec requires them as non-nullable numbers.
 | `frequency_penalty` | `z.number()` | Add `frequency_penalty: float = 0.0` |
 | `top_logprobs` | `z.number().int()` | Add `top_logprobs: int = 0` |
 
-**File:** `src/llama_stack_api/openai_responses.py`
+**File:** `src/ogx_api/openai_responses.py`
 
 ---
 
-## Group 2: Optional in llama-stack, required (non-nullable) in the spec
+## Group 2: Optional in ogx, required (non-nullable) in the spec
 
 These fields exist in `OpenAIResponseObject` but are typed `| None = None`.
 When no value is provided they serialize as `null`, which the Zod schema rejects
 (no null branch in any of these).
 
-| Field | Spec (Zod) | llama-stack today | Fix |
+| Field | Spec (Zod) | ogx today | Fix |
 |---|---|---|---|
 | `temperature` | `z.number()` | `float \| None = None` | Default to `1.0` |
 | `top_p` | `z.number()` | `float \| None = None` | Default to `1.0` |
@@ -42,14 +42,14 @@ When no value is provided they serialize as `null`, which the Zod schema rejects
 | `tools` | `z.array(...)`, no null | `Sequence[...] \| None = None` | Default to `[]` |
 
 Additionally, `_snapshot_response()` in
-`src/llama_stack/providers/inline/agents/builtin/responses/streaming.py`
+`src/ogx/providers/inline/agents/builtin/responses/streaming.py`
 never forwards `temperature` or `top_p` to the response object even though they
 are available on the context (`self.ctx.temperature`, `self.ctx.top_p`).
 
 **Files:**
 
-- `src/llama_stack_api/openai_responses.py`
-- `src/llama_stack/providers/inline/agents/builtin/responses/streaming.py`
+- `src/ogx_api/openai_responses.py`
+- `src/ogx/providers/inline/agents/builtin/responses/streaming.py`
 
 ---
 
@@ -59,9 +59,9 @@ These are hit for each item in `output[]` once the top-level fields are fixed.
 
 ### `messageSchema` (`type: "message"` output items)
 
-`OpenAIResponseMessage` in `src/llama_stack_api/openai_responses.py`:
+`OpenAIResponseMessage` in `src/ogx_api/openai_responses.py`:
 
-| Field | Spec (Zod) | llama-stack today | Fix |
+| Field | Spec (Zod) | ogx today | Fix |
 |---|---|---|---|
 | `id` | `z.string()` (required) | `str \| None = None` | Ensure always populated |
 | `status` | `z.enum(["in_progress","completed","incomplete"])` (required) | `str \| None = None` | Ensure always populated |
@@ -70,7 +70,7 @@ These are hit for each item in `output[]` once the top-level fields are fixed.
 
 `OpenAIResponseOutputMessageContentOutputText`:
 
-| Field | Spec (Zod) | llama-stack today | Fix |
+| Field | Spec (Zod) | ogx today | Fix |
 |---|---|---|---|
 | `logprobs` | `z.array(...)` (required, non-nullable) | `list \| None = None` | Default to `[]` |
 
@@ -78,12 +78,12 @@ These are hit for each item in `output[]` once the top-level fields are fixed.
 
 Relevant to the **Tool Calling** test. `OpenAIResponseFunctionCall`:
 
-| Field | Spec (Zod) | llama-stack today | Fix |
+| Field | Spec (Zod) | ogx today | Fix |
 |---|---|---|---|
 | `id` | `z.string()` (required) | `str \| None = None` | Ensure always populated |
 | `status` | required | `str \| None = None` | Ensure always populated |
 
-**File:** `src/llama_stack_api/openai_responses.py`
+**File:** `src/ogx_api/openai_responses.py`
 
 ---
 

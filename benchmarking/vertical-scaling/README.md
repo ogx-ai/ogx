@@ -1,14 +1,14 @@
-# Llama Stack Vertical Scaling Benchmark
+# OGX Vertical Scaling Benchmark
 
-A simple benchmark suite for measuring the vertical scaling performance of the Llama Stack inference API using a mocked OpenAI-compatible backend.
+A simple benchmark suite for measuring the vertical scaling performance of the OGX inference API using a mocked OpenAI-compatible backend.
 
 ## Overview
 
-This benchmark measures how well the Llama Stack server scales with increasing worker counts. It uses:
+This benchmark measures how well the OGX server scales with increasing worker counts. It uses:
 
 - **Python Mock Server** - Lightweight HTTP server returning fixed OpenAI-compatible responses
 - **Locust** - Load testing tool to generate concurrent requests
-- **Llama Stack Server** - The inference API under test with `remote::openai` provider
+- **OGX Server** - The inference API under test with `remote::openai` provider
 
 The benchmark runs twice:
 
@@ -48,7 +48,7 @@ This will:
 
 1. Check port availability (8080, 8321)
 2. Start Python mock server on port 8080
-3. Start Llama Stack server on port 8321 with 1 worker
+3. Start OGX server on port 8321 with 1 worker
 4. Run baseline benchmark against mock server (60 seconds)
 5. Run stack benchmark against stack server (60 seconds)
 6. Generate HTML reports in `results/`
@@ -60,7 +60,7 @@ This will:
 
 - `--workers NUMBER` - Number of uvicorn workers (default: 1)
 - `--mock-port NUMBER` - Port for mock server (default: 8080)
-- `--stack-port NUMBER` - Port for Llama Stack server (default: 8321)
+- `--stack-port NUMBER` - Port for OGX server (default: 8321)
 
 **Benchmark Options:**
 
@@ -84,7 +84,7 @@ Results are saved to `results/` directory:
 
 Additional files in the benchmark directory:
 
-- `stack.log` - Llama Stack server logs
+- `stack.log` - OGX server logs
 
 Compare the baseline and stack HTML reports to see the routing overhead.
 

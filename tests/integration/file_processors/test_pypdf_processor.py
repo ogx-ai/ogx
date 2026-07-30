@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,13 +7,15 @@
 import io
 import uuid
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import UploadFile
 
-from llama_stack.providers.inline.file_processor.pypdf import PyPDFFileProcessorConfig
-from llama_stack.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
-from llama_stack_api.vector_io import (
+from ogx.providers.inline.file_processor.pypdf import PyPDFFileProcessorConfig
+from ogx.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
+from ogx_api.common.errors import OpenAIFileObjectNotFoundError
+from ogx_api.vector_io import (
     VectorStoreChunkingStrategyAuto,
     VectorStoreChunkingStrategyStatic,
     VectorStoreChunkingStrategyStaticConfig,
@@ -121,7 +123,7 @@ class TestPyPDFFileProcessor:
     @pytest.fixture
     def processor(self, config: PyPDFFileProcessorConfig) -> PyPDFFileProcessor:
         """PyPDF processor instance for testing."""
-        return PyPDFFileProcessor(config, files_api=None)
+        return PyPDFFileProcessor(config, files_api=AsyncMock())
 
     @pytest.fixture
     def test_pdf_path(self) -> Path:
@@ -131,7 +133,7 @@ class TestPyPDFFileProcessor:
             / "responses"
             / "fixtures"
             / "pdfs"
-            / "llama_stack_and_models.pdf"
+            / "ogx_and_models.pdf"
         )
 
     @pytest.fixture
@@ -144,7 +146,7 @@ class TestPyPDFFileProcessor:
     def upload_file(self, test_pdf_content: bytes) -> UploadFile:
         """Mock UploadFile for testing."""
         pdf_buffer = io.BytesIO(test_pdf_content)
-        return UploadFile(file=pdf_buffer, filename="llama_stack_and_models.pdf")
+        return UploadFile(file=pdf_buffer, filename="ogx_and_models.pdf")
 
     async def test_process_file_basic(self, processor: PyPDFFileProcessor, upload_file: UploadFile):
         """Test basic file processing without chunking."""
@@ -206,7 +208,7 @@ class TestPyPDFFileProcessor:
             # Verify chunk metadata dict
             assert "document_id" in chunk.metadata
             uuid.UUID(chunk.metadata["document_id"])  # Should be a valid UUID
-            assert chunk.metadata["filename"] == "llama_stack_and_models.pdf"
+            assert chunk.metadata["filename"] == "ogx_and_models.pdf"
 
     async def test_process_file_with_static_chunking(self, processor: PyPDFFileProcessor, upload_file: UploadFile):
         """Test file processing with static chunking strategy."""
@@ -250,13 +252,13 @@ class TestPyPDFFileProcessor:
         # Check document-level metadata in chunks
         chunk = response.chunks[0]
         assert "filename" in chunk.metadata
-        assert chunk.metadata["filename"] == "llama_stack_and_models.pdf"
+        assert chunk.metadata["filename"] == "ogx_and_models.pdf"
         uuid.UUID(chunk.metadata["document_id"])  # Should be a valid UUID
 
     async def test_text_cleaning(self):
         """Test text cleaning functionality."""
         config = PyPDFFileProcessorConfig(clean_text=True)
-        processor = PyPDFFileProcessor(config, files_api=None)
+        processor = PyPDFFileProcessor(config, files_api=AsyncMock())
 
         # Test the text cleaning method directly
         raw_text = "  This  has   multiple   spaces\n\n\nand   extra\n\n  newlines  "
@@ -269,7 +271,7 @@ class TestPyPDFFileProcessor:
         """Test processing without text cleaning."""
         upload_file.file.seek(0)  # Rewind stream before use
         config = PyPDFFileProcessorConfig(clean_text=False)
-        processor = PyPDFFileProcessor(config, files_api=None)
+        processor = PyPDFFileProcessor(config, files_api=AsyncMock())
 
         response = await processor.process_file(file=upload_file, chunking_strategy=None)
 
@@ -282,7 +284,7 @@ class TestPyPDFFileProcessor:
         """Test processing without metadata extraction."""
         upload_file.file.seek(0)  # Rewind stream before use
         config = PyPDFFileProcessorConfig(extract_metadata=False)
-        processor = PyPDFFileProcessor(config, files_api=None)
+        processor = PyPDFFileProcessor(config, files_api=AsyncMock())
 
         response = await processor.process_file(file=upload_file, chunking_strategy=None)
 
@@ -307,10 +309,16 @@ class TestPyPDFFileProcessor:
         with pytest.raises(ValueError, match="Cannot provide both file and file_id"):
             await processor.process_file(file=upload_file, file_id="test_id")
 
-    async def test_file_id_without_files_api(self, processor: PyPDFFileProcessor):
-        """Test processing file_id without files API."""
-        with pytest.raises(ValueError, match="Files API not available"):
-            await processor.process_file(file_id="test_file_id")
+    async def test_nonexistent_file_id_raises_error(self):
+        """Test that a non-existent file_id raises a clear error."""
+        mock_files_api = AsyncMock()
+        mock_files_api.openai_retrieve_file.side_effect = OpenAIFileObjectNotFoundError("nonexistent_id")
+
+        config = PyPDFFileProcessorConfig()
+        processor = PyPDFFileProcessor(config, files_api=mock_files_api)
+
+        with pytest.raises(OpenAIFileObjectNotFoundError, match="not found"):
+            await processor.process_file(file_id="nonexistent_id")
 
     async def test_minimal_pdf_processing(self, processor: PyPDFFileProcessor):
         """Test processing a minimal PDF with no extractable text."""
@@ -365,7 +373,7 @@ class TestPyPDFFileProcessor:
         # Document ID should be a generated UUID
         uuid.UUID(chunk.chunk_metadata.document_id)  # Should be a valid UUID
         uuid.UUID(chunk.metadata["document_id"])  # Should be a valid UUID
-        assert chunk.metadata["filename"] == "llama_stack_and_models.pdf"
+        assert chunk.metadata["filename"] == "ogx_and_models.pdf"
 
     async def test_chunk_id_uniqueness(self, processor: PyPDFFileProcessor, upload_file: UploadFile):
         """Test chunk ID uniqueness across chunks."""

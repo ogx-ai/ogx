@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -50,7 +50,7 @@ class TestResponsesAccessControl:
         token = get_auth_token("ALICE_TOKEN", "token-alice")
         # Send test id so server uses correct recordings dir in replay mode
         default_headers = {
-            "X-LlamaStack-Provider-Data": json.dumps({"__test_id": request.node.nodeid}),
+            "X-OGX-Provider-Data": json.dumps({"__test_id": request.node.nodeid}),
         }
         return OpenAI(
             base_url=str(openai_client.base_url),
@@ -65,7 +65,7 @@ class TestResponsesAccessControl:
         """Create an OpenAI client for Bob."""
         token = get_auth_token("BOB_TOKEN", "token-bob")
         default_headers = {
-            "X-LlamaStack-Provider-Data": json.dumps({"__test_id": request.node.nodeid}),
+            "X-OGX-Provider-Data": json.dumps({"__test_id": request.node.nodeid}),
         }
         return OpenAI(
             base_url=str(openai_client.base_url),

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -44,8 +44,8 @@ import asyncio
 
 import pytest
 
-from llama_stack_api import ConflictError
-from llama_stack_api.batches.models import CreateBatchRequest, RetrieveBatchRequest
+from ogx_api import ConflictError
+from ogx_api.batches.models import CreateBatchRequest, RetrieveBatchRequest
 
 
 class TestReferenceBatchesIdempotency:

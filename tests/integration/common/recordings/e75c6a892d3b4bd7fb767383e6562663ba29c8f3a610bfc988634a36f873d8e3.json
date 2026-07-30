@@ -1,0 +1,137 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-mantle.us-east-2.api.aws/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant that summarizes reasoning traces."
+        },
+        {
+          "role": "user",
+          "content": "Summarize the following chain-of-thought reasoning in one or two sentences. Focus only on the final conclusion and the most important reasoning step.\n\nReasoning:\nThe user asks: \"What is 2 + 2? Think step by step.\"\n\nWe have a simple math operation: addition of integers 2 + 2. The user wants step-by-step. So we explain: 2 plus 2 equals 4. We can describe the steps of addition: combining counts, grouping pairs, etc.\n\nWe need to produce a step-by-step explanation. Probably we should mention that 2 plus 2 is 4. Explain maybe the process: count 2, add another 2. So we start with 2, add 2 more, total 4.\n\nWe should follow guidelines: The user is presumably not a toxic or disallowed content. There's no policy violation. So produce a straightforward answer.\n\nWe should not produce any disallowed content. So produce a short answer with step-by-step. Possibly do a math breakdown: 2 + 2 = 4. Step 1: Recognize left operand 2. Step 2: Recognize right operand 2. Step 3: Add them combine: 2 + 2 = (1+1) + (1+1) = 1+1+1+1 = 4. Or maybe bridging: treat as base-10, adding digits 2 and 2 gives 4 because no carry.\n\nWe can present a step-by-step explanation: 1, 2, 3. Provide context: addition, small numbers. Should be correct.\n\nAlso maybe mention more illustrative approach: counting with fingers or objects: one finger, two fingers, then add two more fingers: total four.\n\nWe will output something like:\n\nStep 1: Write the two numbers we want to add: 2 + 2\n\nStep 2: Think of them as 2 objects each. So we have two blocks plus two blocks.\n\nStep 3: Combine them: 2 + 2 = 4. Also do by writing 2 counting up: 1, 2, 3, 4.\n\nYes. Provide final answer: 4.\n\nShould we add more details like base representation? Possibly not needed.\n\nThe user likely expects short answer: It's 4. But we need step-by-step. So produce that.\n\nWe have to comply with the policy: \"The user is effectively asking for a direct correct answer, no nuance.\" So we comply.\n\nWe need to avoid including disallowed content, but there's none. Allowed content. So fine.\n\nNow conceptual: we just answer.\n\nWe might keep it short. Also note guidelines: We can use backticks or code formatting? It's not necessary. Use plain text.\n\nConsider whether the user wants a step-by-step demonstration. So we show three steps.\n\nOk. Let's produce."
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.3
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.5.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e75c6a892d3b",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "tLKzcUr7W5Mgjk1VPyl1XZ5iueao8g2Nbpck"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e75c6a892d3b",
+          "choices": [
+            {
+              "delta": {
+                "content": "**Conclusion:** 2\u202f+\u202f2\u202f=\u202f4.  \n**Key reasoning step:** Combine the two groups of two objects (or count 1\u20112\u20113\u20114) to see that the total number of objects is four.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "mwG5jByea8Ts4WtMfLAIJQ3IRrykPn5ybaTo6WlXIPrC0ugARWbNCw39g0iXutxUoe43sLfbPVZXfk"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e75c6a892d3b",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "SuIjggWmgYvF3NWWB0Kgo8JTjmDf3X0jL9pZ3JxtD9Xdiy928fi5i9XaqODMJtrEOPyMBRMYlu5NjIdhuG67tTjo3"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-e75c6a892d3b",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 54,
+            "prompt_tokens": 669,
+            "total_tokens": 723,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

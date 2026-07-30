@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -35,9 +35,9 @@ def generate_ci_docs():
     readme_path = workflows_dir / "README.md"
 
     # Header section to preserve
-    header = """# Llama Stack CI
+    header = """# OGX CI
 
-Llama Stack uses GitHub Actions for Continuous Integration (CI). Below is a table detailing what CI the project includes and the purpose.
+OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detailing what CI the project includes and the purpose.
 
 | Name | File | Purpose |
 | ---- | ---- | ------- |

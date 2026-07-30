@@ -1,0 +1,303 @@
+# Copyright (c) The OGX Contributors.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
+import argparse
+import atexit
+import os
+import ssl
+import subprocess
+import sys
+import warnings
+from pathlib import Path
+
+import uvicorn
+import yaml
+from termcolor import cprint
+
+from ogx.cli.subcommand import Subcommand
+from ogx.core.datatypes import StackConfig
+from ogx.core.distribution import builtin_automatically_routed_apis, get_provider_registry
+from ogx.core.resolver import validate_and_prepare_providers
+from ogx.core.server.server import remove_disabled_providers
+from ogx.core.stack import run_config_from_dynamic_config_spec
+from ogx.core.utils.config import redact_sensitive_fields, reveal_secret_fields
+from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR, UI_LOGS_DIR
+from ogx.core.utils.config_resolution import resolve_config_or_distro
+from ogx.log import get_logger
+
+REPO_ROOT = Path(__file__).parent.parent.parent.parent
+
+logger = get_logger(name=__name__, category="cli")
+
+
+def add_run_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "config",
+        type=str,
+        nargs="?",
+        metavar="config | distro",
+        help="Path to config file to use for the run or name of known distro (`ogx list` for a list).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        help="Port to run the server on. It can also be passed via the env var OGX_PORT.",
+        default=None,
+    )
+    parser.add_argument(
+        "--enable-ui",
+        action="store_true",
+        help="Start the UI server",
+    )
+    parser.add_argument(
+        "--providers",
+        type=str,
+        default=None,
+        help="Run a stack with only a list of providers. This list is formatted like: api1=provider1,api1=provider2,api2=provider3. Where there can be multiple providers per API.",
+    )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        default=False,
+        help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate the config without starting the server.",
+    )
+
+
+def run_stack_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    import yaml
+
+    from ogx.core.configure import parse_and_maybe_upgrade_config
+
+    if args.enable_ui and not args.dry_run:
+        env_port = os.getenv("OGX_PORT")
+        ui_port = args.port or (int(env_port) if env_port else None) or 8321
+        _start_ui_development_server(ui_port)
+
+    if args.config:
+        try:
+            config_file = resolve_config_or_distro(args.config)
+        except ValueError as e:
+            parser.error(str(e))
+    elif args.providers:
+        distro_dir = DISTRIBS_BASE_DIR / "providers-run"
+        os.makedirs(distro_dir, exist_ok=True)
+        try:
+            run_config = run_config_from_dynamic_config_spec(
+                dynamic_config_spec=args.providers,
+                distro_dir=distro_dir,
+                distro_name="providers-run",
+            )
+        except ValueError as e:
+            cprint(str(e), color="red", file=sys.stderr)
+            sys.exit(1)
+        config_dict = run_config.model_dump(mode="json")
+
+        config_file = distro_dir / "config.yaml"
+        logger.info("Writing generated config to", config_file=config_file)
+        with open(config_file, "w") as f:
+            yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
+
+    else:
+        config_file = None
+
+    if config_file:
+        logger.info("Using stack configuration", config_file=config_file)
+
+        try:
+            config_dict = yaml.safe_load(config_file.read_text())
+        except yaml.parser.ParserError as e:
+            parser.error(f"failed to load config file '{config_file}':\n {e}")
+
+        try:
+            config = parse_and_maybe_upgrade_config(config_dict)
+            if config.external_providers_dir and not os.path.exists(str(config.external_providers_dir)):
+                os.makedirs(str(config.external_providers_dir), exist_ok=True)
+        except AttributeError as e:
+            parser.error(f"failed to parse config file '{config_file}':\n {e}")
+
+    if args.dry_run:
+        if not config_file:
+            parser.error("--dry-run requires a config file or --providers")
+        _dry_run_validate(config, config_file)
+        return
+
+    _uvicorn_run(config_file, args, parser)
+
+
+def _dry_run_validate(config: StackConfig, config_file: Path) -> None:
+    routed_apis = builtin_automatically_routed_apis()
+    validate_and_prepare_providers(
+        run_config=config,
+        provider_registry=get_provider_registry(),
+        routing_table_apis={x.routing_table_api for x in routed_apis},
+        router_apis={x.router_api for x in routed_apis},
+    )
+    logger.info("Config validation passed", config_file=config_file)
+
+    safe_config = redact_sensitive_fields(config.model_dump(mode="json"))
+    clean_config = remove_disabled_providers(safe_config)
+    print(yaml.dump(clean_config, indent=2, default_flow_style=False, sort_keys=False))
+
+
+def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    import tempfile
+
+    if not config_file:
+        parser.error("Config file is required")
+
+    from ogx.core.configure import parse_and_maybe_upgrade_config
+
+    config_file = resolve_config_or_distro(str(config_file))
+    with open(config_file) as fp:
+        config_contents = yaml.safe_load(fp)
+        if args.insecure:
+            if "server" not in config_contents:
+                config_contents["server"] = {}
+            config_contents["server"]["insecure"] = True
+
+        config = parse_and_maybe_upgrade_config(config_contents)
+
+    # Write resolved config (with CLI overrides) to a temp file so
+    # create_app() workers read the final config directly from disk.
+    resolved_config = reveal_secret_fields(config.model_dump())
+    fd, resolved_path = tempfile.mkstemp(suffix=".yaml", prefix="ogx-run-")
+    resolved_file = Path(resolved_path)
+    atexit.register(lambda p=resolved_file: p.unlink(missing_ok=True))
+    with os.fdopen(fd, "w") as f:
+        yaml.dump(resolved_config, f, default_flow_style=False, sort_keys=False)
+
+    env_port = os.getenv("OGX_PORT")
+    port = args.port or (int(env_port) if env_port else None) or config.server.port
+    env_workers = os.getenv("OGX_WORKERS")
+    workers = (int(env_workers) if env_workers else None) or config.server.workers
+
+    host = ""
+    if config.server.host:
+        host = config.server.host
+    elif workers and workers > 1:
+        host = "::"
+
+    os.environ["OGX_CONFIG"] = str(resolved_file)
+
+    uvicorn_config = {
+        "factory": True,
+        "host": host,
+        "port": port,
+        "lifespan": "on",
+        "log_level": logger.getEffectiveLevel(),
+        "workers": workers,
+    }
+
+    keyfile = config.server.tls_keyfile
+    certfile = config.server.tls_certfile
+    if keyfile and certfile:
+        uvicorn_config["ssl_keyfile"] = config.server.tls_keyfile
+        uvicorn_config["ssl_certfile"] = config.server.tls_certfile
+        if config.server.tls_cafile:
+            uvicorn_config["ssl_ca_certs"] = config.server.tls_cafile
+            uvicorn_config["ssl_cert_reqs"] = ssl.CERT_REQUIRED
+
+        if config.server.tls_config and config.server.tls_config.ciphers:
+            uvicorn_config["ssl_ciphers"] = ":".join(config.server.tls_config.ciphers)
+
+        logger.info(
+            "HTTPS enabled with certificates", keyfile=keyfile, certfile=certfile, cafile=config.server.tls_cafile
+        )
+    elif not config.server.insecure:
+        raise SystemExit("TLS required: set tls_certfile/tls_keyfile in server config or pass '--insecure' to disable.")
+    else:
+        logger.warning(
+            "TLS is not enabled — server will transmit data in cleartext. "
+            "Set tls_certfile and tls_keyfile in server config to enable HTTPS."
+        )
+
+    logger.info("Listening on", host=host, port=port)
+
+    try:
+        uvicorn.run("ogx.core.server.server:create_app", **uvicorn_config)  # type: ignore[arg-type]
+    except OSError as e:
+        if e.errno in (97, 99):
+            logger.error(
+                f"Failed to bind to {host}:{port}. "
+                "If you're on an IPv4-only system, set 'server.host: \"0.0.0.0\"' in your config."
+            )
+            raise
+        raise
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Received interrupt signal, shutting down gracefully...")
+
+
+def _start_ui_development_server(stack_server_port: int) -> None:
+    logger.info("Attempting to start UI development server...")
+    npm_check = subprocess.run(["npm", "--version"], capture_output=True, text=True, check=False)
+    if npm_check.returncode != 0:
+        logger.warning(
+            "npm command not found or not executable, UI development server will not be started",
+            error=npm_check.stderr,
+        )
+        return
+
+    ui_dir = REPO_ROOT / "ogx_ui"
+    logs_dir = UI_LOGS_DIR
+    try:
+        logs_dir.mkdir(parents=True, exist_ok=True)
+
+        ui_stdout_log_path = logs_dir / "stdout.log"
+        ui_stderr_log_path = logs_dir / "stderr.log"
+
+        stdout_log_file = open(ui_stdout_log_path, "a")
+        stderr_log_file = open(ui_stderr_log_path, "a")
+
+        process = subprocess.Popen(
+            ["npm", "run", "dev"],
+            cwd=str(ui_dir),
+            stdout=stdout_log_file,
+            stderr=stderr_log_file,
+            env={**os.environ, "NEXT_PUBLIC_OGX_BASE_URL": f"http://localhost:{stack_server_port}"},
+        )
+        logger.info("UI development server process started", ui_dir=ui_dir, pid=process.pid)
+        logger.info("UI server logs", stdout=ui_stdout_log_path, stderr=ui_stderr_log_path)
+        logger.info("UI will be available", port=os.getenv("OGX_UI_PORT", 8322))
+
+    except FileNotFoundError:
+        logger.error(
+            "Failed to start UI development server: 'npm' command not found. Make sure npm is installed and in your PATH."
+        )
+    except Exception as e:
+        logger.error("Failed to start UI development server", ui_dir=ui_dir, error=str(e))
+
+
+class StackRun(Subcommand):
+    """CLI subcommand to start a OGX distribution server (deprecated, use 'ogx run' instead)."""
+
+    def __init__(self, subparsers: argparse._SubParsersAction) -> None:
+        super().__init__()
+        self.parser = subparsers.add_parser(
+            "run",
+            prog="ogx stack run",
+            description="""Start the server for a OGX Distribution. You should have already built (or downloaded) and configured the distribution.
+
+NOTE: 'ogx stack run' is deprecated. Use 'ogx run' instead.""",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        )
+        self._add_arguments()
+        self.parser.set_defaults(func=self._run_stack_run_cmd)
+
+    def _add_arguments(self) -> None:
+        add_run_arguments(self.parser)
+
+    def _run_stack_run_cmd(self, args: argparse.Namespace) -> None:
+        warnings.warn(
+            "'ogx stack run' is deprecated and will be removed in a future release. Use 'ogx run' instead.",
+            FutureWarning,
+            stacklevel=1,
+        )
+        run_stack_cmd(args, self.parser)

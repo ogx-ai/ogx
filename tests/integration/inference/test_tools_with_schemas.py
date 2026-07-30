@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,13 +11,13 @@ Tests that tools pass through correctly to various LLM providers.
 
 import pytest
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
 
 class TestChatCompletionWithTools:
     """Test chat completion with tools that have complex schemas."""
 
-    def test_simple_tool_call(self, llama_stack_client, text_model_id):
+    def test_simple_tool_call(self, ogx_client, text_model_id):
         """Test basic tool calling with simple input schema."""
         tools = [
             {
@@ -34,7 +34,7 @@ class TestChatCompletionWithTools:
             }
         ]
 
-        response = llama_stack_client.chat.completions.create(
+        response = ogx_client.chat.completions.create(
             model=text_model_id,
             messages=[{"role": "user", "content": "What's the weather in San Francisco?"}],
             tools=tools,
@@ -42,7 +42,7 @@ class TestChatCompletionWithTools:
 
         assert response is not None
 
-    def test_tool_with_complex_schema(self, llama_stack_client, text_model_id):
+    def test_tool_with_complex_schema(self, ogx_client, text_model_id):
         """Test tool calling with complex schema including $ref and $defs."""
         tools = [
             {
@@ -76,7 +76,7 @@ class TestChatCompletionWithTools:
             }
         ]
 
-        response = llama_stack_client.chat.completions.create(
+        response = ogx_client.chat.completions.create(
             model=text_model_id,
             messages=[{"role": "user", "content": "Book a flight from SFO to JFK for John Doe"}],
             tools=tools,
@@ -156,9 +156,9 @@ class TestOpenAICompatibility:
 class TestMCPToolsInChatCompletion:
     """Test using MCP-style tool schemas in chat completion."""
 
-    def test_mcp_tools_in_inference(self, llama_stack_client, text_model_id):
+    def test_mcp_tools_in_inference(self, ogx_client, text_model_id):
         """Test that MCP-style tool schemas work in inference."""
-        if not isinstance(llama_stack_client, LlamaStackAsLibraryClient):
+        if not isinstance(ogx_client, OGXAsLibraryClient):
             pytest.skip("Library client required")
         tools = [
             {
@@ -183,7 +183,7 @@ class TestMCPToolsInChatCompletion:
             }
         ]
 
-        response = llama_stack_client.chat.completions.create(
+        response = ogx_client.chat.completions.create(
             model=text_model_id,
             messages=[{"role": "user", "content": "Calculate 5 + 3"}],
             tools=tools,
@@ -196,7 +196,7 @@ class TestMCPToolsInChatCompletion:
 class TestStreamingWithTools:
     """Test streaming chat completion with tools."""
 
-    def test_streaming_tool_calls(self, llama_stack_client, text_model_id):
+    def test_streaming_tool_calls(self, ogx_client, text_model_id):
         """Test that tool schemas work correctly in streaming mode."""
         tools = [
             {
@@ -209,7 +209,7 @@ class TestStreamingWithTools:
             }
         ]
 
-        response_stream = llama_stack_client.chat.completions.create(
+        response_stream = ogx_client.chat.completions.create(
             model=text_model_id,
             messages=[{"role": "user", "content": "What time is it in UTC?"}],
             tools=tools,
@@ -228,7 +228,7 @@ class TestStreamingWithTools:
 class TestEdgeCases:
     """Test edge cases in inference with tools."""
 
-    def test_tool_without_schema(self, llama_stack_client, text_model_id):
+    def test_tool_without_schema(self, ogx_client, text_model_id):
         """Test tool with no input_schema."""
         tools = [
             {
@@ -241,7 +241,7 @@ class TestEdgeCases:
             }
         ]
 
-        response = llama_stack_client.chat.completions.create(
+        response = ogx_client.chat.completions.create(
             model=text_model_id,
             messages=[{"role": "user", "content": "Call the no args tool"}],
             tools=tools,
@@ -249,7 +249,7 @@ class TestEdgeCases:
 
         assert response is not None
 
-    def test_multiple_tools_with_different_schemas(self, llama_stack_client, text_model_id):
+    def test_multiple_tools_with_different_schemas(self, ogx_client, text_model_id):
         """Test multiple tools with different schema complexities."""
         tools = [
             {
@@ -284,7 +284,7 @@ class TestEdgeCases:
             },
         ]
 
-        response = llama_stack_client.chat.completions.create(
+        response = ogx_client.chat.completions.create(
             model=text_model_id,
             messages=[{"role": "user", "content": "Use one of the available tools"}],
             tools=tools,

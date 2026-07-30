@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,13 @@
 import pytest
 from pydantic import ValidationError
 
-from llama_stack.core.datatypes import QualifiedModel, RerankerModel, RewriteQueryParams, VectorStoresConfig
+from ogx.core.datatypes import (
+    ChunkRetrievalParams,
+    QualifiedModel,
+    RerankerModel,
+    RewriteQueryParams,
+    VectorStoresConfig,
+)
 
 
 class TestVectorStoresConfigValidation:
@@ -28,9 +34,26 @@ class TestVectorStoresConfigValidation:
         assert "{chunk.content}" in config.context_prompt_params.chunk_annotation_template
         assert "{query}" in config.context_prompt_params.context_template
 
+    def test_default_search_mode_defaults_to_vector(self):
+        """Test that default_search_mode defaults to 'vector' for backward compatibility."""
+        config = VectorStoresConfig()
+        assert config.chunk_retrieval_params.default_search_mode == "vector"
+
+    def test_default_search_mode_can_be_set_to_hybrid(self):
+        """Test that default_search_mode can be configured to 'hybrid'."""
+        config = VectorStoresConfig(
+            chunk_retrieval_params=ChunkRetrievalParams(default_search_mode="hybrid"),
+        )
+        assert config.chunk_retrieval_params.default_search_mode == "hybrid"
+
+    def test_default_search_mode_can_be_set_to_keyword(self):
+        """Test that default_search_mode can be configured to 'keyword'."""
+        params = ChunkRetrievalParams(default_search_mode="keyword")
+        assert params.default_search_mode == "keyword"
+
     def test_template_validation_errors(self):
         """Test that templates fail validation for common errors."""
-        from llama_stack.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
+        from ogx.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
 
         # Empty templates fail
         with pytest.raises(ValidationError, match="must not be empty"):
@@ -74,7 +97,7 @@ class TestVectorStoresConfigValidation:
 
     def test_custom_configuration(self):
         """Test complete custom configuration."""
-        from llama_stack.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
+        from ogx.core.datatypes import AnnotationPromptParams, ContextPromptParams, FileSearchParams
 
         config = VectorStoresConfig(
             default_provider_id="test-provider",

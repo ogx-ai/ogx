@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,7 +7,7 @@
 
 import pytest
 
-from llama_stack_api import (
+from ogx_api import (
     GetPromptRequest,
     InvalidParameterError,
     OpenAIChatCompletionContentPartImageParam,
@@ -16,15 +16,16 @@ from llama_stack_api import (
     OpenAISystemMessageParam,
     Prompt,
 )
-from llama_stack_api.inference import (
+from ogx_api.inference import (
     OpenAIUserMessageParam,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
     OpenAIResponseInputMessageContentFile,
     OpenAIResponseInputMessageContentImage,
     OpenAIResponseInputMessageContentText,
     OpenAIResponsePrompt,
 )
+from ogx_api.responses.models import CreateResponseRequest
 from tests.unit.providers.responses.builtin.test_openai_responses_helpers import fake_stream
 
 
@@ -54,9 +55,7 @@ async def test_create_openai_response_with_prompt(openai_responses_impl, mock_in
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        prompt=openai_response_prompt,
+        CreateResponseRequest(input=input_text, model=model, prompt=openai_response_prompt)
     )
 
     mock_prompts_api.get_prompt.assert_called_with(GetPromptRequest(prompt_id=prompt_id, version=1))
@@ -103,9 +102,7 @@ async def test_prepend_prompt_successful_without_variables(openai_responses_impl
     mock_inference_api.openai_chat_completion.return_value = fake_stream()
 
     await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        prompt=openai_response_prompt,
+        CreateResponseRequest(input=input_text, model=model, prompt=openai_response_prompt)
     )
 
     mock_prompts_api.get_prompt.assert_called_with(GetPromptRequest(prompt_id=prompt_id, version=1))
@@ -240,6 +237,8 @@ async def test_prepend_prompt_with_image_variable(openai_responses_impl, mock_pr
         expires_at=1234567890,
         filename="product.jpg",
         purpose="assistants",
+        status="processed",
+        status_details="",
     )
 
     openai_response_prompt = OpenAIResponsePrompt(
@@ -304,6 +303,8 @@ async def test_prepend_prompt_with_file_variable(openai_responses_impl, mock_pro
         expires_at=1234567890,
         filename="contract.pdf",
         purpose="assistants",
+        status="processed",
+        status_details="",
     )
 
     openai_response_prompt = OpenAIResponsePrompt(
@@ -382,6 +383,8 @@ async def test_prepend_prompt_with_mixed_variables(openai_responses_impl, mock_p
                 expires_at=1234567890,
                 filename="photo.jpg",
                 purpose="assistants",
+                status="processed",
+                status_details="",
             )
         elif file_id == "file-doc-456":
             return OpenAIFileObject(
@@ -392,6 +395,8 @@ async def test_prepend_prompt_with_mixed_variables(openai_responses_impl, mock_p
                 expires_at=1234567890,
                 filename="doc.pdf",
                 purpose="assistants",
+                status="processed",
+                status_details="",
             )
 
     mock_files_api.openai_retrieve_file.side_effect = mock_retrieve_file

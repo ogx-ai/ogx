@@ -1,0 +1,87 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_with_previous_response_id[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is the capital of France?"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The capital of France is Paris."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-416ce6986bb8",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "**Handoff Summary for Context Checkpoint Compaction Task**\n\n**Current Progress and Key Decisions Made:**\n- Successfully identified and clarified the capital of France as Paris.\n- No complex decision-making or branching paths were involved in this task so far.\n\n**Important Context, Constraints, or User Preferences:**\n- User has not specified additional context, preferences, or constraints beyond the initial query.\n- The scope seems to be focused on straightforward factual questions, presumably related to geography or similar topics.\n\n**What Remains to Be Done (Clear Next Steps):**\n- Await additional queries from the user to address. Be prepared to provide concise, accurate answers to similar factual questions.\n- Monitor for potential context shifts or expansions in user queries that could alter the nature of the required information or response style.\n\n**Any Critical Data, Examples, or References Needed to Continue:**\n- Maintain access to reliable geographic data sources as reference material.\n- Stay attentive to any new context or specification details provided by the user in future interactions that may impact the information provided.\n\nThis summary ensures a smooth transition and continuity for the task at hand, enabling efficient, focused responses.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_02e9bb85b6",
+        "usage": {
+          "completion_tokens": 227,
+          "prompt_tokens": 118,
+          "total_tokens": 345,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

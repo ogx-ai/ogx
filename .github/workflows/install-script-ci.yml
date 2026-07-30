@@ -10,7 +10,7 @@ on:
     paths:
       - 'scripts/install.sh'
   schedule:
-    - cron: '0 2 * * *'  # every day at 02:00 UTC
+    - cron: '0 2 * * 1'  # weekly on Monday at 02:00 UTC
 
 jobs:
   lint:
@@ -40,7 +40,7 @@ jobs:
           docker build . \
             -f containers/Containerfile \
             "${BUILD_ARGS[@]}" \
-            --tag llama-stack:starter-ci
+            --tag ogx:starter-ci
 
       - name: Run installer end-to-end
         run: |

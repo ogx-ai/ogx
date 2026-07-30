@@ -1,0 +1,129 @@
+{
+  "test_id": "tests/integration/responses/test_tool_responses.py::test_max_tool_calls_with_function_tools[client_with_models-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content_stream",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Can you tell me the weather in Paris and the current time?"
+            }
+          ]
+        }
+      ],
+      "config": {
+        "tools": [
+          {
+            "function_declarations": [
+              {
+                "description": "Get weather information for a specified location",
+                "name": "get_weather",
+                "parameters_json_schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "The city name (e.g., 'New York', 'London')"
+                    }
+                  }
+                }
+              },
+              {
+                "description": "Get current time for a specified location",
+                "name": "get_time",
+                "parameters_json_schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "The city name (e.g., 'New York', 'London')"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "endpoint": "/generate_content_stream",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:30:35 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "function_call": {
+                    "args": {
+                      "location": "Paris"
+                    },
+                    "name": "get_weather"
+                  }
+                },
+                {
+                  "function_call": {
+                    "args": {
+                      "location": "Paris"
+                    },
+                    "name": "get_time"
+                  }
+                }
+              ],
+              "role": "model"
+            },
+            "finish_reason": "STOP"
+          }
+        ],
+        "create_time": "2026-04-01T10:30:34.816714Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "yvPMacrsMduhmPUPvJLguQ0",
+        "usage_metadata": {
+          "candidates_token_count": 10,
+          "candidates_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 10
+            }
+          ],
+          "prompt_token_count": 33,
+          "prompt_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 33
+            }
+          ],
+          "total_token_count": 43,
+          "traffic_type": "ON_DEMAND"
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

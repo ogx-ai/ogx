@@ -1,0 +1,307 @@
+{
+  "test_id": "tests/integration/responses/test_structured_output.py::test_json_schema_mixed_types_structures[client_with_models-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content_stream",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Generate a profile for Grace, age 35, salary $120000, active status true, with skills Python and SQL, living at 123 Main St in Raleigh, zipcode 27601"
+            }
+          ]
+        }
+      ],
+      "config": {
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "age": {
+              "type": "integer"
+            },
+            "salary": {
+              "type": "number"
+            },
+            "is_active": {
+              "type": "boolean"
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "address": {
+              "type": "object",
+              "properties": {
+                "street": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "zipcode": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "street",
+                "city",
+                "zipcode"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "name",
+            "age",
+            "salary",
+            "is_active",
+            "skills",
+            "address"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "endpoint": "/generate_content_stream",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:30:30 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-01T10:30:30.496710Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "xvPMacaoHtO1mPUP8MOt4AM",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:30:30 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "\n  \""
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-01T10:30:30.496710Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "xvPMacaoHtO1mPUP8MOt4AM",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:30:30 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "name\": \"Grace\",\n  \"age\": 35,\n  "
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-01T10:30:30.496710Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "xvPMacaoHtO1mPUP8MOt4AM",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:30:30 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "\"salary\": 120000.00,\n  \""
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-01T10:30:30.496710Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "xvPMacaoHtO1mPUP8MOt4AM",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:30:30 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "is_active\": true,\n  \"skills\": [\"Python\", \"SQL\"],\n  \"address\": {\n    \"street\": \"123"
+                }
+              ],
+              "role": "model"
+            }
+          }
+        ],
+        "create_time": "2026-04-01T10:30:30.496710Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "xvPMacaoHtO1mPUP8MOt4AM",
+        "usage_metadata": {
+          "traffic_type": "ON_DEMAND"
+        }
+      },
+      {
+        "sdk_http_response": {
+          "headers": {
+            "Content-Type": "text/event-stream",
+            "Content-Disposition": "attachment",
+            "Vary": "Origin, X-Origin, Referer",
+            "Transfer-Encoding": "chunked",
+            "Date": "Wed, 01 Apr 2026 10:30:30 GMT",
+            "Server": "scaffolding on HTTPServer2",
+            "X-XSS-Protection": "0",
+            "X-Frame-Options": "SAMEORIGIN",
+            "X-Content-Type-Options": "nosniff",
+            "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000"
+          }
+        },
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": " Main St\",\n    \"city\": \"Raleigh\",\n    \"zipcode\": 27601\n  }\n}"
+                }
+              ],
+              "role": "model"
+            },
+            "finish_reason": "STOP"
+          }
+        ],
+        "create_time": "2026-04-01T10:30:30.496710Z",
+        "model_version": "gemini-2.0-flash",
+        "response_id": "xvPMacaoHtO1mPUP8MOt4AM",
+        "usage_metadata": {
+          "candidates_token_count": 98,
+          "candidates_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 98
+            }
+          ],
+          "prompt_token_count": 97,
+          "prompt_tokens_details": [
+            {
+              "modality": "TEXT",
+              "token_count": 97
+            }
+          ],
+          "total_token_count": 195,
+          "traffic_type": "ON_DEMAND"
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

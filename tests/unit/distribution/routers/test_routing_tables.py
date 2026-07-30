@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,39 +10,19 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.core.datatypes import RegistryEntrySource
-from llama_stack.core.routing_tables.benchmarks import BenchmarksRoutingTable
-from llama_stack.core.routing_tables.datasets import DatasetsRoutingTable
-from llama_stack.core.routing_tables.models import ModelsRoutingTable
-from llama_stack.core.routing_tables.scoring_functions import ScoringFunctionsRoutingTable
-from llama_stack.core.routing_tables.shields import ShieldsRoutingTable
-from llama_stack.core.routing_tables.toolgroups import ToolGroupsRoutingTable
-from llama_stack_api import (
+from ogx.core.datatypes import RegistryEntrySource
+from ogx.core.routing_tables.models import ModelsRoutingTable
+from ogx.core.routing_tables.toolgroups import ToolGroupsRoutingTable
+from ogx_api import (
     URL,
     Api,
-    Dataset,
-    DatasetPurpose,
-    GetBenchmarkRequest,
-    GetShieldRequest,
-    ListBenchmarksRequest,
     ListToolDefsResponse,
     ListToolsRequest,
     Model,
     ModelNotFoundError,
     ModelType,
-    NumberType,
-    RegisterBenchmarkRequest,
-    RegisterShieldRequest,
-    Shield,
     ToolDef,
     ToolGroup,
-    UnregisterBenchmarkRequest,
-    UnregisterShieldRequest,
-    URIDataSource,
-)
-from llama_stack_api.datasets import (
-    RegisterDatasetRequest,
-    UnregisterDatasetRequest,
 )
 
 
@@ -92,53 +72,6 @@ class InferenceImpl(Impl):
         pass
 
 
-class SafetyImpl(Impl):
-    def __init__(self):
-        super().__init__(Api.safety)
-
-    async def register_shield(self, shield: Shield):
-        return shield
-
-    async def unregister_shield(self, shield_id: str):
-        return shield_id
-
-
-class DatasetsImpl(Impl):
-    def __init__(self):
-        super().__init__(Api.datasetio)
-
-    async def register_dataset(self, dataset: Dataset):
-        return dataset
-
-    async def unregister_dataset(self, dataset_id: str):
-        return dataset_id
-
-
-class ScoringFunctionsImpl(Impl):
-    def __init__(self):
-        super().__init__(Api.scoring)
-
-    async def list_scoring_functions(self):
-        return []
-
-    async def register_scoring_function(self, scoring_fn):
-        return scoring_fn
-
-    async def unregister_scoring_function(self, scoring_fn_id: str):
-        return scoring_fn_id
-
-
-class BenchmarksImpl(Impl):
-    def __init__(self):
-        super().__init__(Api.eval)
-
-    async def register_benchmark(self, benchmark):
-        return benchmark
-
-    async def unregister_benchmark(self, benchmark_id: str):
-        return benchmark_id
-
-
 class ToolGroupsImpl(Impl):
     def __init__(self):
         super().__init__(Api.tool_runtime)
@@ -185,7 +118,7 @@ async def test_models_routing_table(cached_disk_dist_registry):
     assert "test_provider/test-model" in openai_model_ids
     assert "test_provider/test-model-2" in openai_model_ids
 
-    # Verify custom_metadata is populated with Llama Stack-specific data
+    # Verify custom_metadata is populated with OGX-specific data
     for openai_model in openai_models.data:
         assert openai_model.custom_metadata is not None
         assert "model_type" in openai_model.custom_metadata
@@ -217,128 +150,6 @@ async def test_models_routing_table(cached_disk_dist_registry):
     # Test openai list models
     openai_models = await table.openai_list_models()
     assert len(openai_models.data) == 0
-
-
-async def test_shields_routing_table(cached_disk_dist_registry):
-    table = ShieldsRoutingTable({"test_provider": SafetyImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register multiple shields and verify listing
-    await table.register_shield(RegisterShieldRequest(shield_id="test-shield", provider_id="test_provider"))
-    await table.register_shield(RegisterShieldRequest(shield_id="test-shield-2", provider_id="test_provider"))
-    shields = await table.list_shields()
-    assert len(shields.data) == 2
-
-    shield_ids = {s.identifier for s in shields.data}
-    assert "test-shield" in shield_ids
-    assert "test-shield-2" in shield_ids
-
-    # Test get specific shield
-    test_shield = await table.get_shield(GetShieldRequest(identifier="test-shield"))
-    assert test_shield is not None
-    assert test_shield.identifier == "test-shield"
-    assert test_shield.provider_id == "test_provider"
-    assert test_shield.provider_resource_id == "test-shield"
-    assert test_shield.params == {}
-
-    # Test get non-existent shield - should raise ValueError with specific message
-    with pytest.raises(ValueError, match="Shield 'non-existent' not found"):
-        await table.get_shield(GetShieldRequest(identifier="non-existent"))
-
-    # Test unregistering shields
-    await table.unregister_shield(UnregisterShieldRequest(identifier="test-shield"))
-    shields = await table.list_shields()
-
-    assert len(shields.data) == 1
-    shield_ids = {s.identifier for s in shields.data}
-    assert "test-shield" not in shield_ids
-    assert "test-shield-2" in shield_ids
-
-    # Unregister the remaining shield
-    await table.unregister_shield(UnregisterShieldRequest(identifier="test-shield-2"))
-    shields = await table.list_shields()
-    assert len(shields.data) == 0
-
-    # Test unregistering non-existent shield - should raise ValueError with specific message
-    with pytest.raises(ValueError, match="Shield 'non-existent' not found"):
-        await table.unregister_shield(UnregisterShieldRequest(identifier="non-existent"))
-
-
-async def test_datasets_routing_table(cached_disk_dist_registry):
-    table = DatasetsRoutingTable({"localfs": DatasetsImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register multiple datasets and verify listing
-    await table.register_dataset(
-        RegisterDatasetRequest(
-            dataset_id="test-dataset",
-            purpose=DatasetPurpose.eval_messages_answer,
-            source=URIDataSource(uri="test-uri"),
-        )
-    )
-    await table.register_dataset(
-        RegisterDatasetRequest(
-            dataset_id="test-dataset-2",
-            purpose=DatasetPurpose.eval_messages_answer,
-            source=URIDataSource(uri="test-uri-2"),
-        )
-    )
-    datasets = await table.list_datasets()
-
-    assert len(datasets.data) == 2
-    dataset_ids = {d.identifier for d in datasets.data}
-    assert "test-dataset" in dataset_ids
-    assert "test-dataset-2" in dataset_ids
-
-    await table.unregister_dataset(UnregisterDatasetRequest(dataset_id="test-dataset"))
-    await table.unregister_dataset(UnregisterDatasetRequest(dataset_id="test-dataset-2"))
-
-    datasets = await table.list_datasets()
-    assert len(datasets.data) == 0
-
-
-async def test_scoring_functions_routing_table(cached_disk_dist_registry):
-    table = ScoringFunctionsRoutingTable({"test_provider": ScoringFunctionsImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register multiple scoring functions and verify listing
-    from llama_stack_api import (
-        ListScoringFunctionsRequest,
-        RegisterScoringFunctionRequest,
-        UnregisterScoringFunctionRequest,
-    )
-
-    await table.register_scoring_function(
-        RegisterScoringFunctionRequest(
-            scoring_fn_id="test-scoring-fn",
-            provider_id="test_provider",
-            description="Test scoring function",
-            return_type=NumberType(),
-        )
-    )
-    await table.register_scoring_function(
-        RegisterScoringFunctionRequest(
-            scoring_fn_id="test-scoring-fn-2",
-            provider_id="test_provider",
-            description="Another test scoring function",
-            return_type=NumberType(),
-        )
-    )
-    scoring_functions = await table.list_scoring_functions(ListScoringFunctionsRequest())
-
-    assert len(scoring_functions.data) == 2
-    scoring_fn_ids = {fn.identifier for fn in scoring_functions.data}
-    assert "test-scoring-fn" in scoring_fn_ids
-    assert "test-scoring-fn-2" in scoring_fn_ids
-
-    # Unregister scoring functions and verify listing
-    for i in range(len(scoring_functions.data)):
-        await table.unregister_scoring_function(
-            UnregisterScoringFunctionRequest(scoring_fn_id=scoring_functions.data[i].scoring_fn_id)
-        )
-
-    scoring_functions_list_after_deletion = await table.list_scoring_functions(ListScoringFunctionsRequest())
-    assert len(scoring_functions_list_after_deletion.data) == 0
 
 
 async def test_double_registration_models_positive(cached_disk_dist_registry):
@@ -373,68 +184,6 @@ async def test_double_registration_models_negative(cached_disk_dist_registry):
         )
 
 
-async def test_double_registration_scoring_functions_positive(cached_disk_dist_registry):
-    """Test that registering the same scoring function twice with identical data succeeds."""
-    from llama_stack_api import ListScoringFunctionsRequest, RegisterScoringFunctionRequest
-
-    table = ScoringFunctionsRoutingTable({"test_provider": ScoringFunctionsImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register a scoring function
-    await table.register_scoring_function(
-        RegisterScoringFunctionRequest(
-            scoring_fn_id="test-scoring-fn",
-            provider_id="test_provider",
-            description="Test scoring function",
-            return_type=NumberType(),
-        )
-    )
-
-    # Register the exact same scoring function again - should succeed (idempotent)
-    await table.register_scoring_function(
-        RegisterScoringFunctionRequest(
-            scoring_fn_id="test-scoring-fn",
-            provider_id="test_provider",
-            description="Test scoring function",
-            return_type=NumberType(),
-        )
-    )
-
-    # Verify only one scoring function exists
-    scoring_functions = await table.list_scoring_functions(ListScoringFunctionsRequest())
-    assert len(scoring_functions.data) == 1
-    assert scoring_functions.data[0].identifier == "test-scoring-fn"
-
-
-async def test_double_registration_scoring_functions_negative(cached_disk_dist_registry):
-    """Test that registering the same scoring function with conflicting data fails."""
-    from llama_stack_api import RegisterScoringFunctionRequest
-
-    table = ScoringFunctionsRoutingTable({"test_provider": ScoringFunctionsImpl()}, cached_disk_dist_registry, {})
-    await table.initialize()
-
-    # Register a scoring function
-    await table.register_scoring_function(
-        RegisterScoringFunctionRequest(
-            scoring_fn_id="test-scoring-fn",
-            provider_id="test_provider",
-            description="Test scoring function",
-            return_type=NumberType(),
-        )
-    )
-
-    # Try to register the same scoring function with conflicting description - should fail
-    with pytest.raises(ValueError, match="conflicting field values"):
-        await table.register_scoring_function(
-            RegisterScoringFunctionRequest(
-                scoring_fn_id="test-scoring-fn",
-                provider_id="test_provider",
-                description="Different description",
-                return_type=NumberType(),
-            )
-        )
-
-
 async def test_double_registration_different_providers(cached_disk_dist_registry):
     """Test that registering objects with same ID but different providers succeeds."""
     impl1 = InferenceImpl()
@@ -454,58 +203,77 @@ async def test_double_registration_different_providers(cached_disk_dist_registry
     assert "provider2/shared-model" in model_ids
 
 
-async def test_benchmarks_routing_table(cached_disk_dist_registry):
-    table = BenchmarksRoutingTable({"test_provider": BenchmarksImpl()}, cached_disk_dist_registry, {})
+async def test_openai_list_models_has_object_field(cached_disk_dist_registry):
+    """Test that OpenAI list models response includes the object field."""
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
     await table.initialize()
 
-    # Register multiple benchmarks and verify listing
-    await table.register_benchmark(
-        RegisterBenchmarkRequest(
-            benchmark_id="test-benchmark",
-            dataset_id="test-dataset",
-            scoring_functions=["test-scoring-fn", "test-scoring-fn-2"],
-        )
-    )
-    benchmarks = await table.list_benchmarks(ListBenchmarksRequest())
+    await table.register_model(model_id="test-model", provider_id="test_provider")
 
-    assert len(benchmarks.data) == 1
-    benchmark_ids = {b.identifier for b in benchmarks.data}
-    assert "test-benchmark" in benchmark_ids
-
-    # Unregister the benchmark and verify removal
-    await table.unregister_benchmark(UnregisterBenchmarkRequest(benchmark_id="test-benchmark"))
-    benchmarks_after = await table.list_benchmarks(ListBenchmarksRequest())
-    assert len(benchmarks_after.data) == 0
-
-    # Unregistering a non-existent benchmark should raise a clear error
-    with pytest.raises(ValueError, match="Benchmark 'dummy_benchmark' not found"):
-        await table.unregister_benchmark(UnregisterBenchmarkRequest(benchmark_id="dummy_benchmark"))
+    openai_models = await table.openai_list_models()
+    assert openai_models.object == "list"
+    assert len(openai_models.data) == 1
 
 
-async def test_benchmarks_routing_table_stores_dataset_id(cached_disk_dist_registry):
-    """Test that register_benchmark correctly stores dataset_id on the benchmark."""
-    table = BenchmarksRoutingTable({"test_provider": BenchmarksImpl()}, cached_disk_dist_registry, {})
+async def test_anthropic_list_models_supports_pagination(cached_disk_dist_registry):
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
     await table.initialize()
 
-    test_dataset_id = "my-evaluation-dataset"
-    test_scoring_functions = ["accuracy", "f1-score"]
+    await table.register_model(model_id="test-model-a", provider_id="test_provider")
+    await table.register_model(model_id="test-model-b", provider_id="test_provider")
+    await table.register_model(model_id="test-model-c", provider_id="test_provider")
 
-    await table.register_benchmark(
-        RegisterBenchmarkRequest(
-            benchmark_id="test-benchmark-with-dataset",
-            dataset_id=test_dataset_id,
-            scoring_functions=test_scoring_functions,
-        )
-    )
+    first_page = await table.anthropic_list_models(limit=2)
+    first_page_ids = [model.id for model in first_page.data]
+    assert first_page_ids == ["test_provider/test-model-a", "test_provider/test-model-b"]
+    assert first_page.has_more
+    assert first_page.first_id == "test_provider/test-model-a"
+    assert first_page.last_id == "test_provider/test-model-b"
 
-    benchmark = await table.get_benchmark(GetBenchmarkRequest(benchmark_id="test-benchmark-with-dataset"))
+    second_page = await table.anthropic_list_models(after_id=first_page.last_id, limit=2)
+    second_page_ids = [model.id for model in second_page.data]
+    assert second_page_ids == ["test_provider/test-model-c"]
+    assert not second_page.has_more
+    assert second_page.first_id == "test_provider/test-model-c"
+    assert second_page.last_id == "test_provider/test-model-c"
 
-    assert benchmark is not None
-    assert benchmark.identifier == "test-benchmark-with-dataset"
-    assert benchmark.dataset_id == test_dataset_id
-    assert benchmark.scoring_functions == test_scoring_functions
 
-    await table.unregister_benchmark(UnregisterBenchmarkRequest(benchmark_id="test-benchmark-with-dataset"))
+async def test_anthropic_list_models_rejects_invalid_pagination_inputs(cached_disk_dist_registry):
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
+    await table.initialize()
+
+    await table.register_model(model_id="test-model", provider_id="test_provider")
+
+    with pytest.raises(ValueError, match="Failed to list models: before_id and after_id are mutually exclusive."):
+        await table.anthropic_list_models(before_id="test_provider/test-model", after_id="test_provider/test-model")
+
+    with pytest.raises(ValueError, match="Failed to list models: before_id was not found."):
+        await table.anthropic_list_models(before_id="test_provider/unknown-model")
+
+    with pytest.raises(ValueError, match="Failed to list models: limit must be at least 1."):
+        await table.anthropic_list_models(limit=0)
+
+
+async def test_model_has_openai_compatible_fields(cached_disk_dist_registry):
+    """Test that Model includes OpenAI-compatible fields (id, object, created, owned_by)."""
+    table = ModelsRoutingTable({"test_provider": InferenceImpl()}, cached_disk_dist_registry, {})
+    await table.initialize()
+
+    await table.register_model(model_id="test-model", provider_id="test_provider")
+
+    model = await table.get_model("test_provider/test-model")
+    assert model.id == "test_provider/test-model"
+    assert model.object == "model"
+    assert isinstance(model.created, int)
+    assert model.owned_by == "ogx"
+
+    # Verify the fields appear in serialized output
+    data = model.model_dump()
+    assert "id" in data
+    assert "object" in data
+    assert "created" in data
+    assert "owned_by" in data
+    assert data["id"] == model.identifier
 
 
 async def test_tool_groups_routing_table(cached_disk_dist_registry):
@@ -534,24 +302,24 @@ async def test_models_alias_registration_and_lookup(cached_disk_dist_registry):
     await table.initialize()
 
     # Register model with alias (model_id different from provider_model_id)
-    # NOTE: Aliases are not supported anymore, so this is a no-op
+    # The identifier uses model_id, while provider_resource_id stores the actual provider model
     await table.register_model(
         model_id="my-alias", provider_model_id="actual-provider-model", provider_id="test_provider"
     )
 
-    # Verify the model was registered with alias as identifier (not namespaced)
+    # Verify the model was registered with model_id as identifier
     models = await table.list_models()
     assert len(models.data) == 1
     model = models.data[0]
-    assert model.identifier == "test_provider/actual-provider-model"
+    assert model.identifier == "test_provider/my-alias"
     assert model.provider_resource_id == "actual-provider-model"
 
-    # Test lookup by alias fails
+    # Test lookup by unprefixed alias fails
     with pytest.raises(ModelNotFoundError, match="Model 'my-alias' not found"):
         await table.get_model("my-alias")
 
-    retrieved_model = await table.get_model("test_provider/actual-provider-model")
-    assert retrieved_model.identifier == "test_provider/actual-provider-model"
+    retrieved_model = await table.get_model("test_provider/my-alias")
+    assert retrieved_model.identifier == "test_provider/my-alias"
     assert retrieved_model.provider_resource_id == "actual-provider-model"
 
 
@@ -683,7 +451,7 @@ async def test_models_source_interaction_preserves_default(cached_disk_dist_regi
     assert len(models.data) == 1
     user_model = models.data[0]
     assert user_model.source == RegistryEntrySource.via_register_api
-    assert user_model.identifier == "test_provider/provider-model-1"
+    assert user_model.identifier == "test_provider/my-custom-alias"
     assert user_model.provider_resource_id == "provider-model-1"
 
     # Now simulate provider refresh
@@ -705,21 +473,31 @@ async def test_models_source_interaction_preserves_default(cached_disk_dist_regi
     ]
     await table.update_registered_models("test_provider", provider_models)
 
-    # Verify user model with alias is preserved, but provider added new model
+    # Verify user model with alias is preserved, provider-listed model is also registered,
+    # and provider added new model (3 total: user alias + 2 provider models)
     models = await table.list_models()
-    assert len(models.data) == 2
+    assert len(models.data) == 3
 
-    # Find the user model and provider model
-    user_model = next((m for m in models.data if m.identifier == "test_provider/provider-model-1"), None)
-    provider_model = next((m for m in models.data if m.identifier == "test_provider/different-model"), None)
+    # Find the user alias, provider-listed model, and different model
+    user_alias = next((m for m in models.data if m.identifier == "test_provider/my-custom-alias"), None)
+    provider_listed = next((m for m in models.data if m.identifier == "test_provider/provider-model-1"), None)
+    different_model = next((m for m in models.data if m.identifier == "test_provider/different-model"), None)
 
-    assert user_model is not None
-    assert user_model.source == RegistryEntrySource.via_register_api
-    assert user_model.provider_resource_id == "provider-model-1"
+    # User-registered alias should be preserved
+    assert user_alias is not None
+    assert user_alias.source == RegistryEntrySource.via_register_api
+    assert user_alias.provider_resource_id == "provider-model-1"
 
-    assert provider_model is not None
-    assert provider_model.source == RegistryEntrySource.listed_from_provider
-    assert provider_model.provider_resource_id == "different-model"
+    # Provider-listed model with same provider_resource_id should also exist
+    # (allows both alias and canonical name to coexist)
+    assert provider_listed is not None
+    assert provider_listed.source == RegistryEntrySource.listed_from_provider
+    assert provider_listed.provider_resource_id == "provider-model-1"
+
+    # Different provider model should be added
+    assert different_model is not None
+    assert different_model.source == RegistryEntrySource.listed_from_provider
+    assert different_model.provider_resource_id == "different-model"
 
     # Cleanup
     await table.shutdown()

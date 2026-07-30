@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,7 +10,7 @@ import struct
 import pytest
 from openai import OpenAI
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
+from ogx.core.library_client import OGXAsLibraryClient
 
 ASYMMETRIC_EMBEDDING_MODELS_BY_PROVIDER = {
     "remote::nvidia": [
@@ -31,9 +31,13 @@ def decode_base64_to_floats(base64_string: str) -> list[float]:
 
 
 def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list()}
+    models = {m.id: m for m in client_with_models.models.list().data}
     models.update(
-        {m.custom_metadata["provider_resource_id"]: m for m in client_with_models.models.list() if m.custom_metadata}
+        {
+            m.custom_metadata["provider_resource_id"]: m
+            for m in client_with_models.models.list().data
+            if m.custom_metadata
+        }
     )
     provider_id = models[model_id].custom_metadata["provider_id"]
     providers = {p.provider_id: p for p in client_with_models.providers.list()}
@@ -122,9 +126,9 @@ def skip_if_model_doesnt_support_variable_dimensions(client_with_models, model_i
         )
 
 
-@pytest.fixture(params=["openai_client", "llama_stack_client"])
+@pytest.fixture(params=["openai_client", "ogx_client"])
 def compat_client(request, client_with_models):
-    if request.param == "openai_client" and isinstance(client_with_models, LlamaStackAsLibraryClient):
+    if request.param == "openai_client" and isinstance(client_with_models, OGXAsLibraryClient):
         pytest.skip("OpenAI client tests not supported with library client")
     return request.getfixturevalue(request.param)
 

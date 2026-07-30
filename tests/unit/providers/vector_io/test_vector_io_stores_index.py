@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, patch
 import numpy as np
 import pytest
 
-from llama_stack.providers.inline.vector_io.sqlite_vec.sqlite_vec import VECTOR_DBS_PREFIX
-from llama_stack_api import (
+from ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec import VECTOR_DBS_PREFIX
+from ogx_api import (
     Chunk,
     EmbeddedChunk,
     InsertChunksRequest,
@@ -36,7 +36,7 @@ from llama_stack_api import (
 def mock_resume_file_batches(request):
     """Mock the resume functionality to prevent stale file batches from being processed during tests."""
     with patch(
-        "llama_stack.providers.utils.memory.openai_vector_store_mixin.OpenAIVectorStoreMixin._resume_incomplete_batches",
+        "ogx.providers.utils.memory.openai_vector_store_mixin.OpenAIVectorStoreMixin._resume_incomplete_batches",
         new_callable=AsyncMock,
     ):
         yield
@@ -231,7 +231,7 @@ async def test_query_unregistered_raises(vector_io_adapter, vector_provider):
 async def test_insert_chunks_calls_underlying_index(vector_io_adapter, sample_chunks):
     import numpy as np
 
-    from llama_stack_api import EmbeddedChunk
+    from ogx_api import EmbeddedChunk
 
     fake_index = AsyncMock()
     vector_io_adapter.cache["db1"] = fake_index
@@ -262,13 +262,13 @@ async def test_insert_chunks_missing_db_raises(vector_io_adapter):
 
 async def test_insert_chunks_with_missing_document_id(vector_io_adapter):
     """Ensure no KeyError when document_id is missing or in different places."""
-    from llama_stack_api import Chunk, ChunkMetadata
+    from ogx_api import Chunk, ChunkMetadata
 
     fake_index = AsyncMock()
     vector_io_adapter.cache["db1"] = fake_index
 
     # Various document_id scenarios that shouldn't crash
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     chunks = [
         Chunk(
@@ -321,7 +321,7 @@ async def test_insert_chunks_with_missing_document_id(vector_io_adapter):
     # Convert Chunk objects to EmbeddedChunk objects
     import numpy as np
 
-    from llama_stack_api import EmbeddedChunk
+    from ogx_api import EmbeddedChunk
 
     embedded_chunks = [
         EmbeddedChunk(
@@ -342,8 +342,8 @@ async def test_insert_chunks_with_missing_document_id(vector_io_adapter):
 async def test_document_id_with_invalid_type_raises_error():
     """Ensure TypeError is raised when document_id is not a string."""
     # Integer document_id should raise TypeError
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
-    from llama_stack_api import Chunk, ChunkMetadata
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx_api import Chunk, ChunkMetadata
 
     chunk_id = generate_chunk_id("test", "test")
     chunk = Chunk(
@@ -368,8 +368,8 @@ async def test_document_id_with_invalid_type_raises_error():
 
 
 async def test_query_chunks_calls_underlying_index_and_returns(vector_io_adapter):
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
-    from llama_stack_api import ChunkMetadata
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx_api import ChunkMetadata
 
     chunk_id = generate_chunk_id("test", "c1")
     chunk = Chunk(

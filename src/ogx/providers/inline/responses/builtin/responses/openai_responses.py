@@ -1,0 +1,1820 @@
+# Copyright (c) The OGX Contributors.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
+import asyncio
+import io
+import re
+import time
+import uuid
+import zipfile
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ogx_api.skills import Skills
+
+import tiktoken
+from pydantic import TypeAdapter
+
+from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
+from ogx.core.datatypes import VectorStoresConfig
+from ogx.core.task import (
+    RequestContext,
+    activate_request_context,
+    capture_request_context,
+    create_detached_background_task,
+)
+from ogx.log import get_logger
+from ogx.providers.inline.responses.builtin.config import CompactionConfig, MemoryConfig
+from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
+from ogx.providers.inline.skills.builtin.validation import _SKILL_MD
+from ogx.providers.utils.responses.responses_store import (
+    ResponsesStore,
+    _OpenAIResponseObjectWithInputAndMessages,
+)
+from ogx.providers.utils.tools.mcp import MCPSessionManager
+from ogx_api import (
+    AddItemsRequest,
+    ConflictError,
+    Connectors,
+    ConversationItem,
+    Conversations,
+    CreateResponseRequest,
+    Files,
+    GetPromptRequest,
+    Inference,
+    InternalServerError,
+    InvalidParameterError,
+    ListItemsRequest,
+    ListOpenAIResponseInputItem,
+    ListOpenAIResponseObject,
+    MemoryToolConfig,
+    OpenAIChatCompletionContentPartParam,
+    OpenAICompactedResponse,
+    OpenAIDeleteResponseObject,
+    OpenAIMessageParam,
+    OpenAIResponseCompaction,
+    OpenAIResponseError,
+    OpenAIResponseInput,
+    OpenAIResponseInputMessageContentFile,
+    OpenAIResponseInputMessageContentImage,
+    OpenAIResponseInputMessageContentText,
+    OpenAIResponseInputTool,
+    OpenAIResponseInputToolChoice,
+    OpenAIResponseMessage,
+    OpenAIResponseObject,
+    OpenAIResponseObjectStream,
+    OpenAIResponsePrompt,
+    OpenAIResponseReasoning,
+    OpenAIResponseText,
+    OpenAIResponseTextFormat,
+    OpenAIResponseUsage,
+    OpenAIResponseUsageInputTokensDetails,
+    OpenAIResponseUsageOutputTokensDetails,
+    OpenAISystemMessageParam,
+    OpenAIUserMessageParam,
+    Order,
+    Prompts,
+    ResponseItemInclude,
+    ResponseNotFoundError,
+    ResponseTruncation,
+    ServiceNotEnabledError,
+    ToolGroups,
+    ToolRuntime,
+    VectorIO,
+)
+from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceTier
+
+from .memory import resolve_memory_context, resolve_memory_owner_id, write_conversation_memory
+from .streaming import StreamingResponseOrchestrator
+from .tool_executor import ToolExecutor
+from .types import ChatCompletionContext, ToolContext
+from .utils import (
+    APPROX_CHARS_PER_TOKEN,
+    convert_response_content_to_chat_content,
+    convert_response_input_to_chat_messages,
+    convert_response_text_to_chat_response_format,
+)
+
+logger = get_logger(name=__name__, category="openai_responses")
+
+BACKGROUND_RESPONSE_TIMEOUT_SECONDS = 300  # 5 minutes
+BACKGROUND_QUEUE_MAX_SIZE = 100
+BACKGROUND_NUM_WORKERS = 10
+STREAMING_PERSISTED_EVENT_TYPES = {
+    "response.in_progress",
+    "response.output_item.done",
+    "response.completed",
+    "response.incomplete",
+    "response.failed",
+}
+
+
+@dataclass
+class _BackgroundWorkItem:
+    """Typed queue item that pairs business kwargs with the originating request context."""
+
+    request_context: RequestContext
+    kwargs: dict = field(default_factory=dict)
+
+
+class OpenAIResponsesImpl:
+    """Implementation of the OpenAI Responses API with streaming, tool calling, and persistence."""
+
+    def __init__(
+        self,
+        inference_api: Inference,
+        tool_groups_api: ToolGroups,
+        tool_runtime_api: ToolRuntime,
+        responses_store: ResponsesStore,
+        vector_io_api: VectorIO,  # VectorIO
+        moderation_endpoint: str | None,
+        conversations_api: Conversations,
+        prompts_api: Prompts,
+        files_api: Files,
+        connectors_api: Connectors,
+        skills_api: "Skills | None" = None,
+        moderation_headers: dict[str, str] | None = None,
+        vector_stores_config: VectorStoresConfig | None = None,
+        compaction_config=None,
+        memory_config: MemoryConfig | None = None,
+    ):
+        self.inference_api = inference_api
+        self.tool_groups_api = tool_groups_api
+        self.tool_runtime_api = tool_runtime_api
+        self.responses_store = responses_store
+        self.vector_io_api = vector_io_api
+        self.moderation_endpoint = moderation_endpoint
+        self.moderation_headers = moderation_headers
+        self.conversations_api = conversations_api
+        self.skills_api = skills_api
+        self.tool_executor = ToolExecutor(
+            tool_groups_api=tool_groups_api,
+            tool_runtime_api=tool_runtime_api,
+            vector_io_api=vector_io_api,
+            vector_stores_config=vector_stores_config,
+        )
+        self.prompts_api = prompts_api
+        self.files_api = files_api
+        self.connectors_api = connectors_api
+
+        self.compaction_config = compaction_config or CompactionConfig()
+        self.memory_config = memory_config or MemoryConfig()
+        self._background_queue: asyncio.Queue[_BackgroundWorkItem] = asyncio.Queue(maxsize=BACKGROUND_QUEUE_MAX_SIZE)
+        self._background_worker_tasks: set[asyncio.Task] = set()
+        self._background_response_tasks: dict[str, asyncio.Task] = {}
+        self._background_response_tasks_lock = asyncio.Lock()
+        self._background_response_status_locks: dict[str, asyncio.Lock] = {}
+        self._memory_write_tasks: dict[tuple[str, str, str], asyncio.Task] = {}
+        self._memory_write_locks: dict[tuple[str, str, str], asyncio.Lock] = {}
+        self._active_memory_write_keys: set[tuple[str, str, str]] = set()
+
+    async def initialize(self) -> None:
+        """No-op: background workers are started lazily on first use.
+
+        Workers must be started in the event loop that handles requests, not the
+        temporary loop used during provider initialization (which is destroyed after
+        init completes, cancelling any tasks created there).
+        """
+        pass
+
+    async def _ensure_workers_started(self) -> None:
+        """Start background workers in the current event loop if not already running."""
+        for _ in range(BACKGROUND_NUM_WORKERS - len(self._background_worker_tasks)):
+            task = create_detached_background_task(self._background_worker())
+            self._background_worker_tasks.add(task)
+            task.add_done_callback(self._background_worker_tasks.discard)
+
+    async def shutdown(self) -> None:
+        """Stop background worker pool."""
+        # Cancel all in-progress response tasks
+        async with self._background_response_tasks_lock:
+            for task in self._background_response_tasks.values():
+                task.cancel()
+            response_task_list = list(self._background_response_tasks.values())
+
+        # Cancel worker tasks
+        for task in self._background_worker_tasks:
+            task.cancel()
+
+        memory_write_task_list = list(self._memory_write_tasks.values())
+        for task in memory_write_task_list:
+            task.cancel()
+
+        # Wait for all tasks to complete
+        all_tasks = list(self._background_worker_tasks) + response_task_list + memory_write_task_list
+        await asyncio.gather(*all_tasks, return_exceptions=True)
+
+    def _get_background_response_status_lock(self, response_id: str) -> asyncio.Lock:
+        lock = self._background_response_status_locks.get(response_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._background_response_status_locks[response_id] = lock
+        return lock
+
+    def _get_memory_write_lock(self, memory_write_key: tuple[str, str, str]) -> asyncio.Lock:
+        lock = self._memory_write_locks.get(memory_write_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._memory_write_locks[memory_write_key] = lock
+        return lock
+
+    async def _background_worker(self) -> None:
+        """Worker coroutine that pulls items from the queue and processes them."""
+        while True:
+            item = await self._background_queue.get()
+            with activate_request_context(item.request_context):
+                response_id = item.kwargs["response_id"]
+
+                # Create a task for this specific response so we can cancel it
+                processing_task = asyncio.create_task(
+                    asyncio.wait_for(
+                        self._run_background_response_loop(**item.kwargs),
+                        timeout=BACKGROUND_RESPONSE_TIMEOUT_SECONDS,
+                    )
+                )
+
+                # Track the task
+                async with self._background_response_tasks_lock:
+                    self._background_response_tasks[response_id] = processing_task
+
+                try:
+                    await processing_task
+                except asyncio.CancelledError:
+                    # Response was cancelled via cancel_openai_response
+                    logger.info("Background response was cancelled", response_id=response_id)
+                    try:
+                        async with self._get_background_response_status_lock(response_id):
+                            existing = await self.responses_store.get_response_object(
+                                response_id, reconstruct_input=False
+                            )
+                            if existing.status != "cancelled":
+                                existing.status = "cancelled"
+                                await self.responses_store.update_response_object(existing)
+                    except Exception:
+                        logger.exception("Failed to update response with cancelled status", response_id=response_id)
+                except TimeoutError:
+                    logger.exception(
+                        "Background response timed out",
+                        response_id=response_id,
+                        timeout_seconds=BACKGROUND_RESPONSE_TIMEOUT_SECONDS,
+                    )
+                    try:
+                        async with self._get_background_response_status_lock(response_id):
+                            existing = await self.responses_store.get_response_object(
+                                response_id, reconstruct_input=False
+                            )
+                            if existing.status != "cancelled":
+                                existing.status = "failed"
+                                existing.error = OpenAIResponseError(
+                                    code="processing_error",
+                                    message=f"Background response timed out after {BACKGROUND_RESPONSE_TIMEOUT_SECONDS}s",
+                                )
+                                await self.responses_store.update_response_object(existing)
+                    except Exception:
+                        logger.exception(
+                            "Failed to update response with timeout status, client polling this response will not see the failure",
+                            response_id=response_id,
+                        )
+                except Exception as e:
+                    logger.exception("Failed to process background response", response_id=response_id)
+                    try:
+                        async with self._get_background_response_status_lock(response_id):
+                            existing = await self.responses_store.get_response_object(
+                                response_id, reconstruct_input=False
+                            )
+                            if existing.status != "cancelled":
+                                existing.status = "failed"
+                                existing.error = OpenAIResponseError(
+                                    code="processing_error",
+                                    message=str(e),
+                                )
+                                await self.responses_store.update_response_object(existing)
+                    except Exception:
+                        logger.exception(
+                            "Failed to update response with error status, client polling this response will not see the failure",
+                            response_id=response_id,
+                        )
+                finally:
+                    # Remove from tracking
+                    async with self._background_response_tasks_lock:
+                        self._background_response_tasks.pop(response_id, None)
+                    self._background_response_status_locks.pop(response_id, None)
+                    self._background_queue.task_done()
+
+    async def _prepend_previous_response(
+        self,
+        input: str | list[OpenAIResponseInput],
+        previous_response: _OpenAIResponseObjectWithInputAndMessages,
+    ):
+        # Convert Sequence to list for mutation
+        new_input_items = list(previous_response.input)
+        new_input_items.extend(previous_response.output)
+
+        if isinstance(input, str):
+            new_input_items.append(OpenAIResponseMessage(content=input, role="user"))
+        else:
+            new_input_items.extend(input)
+
+        return new_input_items
+
+    async def _process_input_with_previous_response(
+        self,
+        input: str | list[OpenAIResponseInput],
+        tools: list[OpenAIResponseInputTool] | None,
+        previous_response_id: str | None,
+        conversation: str | None,
+    ) -> tuple[
+        str | list[OpenAIResponseInput],
+        list[OpenAIMessageParam],
+        ToolContext,
+        OpenAIResponseUsage | None,
+        list[str] | None,
+    ]:
+        """Process input with optional previous response context.
+
+        Returns:
+            tuple: (all_input, messages, tool context, previous usage, inherited skills)
+        """
+        tool_context = ToolContext(tools)
+        previous_usage: OpenAIResponseUsage | None = None
+        inherited_skills: list[str] | None = None
+        if previous_response_id:
+            previous_response: _OpenAIResponseObjectWithInputAndMessages = (
+                await self.responses_store.get_response_object(previous_response_id)
+            )
+            if previous_response.status in ("queued", "in_progress"):
+                raise ValueError(
+                    f"Response {previous_response_id} is still {previous_response.status}. "
+                    "Cannot use an incomplete background response as previous_response_id."
+                )
+            previous_usage = previous_response.usage
+            inherited_skills = previous_response.skills
+            all_input = await self._prepend_previous_response(input, previous_response)
+
+            if previous_response.messages:
+                # Use stored messages directly and convert only new input
+                message_adapter = TypeAdapter(list[OpenAIMessageParam])
+                messages = message_adapter.validate_python(previous_response.messages)
+                new_messages = await convert_response_input_to_chat_messages(
+                    input, previous_messages=messages, files_api=self.files_api
+                )
+                messages.extend(new_messages)
+            else:
+                # Backward compatibility: reconstruct from inputs
+                messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
+
+            tool_context.recover_tools_from_previous_response(previous_response)
+        elif conversation is not None:
+            conversation_items = await self.conversations_api.list_items(
+                ListItemsRequest(conversation_id=conversation, order="asc")
+            )
+
+            # Use stored messages as source of truth (like previous_response.messages)
+            stored_messages = await self.responses_store.get_conversation_messages(conversation)
+
+            all_input = input
+            if not conversation_items.data:
+                # First turn - just convert the new input
+                messages = await convert_response_input_to_chat_messages(input, files_api=self.files_api)
+            else:
+                if not stored_messages:
+                    conv_items: list[OpenAIResponseInput] = list(conversation_items.data)
+                    if isinstance(input, str):
+                        conv_items.append(
+                            OpenAIResponseMessage(
+                                role="user", content=[OpenAIResponseInputMessageContentText(text=input)]
+                            )
+                        )
+                    else:
+                        conv_items.extend(input)
+                    all_input = conv_items
+                else:
+                    all_input = input
+
+                messages = stored_messages or []
+                new_messages = await convert_response_input_to_chat_messages(
+                    all_input, previous_messages=messages, files_api=self.files_api
+                )
+                messages.extend(new_messages)
+        else:
+            all_input = input
+            messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
+
+        return all_input, messages, tool_context, previous_usage, inherited_skills
+
+    @staticmethod
+    def _insert_memory_context(messages: list[OpenAIMessageParam], memory_context: str) -> None:
+        insert_at = 0
+        for index, message in enumerate(messages):
+            if getattr(message, "role", None) not in {"system", "developer"}:
+                break
+            insert_at = index + 1
+
+        messages.insert(insert_at, OpenAISystemMessageParam(content=memory_context))
+
+    def _schedule_memory_write(
+        self,
+        conversation_id: str | None,
+        response_id: str,
+        response_status: str | None,
+        model: str | None,
+        memory: MemoryToolConfig | None,
+        metadata: dict[str, str] | None,
+        safety_identifier: str | None,
+    ) -> None:
+        if (
+            not self.memory_config.enabled
+            or not self.memory_config.write_enabled
+            or (memory is not None and not memory.enabled)
+            or response_status != "completed"
+            or not conversation_id
+        ):
+            return
+
+        vector_store_id = (
+            memory.vector_store_id if memory and memory.vector_store_id else self.memory_config.default_vector_store_id
+        )
+        if vector_store_id is None and not self.memory_config.auto_create_default_vector_store:
+            return
+        memory_write_vector_store_key = vector_store_id or "__default__"
+        owner_id = resolve_memory_owner_id(memory, metadata, safety_identifier)
+        if not owner_id:
+            logger.debug("Skipping memory write", reason="missing owner")
+            return
+
+        memory_write_key = (owner_id, conversation_id, memory_write_vector_store_key)
+        previous_task = self._memory_write_tasks.get(memory_write_key)
+        if previous_task is not None and not previous_task.done():
+            if memory_write_key not in self._active_memory_write_keys:
+                previous_task.cancel()
+
+        request_context = capture_request_context()
+        task = create_detached_background_task(
+            self._write_conversation_memory_after_delay(
+                memory_write_key=memory_write_key,
+                request_context=request_context,
+                owner_id=owner_id,
+                conversation_id=conversation_id,
+                response_id=response_id,
+                response_status=response_status,
+                model=model,
+                memory=memory,
+                metadata=metadata,
+                safety_identifier=safety_identifier,
+            )
+        )
+        self._memory_write_tasks[memory_write_key] = task
+
+    async def _write_conversation_memory_after_delay(
+        self,
+        memory_write_key: tuple[str, str, str],
+        request_context: RequestContext,
+        owner_id: str,
+        conversation_id: str,
+        response_id: str,
+        response_status: str | None,
+        model: str | None,
+        memory: MemoryToolConfig | None,
+        metadata: dict[str, str] | None,
+        safety_identifier: str | None,
+    ) -> None:
+        try:
+            with activate_request_context(request_context):
+                if self.memory_config.write_debounce_seconds > 0:
+                    await asyncio.sleep(self.memory_config.write_debounce_seconds)
+                async with self._get_memory_write_lock(memory_write_key):
+                    self._active_memory_write_keys.add(memory_write_key)
+                    try:
+                        await self._write_conversation_memory_safe(
+                            conversation_id=conversation_id,
+                            response_id=response_id,
+                            response_status=response_status,
+                            model=model,
+                            memory=memory,
+                            metadata=metadata,
+                            safety_identifier=safety_identifier,
+                            owner_id=owner_id,
+                        )
+                    finally:
+                        self._active_memory_write_keys.discard(memory_write_key)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            current_task = asyncio.current_task()
+            if self._memory_write_tasks.get(memory_write_key) is current_task:
+                self._memory_write_tasks.pop(memory_write_key, None)
+            if (
+                memory_write_key not in self._memory_write_tasks
+                and memory_write_key not in self._active_memory_write_keys
+            ):
+                self._memory_write_locks.pop(memory_write_key, None)
+
+    async def _write_conversation_memory_safe(
+        self,
+        conversation_id: str,
+        response_id: str,
+        response_status: str | None,
+        model: str | None,
+        memory: MemoryToolConfig | None,
+        metadata: dict[str, str] | None,
+        safety_identifier: str | None,
+        owner_id: str,
+    ) -> None:
+        try:
+            await write_conversation_memory(
+                inference_api=self.inference_api,
+                files_api=self.files_api,
+                vector_io_api=self.vector_io_api,
+                responses_store=self.responses_store,
+                memory_config=self.memory_config,
+                request_memory=memory,
+                conversation_id=conversation_id,
+                response_id=response_id,
+                response_status=response_status,
+                model=model,
+                metadata=metadata,
+                safety_identifier=safety_identifier,
+                owner_id=owner_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to write memory summary",
+                conversation_id=conversation_id,
+                response_id=response_id,
+                error=str(exc),
+            )
+
+    async def _resolve_skill_instructions(self, skill_ids: list[str]) -> list[OpenAISystemMessageParam]:
+        """Resolve skill IDs and return system messages with their SKILL.md instructions.
+
+        For each skill, fetches the default version's zip content, parses
+        the SKILL.md manifest, and builds a system message from the skill
+        name, description, and full instructions body.
+        """
+
+        async def _resolve_one(skill_id: str) -> str:
+            assert self.skills_api is not None
+            skill = await self.skills_api.get_skill(skill_id)
+            resp = await self.skills_api.get_skill_version_content(skill_id, skill.default_version)
+
+            with zipfile.ZipFile(io.BytesIO(resp.body)) as zf:
+                if _SKILL_MD in zf.namelist():
+                    manifest = parse_skill_manifest(zf.read(_SKILL_MD).decode("utf-8"))
+                else:
+                    manifest = None
+
+            section = f"## Skill: {skill.name}"
+            if skill.description:
+                section += f"\n{skill.description}"
+            if manifest and manifest.instructions:
+                section += f"\n\n### Instructions\n{manifest.instructions}"
+            return section
+
+        results = await asyncio.gather(*[_resolve_one(sid) for sid in skill_ids])
+        parts = list(results)
+        if not parts:
+            return []
+        return [OpenAISystemMessageParam(content="\n\n".join(parts))]
+
+    async def _prepend_prompt(
+        self,
+        messages: list[OpenAIMessageParam],
+        openai_response_prompt: OpenAIResponsePrompt | None,
+    ) -> None:
+        """Prepend prompt template to messages, resolving text/image/file variables.
+
+        :param messages: List of OpenAIMessageParam objects
+        :param openai_response_prompt: (Optional) OpenAIResponsePrompt object with variables
+        :returns: string of utf-8 characters
+        """
+        if not openai_response_prompt or not openai_response_prompt.id:
+            return
+
+        prompt_version = int(openai_response_prompt.version) if openai_response_prompt.version else None
+        cur_prompt = await self.prompts_api.get_prompt(
+            GetPromptRequest(prompt_id=openai_response_prompt.id, version=prompt_version)
+        )
+
+        if not cur_prompt or not cur_prompt.prompt:
+            return
+
+        cur_prompt_text = cur_prompt.prompt
+        cur_prompt_variables = cur_prompt.variables
+
+        if not openai_response_prompt.variables:
+            messages.insert(0, OpenAISystemMessageParam(content=cur_prompt_text))
+            return
+
+        # Validate that all provided variables exist in the prompt
+        for name in openai_response_prompt.variables.keys():
+            if name not in cur_prompt_variables:
+                raise InvalidParameterError(
+                    "prompt.variables",
+                    name,
+                    f"Variable not defined in prompt '{openai_response_prompt.id}'.",
+                )
+
+        # Separate text and media variables
+        text_substitutions = {}
+        media_content_parts: list[OpenAIChatCompletionContentPartParam] = []
+
+        for name, value in openai_response_prompt.variables.items():
+            # Text variable found
+            if isinstance(value, OpenAIResponseInputMessageContentText):
+                text_substitutions[name] = value.text
+
+            # Media variable found
+            elif isinstance(value, OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile):
+                converted_parts = await convert_response_content_to_chat_content([value], files_api=self.files_api)
+                if isinstance(converted_parts, list):
+                    media_content_parts.extend(converted_parts)
+
+                # Eg: {{product_photo}} becomes "[Image: product_photo]"
+                # This gives the model textual context about what media exists in the prompt
+                var_type = value.type.replace("input_", "").replace("_", " ").title()
+                text_substitutions[name] = f"[{var_type}: {name}]"
+
+        def replace_variable(match: re.Match[str]) -> str:
+            var_name = match.group(1).strip()
+            return str(text_substitutions.get(var_name, match.group(0)))
+
+        pattern = r"\{\{\s*(\w+)\s*\}\}"
+        processed_prompt_text = re.sub(pattern, replace_variable, cur_prompt_text)
+
+        # Insert system message with resolved text
+        messages.insert(0, OpenAISystemMessageParam(content=processed_prompt_text))
+
+        # If we have media, create a new user message because allows to ingest images and files
+        if media_content_parts:
+            messages.append(OpenAIUserMessageParam(content=media_content_parts))
+
+    async def get_openai_response(
+        self,
+        response_id: str,
+    ) -> OpenAIResponseObject:
+        response_with_input = await self.responses_store.get_response_object(
+            response_id,
+            reconstruct_input=False,
+        )
+        return response_with_input.to_response_object()
+
+    async def list_openai_responses(
+        self,
+        after: str | None = None,
+        limit: int | None = 50,
+        model: str | None = None,
+        order: Order | None = Order.desc,
+    ) -> ListOpenAIResponseObject:
+        return await self.responses_store.list_responses(after, limit, model, order)
+
+    async def list_openai_response_input_items(
+        self,
+        response_id: str,
+        after: str | None = None,
+        before: str | None = None,
+        include: list[ResponseItemInclude] | None = None,
+        limit: int | None = 20,
+        order: Order | None = Order.desc,
+    ) -> ListOpenAIResponseInputItem:
+        """List input items for a given OpenAI response.
+
+        :param response_id: The ID of the response to retrieve input items for.
+        :param after: An item ID to list items after, used for pagination.
+        :param before: An item ID to list items before, used for pagination.
+        :param include: Additional fields to include in the response.
+        :param limit: A limit on the number of objects to be returned.
+        :param order: The order to return the input items in.
+        :returns: An ListOpenAIResponseInputItem.
+        """
+        return await self.responses_store.list_response_input_items(response_id, after, before, include, limit, order)
+
+    async def _store_response(
+        self,
+        response: OpenAIResponseObject,
+        input: str | list[OpenAIResponseInput],
+        messages: list[OpenAIMessageParam],
+    ) -> None:
+        new_input_id = f"msg_{uuid.uuid4()}"
+        # Type input_items_data as the full OpenAIResponseInput union to avoid list invariance issues
+        input_items_data: list[OpenAIResponseInput] = []
+
+        if isinstance(input, str):
+            # synthesize a message from the input string
+            input_content = OpenAIResponseInputMessageContentText(text=input)
+            input_content_item = OpenAIResponseMessage(
+                role="user",
+                content=[input_content],
+                id=new_input_id,
+            )
+            input_items_data = [input_content_item]
+        else:
+            # we already have a list of messages
+            for input_item in input:
+                if isinstance(input_item, OpenAIResponseMessage):
+                    # These may or may not already have an id, so dump to dict, check for id, and add if missing
+                    input_item_dict = input_item.model_dump()
+                    if "id" not in input_item_dict:
+                        input_item_dict["id"] = new_input_id
+                    input_items_data.append(OpenAIResponseMessage(**input_item_dict))
+                else:
+                    input_items_data.append(input_item)
+
+        await self.responses_store.store_response_object(
+            response_object=response,
+            input=input_items_data,
+            messages=messages,
+        )
+
+    def _prepare_input_items_for_storage(
+        self,
+        input: str | list[OpenAIResponseInput],
+    ) -> list[OpenAIResponseInput]:
+        """Prepare input items for storage, adding IDs where needed.
+
+        This method is called once at the start of streaming to prepare input items
+        that will be reused across multiple persistence calls during streaming.
+        """
+        new_input_id = f"msg_{uuid.uuid4()}"
+        input_items_data: list[OpenAIResponseInput] = []
+
+        if isinstance(input, str):
+            input_content = OpenAIResponseInputMessageContentText(text=input)
+            input_content_item = OpenAIResponseMessage(
+                role="user",
+                content=[input_content],
+                id=new_input_id,
+            )
+            input_items_data = [input_content_item]
+        else:
+            for input_item in input:
+                if isinstance(input_item, OpenAIResponseMessage):
+                    input_item_dict = input_item.model_dump()
+                    if "id" not in input_item_dict:
+                        input_item_dict["id"] = new_input_id
+                    input_items_data.append(OpenAIResponseMessage(**input_item_dict))
+                else:
+                    input_items_data.append(input_item)
+
+        return input_items_data
+
+    async def _persist_streaming_state(
+        self,
+        stream_chunk: OpenAIResponseObjectStream,
+        orchestrator,
+        input_items: list[OpenAIResponseInput],
+        output_items: list,
+        incremental_input: bool = False,
+        is_background_response: bool = False,
+    ) -> None:
+        """Persist response state at significant streaming events.
+
+        This enables clients to poll GET /v1/responses/{response_id} during streaming
+        to see in-progress turn state instead of empty results.
+
+        Persistence occurs at:
+        - response.in_progress: Initial INSERT with empty output
+        - response.output_item.done: UPDATE with accumulated output items
+        - response.completed/response.incomplete: Final UPDATE with complete state
+        - response.failed: UPDATE with error state
+
+        :param stream_chunk: The current streaming event.
+        :param orchestrator: The streaming orchestrator (for snapshotting response).
+        :param input_items: Pre-prepared input items for storage.
+        :param output_items: Accumulated output items so far.
+        :param incremental_input: If True, input_items contains only new items for this turn.
+        :param is_background_response: If True, guard persistence against background cancellation races.
+        """
+        response = getattr(stream_chunk, "response", None)
+        response_id = getattr(response, "id", None) or getattr(orchestrator, "response_id", None)
+        if stream_chunk.type not in STREAMING_PERSISTED_EVENT_TYPES:
+            return
+
+        try:
+            if is_background_response and response_id:
+                async with self._get_background_response_status_lock(response_id):
+                    try:
+                        existing_response = await self.responses_store.get_response_object(
+                            response_id, reconstruct_input=False
+                        )
+                    except ResponseNotFoundError:
+                        existing_response = None
+                    if existing_response is not None:
+                        if existing_response.status == "cancelled":
+                            logger.info(
+                                "Skipping streaming persistence for cancelled response",
+                                response_id=response_id,
+                                chunk_type=stream_chunk.type,
+                            )
+                            return
+                    await self._persist_streaming_state_unlocked(
+                        stream_chunk=stream_chunk,
+                        orchestrator=orchestrator,
+                        input_items=input_items,
+                        output_items=output_items,
+                        incremental_input=incremental_input,
+                        force_background=True,
+                    )
+                    return
+
+            await self._persist_streaming_state_unlocked(
+                stream_chunk=stream_chunk,
+                orchestrator=orchestrator,
+                input_items=input_items,
+                output_items=output_items,
+                incremental_input=incremental_input,
+                force_background=False,
+            )
+        except Exception as e:
+            # Best-effort persistence: log error but don't fail the stream
+            logger.warning("Failed to persist streaming state", chunk_type=stream_chunk.type, error=str(e))
+
+    async def _persist_streaming_state_unlocked(
+        self,
+        stream_chunk: OpenAIResponseObjectStream,
+        orchestrator,
+        input_items: list[OpenAIResponseInput],
+        output_items: list,
+        incremental_input: bool,
+        force_background: bool,
+    ) -> None:
+        match stream_chunk.type:
+            case "response.in_progress":
+                # Initial persistence when response starts
+                in_progress_response = stream_chunk.response
+                if force_background:
+                    in_progress_response = in_progress_response.model_copy(update={"background": True})
+                await self.responses_store.upsert_response_object(
+                    response_object=in_progress_response,
+                    input=input_items,
+                    messages=[],
+                    incremental_input=incremental_input,
+                )
+
+            case "response.output_item.done":
+                # Incremental update when an output item completes (tool call, message)
+                current_snapshot = orchestrator._snapshot_response(
+                    status="in_progress",
+                    outputs=output_items,
+                )
+                if force_background:
+                    current_snapshot = current_snapshot.model_copy(update={"background": True})
+                # Get current messages (filter out system messages)
+                messages_to_store = list(
+                    filter(
+                        lambda x: not isinstance(x, OpenAISystemMessageParam),
+                        orchestrator.final_messages or orchestrator.ctx.messages,
+                    )
+                )
+                await self.responses_store.upsert_response_object(
+                    response_object=current_snapshot,
+                    input=input_items,
+                    messages=messages_to_store,
+                    incremental_input=incremental_input,
+                )
+
+            case "response.completed" | "response.incomplete":
+                # Final persistence when response finishes
+                final_response = stream_chunk.response
+                if force_background:
+                    final_response = final_response.model_copy(update={"background": True})
+                messages_to_store = list(
+                    filter(
+                        lambda x: not isinstance(x, OpenAISystemMessageParam),
+                        orchestrator.final_messages,
+                    )
+                )
+                await self.responses_store.upsert_response_object(
+                    response_object=final_response,
+                    input=input_items,
+                    messages=messages_to_store,
+                    incremental_input=incremental_input,
+                )
+
+            case "response.failed":
+                # Persist failed state so GET shows error
+                failed_response = stream_chunk.response
+                if force_background:
+                    failed_response = failed_response.model_copy(update={"background": True})
+                # Preserve any accumulated non-system messages for failed responses
+                messages_to_store = list(
+                    filter(
+                        lambda x: not isinstance(x, OpenAISystemMessageParam),
+                        orchestrator.final_messages or orchestrator.ctx.messages,
+                    )
+                )
+                await self.responses_store.upsert_response_object(
+                    response_object=failed_response,
+                    input=input_items,
+                    messages=messages_to_store,
+                    incremental_input=incremental_input,
+                )
+
+    async def create_openai_response(
+        self,
+        request: CreateResponseRequest,
+    ) -> OpenAIResponseObject | AsyncIterator[OpenAIResponseObjectStream]:
+        # Validate that stream and background are mutually exclusive
+        if request.stream and request.background:
+            raise ValueError("OGX does not yet support 'stream' and 'background' together.")
+
+        if request.background and request.store is False:
+            raise ValueError("Cannot use 'background' with 'store=False'. Background responses must be stored.")
+
+        # Filter out unsupported include items instead of rejecting the request
+        if request.include:
+            include = [item for item in request.include if str(item) != "reasoning.encrypted_content"]
+            if include != request.include:
+                request = request.model_copy(update={"include": include})
+
+        # Validate MCP tools: ensure Authorization header is not passed via headers dict
+        if request.tools:
+            from ogx_api.openai_responses import OpenAIResponseInputToolMCP
+
+            for tool in request.tools:
+                if isinstance(tool, OpenAIResponseInputToolMCP) and tool.headers:
+                    for key in tool.headers.keys():
+                        if key.lower() == "authorization":
+                            raise InvalidParameterError(
+                                f"tools[server_label={tool.server_label!r}].headers",
+                                key,
+                                "Authorization credentials must be passed via the 'authorization' parameter, not 'headers'.",
+                            )
+
+        if request.guardrails and not self.moderation_endpoint:
+            raise ServiceNotEnabledError(
+                "moderation_endpoint",
+                provider_specific_message="Guardrails require a moderation endpoint to be configured on the server. Contact your platform administrator to set 'moderation_endpoint' on the responses provider, or remove the 'guardrails' parameter from your request.",
+            )
+
+        if request.conversation is not None:
+            if request.previous_response_id is not None:
+                raise InvalidParameterError(
+                    "previous_response_id, conversation",
+                    "previous_response_id and conversation are both provided",
+                    "Provide only one of these parameters.",
+                )
+
+            if not CONVERSATION_ID_PATTERN.fullmatch(request.conversation):
+                raise InvalidParameterError(
+                    "conversation",
+                    request.conversation,
+                    "Must match format 'conv_' followed by 48 lowercase hex characters.",
+                )
+
+        max_tool_calls = request.max_tool_calls
+        if max_tool_calls is not None and max_tool_calls < 1:
+            raise ValueError(f"Invalid {max_tool_calls=}; should be >= 1")
+
+        # Handle background mode
+        if request.background:
+            response_id = f"resp_{uuid.uuid4()}"
+            return await self._create_background_response(request, response_id)
+
+        stream_gen = self._create_streaming_response(request)
+
+        if request.stream:
+            return stream_gen
+        else:
+            final_response = None
+            final_event_type = None
+            failed_response = None
+            async for stream_chunk in stream_gen:
+                match stream_chunk.type:
+                    case "response.completed" | "response.incomplete":
+                        if final_response is not None:
+                            logger.error(
+                                "The response stream produced multiple terminal events, when it should produce exactly one",
+                                response_id=stream_chunk.response.id,
+                                first_terminal_event=final_event_type,
+                                second_terminal_event=stream_chunk.type,
+                                model=request.model,
+                                conversation=request.conversation,
+                                previous_response_id=request.previous_response_id,
+                            )
+                            raise InternalServerError()
+                        final_response = stream_chunk.response
+                        final_event_type = stream_chunk.type
+                    case "response.failed":
+                        failed_response = stream_chunk.response
+                        error_message = (
+                            failed_response.error.message
+                            if failed_response.error
+                            else "response failed but no error message was provided"
+                        )
+                        error_code = failed_response.error.code if failed_response.error else "server_error"
+                        logger.error(
+                            "response creation failed",
+                            error_message=error_message,
+                            error_code=error_code,
+                            response_id=failed_response.id,
+                            model=request.model,
+                        )
+                        # Surface the provider message — it may be actionable (e.g. wrong tool-call-parser,
+                        # context window exceeded). Use the error code to pick the right HTTP status.
+                        if error_code == "invalid_prompt":
+                            raise InvalidParameterError("model", request.model, error_message)
+                        raise InternalServerError(error_message)
+                    case _:
+                        pass  # Other event types don't have .response
+
+            if final_response is None:
+                logger.error(
+                    "The response stream never reached a terminal state",
+                    model=request.model,
+                    conversation=request.conversation,
+                    previous_response_id=request.previous_response_id,
+                )
+                raise InternalServerError()
+            # Preserve the request mode on the terminal response object returned to the caller.
+            final_response.background = bool(request.background)
+            return final_response
+
+    async def _create_background_response(
+        self,
+        request: CreateResponseRequest,
+        response_id: str,
+    ) -> OpenAIResponseObject:
+        """Create a response that processes in the background.
+
+        Returns immediately with a queued response object.
+        """
+        # Start workers in the current (request-handling) event loop if not already running.
+        await self._ensure_workers_started()
+
+        # Extract extra_body from request's model_extra for queueing
+        extra_body = request.model_extra.get("extra_body") if request.model_extra else None
+
+        created_at = int(time.time())
+
+        # Normalize input to list format for storage
+        input_items: list[OpenAIResponseInput] = (
+            [OpenAIResponseMessage(content=request.input, role="user")]
+            if isinstance(request.input, str)
+            else request.input
+        )
+
+        # Create initial queued response
+        queued_response = OpenAIResponseObject(
+            id=response_id,
+            created_at=created_at,
+            model=request.model,
+            status="queued",
+            output=[],
+            background=True,
+            parallel_tool_calls=request.parallel_tool_calls if request.parallel_tool_calls is not None else True,
+            previous_response_id=request.previous_response_id,
+            prompt=request.prompt,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            text=request.text if request.text else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+            tools=[],  # Will be populated when processing completes
+            tool_choice=request.tool_choice,
+            instructions=request.instructions,
+            skills=request.skills,
+            max_tool_calls=request.max_tool_calls,
+            reasoning=request.reasoning,
+            prompt_cache_key=request.prompt_cache_key,
+            top_logprobs=request.top_logprobs,
+            metadata=request.metadata,
+            safety_identifier=request.safety_identifier,
+            store=request.store if request.store is not None else True,
+        )
+
+        # Store the queued response
+        await self.responses_store.store_response_object(
+            response_object=queued_response,
+            input=input_items,
+            messages=[],
+        )
+
+        # Enqueue work item for background workers. Raises QueueFull if at capacity.
+        try:
+            self._background_queue.put_nowait(
+                _BackgroundWorkItem(
+                    request_context=capture_request_context(),
+                    kwargs=dict(
+                        response_id=response_id,
+                        input=request.input,
+                        model=request.model,
+                        prompt=request.prompt,
+                        instructions=request.instructions,
+                        skills=request.skills,
+                        previous_response_id=request.previous_response_id,
+                        conversation=request.conversation,
+                        store=request.store,
+                        temperature=request.temperature,
+                        top_p=request.top_p,
+                        frequency_penalty=request.frequency_penalty,
+                        text=request.text,
+                        tool_choice=request.tool_choice,
+                        tools=request.tools,
+                        include=request.include,
+                        max_infer_iters=request.max_infer_iters,
+                        guardrails=request.guardrails,
+                        parallel_tool_calls=request.parallel_tool_calls,
+                        max_tool_calls=request.max_tool_calls,
+                        reasoning=request.reasoning,
+                        max_output_tokens=request.max_output_tokens,
+                        prompt_cache_key=request.prompt_cache_key,
+                        service_tier=request.service_tier,
+                        metadata=request.metadata,
+                        safety_identifier=request.safety_identifier,
+                        truncation=request.truncation,
+                        top_logprobs=request.top_logprobs,
+                        presence_penalty=request.presence_penalty,
+                        context_management=request.context_management,
+                        memory=request.memory,
+                        extra_body=extra_body,
+                    ),
+                )
+            )
+        except asyncio.QueueFull:
+            raise ValueError(
+                f"Background response queue is full (max {BACKGROUND_QUEUE_MAX_SIZE}). Try again later."
+            ) from None
+
+        return queued_response
+
+    async def _run_background_response_loop(
+        self,
+        response_id: str,
+        input: str | list[OpenAIResponseInput],
+        model: str,
+        prompt: OpenAIResponsePrompt | None = None,
+        instructions: str | None = None,
+        skills: list[str] | None = None,
+        previous_response_id: str | None = None,
+        conversation: str | None = None,
+        store: bool | None = True,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        frequency_penalty: float | None = None,
+        text: OpenAIResponseText | None = None,
+        tool_choice: OpenAIResponseInputToolChoice | None = None,
+        tools: list[OpenAIResponseInputTool] | None = None,
+        include: list[ResponseItemInclude] | None = None,
+        max_infer_iters: int | None = 10,
+        guardrails: bool | None = None,
+        parallel_tool_calls: bool | None = None,
+        max_tool_calls: int | None = None,
+        reasoning: OpenAIResponseReasoning | None = None,
+        max_output_tokens: int | None = None,
+        prompt_cache_key: str | None = None,
+        service_tier: ServiceTier | None = None,
+        metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
+        truncation: ResponseTruncation | None = None,
+        top_logprobs: int | None = None,
+        presence_penalty: float | None = None,
+        extra_body: dict | None = None,
+        context_management: list | None = None,
+        memory: MemoryToolConfig | None = None,
+    ) -> None:
+        """Inner loop for background response processing, separated for timeout wrapping."""
+        async with self._get_background_response_status_lock(response_id):
+            # Check if response was cancelled before starting
+            existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
+            if existing.status == "cancelled":
+                logger.info("Background response was cancelled before processing started", response_id=response_id)
+                return
+
+            # Update status to in_progress
+            existing.status = "in_progress"
+            await self.responses_store.update_response_object(existing)
+
+        # Process the response using existing streaming logic
+        request = CreateResponseRequest(
+            input=input,
+            conversation=conversation,
+            model=model,
+            prompt=prompt,
+            instructions=instructions,
+            skills=skills,
+            previous_response_id=previous_response_id,
+            store=store if store is not None else True,
+            temperature=temperature,
+            top_p=top_p,
+            frequency_penalty=frequency_penalty,
+            text=text,
+            tools=tools,
+            tool_choice=tool_choice,
+            max_infer_iters=max_infer_iters,
+            guardrails=guardrails,
+            parallel_tool_calls=parallel_tool_calls,
+            max_tool_calls=max_tool_calls,
+            reasoning=reasoning,
+            max_output_tokens=max_output_tokens,
+            prompt_cache_key=prompt_cache_key,
+            service_tier=service_tier,
+            metadata=metadata,
+            safety_identifier=safety_identifier,
+            include=include,
+            truncation=truncation,
+            top_logprobs=top_logprobs,
+            response_id=response_id,
+            presence_penalty=presence_penalty,
+            extra_body=extra_body,
+            context_management=context_management,
+            memory=memory,
+            background=True,
+        )  # type: ignore[call-arg]
+        stream_gen = self._create_streaming_response(request, response_id=response_id)
+
+        result_response = None
+
+        async for stream_chunk in stream_gen:
+            # Check for cancellation periodically
+            current = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
+            if current.status == "cancelled":
+                logger.info("Background response was cancelled during processing", response_id=response_id)
+                return
+
+            match stream_chunk.type:
+                case "response.completed" | "response.incomplete" | "response.failed":
+                    result_response = stream_chunk.response
+                case _:
+                    pass
+
+        if result_response is not None:
+            async with self._get_background_response_status_lock(response_id):
+                # Check if response was cancelled before final update to avoid race condition
+                current = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
+                if current.status == "cancelled":
+                    logger.info("Background response was cancelled before final update", response_id=response_id)
+                    return
+
+                result_response.background = True
+                result_response.id = response_id  # Ensure we update the correct response
+                await self.responses_store.update_response_object(result_response)
+        else:
+            async with self._get_background_response_status_lock(response_id):
+                # Something went wrong - mark as failed
+                existing = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
+                if existing.status == "cancelled":
+                    logger.info("Background response was cancelled before failure update", response_id=response_id)
+                    return
+
+                existing.status = "failed"
+                existing.error = OpenAIResponseError(
+                    code="processing_error",
+                    message="Response stream never reached a terminal state",
+                )
+                await self.responses_store.update_response_object(existing)
+
+    async def _create_streaming_response(
+        self,
+        request: CreateResponseRequest,
+        response_id: str | None = None,
+    ) -> AsyncIterator[OpenAIResponseObjectStream]:
+        extra_body = request.model_extra.get("extra_body") if request.model_extra else None
+
+        text = (
+            request.text
+            if request.text is not None
+            else OpenAIResponseText(format=OpenAIResponseTextFormat(type="text"))
+        )
+
+        # These should never be None when called from create_openai_response (which sets defaults)
+        # but we assert here to help mypy understand the types
+        assert text is not None, "text must not be None"
+        assert request.max_infer_iters is not None, "max_infer_iters must not be None"
+
+        # Input preprocessing
+        (
+            all_input,
+            messages,
+            tool_context,
+            previous_usage,
+            inherited_skills,
+        ) = await self._process_input_with_previous_response(
+            request.input, request.tools, request.previous_response_id, request.conversation
+        )
+
+        # Inherit skills from previous response if not explicitly provided
+        effective_skills = request.skills if request.skills is not None else inherited_skills
+
+        # Auto-compact if context_management is configured (runs on resolved history, not just new input)
+        compacted_history_applied = False
+        if request.context_management:
+            compacted_input = await self._maybe_auto_compact(
+                all_input, request.model, request.context_management, previous_usage, extra_body=extra_body
+            )
+            if compacted_input is not all_input:
+                compacted_history_applied = True
+                all_input = compacted_input
+                messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
+
+        if request.instructions:
+            messages.insert(0, OpenAISystemMessageParam(content=request.instructions))
+
+        # Inject skill instructions after user instructions
+        if effective_skills:
+            if not self.skills_api:
+                raise ServiceNotEnabledError("skills")
+            skill_messages = await self._resolve_skill_instructions(effective_skills)
+            insert_idx = 1 if request.instructions else 0
+            for i, msg in enumerate(skill_messages):
+                messages.insert(insert_idx + i, msg)
+
+        # Prepend reusable prompt (if provided)
+        await self._prepend_prompt(messages, request.prompt)
+
+        memory_context = await resolve_memory_context(
+            vector_io_api=self.vector_io_api,
+            responses_store=self.responses_store,
+            memory_config=self.memory_config,
+            request_memory=request.memory,
+            input=request.input,
+            metadata=request.metadata,
+            safety_identifier=request.safety_identifier,
+        )
+        if memory_context:
+            self._insert_memory_context(messages, memory_context)
+
+        # Structured outputs
+        response_format = await convert_response_text_to_chat_response_format(text)
+
+        ctx = ChatCompletionContext(
+            model=request.model,
+            messages=messages,
+            response_tools=request.tools,
+            tool_choice=request.tool_choice,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            frequency_penalty=request.frequency_penalty,
+            response_format=response_format,
+            tool_context=tool_context,
+            inputs=all_input,
+            extra_body=extra_body,
+        )
+
+        # Create orchestrator and delegate streaming logic
+        if response_id is None:
+            response_id = f"resp_{uuid.uuid4()}"
+        created_at = int(time.time())
+
+        # Create a per-request MCP session manager for session reuse (fix for #4452)
+        # This avoids redundant tools/list calls when making multiple MCP tool invocations
+        async with MCPSessionManager() as mcp_session_manager:
+            request_tool_executor = ToolExecutor(
+                tool_groups_api=self.tool_groups_api,
+                tool_runtime_api=self.tool_runtime_api,
+                vector_io_api=self.vector_io_api,
+                vector_stores_config=self.tool_executor.vector_stores_config,
+                mcp_session_manager=mcp_session_manager,
+            )
+
+            orchestrator = StreamingResponseOrchestrator(
+                inference_api=self.inference_api,
+                ctx=ctx,
+                response_id=response_id,
+                created_at=created_at,
+                prompt=request.prompt,
+                prompt_cache_key=request.prompt_cache_key,
+                previous_response_id=request.previous_response_id,
+                skills=effective_skills,
+                text=text,
+                max_infer_iters=request.max_infer_iters,
+                parallel_tool_calls=request.parallel_tool_calls,
+                tool_executor=request_tool_executor,
+                moderation_endpoint=self.moderation_endpoint,
+                moderation_headers=self.moderation_headers,
+                connectors_api=self.connectors_api,
+                enable_guardrails=bool(request.guardrails),
+                instructions=request.instructions,
+                max_tool_calls=request.max_tool_calls,
+                reasoning=request.reasoning,
+                max_output_tokens=request.max_output_tokens,
+                service_tier=request.service_tier,
+                metadata=request.metadata,
+                safety_identifier=request.safety_identifier,
+                include=request.include,
+                store=request.store,
+                truncation=request.truncation,
+                top_logprobs=request.top_logprobs,
+                presence_penalty=request.presence_penalty,
+                stream_options=request.stream_options,
+                extra_body=extra_body,
+            )
+
+            final_response = None
+            failed_response = None
+
+            output_items: list[ConversationItem] = []
+
+            # Store only new input when building on a previous response (O(n) vs O(n²) storage).
+            # If auto-compaction rewrote the history, store the effective compacted input as a full snapshot
+            # so subsequent previous_response_id turns continue from the compacted context.
+            incremental = bool(request.previous_response_id) and not compacted_history_applied
+            if incremental:
+                input_items_for_storage = self._prepare_input_items_for_storage(request.input)
+            else:
+                input_items_for_storage = self._prepare_input_items_for_storage(all_input)
+
+            async for stream_chunk in orchestrator.create_response():
+                match stream_chunk.type:
+                    case "response.completed" | "response.incomplete":
+                        final_response = stream_chunk.response
+                    case "response.failed":
+                        failed_response = stream_chunk.response
+                    case "response.output_item.done":
+                        item = stream_chunk.item
+                        output_items.append(item)
+                    case _:
+                        pass  # Other event types
+
+                # Incremental persistence: persist on significant state changes
+                # This enables clients to poll GET /v1/responses/{response_id} during streaming
+                if request.store:
+                    await self._persist_streaming_state(
+                        stream_chunk=stream_chunk,
+                        orchestrator=orchestrator,
+                        input_items=input_items_for_storage,
+                        output_items=output_items,
+                        incremental_input=incremental,
+                        is_background_response=bool(request.background),
+                    )
+
+                # Store and sync before yielding terminal events
+                # This ensures the storage/syncing happens even if the consumer breaks after receiving the event
+                if (
+                    stream_chunk.type in {"response.completed", "response.incomplete"}
+                    and final_response
+                    and failed_response is None
+                    and request.store
+                ):
+                    if request.conversation:
+                        messages_to_store = list(
+                            filter(lambda x: not isinstance(x, OpenAISystemMessageParam), orchestrator.final_messages)
+                        )
+                        await self._sync_response_to_conversation(request.conversation, request.input, output_items)
+                        await self.responses_store.store_conversation_messages(request.conversation, messages_to_store)
+                        self._schedule_memory_write(
+                            conversation_id=request.conversation,
+                            response_id=final_response.id,
+                            response_status=final_response.status,
+                            model=request.model,
+                            memory=request.memory,
+                            metadata=request.metadata,
+                            safety_identifier=request.safety_identifier,
+                        )
+
+                yield stream_chunk
+
+    async def delete_openai_response(self, response_id: str) -> OpenAIDeleteResponseObject:
+        return await self.responses_store.delete_response_object(response_id)
+
+    async def compact_openai_response(
+        self,
+        model: str | None,
+        input: str | list[OpenAIResponseInput] | None = None,
+        instructions: str | None = None,
+        skills: list[str] | None = None,
+        previous_response_id: str | None = None,
+        prompt_cache_key: str | None = None,
+        extra_body: dict | None = None,
+    ) -> OpenAICompactedResponse:
+        # Resolve input from previous_response_id or direct input
+        resolved_messages = None
+        if previous_response_id:
+            previous_response = await self.responses_store.get_response_object(previous_response_id)
+            if previous_response.status in ("queued", "in_progress"):
+                raise ValueError(
+                    f"Response {previous_response_id} is still {previous_response.status}. "
+                    "Cannot compact an incomplete background response."
+                )
+            if input is not None:
+                all_input = await self._prepend_previous_response(input, previous_response)
+            else:
+                all_input = list(previous_response.input) + list(previous_response.output)
+
+            # Use stored messages for full conversation context when the caller also
+            # provides new input. In conversation= mode, .input only contains the last
+            # turn's items while .messages has the complete chat history. When input is
+            # None, .input + .output (set above) already captures the full context.
+            if previous_response.messages and input is not None:
+                message_adapter = TypeAdapter(list[OpenAIMessageParam])
+                resolved_messages = message_adapter.validate_python(previous_response.messages)
+        elif input is not None:
+            if isinstance(input, str):
+                all_input = [OpenAIResponseMessage(content=input, role="user")]
+            else:
+                all_input = list(input)
+        else:
+            raise InvalidParameterError(
+                "input, previous_response_id", None, "Either 'input' or 'previous_response_id' must be provided."
+            )
+
+        # Convert to chat messages for the summarization call
+        if resolved_messages is not None:
+            messages = resolved_messages
+            # If caller also provided new input, convert and append it so the
+            # summarization covers the full conversation including the new turn.
+            if input is not None:
+                new_messages = await convert_response_input_to_chat_messages(
+                    input, previous_messages=messages, files_api=self.files_api
+                )
+                messages.extend(new_messages)
+        else:
+            messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
+
+        # Add summarization prompt (use config template, prepend instructions if provided)
+        summarization_prompt = self.compaction_config.summarization_prompt
+        if instructions:
+            summarization_prompt = f"{instructions}\n\n{summarization_prompt}"
+
+        messages.append(OpenAIUserMessageParam(role="user", content=summarization_prompt))
+
+        # Call inference to generate the summary (use configured model or fall back to conversation model)
+        summarization_model = self.compaction_config.summarization_model or model
+        if not summarization_model:
+            raise ValueError(
+                "Failed to compact response: no model specified in request and no "
+                "summarization_model configured in CompactionConfig"
+            )
+        params = OpenAIChatCompletionRequestWithExtraBody(
+            model=summarization_model,
+            messages=messages,
+            stream=False,
+            prompt_cache_key=prompt_cache_key,
+        )
+        completion = await self.inference_api.openai_chat_completion(params)
+        assert not isinstance(completion, AsyncIterator)
+
+        # Extract summary text from the completion
+        summary_text = ""
+        if hasattr(completion, "choices") and completion.choices:
+            choice = completion.choices[0]
+            if choice.message and choice.message.content:
+                summary_text = choice.message.content
+
+        # Extract user messages from input (matching OpenAI behavior: all user messages verbatim)
+        output_items: list[OpenAIResponseInput] = []
+        for item in all_input:
+            if isinstance(item, OpenAIResponseMessage) and item.role == "user":
+                # Normalize bare-string content to a content-part list so the
+                # compacted output message matches the response message schema,
+                # which requires content to be an array of parts.
+                content = item.content
+                if isinstance(content, str):
+                    content = [OpenAIResponseInputMessageContentText(text=content)]
+                output_items.append(
+                    OpenAIResponseMessage(
+                        id=f"msg_{uuid.uuid4().hex[:24]}",
+                        type="message",
+                        status="completed",
+                        role="user",
+                        content=content,
+                    )
+                )
+
+        # Prepend the summary prefix to frame the summary as a handoff
+        if self.compaction_config.summary_prefix:
+            summary_text = f"{self.compaction_config.summary_prefix}\n{summary_text}"
+
+        # Add compaction item as last element
+        compaction_item = OpenAIResponseCompaction(
+            id=f"cmp_{uuid.uuid4().hex[:24]}",
+            encrypted_content=summary_text,
+        )
+        output_items.append(compaction_item)
+
+        # Build usage from completion
+        usage = completion.usage
+        usage_data = OpenAIResponseUsage(
+            input_tokens=usage.prompt_tokens if usage else 0,
+            output_tokens=usage.completion_tokens if usage else 0,
+            total_tokens=usage.total_tokens if usage else 0,
+            input_tokens_details=OpenAIResponseUsageInputTokensDetails(
+                cached_tokens=usage.prompt_tokens_details.cached_tokens
+                if usage and usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens is not None
+                else 0
+            ),
+            output_tokens_details=OpenAIResponseUsageOutputTokensDetails(
+                reasoning_tokens=usage.completion_tokens_details.reasoning_tokens
+                if usage
+                and usage.completion_tokens_details
+                and usage.completion_tokens_details.reasoning_tokens is not None
+                else 0
+            ),
+        )
+
+        response_id = f"resp_{uuid.uuid4().hex[:24]}"
+        created_at = int(time.time())
+
+        # Store a full OpenAIResponseObject so the compacted response ID is
+        # retrievable and can be used as previous_response_id in subsequent calls.
+        stored_response = OpenAIResponseObject(
+            id=response_id,
+            created_at=created_at,
+            model=model or summarization_model,
+            status="completed",
+            output=[],
+            usage=usage_data,
+            store=True,
+        )
+
+        # Convert compacted output to chat messages for conversation continuity
+        compacted_messages = await convert_response_input_to_chat_messages(output_items, files_api=self.files_api)
+
+        await self.responses_store.store_response_object(
+            response_object=stored_response,
+            input=output_items,
+            messages=compacted_messages,
+        )
+
+        return OpenAICompactedResponse(
+            id=response_id,
+            created_at=created_at,
+            output=output_items,
+            usage=usage_data,
+        )
+
+    def _resolve_encoding(self, model: str, extra_body: dict | None = None) -> tiktoken.Encoding | None:
+        """Resolve tiktoken encoding via a 5-step chain. Returns None for character fallback."""
+        # 1. Per-request override (fail hard if invalid)
+        if extra_body and (enc_name := extra_body.get("tokenizer_encoding")):
+            try:
+                return tiktoken.get_encoding(enc_name)
+            except ValueError:
+                raise InvalidParameterError(
+                    "tokenizer_encoding",
+                    enc_name,
+                    "Must be a valid tiktoken encoding name (e.g. 'o200k_base', 'cl100k_base').",
+                ) from None
+
+        # 2. Admin default (validated at startup by CompactionConfig)
+        if self.compaction_config.tokenizer_encoding:
+            return tiktoken.get_encoding(self.compaction_config.tokenizer_encoding)
+
+        # 3. tiktoken built-in (soft fail)
+        model_name = model.split("/")[-1] if "/" in model else model
+        try:
+            return tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            pass
+
+        # 4. Model-family mapping (soft fail)
+        base = model_name.lower()
+        for prefix, enc_name in self.compaction_config.model_tokenizer_mappings.items():
+            if base.startswith(prefix.lower()):
+                try:
+                    return tiktoken.get_encoding(enc_name)
+                except ValueError:
+                    logger.warning("Invalid encoding in model_tokenizer_mappings", prefix=prefix, encoding=enc_name)
+                    break
+
+        # 5. Character fallback
+        logger.warning("Could not resolve tokenizer encoding, using character-based estimate", model=model)
+        return None
+
+    def _count_tokens(
+        self, input: str | list[OpenAIResponseInput], model: str = "", extra_body: dict | None = None
+    ) -> int:
+        """Estimate token count. Uses tiktoken when possible, character-based estimate as fallback."""
+        encoding = self._resolve_encoding(model, extra_body)
+        if encoding is not None:
+            return self._count_with_encoding(encoding, input)
+        return self._estimate_tokens_by_chars(input)
+
+    @staticmethod
+    def _extract_text_segments(items: list[OpenAIResponseInput]) -> list[str]:
+        segments: list[str] = []
+        for item in items:
+            if isinstance(item, OpenAIResponseMessage):
+                if isinstance(item.content, str):
+                    segments.append(item.content)
+                elif isinstance(item.content, list):
+                    for part in item.content:
+                        if hasattr(part, "text"):
+                            segments.append(part.text)
+            elif isinstance(item, OpenAIResponseCompaction):
+                segments.append(item.encrypted_content)
+            elif hasattr(item, "arguments"):
+                args = getattr(item, "arguments", "")
+                if args:
+                    segments.append(args)
+            elif hasattr(item, "output"):
+                output = getattr(item, "output", "")
+                if isinstance(output, str):
+                    segments.append(output)
+        return segments
+
+    def _count_with_encoding(self, encoding: tiktoken.Encoding, input: str | list[OpenAIResponseInput]) -> int:
+        if isinstance(input, str):
+            return len(encoding.encode(input))
+        return sum(len(encoding.encode(s)) for s in self._extract_text_segments(input))
+
+    def _estimate_tokens_by_chars(self, input: str | list[OpenAIResponseInput]) -> int:
+        if isinstance(input, str):
+            return max(1, len(input) // APPROX_CHARS_PER_TOKEN)
+        total_chars = sum(len(s) for s in self._extract_text_segments(input))
+        return max(1, total_chars // APPROX_CHARS_PER_TOKEN)
+
+    async def _maybe_auto_compact(
+        self,
+        input: str | list[OpenAIResponseInput],
+        model: str,
+        context_management: list,
+        previous_usage: OpenAIResponseUsage | None = None,
+        extra_body: dict | None = None,
+    ) -> str | list[OpenAIResponseInput]:
+        """Auto-compact input if token count exceeds compact_threshold."""
+        for entry in context_management:
+            entry_type = entry.type if hasattr(entry, "type") else entry.get("type")
+            if entry_type != "compaction":
+                continue
+
+            threshold = (
+                entry.compact_threshold if hasattr(entry, "compact_threshold") else entry.get("compact_threshold")
+            )
+            if threshold is None:
+                threshold = self.compaction_config.default_compact_threshold
+            if threshold is None:
+                continue
+
+            # Use provider-reported token count when available, fall back to tiktoken estimate
+            if previous_usage and previous_usage.total_tokens:
+                token_count = previous_usage.total_tokens
+            else:
+                token_count = self._count_tokens(input, model=model, extra_body=extra_body)
+            if token_count > threshold:
+                logger.debug("Auto-compacting", token_count=token_count, threshold=threshold)
+                compacted = await self.compact_openai_response(model=model, input=input)
+                return list(compacted.output)
+
+        return input
+
+    async def cancel_openai_response(
+        self,
+        response_id: str,
+    ) -> OpenAIResponseObject:
+        """Cancel a response that is queued or in progress.
+
+        Args:
+            response_id: The ID of the response to cancel
+
+        Returns:
+            The updated response object with status "cancelled"
+
+        Raises:
+            ResponseNotFoundError: If the response doesn't exist (automatically from store)
+            ConflictError: If the response is already in a terminal state
+        """
+        async with self._get_background_response_status_lock(response_id):
+            # Get current response state
+            response = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
+
+            # If already cancelled, return current state (idempotent)
+            if response.status == "cancelled":
+                return response.to_response_object()
+
+            # Only background responses can be cancelled
+            if not response.background:
+                raise ConflictError(
+                    f"Cannot cancel response '{response_id}': only background responses can be cancelled"
+                )
+
+            # Cannot cancel responses in terminal states
+            if response.status in ["completed", "failed", "incomplete"]:
+                raise ConflictError(f"Cannot cancel response '{response_id}' with status '{response.status}'")
+
+            # Update status to cancelled in database
+            response.status = "cancelled"
+            await self.responses_store.update_response_object(response)
+
+            # If the response is currently being processed, cancel the task
+            async with self._background_response_tasks_lock:
+                task = self._background_response_tasks.get(response_id)
+                if task:
+                    task.cancel()
+                    # Note: task removal handled in worker's finally block
+
+            # Re-fetch from store to return the persisted state
+            updated = await self.responses_store.get_response_object(response_id, reconstruct_input=False)
+            return updated.to_response_object()
+
+    async def _sync_response_to_conversation(
+        self, conversation_id: str, input: str | list[OpenAIResponseInput] | None, output_items: list[ConversationItem]
+    ) -> None:
+        """Sync content and response messages to the conversation."""
+        # Type as ConversationItem union to avoid list invariance issues
+        conversation_items: list[ConversationItem] = []
+
+        if isinstance(input, str):
+            conversation_items.append(
+                OpenAIResponseMessage(role="user", content=[OpenAIResponseInputMessageContentText(text=input)])
+            )
+        elif isinstance(input, list):
+            conversation_items.extend(item for item in input if not isinstance(item, OpenAIResponseCompaction))
+
+        conversation_items.extend(output_items)
+
+        adapter = TypeAdapter(list[ConversationItem])
+        validated_items = adapter.validate_python(conversation_items)
+        await self.conversations_api.add_items(conversation_id, AddItemsRequest(items=validated_items))

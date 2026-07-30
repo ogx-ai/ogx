@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from llama_stack.core.distribution import get_provider_registry
+from ogx.core.distribution import get_provider_registry
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -25,7 +25,7 @@ def get_api_docstring(api_name: str) -> str | None:
     """Extract docstring from the API protocol class."""
     try:
         # Import the API module dynamically
-        api_module = __import__(f"llama_stack_api.{api_name}", fromlist=[api_name.title()])
+        api_module = __import__(f"ogx_api.{api_name}", fromlist=[api_name.title()])
 
         # Get the main protocol class (usually capitalized API name)
         protocol_class_name = api_name.title()
@@ -242,11 +242,11 @@ def get_config_class_info(config_class_path: str) -> dict[str, Any]:
                         default_value = field.default_factory()
                         # HACK ALERT:
                         # If the default value contains a path that looks like it came from RUNTIME_BASE_DIR,
-                        # replace it with a generic ~/.llama/ path for documentation
-                        if isinstance(default_value, str) and "/.llama/" in default_value:
-                            if ".llama/" in default_value:
-                                path_part = default_value.split(".llama/")[-1]
-                                default_value = f"~/.llama/{path_part}"
+                        # replace it with a generic ~/.ogx/ path for documentation
+                        if isinstance(default_value, str) and "/.ogx/" in default_value:
+                            if ".ogx/" in default_value:
+                                path_part = default_value.split(".ogx/")[-1]
+                                default_value = f"~/.ogx/{path_part}"
                     except Exception:
                         default_value = ""
                 elif field.default is None or field.default is PydanticUndefined:
@@ -557,7 +557,7 @@ def generate_provider_docs(progress, provider_spec: Any, api_name: str) -> str:
             if sample_config_func is not None:
                 sig = inspect.signature(sample_config_func)
                 if "__distro_dir__" in sig.parameters:
-                    sample_config = sample_config_func(__distro_dir__="~/.llama/dummy")
+                    sample_config = sample_config_func(__distro_dir__="~/.ogx/dummy")
                 else:
                     sample_config = sample_config_func()
 

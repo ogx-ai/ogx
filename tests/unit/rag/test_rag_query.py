@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.providers.inline.tool_runtime.file_search.config import FileSearchToolRuntimeConfig
-from llama_stack.providers.inline.tool_runtime.file_search.file_search import FileSearchToolRuntimeImpl
-from llama_stack_api import Chunk, ChunkMetadata, EmbeddedChunk, QueryChunksResponse, RAGQueryConfig
+from ogx.providers.inline.tool_runtime.file_search.config import FileSearchToolRuntimeConfig
+from ogx.providers.inline.tool_runtime.file_search.file_search import FileSearchToolRuntimeImpl
+from ogx_api import Chunk, ChunkMetadata, EmbeddedChunk, QueryChunksResponse, RAGQueryConfig
 
 
 class TestRagQuery:

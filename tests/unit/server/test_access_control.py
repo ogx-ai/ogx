@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,11 +10,11 @@ import pytest
 import yaml
 from pydantic import TypeAdapter, ValidationError
 
-from llama_stack.core.access_control.access_control import AccessDeniedError, is_action_allowed
-from llama_stack.core.datatypes import AccessRule, ModelWithOwner, User
-from llama_stack.core.routers.inference import InferenceRouter
-from llama_stack.core.routing_tables.models import ModelsRoutingTable
-from llama_stack_api import Api, Model, ModelNotFoundError, ModelType
+from ogx.core.access_control.access_control import AccessDeniedError, is_action_allowed
+from ogx.core.datatypes import AccessRule, ModelWithOwner, User
+from ogx.core.routers.inference import InferenceRouter
+from ogx.core.routing_tables.models import ModelsRoutingTable
+from ogx_api import Api, Model, ModelNotFoundError, ModelType
 
 
 class AsyncMock(MagicMock):
@@ -40,7 +40,7 @@ async def test_setup(cached_disk_dist_registry):
     yield cached_disk_dist_registry, routing_table
 
 
-@patch("llama_stack.core.routing_tables.common.get_authenticated_user")
+@patch("ogx.core.routing_tables.common.get_authenticated_user")
 async def test_access_control_with_cache(mock_get_authenticated_user, test_setup):
     registry, routing_table = test_setup
     model_public = ModelWithOwner(
@@ -104,7 +104,7 @@ async def test_access_control_with_cache(mock_get_authenticated_user, test_setup
         await routing_table.get_model("model-admin")
 
 
-@patch("llama_stack.core.routing_tables.common.get_authenticated_user")
+@patch("ogx.core.routing_tables.common.get_authenticated_user")
 async def test_access_control_and_updates(mock_get_authenticated_user, test_setup):
     registry, routing_table = test_setup
     model_public = ModelWithOwner(
@@ -142,7 +142,7 @@ async def test_access_control_and_updates(mock_get_authenticated_user, test_setu
     assert model.identifier == "model-updates"
 
 
-@patch("llama_stack.core.routing_tables.common.get_authenticated_user")
+@patch("ogx.core.routing_tables.common.get_authenticated_user")
 async def test_access_control_empty_attributes(mock_get_authenticated_user, test_setup):
     registry, routing_table = test_setup
     model = ModelWithOwner(
@@ -166,7 +166,7 @@ async def test_access_control_empty_attributes(mock_get_authenticated_user, test
     assert "model-empty-attrs" not in model_ids
 
 
-@patch("llama_stack.core.routing_tables.common.get_authenticated_user")
+@patch("ogx.core.routing_tables.common.get_authenticated_user")
 async def test_no_user_attributes(mock_get_authenticated_user, test_setup):
     registry, routing_table = test_setup
     model_public = ModelWithOwner(
@@ -196,7 +196,7 @@ async def test_no_user_attributes(mock_get_authenticated_user, test_setup):
     assert all_models.data[0].identifier == "model-public-2"
 
 
-@patch("llama_stack.core.routing_tables.common.get_authenticated_user")
+@patch("ogx.core.routing_tables.common.get_authenticated_user")
 async def test_automatic_access_attributes(mock_get_authenticated_user, test_setup):
     """Test that newly created resources inherit access attributes from their creator."""
     registry, routing_table = test_setup
@@ -275,7 +275,7 @@ async def test_setup_with_access_policy(cached_disk_dist_registry):
     yield routing_table
 
 
-@patch("llama_stack.core.routing_tables.common.get_authenticated_user")
+@patch("ogx.core.routing_tables.common.get_authenticated_user")
 async def test_access_policy(mock_get_authenticated_user, test_setup_with_access_policy):
     routing_table = test_setup_with_access_policy
     mock_get_authenticated_user.return_value = User(
@@ -484,6 +484,119 @@ def test_is_owner():
     assert not is_action_allowed(policy, "read", model, User("user-4", None))
 
 
+def test_is_owner_denies_mismatched_tenants_when_both_present():
+    config = """
+    - permit:
+        actions: [read]
+      when: user is owner
+    """
+    policy = TypeAdapter(list[AccessRule]).validate_python(yaml.safe_load(config))
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["foo"]}, tenant_id="tenant-a"),
+    )
+    assert is_action_allowed(policy, "read", model, User("alice", {"namespaces": ["bar"]}, tenant_id="tenant-a"))
+    assert not is_action_allowed(policy, "read", model, User("alice", {"namespaces": ["foo"]}, tenant_id="tenant-b"))
+    assert is_action_allowed(policy, "read", model, User("alice", {"namespaces": ["foo"]}))
+
+    untagged_model = model.model_copy(update={"owner": User("alice", {"namespaces": ["foo"]})})
+    assert is_action_allowed(
+        policy, "read", untagged_model, User("alice", {"namespaces": ["foo"]}, tenant_id="tenant-a")
+    )
+
+
+def test_user_in_owner_attributes_denies_mismatched_tenants_when_both_present():
+    config = """
+    - permit:
+        actions: [read]
+      when: user in owners namespaces
+    """
+    policy = TypeAdapter(list[AccessRule]).validate_python(yaml.safe_load(config))
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["shared"]}, tenant_id="tenant-a"),
+    )
+    assert is_action_allowed(policy, "read", model, User("bob", {"namespaces": ["shared"]}, tenant_id="tenant-a"))
+    assert not is_action_allowed(policy, "read", model, User("bob", {"namespaces": ["shared"]}, tenant_id="tenant-b"))
+    assert is_action_allowed(policy, "read", model, User("bob", {"namespaces": ["shared"]}))
+
+    untagged_model = model.model_copy(update={"owner": User("alice", {"namespaces": ["shared"]})})
+    assert is_action_allowed(
+        policy, "read", untagged_model, User("bob", {"namespaces": ["shared"]}, tenant_id="tenant-a")
+    )
+
+
+def test_negative_owner_conditions_do_not_permit_cross_tenant_resources():
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["shared"]}, tenant_id="tenant-a"),
+    )
+
+    not_in_policy = TypeAdapter(list[AccessRule]).validate_python(
+        yaml.safe_load(
+            """
+            - permit:
+                actions: [read]
+              when: user not in owners namespaces
+            """
+        )
+    )
+    assert not is_action_allowed(
+        not_in_policy,
+        "read",
+        model,
+        User("bob", {"namespaces": ["other"]}, tenant_id="tenant-b"),
+    )
+    assert is_action_allowed(
+        not_in_policy,
+        "read",
+        model,
+        User("bob", {"namespaces": ["other"]}, tenant_id="tenant-a"),
+    )
+
+    not_owner_policy = TypeAdapter(list[AccessRule]).validate_python(
+        yaml.safe_load(
+            """
+            - permit:
+                actions: [read]
+              when: user is not owner
+            """
+        )
+    )
+    assert not is_action_allowed(not_owner_policy, "read", model, User("bob", None, tenant_id="tenant-b"))
+    assert is_action_allowed(not_owner_policy, "read", model, User("bob", None, tenant_id="tenant-a"))
+
+
+def test_owner_only_unless_policy_does_not_permit_cross_tenant_resources():
+    policy = TypeAdapter(list[AccessRule]).validate_python(
+        yaml.safe_load(
+            """
+            - permit:
+                actions: [read]
+              unless: user is not owner
+            """
+        )
+    )
+    model = ModelWithOwner(
+        identifier="mymodel",
+        provider_id="myprovider",
+        model_type=ModelType.llm,
+        owner=User("alice", {"namespaces": ["shared"]}, tenant_id="tenant-a"),
+    )
+
+    assert is_action_allowed(policy, "read", model, User("alice", None, tenant_id="tenant-a"))
+    assert not is_action_allowed(policy, "read", model, User("alice", None, tenant_id="tenant-b"))
+
+    legacy_model = model.model_copy(update={"owner": User("alice", {"namespaces": ["shared"]})})
+    assert is_action_allowed(policy, "read", legacy_model, User("alice", None, tenant_id="tenant-a"))
+
+
 def test_is_not_owner():
     config = """
     - permit:
@@ -556,14 +669,14 @@ def test_invalid_condition():
     ],
 )
 def test_condition_reprs(condition):
-    from llama_stack.core.access_control.conditions import parse_condition
+    from ogx.core.access_control.conditions import parse_condition
 
     assert condition == str(parse_condition(condition))
 
 
 def test_regex_resource_matching():
     """Test regex pattern matching for resources"""
-    from llama_stack.core.access_control.access_control import matches_resource
+    from ogx.core.access_control.access_control import matches_resource
 
     # Test exact match (backward compatibility)
     assert matches_resource("model::llama-3-1b", "model::llama-3-1b")
@@ -636,7 +749,7 @@ def admin_user():
 @pytest.fixture
 def rbac_policy():
     """RBAC policy that restricts access to certain models."""
-    from llama_stack.core.access_control.datatypes import Action, Scope
+    from ogx.core.access_control.datatypes import Action, Scope
 
     return [
         # Admins get full access
@@ -663,7 +776,7 @@ class TestInferenceRouterRBACBypass:
         routing_table.policy = []
         return routing_table
 
-    @patch("llama_stack.core.routers.inference.get_authenticated_user")
+    @patch("ogx.core.routers.inference.get_authenticated_user")
     async def test_registry_path_and_fallback_path_consistent(
         self, mock_get_user, mock_routing_table, restricted_user, admin_user, rbac_policy
     ):
@@ -718,10 +831,10 @@ class TestInferenceRouterRBACBypass:
 class TestModelListingRBACBypass:
     """Test RBAC bypass vulnerability in dynamic model listing via provider_data."""
 
-    @patch("llama_stack.core.routing_tables.models.instantiate_class_type")
-    @patch("llama_stack.core.routing_tables.models.PROVIDER_DATA_VAR")
-    @patch("llama_stack.core.routing_tables.models.get_authenticated_user")
-    @patch("llama_stack.core.routing_tables.common.get_authenticated_user")
+    @patch("ogx.core.routing_tables.models.instantiate_class_type")
+    @patch("ogx.core.routing_tables.models.PROVIDER_DATA_VAR")
+    @patch("ogx.core.routing_tables.models.get_authenticated_user")
+    @patch("ogx.core.routing_tables.common.get_authenticated_user")
     async def test_dynamic_models_respect_rbac(
         self,
         mock_get_user_common,
@@ -734,7 +847,7 @@ class TestModelListingRBACBypass:
         restricted_user,
     ):
         """Test that models fetched via provider_data are filtered by RBAC."""
-        from llama_stack.core.request_headers import NeedsRequestProviderData
+        from ogx.core.request_headers import NeedsRequestProviderData
 
         # Create a mock provider that supports provider_data
         mock_provider = Mock(spec=NeedsRequestProviderData)
@@ -800,7 +913,7 @@ def test_invalid_regex_pattern_in_access_policy_logs_warning(caplog):
     """Test that invalid regex patterns in access_policy log a warning and don't crash"""
     import logging  # allow-direct-logging
 
-    from llama_stack.core.access_control.access_control import matches_resource
+    from ogx.core.access_control.access_control import matches_resource
 
     # Test various invalid regex patterns
     invalid_patterns = [

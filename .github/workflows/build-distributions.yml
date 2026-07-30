@@ -20,9 +20,10 @@ on:
 permissions:
   contents: read
   actions: write
+  security-events: write
 
 env:
-  IMAGE_PREFIX: llamastack/distribution
+  IMAGE_PREFIX: ogx/distribution
 
 jobs:
   generate-matrix:
@@ -66,7 +67,7 @@ jobs:
             distros=$(echo "${{ github.event.inputs.distributions }}" | tr ',' '\n' | jq -R -s -c 'split("\n") | map(select(length > 0))')
           else
             # Get all distributions, excluding ci-tests and __pycache__
-            distros=$(find src/llama_stack/distributions -mindepth 2 -maxdepth 2 -name '*build.yaml' 2>/dev/null | \
+            distros=$(find src/ogx/distributions -mindepth 2 -maxdepth 2 -name '*build.yaml' 2>/dev/null | \
               awk -F'/' '{print $(NF-1)}' | \
               grep -v '^ci-tests$' | \
               grep -v '^__pycache__$' | \
@@ -90,7 +91,7 @@ jobs:
         uses: ./.github/actions/setup-runner
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
 
       - name: Build distribution image
         env:
@@ -101,6 +102,11 @@ jobs:
           LOCAL_IMAGE_NAME="${IMAGE_PREFIX}-${DISTRO_NAME}:${IMAGE_TAG}"
           echo "Verifying build for: ${LOCAL_IMAGE_NAME}"
           echo "Requested platforms: ${PLATFORMS}"
+
+          # Generate config labels (one per line, read into array)
+          echo "Generating config labels..."
+          CONFIG_LABELS=$(bash scripts/generate-config-labels.sh "$DISTRO_NAME" "$IMAGE_TAG")
+          mapfile -t LABEL_ARGS <<< "$CONFIG_LABELS"
 
           # Build arguments
           BUILD_ARGS=(--build-arg "INSTALL_MODE=pypi" --build-arg "DISTRO_NAME=${DISTRO_NAME}")
@@ -120,7 +126,36 @@ jobs:
             --load \
             -f containers/Containerfile \
             "${BUILD_ARGS[@]}" \
+            "${LABEL_ARGS[@]}" \
             --tag "${LOCAL_IMAGE_NAME}" \
             .
 
           echo "Successfully built: ${LOCAL_IMAGE_NAME}"
+
+      - name: Verify embedded config labels
+        env:
+          DISTRO_NAME: ${{ matrix.distro }}
+          IMAGE_TAG: ${{ needs.generate-matrix.outputs.version }}
+        run: |
+          LOCAL_IMAGE_NAME="${IMAGE_PREFIX}-${DISTRO_NAME}:${IMAGE_TAG}"
+          bash scripts/verify-config-labels.sh "${LOCAL_IMAGE_NAME}"
+
+      - name: Scan container image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          DISTRO_NAME: ${{ matrix.distro }}
+          IMAGE_TAG: ${{ needs.generate-matrix.outputs.version }}
+        with:
+          image-ref: '${{ env.IMAGE_PREFIX }}-${{ matrix.distro }}:${{ needs.generate-matrix.outputs.version }}'
+          scan-type: 'image'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          format: 'sarif'
+          output: 'trivy-container-${{ matrix.distro }}.sarif'
+
+      - name: Upload container scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-container-${{ matrix.distro }}.sarif'
+          category: 'trivy-container-${{ matrix.distro }}'

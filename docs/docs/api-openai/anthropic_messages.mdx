@@ -1,0 +1,174 @@
+---
+title: Anthropic Messages API
+description: Use the Anthropic SDK to send messages to OGX.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Anthropic Messages API
+
+OGX natively supports the Anthropic Messages API at `/v1/messages`. Use the official Anthropic SDK with any model, just point it at your OGX server.
+
+## Quick example
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+message = client.messages.create(
+    model="llama-3.3-70b",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "What is OGX?"}
+    ],
+)
+
+print(message.content[0].text)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  baseURL: "http://localhost:8321/v1",
+  apiKey: "fake",
+});
+
+const message = await client.messages.create({
+  model: "llama-3.3-70b",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "What is OGX?" }],
+});
+
+console.log(message.content[0].text);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl http://localhost:8321/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-]api-key: fake" \
+  -d '{
+    "model": "llama-3.3-70b",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "What is OGX?"}
+    ]
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+## Streaming
+
+<Tabs>
+<TabItem value="python" label="Python">
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+with client.messages.stream(
+    model="llama-3.3-70b",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "Explain RAG in 3 sentences."}
+    ],
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+```
+
+</TabItem>
+<TabItem value="typescript" label="TypeScript">
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic({
+  baseURL: "http://localhost:8321/v1",
+  apiKey: "fake",
+});
+
+const stream = client.messages.stream({
+  model: "llama-3.3-70b",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Explain RAG in 3 sentences." }],
+});
+
+for await (const event of stream) {
+  if (
+    event.type === "content_block_delta" &&
+    event.delta.type === "text_delta"
+  ) {
+    process.stdout.write(event.delta.text);
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Multi-turn conversation
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+message = client.messages.create(
+    model="llama-3.3-70b",
+    max_tokens=1024,
+    system="You are a helpful coding assistant.",
+    messages=[
+        {"role": "user", "content": "Write a Python function to reverse a string."},
+        {"role": "assistant", "content": "def reverse(s): return s[::-1]"},
+        {"role": "user", "content": "Now make it handle unicode properly."},
+    ],
+)
+
+print(message.content[0].text)
+```
+
+## What's supported
+
+| Feature | Status |
+|---------|--------|
+| `messages.create` | Supported |
+| `messages.stream` | Supported |
+| System messages | Supported |
+| Multi-turn conversations | Supported |
+| `max_tokens` | Supported |
+| `temperature` | Supported |
+| `top_p` | Supported |
+| `stop_sequences` | Supported |
+| Tool use | Not yet supported |
+| Vision (image inputs) | Not yet supported |
+
+## API reference
+
+See the auto-generated API reference for the full request/response schema:
+
+- [Create a message](/docs/api/create-message-v-1-messages-post)
+- [Count tokens](/docs/api/count-message-tokens-v-1-messages-count-tokens-post)

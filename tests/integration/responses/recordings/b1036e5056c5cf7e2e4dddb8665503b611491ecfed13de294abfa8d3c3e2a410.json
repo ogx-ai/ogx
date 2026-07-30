@@ -1,0 +1,138 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_double_compaction[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Topic A discussion"
+        },
+        {
+          "role": "assistant",
+          "content": "Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\n### CONTEXT CHECKPOINT HANDOFF SUMMARY\n\n#### 1. **Current Progress and Key Decisions**\n   - **Progress Status:**\n     - The discussion is centered on **Topic A**, but the specific scope or subtopics have not been clarified yet. \n     - User input so far has been limited; areas of focus or desired depth are still undefined.  \n   - **Decisions Made:**\n     - No major decisions identified yet\u2014pending additional user guidance.\n\n#### 2. **Important Context, Constraints, or User Preferences**\n   - **Context:**\n     - The user's request mentions a discussion-based task, implying a collaborative or exploratory approach.\n     - The purpose or end goal of the discussion (analysis, brainstorming, explanation, etc.) has not been stated explicitly. \n   - **Constraints:**\n     - None explicitly provided, but assume concise, relevant responses until further clarification from the user.\n   - **User Preferences:**\n     - Limited insight at this stage; user may prefer a focused, structured response based on follow-up questions or clarifications.  \n\n#### 3. **What Remains to Be Done (Next Steps)**\n   - Seek clarification from the user regarding:\n     1. Scope and purpose of the Topic A discussion (e.g., problem-solving, generating ideas, in-depth analysis).\n     2. Preferred level of detail and tone (e.g., technical, casual, brief, expansive).\n   - Begin exploring key aspects of Topic A once additional context is provided, starting with foundational concepts or themes.\n   - Adapt and expand the discussion based on user feedback in real-time.\n\n#### 4. **Critical Data and References**\n   - **Initial Prompts for Continuation:**\n     - \"Could you clarify what specific aspect of Topic A you'd like to discuss?\"\n     - \"Are there any goals or areas of interest you'd like to focus on for Topic A?\"\n   - **Relevant Examples/Inputs:**\n     - None have been provided yet. Watch for contextual hints or specific examples in subsequent user inputs.\n   - **External References:**\n     - Be ready to incorporate authoritative information or examples if the discussion moves into a fact-based or technical domain.\n\n---\n\nThis summary ensures that the next LLM can pick up smoothly, assisting the user while maintaining coherence and continuity."
+        },
+        {
+          "role": "user",
+          "content": "Topic B discussion"
+        },
+        {
+          "role": "assistant",
+          "content": "Response about B"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-b1036e5056c5",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### CONTEXT CHECKPOINT COMPACTION HANDOFF SUMMARY\n\n#### 1. **Current Progress and Key Decisions Made**\n   - **Progress Status:**\n     - User shifted focus from **Topic A** to **Topic B**, though specifics about Topic B's scope, goals, or subtopics have not been clarified yet.\n     - No substantive discussion or decisions about **Topic B** have taken place so far.\n   - **Decisions:**\n     - The approach is still exploratory, awaiting user guidance to define the focus or objectives of Topic B.\n\n---\n\n#### 2. **Important Context, Constraints, or User Preferences**\n   - **Context:**\n     - The user has not elaborated on the purpose or end-goals of discussing Topic B (e.g., problem-solving, brainstorming, analysis).\n   - **Constraints:**\n     - Assume concise, contextually relevant responses while staying flexible. Avoid assumptions until further clarification is provided.\n   - **User Preferences:**\n     - Minimal information about specific preferences has emerged, but a structured, responsive approach to follow-up questions is advised.\n\n---\n\n#### 3. **What Remains to Be Done (Next Steps)**\n   - Request clarification from the user regarding:\n     1. The scope of the Topic B discussion\u2014what specific facets or aspects should be explored?\n     2. The desired format or tone of the response (high-level overview, detailed explanation, informal brainstorming, etc.).\n   - Begin with broad, foundational elements of Topic B based on user input and pivot accordingly based on user feedback.\n   - Identify and incorporate any relevant examples, facts, or resources as necessary to support the discussion once direction is clear.\n\n---\n\n#### 4. **Critical Data, Examples, or References Needed**\n   - **Next Prompts for the User:**\n     - \"What specific aspect of Topic B would you like to dive into?\"\n     - \"Could you share any goals or areas of focus you'd like to prioritize for Topic B?\"\n   - **References or Context:** None specified yet\u2014monitor for user-provided details or hints to refine the response. Be prepared to access domain-relevant info if the discussion becomes technical or detail-oriented.\n\n---\n\nThis compact summary ensures the next LLM can pick up and advance the task efficiently while maintaining alignment with the user's intentions.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            },
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "protected_material_code": {
+                "filtered": false,
+                "detected": false
+              },
+              "protected_material_text": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": null,
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 467,
+          "prompt_tokens": 663,
+          "total_tokens": 1130,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "prompt_filter_results": [
+          {
+            "prompt_index": 0,
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "jailbreak": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

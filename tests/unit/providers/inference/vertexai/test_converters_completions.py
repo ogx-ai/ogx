@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,15 +15,15 @@ from typing import Any, cast
 
 import pytest
 
-from llama_stack.providers.remote.inference.vertexai import converters as vertexai_converters
-from llama_stack.providers.remote.inference.vertexai.converters import (
+from ogx.providers.remote.inference.vertexai import converters as vertexai_converters
+from ogx.providers.remote.inference.vertexai.converters import (
     convert_completion_prompt_to_contents,
     convert_gemini_response_to_openai,
     convert_gemini_response_to_openai_completion,
     convert_gemini_stream_chunk_to_openai,
     convert_gemini_stream_chunk_to_openai_completion,
 )
-from llama_stack_api import OpenAICompletion
+from ogx_api import OpenAICompletion
 
 _convert_image_url_part = getattr(vertexai_converters, "_convert_image_url_part", None)
 

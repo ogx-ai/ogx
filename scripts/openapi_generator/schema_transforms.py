@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -16,6 +16,7 @@ from ._schema_output import (
     _apply_legacy_sorting,
     _dedupe_create_response_request_input_union_for_stainless,
     _extract_duplicate_union_types,
+    _fix_compact_request_schema,
     _write_yaml_file,
     validate_openapi_schema,
 )
@@ -151,7 +152,7 @@ def _add_error_responses(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         openapi_schema["components"]["responses"] = {}
 
     try:
-        from llama_stack_api.datatypes import Error
+        from ogx_api.datatypes import Error
 
         schema_collection._ensure_components_schemas(openapi_schema)
         if "Error" not in openapi_schema["components"]["schemas"]:
@@ -359,20 +360,53 @@ def _add_titles_to_unions(obj: Any, parent_key: str | None = None) -> None:
             _add_titles_to_unions(item, parent_key)
 
 
+def _restore_const_enum_defaults(openapi_schema: dict[str, Any]) -> None:
+    """Restore defaults on single-value enum ``object`` fields where the OpenAI spec expects them.
+
+    ``_convert_standalone_const_to_enum`` strips all defaults from single-value
+    enums because most OpenAI schemas omit them.  A handful of schemas (Conversations,
+    Responses, Compact, Chat list) DO include a default on their ``object`` field.
+    This function adds the default back for those specific schemas so the conformance
+    checker doesn't flag them as mismatches.
+    """
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+
+    # Mapping of our schema name → property name → expected default value.
+    # These correspond to OpenAI schemas that have explicit defaults on
+    # single-value enum fields (verified against openai-spec-2.3.0.yml).
+    _defaults_to_restore: dict[str, dict[str, str]] = {
+        "ChatCompletionMessageList": {"object": "list"},
+        "Conversation": {"object": "conversation"},
+        "ListOpenAIChatCompletionResponse": {"object": "list"},
+        "OpenAICompactedResponse": {"object": "response.compaction"},
+        "OpenAIResponseObject": {"object": "response"},
+        "OpenAIResponseObjectWithInput": {"object": "response"},
+    }
+
+    for schema_name, props_to_fix in _defaults_to_restore.items():
+        schema_def = schemas.get(schema_name)
+        if not isinstance(schema_def, dict) or "properties" not in schema_def:
+            continue
+        for prop_name, default_val in props_to_fix.items():
+            prop = schema_def["properties"].get(prop_name)
+            if isinstance(prop, dict) and "enum" in prop and prop["enum"] == [default_val] and "default" not in prop:
+                prop["default"] = default_val
+
+
 def _convert_standalone_const_to_enum(obj: Any) -> None:
     """Convert standalone const values to single-value enums to match OpenAI spec style.
 
     Converts: {const: "value", type: "string", default: "value"}
     To:       {enum: ["value"], type: "string"}
 
-    OpenAI uses enum with a single value rather than const. Defaults are removed
-    for single-value enums since they are redundant (only one value is valid).
+    OpenAI uses enum with a single value rather than const. Defaults are stripped
+    because most OpenAI schemas omit defaults on single-value enums.  Schemas that
+    need a default restored are handled individually in ``_fix_schema_issues``.
     """
     if isinstance(obj, dict):
         if "const" in obj and "anyOf" not in obj:
             const_val = obj.pop("const")
             obj["enum"] = [const_val]
-            # Remove default if it matches the const value (redundant for single-value enum)
             if "default" in obj and obj["default"] == const_val:
                 del obj["default"]
 
@@ -490,9 +524,41 @@ def _clean_schema_descriptions(openapi_schema: dict[str, Any]) -> dict[str, Any]
     return openapi_schema
 
 
+def _promote_model_extra_body_fields(openapi_schema: dict[str, Any]) -> dict[str, Any]:
+    """Strip fields marked x-extra-body-field from schemas and add to x-ogx-extra-body-params."""
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    schema_extra: dict[str, dict[str, Any]] = {}
+    for name, defn in schemas.items():
+        if not isinstance(defn, dict) or "properties" not in defn:
+            continue
+        extra: dict[str, Any] = {}
+        for prop, prop_def in list(defn["properties"].items()):
+            if isinstance(prop_def, dict) and prop_def.pop("x-extra-body-field", None):
+                extra[prop] = prop_def
+                del defn["properties"][prop]
+                if "required" in defn and prop in defn["required"]:
+                    defn["required"].remove(prop)
+        if extra:
+            schema_extra[name] = extra
+    for path_item in openapi_schema.get("paths", {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for method in ("post", "put", "patch"):
+            op = path_item.get(method)
+            if not op:
+                continue
+            rb = op.get("requestBody", {})
+            ref = rb.get("content", {}).get("application/json", {}).get("schema", {})
+            if isinstance(ref, dict) and "$ref" in ref:
+                ref_name = ref["$ref"].split("/")[-1]
+                if ref_name in schema_extra:
+                    rb["x-ogx-extra-body-params"] = schema_extra[ref_name]
+    return openapi_schema
+
+
 def _add_extra_body_params_extension(openapi_schema: dict[str, Any]) -> dict[str, Any]:
     """
-    Add x-llama-stack-extra-body-params extension to requestBody for endpoints with ExtraBodyField parameters.
+    Add x-ogx-extra-body-params extension to requestBody for endpoints with ExtraBodyField parameters.
     """
     if "paths" not in openapi_schema:
         return openapi_schema
@@ -576,8 +642,8 @@ def _add_extra_body_params_extension(openapi_schema: dict[str, Any]) -> dict[str
 
             if extra_params_schema:
                 # Add the extension to requestBody
-                if "x-llama-stack-extra-body-params" not in request_body:
-                    request_body["x-llama-stack-extra-body-params"] = extra_params_schema
+                if "x-ogx-extra-body-params" not in request_body:
+                    request_body["x-ogx-extra-body-params"] = extra_params_schema
 
     return openapi_schema
 
@@ -712,16 +778,33 @@ def _remove_request_bodies_from_get_endpoints(openapi_schema: dict[str, Any]) ->
 
 
 def _remove_type_object_from_openai_schemas(openapi_schema: dict[str, Any]) -> dict[str, Any]:
-    """Remove redundant 'type: object' from schemas that have 'properties' defined.
+    """Remove 'type: object' from specific schemas that omit it in the OpenAI spec.
 
-    The OpenAI spec does not include an explicit ``type: object`` on schemas
-    that already declare ``properties`` (the presence of ``properties`` implies
-    object type per JSON Schema).  Pydantic adds ``type: object`` automatically,
-    so we strip it from all schemas with ``properties`` to stay conformant.
+    Most OpenAI schemas (766 of 772) include ``type: object`` alongside
+    ``properties``.  Only 6 omit it.  We strip the field only from those
+    specific schemas to avoid hurting conformance on the majority that keep it.
     """
+    # Only these schemas in the OpenAI spec omit type: object while having properties.
+    # Includes both the OpenAI schema names and our equivalent schema names.
+    schemas_without_type_object = {
+        "ListMessagesResponse",
+        "ListRunStepsResponse",
+        "ListVectorStoreFilesResponse",
+        "ListVectorStoresResponse",
+        "Model",
+        "OpenAIFile",
+        "OpenAIFileObject",
+        "OpenAIModel",
+    }
+
     schemas = openapi_schema.get("components", {}).get("schemas", {})
-    for schema_def in schemas.values():
-        if isinstance(schema_def, dict) and schema_def.get("type") == "object" and "properties" in schema_def:
+    for schema_name, schema_def in schemas.items():
+        if (
+            schema_name in schemas_without_type_object
+            and isinstance(schema_def, dict)
+            and schema_def.get("type") == "object"
+            and "properties" in schema_def
+        ):
             del schema_def["type"]
     return openapi_schema
 
@@ -822,6 +905,58 @@ def _inline_component_refs(openapi_schema: dict[str, Any], components_to_inline:
     _inline_refs(openapi_schema)
 
 
+def _create_streaming_delta_tool_call(openapi_schema: dict[str, Any]) -> None:
+    """Create a streaming-friendly tool call schema for delta parsing.
+
+    The existing openapi.yml used the same ChatCompletionMessageToolCall schema for both
+    complete responses and streaming deltas, but streaming deltas on the wire include an
+    index field and omit id/type/function on continuation chunks. This function formalizes
+    the de-facto streaming protocol by creating a ChoiceDeltaToolCall variant with relaxed
+    field requirements, matching what the server actually sends.
+    """
+    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    tc_schema = schemas.get("ChatCompletionMessageToolCall")
+    if not tc_schema:
+        return
+
+    delta_tc = copy.deepcopy(tc_schema)
+    delta_tc["description"] = "A tool call delta in a streaming chat completion chunk."
+    delta_props = delta_tc.get("properties", {})
+
+    # Add back `index` (required for correlating chunks across streaming deltas)
+    delta_props["index"] = {
+        "type": "integer",
+        "description": "The index of the tool call being streamed.",
+    }
+
+    # Make id and type optional (only present in the first chunk for a tool call)
+    for field in ("id", "type"):
+        if field in delta_props:
+            delta_props[field] = {
+                "anyOf": [delta_props[field], {"type": "null"}],
+                "description": delta_props[field].get("description", ""),
+            }
+
+    # Make function optional and its inner fields (name, arguments) not required
+    if "function" in delta_props:
+        func_schema = delta_props["function"]
+        func_schema.pop("required", None)
+        delta_props["function"] = {
+            "anyOf": [func_schema, {"type": "null"}],
+            "description": func_schema.pop("description", ""),
+        }
+
+    delta_tc["required"] = ["index"]
+    schemas["ChoiceDeltaToolCall"] = delta_tc
+
+    # Point the streaming delta's tool_calls to the new variant
+    delta_schema = schemas.get("OpenAIChoiceDelta")
+    if delta_schema:
+        tc_prop = delta_schema.get("properties", {}).get("tool_calls", {})
+        if "items" in tc_prop:
+            tc_prop["items"] = {"$ref": "#/components/schemas/ChoiceDeltaToolCall"}
+
+
 def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
     """Fix common schema issues: exclusiveMinimum, null defaults, and add titles to unions."""
     # Convert standalone const values to single-value enums (OpenAI style)
@@ -829,6 +964,11 @@ def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
 
     # Convert anyOf with const values to enums across the entire schema
     _convert_anyof_const_to_enum(openapi_schema)
+
+    # Restore defaults on single-value enums where the OpenAI spec expects them.
+    # _convert_standalone_const_to_enum strips all defaults; these specific schemas
+    # need them back to match the reference spec (e.g. CompactResource.object).
+    _restore_const_enum_defaults(openapi_schema)
 
     # Align tool call schemas with OpenAI's spec BEFORE inlining (inlining copies schema content).
     if "components" in openapi_schema and "schemas" in openapi_schema["components"]:
@@ -885,6 +1025,8 @@ def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         openapi_schema, "OpenAIChatCompletionCustomToolCall", "ChatCompletionMessageCustomToolCall"
     )
 
+    _create_streaming_delta_tool_call(openapi_schema)
+
     # Add discriminator to tool_calls items anyOf (OpenAI uses propertyName: "type")
     if "components" in openapi_schema and "schemas" in openapi_schema["components"]:
         msg_schema = openapi_schema["components"]["schemas"].get("OpenAIChatCompletionResponseMessage")
@@ -899,5 +1041,8 @@ def _fix_schema_issues(openapi_schema: dict[str, Any]) -> dict[str, Any]:
         for schema_name, schema_def in openapi_schema["components"]["schemas"].items():
             _fix_schema_recursive(schema_def)
             _add_titles_to_unions(schema_def, schema_name)
+
+    # Run compact transforms AFTER titles are added so the new oneOf wrapper stays title-free.
+    _fix_compact_request_schema(openapi_schema)
 
     return openapi_schema

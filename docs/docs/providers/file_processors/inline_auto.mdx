@@ -1,0 +1,27 @@
+---
+description: "Composite file processor that dispatches to sibling providers based on file MIME type. Configure a priority list of provider IDs; each provider declares the MIME types it supports and the first match wins. Unmatched types return a 422 error. Without a priority list, falls back to built-in PyPDF (PDF, text) and MarkItDown (office, media) backends."
+sidebar_label: Auto
+title: inline::auto
+---
+
+# inline::auto
+
+## Description
+
+Composite file processor that dispatches to sibling providers based on file MIME type. Configure a priority list of provider IDs; each provider declares the MIME types it supports and the first match wins. Unmatched types return a 422 error. Without a priority list, falls back to built-in PyPDF (PDF, text) and MarkItDown (office, media) backends.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `default_chunk_overlap_tokens` | `int` | No | 400 | Default chunk overlap in tokens when chunking_strategy type is 'auto' |
+| `extract_metadata` | `bool` | No | True | Whether to extract PDF metadata (title, author, etc.) |
+| `clean_text` | `bool` | No | True | Whether to clean extracted text (remove extra whitespace, normalize line breaks) |
+| `priority` | `list[str]` | No | [] | Ordered list of sibling provider IDs to dispatch to. Each provider declares the MIME types it supports; the first provider in the list that supports a given MIME type handles it. |
+
+## Sample Configuration
+
+```yaml
+{}
+```

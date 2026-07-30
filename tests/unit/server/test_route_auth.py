@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,14 +9,14 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI
 
-from llama_stack.core.access_control.datatypes import RouteAccessRule, RouteScope
-from llama_stack.core.datatypes import (
+from ogx.core.access_control.datatypes import RouteAccessRule, RouteScope
+from ogx.core.datatypes import (
     AuthenticationConfig,
     AuthProviderType,
     CustomAuthConfig,
     User,
 )
-from llama_stack.core.server.auth import (
+from ogx.core.server.auth import (
     AuthenticationMiddleware,
     RouteAuthorizationMiddleware,
 )
@@ -343,42 +343,44 @@ async def test_rule_order_matters(developer_user):
     assert not middleware._is_route_allowed("/v1/models/list", developer_user)
 
 
-async def test_websocket_passthrough():
-    """Test that websocket requests pass through without blocking"""
+async def test_websocket_route_authorization():
+    """WebSocket handshakes are subject to the same route policy as HTTP."""
     route_policy = [
         RouteAccessRule(
-            permit=RouteScope(paths="/v1/chat/completions"),
-            when="user with developer in roles",
+            permit=RouteScope(paths="/v1/responses"),
+            description="Allow the Responses WebSocket route",
         )
+        # All other routes denied by default (no matching rule)
     ]
-
-    app = FastAPI()
-    middleware = RouteAuthorizationMiddleware(app, route_policy)
-
-    # Mock websocket scope
-    scope = {
-        "type": "websocket",
-        "path": "/ws",
-    }
-
-    # Track if next middleware was called
-    called = False
-
-    async def mock_app(scope, receive, send):
-        nonlocal called
-        called = True
 
     async def receive():
         return {}
 
-    async def send(msg):
-        pass
+    async def run(path: str) -> tuple[bool, list[dict]]:
+        called = False
+        sent: list[dict] = []
 
-    middleware.app = mock_app
-    await middleware(scope, receive, send)
+        async def mock_app(scope, receive, send):
+            nonlocal called
+            called = True
 
-    # Websocket requests should pass through
+        async def send(msg):
+            sent.append(msg)
+
+        middleware = RouteAuthorizationMiddleware(mock_app, route_policy)
+        await middleware({"type": "websocket", "path": path}, receive, send)
+        return called, sent
+
+    # Permitted route reaches the app.
+    called, sent = await run("/v1/responses")
     assert called
+    assert sent == []
+
+    # A route with no matching permit rule is rejected with a close frame
+    # instead of being allowed through unauthenticated.
+    called, sent = await run("/v1/admin/reset")
+    assert not called
+    assert sent == [{"type": "websocket.close", "code": 4403}]
 
 
 async def test_route_blocking_without_auth():

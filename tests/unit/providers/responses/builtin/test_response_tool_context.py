@@ -1,15 +1,15 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 
-from llama_stack.providers.inline.responses.builtin.responses.streaming import (
+from ogx.providers.inline.responses.builtin.responses.streaming import (
     _process_tool_choice,
 )
-from llama_stack.providers.inline.responses.builtin.responses.types import ToolContext
-from llama_stack_api import (
+from ogx.providers.inline.responses.builtin.responses.types import ToolContext
+from ogx_api import (
     MCPListToolsTool,
     OpenAIChatCompletionToolChoiceAllowedTools,
     OpenAIChatCompletionToolChoiceCustomTool,

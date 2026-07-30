@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -18,9 +18,9 @@ from fastapi import FastAPI
 from fastapi.params import Body as FastAPIBody
 from pydantic import Field, create_model
 
-from llama_stack.log import get_logger
-from llama_stack_api import Api
-from llama_stack_api.schema_utils import get_registered_schema_info
+from ogx.log import get_logger
+from ogx_api import Api
+from ogx_api.schema_utils import get_registered_schema_info
 
 from . import app as app_module
 from .state import _extra_body_fields, register_dynamic_model
@@ -217,7 +217,7 @@ def _is_file_or_form_param(param_type: Any) -> bool:
 
 def _is_extra_body_field(metadata_item: Any) -> bool:
     """Check if a metadata item is an ExtraBodyField instance."""
-    from llama_stack_api.schema_utils import ExtraBodyField
+    from ogx_api.schema_utils import ExtraBodyField
 
     return isinstance(metadata_item, ExtraBodyField)
 

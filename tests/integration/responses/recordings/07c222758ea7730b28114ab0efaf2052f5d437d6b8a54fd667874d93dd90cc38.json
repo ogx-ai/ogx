@@ -1,0 +1,85 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_basic_conversation[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Help me plan a Python web app."
+        },
+        {
+          "role": "assistant",
+          "content": "I suggest FastAPI with SQLite."
+        },
+        {
+          "role": "user",
+          "content": "Add authentication too."
+        },
+        {
+          "role": "assistant",
+          "content": "Use OAuth2 with JWT tokens."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a concise handoff summary of the conversation so far. Include:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-07c222758ea7",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary\n\n**Current Progress and Key Decisions:**\n- **Framework & Database:** Decided to use FastAPI for the web application and SQLite for database management.\n- **Authentication:** Plan to implement OAuth2 with JWT tokens for authentication.\n\n**Important Context, Constraints, or Preferences:**\n- The user prefers simplicity and likely plans for a lightweight, efficient app, suitable for small to medium-sized use cases due to the choice of SQLite.\n- FastAPI is favored, indicating a preference for modern, fast, and easy-to-use frameworks in Python.\n\n**Next Steps:**\n1. **Set Up FastAPI Project:**\n   - Initialize a new FastAPI project structure.\n   - Install necessary packages (`fastapi`, `uvicorn`, `sqlalchemy`, etc.).\n\n2. **Configure Database:**\n   - Set up SQLite and configure SQLAlchemy to manage database interactions.\n\n3. **Implement Authentication:**\n   - Set up OAuth2 authentication with JWT tokens using FastAPI utilities.\n   - Create endpoints for user registration, login, and token management.\n\n4. **Design API Endpoints:**\n   - Plan and implement RESTful API endpoints based on application requirements.\n\n5. **Testing and Deployment:**\n   - Develop unit and integration tests.\n   - Plan deployment strategy, possibly using Docker for containerization.\n\n**Critical Data, Examples, or References:**\n- Documentation for [FastAPI](https://fastapi.tiangolo.com/)\n- Resources on [OAuth2 and JWT](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/)\n- [SQLAlchemy](https://www.sqlalchemy.org/) setup for working with SQLite.\n\nThis summary should help ensure continuity in developing the web application with a clear progression of tasks and relevant resources.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_1bc4f4a202",
+        "usage": {
+          "completion_tokens": 354,
+          "prompt_tokens": 131,
+          "total_tokens": 485,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

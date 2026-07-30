@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -17,7 +17,7 @@ parent-child API relationships, enabling nested access like:
 For a hierarchy like {chat: {completions: {}}}, this will:
 1. Add an import of CompletionsApi in chat_api.py
 2. Add a property `self.completions` in ChatApi
-3. Wire up `client.chat.completions = client.completions` in LlamaStackClient
+3. Wire up `client.chat.completions = client.completions` in OgxClient
 """
 
 import argparse
@@ -151,8 +151,8 @@ def patch_optional_import(api_file: Path) -> bool:
     return False
 
 
-def patch_llama_stack_client(client_file: Path, pairs: list[tuple[str, str]]) -> bool:
-    """Patch LlamaStackClient to wire up parent-child API relationships.
+def patch_ogx_client(client_file: Path, pairs: list[tuple[str, str]]) -> bool:
+    """Patch OgxClient to wire up parent-child API relationships.
 
     Looks for the '# Nested API structure' comment and inserts assignments like:
         self.chat.completions = self.completions
@@ -208,7 +208,7 @@ def patch_llama_stack_client(client_file: Path, pairs: list[tuple[str, str]]) ->
     with open(client_file, "w") as f:
         f.writelines(lines)
 
-    print(f"  Patched LlamaStackClient with {len(pairs)} parent-child relationships")
+    print(f"  Patched OgxClient with {len(pairs)} parent-child relationships")
     return True
 
 
@@ -270,7 +270,7 @@ def patch_proxy_methods(api_dir: Path, proxy_methods: list[dict]) -> int:
     return count
 
 
-def patch_apis(hierarchy_file: str, sdk_dir: str, package_name: str = "llama_stack_client") -> None:
+def patch_apis(hierarchy_file: str, sdk_dir: str, package_name: str = "ogx_client") -> None:
     """Patch all generated API files based on the hierarchy."""
     yaml_handler = ryaml.YAML()
     yaml_handler.preserve_quotes = True
@@ -305,11 +305,11 @@ def patch_apis(hierarchy_file: str, sdk_dir: str, package_name: str = "llama_sta
             patched_count += 1
 
     # Patch the main client class
-    client_file = Path(sdk_dir) / package_name / "llama_stack_client.py"
+    client_file = Path(sdk_dir) / package_name / "ogx_client.py"
     if client_file.exists():
-        patch_llama_stack_client(client_file, pairs)
+        patch_ogx_client(client_file, pairs)
     else:
-        print(f"  Warning: LlamaStackClient not found at {client_file}")
+        print(f"  Warning: OgxClient not found at {client_file}")
 
     # Inject proxy methods for shared endpoints
     proxy_methods = data.get("proxy_methods", [])
@@ -337,8 +337,8 @@ def main():
     parser.add_argument(
         "--package",
         "-p",
-        default="llama_stack_client",
-        help="Package name (default: llama_stack_client)",
+        default="ogx_client",
+        help="Package name (default: ogx_client)",
     )
 
     args = parser.parse_args()
