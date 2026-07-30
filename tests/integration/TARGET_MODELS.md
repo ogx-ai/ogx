@@ -59,7 +59,7 @@ Cron: `1 0 * * 0`
 | Setup | Text Model | Vision Model | Embedding Model | Safety Model | Default CI | Scheduled CI |
 |-------|------------|--------------|-----------------|--------------|------------|--------------|
 | `anthropic` | anthropic/claude-3-5-haiku-20241022 | — | — | — | — | — |
-| `cerebras` | cerebras/llama-3.3-70b | — | — | — | — | — |
+| `cerebras` | cerebras/gpt-oss-120b | — | — | — | — | — |
 | `databricks` | databricks/databricks-meta-llama-3-3-70b-instruct | — | databricks/databricks-bge-large-en | — | — | — |
 | `fireworks` | fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct | — | fireworks/accounts/fireworks/models/qwen3-embedding-8b | — | — | — |
 | `groq` | groq/llama-3.3-70b-versatile | — | — | — | — | — |

@@ -60,10 +60,10 @@ Install and run a OGX server:
 curl -LsSf https://github.com/ogx-ai/ogx/raw/main/scripts/install.sh | bash
 
 # Or install via uv
-uv pip install ogx[starter]
+uv pip install ogx
 
-# Start the server (uses the starter distribution with Ollama)
-uv run ogx run starter
+# Start the server (auto-detects providers from the environment)
+uv run ogx go
 ```
 
 Then connect with any OpenAI, Anthropic, or Google GenAI client — [Python](https://github.com/openai/openai-python), [TypeScript](https://github.com/openai/openai-node), [curl](https://platform.openai.com/docs/api-reference), or any framework that speaks these APIs.

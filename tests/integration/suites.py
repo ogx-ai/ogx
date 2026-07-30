@@ -196,7 +196,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         name="cerebras",
         description="Cerebras models",
         defaults={
-            "text_model": "cerebras/llama-3.3-70b",
+            "text_model": "cerebras/gpt-oss-120b",
         },
     ),
     "databricks": Setup(

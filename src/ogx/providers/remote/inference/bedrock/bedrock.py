@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
 import httpx
-from openai import AuthenticationError, PermissionDeniedError
+from openai import AsyncOpenAI, AuthenticationError, PermissionDeniedError
 from pydantic import PrivateAttr
 
 from ogx.log import get_logger
@@ -39,6 +39,10 @@ from ogx_api import (
 )
 
 logger = get_logger(name=__name__, category="inference::bedrock")
+
+_DEFAULT_REGION = "us-east-2"
+_BEDROCK_RUNTIME_URL = "https://bedrock-runtime.{region}.amazonaws.com/openai/v1"
+_BEDROCK_MANTLE_URL = "https://bedrock-mantle.{region}.api.aws/v1"
 
 
 class BedrockInferenceAdapter(OpenAIMixin):
@@ -86,8 +90,10 @@ class BedrockInferenceAdapter(OpenAIMixin):
 
     Credentials are automatically refreshed by boto3 when they expire.
 
-    Note: Bedrock's OpenAI-compatible endpoint does not support /v1/models
-    for dynamic model discovery. Models must be pre-registered in the config.
+    Models are auto-discovered at startup via two paths:
+    - SigV4 auth: uses the ListFoundationModels control-plane API
+    - Bearer token auth: queries the mantle endpoint's /v1/models
+    Pre-registered models in the config are also supported.
     """
 
     provider_data_api_key_field: str | None = "aws_bedrock_bearer_token"
@@ -95,6 +101,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
     # built once in initialize() so get_extra_client_params() can stay sync;
     # reusing one client also avoids opening a new socket per request
     _sigv4_http_client: httpx.AsyncClient | None = PrivateAttr(default=None)
+    _bedrock_client: Any = PrivateAttr(default=None)
 
     @property
     def _bedrock_config(self) -> "BedrockConfig":
@@ -105,8 +112,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
         return self.config
 
     def get_base_url(self) -> str:
-        region = self._bedrock_config.region_name or "us-east-2"
-        return f"https://bedrock-runtime.{region}.amazonaws.com/openai/v1"
+        return _BEDROCK_RUNTIME_URL.format(region=self._bedrock_config.region_name or _DEFAULT_REGION)
 
     def _should_use_sigv4(self) -> bool:
         # checked per-request so a bearer token in provider data can override SigV4 at runtime
@@ -154,6 +160,13 @@ class BedrockInferenceAdapter(OpenAIMixin):
         # per-request bearer token overrides are handled in get_extra_client_params()
         if not self._bedrock_config.has_bearer_token():
             self._sigv4_http_client = self._build_sigv4_http_client()
+            # separate boto3 client for the bedrock control-plane API (ListFoundationModels)
+            try:
+                from ogx.providers.utils.bedrock.client import create_bedrock_client
+
+                self._bedrock_client = create_bedrock_client(self._bedrock_config, "bedrock")
+            except Exception:
+                logger.debug("Could not create Bedrock control-plane client, model discovery will be skipped")
 
     def get_api_key(self) -> str | None:
         if self._should_use_sigv4():
@@ -169,11 +182,33 @@ class BedrockInferenceAdapter(OpenAIMixin):
         return {}
 
     async def list_provider_model_ids(self) -> Iterable[str]:
-        # bedrock's openai-compatible endpoint doesn't expose /v1/models
-        return []
+        if self._should_use_sigv4():
+            # SigV4 path: bedrock-runtime doesn't expose /v1/models,
+            # use the control-plane ListFoundationModels API instead
+            if self._bedrock_client is None:
+                return []
+            try:
+                response = await asyncio.to_thread(
+                    self._bedrock_client.list_foundation_models,
+                    byInferenceType="ON_DEMAND",
+                )
+            except Exception:
+                logger.warning("Failed to list Bedrock foundation models", exc_info=True)
+                return []
+            return [
+                m["modelId"] for m in response.get("modelSummaries", []) if m.get("modelLifecycleStatus") == "ACTIVE"
+            ]
+        # bearer token path: bedrock-runtime doesn't expose /v1/models,
+        # but the mantle endpoint does — query it directly
+        mantle_url = _BEDROCK_MANTLE_URL.format(region=self._bedrock_config.region_name or _DEFAULT_REGION)
+        try:
+            client = AsyncOpenAI(base_url=mantle_url, api_key=self.get_api_key())
+            return [m.id async for m in client.models.list()]
+        except Exception:
+            logger.warning("Failed to list models from Bedrock mantle endpoint", exc_info=True)
+            return []
 
     async def check_model_availability(self, model: str) -> bool:
-        # no /v1/models to query — accept whatever is registered in config
         return True
 
     async def shutdown(self) -> None:
