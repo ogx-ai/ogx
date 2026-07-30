@@ -19,13 +19,13 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 111 | 111 | 0 | 81% |
+| azure | 111 | 111 | 0 | 82% |
 | bedrock | 27 | 27 | 0 | 20% |
-| ollama | 4 | 4 | 0 | 3% |
-| openai | 136 | 136 | 0 | 99% |
-| vertexai | 70 | 70 | 0 | 51% |
-| vllm | 4 | 4 | 0 | 3% |
-| watsonx | 61 | 61 | 0 | 44% |
+| ollama | 3 | 3 | 0 | 2% |
+| openai | 136 | 136 | 0 | 100% |
+| vertexai | 70 | 70 | 0 | 52% |
+| vllm | 3 | 3 | 0 | 2% |
+| watsonx | 61 | 61 | 0 | 45% |
 
 ## Provider Details
 
@@ -35,7 +35,7 @@ Models, endpoints, and versions used during test recordings.
 |----------|----------|----------|--------------|
 | azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.43.0 |
 | bedrock | openai.gpt-oss-20b-1:0 | bedrock-runtime.us-west-2.amazonaws.com | openai sdk: 2.30.0 |
-| ollama | deepseek-r1:1.5b, gpt-oss:20b | — | openai sdk: 2.43.0, vllm server: 0.17.2rc1.dev79+g5ce2d10e4 |
+| ollama | deepseek-r1:1.5b | — | openai sdk: 2.43.0 |
 | openai | gpt-4o, o4-mini, text-embedding-3-small | api.openai.com | openai sdk: 2.43.0 |
 | vertexai | publishers/google/models/gemini-2.0-flash | — | openai sdk: 2.5.0, provider: vertexai |
 | vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.17.2rc1.dev79+g5ce2d10e4 |
@@ -167,7 +167,6 @@ Models, endpoints, and versions used during test recordings.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | reasoning basic streaming | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
-| reasoning multi turn with tool call | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ | ⏭️ |
 | reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
 | reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
 | reasoning summary event ordering | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
