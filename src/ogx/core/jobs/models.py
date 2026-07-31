@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ogx.core.access_control.datatypes import AccessRule
 from ogx_api.common.job_types import JobStatus
 
 # Terminal states: a job in one of these will not change again.
@@ -48,6 +49,10 @@ class ProviderDescriptor(BaseModel):
         default=False,
         description="Whether the entrypoint accepts the access policy as a third argument.",
     )
+    policy: list[AccessRule] = Field(
+        default_factory=list,
+        description="Configured access policy passed to policy-aware provider factories.",
+    )
     dependencies: dict[str, "ProviderDescriptor"] = Field(
         default_factory=dict,
         description="Descriptors for this provider's direct API dependencies, keyed by API value.",
@@ -68,12 +73,18 @@ class JobRecord(BaseModel):
     method: str = Field(description="Provider method the worker should invoke, e.g. 'process_file'.")
     status: JobStatus = JobStatus.scheduled
     payload: dict[str, Any] = Field(default_factory=dict)
+    owner_principal: str | None = None
+    owner_tenant_id: str | None = None
+    authenticated_user: dict[str, Any] | None = None
     result: dict[str, Any] | None = None
     error: str | None = None
     attempts: int = 0
     max_attempts: int = 1
     lease_owner: str | None = None
     lease_expires_at: int = 0
+    cleanup_owner: str | None = None
+    cleanup_lease_expires_at: int | None = 0
+    cleaned_at: int | None = None
     created_at: int = Field(default_factory=lambda: int(time.time()))
     updated_at: int = Field(default_factory=lambda: int(time.time()))
 

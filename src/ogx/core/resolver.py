@@ -344,6 +344,10 @@ async def instantiate_providers(
                 others = {k: v for k, v in siblings.items() if k != provider_id}
                 impl.set_sibling_providers(others)
 
+    runtime = get_job_runtime()
+    if runtime is not None:
+        _register_worker_sibling_descriptors(sibling_impls_by_api, runtime.pool, policy)
+
     return impls
 
 
@@ -459,13 +463,14 @@ async def instantiate_provider(
         if "policy" in inspect.signature(getattr(module, method)).parameters:
             args.append(policy)
     if isinstance(provider_spec, InlineProviderSpec) and getattr(provider_spec, "execution_mode", "inline") == "worker":
-        impl = _instantiate_worker_proxy(provider, provider_spec, config, deps)
+        impl = _instantiate_worker_proxy(provider, provider_spec, config, deps, policy)
     else:
         fn = getattr(module, method)
         impl = await fn(*args)
     impl.__provider_id__ = provider.provider_id
     impl.__provider_spec__ = provider_spec
     impl.__provider_config__ = config
+    impl.__provider_deps__ = deps
 
     protocols = api_protocol_map_for_compliance_check(run_config)
     additional_protocols = additional_protocols_map()
@@ -479,7 +484,13 @@ async def instantiate_provider(
     return impl
 
 
-def _descriptor_for_impl(api: str, provider_id: str, spec: ProviderSpec, config: Any) -> ProviderDescriptor:
+def _descriptor_for_impl(
+    api: str,
+    provider_id: str,
+    spec: ProviderSpec,
+    config: Any,
+    policy: list[AccessRule],
+) -> ProviderDescriptor:
     """Build a worker-side descriptor from a provider spec and its resolved config."""
     if spec.module is None or spec.config_class is None:
         raise ValueError(
@@ -488,7 +499,7 @@ def _descriptor_for_impl(api: str, provider_id: str, spec: ProviderSpec, config:
     method = "get_adapter_impl" if isinstance(spec, RemoteProviderSpec) else "get_provider_impl"
     module = importlib.import_module(spec.module)
     pass_policy = "policy" in inspect.signature(getattr(module, method)).parameters
-    config_dict = config.model_dump(mode="json") if hasattr(config, "model_dump") else dict(config)
+    config_dict = config.model_dump(mode="python") if hasattr(config, "model_dump") else dict(config)
     return ProviderDescriptor(
         api=api,
         provider_id=provider_id,
@@ -498,7 +509,86 @@ def _descriptor_for_impl(api: str, provider_id: str, spec: ProviderSpec, config:
         config=config_dict,
         method=method,
         pass_policy=pass_policy,
+        policy=policy,
     )
+
+
+def _add_dependency_descriptors(
+    descriptor: ProviderDescriptor,
+    spec: ProviderSpec,
+    deps: dict[Api, Any],
+    policy: list[AccessRule],
+) -> None:
+    """Attach the dependencies that can be rebuilt in a spawned worker."""
+    optional_dependencies = set(spec.optional_api_dependencies)
+    for dep_api, dep_impl in deps.items():
+        dep_spec = getattr(dep_impl, "__provider_spec__", None)
+        dep_config = getattr(dep_impl, "__provider_config__", None)
+        dep_provider_id = getattr(dep_impl, "__provider_id__", None)
+        reconstructable = (
+            dep_spec is not None
+            and dep_provider_id is not None
+            and not isinstance(dep_spec, AutoRoutedProviderSpec | RoutingTableProviderSpec)
+            and dep_spec.module is not None
+            and dep_spec.config_class is not None
+        )
+        if not reconstructable:
+            configured_vlm_requires_inference = dep_api == Api.inference and descriptor.config.get("vlm_model")
+            if dep_api in optional_dependencies and not configured_vlm_requires_inference:
+                logger.warning(
+                    "Skipping optional dependency that cannot be reconstructed in a worker",
+                    api=spec.api.value,
+                    dependency_api=dep_api.value,
+                    provider_id=dep_provider_id,
+                )
+                continue
+            raise ValueError(
+                f"Failed to build worker descriptor for '{descriptor.provider_id}': required dependency "
+                f"'{dep_api.value}' cannot be reconstructed in a worker."
+            )
+
+        assert dep_spec is not None
+        assert dep_provider_id is not None
+        dep_descriptor = _descriptor_for_impl(dep_api.value, dep_provider_id, dep_spec, dep_config, policy)
+        _add_dependency_descriptors(
+            dep_descriptor,
+            dep_spec,
+            getattr(dep_impl, "__provider_deps__", {}),
+            policy,
+        )
+        descriptor.dependencies[dep_api.value] = dep_descriptor
+
+    if descriptor.config.get("vlm_model") and Api.inference.value not in descriptor.dependencies:
+        raise ValueError(
+            f"Failed to build worker descriptor for '{descriptor.provider_id}': configured VLM processing requires "
+            "an inference dependency that can be reconstructed in a worker."
+        )
+
+
+def _register_worker_sibling_descriptors(
+    sibling_impls_by_api: dict[str, dict[str, Any]],
+    pool: Any,
+    policy: list[AccessRule],
+) -> None:
+    """Make all siblings of worker-backed APIs available to worker-side routers."""
+    registered = pool.registered_providers
+    worker_apis = {api for api, _provider_id in registered}
+    for api, siblings in sibling_impls_by_api.items():
+        if api not in worker_apis:
+            continue
+        for provider_id, impl in siblings.items():
+            if (api, provider_id) in registered:
+                continue
+            spec = getattr(impl, "__provider_spec__", None)
+            config = getattr(impl, "__provider_config__", None)
+            if spec is None:
+                raise ValueError(
+                    f"Failed to build worker descriptor for sibling provider '{provider_id}': provider spec is missing."
+                )
+            descriptor = _descriptor_for_impl(api, provider_id, spec, config, policy)
+            _add_dependency_descriptors(descriptor, spec, getattr(impl, "__provider_deps__", {}), policy)
+            pool.register(descriptor)
+            registered.add((api, provider_id))
 
 
 def _instantiate_worker_proxy(
@@ -506,6 +596,7 @@ def _instantiate_worker_proxy(
     provider_spec: ProviderSpec,
     config: Any,
     deps: dict[Api, Any],
+    policy: list[AccessRule],
 ) -> Any:
     """Register a worker-mode provider with the pool and return its server-side proxy.
 
@@ -528,16 +619,8 @@ def _instantiate_worker_proxy(
     if provider.provider_id is None:
         raise ValueError("Failed to start worker-mode provider: provider_id is not set.")
 
-    descriptor = _descriptor_for_impl(provider_spec.api.value, provider.provider_id, provider_spec, config)
-    for dep_api, dep_impl in deps.items():
-        dep_spec = getattr(dep_impl, "__provider_spec__", None)
-        dep_config = getattr(dep_impl, "__provider_config__", None)
-        dep_provider_id = getattr(dep_impl, "__provider_id__", None)
-        if dep_spec is None or dep_provider_id is None:
-            continue
-        descriptor.dependencies[dep_api.value] = _descriptor_for_impl(
-            dep_api.value, dep_provider_id, dep_spec, dep_config
-        )
+    descriptor = _descriptor_for_impl(provider_spec.api.value, provider.provider_id, provider_spec, config, policy)
+    _add_dependency_descriptors(descriptor, provider_spec, deps, policy)
 
     runtime.pool.register(descriptor)
     return factory(provider.provider_id, runtime.queue, deps)

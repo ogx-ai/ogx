@@ -12,9 +12,9 @@ all API-related code together.
 """
 
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol, cast
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import ValidationError
 
 from ogx_api.common.upload_limits import (
@@ -69,6 +69,9 @@ async def _build_request_and_file(
     max_upload_size_bytes: int,
 ) -> tuple[ProcessFileRequest, UploadFile | None]:
     """Shared multipart handling for the blocking and job-based submit endpoints."""
+    if (file is None) == (file_id is None):
+        raise HTTPException(status_code=400, detail="Exactly one of file or file_id must be provided.")
+
     parsed_chunking_strategy = _parse_chunking_strategy(chunking_strategy)
 
     safe_file: UploadFile | None = None
@@ -78,6 +81,36 @@ async def _build_request_and_file(
 
     request = ProcessFileRequest(file_id=file_id, options=options, chunking_strategy=parsed_chunking_strategy)
     return request, safe_file
+
+
+class _FileProcessorJobs(Protocol):
+    async def create_process_file_job(
+        self, request: ProcessFileRequest, file: UploadFile | None = None
+    ) -> ProcessFileJob: ...
+
+    async def list_process_file_jobs(
+        self, after: str | None = None, limit: int = 100
+    ) -> ListProcessFileJobsResponse: ...
+
+    async def retrieve_process_file_job(self, job_id: str) -> ProcessFileJob: ...
+
+    async def cancel_process_file_job(self, job_id: str) -> ProcessFileJob: ...
+
+
+def _job_impl(impl: FileProcessors) -> _FileProcessorJobs:
+    """Return the optional server-side job capability without expanding the provider SDK contract."""
+    methods = (
+        "create_process_file_job",
+        "list_process_file_jobs",
+        "retrieve_process_file_job",
+        "cancel_process_file_job",
+    )
+    if not all(callable(getattr(impl, name, None)) for name in methods):
+        raise HTTPException(
+            status_code=501,
+            detail="File processor job execution is not enabled for the configured provider.",
+        )
+    return cast(_FileProcessorJobs, impl)
 
 
 def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX_UPLOAD_SIZE_BYTES) -> APIRouter:
@@ -170,10 +203,11 @@ def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX
             ),
         ] = None,
     ) -> ProcessFileJob:
+        job_impl = _job_impl(impl)
         request, safe_file = await _build_request_and_file(
             file, file_id, options, chunking_strategy, max_upload_size_bytes
         )
-        return await impl.create_process_file_job(request, safe_file)
+        return await job_impl.create_process_file_job(request, safe_file)
 
     @router.get(
         "/file-processors/jobs",
@@ -181,8 +215,11 @@ def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX
         summary="List file-processing jobs.",
         description="List file-processing jobs, most recent first.",
     )
-    async def list_process_file_jobs() -> ListProcessFileJobsResponse:
-        return await impl.list_process_file_jobs()
+    async def list_process_file_jobs(
+        after: Annotated[str | None, Query(description="Return jobs after this job ID.")] = None,
+        limit: Annotated[int, Query(ge=1, le=100, description="Maximum jobs to return.")] = 100,
+    ) -> ListProcessFileJobsResponse:
+        return await _job_impl(impl).list_process_file_jobs(after=after, limit=limit)
 
     @router.get(
         "/file-processors/jobs/{job_id}",
@@ -191,7 +228,7 @@ def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX
         description="Retrieve the current state of a file-processing job, including its result once completed.",
     )
     async def retrieve_process_file_job(job_id: str) -> ProcessFileJob:
-        return await impl.retrieve_process_file_job(job_id)
+        return await _job_impl(impl).retrieve_process_file_job(job_id)
 
     @router.post(
         "/file-processors/jobs/{job_id}/cancel",
@@ -200,6 +237,6 @@ def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX
         description="Cancel a scheduled or in-progress file-processing job.",
     )
     async def cancel_process_file_job(job_id: str) -> ProcessFileJob:
-        return await impl.cancel_process_file_job(job_id)
+        return await _job_impl(impl).cancel_process_file_job(job_id)
 
     return router

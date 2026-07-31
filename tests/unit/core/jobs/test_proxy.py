@@ -10,8 +10,11 @@ import asyncio
 
 import pytest
 
+from ogx.core.datatypes import User
 from ogx.core.jobs.file_processor_proxy import FileProcessorJobProxy
 from ogx.core.jobs.queue import JobQueue
+from ogx.core.request_headers import RequestProviderDataContext
+from ogx_api import ResourceNotFoundError
 from ogx_api.common.job_types import JobStatus
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
 from ogx_api.vector_io import Chunk
@@ -56,6 +59,25 @@ async def test_create_job_stages_direct_upload(proxy: FileProcessorJobProxy, que
     record = await queue.get(job.job_id)
     # The enqueued payload references the staged file id, never raw bytes.
     assert record.payload["request"]["file_id"] == "file-staged-123"
+    assert record.payload["staged_file_id"] == "file-staged-123"
+
+
+@pytest.mark.parametrize(
+    ("process_request", "file"),
+    [
+        (ProcessFileRequest(), None),
+        (ProcessFileRequest(file_id="existing"), object()),
+    ],
+)
+async def test_direct_proxy_calls_require_exactly_one_input(
+    proxy: FileProcessorJobProxy,
+    process_request: ProcessFileRequest,
+    file: object | None,
+) -> None:
+    with pytest.raises(ValueError, match="exactly one of file or file_id"):
+        await proxy.create_process_file_job(process_request, file)
+
+    assert proxy.files_api.uploads == []
 
 
 async def test_failed_enqueue_cleans_up_staged_upload(proxy: FileProcessorJobProxy, queue: JobQueue):
@@ -89,6 +111,7 @@ async def test_create_job_with_file_id_does_not_upload(proxy: FileProcessorJobPr
     assert proxy.files_api.uploads == []
     record = await queue.get(job.job_id)
     assert record.payload["request"]["file_id"] == "existing"
+    assert record.max_attempts == 3
 
 
 async def test_retrieve_reflects_completion(proxy: FileProcessorJobProxy, queue: JobQueue):
@@ -103,14 +126,21 @@ async def test_retrieve_reflects_completion(proxy: FileProcessorJobProxy, queue:
 
 
 async def test_retrieve_unknown_job_raises(proxy: FileProcessorJobProxy):
-    with pytest.raises(ValueError, match="Failed to find file-processing job"):
+    with pytest.raises(ResourceNotFoundError, match="File-processing job 'nope' not found"):
         await proxy.retrieve_process_file_job("nope")
 
 
-async def test_cancel_job(proxy: FileProcessorJobProxy):
-    job = await proxy.create_process_file_job(ProcessFileRequest(file_id="f"), file=None)
+async def test_cancel_unknown_job_raises_not_found(proxy: FileProcessorJobProxy):
+    with pytest.raises(ResourceNotFoundError, match="File-processing job 'nope' not found"):
+        await proxy.cancel_process_file_job("nope")
+
+
+async def test_cancel_job_leaves_staged_file_for_durable_cleanup(proxy: FileProcessorJobProxy, queue: JobQueue):
+    job = await proxy.create_process_file_job(ProcessFileRequest(), file=object())
     cancelled = await proxy.cancel_process_file_job(job.job_id)
     assert cancelled.status == JobStatus.cancelled
+    assert proxy.files_api.deleted == []
+    assert (await queue.get(job.job_id)).cleaned_at is None
 
 
 async def test_list_jobs(proxy: FileProcessorJobProxy):
@@ -118,6 +148,43 @@ async def test_list_jobs(proxy: FileProcessorJobProxy):
     await proxy.create_process_file_job(ProcessFileRequest(file_id="b"), file=None)
     listed = await proxy.list_process_file_jobs()
     assert len(listed.data) == 2
+    assert not listed.has_more
+
+
+async def test_list_jobs_is_paginated_and_omits_result_bodies(proxy: FileProcessorJobProxy, queue: JobQueue):
+    jobs = [
+        await proxy.create_process_file_job(ProcessFileRequest(file_id=file_id), file=None)
+        for file_id in ("a", "b", "c")
+    ]
+    leased = await queue.lease("worker-A")
+    await queue.complete(leased.job_id, "worker-A", _result_payload())
+
+    first_page = await proxy.list_process_file_jobs(limit=2)
+    second_page = await proxy.list_process_file_jobs(after=first_page.data[-1].job_id, limit=2)
+
+    assert first_page.has_more
+    assert not second_page.has_more
+    assert len(first_page.data) == 2
+    assert len(second_page.data) == 1
+    assert all(job.result is None for job in first_page.data + second_page.data)
+    assert {job.job_id for job in first_page.data + second_page.data} == {job.job_id for job in jobs}
+
+
+async def test_proxy_job_control_is_scoped_to_authenticated_caller(proxy: FileProcessorJobProxy):
+    alice = User("alice", {"roles": ["member"]}, tenant_id="tenant-a")
+    bob = User("bob", {"roles": ["member"]}, tenant_id="tenant-a")
+    with RequestProviderDataContext(user=alice):
+        alice_job = await proxy.create_process_file_job(ProcessFileRequest(file_id="a"), file=None)
+
+    with RequestProviderDataContext(user=bob):
+        with pytest.raises(ResourceNotFoundError, match="File-processing job"):
+            await proxy.retrieve_process_file_job(alice_job.job_id)
+        assert (await proxy.list_process_file_jobs()).data == []
+        with pytest.raises(ResourceNotFoundError, match="File-processing job"):
+            await proxy.cancel_process_file_job(alice_job.job_id)
+
+    with RequestProviderDataContext(user=alice):
+        assert (await proxy.retrieve_process_file_job(alice_job.job_id)).job_id == alice_job.job_id
 
 
 async def test_blocking_process_file_waits_for_worker(proxy: FileProcessorJobProxy, queue: JobQueue):
@@ -141,12 +208,14 @@ async def test_blocking_process_file_waits_for_worker(proxy: FileProcessorJobPro
 
 async def test_blocking_process_file_raises_on_failure(proxy: FileProcessorJobProxy, queue: JobQueue):
     async def failing_worker():
-        for _ in range(50):
+        failed_attempts = 0
+        while failed_attempts < 3:
             leased = await queue.lease("worker-A")
-            if leased is not None:
-                await queue.fail(leased.job_id, "worker-A", "kaboom")
-                return
-            await asyncio.sleep(0.05)
+            if leased is None:
+                await asyncio.sleep(0.05)
+                continue
+            await queue.fail(leased.job_id, "worker-A", "kaboom")
+            failed_attempts += 1
 
     worker = asyncio.create_task(failing_worker())
     with pytest.raises(RuntimeError, match="kaboom"):

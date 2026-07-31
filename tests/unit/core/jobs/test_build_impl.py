@@ -11,6 +11,8 @@ an actual provider impl (with config, dependencies, policy, and initialize()) fr
 the serializable ProviderDescriptor the server hands off.
 """
 
+from ogx.core.access_control.datatypes import AccessRule, Action, Scope
+from ogx.core.jobs import worker
 from ogx.core.jobs.models import ProviderDescriptor
 from ogx.core.jobs.worker import _build_impl
 from ogx.core.storage.datatypes import SqliteSqlStoreConfig
@@ -48,9 +50,34 @@ async def test_build_impl_reconstructs_provider_with_dependencies(tmp_path):
         dependencies={"files": files_descriptor},
     )
 
+    policy = [AccessRule(permit=Scope(actions=Action.READ))]
+    files_descriptor.policy = policy
     impl = await _build_impl(descriptor)
 
     # The rebuilt processor is a working impl wired to its (also rebuilt) files dependency.
     assert hasattr(impl, "process_file")
     assert impl.files_api is not None
     assert hasattr(impl.files_api, "openai_upload_file")
+    assert impl.files_api.policy == policy
+
+
+def test_worker_wires_same_api_sibling_providers() -> None:
+    class _Impl:
+        def __init__(self):
+            self.siblings = None
+
+        def set_sibling_providers(self, siblings):
+            self.siblings = siblings
+
+    auto = _Impl()
+    pypdf = object()
+    markitdown = object()
+    impls = {
+        ("file_processors", "auto"): auto,
+        ("file_processors", "pypdf"): pypdf,
+        ("file_processors", "markitdown"): markitdown,
+    }
+
+    worker._wire_sibling_providers(impls)
+
+    assert auto.siblings == {"pypdf": pypdf, "markitdown": markitdown}

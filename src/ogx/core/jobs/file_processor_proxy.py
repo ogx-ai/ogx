@@ -21,7 +21,7 @@ from typing import Any
 from fastapi import UploadFile
 
 from ogx.log import get_logger
-from ogx_api import Api, Files
+from ogx_api import Api, Files, ResourceNotFoundError
 from ogx_api.file_processors import (
     ListProcessFileJobsResponse,
     ProcessFileJob,
@@ -54,6 +54,9 @@ class FileProcessorJobProxy(JobBackedProxy):
         scoped to that window only: once the job is queued the file belongs to the
         job and must outlive this call.
         """
+        if (file is None) == (request.file_id is None):
+            raise ValueError("Failed to process file: exactly one of file or file_id must be provided.")
+
         staged_file_id: str | None = None
         if file is not None:
             uploaded = await self.files_api.openai_upload_file(
@@ -64,7 +67,10 @@ class FileProcessorJobProxy(JobBackedProxy):
             request = request.model_copy(update={"file_id": uploaded.id})
 
         try:
-            return await self._enqueue(PROCESS_FILE_METHOD, {"request": request.model_dump(mode="json")})
+            payload: dict[str, Any] = {"request": request.model_dump(mode="json")}
+            if staged_file_id is not None:
+                payload["staged_file_id"] = staged_file_id
+            return await self._enqueue(PROCESS_FILE_METHOD, payload)
         except Exception:
             if staged_file_id is not None:
                 await self._discard_staged_file(staged_file_id)
@@ -78,8 +84,10 @@ class FileProcessorJobProxy(JobBackedProxy):
             logger.warning("Failed to delete orphaned staged file", file_id=file_id, error=str(e))
 
     @staticmethod
-    def _to_job(record: JobRecord) -> ProcessFileJob:
-        result = ProcessFileResponse.model_validate(record.result) if record.result is not None else None
+    def _to_job(record: JobRecord, include_result: bool = True) -> ProcessFileJob:
+        result = (
+            ProcessFileResponse.model_validate(record.result) if include_result and record.result is not None else None
+        )
         return ProcessFileJob(
             job_id=record.job_id,
             status=record.status,
@@ -107,17 +115,25 @@ class FileProcessorJobProxy(JobBackedProxy):
     async def retrieve_process_file_job(self, job_id: str) -> ProcessFileJob:
         record = await self._get(job_id)
         if record is None:
-            raise ValueError(f"Failed to find file-processing job '{job_id}'")
+            raise ResourceNotFoundError(job_id, resource_type="File-processing job")
         return self._to_job(record)
 
     async def cancel_process_file_job(self, job_id: str) -> ProcessFileJob:
         record = await self._cancel(job_id)
         if record is None:
-            raise ValueError(f"Failed to find file-processing job '{job_id}'")
+            raise ResourceNotFoundError(job_id, resource_type="File-processing job")
         return self._to_job(record)
 
-    async def list_process_file_jobs(self) -> ListProcessFileJobsResponse:
-        return ListProcessFileJobsResponse(data=[self._to_job(r) for r in await self._list()])
+    async def list_process_file_jobs(
+        self,
+        after: str | None = None,
+        limit: int = 100,
+    ) -> ListProcessFileJobsResponse:
+        records, has_more = await self._list(after=after, limit=limit)
+        return ListProcessFileJobsResponse(
+            data=[self._to_job(record, include_result=False) for record in records],
+            has_more=has_more,
+        )
 
 
 def _file_processor_proxy_factory(provider_id: str, job_queue: JobQueue, deps: dict[Api, Any]) -> FileProcessorJobProxy:

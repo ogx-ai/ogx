@@ -21,6 +21,7 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
+from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
 from ogx_api import Api
 from ogx_api.common.job_types import JobStatus
@@ -53,13 +54,14 @@ class JobBackedProxy:
         self.provider_id = provider_id
         self.job_queue = job_queue
 
-    async def _enqueue(self, method: str, payload: dict, max_attempts: int = 1) -> JobRecord:
+    async def _enqueue(self, method: str, payload: dict, max_attempts: int = 3) -> JobRecord:
         return await self.job_queue.enqueue(
             api=self.api,
             provider_id=self.provider_id,
             method=method,
             payload=payload,
             max_attempts=max_attempts,
+            authenticated_user=get_authenticated_user(),
         )
 
     async def _run_blocking(
@@ -85,7 +87,7 @@ class JobBackedProxy:
         """
         deadline = asyncio.get_running_loop().time() + timeout_seconds
         while True:
-            current = await self.job_queue.get(record.job_id)
+            current = await self._get(record.job_id)
             if current is not None and current.is_terminal:
                 if current.status == JobStatus.completed:
                     return current
@@ -97,13 +99,33 @@ class JobBackedProxy:
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)
 
     async def _get(self, job_id: str) -> JobRecord | None:
-        return await self.job_queue.get(job_id)
+        return await self.job_queue.get_scoped(
+            job_id,
+            self.api,
+            self.provider_id,
+            get_authenticated_user(),
+        )
 
     async def _cancel(self, job_id: str) -> JobRecord | None:
-        return await self.job_queue.cancel(job_id)
+        return await self.job_queue.cancel_scoped(
+            job_id,
+            self.api,
+            self.provider_id,
+            get_authenticated_user(),
+        )
 
-    async def _list(self, limit: int = DEFAULT_LIST_LIMIT) -> list[JobRecord]:
-        return await self.job_queue.list(api=self.api, limit=limit)
+    async def _list(
+        self,
+        after: str | None = None,
+        limit: int = DEFAULT_LIST_LIMIT,
+    ) -> tuple[list[JobRecord], bool]:
+        return await self.job_queue.list_scoped(
+            self.api,
+            self.provider_id,
+            get_authenticated_user(),
+            after=after,
+            limit=limit,
+        )
 
 
 # A factory builds an API's proxy from the provider id, the shared queue, and the

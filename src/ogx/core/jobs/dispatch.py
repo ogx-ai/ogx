@@ -14,7 +14,7 @@ into a JSON-serializable result for storage.
 Adding a new worker-backed API means adding one entry to ``JOB_DISPATCHERS``.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import BaseModel
@@ -27,6 +27,7 @@ class JobDispatcher(BaseModel):
 
     build_kwargs: Callable[[dict[str, Any]], dict[str, Any]]
     serialize_result: Callable[[Any], dict[str, Any]]
+    cleanup: Callable[[object, dict[str, Any]], Awaitable[None]] | None = None
 
 
 def _file_processors_process_file_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
@@ -41,11 +42,27 @@ def _serialize_pydantic(result: BaseModel) -> dict[str, Any]:
     return result.model_dump()
 
 
+async def _cleanup_file_processor_upload(impl: Any, payload: dict[str, Any]) -> None:
+    staged_file_id = payload.get("staged_file_id")
+    if staged_file_id is None:
+        return
+    from ogx_api import ResourceNotFoundError
+    from ogx_api.files import DeleteFileRequest
+
+    try:
+        await impl.files_api.openai_delete_file(DeleteFileRequest(file_id=staged_file_id))
+    except ResourceNotFoundError:
+        # A previous cleanup owner may have deleted the file before crashing
+        # just short of recording completion. Absence is the desired end state.
+        return
+
+
 # Keyed by (api, method).
 JOB_DISPATCHERS: dict[tuple[str, str], JobDispatcher] = {
     ("file_processors", "process_file"): JobDispatcher(
         build_kwargs=_file_processors_process_file_kwargs,
         serialize_result=_serialize_pydantic,
+        cleanup=_cleanup_file_processor_upload,
     ),
 }
 

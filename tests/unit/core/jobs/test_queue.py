@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+from ogx.core.datatypes import User
 from ogx.core.jobs.queue import JobQueue
 from ogx.core.storage.datatypes import SqliteSqlStoreConfig
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
@@ -133,7 +134,7 @@ async def test_reclaim_stale_fails_job_with_no_attempts_left(queue: JobQueue):
 
 
 async def test_lease_reclaims_expired_in_progress_job(queue: JobQueue):
-    record = await _enqueue(queue)
+    record = await _enqueue(queue, max_attempts=2)
     leased = await queue.lease("worker-A")
     await queue.sql_store.update(
         queue.table_name,
@@ -141,10 +142,46 @@ async def test_lease_reclaims_expired_in_progress_job(queue: JobQueue):
         where={"job_id": leased.job_id},
     )
     # Another worker should be able to pick up the abandoned job.
+    await queue.reclaim_stale()
     reclaimed = await queue.lease("worker-B")
     assert reclaimed is not None
     assert reclaimed.job_id == record.job_id
     assert reclaimed.lease_owner == "worker-B"
+
+
+async def test_live_lease_expiry_fails_job_when_attempt_budget_is_exhausted(queue: JobQueue):
+    record = await _enqueue(queue, max_attempts=1)
+    leased = await queue.lease("worker-A")
+    await queue.sql_store.update(
+        queue.table_name,
+        data={"lease_expires_at": int(time.time()) - 1},
+        where={"job_id": leased.job_id},
+    )
+
+    await queue.reclaim_stale()
+    assert await queue.lease("worker-B") is None
+    failed = await queue.get(record.job_id)
+    assert failed.status == JobStatus.failed
+    assert failed.attempts == 1
+    assert "no attempts remain" in failed.error
+
+
+async def test_terminal_cleanup_is_claimed_exclusively_and_retried(queue: JobQueue):
+    record = await _enqueue(queue)
+    leased = await queue.lease("worker-A")
+    await queue.complete(leased.job_id, "worker-A", {"chunks": []})
+
+    claimed = await queue.claim_cleanup("cleanup-A")
+    assert [item.job_id for item in claimed] == [record.job_id]
+    assert await queue.claim_cleanup("cleanup-B") == []
+
+    await queue.release_cleanup(record.job_id, "cleanup-A")
+    retried = await queue.claim_cleanup("cleanup-B")
+    assert [item.job_id for item in retried] == [record.job_id]
+
+    await queue.complete_cleanup(record.job_id, "cleanup-B")
+    assert await queue.claim_cleanup("cleanup-C") == []
+    assert (await queue.get(record.job_id)).cleaned_at is not None
 
 
 async def test_list_filters_by_api(queue: JobQueue):
@@ -154,6 +191,92 @@ async def test_list_filters_by_api(queue: JobQueue):
 
     listed = await queue.list(api="file_processors")
     assert {r.job_id for r in listed} == {first.job_id, second.job_id}
+
+
+async def test_scoped_job_operations_isolate_callers(queue: JobQueue):
+    alice = User("alice", {"roles": ["member"]}, tenant_id="tenant-a")
+    bob = User("bob", {"roles": ["member"]}, tenant_id="tenant-a")
+    alice_job = await _enqueue(queue, authenticated_user=alice)
+    bob_job = await _enqueue(queue, authenticated_user=bob)
+
+    assert await queue.get_scoped(alice_job.job_id, "file_processors", "p1", alice) is not None
+    assert await queue.get_scoped(alice_job.job_id, "file_processors", "p1", bob) is None
+    assert await queue.get_scoped(alice_job.job_id, "file_processors", "other", alice) is None
+    listed, has_more = await queue.list_scoped("file_processors", "p1", alice)
+    assert [record.job_id for record in listed] == [alice_job.job_id]
+    assert not has_more
+
+    assert await queue.cancel_scoped(alice_job.job_id, "file_processors", "p1", bob) is None
+    assert (await queue.get(alice_job.job_id)).status == JobStatus.scheduled
+    assert (await queue.cancel_scoped(alice_job.job_id, "file_processors", "p1", alice)).status == JobStatus.cancelled
+    assert (await queue.get(bob_job.job_id)).status == JobStatus.scheduled
+
+
+async def test_scoped_job_operations_isolate_tenants_for_same_principal(queue: JobQueue):
+    tenant_a = User("alice", None, tenant_id="tenant-a")
+    tenant_b = User("alice", None, tenant_id="tenant-b")
+    record = await _enqueue(queue, authenticated_user=tenant_a)
+
+    assert await queue.get_scoped(record.job_id, "file_processors", "p1", tenant_b) is None
+    assert await queue.get_scoped(record.job_id, "file_processors", "p1", tenant_a) is not None
+
+
+async def test_scoped_job_listing_has_stable_pagination_for_equal_timestamps(queue: JobQueue):
+    alice = User("alice", None, tenant_id="tenant-a")
+    records = [await _enqueue(queue, authenticated_user=alice) for _ in range(5)]
+    for record in records:
+        await queue.sql_store.update(queue.table_name, {"created_at": 100}, where={"job_id": record.job_id})
+
+    first_page, has_more = await queue.list_scoped("file_processors", "p1", alice, limit=2)
+    second_page, second_has_more = await queue.list_scoped(
+        "file_processors", "p1", alice, after=first_page[-1].job_id, limit=2
+    )
+    third_page, third_has_more = await queue.list_scoped(
+        "file_processors", "p1", alice, after=second_page[-1].job_id, limit=2
+    )
+
+    assert has_more
+    assert second_has_more
+    assert not third_has_more
+    assert [record.job_id for record in first_page + second_page + third_page] == sorted(
+        [record.job_id for record in records], reverse=True
+    )
+
+
+async def test_purge_expired_removes_only_old_terminal_jobs(queue: JobQueue):
+    old_completed = await _enqueue(queue)
+    old_pending_cleanup = await _enqueue(queue)
+    recent_failed = await _enqueue(queue)
+    old_active = await _enqueue(queue)
+    now = 1_000_000
+    cutoff_age = 7 * 24 * 60 * 60
+    await queue.sql_store.update(
+        queue.table_name,
+        {"status": JobStatus.completed.value, "updated_at": now - cutoff_age - 1, "cleaned_at": now - 1},
+        where={"job_id": old_completed.job_id},
+    )
+    await queue.sql_store.update(
+        queue.table_name,
+        {"status": JobStatus.completed.value, "updated_at": now - cutoff_age - 1},
+        where={"job_id": old_pending_cleanup.job_id},
+    )
+    await queue.sql_store.update(
+        queue.table_name,
+        {"status": JobStatus.failed.value, "updated_at": now - cutoff_age + 1, "cleaned_at": now - 1},
+        where={"job_id": recent_failed.job_id},
+    )
+    await queue.sql_store.update(
+        queue.table_name,
+        {"status": JobStatus.scheduled.value, "updated_at": now - cutoff_age - 1},
+        where={"job_id": old_active.job_id},
+    )
+
+    await queue.purge_expired(now=now)
+
+    assert await queue.get(old_completed.job_id) is None
+    assert await queue.get(old_pending_cleanup.job_id) is not None
+    assert await queue.get(recent_failed.job_id) is not None
+    assert await queue.get(old_active.job_id) is not None
 
 
 async def test_second_process_must_initialize_before_querying(tmp_path):

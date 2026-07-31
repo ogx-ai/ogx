@@ -817,9 +817,9 @@ class Stack:
         await refresh_registry_once(impls)
         await validate_vector_stores_config(self.run_config.vector_stores, impls)
 
-        # Recover any jobs left in-progress by a previous run, then launch workers.
+        # Workers reclaim interrupted jobs so terminal resource cleanup happens
+        # inside the restored request identity and provider context.
         if self.job_runtime is not None:
-            await self.job_runtime.queue.reclaim_stale()
             self.job_runtime.pool.start()
 
         self.impls = impls

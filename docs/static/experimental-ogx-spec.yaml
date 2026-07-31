@@ -385,22 +385,44 @@ paths:
               schema:
                 $ref: '#/components/schemas/ListProcessFileJobsResponse'
         '400':
-          description: Bad Request
           $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
         '429':
-          description: Too Many Requests
           $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
         '500':
-          description: Internal Server Error
           $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
         default:
-          description: Default Response
           $ref: '#/components/responses/DefaultError'
+          description: Default Response
       tags:
       - File Processors
       summary: List file-processing jobs.
       description: List file-processing jobs, most recent first.
       operationId: list_process_file_jobs_v1alpha_file_processors_jobs_get
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Return jobs after this job ID.
+          title: After
+        description: Return jobs after this job ID.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Maximum jobs to return.
+          default: 100
+          title: Limit
+        description: Maximum jobs to return.
     post:
       responses:
         '200':
@@ -410,17 +432,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProcessFileJob'
         '400':
-          description: Bad Request
           $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
         '429':
-          description: Too Many Requests
           $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
         '500':
-          description: Internal Server Error
           $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
         default:
-          description: Default Response
           $ref: '#/components/responses/DefaultError'
+          description: Default Response
       tags:
       - File Processors
       summary: Submit a file for asynchronous processing.
@@ -8122,6 +8144,11 @@ components:
           type: array
           title: Data
           description: The list of file-processing jobs.
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether more jobs are available after this page.
+          default: false
       type: object
       required:
       - data

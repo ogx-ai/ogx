@@ -88,6 +88,7 @@ class ListProcessFileJobsResponse(BaseModel):
     """Response model listing file-processing jobs."""
 
     data: list[ProcessFileJob] = Field(..., description="The list of file-processing jobs.")
+    has_more: bool = Field(default=False, description="Whether more jobs are available after this page.")
 
 
 __all__ = [
