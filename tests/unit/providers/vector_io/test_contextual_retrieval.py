@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.core.datatypes import ContextualRetrievalParams, QualifiedModel, VectorStoresConfig
-from llama_stack.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
-from llama_stack_api import (
+from ogx.core.datatypes import ContextualRetrievalParams, QualifiedModel, VectorStoresConfig
+from ogx.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
+from ogx_api import (
     Chunk,
     ChunkMetadata,
     DeleteChunksRequest,
@@ -93,7 +93,7 @@ def provider_with_model(inference_api):
 @pytest.fixture(autouse=False)
 def fast_retry(monkeypatch):
     """Eliminate backoff delays in retry tests."""
-    import llama_stack.providers.utils.memory.openai_vector_store_mixin as mod
+    import ogx.providers.utils.memory.openai_vector_store_mixin as mod
 
     monkeypatch.setattr(mod, "_RETRY_BASE_DELAY", 0.0)
     monkeypatch.setattr(mod.random, "uniform", lambda _a, _b: 0.0)

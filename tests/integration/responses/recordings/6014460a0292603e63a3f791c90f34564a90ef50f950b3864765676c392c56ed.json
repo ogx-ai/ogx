@@ -1,0 +1,130 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_response_is_retrievable[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello there!"
+        },
+        {
+          "role": "assistant",
+          "content": "Hi! How can I help?"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-6014460a0292",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "**Handoff Summary: Context Checkpoint Compaction**\n\n---\n\n### **1. Current Progress and Key Decisions Made**\n- Initiated interaction with the user. Greeting completed: \"Hello there!\"\n- Task request identified: \"Perform a CONTEXT CHECKPOINT COMPACTION\" with a structured handoff summary.\n- Decision to maintain concise, structured formatting to support seamless task continuity.\n  \n---\n\n### **2. Important Context, Constraints, or User Preferences**\n- User expects a clear, structured, and actionable summary for the next LLM.\n- Focus is on Compaction and Handoff Efficiency: brevity without losing critical information.\n- No explicit additional context or background has been shared yet by the user.\n\n---\n\n### **3. What Remains to be Done (Next Steps)**\n- Await further clarification or elaboration of user requirements, if necessary.\n- Expand the summary with critical context, examples, or details when provided.\n- Confirm alignment with the user\u2019s intent for the task (if unclear).\n- Follow any specific formatting preferences, if introduced.\n\n---\n\n### **4. Critical Data, Examples, or References Needed**\n- Additional task-specific context or details that the user may have but has not provided yet.\n- If possible, verify if the user has a specific example of prior work for reference in compaction/handoff style.\n- Any preferences on the level of formality or technical depth.\n\n---\n\n\ud83d\udca1 **Tip for Continuation**: Proactively check with the user if additional clarification is needed, and adapt as required. Keep the structure concise yet adaptable to dynamic user needs.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            },
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "protected_material_code": {
+                "filtered": false,
+                "detected": false
+              },
+              "protected_material_text": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": null,
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 318,
+          "prompt_tokens": 114,
+          "total_tokens": 432,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "prompt_filter_results": [
+          {
+            "prompt_index": 0,
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "jailbreak": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,13 +8,13 @@ import time
 from io import BytesIO
 
 import pytest
-from llama_stack_client import BadRequestError
+from ogx_open_client import BadRequestError
 from openai import BadRequestError as OpenAIBadRequestError
 from openai import OpenAI
 
-from llama_stack.core.library_client import LlamaStackAsLibraryClient
-from llama_stack.log import get_logger
-from llama_stack_api import ChunkMetadata, EmbeddedChunk, ExpiresAfter
+from ogx.core.library_client import OGXAsLibraryClient
+from ogx.log import get_logger
+from ogx_api import ChunkMetadata, EmbeddedChunk, ExpiresAfter
 
 from ..conftest import vector_provider_wrapper
 
@@ -44,11 +44,10 @@ def skip_if_provider_doesnt_support_openai_vector_stores(client_with_models):
 
 
 _PROVIDERS_WITH_NATIVE_FILTERING = {
-    "inline::faiss",
-    "inline::sqlite-vec",
-    "inline::milvus",
-    "remote::milvus",
-    "remote::pgvector",
+    "faiss",
+    "sqlite-vec",
+    "milvus",
+    "pgvector",
 }
 
 
@@ -106,7 +105,7 @@ def skip_if_provider_doesnt_support_openai_vector_stores_search(
     }
 
     # ChromaDB's default embedding function produces 384-dimensional embeddings whereas other providers produce 768-dimensional embeddings.
-    # More details: https://github.com/llamastack/llama-stack/issues/4588
+    # More details: https://github.com/ogx-ai/ogx/issues/4588
     # When using query_texts for keyword/hybrid search, the embedding dimension must match
     chromadb_default_embedding_dim = 384
 
@@ -145,11 +144,38 @@ def skip_if_provider_doesnt_support_openai_vector_stores_search(
     )
 
 
+def _get_file_content(client, vector_store_id, file_id, include_embeddings=None, include_metadata=None):
+    """Fetch vector store file content, adapting parameters to the client type.
+
+    The OpenAI SDK doesn't have include_embeddings/include_metadata as direct
+    parameters, so we pass them via extra_query. The generated SDK has them
+    as first-class parameters and doesn't support extra_query.
+    """
+    if isinstance(client, OpenAI):
+        extra_query = {}
+        if include_embeddings is not None:
+            extra_query["include_embeddings"] = include_embeddings
+        if include_metadata is not None:
+            extra_query["include_metadata"] = include_metadata
+        return client.vector_stores.files.content(
+            vector_store_id=vector_store_id,
+            file_id=file_id,
+            extra_query=extra_query if extra_query else None,
+        )
+    else:
+        return client.vector_stores.files.content(
+            vector_store_id=vector_store_id,
+            file_id=file_id,
+            include_embeddings=include_embeddings,
+            include_metadata=include_metadata,
+        )
+
+
 @pytest.fixture(scope="session")
 def sample_chunks():
     import time
 
-    from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
+    from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 
     chunks_data = [
         (
@@ -3563,7 +3589,7 @@ def test_openai_vector_store_with_chunks(
         },
     )
 
-    # Insert chunks using the native LlamaStack API (since OpenAI API doesn't have direct chunk insertion)
+    # Insert chunks using the native OGX API (since OpenAI API doesn't have direct chunk insertion)
     llama_client.vector_io.insert(
         vector_store_id=vector_store.id,
         chunks=sample_chunks,
@@ -3586,7 +3612,7 @@ def test_openai_vector_store_with_chunks(
     filtered_search = compat_client.vector_stores.search(
         vector_store_id=vector_store.id,
         query="artificial intelligence",
-        filters={"topic": "ai"},
+        filters={"type": "eq", "key": "topic", "value": "ai"},
         max_num_results=5,
     )
 
@@ -3786,7 +3812,7 @@ def test_openai_vector_store_search_with_high_score_filter(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_weighted_ranker(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -3798,7 +3824,7 @@ def test_openai_vector_store_search_with_weighted_ranker(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -3884,7 +3910,7 @@ def test_openai_vector_store_search_with_weighted_ranker(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_rrf_ranker(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -3896,7 +3922,7 @@ def test_openai_vector_store_search_with_rrf_ranker(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -3937,7 +3963,7 @@ def test_openai_vector_store_search_with_rrf_ranker(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_ranker_defaults(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -3949,7 +3975,7 @@ def test_openai_vector_store_search_with_ranker_defaults(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -4014,7 +4040,7 @@ def test_openai_vector_store_search_neural_ranker_validation(
 
     compat_client = compat_client_with_empty_stores
 
-    # OpenAI client doesn't support search_mode parameter (it's a Llama Stack extension)
+    # OpenAI client doesn't support search_mode parameter (it's a OGX extension)
     if isinstance(compat_client, OpenAI):
         pytest.skip("OpenAI client doesn't support search_mode parameter")
     llama_client = client_with_models
@@ -4064,7 +4090,7 @@ def test_openai_vector_store_search_neural_ranker_validation(
 
 @vector_provider_wrapper
 def test_openai_vector_store_search_with_ranking_options_combined(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     embedding_model_id,
@@ -4076,7 +4102,7 @@ def test_openai_vector_store_search_with_ranking_options_combined(
         client_with_models, "hybrid", vector_io_provider_id, embedding_dimension
     )
 
-    client = llama_stack_client
+    client = ogx_client
     llama_client = client_with_models
 
     # Create a vector store
@@ -4177,7 +4203,7 @@ def test_openai_vector_store_attach_file(
 ):
     """Test OpenAI vector store attach file."""
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     compat_client = compat_client_with_empty_stores
 
@@ -4361,7 +4387,7 @@ def test_openai_vector_store_attach_files_on_creation(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create some files and attach them to the vector store
     valid_file_ids = []
@@ -4426,7 +4452,7 @@ def test_openai_vector_store_list_files(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4501,7 +4527,7 @@ def test_openai_vector_store_list_files_invalid_vector_store(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    if isinstance(compat_client, LlamaStackAsLibraryClient):
+    if isinstance(compat_client, OGXAsLibraryClient):
         errors = ValueError
     else:
         errors = (BadRequestError, OpenAIBadRequestError)
@@ -4518,7 +4544,7 @@ def test_openai_vector_store_retrieve_file_contents(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4563,7 +4589,7 @@ def test_openai_vector_store_retrieve_file_contents(
     assert len(file_contents.data) == 1
     content = file_contents.data[0]
 
-    # llama-stack-client returns a model, openai-python is a badboy and returns a dict
+    # ogx-client returns a model, openai-python is a badboy and returns a dict
     if not isinstance(content, dict):
         content = content.model_dump()
     assert content["type"] == "text"
@@ -4579,7 +4605,7 @@ def test_openai_vector_store_delete_file(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4645,7 +4671,7 @@ def test_openai_vector_store_delete_file_removes_from_vector_store(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4697,7 +4723,7 @@ def test_openai_vector_store_update_file(
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
 
     compat_client = compat_client_with_empty_stores
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     # Create a vector store
     vector_store = compat_client.vector_stores.create(
@@ -4754,7 +4780,7 @@ def test_create_vector_store_files_duplicate_vector_store_name(
     This test confirms that client.vector_stores.create() creates a unique ID
     """
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
-    from llama_stack_api import ExpiresAfter
+    from ogx_api import ExpiresAfter
 
     compat_client = compat_client_with_empty_stores
 
@@ -4820,7 +4846,7 @@ def test_create_vector_store_files_duplicate_vector_store_name(
 @pytest.mark.parametrize("search_mode", ["vector", "keyword", "hybrid"])
 @vector_provider_wrapper
 def test_openai_vector_store_search_modes(
-    llama_stack_client,
+    ogx_client,
     client_with_models,
     sample_chunks,
     search_mode,
@@ -4833,7 +4859,7 @@ def test_openai_vector_store_search_modes(
         client_with_models, search_mode, vector_io_provider_id, embedding_dimension
     )
 
-    vector_store = llama_stack_client.vector_stores.create(
+    vector_store = ogx_client.vector_stores.create(
         name=f"search_mode_test_{search_mode}",
         metadata={"purpose": "search_mode_testing"},
         extra_body={
@@ -4848,7 +4874,7 @@ def test_openai_vector_store_search_modes(
     )
     query = "Python programming language"
 
-    search_response = llama_stack_client.vector_stores.search(
+    search_response = ogx_client.vector_stores.search(
         vector_store_id=vector_store.id,
         query=query,
         max_num_results=4,
@@ -4893,7 +4919,7 @@ def test_openai_vector_store_file_batch_create_and_retrieve(
     )
 
     assert batch is not None
-    assert batch.object == "vector_store.file_batch"
+    assert batch.object == "vector_store.files_batch"
     assert batch.vector_store_id == vector_store.id
     assert batch.status in ["in_progress", "completed"]
     assert batch.file_counts.total == len(file_ids)
@@ -4917,7 +4943,7 @@ def test_openai_vector_store_file_batch_create_and_retrieve(
     assert retrieved_batch is not None
     assert retrieved_batch.id == batch.id
     assert retrieved_batch.vector_store_id == vector_store.id
-    assert retrieved_batch.object == "vector_store.file_batch"
+    assert retrieved_batch.object == "vector_store.files_batch"
     assert retrieved_batch.file_counts.total == len(file_ids)
     assert retrieved_batch.status == "completed"  # Should be completed after processing
 
@@ -5063,7 +5089,7 @@ def test_openai_vector_store_file_batch_cancel(
         assert cancelled_batch.id == batch.id
         assert cancelled_batch.vector_store_id == vector_store.id
         assert cancelled_batch.status == "cancelled"
-        assert cancelled_batch.object == "vector_store.file_batch"
+        assert cancelled_batch.object == "vector_store.files_batch"
     except Exception:
         # If cancellation fails (e.g., batch completed too quickly),
         # verify the batch reached completion instead
@@ -5182,7 +5208,7 @@ def test_openai_vector_store_file_batch_error_handling(
     assert batch.file_counts.failed >= 0  # Implementation may vary
 
     # Test retrieving non-existent batch (returns BadRequestError)
-    if isinstance(compat_client, LlamaStackAsLibraryClient):
+    if isinstance(compat_client, OGXAsLibraryClient):
         batch_errors = ValueError
     else:
         batch_errors = (BadRequestError, OpenAIBadRequestError)
@@ -5194,7 +5220,7 @@ def test_openai_vector_store_file_batch_error_handling(
         )
 
     # Test operations on non-existent vector store (returns BadRequestError)
-    if isinstance(compat_client, LlamaStackAsLibraryClient):
+    if isinstance(compat_client, OGXAsLibraryClient):
         vector_store_errors = ValueError
     else:
         vector_store_errors = (BadRequestError, OpenAIBadRequestError)
@@ -5264,7 +5290,7 @@ def test_openai_vector_store_embedding_config_from_metadata(
 def test_openai_vector_store_file_contents_with_extra_query(
     compat_client_with_empty_stores, client_with_models, embedding_model_id, embedding_dimension, vector_io_provider_id
 ):
-    """Test that vector store file contents endpoint supports extra_query parameter."""
+    """Test that vector store file contents endpoint supports include_embeddings and include_metadata flags."""
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
     compat_client = compat_client_with_empty_stores
 
@@ -5297,15 +5323,18 @@ def test_openai_vector_store_file_contents_with_extra_query(
     # Wait for processing
     time.sleep(2)
 
-    # Test that extra_query parameter is accepted and processed
-    content_with_extra_query = compat_client.vector_stores.files.content(
+    # Test that include flags are accepted and processed
+    content_with_extra_query = _get_file_content(
+        compat_client,
         vector_store_id=vector_store.id,
         file_id=file.id,
-        extra_query={"include_embeddings": True, "include_metadata": True},
+        include_embeddings=True,
+        include_metadata=True,
     )
 
-    # Test without extra_query for comparison
-    content_without_extra_query = compat_client.vector_stores.files.content(
+    # Test without include flags for comparison
+    content_without_extra_query = _get_file_content(
+        compat_client,
         vector_store_id=vector_store.id,
         file_id=file.id,
     )
@@ -5316,12 +5345,12 @@ def test_openai_vector_store_file_contents_with_extra_query(
     assert len(content_with_extra_query.data) > 0
     assert len(content_without_extra_query.data) > 0
 
-    # Validate that extra_query parameter is processed correctly
+    # Validate that include flags are processed correctly
     # Both should have the embedding/metadata fields available (may be None based on flags)
     first_chunk_with_flags = content_with_extra_query.data[0]
     first_chunk_without_flags = content_without_extra_query.data[0]
 
-    # The key validation: extra_query fields are present in the response
+    # The key validation: expected fields are present in the response
     # Handle both dict and object responses (different clients may return different formats)
     def has_field(obj, field):
         if isinstance(obj, dict):
@@ -5332,8 +5361,10 @@ def test_openai_vector_store_file_contents_with_extra_query(
     # Validate that all expected fields are present in both responses
     expected_fields = ["embedding", "chunk_metadata", "metadata", "text"]
     for field in expected_fields:
-        assert has_field(first_chunk_with_flags, field), f"Field '{field}' missing from response with extra_query"
-        assert has_field(first_chunk_without_flags, field), f"Field '{field}' missing from response without extra_query"
+        assert has_field(first_chunk_with_flags, field), f"Field '{field}' missing from response with include flags"
+        assert has_field(first_chunk_without_flags, field), (
+            f"Field '{field}' missing from response without include flags"
+        )
 
     # Validate content is the same
     def get_field(obj, field):

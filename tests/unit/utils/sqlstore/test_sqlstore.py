@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,12 +11,12 @@ from unittest.mock import patch
 
 import pytest
 
-from llama_stack.core.storage.datatypes import PostgresSqlStoreConfig
-from llama_stack.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
-from llama_stack.core.storage.sqlstore.sqlstore import SqliteSqlStoreConfig
+from ogx.core.storage.datatypes import PostgresSqlStoreConfig
+from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
+from ogx.core.storage.sqlstore.sqlstore import SqliteSqlStoreConfig
 
 _SQLSTORE_MODULE = sys.modules[SqlAlchemySqlStoreImpl.__module__]
-from llama_stack_api.internal.sqlstore import ColumnDefinition, ColumnType
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 
 async def test_sqlstore_shutdown_disposes_engine():
@@ -24,7 +24,7 @@ async def test_sqlstore_shutdown_disposes_engine():
 
     This is critical for aiosqlite >= 0.22 where worker threads are non-daemon.
     Without proper engine disposal, the process hangs on exit.
-    See: https://github.com/llamastack/llama-stack/issues/4587
+    See: https://github.com/ogx-ai/ogx/issues/4587
     """
     with TemporaryDirectory() as tmp_dir:
         db_path = tmp_dir + "/shutdown_test.db"
@@ -559,7 +559,7 @@ async def test_postgres_pool_config_defaults():
     cfg = PostgresSqlStoreConfig(user="test", password="test")
     assert cfg.pool_size == 10
     assert cfg.max_overflow == 20
-    assert cfg.pool_recycle == -1
+    assert cfg.pool_recycle == 3600
 
 
 async def test_postgres_pool_kwargs_propagate_to_engine():
@@ -602,3 +602,34 @@ async def test_pool_recycle_is_configurable():
         pool_recycle=300,
     )
     assert cfg.pool_recycle == 300
+
+
+async def test_late_table_creation_after_engine_init():
+    """Tables registered after the engine has started are still physically created.
+
+    When one provider triggers _ensure_engine (via a data operation) before another
+    provider registers its tables, the late tables must still be created in the
+    database. Regression test for the 'no such table: responses' CI failure.
+    """
+    with TemporaryDirectory() as tmp_dir:
+        db_path = tmp_dir + "/late_table.db"
+        config = SqliteSqlStoreConfig(db_path=db_path)
+        store = SqlAlchemySqlStoreImpl(config)
+
+        await store.create_table(
+            "early_table",
+            {"id": ColumnDefinition(type=ColumnType.STRING, primary_key=True), "data": ColumnType.STRING},
+        )
+        await store.insert("early_table", {"id": "1", "data": "hello"})
+
+        await store.create_table(
+            "late_table",
+            {"id": ColumnDefinition(type=ColumnType.STRING, primary_key=True), "value": ColumnType.STRING},
+        )
+        await store.insert("late_table", {"id": "a", "value": "world"})
+
+        result = await store.fetch_all("late_table")
+        assert len(result.data) == 1
+        assert result.data[0]["value"] == "world"
+
+        await store.shutdown()

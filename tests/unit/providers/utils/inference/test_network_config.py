@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,18 +11,26 @@ from pathlib import Path
 import httpx
 import pytest
 
-from llama_stack.providers.utils.inference.http_client import (
-    _build_network_client_kwargs,
+from ogx.providers.utils.inference.http_client import (
+    _build_limits,
     _build_proxy_mounts,
     _build_ssl_context,
     build_http_client,
 )
-from llama_stack.providers.utils.inference.model_registry import (
+from ogx.providers.utils.inference.http_client import (
+    build_network_client_kwargs as _build_network_client_kwargs,
+)
+from ogx.providers.utils.inference.model_registry import (
+    RemoteInferenceProviderConfig,
+)
+from ogx.providers.utils.inference.network_config import (
+    LimitsConfig,
     NetworkConfig,
     ProxyConfig,
     TimeoutConfig,
     TLSConfig,
 )
+from tests.unit.providers.utils.inference.openai_mixin_helpers import OpenAIMixinImpl
 
 
 class TestTLSConfig:
@@ -209,6 +217,42 @@ class TestTimeoutConfig:
         assert config.read == 30.0
 
 
+class TestLimitsConfig:
+    """Tests for LimitsConfig model, matching httpx.Limits defaults."""
+
+    def test_default_values_match_httpx_defaults(self):
+        """Test LimitsConfig defaults match httpx.Limits defaults."""
+        config = LimitsConfig()
+        assert config.max_connections == 100
+        assert config.max_keepalive_connections == 20
+        assert config.keepalive_expiry == 5.0
+
+    def test_custom_max_connections(self):
+        """Test LimitsConfig with a custom max_connections."""
+        config = LimitsConfig(max_connections=500)
+        assert config.max_connections == 500
+        # Unset fields keep httpx's own defaults, not None/unlimited.
+        assert config.max_keepalive_connections == 20
+        assert config.keepalive_expiry == 5.0
+
+    def test_none_disables_limit(self):
+        """Test that None means no limit, per httpx.Limits semantics."""
+        config = LimitsConfig(max_connections=None, max_keepalive_connections=None, keepalive_expiry=None)
+        assert config.max_connections is None
+        assert config.max_keepalive_connections is None
+        assert config.keepalive_expiry is None
+
+    def test_rejects_negative_max_connections(self):
+        """Test that negative max_connections is rejected."""
+        with pytest.raises(ValueError):
+            LimitsConfig(max_connections=0)
+
+    def test_rejects_negative_keepalive_expiry(self):
+        """Test that negative keepalive_expiry is rejected."""
+        with pytest.raises(ValueError):
+            LimitsConfig(keepalive_expiry=-1.0)
+
+
 class TestNetworkConfig:
     """Tests for NetworkConfig model."""
 
@@ -218,6 +262,7 @@ class TestNetworkConfig:
         assert config.tls is None
         assert config.proxy is None
         assert config.timeout is None
+        assert config.limits is None
 
     def test_with_tls_config(self):
         """Test NetworkConfig with TLS configuration."""
@@ -244,17 +289,26 @@ class TestNetworkConfig:
         assert config.timeout.connect == 5.0
         assert config.timeout.read == 30.0
 
+    def test_with_limits_config(self):
+        """Test NetworkConfig with connection pool limits."""
+        config = NetworkConfig(limits=LimitsConfig(max_connections=200, max_keepalive_connections=50))
+        assert config.limits is not None
+        assert config.limits.max_connections == 200
+        assert config.limits.max_keepalive_connections == 50
+
     def test_full_config(self):
         """Test NetworkConfig with all options."""
         config = NetworkConfig(
             tls=TLSConfig(verify=True, min_version="TLSv1.2"),
             proxy=ProxyConfig(url="http://proxy:8080"),
             timeout=60.0,
+            limits=LimitsConfig(max_connections=200),
         )
         assert config.tls.verify is True
         assert config.tls.min_version == "TLSv1.2"
         assert str(config.proxy.url) == "http://proxy:8080/"
         assert config.timeout == 60.0
+        assert config.limits.max_connections == 200
 
 
 class TestBuildSSLContext:
@@ -273,7 +327,7 @@ class TestBuildSSLContext:
         assert result is False
 
     def test_verify_with_path(self):
-        """Test SSL context with CA path returns the path."""
+        """Test SSL context with CA path returns a string (httpx requires str, not Path)."""
         with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as f:
             f.write(b"fake cert")
             cert_path = f.name
@@ -281,7 +335,8 @@ class TestBuildSSLContext:
         try:
             tls_config = TLSConfig(verify=cert_path)
             result = _build_ssl_context(tls_config)
-            assert result.resolve() == Path(cert_path).resolve()
+            assert isinstance(result, str)
+            assert Path(result).resolve() == Path(cert_path).resolve()
         finally:
             Path(cert_path).unlink()
 
@@ -484,13 +539,55 @@ class TestBuildHttpClient:
         assert "http_client" in result
         assert isinstance(result["http_client"], httpx.AsyncClient)
 
+    def test_with_limits(self):
+        """Test http client with connection pool limits."""
+        config = NetworkConfig(limits=LimitsConfig(max_connections=500, max_keepalive_connections=100))
+        result = build_http_client(config)
+        assert "http_client" in result
+        assert isinstance(result["http_client"], httpx.AsyncClient)
+
+        client_kwargs = _build_network_client_kwargs(config)
+        assert "limits" in client_kwargs
+        limits = client_kwargs["limits"]
+        assert isinstance(limits, httpx.Limits)
+        assert limits.max_connections == 500
+        assert limits.max_keepalive_connections == 100
+        assert limits.keepalive_expiry == 5.0
+
+    def test_without_limits_omits_limits_kwarg(self):
+        """Test that leaving limits unset doesn't add a limits kwarg, preserving httpx defaults."""
+        config = NetworkConfig(timeout=30.0)
+        client_kwargs = _build_network_client_kwargs(config)
+        assert "limits" not in client_kwargs
+
+
+class TestBuildLimits:
+    """Tests for _build_limits function."""
+
+    def test_builds_httpx_limits_from_config(self):
+        """Test that _build_limits converts LimitsConfig to httpx.Limits faithfully."""
+        config = LimitsConfig(max_connections=250, max_keepalive_connections=30, keepalive_expiry=10.0)
+        limits = _build_limits(config)
+        assert isinstance(limits, httpx.Limits)
+        assert limits.max_connections == 250
+        assert limits.max_keepalive_connections == 30
+        assert limits.keepalive_expiry == 10.0
+
+    def test_none_fields_pass_through_as_unlimited(self):
+        """Test that None fields in LimitsConfig map to unlimited/no-expiry in httpx.Limits."""
+        config = LimitsConfig(max_connections=None, max_keepalive_connections=None, keepalive_expiry=None)
+        limits = _build_limits(config)
+        assert limits.max_connections is None
+        assert limits.max_keepalive_connections is None
+        assert limits.keepalive_expiry is None
+
 
 class TestVLLMBackwardCompatibility:
     """Tests for vLLM backward compatibility with tls_verify."""
 
     def test_legacy_tls_verify_true(self):
         """Test that legacy tls_verify=True is migrated."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
             config = VLLMInferenceAdapterConfig(tls_verify=True)
@@ -501,7 +598,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_legacy_tls_verify_false(self):
         """Test that legacy tls_verify=False is migrated."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
             config = VLLMInferenceAdapterConfig(tls_verify=False)
@@ -512,7 +609,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_legacy_tls_verify_path(self):
         """Test that legacy tls_verify path is migrated."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with tempfile.NamedTemporaryFile(suffix=".crt", delete=False) as f:
             f.write(b"fake cert")
@@ -530,7 +627,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_new_network_config_style(self):
         """Test that new network config style works."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         config = VLLMInferenceAdapterConfig(
             network=NetworkConfig(
@@ -545,7 +642,7 @@ class TestVLLMBackwardCompatibility:
 
     def test_network_not_overwritten_by_tls_verify(self):
         """Test that existing network.tls is not overwritten by tls_verify."""
-        from llama_stack.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
+        from ogx.providers.remote.inference.vllm import VLLMInferenceAdapterConfig
 
         with pytest.warns(DeprecationWarning, match="tls_verify.*deprecated"):
             config = VLLMInferenceAdapterConfig(
@@ -556,3 +653,29 @@ class TestVLLMBackwardCompatibility:
         # network.tls should be preserved since it was explicitly set
         assert config.network.tls.verify is True
         assert config.network.tls.min_version == "TLSv1.3"
+
+
+class TestOpenAIMixinConnectionLimits:
+    """End-to-end tests that configured connection pool limits reach the real httpx pool
+    used by OpenAIMixin-based remote inference providers."""
+
+    def test_configured_limits_reach_httpx_connection_pool(self):
+        """Test that NetworkConfig.limits ends up on the actual httpx connection pool."""
+        config = RemoteInferenceProviderConfig(
+            network=NetworkConfig(limits=LimitsConfig(max_connections=333, max_keepalive_connections=42))
+        )
+        mixin = OpenAIMixinImpl(config=config)
+
+        pool = mixin.client._client._transport._pool
+        assert pool._max_connections == 333
+        assert pool._max_keepalive_connections == 42
+
+    def test_partial_limits_config_falls_back_to_httpx_defaults_for_unset_fields(self):
+        """Test that overriding only one limits field leaves the others at httpx's defaults,
+        rather than leaving them unbounded."""
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(limits=LimitsConfig(max_connections=500)))
+        mixin = OpenAIMixinImpl(config=config)
+
+        pool = mixin.client._client._transport._pool
+        assert pool._max_connections == 500
+        assert pool._max_keepalive_connections == 20

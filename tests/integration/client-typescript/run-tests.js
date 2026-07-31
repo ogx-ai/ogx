@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Copyright (c) The OGX Contributors.
 // All rights reserved.
 //
 // This source code is licensed under the terms described in the LICENSE file in
@@ -14,11 +14,11 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const suite = process.env.LLAMA_STACK_TEST_SUITE;
-const setup = process.env.LLAMA_STACK_TEST_SETUP || '';
+const suite = process.env.OGX_TEST_SUITE;
+const setup = process.env.OGX_TEST_SETUP || '';
 
 if (!suite) {
-  console.error('Error: LLAMA_STACK_TEST_SUITE environment variable is required');
+  console.error('Error: OGX_TEST_SUITE environment variable is required');
   process.exit(1);
 }
 

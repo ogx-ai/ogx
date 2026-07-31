@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,8 +11,8 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
-from llama_stack.core.request_headers import PROVIDER_DATA_VAR
-from llama_stack.core.task import (
+from ogx.core.request_headers import PROVIDER_DATA_VAR
+from ogx.core.task import (
     RequestContext,
     activate_request_context,
     capture_request_context,

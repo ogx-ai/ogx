@@ -2,18 +2,18 @@
 # Unified PyPI/NPM Release Workflow
 # =============================================================================
 #
-# This workflow builds, tests, and publishes all llama-stack packages:
-# - llama-stack (PyPI)
-# - llama-stack-api (PyPI)
-# - llama-stack-client-python (PyPI, from external repo)
-# - llama-stack-client-typescript (npm, from external repo)
+# This workflow builds, tests, and publishes all ogx packages:
+# - ogx (PyPI)
+# - ogx-api (PyPI)
+# - ogx-client (PyPI, OpenAPI-generated SDK)
+# - ogx-client-typescript (npm, from external repo)
 #
 # =============================================================================
 # REQUIRED SECRETS
 # =============================================================================
 #
 # 1. NPM_TOKEN - npm Access Token
-#    Purpose: Publish llama-stack-client package to npmjs.org (production only)
+#    Purpose: Publish ogx-client package to npmjs.org (production only)
 #
 #    How to create:
 #    - Log in to https://www.npmjs.com/
@@ -23,7 +23,7 @@
 #    Add to repo: Settings > Secrets and variables > Actions > New repository secret
 #    Name: NPM_TOKEN
 #
-#    Note: Token owner must have publish access to llama-stack-client on npm
+#    Note: Token owner must have publish access to ogx-client on npm
 #
 # 2. DOCKERHUB_USERNAME - DockerHub username
 #    Purpose: Authenticate with DockerHub to push distribution images
@@ -52,7 +52,7 @@
 #
 # packages:
 #   - all: Build all packages
-#   - llama-stack-only: Build only llama-stack and llama-stack-api
+#   - ogx-only: Build only ogx and ogx-api
 #   - clients-only: Build only client packages
 #
 # client_ref: Git ref for client repos. Auto-detected from branch:
@@ -64,6 +64,15 @@
 #   images. Use this to retry Docker publishing after a run where packages
 #   published successfully but image builds failed. Requires "version" to be
 #   set to the already-published version.
+#
+# package_name: PyPI package to bundle in the Docker images. Defaults to "ogx".
+#   Set to "llama-stack" to publish images for pre-rename releases (e.g. 0.5.0),
+#   which were published under the old package name. The CLI binary and home
+#   directory are derived automatically ("llama-stack" -> "llama"/".llama").
+#
+# skip_latest: When true, production image builds are tagged only with the
+#   version and not also as "latest". Use when backfilling an older release so
+#   it does not become the default image users pull.
 #
 # =============================================================================
 
@@ -107,7 +116,7 @@ on:
         type: choice
         options:
           - all
-          - llama-stack-only
+          - ogx-only
           - clients-only
         default: 'all'
       client_ref:
@@ -120,6 +129,16 @@ on:
         required: false
         type: boolean
         default: false
+      package_name:
+        description: 'PyPI package to bundle in Docker images. Use "llama-stack" for pre-rename releases (e.g. 0.5.0).'
+        required: false
+        type: string
+        default: 'ogx'
+      skip_latest:
+        description: 'Do not also tag/push images as "latest". Use when backfilling an older release so it does not become the default pull.'
+        required: false
+        type: boolean
+        default: false
 
 env:
   LC_ALL: en_US.UTF-8
@@ -127,6 +146,10 @@ env:
 defaults:
   run:
     shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -147,7 +170,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -188,26 +211,28 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
           # Local packages (in this repo)
-          - package: llama-stack-api
-            path: src/llama_stack_api
+          - package: ogx-api
+            path: src/ogx_api
             type: local
             registry: pypi
-          - package: llama-stack
+          - package: ogx
             path: .
             type: local
             registry: pypi
-          # External packages (client SDKs from other repos)
-          - package: llama-stack-client-python
-            repo: llamastack/llama-stack-client-python
-            type: external
+          # OpenAPI-generated SDK (built from spec in this repo)
+          - package: ogx-client
+            path: client-sdks/openapi
+            type: openapi-sdk
             registry: pypi
-          - package: llama-stack-client-typescript
-            repo: llamastack/llama-stack-client-typescript
+          # External packages (client SDKs from other repos)
+          - package: ogx-client-typescript
+            repo: ogx-ai/ogx-client-typescript
             type: external
             registry: npm
 
@@ -222,9 +247,9 @@ jobs:
 
           if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "llama-stack-only" ] && [ "$TYPE" == "local" ]; then
+          elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "clients-only" ] && [ "$TYPE" == "external" ]; then
+          elif [ "$PACKAGES" == "clients-only" ] && { [ "$TYPE" == "external" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           else
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -233,13 +258,13 @@ jobs:
 
       # === LOCAL PACKAGE STEPS ===
       - name: Checkout local repo
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # for setuptools-scm
 
       - name: Install dependent PRs if needed
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
         uses: depends-on/depends-on-action@826c144163ac67bf08347590a5f81afd45da63ca # main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -285,13 +310,13 @@ jobs:
       # === PYTHON SETUP (for all Python packages) ===
       - name: Set up Python
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'pypi'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
       - name: Install uv
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'pypi'
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 
       - name: Install build dependencies
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'pypi'
@@ -300,23 +325,23 @@ jobs:
       # === NODE SETUP (for npm packages) ===
       - name: Set up Node.js
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
       # === LOCAL PYTHON PACKAGE BUILD ===
-      - name: Check for missing package entries (llama-stack-api)
-        if: steps.should-build.outputs.skip != 'true' && matrix.package == 'llama-stack-api'
-        working-directory: src/llama_stack_api
+      - name: Check for missing package entries (ogx-api)
+        if: steps.should-build.outputs.skip != 'true' && matrix.package == 'ogx-api'
+        working-directory: src/ogx_api
         run: |
           for f in *.py; do
             [[ "$f" == "__init__.py" ]] && continue
-            grep -q "llama_stack_api.${f%.py}" pyproject.toml || echo "::warning::Missing from py-modules: ${f%.py}"
+            grep -q "ogx_api.${f%.py}" pyproject.toml || echo "::warning::Missing from py-modules: ${f%.py}"
           done
           for d in */; do
             [[ "$d" =~ ^(__pycache__|dist|build|.*egg-info|\..*)/$ ]] && continue
-            grep -q "llama_stack_api.${d%/}" pyproject.toml || echo "::warning::Missing from packages: ${d%/}"
+            grep -q "ogx_api.${d%/}" pyproject.toml || echo "::warning::Missing from packages: ${d%/}"
           done
 
       - name: Build local Python package
@@ -326,16 +351,128 @@ jobs:
         env:
           SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.compute-version.outputs.version }}
 
+      # === OPENAPI SDK BUILD (ogx-client) ===
+      - name: Set up Java (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Set up Node.js (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '20'
+
+      - name: Install openapi-generator-cli (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      - name: Generate and build OpenAPI SDK
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        working-directory: ${{ matrix.path }}
+        run: |
+          VERSION="${{ needs.compute-version.outputs.version }}"
+          echo "Generating SDK with OPEN=0 (ogx_client) at version ${VERSION}..."
+          make sdk OPEN=0 VERSION="${VERSION}"
+
+          cd sdks/python
+          echo "Building Python package..."
+          uv build --out-dir ../../dist --no-build-isolation
+
+      - name: Verify OpenAPI SDK generation
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        working-directory: ${{ matrix.path }}
+        run: |
+          PY_FILE_COUNT=$(find sdks/python -name "*.py" | wc -l)
+          echo "Generated Python files: $PY_FILE_COUNT"
+          if [ "$PY_FILE_COUNT" -le 10 ]; then
+            echo "::error::Too few Python files generated (expected > 10, got $PY_FILE_COUNT)"
+            exit 1
+          fi
+          echo "SDK generated successfully"
+
       # === EXTERNAL PYTHON PACKAGE BUILD ===
+      - name: Check and bump version if exists on PyPI
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external' && matrix.registry == 'pypi'
+        id: version-check
+        run: |
+          BASE_VERSION="${{ needs.compute-version.outputs.version }}"
+          MATRIX_PACKAGE="${{ matrix.package }}"
+
+          # Map matrix package name to actual PyPI package name
+          if [ "$MATRIX_PACKAGE" == "ogx-client-python" ]; then
+            PACKAGE="ogx-client"
+          else
+            PACKAGE="$MATRIX_PACKAGE"
+          fi
+
+          # Function to check if version exists on PyPI
+          check_version_exists() {
+            local pkg=$1
+            local ver=$2
+            if curl -sf "https://pypi.org/pypi/${pkg}/${ver}/json" -o /dev/null 2>&1; then
+              return 0  # exists
+            else
+              return 1  # does not exist
+            fi
+          }
+
+          # Start with the base version and increment patch if needed
+          VERSION="$BASE_VERSION"
+
+          # Only check/bump for non-dev versions (production releases)
+          if [[ ! "$VERSION" =~ \.dev ]]; then
+            echo "Checking if ${PACKAGE} ${VERSION} exists on PyPI..."
+
+            # Parse version components
+            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              SUFFIX="${BASH_REMATCH[4]}"
+
+              # Keep incrementing patch version until we find one that doesn't exist
+              MAX_ATTEMPTS=10
+              ATTEMPT=0
+              while check_version_exists "$PACKAGE" "$VERSION"; do
+                ATTEMPT=$((ATTEMPT + 1))
+                if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+                  echo "::error::Reached maximum attempts ($MAX_ATTEMPTS) trying to find unused version"
+                  exit 1
+                fi
+
+                echo "Version ${VERSION} already exists on PyPI, trying next patch version..."
+                PATCH=$((PATCH + 1))
+                VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
+                echo "Checking ${VERSION}..."
+              done
+
+              if [ "$VERSION" != "$BASE_VERSION" ]; then
+                echo "::notice::Bumped ${MATRIX_PACKAGE} (PyPI: ${PACKAGE}) version from ${BASE_VERSION} to ${VERSION} (already existed on PyPI)"
+              else
+                echo "Version ${VERSION} is available on PyPI for ${PACKAGE}"
+              fi
+            else
+              echo "::warning::Could not parse version ${VERSION}, using as-is"
+            fi
+          else
+            echo "Dev version detected (${VERSION}), skipping PyPI check"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Final version: ${VERSION}"
+
       - name: Build external Python package
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external' && matrix.registry == 'pypi'
         working-directory: external-repo
         run: |
-          VERSION="${{ needs.compute-version.outputs.version }}"
+          VERSION="${{ steps.version-check.outputs.version }}"
           echo "Setting version to $VERSION"
           sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
           # Also update __version__ in _version.py if it exists
-          VERSION_FILE=$(find . -name "_version.py" -path "*/llama_stack_client/*" | head -1)
+          VERSION_FILE=$(find . -name "_version.py" -path "*/ogx_client/*" | head -1)
           if [ -n "$VERSION_FILE" ]; then
             sed -i "s/__version__ = .*/__version__ = \"$VERSION\"/" "$VERSION_FILE"
           fi
@@ -344,15 +481,83 @@ jobs:
           python -m build --outdir dist
 
       # === NPM PACKAGE BUILD ===
+      - name: Check and bump npm version if exists
+        if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
+        id: npm-version-check
+        run: |
+          BASE_VERSION="${{ needs.compute-version.outputs.version }}"
+          MATRIX_PACKAGE="${{ matrix.package }}"
+
+          # Map matrix package name to actual npm package name
+          if [ "$MATRIX_PACKAGE" == "ogx-client-typescript" ]; then
+            PACKAGE="ogx-client"
+          else
+            PACKAGE="$MATRIX_PACKAGE"
+          fi
+
+          # Convert PEP 440 dev version to valid semver for npm
+          # e.g. 0.4.5.dev20260202 -> 0.4.5-dev.20260202
+          VERSION="${BASE_VERSION/.dev/-dev.}"
+
+          # Function to check if version exists on npm using registry API
+          check_npm_version_exists() {
+            local pkg=$1
+            local ver=$2
+            if curl -sf "https://registry.npmjs.org/${pkg}/${ver}" -o /dev/null 2>&1; then
+              return 0  # exists
+            else
+              return 1  # does not exist
+            fi
+          }
+
+          # Only check/bump for non-dev versions (production releases)
+          if [[ ! "$VERSION" =~ -dev\. ]]; then
+            echo "Checking if ${PACKAGE} ${VERSION} exists on npm..."
+
+            # Parse version components (semver format)
+            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              SUFFIX="${BASH_REMATCH[4]}"
+
+              # Keep incrementing patch version until we find one that doesn't exist
+              MAX_ATTEMPTS=10
+              ATTEMPT=0
+              while check_npm_version_exists "$PACKAGE" "$VERSION"; do
+                ATTEMPT=$((ATTEMPT + 1))
+                if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+                  echo "::error::Reached maximum attempts ($MAX_ATTEMPTS) trying to find unused version"
+                  exit 1
+                fi
+
+                echo "Version ${VERSION} already exists on npm, trying next patch version..."
+                PATCH=$((PATCH + 1))
+                VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
+                echo "Checking ${VERSION}..."
+              done
+
+              if [ "$VERSION" != "${BASE_VERSION/.dev/-dev.}" ]; then
+                echo "::notice::Bumped ${MATRIX_PACKAGE} (npm: ${PACKAGE}) version from ${BASE_VERSION/.dev/-dev.} to ${VERSION} (already existed on npm)"
+              else
+                echo "Version ${VERSION} is available on npm for ${PACKAGE}"
+              fi
+            else
+              echo "::warning::Could not parse version ${VERSION}, using as-is"
+            fi
+          else
+            echo "Dev version detected (${VERSION}), skipping npm check"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Final version: ${VERSION}"
+
       - name: Build TypeScript package
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
         working-directory: external-repo
         run: |
-          VERSION="${{ needs.compute-version.outputs.version }}"
-          # Convert PEP 440 dev version to valid semver for npm
-          # e.g. 0.4.5.dev20260202 -> 0.4.5-dev.20260202
-          NPM_VERSION="${VERSION/.dev/-dev.}"
-          echo "Setting version to $NPM_VERSION (from $VERSION)"
+          NPM_VERSION="${{ steps.npm-version-check.outputs.version }}"
+          echo "Setting version to $NPM_VERSION"
           npm version "$NPM_VERSION" --no-git-tag-version
           npm install
           npm run build
@@ -363,7 +568,7 @@ jobs:
         run: uv pip install --system twine check-wheel-contents
 
       - name: Check wheel contents (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local' && matrix.registry == 'pypi'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk') && matrix.registry == 'pypi'
         run: check-wheel-contents --ignore W002,W004 ${{ matrix.path }}/dist/*.whl
 
       - name: Check wheel contents (external)
@@ -371,7 +576,7 @@ jobs:
         run: check-wheel-contents --ignore W002,W004 external-repo/dist/*.whl
 
       - name: Validate package with twine (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local' && matrix.registry == 'pypi'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk') && matrix.registry == 'pypi'
         run: twine check ${{ matrix.path }}/dist/*
 
       - name: Validate package with twine (external)
@@ -380,7 +585,7 @@ jobs:
 
       # === LIST AND UPLOAD ARTIFACTS ===
       - name: List dist contents (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
         run: ls -la ${{ matrix.path }}/dist/
 
       - name: List dist contents (external Python)
@@ -397,15 +602,15 @@ jobs:
           ls -la dist/
 
       - name: Upload artifacts (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Packages-${{ matrix.package }}
           path: ${{ matrix.path }}/dist/*
 
       - name: Upload artifacts (external)
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Packages-${{ matrix.package }}
           path: external-repo/dist/*
@@ -414,53 +619,55 @@ jobs:
   test-package:
     name: Test packages (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build-package
     strategy:
       matrix:
-        python-version: ['3.12', '3.13']
+        # Test 3.13 only on push to main, releases, and scheduled runs
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || fromJSON('["3.12", "3.13"]') }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
 
-      - name: Download llama-stack-api artifacts
+      - name: Download ogx-api artifacts
         id: download-api
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack-api
+          name: Packages-ogx-api
           path: dist-api
         continue-on-error: true
 
-      - name: Download llama-stack artifacts
+      - name: Download ogx artifacts
         id: download-stack
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack
+          name: Packages-ogx
           path: dist-stack
         continue-on-error: true
 
-      - name: Download llama-stack-client-python artifacts
-        id: download-client-python
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+      - name: Download ogx-client-typescript artifacts
+        id: download-client-ts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack-client-python
-          path: dist-client-python
+          name: Packages-ogx-client-typescript
+          path: dist-client-ts
         continue-on-error: true
 
-      - name: Download llama-stack-client-typescript artifacts
-        id: download-client-ts
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+      - name: Download ogx-client artifacts (OpenAPI SDK)
+        id: download-client-python
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: Packages-llama-stack-client-typescript
-          path: dist-client-ts
+          name: Packages-ogx-client
+          path: dist-client-python
         continue-on-error: true
 
       - name: Create venv and install Python packages
@@ -470,51 +677,51 @@ jobs:
 
           # Install available Python packages
           if [ -d "dist-api" ] && ls dist-api/*.whl 1>/dev/null 2>&1; then
-            echo "Installing llama-stack-api..."
+            echo "Installing ogx-api..."
             uv pip install dist-api/*.whl
           fi
 
           if [ -d "dist-client-python" ] && ls dist-client-python/*.whl 1>/dev/null 2>&1; then
-            echo "Installing llama-stack-client..."
+            echo "Installing ogx-client..."
             uv pip install dist-client-python/*.whl
           fi
 
           if [ -d "dist-stack" ] && ls dist-stack/*.whl 1>/dev/null 2>&1; then
-            echo "Installing llama-stack..."
+            echo "Installing ogx..."
             uv pip install dist-stack/*.whl
           fi
 
-      - name: List Wheel Contents (llama-stack-api)
+      - name: List Wheel Contents (ogx-api)
         if: steps.download-api.outcome == 'success'
         run: |
           source .venv/bin/activate
           python -m zipfile -l dist-api/*.whl
 
-      - name: Verify Llama Stack package
+      - name: Verify OGX package
         if: steps.download-stack.outcome == 'success'
         run: |
           source .venv/bin/activate
           uv pip list
-          uv pip show llama-stack
-          command -v llama
-          llama stack list-apis
-          llama stack list-providers inference
-          llama stack list-deps starter
+          uv pip show ogx
+          command -v ogx
+          ogx stack list-apis
+          ogx stack list-providers inference
+          ogx stack list-deps starter
 
       - name: Verify packages are importable
         run: |
           source .venv/bin/activate
 
           if [ -d "dist-stack" ] && ls dist-stack/*.whl 1>/dev/null 2>&1; then
-            python -c "import llama_stack; print(f'llama_stack imported successfully from {llama_stack.__file__}')"
+            python -c "import ogx; print(f'ogx imported successfully from {ogx.__file__}')"
           fi
 
           if [ -d "dist-api" ] && ls dist-api/*.whl 1>/dev/null 2>&1; then
-            python -c "import llama_stack_api; print(f'llama_stack_api imported successfully from {llama_stack_api.__file__}')"
+            python -c "import ogx_api; print(f'ogx_api imported successfully from {ogx_api.__file__}')"
           fi
 
           if [ -d "dist-client-python" ] && ls dist-client-python/*.whl 1>/dev/null 2>&1; then
-            python -c "import llama_stack_client; print(f'llama_stack_client imported successfully from {llama_stack_client.__file__}')"
+            python -c "import ogx_client; print(f'ogx_client imported successfully from {ogx_client.__file__}')"
           fi
 
       - name: Verify TypeScript package
@@ -532,15 +739,15 @@ jobs:
             echo "TypeScript package installed successfully"
 
             # Verify the package is importable
-            node -e "const pkg = require('llama-stack-client'); console.log('llama-stack-client package loaded successfully');" || echo "Package may use ES modules, skipping require test"
+            node -e "const pkg = require('ogx-client'); console.log('ogx-client package loaded successfully');" || echo "Package may use ES modules, skipping require test"
           fi
 
   # Publish packages to PyPI/npm
-  # Order: llama-stack-client-python, llama-stack-client-typescript, llama-stack-api, llama-stack
+  # Order: ogx-client-typescript, ogx-client, ogx-api, ogx
   publish-packages:
     name: Publish ${{ matrix.package }}
     if: |
-      github.repository_owner == 'llamastack' &&
+      github.repository_owner == 'ogx-ai' &&
       (inputs.dry_run || 'test-pypi') != 'build-only' && (
         github.event_name == 'workflow_dispatch' ||
         github.event.action == 'published' ||
@@ -550,22 +757,23 @@ jobs:
       contents: write  # for gh release upload
       id-token: write  # for PyPI trusted publishing
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: test-package
     strategy:
       max-parallel: 1
       matrix:
         include:
           # Order matters! Dependencies are published first
-          - package: llama-stack-client-python
-            registry: pypi
-            type: external
-          - package: llama-stack-client-typescript
+          - package: ogx-client-typescript
             registry: npm
             type: external
-          - package: llama-stack-api
+          - package: ogx-client
+            registry: pypi
+            type: openapi-sdk
+          - package: ogx-api
             registry: pypi
             type: local
-          - package: llama-stack
+          - package: ogx
             registry: pypi
             type: local
 
@@ -580,9 +788,9 @@ jobs:
 
           if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "llama-stack-only" ] && [ "$TYPE" == "local" ]; then
+          elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "clients-only" ] && [ "$TYPE" == "external" ]; then
+          elif [ "$PACKAGES" == "clients-only" ] && { [ "$TYPE" == "external" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           else
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -592,7 +800,7 @@ jobs:
       - name: Download build artifacts
         if: steps.should-publish.outputs.skip != 'true'
         id: download
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: Packages-${{ matrix.package }}
           path: dist
@@ -646,7 +854,7 @@ jobs:
           matrix.registry == 'pypi' &&
           steps.check-artifacts.outputs.has_artifacts == 'true' &&
           steps.pypi-target.outputs.is_production == 'true'
-        uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc # v3.3.0
+        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
         with:
           inputs: >-
             ./dist/*.tar.gz
@@ -675,7 +883,7 @@ jobs:
 
       - name: Upload to PyPI
         if: steps.should-publish.outputs.skip != 'true' && matrix.registry == 'pypi' && steps.check-artifacts.outputs.has_artifacts == 'true'
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           repository-url: ${{ steps.pypi-target.outputs.url }}
           verbose: true
@@ -683,7 +891,7 @@ jobs:
       # === NPM PUBLISHING ===
       - name: Set up Node.js
         if: steps.should-publish.outputs.skip != 'true' && matrix.registry == 'npm' && steps.check-artifacts.outputs.has_artifacts == 'true'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
@@ -734,7 +942,7 @@ jobs:
   # are published to PyPI. CPU distros are built for linux/amd64 and
   # linux/arm64. GPU distros are built for linux/amd64 only.
   #
-  # Images are pushed to: llamastack/distribution-<distro>:<tag>
+  # Images are pushed to: ogxai/distribution-<distro>:<tag>
   #   - Production (release or dry_run=off): tagged with VERSION and "latest"
   #   - Test (test-pypi or schedule): tagged with "test-VERSION"
   publish-docker-images:
@@ -743,7 +951,7 @@ jobs:
       always() &&
       needs.compute-version.result == 'success' &&
       (needs.publish-packages.result == 'success' || needs.publish-packages.result == 'skipped') &&
-      github.repository_owner == 'llamastack' &&
+      github.repository_owner == 'ogx-ai' &&
       (inputs.dry_run || 'test-pypi') != 'build-only' &&
       (inputs.packages || 'all') != 'clients-only' && (
         github.event_name == 'workflow_dispatch' ||
@@ -763,11 +971,6 @@ jobs:
             platforms: linux/amd64,linux/arm64
           - distro: postgres-demo
             platforms: linux/amd64,linux/arm64
-          - distro: dell
-            platforms: linux/amd64,linux/arm64
-          # GPU distributions — amd64 only
-          - distro: starter-gpu
-            platforms: linux/amd64
 
     steps:
       - name: Free disk space
@@ -787,13 +990,13 @@ jobs:
 
       - name: Set up QEMU for multi-arch builds
         if: contains(matrix.platforms, 'arm64')
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
 
       - name: Log in to DockerHub
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -803,53 +1006,147 @@ jobs:
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
           DISTRO="${{ matrix.distro }}"
-          IMAGE="llamastack/distribution-${DISTRO}"
+          IMAGE="ogxai/distribution-${DISTRO}"
 
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"
 
+          # PyPI package to bundle. Pre-rename releases (e.g. 0.5.0) shipped as
+          # "llama-stack"; the CLI binary is derived by stripping the "-stack"
+          # suffix ("llama-stack" -> "llama", "ogx" -> "ogx").
+          PACKAGE_NAME="${{ inputs.package_name || 'ogx' }}"
+          CLI_NAME="${PACKAGE_NAME%-stack}"
+          # Backfilling a non-ogx (pre-rename) package pins old dependencies that
+          # can conflict with the latest OTel auto-instrumentation packages, so
+          # make the bootstrap best-effort for those builds. The ogx path stays
+          # strict.
+          if [ "$PACKAGE_NAME" == "ogx" ]; then OTEL_BEST_EFFORT=""; else OTEL_BEST_EFFORT="1"; fi
+          {
+            echo "package_name=${PACKAGE_NAME}"
+            echo "cli_name=${CLI_NAME}"
+            echo "otel_best_effort=${OTEL_BEST_EFFORT}"
+          } >> "$GITHUB_OUTPUT"
+
           if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
+            if [ "${{ inputs.skip_latest }}" == "true" ]; then
+              TAGS="${IMAGE}:${VERSION}"
+              LATEST_NOTE=""
+            else
+              TAGS="${IMAGE}:${VERSION},${IMAGE}:latest"
+              LATEST_NOTE=" + latest"
+            fi
             {
               echo "install_mode=pypi"
-              echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest"
+              echo "tags=${TAGS}"
               echo "version_arg=PYPI_VERSION=${VERSION}"
             } >> "$GITHUB_OUTPUT"
-            echo "Publishing production image: ${IMAGE}:${VERSION} + latest"
+            echo "Publishing production image: ${IMAGE}:${VERSION}${LATEST_NOTE} (package: ${PACKAGE_NAME})"
           else
             {
               echo "install_mode=test-pypi"
               echo "tags=${IMAGE}:test-${VERSION}"
               echo "version_arg=TEST_PYPI_VERSION=${VERSION}"
             } >> "$GITHUB_OUTPUT"
-            echo "Publishing test image: ${IMAGE}:test-${VERSION}"
+            echo "Publishing test image: ${IMAGE}:test-${VERSION} (package: ${PACKAGE_NAME})"
           fi
 
       - name: Wait for package on test PyPI
         if: steps.meta.outputs.install_mode == 'test-pypi'
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
-          URL="https://test.pypi.org/pypi/llama-stack/${VERSION}/json"
+          PACKAGE_NAME="${{ steps.meta.outputs.package_name }}"
+          URL="https://test.pypi.org/pypi/${PACKAGE_NAME}/${VERSION}/json"
           echo "Polling ${URL} ..."
           for i in $(seq 1 20); do
             if curl -sf "$URL" -o /dev/null; then
-              echo "llama-stack==${VERSION} is available on test PyPI"
+              echo "${PACKAGE_NAME}==${VERSION} is available on test PyPI"
               exit 0
             fi
             echo "Attempt ${i}/20: not yet available, waiting 30s..."
             sleep 30
           done
-          echo "::error::llama-stack==${VERSION} did not appear on test PyPI after 10 minutes"
+          echo "::error::${PACKAGE_NAME}==${VERSION} did not appear on test PyPI after 10 minutes"
           exit 1
 
+      - name: Generate config labels
+        id: labels
+        run: |
+          # Embed distribution configs as OCI labels (see scripts/generate-config-labels.sh).
+          # generate-config-labels.sh emits alternating "--label"/"key=value" lines for
+          # docker CLI; build-push-action wants bare "key=value" lines, so drop the flags.
+          LABELS=$(bash scripts/generate-config-labels.sh \
+            "${{ matrix.distro }}" "${{ needs.compute-version.outputs.version }}" \
+            | grep -v '^--label$')
+          {
+            echo "labels<<EOF"
+            echo "$LABELS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: containers/Containerfile
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.labels.outputs.labels }}
           build-args: |
             DISTRO_NAME=${{ matrix.distro }}
             INSTALL_MODE=${{ steps.meta.outputs.install_mode }}
+            PACKAGE_NAME=${{ steps.meta.outputs.package_name }}
+            CLI_NAME=${{ steps.meta.outputs.cli_name }}
+            OTEL_BEST_EFFORT=${{ steps.meta.outputs.otel_best_effort }}
             ${{ steps.meta.outputs.version_arg }}
+
+  scan-docker-images:
+    name: Scan Docker ${{ matrix.distro }}
+    if: |
+      always() &&
+      needs.publish-docker-images.result == 'success'
+    permissions:
+      contents: read
+      security-events: write
+    runs-on: ubuntu-latest
+    needs: [publish-docker-images, compute-version]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: starter
+          - distro: postgres-demo
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          VERSION="${{ needs.compute-version.outputs.version }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
+            echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=test-${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scan published image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'ogxai/distribution-${{ matrix.distro }}:${{ steps.tag.outputs.tag }}'
+          scan-type: 'image'
+          scanners: 'vuln'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+          format: 'sarif'
+          output: 'trivy-image-${{ matrix.distro }}.sarif'
+          trivy-config: 'trivy.yaml'
+
+      - name: Upload Trivy image scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image-${{ matrix.distro }}.sarif'
+          category: 'trivy-image-${{ matrix.distro }}'

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import pytest
 from pydantic import BaseModel, Field, SecretStr
 
-from llama_stack.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
-from llama_stack.providers.utils.inference.openai_mixin import OpenAIMixin
-from llama_stack_api import Model, ModelType
+from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
+from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx_api import Model, ModelType
 
 
 class OpenAIMixinImpl(OpenAIMixin):
@@ -91,11 +91,10 @@ def mixin():
     config = RemoteInferenceProviderConfig()
     mixin_instance = OpenAIMixinImpl(config=config)
 
-    # Mock model_store with async methods
+    # Mock model_store, used by check_model_availability() to look up pre-registered models.
+    # Model name -> provider model id resolution no longer goes through model_store; the router
+    # resolves params.model to the provider_resource_id before calling the mixin.
     mock_model_store = AsyncMock()
-    mock_model = MagicMock()
-    mock_model.provider_resource_id = "test-provider-resource-id"
-    mock_model_store.get_model = AsyncMock(return_value=mock_model)
     mock_model_store.has_model = AsyncMock(return_value=False)  # Default to False, tests can override
     mixin_instance.model_store = mock_model_store
 

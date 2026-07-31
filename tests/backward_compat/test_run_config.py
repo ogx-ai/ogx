@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -17,8 +17,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from llama_stack.core.datatypes import StackConfig
-from llama_stack.core.stack import replace_env_vars
+from ogx.core.datatypes import StackConfig
+from ogx.core.distribution import builtin_automatically_routed_apis, get_provider_registry
+from ogx.core.resolver import validate_and_prepare_providers
+from ogx.core.stack import replace_env_vars
 
 
 def get_test_configs():
@@ -37,7 +39,7 @@ def get_test_configs():
     else:
         # Local mode: test current distribution configs
         repo_root = Path(__file__).parent.parent.parent
-        config_files = sorted((repo_root / "src" / "llama_stack" / "distributions").glob("*/config.yaml"))
+        config_files = sorted((repo_root / "src" / "ogx" / "distributions").glob("*/config.yaml"))
 
         if not config_files:
             pytest.skip("No config.yaml files found in distributions/")
@@ -58,4 +60,19 @@ def test_load_run_config(config_file):
     except Exception:
         pass
 
-    StackConfig.model_validate(config_data)
+    # Validate schema
+    config = StackConfig.model_validate(config_data)
+
+    # Validate providers using the same validation the stack uses at runtime
+    # This validates:
+    #   - Provider types exist in registry
+    #   - No conflicts with auto-routed APIs
+    #   - Provider deprecation warnings/errors
+    provider_registry = get_provider_registry()
+    routing_table_apis = {x.routing_table_api for x in builtin_automatically_routed_apis()}
+    router_apis = {x.router_api for x in builtin_automatically_routed_apis()}
+
+    try:
+        validate_and_prepare_providers(config, provider_registry, routing_table_apis, router_apis)
+    except ValueError as e:
+        pytest.fail(f"Provider validation failed: {str(e)}")

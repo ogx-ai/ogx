@@ -1,0 +1,91 @@
+{
+  "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_tool_calling_multiple_tools[txt=gemini/gemini-2.5-flash-lite]",
+  "request": {
+    "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_tool_calling_multiple_tools[txt=gemini/gemini-2.5-flash-lite]",
+    "url": "https://generativelanguage.googleapis.com/v1beta/interactions",
+    "method": "POST",
+    "payload": {
+      "model": "gemini-2.5-flash-lite",
+      "input": "What time is it in London? Use the get_time tool.",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get the current weather for a location.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        },
+        {
+          "type": "function",
+          "name": "get_time",
+          "description": "Get the current time in a timezone.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "timezone": {
+                "type": "string",
+                "description": "IANA timezone"
+              }
+            },
+            "required": [
+              "timezone"
+            ]
+          }
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "v1_ChcwZkxnYWVUNEF2MmtrZFVQbE82TnlBaxIXMGZMZ2FlVDRBdjJra2RVUGxPNk55QWs",
+      "status": "requires_action",
+      "outputs": [
+        {
+          "signature": "CiRlMjQ4MzBhNy01Y2Q2LTQyZmUtOTk4Yi1lZTUzOWU3MmI5YzM=",
+          "type": "thought"
+        },
+        {
+          "name": "get_time",
+          "arguments": {
+            "timezone": "Europe/London"
+          },
+          "type": "function_call",
+          "id": "l04i196h"
+        }
+      ],
+      "usage": {
+        "total_tokens": 114,
+        "total_input_tokens": 97,
+        "input_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 97
+          }
+        ],
+        "total_cached_tokens": 0,
+        "total_output_tokens": 17,
+        "total_tool_use_tokens": 0,
+        "total_thought_tokens": 0
+      },
+      "role": "model",
+      "created": "2026-04-16T14:31:46Z",
+      "updated": "2026-04-16T14:31:46Z",
+      "service_tier": "standard",
+      "object": "interaction",
+      "model": "gemini-2.5-flash-lite"
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

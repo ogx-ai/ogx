@@ -1,46 +1,43 @@
 ---
 title: API Providers
-description: Ecosystem of providers for swapping implementations across the same API
+description: 50+ pluggable providers across inference, vector stores, tools, and file storage
 sidebar_label: Overview
 sidebar_position: 1
 ---
 
+import { ProviderGrid, ProviderReference } from '@site/src/components/ProviderGrid';
+
 # API Providers
 
-The goal of Llama Stack is to build an ecosystem where users can easily swap out different implementations for the same API. Examples for these include:
-- LLM inference providers (e.g., Builtin, Ollama, Fireworks, Together, AWS Bedrock, Groq, Cerebras, SambaNova, vLLM, OpenAI, Anthropic, Gemini, WatsonX, etc.),
-- Vector databases (e.g., FAISS, SQLite-Vec, ChromaDB, Weaviate, Qdrant, Milvus, PGVector, Elasticsearch, Infinispan, etc.),
-- Safety providers (e.g., Meta's Llama Guard, Prompt Guard, Code Scanner, AWS Bedrock Guardrails, etc.),
-- Tool Runtime providers (e.g., RAG Runtime, Brave Search, etc.)
+OGX composes 23 inference providers, 15 vector stores, 6 tool runtimes, and 3 file storage options into a single deployable server. No other open-source project covers this surface area in one process.
 
-Providers come in two flavors:
-- **Remote**: the provider runs as a separate service external to the Llama Stack codebase. Llama Stack contains a small amount of adapter code.
-- **Inline**: the provider is fully specified and implemented within the Llama Stack codebase. It may be a simple wrapper around an existing library, or a full fledged implementation within Llama Stack.
+Providers come in two types:
 
-Importantly, Llama Stack always strives to provide at least one fully inline provider for each API so you can iterate on a fully featured environment locally.
+- **Remote**: adapts an external service (Ollama, OpenAI, vLLM, Bedrock, etc.)
+- **Inline**: runs in-process within OGX (FAISS, sentence-transformers, file-search, etc.)
 
-## Provider Categories
+:::info
+At least one inline provider exists for each API so you can run a fully featured stack locally without any external dependencies.
+:::
 
-- **[External Providers](external/index.mdx)** - Guide for building and using external providers
-- **[OpenAI Compatibility](../api-openai/index.mdx)** - OpenAI API compatibility layer
-- **[Inference](inference/index.mdx)** - LLM and embedding model providers
-- **[Agents](agents/index.mdx)** - Agentic system providers
-- **[DatasetIO](datasetio/index.mdx)** - Dataset and data loader providers
-- **[Safety](safety/index.mdx)** - Content moderation and safety providers
-- **[Vector IO](vector_io/index.mdx)** - Vector database providers
-- **[Tool Runtime](tool_runtime/index.mdx)** - Tool and protocol providers
-- **[Files](files/index.mdx)** - File system and storage providers
+## Provider categories
 
-## API Documentation
+<ProviderGrid />
 
-For comprehensive API documentation and reference:
+## Reference
 
-- **[API Reference](../api/index.mdx)** - Complete API documentation
-- **[Experimental APIs](../api-experimental/index.mdx)** - APIs in development
-- **[Deprecated APIs](../api-deprecated/index.mdx)** - Legacy APIs being phased out
-- **[OpenAI Compatibility](../api-openai/index.mdx)** - OpenAI API compatibility guide
+<ProviderReference />
 
-## Additional Provider Information
+## Why this matters
 
-- **[OpenAI Implementation Guide](./openai.mdx)** - Code examples and implementation details for OpenAI APIs
-- **[OpenAI-Compatible Responses Limitations](./openai_responses_limitations.mdx)** - Known limitations of the Responses API in Llama Stack
+Gateways like LiteLLM route inference requests to multiple providers. That's useful, but inference routing is one API.
+
+OGX composes the full application: an agent running on the Responses API can call a model via any inference provider, search documents in any vector store, invoke tools via MCP, and stream the result back. All in one server process, all through OpenAI-compatible endpoints.
+
+The composition is the hard part. Making inference + vector stores + files + tools + agentic orchestration work together correctly across dozens of provider combinations is what takes years, not months.
+
+## OpenAI Compatibility
+
+OGX is OpenAI-first. The primary API surface implements the OpenAI spec. An Anthropic Messages adapter (`/v1/messages`) translates to the inference API for teams that use the Anthropic SDK.
+
+See the [OpenAI compatibility guide](/docs/api-openai/) and [known Responses API limitations](/docs/providers/openai_responses_limitations).

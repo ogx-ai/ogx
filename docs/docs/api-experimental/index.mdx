@@ -1,128 +1,68 @@
 ---
 title: Experimental APIs
-description: APIs in development with limited support
+description: APIs in development that may change
 sidebar_label: Experimental
 sidebar_position: 1
 ---
 
 # Experimental APIs
 
-This section contains APIs that are currently in development and may have limited support or stability. These APIs are available for testing and feedback but should not be used in production environments.
+This section contains APIs that are still maturing and may change between releases. They are functional and available for use but have not yet reached stable (`v1`) status.
 
-:::warning Experimental Notice
-These APIs are experimental and may change without notice. Use with caution and provide feedback to help improve them.
+:::warning
+Experimental APIs may introduce breaking changes in minor releases. Pin your client version if stability is important for your use case.
 :::
 
-## Current Experimental APIs
+## v1beta APIs
 
-### Batch Inference API
-Run inference on a dataset of inputs in batch mode for improved efficiency.
+These APIs are nearing stability but may still see minor changes.
 
-**Status:** In Development
-**Provider Support:** Limited
-**Use Case:** Large-scale inference operations
+### Datasets API
+Manage datasets for evaluation workflows.
 
-**Features:**
-- Batch processing of multiple inputs
-- Optimized resource utilization
-- Progress tracking and monitoring
+**Endpoint prefix:** `v1beta`
+**Use case:** Dataset creation, listing, and deletion for eval pipelines.
 
-### Batch Agents API
-Run agentic workflows on a dataset of inputs in batch mode.
+### DatasetIO API
+Read and write dataset contents.
 
-**Status:** In Development
-**Provider Support:** Limited
-**Use Case:** Large-scale agent operations
+**Endpoint prefix:** `v1beta`
+**Use case:** Row-level access to dataset data for scoring and evaluation.
 
-**Features:**
-- Batch agent execution
-- Parallel processing capabilities
-- Result aggregation and analysis
+### Connectors API
+Manage external connectors such as MCP servers.
 
-### Synthetic Data Generation API
-Generate synthetic data for model development and testing.
+**Endpoint prefix:** `v1beta`
+**Use case:** Register and manage connections to external tool servers.
 
-**Status:** Early Development
-**Provider Support:** Very Limited
-**Use Case:** Training data augmentation
+## v1alpha APIs
 
-**Features:**
-- Automated data generation
-- Quality control mechanisms
-- Customizable generation parameters
+These APIs are in early development and more likely to change.
 
-### Batches API (OpenAI-compatible)
-OpenAI-compatible batch management for inference operations.
+### Eval API
+Run evaluation jobs against benchmarks.
 
-**Status:** In Development
-**Provider Support:** Limited
-**Use Case:** OpenAI batch processing compatibility
+**Endpoint prefix:** `v1alpha`
+**Use case:** Execute evaluation pipelines and retrieve results.
 
-**Features:**
-- OpenAI batch API compatibility
-- Job scheduling and management
-- Status tracking and monitoring
+### Benchmarks API
+Register and manage benchmark suites.
 
-## Getting Started with Experimental APIs
+**Endpoint prefix:** `v1alpha`
+**Use case:** Define benchmark configurations for model evaluation.
 
-### Prerequisites
-- Llama Stack server running with experimental features enabled
-- Appropriate provider configurations
-- Understanding of API limitations
+### File Processors API
+Parse and process uploaded files.
 
-### Configuration
-Experimental APIs may require special configuration flags or provider settings. Check the specific API documentation for setup requirements.
+**Endpoint prefix:** `v1alpha`
+**Use case:** Extract structured content from PDFs, DOCX, and other document formats.
 
-### Usage Guidelines
-1. **Testing Only**: Use experimental APIs for testing and development only
-2. **Monitor Changes**: Watch for updates and breaking changes
-3. **Provide Feedback**: Report issues and suggest improvements
-4. **Backup Data**: Always backup important data when using experimental features
+### Admin API
+Server administration and management.
 
-## Feedback and Contribution
+**Endpoint prefix:** `v1alpha`
+**Use case:** Server version information and administrative operations.
 
-We encourage feedback on experimental APIs to help improve them:
+## Feedback
 
-### Reporting Issues
-- Use GitHub issues with the "experimental" label
-- Include detailed error messages and reproduction steps
-- Specify the API version and provider being used
-
-### Feature Requests
-- Submit feature requests through GitHub discussions
-- Provide use cases and expected behavior
-- Consider contributing implementations
-
-### Testing
-- Test experimental APIs in your environment
-- Report performance issues and optimization opportunities
-- Share success stories and use cases
-
-## Migration to Stable APIs
-
-As experimental APIs mature, they will be moved to the stable API section. When this happens:
-
-1. **Announcement**: We'll announce the promotion in release notes
-2. **Migration Guide**: Detailed migration instructions will be provided
-3. **Deprecation Timeline**: Experimental versions will be deprecated with notice
-4. **Support**: Full support will be available for stable versions
-
-## Provider Support
-
-Experimental APIs may have limited provider support. Check the specific API documentation for:
-
-- Supported providers
-- Configuration requirements
-- Known limitations
-- Performance characteristics
-
-## Roadmap
-
-Experimental APIs are part of our ongoing development roadmap:
-
-- **Q1 2024**: Batch Inference API stabilization
-- **Q2 2024**: Batch Agents API improvements
-- **Q3 2024**: Synthetic Data Generation API expansion
-- **Q4 2024**: Batches API full OpenAI compatibility
-
-For the latest updates, follow our [GitHub releases](https://github.com/llamastack/llama-stack/releases) and [roadmap discussions](https://github.com/llamastack/llama-stack/discussions).
+Report issues or suggest improvements through [GitHub Issues](https://github.com/ogx-ai/ogx/issues).

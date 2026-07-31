@@ -7,10 +7,48 @@ sidebar_position: 3
 
 # Distributions
 
-While there is a lot of flexibility to mix-and-match providers, often users will work with a specific set of providers (hardware support, contractual obligations, etc.) We therefore need to provide a _convenient shorthand_ for such collections. We call this shorthand a **Llama Stack Distribution** or a **Distro**. One can think of it as specific pre-packaged versions of the Llama Stack. Here are some examples:
+A distribution is a pre-configured run config that bundles specific providers for a target environment. Think Kubernetes distributions (AKS, EKS, GKE) - the API stays the same, each distribution wires different backends.
 
-**Remotely Hosted Distro**: These are the simplest to consume from a user perspective. You can simply obtain the API key for these providers, point to a URL and have _all_ Llama Stack APIs working out of the box. Currently, [Fireworks](https://fireworks.ai/) and [Together](https://together.xyz/) provide such easy-to-consume Llama Stack distributions.
+## The Starter Distribution
 
-**Locally Hosted Distro**: You may want to run Llama Stack on your own hardware. Typically though, you still need to use Inference via an external service. You can use providers like Fireworks, Together, etc. for this purpose. Or you may have access to GPUs and can run a [vLLM](https://github.com/vllm-project/vllm) or [NVIDIA NIM](https://build.nvidia.com/nim?filters=nimType%3Anim_type_run_anywhere&q=llama) instance. If you "just" have a regular desktop machine, you can use [Ollama](https://ollama.com/) for inference. To provide convenient quick access to these options, we provide a number of such pre-configured locally-hosted Distros.
+Most users should start with `starter`. It includes all providers and auto-enables them based on available environment variables:
 
-**On-device Distro**: To run Llama Stack directly on an edge device (mobile phone or a tablet), we provide Distros for [iOS](/docs/distributions/ondevice_distro/ios_sdk) and [Android](/docs/distributions/ondevice_distro/android_sdk)
+```bash
+# With Ollama (local inference)
+OLLAMA_URL=http://localhost:11434 uv run ogx run starter
+
+# With OpenAI (remote inference)
+OPENAI_API_KEY=sk-xxx uv run ogx run starter
+```
+
+The starter distribution uses FAISS for vector storage, sentence-transformers for embeddings, and pypdf for file processing - all running locally with no external dependencies.
+
+## Types of Distributions
+
+**Self-hosted**: Run OGX on your own infrastructure with your choice of inference backend (Ollama, vLLM, or cloud providers like OpenAI, Bedrock, etc.). The `starter` distribution covers this use case.
+
+**Hardware-specific**: Optimized for specific hardware. The `nvidia` distribution includes vendor-specific provider configurations.
+
+**Starter variants**: The `postgres-demo` distribution is the starter pre-configured with PostgreSQL storage ([`ogxai/distribution-postgres-demo`](https://hub.docker.com/r/ogxai/distribution-postgres-demo)).
+
+## Custom Distributions
+
+You can create your own distribution by writing a run config YAML:
+
+```yaml
+version: 2
+distro_name: my-distro
+providers:
+  inference:
+    - provider_id: vllm
+      provider_type: remote::vllm
+      config:
+        base_url: http://my-gpu-server:8000/v1
+  vector_io:
+    - provider_id: pgvector
+      provider_type: remote::pgvector
+      config:
+        host: my-postgres-server
+```
+
+See [Building Distributions](/docs/distributions/building_distro) and [Customizing Run Config](/docs/distributions/customizing_run_yaml) for details.

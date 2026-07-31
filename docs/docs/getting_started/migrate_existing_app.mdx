@@ -1,0 +1,103 @@
+---
+description: Switch an existing OpenAI or Anthropic application to OGX with minimal code changes.
+sidebar_label: Migrate an existing app
+sidebar_position: 2
+title: Migrate an existing app
+---
+
+If you already have an application built on the OpenAI or Anthropic SDK, migrating to OGX is straightforward. In most cases you only need to change the `base_url`
+and the 'model' name to include the provider for the model you wish to use.
+
+## From OpenAI
+
+This example shows a move from a direct interaction to the OpenAI API to a local Llama3.2 model hosted via Ollama.
+
+**Before** (talking directly to OpenAI):
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key="sk-xxx")
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(response.choices[0].message.content)
+```
+
+**After** (talking to OGX):
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",  # not validated by OGX
+)
+
+response = client.chat.completions.create(
+    model="ollama/llama3.2:3b",  # use a model registered in your server
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(response.choices[0].message.content)
+```
+
+The only changes are `base_url`, `api_key`, and `model`. Everything else stays the same.
+
+## From Anthropic
+
+The Anthropic SDK uses a different interface, so you will need to switch to the OpenAI SDK. OGX implements the OpenAI API.
+
+**Before** (Anthropic SDK):
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(api_key="sk-ant-xxx")
+
+message = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(message.content[0].text)
+```
+
+**After** (OpenAI SDK pointing to OGX):
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8321/v1",
+    api_key="fake",
+)
+
+response = client.chat.completions.create(
+    model="ollama/llama3.2:3b",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(response.choices[0].message.content)
+```
+
+## What works out of the box
+
+These OpenAI-compatible endpoints are supported:
+
+- `POST /v1/chat/completions` - chat with streaming support
+- `POST /v1/responses` - the Responses API with tool calling and agents
+- `POST /v1/embeddings` - text embeddings
+- `GET /v1/models` - list available models
+- `POST /v1/vector_stores` - create and manage vector stores
+- `POST /v1/files` - upload files for RAG
+
+See the full [OpenAI compatibility guide](/docs/api-openai) for details on supported parameters.
+
+## What's different
+
+**Provider configuration.** OGX routes requests to configurable backends (Ollama, vLLM, Bedrock, etc.). The server's `run.yaml` controls which providers are active. You do not configure providers in your application code.
+
+**Model names.** Model identifiers depend on the provider. For example, Ollama uses names like `llama3.2:3b` while remote providers use their own naming conventions. Run `GET /v1/models` to see what is available on your server.
+
+**API key.** OGX does not validate API keys by default. You can pass any string (or `"fake"`) as the key. Authentication can be configured separately if needed.

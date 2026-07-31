@@ -1,0 +1,109 @@
+---
+title: OGX UI
+description: Web-based user interface for interacting with OGX servers
+sidebar_label: OGX UI
+sidebar_position: 8
+---
+
+# OGX UI
+
+The OGX UI is a web-based interface for interacting with OGX servers. Built with Next.js and React, it provides a visual way to work with agents, manage resources, and view logs.
+
+## Features
+
+- **Logs & Monitoring**: View chat completions, agent responses, and vector store activity
+- **Vector Stores**: Create and manage vector databases for RAG (Retrieval-Augmented Generation) workflows
+- **Prompt Management**: Create and manage reusable prompts
+
+## Prerequisites
+
+You need a running OGX server. The UI is a client that connects to the OGX backend.
+
+If you don't have a OGX server running yet, see the [Starting OGX Server](starting_ogx_server) guide.
+
+## Running the UI
+
+### Option 1: Using npx (Recommended for Quick Start)
+
+The fastest way to get started is using `npx`:
+
+```bash
+npx ogx-ui
+```
+
+This will start the UI server on `http://localhost:8322` (default port).
+
+### Option 2: Using Docker
+
+Run the UI in a container:
+
+```bash
+docker run -p 8322:8322 ogx/ui
+```
+
+Access the UI at `http://localhost:8322`.
+
+## Environment Variables
+
+The UI can be configured using the following environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OGX_BACKEND_URL` | URL of your OGX server | `http://localhost:8321` |
+| `OGX_UI_PORT` | Port for the UI server | `8322` |
+
+If the OGX server is running with authentication enabled, you can configure the UI to use it by setting the following environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEXTAUTH_URL` | NextAuth URL for authentication | `http://localhost:8322` |
+| `GITHUB_CLIENT_ID` | GitHub OAuth client ID (optional, for authentication) | - |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret (optional, for authentication) | - |
+
+### Setting Environment Variables
+
+#### For npx:
+
+```bash
+OGX_BACKEND_URL=http://localhost:8321 \
+OGX_UI_PORT=8080 \
+npx ogx-ui
+```
+
+#### For Docker:
+
+```bash
+docker run -p 8080:8080 \
+  -e OGX_BACKEND_URL=http://localhost:8321 \
+  -e OGX_UI_PORT=8080 \
+  ogx/ui
+```
+
+## Using the UI
+
+### Managing Resources
+
+- **Vector Stores**: Create vector databases for RAG workflows, view stored documents and embeddings
+- **Prompts**: Create and manage reusable prompt templates
+- **Chat Completions**: View history of chat interactions
+- **Responses**: Browse detailed agent responses and tool calls
+
+## Development
+
+If you want to run the UI from source for development:
+
+```bash
+# From the project root
+cd src/ogx_ui
+
+# Install dependencies
+npm install
+
+# Set environment variables
+export OGX_BACKEND_URL=http://localhost:8321
+
+# Start the development server
+npm run dev
+```
+
+The development server will start on `http://localhost:8322` with hot reloading enabled.

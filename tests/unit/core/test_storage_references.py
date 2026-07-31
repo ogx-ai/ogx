@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,11 +11,11 @@ import os
 import pytest
 from pydantic import ValidationError
 
-from llama_stack.core.datatypes import (
-    LLAMA_STACK_RUN_CONFIG_VERSION,
+from ogx.core.datatypes import (
+    OGX_RUN_CONFIG_VERSION,
     StackConfig,
 )
-from llama_stack.core.storage.datatypes import (
+from ogx.core.storage.datatypes import (
     InferenceStoreReference,
     KVStoreReference,
     ServerStoresConfig,
@@ -54,7 +54,7 @@ def _base_run_config(**overrides):
         ),
     )
     return StackConfig(
-        version=LLAMA_STACK_RUN_CONFIG_VERSION,
+        version=OGX_RUN_CONFIG_VERSION,
         distro_name="test-distro",
         apis=[],
         providers={},
@@ -93,7 +93,7 @@ def test_default_backends_resolve_env_vars(backend_key, monkeypatch):
     object-construction time — before ``replace_env_vars()`` processes the
     YAML — so they must resolve environment variables eagerly.
 
-    See https://github.com/llamastack/llama-stack/issues/4896
+    See https://github.com/ogx-ai/ogx/issues/4896
     """
     monkeypatch.delenv("SQLITE_STORE_DIR", raising=False)
     config = StorageConfig()
@@ -111,7 +111,7 @@ def test_default_backends_respect_sqlite_store_dir(monkeypatch):
 
 def test_default_backends_fallback_to_distribs_base_dir(monkeypatch):
     """When SQLITE_STORE_DIR is unset, defaults should use DISTRIBS_BASE_DIR."""
-    from llama_stack.core.utils.config_dirs import DISTRIBS_BASE_DIR
+    from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
     monkeypatch.delenv("SQLITE_STORE_DIR", raising=False)
     config = StorageConfig()

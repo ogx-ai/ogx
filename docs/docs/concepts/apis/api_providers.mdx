@@ -7,13 +7,36 @@ sidebar_position: 2
 
 # API Providers
 
-The goal of Llama Stack is to build an ecosystem where users can easily swap out different implementations for the same API. Examples for these include:
-- LLM inference providers (e.g., Fireworks, Together, AWS Bedrock, Groq, Cerebras, SambaNova, vLLM, etc.),
-- Vector databases (e.g., ChromaDB, Weaviate, Qdrant, Milvus, FAISS, PGVector, Elasticsearch, Infinispan, etc.),
-- Safety providers (e.g., Meta's Llama Guard, AWS Bedrock Guardrails, etc.)
+Every API in OGX is backed by one or more providers. You can swap providers without changing your application code.
 
-Providers come in two flavors:
-- **Remote**: the provider runs as a separate service external to the Llama Stack codebase. Llama Stack contains a small amount of adapter code.
-- **Inline**: the provider is fully specified and implemented within the Llama Stack codebase. It may be a simple wrapper around an existing library, or a full fledged implementation within Llama Stack.
+## Provider Types
 
-Most importantly, Llama Stack always strives to provide at least one fully inline provider for each API so you can iterate on a fully featured environment locally.
+| Type | How it works | Examples |
+|------|-------------|----------|
+| **Remote** (`remote::`) | Adapts an external service via a thin client | Ollama, OpenAI, vLLM, Bedrock, Fireworks, Together |
+| **Inline** (`inline::`) | Runs entirely inside the OGX process | FAISS, SQLite-vec, sentence-transformers, Llama Guard |
+
+OGX provides at least one inline provider for each API so you can run a fully featured stack locally without any external dependencies.
+
+## Multiple Providers Per API
+
+You can configure multiple providers for the same API. The routing table dispatches requests to the right provider based on the resource (model, vector store, etc.):
+
+```yaml
+providers:
+  inference:
+    - provider_id: ollama
+      provider_type: remote::ollama
+      config:
+        base_url: http://localhost:11434/v1
+    - provider_id: openai
+      provider_type: remote::openai
+      config:
+        api_key: ${env.OPENAI_API_KEY}
+```
+
+Each provider automatically discovers its available models at startup. Requests are routed based on the model identifier - models from Ollama go to the Ollama provider, models from OpenAI go to the OpenAI provider. Same endpoint, same client code.
+
+## Available Providers
+
+See the [Providers](/docs/providers) section for the full list of supported providers per API.

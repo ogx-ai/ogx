@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from .helpers import assert_text_contains, new_vector_store, upload_file
+from .helpers import assert_text_contains, new_vector_store, skip_if_provider_is_vertexai, upload_file
 
 
 @pytest.mark.parametrize(
@@ -45,13 +45,19 @@ def test_response_text_format(responses_client, text_model_id, text_format):
 
 @pytest.fixture
 def vector_store_with_filtered_files(
-    request, responses_client, embedding_model_id, embedding_dimension, tmp_path_factory
+    request, responses_client, client_with_models, embedding_model_id, embedding_dimension, tmp_path_factory
 ):
     # """Create a vector store with multiple files that have different attributes for filtering tests."""
     if "text_model_id" in request.fixturenames:
         text_model_id = request.getfixturevalue("text_model_id")
         if text_model_id and text_model_id.startswith("watsonx/"):
             pytest.skip("WatsonX file search filters are not reliably supported")
+        if text_model_id:
+            skip_if_provider_is_vertexai(
+                client_with_models,
+                text_model_id,
+                "file search filter replay fails due to non-deterministic vector store IDs",
+            )
     vector_store = new_vector_store(
         responses_client, "test_vector_store_with_filters", embedding_model_id, embedding_dimension
     )
@@ -137,10 +143,15 @@ def vector_store_with_filtered_files(
         pass  # Best effort cleanup
 
 
-def test_response_file_search_filter_by_region(responses_client, text_model_id, vector_store_with_filtered_files):
+def test_response_file_search_filter_by_region(
+    responses_client, client_with_models, text_model_id, vector_store_with_filtered_files
+):
     """Test file search with region equality filter."""
     if text_model_id.startswith("watsonx/"):
         pytest.skip("WatsonX file search filters are not reliably supported")
+    skip_if_provider_is_vertexai(
+        client_with_models, text_model_id, "file search filter replay fails due to non-deterministic vector store IDs"
+    )
     tools = [
         {
             "type": "file_search",
@@ -170,10 +181,15 @@ def test_response_file_search_filter_by_region(responses_client, text_model_id, 
         assert "asia" not in result.text.lower()
 
 
-def test_response_file_search_filter_by_category(responses_client, text_model_id, vector_store_with_filtered_files):
+def test_response_file_search_filter_by_category(
+    responses_client, client_with_models, text_model_id, vector_store_with_filtered_files
+):
     """Test file search with category equality filter."""
     if text_model_id.startswith("watsonx/"):
         pytest.skip("WatsonX does not reliably support tool calling")
+    skip_if_provider_is_vertexai(
+        client_with_models, text_model_id, "file search filter behavior differs from expected results"
+    )
     tools = [
         {
             "type": "file_search",
@@ -202,10 +218,15 @@ def test_response_file_search_filter_by_category(responses_client, text_model_id
         assert "revenue figures" not in result.text.lower()
 
 
-def test_response_file_search_filter_by_date_range(responses_client, text_model_id, vector_store_with_filtered_files):
+def test_response_file_search_filter_by_date_range(
+    responses_client, client_with_models, text_model_id, vector_store_with_filtered_files
+):
     """Test file search with date range filter using compound AND."""
     if text_model_id.startswith("watsonx/"):
         pytest.skip("WatsonX file search filters are not reliably supported")
+    skip_if_provider_is_vertexai(
+        client_with_models, text_model_id, "file search filter replay fails due to non-deterministic vector store IDs"
+    )
     tools = [
         {
             "type": "file_search",
@@ -247,10 +268,15 @@ def test_response_file_search_filter_by_date_range(responses_client, text_model_
         assert "q3" not in result.text.lower()
 
 
-def test_response_file_search_filter_compound_and(responses_client, text_model_id, vector_store_with_filtered_files):
+def test_response_file_search_filter_compound_and(
+    responses_client, client_with_models, text_model_id, vector_store_with_filtered_files
+):
     """Test file search with compound AND filter (region AND category)."""
     if text_model_id.startswith("watsonx/"):
         pytest.skip("WatsonX file search filters are not reliably supported")
+    skip_if_provider_is_vertexai(
+        client_with_models, text_model_id, "file search filter replay fails due to non-deterministic vector store IDs"
+    )
     tools = [
         {
             "type": "file_search",

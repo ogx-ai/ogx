@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -30,12 +30,12 @@ import json
 import sys
 from pathlib import Path
 
-# Add parent directory to path to import from llama_stack
+# Add parent directory to path to import from ogx
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 try:
-    from llama_stack.testing.api_recorder import normalize_inference_request
+    from ogx.testing.api_recorder import normalize_inference_request
 except ImportError:
     normalize_inference_request = None
 
@@ -281,7 +281,7 @@ def explain_paths(test_id: str | None = None, base_dir: Path | None = None):
 def compute_hash(endpoint: str, method: str, body_json: str, test_id: str | None = None):
     """Compute hash for a request"""
     if normalize_inference_request is None:
-        print("Could not import normalize_inference_request from llama_stack.testing.api_recorder")
+        print("Could not import normalize_inference_request from ogx.testing.api_recorder")
         print("Make sure you're running from the repo root with proper PYTHONPATH")
         return
 
@@ -296,7 +296,7 @@ def compute_hash(endpoint: str, method: str, body_json: str, test_id: str | None
 
     # Set test context if provided
     if test_id:
-        from llama_stack.core.testing_context import set_test_context
+        from ogx.core.testing_context import set_test_context
 
         set_test_context(test_id)
 

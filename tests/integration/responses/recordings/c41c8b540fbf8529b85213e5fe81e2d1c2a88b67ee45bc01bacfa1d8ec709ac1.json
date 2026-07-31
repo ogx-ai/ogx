@@ -1,0 +1,85 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_basic_conversation[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Help me plan a Python web app."
+        },
+        {
+          "role": "assistant",
+          "content": "I suggest FastAPI with SQLite."
+        },
+        {
+          "role": "user",
+          "content": "Add authentication too."
+        },
+        {
+          "role": "assistant",
+          "content": "Use OAuth2 with JWT tokens."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-c41c8b540fbf",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "**Handoff Summary for Python Web App Planning:**\n\n**Current Progress and Key Decisions:**\n1. **Framework Choice**: We have decided to use FastAPI for the web app development due to its performance benefits and ease of use.\n2. **Database**: SQLite has been selected as the database since it is lightweight and perfect for a quick setup, suitable for this application.\n3. **Authentication**: OAuth2 with JWT tokens will be used for authentication to ensure secure user access management.\n\n**Important Context, Constraints, or User Preferences:**\n- The user prefers technologies that are relatively easy to implement and maintain.\n- The focus is on rapid development without compromising security, hence the choice of JWT for authentication.\n- There is no mention of scalability or high concurrency requirements, so SQLite is appropriate.\n\n**What Remains to be Done (Next Steps):**\n1. **Define the App Structure**: Determine the endpoints and the folder structure for the FastAPI app.\n2. **Implement the Authentication System**: Set up OAuth2 with JWT, including token generation and validation.\n3. **Database Schema Design**: Create the initial schema for SQLite, defining tables and relationships.\n4. **Develop Core Endpoints**: Implement key RESTful endpoints for the main features of the web app.\n5. **Error Handling and Logging**: Set up proper error handling to deal with exceptions and add logging for monitoring.\n\n**Critical Data, Examples, or References Needed:**\n- A basic understanding of FastAPI concepts and examples (e.g., [FastAPI official documentation](https://fastapi.tiangolo.com/)).\n- Familiarity with OAuth2 and JWT implementation (e.g., [OAuth2 FastAPI example](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/)).\n- SQLite schema design templates or examples to base initial designs upon.\n\nThe next LLM should focus on expanding these areas to build a robust and functional web application.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_b8ee6cd0c3",
+        "usage": {
+          "completion_tokens": 393,
+          "prompt_tokens": 138,
+          "total_tokens": 531,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

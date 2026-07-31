@@ -2,18 +2,10 @@ name: Test External Providers Installed via Module
 
 run-name: Test External Provider installation via Python module
 
+# Disabled until we find a suitable external provider for CI.
+# The lmeval provider depends on the eval API which is being removed.
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'src/llama_stack/**'
-      - 'tests/integration/**'
-      - 'uv.lock'
-      - 'pyproject.toml'
-      - 'tests/external/*'
-      - '.github/workflows/test-external-provider-module.yml' # This workflow
+  workflow_dispatch: {}
 
 jobs:
   test-external-providers-from-module:
@@ -25,18 +17,24 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup-runner
 
-      - name: Install lmeval provider
+      - name: Install weather external API and kaze provider
         run: |
-          uv pip install llama-stack-provider-lmeval
+          uv pip install tests/external/ogx-api-weather
+          uv pip install tests/external/ogx-provider-kaze
 
-      - name: Start Llama Stack server in background
+      - name: Configure external API and provider
+        run: |
+          mkdir -p ~/.ogx/apis.d ~/.ogx/providers.d
+          cp tests/external/weather.yaml ~/.ogx/apis.d/
+          cp tests/external/kaze.yaml ~/.ogx/providers.d/
+
+      - name: Start OGX server in background
         env:
-          TRUSTYAI_LMEVAL_USE_K8S: "false"
-          LLAMA_STACK_LOG_FILE: "server.log"
+          OGX_LOG_FILE: "server.log"
         run: |
-          nohup uv run llama stack run tests/external/llama-stack-provider-lmeval/config.yaml > server.log 2>&1 &
+          nohup uv run ogx stack run tests/external/config.yaml --insecure > server.log 2>&1 &
 
-      - name: Wait for Llama Stack server to be ready
+      - name: Wait for OGX server to be ready
         run: |
           for _ in {1..30}; do
             if curl -s http://localhost:8321/v1/health | grep -q "OK"; then
@@ -54,16 +52,16 @@ jobs:
         run: |
           response=$(curl -s http://localhost:8321/v1/providers)
           echo "$response" | python3 -m json.tool
-          if echo "$response" | grep -q "trustyai_lmeval"; then
-            echo "lmeval external provider loaded successfully"
+          if echo "$response" | grep -q "kaze"; then
+            echo "kaze external provider loaded successfully"
           else
-            echo "ERROR: lmeval provider not found in providers list"
+            echo "ERROR: kaze provider not found in providers list"
             exit 1
           fi
 
       - name: Upload all logs to artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: logs-${{ github.run_id }}-${{ github.run_attempt }}-external-provider-module-test
           path: |

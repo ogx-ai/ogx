@@ -1,0 +1,80 @@
+{
+  "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_non_streaming_multi_turn[txt=gemini/gemini-2.5-flash-lite]",
+  "request": {
+    "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_non_streaming_multi_turn[txt=gemini/gemini-2.5-flash-lite]",
+    "url": "https://generativelanguage.googleapis.com/v1beta/interactions",
+    "method": "POST",
+    "payload": {
+      "model": "gemini-2.5-flash-lite",
+      "input": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "My name is Alice."
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello Alice! Nice to meet you."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is my name?"
+            }
+          ]
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "v1_ChcxeEhlYWMzOU4tMk12ZElQdzZLZHNRWRIXMXhIZWFjMzlOLTJNdmRJUHc2S2RzUVk",
+      "status": "completed",
+      "outputs": [
+        {
+          "signature": "CiRlMjQ4MzBhNy01Y2Q2LTQyZmUtOTk4Yi1lZTUzOWU3MmI5YzM=",
+          "type": "thought"
+        },
+        {
+          "text": "Your name is Alice.",
+          "type": "text"
+        }
+      ],
+      "usage": {
+        "total_tokens": 26,
+        "total_input_tokens": 21,
+        "input_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 21
+          }
+        ],
+        "total_cached_tokens": 0,
+        "total_output_tokens": 5,
+        "total_tool_use_tokens": 0,
+        "total_thought_tokens": 0
+      },
+      "role": "model",
+      "created": "2026-04-14T10:07:21Z",
+      "updated": "2026-04-14T10:07:21Z",
+      "service_tier": "standard",
+      "object": "interaction",
+      "model": "gemini-2.5-flash-lite"
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

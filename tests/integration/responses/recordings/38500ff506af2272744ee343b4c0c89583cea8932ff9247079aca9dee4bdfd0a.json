@@ -1,0 +1,723 @@
+{
+  "test_id": "tests/integration/responses/test_mcp_authentication.py::test_mcp_authorization_backward_compatibility[client_with_models-txt=bedrock/openai.gpt-oss-20b-1:0]",
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b-1:0",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is the boiling point of myawesomeliquid?"
+        }
+      ],
+      "parallel_tool_calls": true,
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "greet_everyone",
+            "parameters": {
+              "properties": {
+                "url": {
+                  "title": "Url",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "title": "greet_everyoneArguments",
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "get_boiling_point",
+            "description": "\n        Returns the boiling point of a liquid in Celsius or Fahrenheit.\n\n        :param liquid_name: The name of the liquid\n        :param celsius: Whether to return the boiling point in Celsius\n        :return: The boiling point of the liquid in Celcius or Fahrenheit\n        ",
+            "parameters": {
+              "properties": {
+                "liquid_name": {
+                  "title": "Liquid Name",
+                  "type": "string"
+                },
+                "celsius": {
+                  "default": true,
+                  "title": "Celsius",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "liquid_name"
+              ],
+              "title": "get_boiling_pointArguments",
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b-1:0",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "XIdP7PYFehhoL5SsyxtvYYpVKtdl7ToGWXgY51Fo21NIn"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "mERdsIRB9qPBQPmRpk4A4OsAhBuiZ4sPw3EZOszyWQAmoej6jcAyve4uJDQ0I5ish3u0P9jFEMfNXhniV5maxVZiXxnCMHbfM5IIstJA5Fl"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning>We need to use function get_boiling_point. We have</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "57hJDQyruQ7kcaoxNMRxKc9UpdE6YWLNdn3gx5OEXzZPgEKAiVLmKGJQCX1Wleq3KCO9gAlanQCWYXOgrdpNaDQm4SLImAVIsC"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning> liquid_name: \"myawesomeliquid\". Provide</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "ciGPBKLwuh2o0ci2I5uHEtOfvU5DlXJp0WWy1ckaRssOLAzOqTkCjysIjK3gofXlXSgtd76GFtF"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning> celsius? The default is true. So should return boiling point in</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "GJ16cenIdur6XiOdDbCbeDmPRCf5Law5bA7CSzWh91nIaj"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning> Celsius. Let's call.</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "3C8uEBuU4BJUt3BVve4WwWkDYucNTKxURTx47rkaqeifUdOuh"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "LsURFEKhDjRCBazZdkVjuVoaGW9hcKLcLfELMT7dSvCNqFIe2PWUr2XVHY5EuH2qdxTYDdmlu6jK2tzcxdmuflNoWZcmYptltxWJrMECMVhJpEwi"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "AuEt00buNVH8NMDyx5fhqyYrunjiqi814DwKUvKAfGc6TxuOPhW0sx2XedXukySn5CZJcU4TSsOxE4NqLE2zY9qwgWsV9ltklzHBjXDtwwoGjIu0G"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "tcy3iXPpBVsb2FXtqjvIyrSlHb90ENZvEDjzKgCVKCQlkIlSTxuXntzIQRS8CJigp2Aee126qlXpffC2ZzH0RlSzd"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "alK1HngBsVEyiusqjvDrRsMl7qGBn4VHqF"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "HGuojvQw416dBL27DE4LKx9Voi7H0Zov7RrTVDgx63hS3cKhyBrbu63JPZiQaMxpgkzCyQHuPh7J23g6QJQlgyiLEaiorbM675TMANUJhcdqosMZe"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "ctOfwcKzfVhtDb0eS5jO6TkcbWrJ7jztHut0VzIDFzTxdG6SeL0TPg0nthj5w7wXiiwbf9WJew5GlQ2q57xY1VrbCFW"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "7zX4WKTrT3rn3kW4kZ7Th1bw2Ug4MezGhfVquZQXXsOvXYtt5ovZIQXqHrrZM"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": "chatcmpl-tool-93e7bd9564cd4994",
+                    "function": {
+                      "arguments": "{\"li",
+                      "name": "get_boiling_point"
+                    },
+                    "type": "function"
+                  }
+                ]
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "Yt0Yj2UofQy35OkaZNqExRpyRoB5JufSsdgg2UZzZCwnSixxxACJBbP4gei53kdoPY6pZ6ycCB2dpYRCRWQn5OmZCrg26n7iw"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "quid",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "_name",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "\":\"",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "my",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "aw",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "esom",
+                      "name": null
+                    },
+                    "type": "function"
+                  }
+                ]
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "J7xjsW7uWjuPwCyJZyWAqjDcJNlW0nuk8qBZeNlKHEUj31llZnPxcMapHNBF7Vx8jc4v8RaX7Y82c8l1pzX4f9xnL8etaU"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "eli",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "quid",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "\",\"",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "c",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "elsius",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "\":",
+                      "name": null
+                    },
+                    "type": "function"
+                  }
+                ]
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "TUEfEQNkLg5sSPeiCtllWzIdzl6szZwCbsJMmTPnzmNSSeNyJYDbo8C3ybp2"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "true",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "}",
+                      "name": null
+                    },
+                    "type": "function"
+                  }
+                ]
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "pYSCbicXuyV44lSSWfn9pQwxbyDllwJjPKcwS8gqQ8Ln9ZG6AquM0f9Dw40F7QdvvC3Z60w6QjvFfYIMJy"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "MmSUzR1WsEilEgREkfVOxL5CVjbXtPgcaJqq6"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-38500ff506af",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 79,
+            "prompt_tokens": 229,
+            "total_tokens": 308,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

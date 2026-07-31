@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,8 +10,8 @@ Shared state for the OpenAPI generator module.
 
 from typing import Any
 
-from llama_stack_api import Api
-from llama_stack_api.schema_utils import clear_dynamic_schema_types, register_dynamic_schema_type
+from ogx_api import Api
+from ogx_api.schema_utils import clear_dynamic_schema_types, register_dynamic_schema_type
 
 _dynamic_model_registry: dict[str, type] = {}
 

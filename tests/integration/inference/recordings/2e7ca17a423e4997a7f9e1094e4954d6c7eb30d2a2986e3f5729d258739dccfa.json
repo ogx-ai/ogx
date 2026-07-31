@@ -1,0 +1,65 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough[txt=ollama/deepseek-r1:1.5b]",
+  "request": {
+    "method": "POST",
+    "url": "http://0.0.0.0:11434/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "deepseek-r1:1.5b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant."
+        },
+        {
+          "role": "user",
+          "content": "What is 2+2? Think step by step."
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "deepseek-r1:1.5b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-2e7ca17a423e",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Certainly! Here's a clear and straightforward explanation:\n\n**Problem**: What is \\(2 + 2\\)?\n\n**Solution**:\n1. Start with the number \\(2\\).\n2. Add another number \\(2\\) to it: \\(2 + 2\\).\n3. Calculate the sum: \\(2 + 2 = 4\\).\n\nTherefore, \\(2 + 2\\) equals **4**.\n\nHere's a step-by-step explanation:\n\n1. Begin with the value **\\(2\\)**.\n2. Add another value of **\\(2\\)** to this number.\n3. Perform the addition operation: \\(2 + 2 = 4\\).\n4. The final result is **4**, which concludes the calculation.\n\nThus, \\(2 + 2\\) equals **4**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning": "Okay, let's see. The user just asked me two simple questions: \"What is 2+2?\" and \"Think step by step.\" \n\nFirst, I should handle the first question because it's straightforward. 2 plus 2 equals 4, that's easy. Maybe they're just starting to learn addition or needing verification.\n\nNow, for the second part about thinking step by step, since my responses are automated, I can't engage further in a chat with an assistant like humans. But if the user is open and wants me to explain again, I can do that. Let's go through each number separately: adding 2 to get to four step by step.\n\nI should make sure to break it down clearly so they understand how 1+3 becomes part of it, leading up to the total sum. This way, even if they're new to this, seeing every step helps reinforce the concept.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "deepseek-r1:1.5b",
+        "object": "chat.completion",
+        "service_tier": null,
+        "system_fingerprint": "fp_ollama",
+        "usage": {
+          "completion_tokens": 353,
+          "prompt_tokens": 21,
+          "total_tokens": 374,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": null
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

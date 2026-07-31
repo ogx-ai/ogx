@@ -1,0 +1,140 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_with_previous_response_id[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is the capital of France?"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The capital of France is **Paris**."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-0f2877b71ce2",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### CONTEXT CHECKPOINT HANDOFF SUMMARY\n\n**1. Current Progress and Key Decisions Made:**\n- User initiated a general inquiry: \"What is the capital of France?\"\n- Response provided: \"The capital of France is Paris.\"\n\n**2. Important Context, Constraints, or User Preferences:**\n- User\u2019s intention or follow-up goals are unclear at this point.\n- No specific constraints, preferences, or detailed instructions have been shared yet.\n- Interaction tone appears straightforward and factual.\n\n**3. What Remains to Be Done (Next Steps):**\n- Await or prompt user clarification regarding additional requests or follow-up questions (e.g., details about Paris, related historical context, travel tips, etc.).\n- If no further clarification is provided, be prepared to engage by inferring intent from subsequent prompts.\n\n**4. Critical Data, Examples, or References Needed:**\n- General knowledge of Paris (historical importance, culture, geography).\n- Ability to provide tailored responses if the user specifies a particular direction for further information.\n\n**Guidance for Continuity:**\nFocus on maintaining a clear and concise response style while adapting to any new clarification or direction from the user. If unclear, gently prompt for further details to narrow context.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            },
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "protected_material_code": {
+                "filtered": false,
+                "detected": false
+              },
+              "protected_material_text": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": null,
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 247,
+          "prompt_tokens": 120,
+          "total_tokens": 367,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "prompt_filter_results": [
+          {
+            "prompt_index": 0,
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "jailbreak": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

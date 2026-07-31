@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -6,11 +6,11 @@
 
 import time
 
-from llama_stack.providers.utils.vector_io.vector_utils import (
+from ogx.providers.utils.vector_io.vector_utils import (
     generate_chunk_id,
     load_embedded_chunk_with_backward_compat,
 )
-from llama_stack_api import Chunk, ChunkMetadata, VectorStoreFileObject
+from ogx_api import Chunk, ChunkMetadata, VectorStoreFileObject
 
 # This test is a unit test for the chunk_utils.py helpers. This should only contain
 # tests which are specific to this file. More general (API-level) tests should be placed in
@@ -119,7 +119,7 @@ def test_chunk_serialization():
 def test_vector_store_file_object_attributes_validation():
     """Test VectorStoreFileObject validates and sanitizes attributes at input boundary."""
     # Test with metadata containing lists, nested dicts, and primitives
-    from llama_stack_api.vector_io import VectorStoreChunkingStrategyAuto
+    from ogx_api.vector_io import VectorStoreChunkingStrategyAuto
 
     file_obj = VectorStoreFileObject(
         id="file-123",
@@ -135,6 +135,7 @@ def test_vector_store_file_object_attributes_validation():
         created_at=1234567890,
         status="completed",
         vector_store_id="vs-123",
+        usage_bytes=0,
     )
 
     # Lists converted to comma-separated strings
@@ -150,7 +151,7 @@ def test_vector_store_file_object_attributes_validation():
 
 def test_vector_store_file_object_attributes_constraints():
     """Test VectorStoreFileObject enforces OpenAPI constraints on attributes."""
-    from llama_stack_api.vector_io import VectorStoreChunkingStrategyAuto
+    from ogx_api.vector_io import VectorStoreChunkingStrategyAuto
 
     # Test max 16 properties
     many_attrs = {f"key{i}": f"value{i}" for i in range(20)}
@@ -161,6 +162,7 @@ def test_vector_store_file_object_attributes_constraints():
         created_at=1234567890,
         status="completed",
         vector_store_id="vs-123",
+        usage_bytes=0,
     )
     assert len(file_obj.attributes) == 16  # Max 16 properties
 
@@ -173,6 +175,7 @@ def test_vector_store_file_object_attributes_constraints():
         created_at=1234567890,
         status="completed",
         vector_store_id="vs-123",
+        usage_bytes=0,
     )
     assert "a" * 65 not in file_obj.attributes
     assert "valid_key" in file_obj.attributes
@@ -186,6 +189,7 @@ def test_vector_store_file_object_attributes_constraints():
         created_at=1234567890,
         status="completed",
         vector_store_id="vs-123",
+        usage_bytes=0,
     )
     assert len(file_obj.attributes["key"]) == 512
 

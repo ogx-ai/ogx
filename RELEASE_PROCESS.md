@@ -1,10 +1,10 @@
-# Llama Stack Release Process
+# OGX Release Process
 
-This document outlines the release process for Llama Stack, providing predictability for the community on feature delivery timelines and release expectations.
+This document outlines the release process for OGX, providing predictability for the community on feature delivery timelines and release expectations.
 
 ## Release Schedule
 
-Llama Stack follows [Semantic Versioning](https://semver.org/) with three release streams:
+OGX follows [Semantic Versioning](https://semver.org/) with three release streams:
 
 | Release Type | Cadence | Description |
 |-------------|---------|-------------|
@@ -53,7 +53,7 @@ A version is released when:
 ### Triaging
 
 - Triagers manage milestones and prioritize issues
-- Discussions happen in the `#triage` Discord channel
+- Discussions happen in the `#triage` Slack channel
 - Priority decisions are reviewed in community calls
 
 ## Release Process
@@ -62,7 +62,7 @@ A version is released when:
 
 Each release has a designated **Release Owner** from the [CODEOWNERS](./CODEOWNERS) group who is responsible for:
 
-1. Creating a dedicated Discord thread in `#release` channel
+1. Creating a dedicated Slack thread in `#release` channel
 2. Coordinating testing activities
 3. Managing the release timeline
 4. Publishing release artifacts
@@ -99,10 +99,10 @@ Testing requirements scale with release type:
 
 For each release, the Release Owner should complete:
 
-- [ ] Create release-specific thread in `#releases` Discord channel
+- [ ] Create release-specific thread in `#releases` Slack channel
 - [ ] Complete the technical release steps below
 - [ ] Generate release notes
-- [ ] Announce in `#announcements` Discord channel
+- [ ] Announce in `#announcements` Slack channel
 
 ### Technical Release Steps
 
@@ -112,23 +112,23 @@ For each release, the Release Owner should complete:
 
 Backports are handled automatically by Mergify — patch releases ship whatever has already been backported to the release branch. No manual cherry-picking needed.
 
-- [ ] Run the [**Prepare release**](https://github.com/llamastack/llama-stack/actions/workflows/prepare-release.yml) workflow:
+- [ ] Run the [**Prepare release**](https://github.com/ogx-ai/ogx/actions/workflows/prepare-release.yml) workflow:
   - Input `version`: `0.4.5`
   - Input `release_branch`: `release-0.4.x`
-  - This commits `fallback_version` and `llama-stack-client` pin updates directly to the release branch
+  - This commits `fallback_version` and `ogx-client` pin updates directly to the release branch
 
 **Release:**
 
 - [ ] Create GitHub release: tag `v0.4.5`, target `release-0.4.x`
 - [ ] Verify all 4 packages published:
-  - [llama-stack on PyPI](https://pypi.org/project/llama-stack/)
-  - [llama-stack-api on PyPI](https://pypi.org/project/llama-stack-api/)
-  - [llama-stack-client on PyPI](https://pypi.org/project/llama-stack-client/)
-  - [llama-stack-client on npm](https://www.npmjs.com/package/llama-stack-client)
+  - [ogx on PyPI](https://pypi.org/project/ogx/)
+  - [ogx-api on PyPI](https://pypi.org/project/ogx-api/)
+  - [ogx-client on PyPI](https://pypi.org/project/ogx-client/)
+  - [ogx-client on npm](https://www.npmjs.com/package/ogx-client)
 
 **Post-release (automated):**
 
-The following steps are handled automatically by the [**Post-release automation**](https://github.com/llamastack/llama-stack/actions/workflows/post-release.yml) workflow, which triggers on `release: published`:
+The following steps are handled automatically by the [**Post-release automation**](https://github.com/ogx-ai/ogx/actions/workflows/post-release.yml) workflow, which triggers on `release: published`:
 
 - Tags `main` with `v0.4.6-dev` (next dev tag)
 - Commits `fallback_version` bump to `"0.4.6.dev0"` directly to `main`
@@ -145,17 +145,17 @@ The following steps are handled automatically by the [**Post-release automation*
 
 Each release includes:
 
-- **PyPI package**: `llama-stack` and `llama-stack-client`
-- **npm package**: `llama-stack-client`
+- **PyPI package**: `ogx` and `ogx-client`
+- **npm package**: `ogx-client`
 - **Docker images**: Distribution images on Docker Hub
 - **GitHub Release**: Tagged release with release notes
-- **Documentation**: Updated docs at <https://llamastack.github.io>
+- **Documentation**: Updated docs at <https://ogx-ai.github.io>
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for general contribution guidelines.
 
 ## Maintenance Policy
 
-Llama Stack actively maintains the **last 2 stable minor releases**.
+OGX actively maintains the **last 2 stable minor releases**.
 
 ### What "Maintained" Means
 
@@ -185,8 +185,8 @@ Users on unmaintained versions are encouraged to upgrade to continue receiving f
 
 The unified workflow (`.github/workflows/pypi.yml`) builds and publishes all packages:
 
-- **Local packages** (llama-stack, llama-stack-api): version comes from the git tag via `SETUPTOOLS_SCM_PRETEND_VERSION`
-- **External packages** (llama-stack-client python/typescript): the workflow patches `pyproject.toml`/`_version.py`/`package.json` at build time using the tag version via `sed`/`npm version`
+- **Local packages** (ogx, ogx-api): version comes from the git tag via `SETUPTOOLS_SCM_PRETEND_VERSION`
+- **External packages** (ogx-client python/typescript): the workflow patches `pyproject.toml`/`_version.py`/`package.json` at build time using the tag version via `sed`/`npm version`
 - `fallback_version` is only used for nightly/dev builds and Docker — not for releases
 - The workflow always runs from `main` but checks out the tag's commit for local packages
 
@@ -207,7 +207,7 @@ The unified workflow (`.github/workflows/pypi.yml`) builds and publishes all pac
 Triggered via `workflow_dispatch`. Takes a version and release branch as input, then:
 
 - Updates `fallback_version` to the release version in both `pyproject.toml` files
-- Updates `llama-stack-client` pins to `==X.Y.Z`
+- Updates `ogx-client` pins to `==X.Y.Z`
 - Opens a PR to the release branch
 
 ### Post-release (`.github/workflows/post-release.yml`)
@@ -226,11 +226,11 @@ The nightly build (in `pypi.yml`) derives its base version from `git describe --
 
 ### 1. Remove the client pin problem
 
-The `llama-stack-client==X.Y.Z` pin in `pyproject.toml` can't be satisfied until the client is published, but the client is published in the same workflow run. Options:
+The `ogx-client==X.Y.Z` pin in `pyproject.toml` can't be satisfied until the client is published, but the client is published in the same workflow run. Options:
 
 - Change the pin to `>=X.Y.Z` or `~=X.Y` so it doesn't require an exact match that doesn't exist yet
 - Remove the pin from the release branch entirely and let the workflow handle compatibility
-- Publish client packages first in a separate step, then update pins, then publish llama-stack
+- Publish client packages first in a separate step, then update pins, then publish ogx
 
 ### 2. Let setuptools-scm infer version from tags directly
 
@@ -243,4 +243,4 @@ Right now the workflow computes the version separately and passes it via `SETUPT
 
 ### 3. Client repos should use dynamic versioning
 
-The `llama-stack-client-python` and `llama-stack-client-typescript` repos use static versions. The workflow patches them with `sed` at build time, which is fragile. If those repos adopted setuptools-scm (Python) or a similar scheme, the workflow could just set an env var instead of rewriting files.
+The `ogx-client-python` and `ogx-client-typescript` repos use static versions. The workflow patches them with `sed` at build time, which is fragile. If those repos adopted setuptools-scm (Python) or a similar scheme, the workflow could just set an env var instead of rewriting files.

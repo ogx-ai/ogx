@@ -1,11 +1,11 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 """
-OpenAPI generator module for Llama Stack.
+OpenAPI generator module for OGX.
 
 This module provides functionality to generate OpenAPI specifications
 from FastAPI applications.

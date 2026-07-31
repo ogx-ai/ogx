@@ -1,0 +1,159 @@
+{
+  "test_id": "tests/integration/responses/test_basic_responses.py::test_response_streaming_incremental_content[openai_client-txt=bedrock/openai.gpt-oss-20b-1:0-earth]",
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b-1:0",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b-1:0",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-2fe66699cc89",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "QJ65mWwW0T9VSSHb3pFTzW8giwS6tFs0z6NdPDNH"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-2fe66699cc89",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "nupzbDjXTFedCMVIO7flOKdvkODikXU7msKpAKzWQ"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-2fe66699cc89",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning>We need to answer a question: \"Which planet do humans live on?\" Likely meaning we are ChatGPT, humans live on Earth. Not ambiguous. So answer: Earth. Possibly a trick? Should confirm that only humans live on Earth. So answer: Earth. Provide brief explanation.\n\nBut consider perspective: if this is some fictional scenario? But typical answer: Earth. Let\u2019s answer accordingly.</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "XsjrqEQq9nNu43KSL83HrcB87wD8nMnFWtagMUhlLfP1KuIgYChc4VPjUbLQGGzQcyUNpUeoxIXf3Djwp0khNn7BdogTPRxDWPqMy1tkzmNicvg"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-2fe66699cc89",
+          "choices": [
+            {
+              "delta": {
+                "content": "Humans live on **Earth**.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "dkcn7eri79lGjcSfguRYVAw80NTEBYC1BkoEmLQsF9fmA899ULF0xmOBxdDiK13tyzuLIpH0Z7W4YB3BoUwpvzp71iipy6lgfjMjFKDIDhzuwcWVU3kICGQGUxhCK"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-2fe66699cc89",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 98,
+            "prompt_tokens": 74,
+            "total_tokens": 172,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,41 +1,43 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from llama_stack.providers.inline.responses.builtin.responses.streaming import (
+from ogx.providers.inline.responses.builtin.responses.streaming import (
     StreamingResponseOrchestrator,
     convert_tooldef_to_chat_tool,
 )
-from llama_stack.providers.inline.responses.builtin.responses.types import ChatCompletionContext, ToolContext
-from llama_stack_api import ToolDef
-from llama_stack_api.inference.models import (
+from ogx.providers.inline.responses.builtin.responses.types import ChatCompletionContext, ToolContext
+from ogx.providers.inline.responses.builtin.responses.utils import (
+    build_summary_prompt,
+    should_summarize_reasoning,
+    summarize_reasoning,
+)
+from ogx_api import ToolDef
+from ogx_api.inference.models import (
     OpenAIAssistantMessageParam,
+    OpenAIChatCompletion,
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
+    OpenAIChatCompletionUsage,
     OpenAIChoice,
 )
-from llama_stack_api.openai_responses import OpenAIResponseInputToolMCP
+from ogx_api.openai_responses import (
+    OpenAIResponseInputToolMCP,
+    OpenAIResponseReasoning,
+)
 
 
 @pytest.fixture
-def mock_safety_api():
-    safety_api = AsyncMock()
-    # Mock the routing table and shields list for guardrails lookup
-    safety_api.routing_table = AsyncMock()
-    shield = AsyncMock()
-    shield.identifier = "llama-guard"
-    shield.provider_resource_id = "llama-guard-model"
-    safety_api.routing_table.list_shields.return_value = AsyncMock(data=[shield])
-    # Mock run_moderation to return non-flagged result by default
-    safety_api.run_moderation.return_value = AsyncMock(flagged=False)
-    return safety_api
+def mock_moderation_endpoint():
+    return "http://localhost:8080/v1/moderations"
 
 
 @pytest.fixture
@@ -51,6 +53,8 @@ def mock_context():
     context.tool_context = AsyncMock()
     context.tool_context.previous_tools = {}
     context.messages = []
+    context.tool_choice = None
+    context.available_tools = MagicMock(return_value=[])
     return context
 
 
@@ -84,7 +88,7 @@ def test_convert_tooldef_to_chat_tool_preserves_items_field():
 
 # ---------------------------------------------------------------------------
 # _separate_tool_calls regression tests
-# See: https://github.com/llamastack/llama-stack/issues/5301
+# See: https://github.com/ogx-ai/ogx/issues/5301
 # ---------------------------------------------------------------------------
 
 
@@ -128,7 +132,7 @@ def _build_orchestrator(mcp_tool_to_server: dict[str, OpenAIResponseInputToolMCP
         max_infer_iters=1,
         tool_executor=MagicMock(),
         instructions=None,
-        safety_api=None,
+        moderation_endpoint=None,
     )
 
 
@@ -161,7 +165,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 1
         assert len(result_messages) == 2
@@ -180,7 +184,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 3
         assert len(result_messages) == 2, (
@@ -201,7 +205,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 2
         assert "user_msg" in result_messages
@@ -223,7 +227,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 0
         assert len(result_messages) == 2
@@ -254,7 +258,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 1
         assert non_function[0].id == "call_1"
@@ -282,7 +286,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time, tc_news])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 1
@@ -316,7 +320,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 1
         assert len(approvals) == 0
@@ -349,7 +353,7 @@ class TestMixedApproval:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, _, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, _, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert result_messages[0] == "system_msg"
         assert result_messages[1] == "user_msg"
@@ -370,7 +374,7 @@ class TestAllExecuted:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 0
@@ -396,7 +400,7 @@ class TestAllExecuted:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 0
@@ -405,3 +409,164 @@ class TestAllExecuted:
         assistant_msg = result_messages[2]
         assert isinstance(assistant_msg, OpenAIAssistantMessageParam)
         assert len(assistant_msg.tool_calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# Reasoning summary tests
+# ---------------------------------------------------------------------------
+
+
+class TestShouldSummarizeReasoning:
+    def test_returns_false_when_reasoning_is_none(self):
+        assert should_summarize_reasoning(None) is False
+
+    def test_returns_true_for_concise(self):
+        reasoning = OpenAIResponseReasoning(summary="concise")
+        assert should_summarize_reasoning(reasoning) is True
+
+    def test_returns_true_for_detailed(self):
+        reasoning = OpenAIResponseReasoning(summary="detailed")
+        assert should_summarize_reasoning(reasoning) is True
+
+    def test_returns_true_for_auto(self):
+        reasoning = OpenAIResponseReasoning(summary="auto")
+        assert should_summarize_reasoning(reasoning) is True
+
+
+class TestBuildSummaryPrompt:
+    def test_concise_prompt_asks_for_short_summary(self):
+        prompt = build_summary_prompt("Some reasoning text", "concise")
+        assert "one or two sentences" in prompt
+        assert "Some reasoning text" in prompt
+
+    def test_detailed_prompt_preserves_logical_steps(self):
+        prompt = build_summary_prompt("Some reasoning text", "detailed")
+        assert "Preserve the key logical steps" in prompt
+        assert "Some reasoning text" in prompt
+
+    def test_auto_falls_through_to_concise(self):
+        prompt_auto = build_summary_prompt("text", "auto")
+        prompt_concise = build_summary_prompt("text", "concise")
+        assert prompt_auto == prompt_concise
+
+
+def _make_completion(content: str, usage: OpenAIChatCompletionUsage | None = None) -> OpenAIChatCompletion:
+    """Build a mock non-streaming chat completion response."""
+    return OpenAIChatCompletion(
+        id="comp_1",
+        choices=[
+            OpenAIChoice(
+                index=0,
+                finish_reason="stop",
+                message=OpenAIChatCompletionResponseMessage(content=content),
+            )
+        ],
+        created=0,
+        model="test-model",
+        object="chat.completion",
+        usage=usage,
+    )
+
+
+class TestSummarizeReasoning:
+    async def test_returns_summary_text(self):
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completion.return_value = _make_completion("The answer is 4.")
+
+        result = await summarize_reasoning(
+            inference_api=mock_inference,
+            model="test-model",
+            reasoning_text="Simple math.",
+            summary_mode="concise",
+        )
+
+        assert result == "The answer is 4."
+
+    async def test_returns_none_for_empty_content(self):
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completion.return_value = _make_completion("")
+
+        result = await summarize_reasoning(
+            inference_api=mock_inference,
+            model="test-model",
+            reasoning_text="reasoning",
+            summary_mode="concise",
+        )
+
+        assert result is None
+
+    async def test_collects_usage(self):
+        usage_data = OpenAIChatCompletionUsage(
+            prompt_tokens=10,
+            completion_tokens=5,
+            total_tokens=15,
+        )
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completion.return_value = _make_completion("summary", usage=usage_data)
+
+        summary_usage: list[OpenAIChatCompletionUsage] = []
+        result = await summarize_reasoning(
+            inference_api=mock_inference,
+            model="test-model",
+            reasoning_text="reasoning",
+            summary_mode="concise",
+            summary_usage=summary_usage,
+        )
+
+        assert result == "summary"
+        assert len(summary_usage) == 1
+        assert summary_usage[0].prompt_tokens == 10
+        assert summary_usage[0].completion_tokens == 5
+
+    async def test_preserves_multiline_content(self):
+        full_content = "First paragraph.\n\nSecond paragraph."
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completion.return_value = _make_completion(full_content)
+
+        result = await summarize_reasoning(
+            inference_api=mock_inference,
+            model="test-model",
+            reasoning_text="complex reasoning",
+            summary_mode="detailed",
+        )
+
+        assert result == full_content
+
+    async def test_inference_failure_raises(self):
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completion.side_effect = RuntimeError("provider down")
+
+        with pytest.raises(RuntimeError, match="provider down"):
+            await summarize_reasoning(
+                inference_api=mock_inference,
+                model="test-model",
+                reasoning_text="reasoning",
+                summary_mode="concise",
+            )
+
+    async def test_unexpected_streaming_response_raises(self):
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completion.return_value = MagicMock(spec=AsyncIterator)
+
+        with pytest.raises(RuntimeError, match="Expected non-streaming response"):
+            await summarize_reasoning(
+                inference_api=mock_inference,
+                model="test-model",
+                reasoning_text="reasoning",
+                summary_mode="concise",
+            )
+
+    async def test_uses_correct_summary_mode(self):
+        mock_inference = AsyncMock()
+        mock_inference.openai_chat_completion.return_value = _make_completion("summary")
+
+        await summarize_reasoning(
+            inference_api=mock_inference,
+            model="test-model",
+            reasoning_text="some reasoning",
+            summary_mode="detailed",
+        )
+
+        call_args = mock_inference.openai_chat_completion.call_args[0][0]
+        user_msg = call_args.messages[1].content
+        assert "Preserve the key logical steps" in user_msg

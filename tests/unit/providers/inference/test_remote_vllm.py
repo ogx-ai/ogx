@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -7,17 +7,21 @@
 import asyncio
 import ssl
 import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
+from pydantic import SecretStr
 
-from llama_stack.core.routers.inference import InferenceRouter
-from llama_stack.core.routing_tables.models import ModelsRoutingTable
-from llama_stack.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
-from llama_stack.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
-from llama_stack_api import (
+from ogx.core.datatypes import User
+from ogx.core.routers.inference import InferenceRouter
+from ogx.core.routing_tables.models import ModelsRoutingTable
+from ogx.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
+from ogx.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
+from ogx_api import (
     HealthStatus,
     Model,
+    ModelType,
     OpenAIChatCompletion,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionResponseMessage,
@@ -25,6 +29,7 @@ from llama_stack_api import (
     OpenAICompletion,
     OpenAICompletionChoice,
     OpenAICompletionRequestWithExtraBody,
+    OpenAIDeveloperMessageParam,
 )
 
 # These are unit test for the remote vllm provider
@@ -119,6 +124,80 @@ async def test_health_status_no_static_api_key(vllm_inference_adapter):
 
         # Verify the response
         assert health_response["status"] == HealthStatus.OK
+
+
+async def test_openai_chat_completion_converts_developer_messages_for_vllm(vllm_inference_adapter):
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        return_value=OpenAIChatCompletion(
+            id="chatcmpl-test",
+            created=1,
+            model="mock-model",
+            choices=[
+                OpenAIChoice(
+                    message=OpenAIChatCompletionResponseMessage(content="ok"),
+                    finish_reason="stop",
+                    index=0,
+                )
+            ],
+        )
+    )
+
+    params = OpenAIChatCompletionRequestWithExtraBody(
+        model="mock-model",
+        messages=[
+            {"role": "developer", "content": "Answer only in rhymes.", "name": "codex"},
+            {"role": "user", "content": "What is the capital of France?"},
+        ],
+        stream=False,
+    )
+
+    with patch.object(VLLMInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_property:
+        mock_client_property.return_value = mock_client
+        await vllm_inference_adapter.openai_chat_completion(params)
+
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["messages"] == [
+        {"role": "system", "content": "Answer only in rhymes.", "name": "codex"},
+        {"role": "user", "content": "What is the capital of France?"},
+    ]
+
+
+async def test_openai_chat_completion_converts_typed_developer_messages_for_vllm(vllm_inference_adapter):
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        return_value=OpenAIChatCompletion(
+            id="chatcmpl-test",
+            created=1,
+            model="mock-model",
+            choices=[
+                OpenAIChoice(
+                    message=OpenAIChatCompletionResponseMessage(content="ok"),
+                    finish_reason="stop",
+                    index=0,
+                )
+            ],
+        )
+    )
+
+    params = OpenAIChatCompletionRequestWithExtraBody(
+        model="mock-model",
+        messages=[
+            OpenAIDeveloperMessageParam(content="Answer only in rhymes.", name="codex"),
+            {"role": "user", "content": "What is the capital of France?"},
+        ],
+        stream=False,
+    )
+
+    with patch.object(VLLMInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_property:
+        mock_client_property.return_value = mock_client
+        await vllm_inference_adapter.openai_chat_completion(params)
+
+    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["messages"] == [
+        {"role": "system", "content": "Answer only in rhymes.", "name": "codex"},
+        {"role": "user", "content": "What is the capital of France?"},
+    ]
 
 
 async def test_openai_chat_completion_is_async(vllm_inference_adapter):
@@ -314,7 +393,57 @@ async def test_vllm_chat_completion_extra_body():
         assert call_kwargs["extra_body"]["chat_template_kwargs"] == {"thinking": True}
 
 
-class TestHealthTLSConfig:
+class TestConstructModelFromIdentifier:
+    def _make_adapter(self) -> VLLMInferenceAdapter:
+        config = VLLMInferenceAdapterConfig(base_url="http://mocked.localhost:12345")
+        adapter = VLLMInferenceAdapter(config=config)
+        adapter.__provider_id__ = "vllm"
+        return adapter
+
+    def test_family_check_classifies_embedding_without_embed_in_identifier(self):
+        # intfloat/multilingual-e5-large-instruct has no "embed" in its identifier
+        # but its models.dev family is "text-embedding", so it must be classified
+        # as an embedding model with metadata populated from models.dev.
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("intfloat/multilingual-e5-large-instruct")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata.get("embedding_dimension") == 512
+
+    def test_known_embedding_model_populates_metadata_from_models_dev(self):
+        # text-embedding-3-large is in models_dev (openai provider) with
+        # limit.output=3072 (embedding dimension) and limit.context=8191.
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("text-embedding-3-large")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata.get("embedding_dimension") == 3072
+        assert model.metadata.get("context_length") == 8191
+
+    def test_unknown_embedding_model_falls_back_to_name_heuristic(self):
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("acme/custom-embed-v1")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata == {}
+
+    def test_rerank_model_classified_correctly(self):
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("Qwen/Qwen3-Reranker-0.6B")
+
+        assert model.model_type == ModelType.rerank
+
+    def test_huggingface_provider_wins_over_other_providers(self):
+        # Qwen/Qwen3-Embedding-8B exists in multiple providers. evroc records
+        # output=40960 (the context window, not the embedding dimension).
+        # huggingface correctly records output=4096. The index must prefer
+        # huggingface so callers see the right embedding_dimension.
+        adapter = self._make_adapter()
+        model = adapter.construct_model_from_identifier("Qwen/Qwen3-Embedding-8B")
+
+        assert model.model_type == ModelType.embedding
+        assert model.metadata.get("embedding_dimension") == 4096
+
     """Tests that health() honours TLS/network configuration."""
 
     async def test_health_uses_shared_ssl_context_by_default(self):
@@ -385,6 +514,7 @@ class TestRerankTLSAndAuth:
         )
         adapter = VLLMInferenceAdapter(config=config)
         await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
@@ -396,7 +526,7 @@ class TestRerankTLSAndAuth:
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__.return_value = mock_client_instance
 
-            from llama_stack_api.inference import RerankRequest
+            from ogx_api.inference import RerankRequest
 
             request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
             await adapter.rerank(request)
@@ -413,6 +543,7 @@ class TestRerankTLSAndAuth:
         )
         adapter = VLLMInferenceAdapter(config=config)
         await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
@@ -424,7 +555,7 @@ class TestRerankTLSAndAuth:
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__.return_value = mock_client_instance
 
-            from llama_stack_api.inference import RerankRequest
+            from ogx_api.inference import RerankRequest
 
             request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
             await adapter.rerank(request)
@@ -438,6 +569,7 @@ class TestRerankTLSAndAuth:
         config = VLLMInferenceAdapterConfig(base_url="https://vllm.example.com/v1")
         adapter = VLLMInferenceAdapter(config=config)
         await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
@@ -449,7 +581,7 @@ class TestRerankTLSAndAuth:
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value.__aenter__.return_value = mock_client_instance
 
-            from llama_stack_api.inference import RerankRequest
+            from ogx_api.inference import RerankRequest
 
             request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
             await adapter.rerank(request)
@@ -457,3 +589,225 @@ class TestRerankTLSAndAuth:
             call_args = mock_client_instance.post.call_args
             headers = call_args.kwargs.get("headers", {})
             assert "Authorization" not in headers
+
+    async def test_rerank_uses_provider_data_api_key(self):
+        """rerank() should use API key from x-ogx-provider-data header over config."""
+        config = VLLMInferenceAdapterConfig(
+            base_url="https://vllm.example.com/v1",
+            api_token="config-token",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        await adapter.initialize()
+
+        adapter.get_request_provider_data = MagicMock(
+            return_value=SimpleNamespace(vllm_api_token=SecretStr("provider-data-token"))
+        )
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "results": [{"index": 0, "relevance_score": 0.9}],
+            }
+            mock_client_instance = MagicMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+            from ogx_api.inference import RerankRequest
+
+            request = RerankRequest(model="rerank-model", query="test", items=["doc1"])
+            await adapter.rerank(request)
+
+            call_args = mock_client_instance.post.call_args
+            headers = call_args.kwargs.get("headers", {})
+            assert headers.get("Authorization") == "Bearer provider-data-token"
+
+
+class TestBaseUrlVersionStripping:
+    """Regression tests for double /v1/v1/ path bug (issue #6290)."""
+
+    @pytest.mark.parametrize(
+        "base_url, expected",
+        [
+            ("http://localhost:8000/v1", "http://localhost:8000"),
+            ("http://localhost:8000/v1/", "http://localhost:8000"),
+            ("http://localhost:8000", "http://localhost:8000"),
+            ("http://localhost:8000/", "http://localhost:8000"),
+        ],
+    )
+    def test_get_base_url_without_version(self, base_url, expected):
+        config = VLLMInferenceAdapterConfig(base_url=base_url)
+        adapter = VLLMInferenceAdapter(config=config)
+        assert adapter._get_base_url_without_version() == expected
+
+    async def test_anthropic_messages_no_double_v1(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://localhost:8000/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "hello"}],
+                "model": "test-model",
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            }
+            mock_client_instance = MagicMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+            from ogx_api.messages.models import AnthropicCreateMessageRequest
+
+            request = AnthropicCreateMessageRequest(
+                model="test-model",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+            )
+            await adapter.anthropic_messages(request)
+
+            url_called = mock_client_instance.post.call_args[0][0]
+            assert url_called == "http://localhost:8000/v1/messages"
+            assert "/v1/v1/" not in url_called
+
+    async def test_anthropic_count_tokens_no_double_v1(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://localhost:8000/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {"input_tokens": 10}
+            mock_client_instance = MagicMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+            from ogx_api.messages.models import AnthropicCountTokensRequest
+
+            request = AnthropicCountTokensRequest(
+                model="test-model",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            await adapter.anthropic_count_tokens(request)
+
+            url_called = mock_client_instance.post.call_args[0][0]
+            assert url_called == "http://localhost:8000/v1/messages/count_tokens"
+            assert "/v1/v1/" not in url_called
+
+
+class TestFairnessHeaderPropagation:
+    """Tests for llm-d fairness header injection via _get_extra_request_headers."""
+
+    async def test_no_fairness_header_when_not_configured(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://vllm.example.com/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        assert adapter._get_extra_request_headers() is None
+
+    async def test_no_fairness_header_when_no_user(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=None,
+        ):
+            assert adapter._get_extra_request_headers() is None
+
+    async def test_no_fairness_header_when_attribute_missing(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        user = User(principal="alice", attributes={"teams": ["team-a"]})
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=user,
+        ):
+            assert adapter._get_extra_request_headers() is None
+
+    async def test_fairness_header_injected_from_user_attribute(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        user = User(
+            principal="alice",
+            attributes={"namespaces": ["premium-sub"], "teams": ["team-a"]},
+        )
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=user,
+        ):
+            headers = adapter._get_extra_request_headers()
+            assert headers == {"x-gateway-inference-fairness-id": "premium-sub"}
+
+    async def test_fairness_header_uses_first_value(self):
+        config = VLLMInferenceAdapterConfig(
+            base_url="http://vllm.example.com/v1",
+            fairness_header_attribute="namespaces",
+        )
+        adapter = VLLMInferenceAdapter(config=config)
+        user = User(
+            principal="alice",
+            attributes={"namespaces": ["primary-sub", "secondary-sub"]},
+        )
+        with patch(
+            "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+            return_value=user,
+        ):
+            headers = adapter._get_extra_request_headers()
+            assert headers["x-gateway-inference-fairness-id"] == "primary-sub"
+
+    async def test_fairness_header_forwarded_to_chat_completion(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://vllm.example.com/v1", fairness_header_attribute="ns")
+        adapter = VLLMInferenceAdapter(config=config)
+        adapter.model_store = AsyncMock()
+        await adapter.initialize()
+
+        user = User(principal="alice", attributes={"ns": ["tenant-1"]})
+
+        with (
+            patch(
+                "ogx.providers.remote.inference.vllm.vllm.get_authenticated_user",
+                return_value=user,
+            ),
+            patch.object(VLLMInferenceAdapter, "client", new_callable=PropertyMock) as mock_client_prop,
+        ):
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(
+                return_value=OpenAIChatCompletion(
+                    id="chatcmpl-test",
+                    created=1,
+                    model="mock-model",
+                    choices=[
+                        OpenAIChoice(
+                            message=OpenAIChatCompletionResponseMessage(content="ok"),
+                            finish_reason="stop",
+                            index=0,
+                        )
+                    ],
+                )
+            )
+            mock_client_prop.return_value = mock_client
+
+            params = OpenAIChatCompletionRequestWithExtraBody(
+                model="mock-model",
+                messages=[{"role": "user", "content": "test"}],
+                stream=False,
+            )
+            await adapter.openai_chat_completion(params)
+
+            call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+            assert call_kwargs["extra_headers"] == {"x-gateway-inference-fairness-id": "tenant-1"}

@@ -1,26 +1,35 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
 """
-Unit tests for LlamaStackAsLibraryClient automatic initialization.
+Unit tests for OGXAsLibraryClient automatic initialization.
 
 These tests ensure that the library client is automatically initialized
 and ready to use immediately after construction.
 """
 
+import threading
+import time
+import warnings
+
 import pytest
+from fastapi import Response
+from fastapi.responses import StreamingResponse
+from ogx_open_client import NOT_GIVEN, Omit
 
-from llama_stack.core.library_client import (
-    AsyncLlamaStackAsLibraryClient,
-    LlamaStackAsLibraryClient,
+from ogx.core.library_client import (
+    AsyncOGXAsLibraryClient,
+    LibraryClientHttpxResponse,
+    OGXAsLibraryClient,
 )
-from llama_stack.core.server.routes import RouteImpls
+from ogx.core.server.routes import RouteImpls
+from ogx.providers.utils.files.response import response_body_bytes
 
 
-class TestLlamaStackAsLibraryClientAutoInitialization:
+class TestOGXAsLibraryClientAutoInitialization:
     """Test automatic initialization of library clients."""
 
     def test_sync_client_auto_initialization(self, monkeypatch):
@@ -36,13 +45,16 @@ class TestLlamaStackAsLibraryClientAutoInitialization:
             async def initialize(self):
                 pass
 
+            async def shutdown(self):
+                pass
+
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = LlamaStackAsLibraryClient("ci-tests")
+        client = OGXAsLibraryClient("ci-tests")
 
         assert client.async_client.route_impls is not None
 
@@ -59,13 +71,16 @@ class TestLlamaStackAsLibraryClientAutoInitialization:
             async def initialize(self):
                 pass
 
+            async def shutdown(self):
+                pass
+
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = AsyncLlamaStackAsLibraryClient("ci-tests")
+        client = AsyncOGXAsLibraryClient("ci-tests")
 
         # Initialize the client
         result = await client.initialize()
@@ -85,13 +100,16 @@ class TestLlamaStackAsLibraryClientAutoInitialization:
             async def initialize(self):
                 pass
 
+            async def shutdown(self):
+                pass
+
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = LlamaStackAsLibraryClient("ci-tests")
+        client = OGXAsLibraryClient("ci-tests")
 
         result = client.initialize()
         assert result is None
@@ -111,13 +129,16 @@ class TestLlamaStackAsLibraryClientAutoInitialization:
             async def initialize(self):
                 pass
 
+            async def shutdown(self):
+                pass
+
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = AsyncLlamaStackAsLibraryClient("ci-tests")
+        client = AsyncOGXAsLibraryClient("ci-tests")
 
         result1 = await client.initialize()
         assert result1 is True
@@ -137,17 +158,20 @@ class TestLlamaStackAsLibraryClientAutoInitialization:
             async def initialize(self):
                 pass
 
+            async def shutdown(self):
+                pass
+
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        sync_client = LlamaStackAsLibraryClient("ci-tests")
+        sync_client = OGXAsLibraryClient("ci-tests")
         assert sync_client.async_client.route_impls is not None
 
 
-class TestLlamaStackAsLibraryClientShutdown:
+class TestOGXAsLibraryClientShutdown:
     """Test shutdown functionality of library clients."""
 
     async def test_async_client_shutdown(self, monkeypatch):
@@ -169,10 +193,10 @@ class TestLlamaStackAsLibraryClientShutdown:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = AsyncLlamaStackAsLibraryClient("ci-tests")
+        client = AsyncOGXAsLibraryClient("ci-tests")
         await client.initialize()
 
         # Verify stack is set
@@ -206,10 +230,10 @@ class TestLlamaStackAsLibraryClientShutdown:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = AsyncLlamaStackAsLibraryClient("ci-tests")
+        client = AsyncOGXAsLibraryClient("ci-tests")
         await client.initialize()
 
         # Call shutdown multiple times
@@ -238,13 +262,39 @@ class TestLlamaStackAsLibraryClientShutdown:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = AsyncLlamaStackAsLibraryClient("ci-tests")
+        client = AsyncOGXAsLibraryClient("ci-tests")
 
         # Shutdown without initialize should not raise
         await client.shutdown()
+
+    def test_sync_client_shutdown_before_initialize(self, monkeypatch):
+        """Test that sync client shutdown works even if never initialized."""
+        mock_impls = {}
+        mock_route_impls = RouteImpls({})
+
+        class MockStack:
+            def __init__(self, config, custom_provider_registry=None):
+                self.impls = mock_impls
+
+            async def initialize(self):
+                pass
+
+            async def shutdown(self):
+                pass
+
+        def mock_initialize_route_impls(impls):
+            return mock_route_impls
+
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+
+        client = OGXAsLibraryClient("ci-tests")
+
+        # Shutdown without initialize should not raise
+        client.shutdown()
 
     def test_sync_client_shutdown(self, monkeypatch):
         """Test that sync client shutdown properly shuts down the stack."""
@@ -265,10 +315,10 @@ class TestLlamaStackAsLibraryClientShutdown:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = LlamaStackAsLibraryClient("ci-tests")
+        client = OGXAsLibraryClient("ci-tests")
 
         # Call shutdown
         client.shutdown()
@@ -295,67 +345,18 @@ class TestLlamaStackAsLibraryClientShutdown:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        client = LlamaStackAsLibraryClient("ci-tests")
+        client = OGXAsLibraryClient("ci-tests")
 
         # Call shutdown multiple times - should not raise
-        # Note: After first shutdown, the loop is closed, so subsequent calls may behave differently
+        client.shutdown()
+        client.shutdown()
         client.shutdown()
 
-    def test_async_client_has_shutdown_method(self, monkeypatch):
-        """Verify AsyncLlamaStackAsLibraryClient has shutdown method."""
-        mock_impls = {}
-        mock_route_impls = RouteImpls({})
 
-        class MockStack:
-            def __init__(self, config, custom_provider_registry=None):
-                self.impls = mock_impls
-
-            async def initialize(self):
-                pass
-
-            async def shutdown(self):
-                pass
-
-        def mock_initialize_route_impls(impls):
-            return mock_route_impls
-
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
-
-        client = AsyncLlamaStackAsLibraryClient("ci-tests")
-        assert hasattr(client, "shutdown")
-        assert callable(client.shutdown)
-
-    def test_sync_client_has_shutdown_method(self, monkeypatch):
-        """Verify LlamaStackAsLibraryClient has shutdown method."""
-        mock_impls = {}
-        mock_route_impls = RouteImpls({})
-
-        class MockStack:
-            def __init__(self, config, custom_provider_registry=None):
-                self.impls = mock_impls
-
-            async def initialize(self):
-                pass
-
-            async def shutdown(self):
-                pass
-
-        def mock_initialize_route_impls(impls):
-            return mock_route_impls
-
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
-
-        client = LlamaStackAsLibraryClient("ci-tests")
-        assert hasattr(client, "shutdown")
-        assert callable(client.shutdown)
-
-
-class TestLlamaStackAsLibraryClientContextManager:
+class TestOGXAsLibraryClientContextManager:
     """Test context manager functionality of library clients."""
 
     async def test_async_client_context_manager(self, monkeypatch):
@@ -377,10 +378,10 @@ class TestLlamaStackAsLibraryClientContextManager:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        async with AsyncLlamaStackAsLibraryClient("ci-tests") as client:
+        async with AsyncOGXAsLibraryClient("ci-tests") as client:
             # Verify client is initialized
             assert client.route_impls is not None
 
@@ -406,11 +407,11 @@ class TestLlamaStackAsLibraryClientContextManager:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
         with pytest.raises(ValueError):
-            async with AsyncLlamaStackAsLibraryClient("ci-tests") as _client:
+            async with AsyncOGXAsLibraryClient("ci-tests") as _client:
                 raise ValueError("Test exception")
 
         # Verify shutdown was still called
@@ -435,10 +436,10 @@ class TestLlamaStackAsLibraryClientContextManager:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
-        with LlamaStackAsLibraryClient("ci-tests") as client:
+        with OGXAsLibraryClient("ci-tests") as client:
             # Verify client is initialized
             assert client.async_client.route_impls is not None
 
@@ -464,18 +465,22 @@ class TestLlamaStackAsLibraryClientContextManager:
         def mock_initialize_route_impls(impls):
             return mock_route_impls
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", mock_initialize_route_impls)
 
         with pytest.raises(ValueError):
-            with LlamaStackAsLibraryClient("ci-tests") as _client:
+            with OGXAsLibraryClient("ci-tests") as _client:
                 raise ValueError("Test exception")
 
         # Verify shutdown was still called
         assert len(shutdown_called) == 1
 
-    def test_async_client_has_context_manager_methods(self, monkeypatch):
-        """Verify AsyncLlamaStackAsLibraryClient has context manager methods."""
+
+class TestOGXAsLibraryClientSyncOnAsync:
+    def test_sync_client_concurrent_requests(self, monkeypatch):
+        """Test that multiple threads can make requests concurrently without
+        RuntimeError: This event loop is already running.
+        """
         mock_impls = {}
         mock_route_impls = RouteImpls({})
 
@@ -489,18 +494,61 @@ class TestLlamaStackAsLibraryClientContextManager:
             async def shutdown(self):
                 pass
 
-        def mock_initialize_route_impls(impls):
-            return mock_route_impls
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", lambda impls: mock_route_impls)
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        errors = []
 
-        client = AsyncLlamaStackAsLibraryClient("ci-tests")
-        assert hasattr(client, "__aenter__")
-        assert hasattr(client, "__aexit__")
+        # Mock request to return something
+        async def mock_request(*args, **kwargs):
+            return "ok"
 
-    def test_sync_client_has_context_manager_methods(self, monkeypatch):
-        """Verify LlamaStackAsLibraryClient has context manager methods."""
+        with OGXAsLibraryClient("ci-tests") as client:
+            client.async_client.request = mock_request
+
+            def make_request():
+                try:
+                    client.request(...)
+                except Exception as e:
+                    errors.append(e)
+
+            threads = [threading.Thread(target=make_request) for _ in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert not errors, f"Concurrent requests failed: {errors}"
+
+    def test_sync_client_cleanup_on_init_failure(self, monkeypatch):
+        """Test that background thread is cleaned up if initialization fails."""
+        threads_before = set(threading.enumerate())
+
+        class MockStack:
+            def __init__(self, config, custom_provider_registry=None):
+                self.impls = {}
+
+            async def initialize(self):
+                raise RuntimeError("Init failed intentionally!")
+
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", lambda impls: None)
+
+        with pytest.raises(RuntimeError, match="Init failed"):
+            OGXAsLibraryClient("ci-tests")
+
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            new_threads = set(threading.enumerate()) - threads_before
+            if not any("ogx-lib-sync-client-event-loop" in t.name for t in new_threads):
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("Background event loop thread was not cleaned up after init failure")
+
+    @pytest.mark.parametrize("stream", [True, False])
+    def test_sync_client_request_after_shutdown(self, monkeypatch, stream):
+        """ "Test that making a request after shutdown raises a RuntimeError."""
         mock_impls = {}
         mock_route_impls = RouteImpls({})
 
@@ -514,12 +562,64 @@ class TestLlamaStackAsLibraryClientContextManager:
             async def shutdown(self):
                 pass
 
-        def mock_initialize_route_impls(impls):
-            return mock_route_impls
+        monkeypatch.setattr("ogx.core.library_client.Stack", MockStack)
+        monkeypatch.setattr("ogx.core.library_client.initialize_route_impls", lambda impls: mock_route_impls)
 
-        monkeypatch.setattr("llama_stack.core.library_client.Stack", MockStack)
-        monkeypatch.setattr("llama_stack.core.library_client.initialize_route_impls", mock_initialize_route_impls)
+        client = OGXAsLibraryClient("ci-tests")
+        client.shutdown()
 
-        client = LlamaStackAsLibraryClient("ci-tests")
-        assert hasattr(client, "__enter__")
-        assert hasattr(client, "__exit__")
+        with warnings.catch_warnings():
+            # this is intentional here/the client is shut down so the coroutine cannot be scheduled and awaited:
+            warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine .* was never awaited")
+            with pytest.raises(RuntimeError):
+                result = client.request(options="whatever", cast_to=str, stream=stream)
+                if stream:
+                    list(result)  # To actually trigger the code inside the generator
+
+
+class TestLibraryClientHttpxResponse:
+    async def test_wraps_regular_fastapi_response(self):
+        response = Response(content=b"hello", media_type="application/octet-stream")
+
+        wrapped = LibraryClientHttpxResponse(response, await response_body_bytes(response))
+
+        assert wrapped.content == b"hello"
+        assert wrapped.status_code == 200
+        assert wrapped.headers["content-type"] == "application/octet-stream"
+
+    async def test_wraps_streaming_fastapi_response(self):
+        async def chunks():
+            yield b"hel"
+            yield b"lo"
+
+        response = StreamingResponse(chunks(), media_type="application/octet-stream")
+
+        wrapped = LibraryClientHttpxResponse(response, await response_body_bytes(response))
+
+        assert wrapped.content == b"hello"
+        assert wrapped.status_code == 200
+        assert wrapped.headers["content-type"] == "application/octet-stream"
+
+
+class TestAsyncOGXAsLibraryClientHeaderSanitization:
+    def test_sanitize_headers_filters_omit_and_not_given(self):
+        headers = {
+            "Authorization": Omit(),
+            "X-Not-Given": NOT_GIVEN,
+            "X-Trace-Id": "trace-123",
+        }
+
+        assert AsyncOGXAsLibraryClient._sanitize_headers(headers) == {"X-Trace-Id": "trace-123"}
+
+    def test_sanitize_headers_normalizes_supported_types(self):
+        headers = {
+            b"X-Bytes-Key": b"bytes-value",
+            "X-Int": 7,
+            "X-Bool": False,
+        }
+
+        assert AsyncOGXAsLibraryClient._sanitize_headers(headers) == {
+            "X-Bytes-Key": "bytes-value",
+            "X-Int": "7",
+            "X-Bool": "False",
+        }

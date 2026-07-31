@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -10,20 +10,20 @@ import os
 
 import pytest
 
-from llama_stack.testing.api_recorder import patch_httpx_for_test_id
-from tests.integration.fixtures.common import instantiate_llama_stack_client
+from ogx.testing.api_recorder import patch_httpx_for_test_id
+from tests.integration.fixtures.common import instantiate_ogx_client
 from tests.integration.telemetry.collectors import InMemoryTelemetryManager, OtlpHttpTestCollector
 
 
 # TODO: Fix this to work with Automatic Instrumentation
 @pytest.fixture(scope="session")
 def telemetry_test_collector():
-    stack_mode = os.environ.get("LLAMA_STACK_TEST_STACK_CONFIG_TYPE", "library_client")
+    stack_mode = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
 
     if stack_mode == "server":
         # In server mode, the collector must be started and the server is already running.
         # The integration test script (scripts/integration-tests.sh) should have set
-        # LLAMA_STACK_TEST_COLLECTOR_PORT and OTEL_EXPORTER_OTLP_ENDPOINT before starting the server.
+        # OGX_TEST_COLLECTOR_PORT and OTEL_EXPORTER_OTLP_ENDPOINT before starting the server.
         try:
             collector = OtlpHttpTestCollector()
         except RuntimeError as exc:
@@ -51,10 +51,10 @@ def telemetry_test_collector():
 
 # TODO: Fix this to work with Automatic Instrumentation
 @pytest.fixture(scope="session")
-def llama_stack_client(telemetry_test_collector, request):
+def ogx_client(telemetry_test_collector, request):
     """Ensure telemetry collector is ready before initializing the stack client."""
     patch_httpx_for_test_id()
-    client = instantiate_llama_stack_client(request.session)
+    client = instantiate_ogx_client(request.session)
     return client
 
 

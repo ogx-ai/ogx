@@ -1,0 +1,137 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-mantle.us-east-2.api.aws/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a helpful assistant that summarizes reasoning traces."
+        },
+        {
+          "role": "user",
+          "content": "Summarize the following chain-of-thought reasoning in one or two sentences. Focus only on the final conclusion and the most important reasoning step.\n\nReasoning:\nWe need to answer \"What is 2 + 2? Think step by step.\" So we need to give step by step reasoning. Use a short explanation: start with 2, add 2. Yes. The answer: 4.\n\nWe need to think about how to reply. The conversation: user: \"What is 2 + 2? Think step by step.\" So we just need to provide a step-by-step reasoning.\n\nWe want to be concise. We can say\n\nStep 1: Write down the first addend: 2\nStep 2: Write down the second addend: 2\nStep 3: Add them: 2 + 2 = ?\n\nBut maybe we can also illustrate the addition or show a mental addition: 2 + 2 is counting: From 2, adding 2 more increments the count to 4. So the result is 4.\n\nOk. In common tasks, they'd want the answer with step by step. Also it's simple, so it's fine.\n\nBut might also want the summation: 2 + 2 = (2 + 1) + 1 = 3 + 1 = 4. That's stepwise.\n\nThus we respond.\n\nProbably there's no hidden nuance, maybe we mention it's arithmetic addition.\n\nOk. Provide step by step. Also mention the answer is 4.\n\nWe need to comply with the policy: no disallowed content. It's fine.\n\nThe answer: The sum is 4.\n\nLet's produce final answer."
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "temperature": 0.3
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.5.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-c759536f8798",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "mcK9TiVYeYMULVngRlvIAonWVkupumzsrIxIezr567sMBWgPL36PWMbgXTBunsQmg5ZKbwVuP78OjiL9NcHJVnPWz0"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-c759536f8798",
+          "choices": [
+            {
+              "delta": {
+                "content": "The sum of 2\u202f+\u202f2 is 4, because adding the first 2 to the second 2 increases the count from 2 to 4.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "j9c96bIBZDLRsd5wDPKLjqQIq7lRajyhkDsNx4om"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-c759536f8798",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "9Syy8HVh3bnl9CESSF3g4dgRr6Umnj3zNKRvtvaAxgOo7zv2XlSxMQ46l6QeeJn2qtsDbft6hY8GvW"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-c759536f8798",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 38,
+            "prompt_tokens": 419,
+            "total_tokens": 457,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

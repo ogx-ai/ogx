@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -19,7 +19,7 @@ def models():
     """Manage GenAI models."""
 
 
-@click.command(name="list", help="Show available llama models at distribution endpoint")
+@click.command(name="list", help="Show available models at distribution endpoint")
 @click.help_option("-h", "--help")
 @click.pass_context
 @handle_client_errors("list models")

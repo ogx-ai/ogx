@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -26,4 +26,4 @@ DATASET_NAME = "xlam-ft-dataset-1"
 # like to associate with your Customized models.
 PROJECT_ID = ""
 # (Optional) Directory to save the Customized model.
-CUSTOMIZED_MODEL_DIR = "nvidia-tool-calling-tutorial/test-llama-stack@v1"
+CUSTOMIZED_MODEL_DIR = "nvidia-tool-calling-tutorial/test-ogx@v1"

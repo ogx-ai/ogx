@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -13,15 +13,17 @@ import httpx
 import pytest
 from openai import AsyncOpenAI, NotFoundError
 
-from llama_stack.testing.api_recorder import (
+from ogx.core.testing_context import reset_test_context, set_test_context
+from ogx.testing.api_recorder import (
     APIRecordingMode,
     ResponseStorage,
+    _is_ogx_test_server_model_list_url,
     api_recording,
     normalize_inference_request,
 )
 
 # Import the real Pydantic response types instead of using Mocks
-from llama_stack_api import (
+from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionResponseMessage,
     OpenAIChoice,
@@ -108,6 +110,72 @@ class TestInferenceRecording:
 
         assert hash1 != hash3
 
+    def test_provider_model_list_normalization_ignores_test_context(self):
+        """Provider model-list calls are shared infrastructure across tests."""
+        url = "https://generativelanguage.googleapis.com/v1beta/openai/v1/models"
+
+        first_token = set_test_context("tests/integration/inference/test_a.py::test_one")
+        try:
+            hash1 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(first_token)
+
+        second_token = set_test_context("tests/integration/inference/test_b.py::test_two")
+        try:
+            hash2 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(second_token)
+
+        assert hash1 == hash2
+
+    def test_provider_model_list_normalization_matches_existing_recordings(self):
+        """Shared model-list hashes preserve compatibility with existing files."""
+        assert (
+            normalize_inference_request("POST", "https://api.openai.com/v1/v1/models", {}, {})
+            == "64a2277c90f0f42576f60c1030e3a020403d34a95f56931b792d5939f4cebc57"
+        )
+        assert (
+            normalize_inference_request(
+                "POST", "https://generativelanguage.googleapis.com/v1beta/openai/v1/models", {}, {}
+            )
+            == "d98e7566147f9d534bc0461f2efe61e3f525c18360a07bb3dda397579e25c27b"
+        )
+        assert (
+            normalize_inference_request(
+                "POST",
+                "https://us-south.ml.cloud.ibm.com/ml/v1/v1/models",
+                {},
+                {"extra_query": {"project_id": "replay-mode-dummy-project"}},
+            )
+            == "83953d70762b611d7b1e6ff232b53374ee7c35538fb0392cf9d92f27815c4fc6"
+        )
+
+    def test_local_provider_model_list_normalization_keeps_test_context(self):
+        """Local provider model-list calls return raw provider IDs and stay scoped."""
+        url = "http://0.0.0.0:11434/v1/v1/models"
+
+        first_token = set_test_context("tests/integration/inference/test_a.py::test_one")
+        try:
+            hash1 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(first_token)
+
+        second_token = set_test_context("tests/integration/inference/test_b.py::test_two")
+        try:
+            hash2 = normalize_inference_request("POST", url, {}, {})
+        finally:
+            reset_test_context(second_token)
+
+        assert hash1 != hash2
+
+    def test_ogx_test_server_model_list_detection(self, monkeypatch):
+        """Only OGX test server model-list calls bypass recording."""
+        monkeypatch.setenv("TEST_API_BASE_URL", "http://localhost:8322")
+
+        assert _is_ogx_test_server_model_list_url("http://localhost:8322/v1/v1/models")
+        assert not _is_ogx_test_server_model_list_url("http://0.0.0.0:11434/v1/v1/models")
+        assert not _is_ogx_test_server_model_list_url("https://api.openai.com/v1/v1/models")
+
     def test_request_normalization_edge_cases(self):
         """Test request normalization is precise about request content."""
         # Test that different whitespace produces different hashes (no normalization)
@@ -171,6 +239,110 @@ class TestInferenceRecording:
             "POST", "http://test/v1/chat/completions", {}, body_with_close_scores_variation
         )
         assert hash7 == hash8
+
+    def test_file_search_score_normalization(self):
+        """Test that file_search scores are normalized for stable hashing.
+
+        Vector search returns non-deterministic scores that vary between runs.
+        The score values must be replaced entirely (not just rounded) so that
+        replay hashes match regardless of the exact score returned.
+        """
+        url = "http://test/v1/chat/completions"
+
+        body_a = {
+            "messages": [
+                {
+                    "role": "tool",
+                    "content": "document_id: file-123, score: 0.8523456789",
+                }
+            ]
+        }
+        body_b = {
+            "messages": [
+                {
+                    "role": "tool",
+                    "content": "document_id: file-123, score: 0.4217891234",
+                }
+            ]
+        }
+        hash_a = normalize_inference_request("POST", url, {}, body_a)
+        hash_b = normalize_inference_request("POST", url, {}, body_b)
+        assert hash_a == hash_b
+
+    def test_file_search_attributes_normalization(self):
+        """Test that file_search attribute dicts are stripped for stable hashing."""
+        url = "http://test/v1/chat/completions"
+
+        body_a = {
+            "messages": [
+                {
+                    "role": "tool",
+                    "content": "document_id: file-123, score: 0.85, attributes: {'document_id': 'file-123', 'source': 'a.txt'}",
+                }
+            ]
+        }
+        body_b = {
+            "messages": [
+                {
+                    "role": "tool",
+                    "content": "document_id: file-123, score: 0.85, attributes: {'document_id': 'file-456', 'source': 'b.txt'}",
+                }
+            ]
+        }
+        hash_a = normalize_inference_request("POST", url, {}, body_a)
+        hash_b = normalize_inference_request("POST", url, {}, body_b)
+        assert hash_a == hash_b
+
+    def test_file_search_complete_normalization(self):
+        """End-to-end test with realistic file_search results including all non-deterministic metadata.
+
+        Tests that document_id (UUID), score, attributes, and citations all normalize correctly,
+        even when document UUIDs, scores, and attributes vary completely between test runs.
+        This is the realistic scenario where recordings are replayed with different IDs.
+        """
+        url = "http://test/v1/chat/completions"
+
+        # First run: UUID 3ad3371d-04a9-4fa3-b837-d6dd716348e7 with score 0.0077...
+        body_a = {
+            "messages": [
+                {
+                    "role": "tool",
+                    "content": (
+                        "[1] document_id: 3ad3371d-04a9-4fa3-b837-d6dd716348e7, score: 0.007751386943071613, "
+                        "attributes: {'region': 'us', 'category': 'engineering', 'file_id': 'file-450428750203'} "
+                        "cite as <|3ad3371d-04a9-4fa3-b837-d6dd716348e7|>\n"
+                        "US technical updates for Q2 2023."
+                    ),
+                }
+            ]
+        }
+        # Second run: different UUID with different score and attributes
+        body_b = {
+            "messages": [
+                {
+                    "role": "tool",
+                    "content": (
+                        "[1] document_id: ae7bfea9-d479-4d0c-a676-babf9e6e314a, score: 0.002861692101212796, "
+                        "attributes: {'region': 'us', 'category': 'marketing', 'file_id': 'file-450428750202'} "
+                        "cite as <|ae7bfea9-d479-4d0c-a676-babf9e6e314a|>\n"
+                        "US technical updates for Q2 2023."
+                    ),
+                }
+            ]
+        }
+        hash_a = normalize_inference_request("POST", url, {}, body_a)
+        hash_b = normalize_inference_request("POST", url, {}, body_b)
+        assert hash_a == hash_b
+
+    def test_non_file_search_content_still_differs(self):
+        """Ensure normalization does not collapse genuinely different requests."""
+        url = "http://test/v1/chat/completions"
+
+        body_a = {"messages": [{"role": "user", "content": "What is machine learning?"}]}
+        body_b = {"messages": [{"role": "user", "content": "What is deep learning?"}]}
+        hash_a = normalize_inference_request("POST", url, {}, body_a)
+        hash_b = normalize_inference_request("POST", url, {}, body_b)
+        assert hash_a != hash_b
 
     def test_response_storage(self, temp_storage_dir):
         """Test the ResponseStorage class."""

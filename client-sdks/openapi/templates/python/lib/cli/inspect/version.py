@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,7 +15,7 @@ from ..common.utils import handle_client_errors
 @click.pass_context
 @handle_client_errors("inspect version")
 def inspect_version(ctx):
-    """Show Llama Stack version on distribution endpoint"""
+    """Show OGX version on distribution endpoint"""
     client = ctx.obj["client"]
     console = Console()
     version_response = client.inspect.version()

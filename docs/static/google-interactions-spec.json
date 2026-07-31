@@ -1,0 +1,3649 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Gemini API",
+    "description": "The Gemini Interactions API is an experimental API that allows developers to build generative AI applications using Gemini models. Gemini is our most capable model, built from the ground up to be multimodal. It can generalize and seamlessly understand, operate across, and combine different types of information including language, images, audio, video, and code. You can use the Gemini API for use cases like reasoning across text and images, content generation, dialogue agents, summarization and classification systems, and more.",
+    "version": "v1beta",
+    "x-google-revision": "0"
+  },
+  "servers": [
+    {
+      "url": "https://generativelanguage.googleapis.com",
+      "description": "Global Endpoint"
+    }
+  ],
+  "paths": {
+    "/{api_version}/interactions": {
+      "parameters": [{ "$ref": "#/components/parameters/api_version" }],
+      "post": {
+        "operationId": "CreateInteraction",
+        "description": "Creates a new interaction.",
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "description": "The request body.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateModelInteractionParams"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CreateAgentInteractionParams"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" },
+                "examples": {
+                  "simple": {
+                    "summary": "Simple Request",
+                    "value": {
+                      "created": "2025-11-26T12:25:15Z",
+                      "id": "v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg",
+                      "model": "gemini-3-flash-preview",
+                      "object": "interaction",
+                      "outputs": [
+                        {
+                          "text": "Hello! I'm functioning perfectly and ready to assist you.\n\nHow are you doing today?",
+                          "type": "text"
+                        }
+                      ],
+                      "role": "model",
+                      "status": "completed",
+                      "updated": "2025-11-26T12:25:15Z",
+                      "usage": {
+                        "input_tokens_by_modality": [
+                          { "modality": "text", "tokens": 7 }
+                        ],
+                        "total_cached_tokens": 0,
+                        "total_input_tokens": 7,
+                        "total_output_tokens": 20,
+                        "total_thought_tokens": 22,
+                        "total_tokens": 49,
+                        "total_tool_use_tokens": 0
+                      }
+                    }
+                  },
+                  "multi_turn": {
+                    "summary": "Multi-turn",
+                    "value": {
+                      "id": "v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg",
+                      "model": "gemini-3-flash-preview",
+                      "status": "completed",
+                      "object": "interaction",
+                      "created": "2025-11-26T12:22:47Z",
+                      "updated": "2025-11-26T12:22:47Z",
+                      "role": "model",
+                      "outputs": [
+                        {
+                          "type": "text",
+                          "text": "The capital of France is Paris."
+                        }
+                      ],
+                      "usage": {
+                        "input_tokens_by_modality": [
+                          { "modality": "text", "tokens": 50 }
+                        ],
+                        "total_cached_tokens": 0,
+                        "total_input_tokens": 50,
+                        "total_output_tokens": 10,
+                        "total_thought_tokens": 0,
+                        "total_tokens": 60,
+                        "total_tool_use_tokens": 0
+                      }
+                    }
+                  },
+                  "multimodal_image": {
+                    "summary": "Image Input",
+                    "value": {
+                      "id": "v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg",
+                      "model": "gemini-3-flash-preview",
+                      "status": "completed",
+                      "object": "interaction",
+                      "created": "2025-11-26T12:22:47Z",
+                      "updated": "2025-11-26T12:22:47Z",
+                      "role": "model",
+                      "outputs": [
+                        {
+                          "type": "text",
+                          "text": "A white humanoid robot with glowing blue eyes stands holding a red skateboard."
+                        }
+                      ],
+                      "usage": {
+                        "input_tokens_by_modality": [
+                          { "modality": "text", "tokens": 10 },
+                          { "modality": "image", "tokens": 258 }
+                        ],
+                        "total_cached_tokens": 0,
+                        "total_input_tokens": 268,
+                        "total_output_tokens": 20,
+                        "total_thought_tokens": 0,
+                        "total_tokens": 288,
+                        "total_tool_use_tokens": 0
+                      }
+                    }
+                  },
+                  "function_calling": {
+                    "summary": "Function Calling",
+                    "value": {
+                      "id": "v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg",
+                      "model": "gemini-3-flash-preview",
+                      "status": "requires_action",
+                      "object": "interaction",
+                      "created": "2025-11-26T12:22:47Z",
+                      "updated": "2025-11-26T12:22:47Z",
+                      "role": "model",
+                      "outputs": [
+                        {
+                          "type": "function_call",
+                          "id": "gth23981",
+                          "name": "get_weather",
+                          "arguments": { "location": "Boston, MA" }
+                        }
+                      ],
+                      "usage": {
+                        "input_tokens_by_modality": [
+                          { "modality": "text", "tokens": 100 }
+                        ],
+                        "total_cached_tokens": 0,
+                        "total_input_tokens": 100,
+                        "total_output_tokens": 25,
+                        "total_thought_tokens": 0,
+                        "total_tokens": 125,
+                        "total_tool_use_tokens": 50
+                      }
+                    }
+                  },
+                  "deep_research": {
+                    "summary": "Deep Research",
+                    "value": {
+                      "id": "v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg",
+                      "agent": "deep-research-pro-preview-12-2025",
+                      "status": "completed",
+                      "object": "interaction",
+                      "created": "2025-11-26T12:22:47Z",
+                      "updated": "2025-11-26T12:22:47Z",
+                      "role": "agent",
+                      "outputs": [
+                        {
+                          "type": "text",
+                          "text": "Here is a comprehensive research report on the current state of cancer research..."
+                        }
+                      ],
+                      "usage": {
+                        "input_tokens_by_modality": [
+                          { "modality": "text", "tokens": 20 }
+                        ],
+                        "total_cached_tokens": 0,
+                        "total_input_tokens": 20,
+                        "total_output_tokens": 1000,
+                        "total_thought_tokens": 500,
+                        "total_tokens": 1520,
+                        "total_tool_use_tokens": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error creating interaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "$ref": "#/components/schemas/Error" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Creating an interaction",
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "simple",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"input\": \"Hello, how are you?\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "simple",
+            "source": "from google import genai\n\nclient = genai.Client()\ninteraction = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    input=\"Hello, how are you?\",\n)\nprint(interaction.outputs[-1].text)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "simple",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    input: 'Hello, how are you?',\n});\nconsole.log(interaction.outputs[interaction.outputs.length - 1].text);\n"
+          },
+          {
+            "lang": "sh",
+            "label": "multi_turn",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"input\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Hello!\"\n      },\n      {\n        \"role\": \"model\",\n        \"content\": \"Hi there! How can I help you today?\"\n      },\n      {\n        \"role\": \"user\",\n        \"content\": \"What is the capital of France?\"\n      }\n    ]\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "multi_turn",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    input=[\n        { \"role\": \"user\", \"content\": \"Hello!\" },\n        { \"role\": \"model\", \"content\": \"Hi there! How can I help you today?\" },\n        { \"role\": \"user\", \"content\": \"What is the capital of France?\" }\n    ]\n)\nprint(response.outputs[-1].text)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "multi_turn",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    input: [\n        { role: 'user', content: 'Hello' },\n        { role: 'model', content: 'Hi there! How can I help you today?' },\n        { role: 'user', content: 'What is the capital of France?' }\n    ]\n});\nconsole.log(interaction.outputs[interaction.outputs.length - 1].text);\n"
+          },
+          {
+            "lang": "sh",
+            "label": "multimodal_image",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"input\": [\n      {\n        \"type\": \"text\",\n        \"text\": \"What is in this picture?\"\n      },\n      {\n        \"type\": \"image\",\n        \"data\": \"BASE64_ENCODED_IMAGE\",\n        \"mime_type\": \"image/png\"\n      }\n    ]\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "multimodal_image",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    input=[\n      { \"type\": \"text\", \"text\": \"What is in this picture?\" },\n      { \"type\": \"image\", \"data\": \"BASE64_ENCODED_IMAGE\", \"mime_type\": \"image/png\" }\n    ]\n)\nprint(response.outputs[-1].text)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "multimodal_image",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    input: [\n      { type: 'text', text: 'What is in this picture?' },\n      { type: 'image', data: 'BASE64_ENCODED_IMAGE', mime_type: 'image/png' }\n    ]\n});\nconsole.log(interaction.outputs[interaction.outputs.length - 1].text);\n"
+          },
+          {
+            "lang": "sh",
+            "label": "function_calling",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [\n      {\n        \"type\": \"function\",\n        \"name\": \"get_weather\",\n        \"description\": \"Get the current weather in a given location\",\n        \"parameters\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"location\": {\n              \"type\": \"string\",\n              \"description\": \"The city and state, e.g. San Francisco, CA\"\n            }\n          },\n          \"required\": [\n            \"location\"\n          ]\n        }\n      }\n    ],\n    \"input\": \"What is the weather like in Boston, MA?\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "function_calling",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\n        \"type\": \"function\",\n        \"name\": \"get_weather\",\n        \"description\": \"Get the current weather in a given location\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"location\": {\n                    \"type\": \"string\",\n                    \"description\": \"The city and state, e.g. San Francisco, CA\"\n                }\n            },\n            \"required\": [\"location\"]\n        }\n    }],\n    input=\"What is the weather like in Boston, MA?\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "function_calling",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{\n        type: 'function',\n        name: 'get_weather',\n        description: 'Get the current weather in a given location',\n        parameters: {\n            type: 'object',\n            properties: {\n                location: {\n                    type: 'string',\n                    description: 'The city and state, e.g. San Francisco, CA'\n                }\n            },\n            required: ['location']\n        }\n    }],\n    input: 'What is the weather like in Boston, MA?'\n});\nconsole.log(interaction.outputs[0]);\n"
+          },
+          {
+            "lang": "sh",
+            "label": "deep_research",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"agent\": \"deep-research-pro-preview-12-2025\",\n    \"input\": \"Find a cure to cancer\",\n    \"background\": true\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "deep_research",
+            "source": "from google import genai\n\nclient = genai.Client()\ninteraction = client.interactions.create(\n    agent=\"deep-research-pro-preview-12-2025\",\n    input=\"find a cure to cancer\",\n    background=True,\n)\nprint(interaction.status)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "deep_research",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    agent: 'deep-research-pro-preview-12-2025',\n    input: 'find a cure to cancer',\n    background: true,\n});\nconsole.log(interaction.status);\n"
+          }
+        ]
+      }
+    },
+    "/{api_version}/interactions?model": {
+      "parameters": [{ "$ref": "#/components/parameters/api_version" }],
+      "post": {
+        "operationId": "CreateInteraction",
+        "description": "Creates a new interaction.",
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "description": "The request body.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateModelInteractionParams"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error creating interaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "$ref": "#/components/schemas/Error" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Creating an interaction",
+        "x-internal": true
+      }
+    },
+    "/{api_version}/interactions?agent": {
+      "parameters": [{ "$ref": "#/components/parameters/api_version" }],
+      "post": {
+        "operationId": "CreateInteraction",
+        "description": "Creates a new interaction.",
+        "security": [],
+        "parameters": [],
+        "requestBody": {
+          "description": "The request body.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentInteractionParams"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error creating interaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "$ref": "#/components/schemas/Error" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Creating an interaction",
+        "x-internal": true
+      }
+    },
+    "/{api_version}/interactions/{id}": {
+      "get": {
+        "operationId": "getInteractionById",
+        "description": "Retrieves the full details of a single interaction based on its `Interaction.id`.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the interaction to retrieve.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false },
+            "description": "If set to true, the generated content will be streamed incrementally."
+          },
+          {
+            "name": "last_event_id",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Optional. If set, resumes the interaction stream from the next chunk after the event marked by the event id. Can only be used if `stream` is true."
+          },
+          {
+            "name": "include_input",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false },
+            "description": "If set to true, includes the input in the response."
+          },
+          { "$ref": "#/components/parameters/api_version" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful retrieval of the interaction.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" },
+                "examples": {
+                  "get": {
+                    "summary": "Get Interaction",
+                    "value": {
+                      "id": "v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg",
+                      "model": "gemini-3-flash-preview",
+                      "status": "completed",
+                      "object": "interaction",
+                      "created": "2025-11-26T12:25:15Z",
+                      "updated": "2025-11-26T12:25:15Z",
+                      "role": "model",
+                      "outputs": [
+                        {
+                          "type": "text",
+                          "text": "I'm doing great, thank you for asking! How can I help you today?"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error getting interaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "$ref": "#/components/schemas/Error" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Retrieving an interaction",
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "get",
+            "source": "curl -X GET https://generativelanguage.googleapis.com/v1beta/interactions/v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\"\n"
+          },
+          {
+            "lang": "python",
+            "label": "get",
+            "source": "from google import genai\n\nclient = genai.Client()\n\ninteraction = client.interactions.get(id=\"v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg\")\nprint(interaction.status)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "get",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.get('v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg');\nconsole.log(interaction.status);\n"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteInteraction",
+        "description": "Deletes the interaction by id.",
+        "summary": "Deleting an interaction",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the interaction to delete.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/api_version" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful deletion of the interaction.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" },
+                "examples": {
+                  "delete": { "summary": "Delete Interaction", "value": {} }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error deleting interaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "$ref": "#/components/schemas/Error" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "delete",
+            "source": "curl -X DELETE https://generativelanguage.googleapis.com/v1beta/interactions/v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\"\n"
+          },
+          {
+            "lang": "python",
+            "label": "delete",
+            "source": "from google import genai\n\nclient = genai.Client()\nclient.interactions.delete(id=\"v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg\")\nprint(\"Interaction deleted successfully.\")\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "delete",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nawait ai.interactions.delete('v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg');\nconsole.log('Interaction deleted successfully.');\n"
+          }
+        ]
+      }
+    },
+    "/{api_version}/interactions/{id}/cancel": {
+      "post": {
+        "operationId": "cancelInteractionById",
+        "description": "Cancels an interaction by id. This only applies to background interactions that are still running.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the interaction to cancel.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          { "$ref": "#/components/parameters/api_version" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful cancellation of the interaction.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Interaction" },
+                "examples": {
+                  "cancel": {
+                    "summary": "Cancel Interaction",
+                    "value": {
+                      "id": "v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg",
+                      "agent": "deep-research-pro-preview-12-2025",
+                      "status": "cancelled",
+                      "object": "interaction",
+                      "created": "2025-11-26T12:25:15Z",
+                      "updated": "2025-11-26T12:25:15Z",
+                      "role": "agent"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error cancelling interaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "$ref": "#/components/schemas/Error" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Canceling an interaction",
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "cancel",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions/v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg/cancel \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\"\n"
+          },
+          {
+            "lang": "python",
+            "label": "cancel",
+            "source": "from google import genai\n\nclient = genai.Client()\n\ninteraction = client.interactions.cancel(id=\"v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg\")\nprint(interaction.status)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "cancel",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.cancel('v1_ChdPU0F4YWFtNkFwS2kxZThQZ05lbXdROBIXT1NBeGFhbTZBcEtpMWU4UGdOZW13UTg');\nconsole.log(interaction.status);\n"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "api_version": {
+        "name": "api_version",
+        "description": "Which version of the API to use.",
+        "schema": { "type": "string" },
+        "in": "path"
+      }
+    },
+    "securitySchemes": {},
+    "schemas": {
+      "Content": {
+        "description": "The content of the response.",
+        "type": "object",
+        "oneOf": [
+          { "$ref": "#/components/schemas/TextContent" },
+          { "$ref": "#/components/schemas/ImageContent" },
+          { "$ref": "#/components/schemas/AudioContent" },
+          { "$ref": "#/components/schemas/DocumentContent" },
+          { "$ref": "#/components/schemas/VideoContent" },
+          { "$ref": "#/components/schemas/ThoughtContent" },
+          { "$ref": "#/components/schemas/FunctionCallContent" },
+          { "$ref": "#/components/schemas/CodeExecutionCallContent" },
+          { "$ref": "#/components/schemas/UrlContextCallContent" },
+          { "$ref": "#/components/schemas/McpServerToolCallContent" },
+          { "$ref": "#/components/schemas/GoogleSearchCallContent" },
+          { "$ref": "#/components/schemas/FileSearchCallContent" },
+          { "$ref": "#/components/schemas/GoogleMapsCallContent" },
+          { "$ref": "#/components/schemas/FunctionResultContent" },
+          { "$ref": "#/components/schemas/CodeExecutionResultContent" },
+          { "$ref": "#/components/schemas/UrlContextResultContent" },
+          { "$ref": "#/components/schemas/GoogleSearchResultContent" },
+          { "$ref": "#/components/schemas/McpServerToolResultContent" },
+          { "$ref": "#/components/schemas/FileSearchResultContent" },
+          { "$ref": "#/components/schemas/GoogleMapsResultContent" }
+        ],
+        "discriminator": { "propertyName": "type" }
+      },
+      "TextContent": {
+        "description": "A text content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "text" },
+          "text": {
+            "description": "Required. The text content.",
+            "type": "string"
+          },
+          "annotations": {
+            "description": "Citation information for model-generated content.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Annotation" }
+          }
+        },
+        "required": ["type", "text"],
+        "examples": [
+          {
+            "text": {
+              "summary": "Text",
+              "value": { "type": "text", "text": "Hello, how are you?" }
+            }
+          }
+        ]
+      },
+      "Annotation": {
+        "description": "Citation information for model-generated content.",
+        "type": "object",
+        "oneOf": [
+          { "$ref": "#/components/schemas/UrlCitation" },
+          { "$ref": "#/components/schemas/FileCitation" },
+          { "$ref": "#/components/schemas/PlaceCitation" }
+        ],
+        "discriminator": { "propertyName": "type" }
+      },
+      "UrlCitation": {
+        "description": "A URL citation annotation.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "url_citation" },
+          "url": { "description": "The URL.", "type": "string" },
+          "title": { "description": "The title of the URL.", "type": "string" },
+          "start_index": {
+            "description": "Start of segment of the response that is attributed to this source.\n\nIndex indicates the start of the segment, measured in bytes.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "end_index": {
+            "description": "End of the attributed segment, exclusive.",
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": ["type"]
+      },
+      "FileCitation": {
+        "description": "A file citation annotation.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "file_citation" },
+          "document_uri": {
+            "description": "The URI of the file.",
+            "type": "string"
+          },
+          "file_name": {
+            "description": "The name of the file.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Source attributed for a portion of the text.",
+            "type": "string"
+          },
+          "start_index": {
+            "description": "Start of segment of the response that is attributed to this source.\n\nIndex indicates the start of the segment, measured in bytes.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "end_index": {
+            "description": "End of the attributed segment, exclusive.",
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": ["type"]
+      },
+      "PlaceCitation": {
+        "description": "A place citation annotation.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "place_citation" },
+          "place_id": {
+            "description": "The ID of the place, in `places/{place_id}` format.",
+            "type": "string"
+          },
+          "name": { "description": "Title of the place.", "type": "string" },
+          "url": {
+            "description": "URI reference of the place.",
+            "type": "string"
+          },
+          "review_snippets": {
+            "description": "Snippets of reviews that are used to generate answers about the\nfeatures of a given place in Google Maps.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReviewSnippet" }
+          },
+          "start_index": {
+            "description": "Start of segment of the response that is attributed to this source.\n\nIndex indicates the start of the segment, measured in bytes.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "end_index": {
+            "description": "End of the attributed segment, exclusive.",
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": ["type"]
+      },
+      "ReviewSnippet": {
+        "description": "Encapsulates a snippet of a user review that answers a question about\nthe features of a specific place in Google Maps.",
+        "type": "object",
+        "properties": {
+          "title": { "description": "Title of the review.", "type": "string" },
+          "url": {
+            "description": "A link that corresponds to the user review on Google Maps.",
+            "type": "string"
+          },
+          "review_id": {
+            "description": "The ID of the review snippet.",
+            "type": "string"
+          }
+        }
+      },
+      "ImageContent": {
+        "description": "An image content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "image" },
+          "data": {
+            "description": "The image content.",
+            "type": "string",
+            "format": "byte"
+          },
+          "uri": { "description": "The URI of the image.", "type": "string" },
+          "mime_type": {
+            "description": "The mime type of the image.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "PNG image format",
+              "JPEG image format",
+              "WebP image format",
+              "HEIC image format",
+              "HEIF image format",
+              "GIF image format",
+              "BMP image format",
+              "TIFF image format"
+            ],
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/heic",
+              "image/heif",
+              "image/gif",
+              "image/bmp",
+              "image/tiff"
+            ]
+          },
+          "resolution": {
+            "description": "The resolution of the media.",
+            "$ref": "#/components/schemas/MediaResolution"
+          }
+        },
+        "required": ["type"],
+        "examples": [
+          {
+            "image": {
+              "summary": "Image",
+              "value": {
+                "type": "image",
+                "data": "BASE64_ENCODED_IMAGE",
+                "mime_type": "image/png"
+              }
+            }
+          }
+        ]
+      },
+      "AudioContent": {
+        "description": "An audio content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "audio" },
+          "data": {
+            "description": "The audio content.",
+            "type": "string",
+            "format": "byte"
+          },
+          "uri": { "description": "The URI of the audio.", "type": "string" },
+          "mime_type": {
+            "description": "The mime type of the audio.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "WAV audio format",
+              "MP3 audio format",
+              "AIFF audio format",
+              "AAC audio format",
+              "OGG audio format",
+              "FLAC audio format",
+              "MPEG audio format",
+              "M4A audio format",
+              "L16 audio format"
+            ],
+            "enum": [
+              "audio/wav",
+              "audio/mp3",
+              "audio/aiff",
+              "audio/aac",
+              "audio/ogg",
+              "audio/flac",
+              "audio/mpeg",
+              "audio/m4a",
+              "audio/l16"
+            ]
+          },
+          "rate": {
+            "description": "The sample rate of the audio.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "channels": {
+            "description": "The number of audio channels.",
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": ["type"],
+        "examples": [
+          {
+            "audio": {
+              "summary": "Audio",
+              "value": {
+                "type": "audio",
+                "data": "BASE64_ENCODED_AUDIO",
+                "mime_type": "audio/wav"
+              }
+            }
+          }
+        ]
+      },
+      "DocumentContent": {
+        "description": "A document content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "document" },
+          "data": {
+            "description": "The document content.",
+            "type": "string",
+            "format": "byte"
+          },
+          "uri": {
+            "description": "The URI of the document.",
+            "type": "string"
+          },
+          "mime_type": {
+            "description": "The mime type of the document.",
+            "type": "string",
+            "x-google-enum-descriptions": ["PDF document format"],
+            "enum": ["application/pdf"]
+          }
+        },
+        "required": ["type"],
+        "examples": [
+          {
+            "document": {
+              "summary": "Document",
+              "value": {
+                "type": "document",
+                "data": "BASE64_ENCODED_DOCUMENT",
+                "mime_type": "application/pdf"
+              }
+            }
+          }
+        ]
+      },
+      "VideoContent": {
+        "description": "A video content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "video" },
+          "data": {
+            "description": "The video content.",
+            "type": "string",
+            "format": "byte"
+          },
+          "uri": { "description": "The URI of the video.", "type": "string" },
+          "mime_type": {
+            "description": "The mime type of the video.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "MP4 video format",
+              "MPEG video format",
+              "MPG video format",
+              "MOV video format",
+              "AVI video format",
+              "FLV video format",
+              "WebM video format",
+              "WMV video format",
+              "3GPP video format"
+            ],
+            "enum": [
+              "video/mp4",
+              "video/mpeg",
+              "video/mpg",
+              "video/mov",
+              "video/avi",
+              "video/x-flv",
+              "video/webm",
+              "video/wmv",
+              "video/3gpp"
+            ]
+          },
+          "resolution": {
+            "description": "The resolution of the media.",
+            "$ref": "#/components/schemas/MediaResolution"
+          }
+        },
+        "required": ["type"],
+        "examples": [
+          {
+            "video": {
+              "summary": "Video",
+              "value": {
+                "type": "video",
+                "uri": "https://www.youtube.com/watch?v=9hE5-98ZeCg"
+              }
+            }
+          }
+        ]
+      },
+      "ThoughtContent": {
+        "description": "A thought content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "thought" },
+          "signature": {
+            "description": "Signature to match the backend source to be part of the generation.",
+            "type": "string",
+            "format": "byte"
+          },
+          "summary": {
+            "description": "A summary of the thought.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ThoughtSummaryContent" }
+          }
+        },
+        "required": ["type"],
+        "examples": [
+          {
+            "thought": {
+              "summary": "Thought",
+              "value": {
+                "type": "thought",
+                "summary": [
+                  {
+                    "type": "text",
+                    "text": "The user is asking about the weather. I should use the get_weather tool."
+                  }
+                ],
+                "signature": "CoMDAXLI2nynRYojJIy6B1Jh9os2crpWLfB0+19xcLsGG46bd8wjkF/6RNlRUdvHrXyjsHkG0BZFcuO/bPOyA6Xh5jANNgx82wPHjGExN8A4ZQn56FlMwyZoqFVQz0QyY1lfibFJ2zU3J87uw26OewzcuVX0KEcs+GIsZa3EA6WwqhbsOd3wtZB3Ua2Qf98VAWZTS5y/tWpql7jnU3/CU7pouxQr/Bwft3hwnJNesQ9/dDJTuaQ8Zprh9VRWf1aFFjpIueOjBRrlT3oW6/y/eRl/Gt9BQXCYTqg/38vHFUU4Wo/d9dUpvfCe/a3o97t2Jgxp34oFKcsVb4S5WJrykIkw+14DzVnTpCpbQNFckqvFLuqnJCkL0EQFtunBXI03FJpPu3T1XU6id8S7ojoJQZSauGUCgmaLqUGdMrd08oo81ecoJSLs51Re9N/lISGmjWFPGpqJLoGq6uo4FHz58hmeyXCgHG742BHz2P3MiH1CXHUT2J8mF6zLhf3SR9Qb3lkrobAh"
+              }
+            }
+          }
+        ]
+      },
+      "ThoughtSummaryContent": {
+        "type": "object",
+        "oneOf": [
+          { "$ref": "#/components/schemas/TextContent" },
+          { "$ref": "#/components/schemas/ImageContent" }
+        ],
+        "discriminator": { "propertyName": "type" }
+      },
+      "FunctionCallContent": {
+        "description": "A function tool call content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "function_call" },
+          "name": {
+            "description": "Required. The name of the tool to call.",
+            "type": "string"
+          },
+          "arguments": {
+            "description": "Required. The arguments to pass to the function.",
+            "type": "object",
+            "additionalProperties": {
+              "description": "Properties of the object."
+            }
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "name", "arguments", "id"],
+        "examples": [
+          {
+            "function_call": {
+              "summary": "Function Call",
+              "value": {
+                "type": "function_call",
+                "name": "get_weather",
+                "id": "gth23981",
+                "arguments": { "location": "Boston, MA" }
+              }
+            }
+          }
+        ]
+      },
+      "CodeExecutionCallContent": {
+        "description": "Code execution content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "code_execution_call" },
+          "arguments": {
+            "description": "Required. The arguments to pass to the code execution.",
+            "$ref": "#/components/schemas/CodeExecutionCallArguments"
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "arguments", "id"],
+        "examples": [
+          {
+            "code_execution_call": {
+              "summary": "Code Execution Call",
+              "value": {
+                "type": "code_execution_call",
+                "id": "call_123456",
+                "arguments": {
+                  "language": "python",
+                  "code": "print('hello world')"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CodeExecutionCallArguments": {
+        "description": "The arguments to pass to the code execution.",
+        "type": "object",
+        "properties": {
+          "language": {
+            "description": "Programming language of the `code`.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "Python >= 3.10, with numpy and simpy available."
+            ],
+            "enum": ["python"]
+          },
+          "code": {
+            "description": "The code to be executed.",
+            "type": "string"
+          }
+        }
+      },
+      "UrlContextCallContent": {
+        "description": "URL context content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "url_context_call" },
+          "arguments": {
+            "description": "Required. The arguments to pass to the URL context.",
+            "$ref": "#/components/schemas/UrlContextCallArguments"
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "arguments", "id"],
+        "examples": [
+          {
+            "url_context_call": {
+              "summary": "Url Context Call",
+              "value": {
+                "type": "url_context_call",
+                "id": "call_123456",
+                "arguments": { "urls": ["https://www.example.com"] }
+              }
+            }
+          }
+        ]
+      },
+      "UrlContextCallArguments": {
+        "description": "The arguments to pass to the URL context.",
+        "type": "object",
+        "properties": {
+          "urls": {
+            "description": "The URLs to fetch.",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "McpServerToolCallContent": {
+        "description": "MCPServer tool call content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "mcp_server_tool_call" },
+          "name": {
+            "description": "Required. The name of the tool which was called.",
+            "type": "string"
+          },
+          "server_name": {
+            "description": "Required. The name of the used MCP server.",
+            "type": "string"
+          },
+          "arguments": {
+            "description": "Required. The JSON object of arguments for the function.",
+            "type": "object",
+            "additionalProperties": {
+              "description": "Properties of the object."
+            }
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "name", "server_name", "arguments", "id"],
+        "examples": [
+          {
+            "mcp_server_tool_call": {
+              "summary": "Mcp Server Tool Call",
+              "value": {
+                "type": "mcp_server_tool_call",
+                "id": "call_123456",
+                "name": "get_forecast",
+                "server_name": "weather_server",
+                "arguments": { "city": "London" }
+              }
+            }
+          }
+        ]
+      },
+      "GoogleSearchCallContent": {
+        "description": "Google Search content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_search_call" },
+          "arguments": {
+            "description": "Required. The arguments to pass to Google Search.",
+            "$ref": "#/components/schemas/GoogleSearchCallArguments"
+          },
+          "search_type": {
+            "description": "The type of search grounding enabled.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "Setting this field enables web search. Only text results are returned.",
+              "Setting this field enables image search. Image bytes are returned.",
+              "Setting this field enables enterprise web search."
+            ],
+            "enum": ["web_search", "image_search", "enterprise_web_search"]
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "arguments", "id"],
+        "examples": [
+          {
+            "google_search_call": {
+              "summary": "Google Search Call",
+              "value": {
+                "type": "google_search_call",
+                "id": "call_123456",
+                "arguments": { "queries": ["weather in Boston"] }
+              }
+            }
+          }
+        ]
+      },
+      "GoogleSearchCallArguments": {
+        "description": "The arguments to pass to Google Search.",
+        "type": "object",
+        "properties": {
+          "queries": {
+            "description": "Web search queries for the following-up web search.",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "FileSearchCallContent": {
+        "description": "File Search content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "file_search_call" },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "id"],
+        "examples": [
+          {
+            "file_search_call": {
+              "summary": "File Search Call",
+              "value": { "type": "file_search_call", "id": "call_123456" }
+            }
+          }
+        ]
+      },
+      "GoogleMapsCallContent": {
+        "description": "Google Maps content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_maps_call" },
+          "arguments": {
+            "description": "The arguments to pass to the Google Maps tool.",
+            "$ref": "#/components/schemas/GoogleMapsCallArguments"
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "id"],
+        "examples": [
+          {
+            "google_maps_call": {
+              "summary": "Google Maps Call",
+              "value": {
+                "type": "google_maps_call",
+                "id": "call_123456",
+                "arguments": { "query": "best food near me" }
+              }
+            }
+          }
+        ]
+      },
+      "GoogleMapsCallArguments": {
+        "description": "The arguments to pass to the Google Maps tool.",
+        "type": "object",
+        "properties": {
+          "queries": {
+            "description": "The queries to be executed.",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "FunctionResultContent": {
+        "description": "A function tool result content block.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "function_result" },
+          "name": {
+            "description": "The name of the tool that was called.",
+            "type": "string"
+          },
+          "is_error": {
+            "description": "Whether the tool call resulted in an error.",
+            "type": "boolean"
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          },
+          "result": {
+            "description": "The result of the tool call.",
+            "oneOf": [
+              { "type": "object" },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FunctionResultSubcontent"
+                },
+                "title": "FunctionResultSubcontentList"
+              },
+              { "type": "string" }
+            ]
+          }
+        },
+        "required": ["type", "call_id", "result"],
+        "examples": [
+          {
+            "function_result": {
+              "summary": "Function Result",
+              "value": {
+                "type": "function_result",
+                "name": "get_weather",
+                "call_id": "gth23981",
+                "result": [
+                  { "type": "text", "text": "{\"weather\":\"sunny\"}" }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "FunctionResultSubcontent": {
+        "type": "object",
+        "oneOf": [
+          { "$ref": "#/components/schemas/TextContent" },
+          { "$ref": "#/components/schemas/ImageContent" }
+        ],
+        "discriminator": { "propertyName": "type" }
+      },
+      "CodeExecutionResultContent": {
+        "description": "Code execution result content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "code_execution_result" },
+          "result": {
+            "description": "Required. The output of the code execution.",
+            "type": "string"
+          },
+          "is_error": {
+            "description": "Whether the code execution resulted in an error.",
+            "type": "boolean"
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"],
+        "examples": [
+          {
+            "code_execution_result": {
+              "summary": "Code Execution Result",
+              "value": {
+                "type": "code_execution_result",
+                "call_id": "call_123456",
+                "result": "hello world"
+              }
+            }
+          }
+        ]
+      },
+      "UrlContextResultContent": {
+        "description": "URL context result content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "url_context_result" },
+          "result": {
+            "description": "Required. The results of the URL context.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UrlContextResult" }
+          },
+          "is_error": {
+            "description": "Whether the URL context resulted in an error.",
+            "type": "boolean"
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"],
+        "examples": [
+          {
+            "url_context_result": {
+              "summary": "Url Context Result",
+              "value": {
+                "type": "url_context_result",
+                "call_id": "call_123456",
+                "result": [
+                  { "url": "https://www.example.com", "status": "SUCCESS" }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "UrlContextResult": {
+        "description": "The result of the URL context.",
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "The URL that was fetched.",
+            "type": "string"
+          },
+          "status": {
+            "description": "The status of the URL retrieval.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "Url retrieval is successful.",
+              "Url retrieval is failed due to error.",
+              "Url retrieval is failed because the content is behind paywall.",
+              "Url retrieval is failed because the content is unsafe."
+            ],
+            "enum": ["success", "error", "paywall", "unsafe"]
+          }
+        }
+      },
+      "GoogleSearchResultContent": {
+        "description": "Google Search result content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_search_result" },
+          "result": {
+            "description": "Required. The results of the Google Search.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GoogleSearchResult" }
+          },
+          "is_error": {
+            "description": "Whether the Google Search resulted in an error.",
+            "type": "boolean"
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"],
+        "examples": [
+          {
+            "google_search_result": {
+              "summary": "Google Search Result",
+              "value": {
+                "type": "google_search_result",
+                "call_id": "call_123456",
+                "result": [
+                  {
+                    "url": "https://www.google.com/search?q=weather+in+Boston",
+                    "title": "Weather in Boston"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "GoogleSearchResult": {
+        "description": "The result of the Google Search.",
+        "type": "object",
+        "properties": {
+          "search_suggestions": {
+            "description": "Web content snippet that can be embedded in a web page or an app webview.",
+            "type": "string"
+          }
+        }
+      },
+      "McpServerToolResultContent": {
+        "description": "MCPServer tool result content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "mcp_server_tool_result" },
+          "name": {
+            "description": "Name of the tool which is called for this specific tool call.",
+            "type": "string"
+          },
+          "server_name": {
+            "description": "The name of the used MCP server.",
+            "type": "string"
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          },
+          "result": {
+            "description": "The output from the MCP server call. Can be simple text or rich content.",
+            "oneOf": [
+              { "type": "object" },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FunctionResultSubcontent"
+                },
+                "title": "FunctionResultSubcontentList"
+              },
+              { "type": "string" }
+            ]
+          }
+        },
+        "required": ["type", "call_id", "result"],
+        "examples": [
+          {
+            "mcp_server_tool_result": {
+              "summary": "Mcp Server Tool Result",
+              "value": {
+                "type": "mcp_server_tool_result",
+                "name": "get_forecast",
+                "server_name": "weather_server",
+                "call_id": "call_123456",
+                "result": "sunny"
+              }
+            }
+          }
+        ]
+      },
+      "FileSearchResultContent": {
+        "description": "File Search result content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "file_search_result" },
+          "result": {
+            "description": "Required. The results of the File Search.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FileSearchResult" }
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"],
+        "examples": [
+          {
+            "file_search_result": {
+              "summary": "File Search Result",
+              "value": {
+                "type": "file_search_result",
+                "call_id": "call_123456",
+                "result": [
+                  {
+                    "text": "search result chunk",
+                    "file_search_store": "file_search_store"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "FileSearchResult": {
+        "description": "The result of the File Search.",
+        "type": "object",
+        "properties": {
+          "custom_metadata": {
+            "description": "User provided metadata about the FileSearchResult.",
+            "type": "array",
+            "items": { "type": "object" }
+          }
+        }
+      },
+      "GoogleMapsResultContent": {
+        "description": "Google Maps result content.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_maps_result" },
+          "result": {
+            "description": "Required. The results of the Google Maps.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GoogleMapsResult" }
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"],
+        "examples": [
+          {
+            "google_maps_result": {
+              "summary": "Google Maps Result",
+              "value": {
+                "type": "google_maps_result",
+                "call_id": "call_123456",
+                "result": [
+                  {
+                    "places": [
+                      {
+                        "url": "https://www.google.com/maps/search/best+food+near+me",
+                        "name": "Tasty Restaurant"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "GoogleMapsResult": {
+        "description": "The result of the Google Maps.",
+        "type": "object",
+        "properties": {
+          "places": {
+            "description": "The places that were found.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Places" }
+          },
+          "widget_context_token": {
+            "description": "Resource name of the Google Maps widget context token.",
+            "type": "string"
+          }
+        }
+      },
+      "Places": {
+        "type": "object",
+        "properties": {
+          "place_id": {
+            "description": "The ID of the place, in `places/{place_id}` format.",
+            "type": "string"
+          },
+          "name": { "description": "Title of the place.", "type": "string" },
+          "url": {
+            "description": "URI reference of the place.",
+            "type": "string"
+          },
+          "review_snippets": {
+            "description": "Snippets of reviews that are used to generate answers about the\nfeatures of a given place in Google Maps.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReviewSnippet" }
+          }
+        }
+      },
+      "Turn": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "description": "The originator of this turn. Must be user for input or model for\nmodel output.",
+            "type": "string"
+          },
+          "content": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Content" },
+                "title": "ContentList"
+              },
+              { "type": "string" }
+            ]
+          }
+        },
+        "examples": [
+          {
+            "user_turn": {
+              "summary": "User Turn",
+              "value": {
+                "role": "user",
+                "content": [{ "type": "text", "text": "user turn" }]
+              }
+            }
+          },
+          {
+            "model_turn": {
+              "summary": "Model Turn",
+              "value": {
+                "role": "model",
+                "content": [{ "type": "text", "text": "model turn" }]
+              }
+            }
+          }
+        ]
+      },
+      "GenerationConfig": {
+        "description": "Configuration parameters for model interactions.",
+        "type": "object",
+        "properties": {
+          "temperature": {
+            "description": "Controls the randomness of the output.",
+            "type": "number",
+            "format": "float"
+          },
+          "top_p": {
+            "description": "The maximum cumulative probability of tokens to consider when sampling.",
+            "type": "number",
+            "format": "float"
+          },
+          "seed": {
+            "description": "Seed used in decoding for reproducibility.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "stop_sequences": {
+            "description": "A list of character sequences that will stop output interaction.",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "thinking_level": {
+            "description": "The level of thought tokens that the model should generate.",
+            "$ref": "#/components/schemas/ThinkingLevel"
+          },
+          "thinking_summaries": {
+            "description": "Whether to include thought summaries in the response.",
+            "$ref": "#/components/schemas/ThinkingSummaries"
+          },
+          "max_output_tokens": {
+            "description": "The maximum number of tokens to include in the response.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "speech_config": {
+            "description": "Configuration for speech interaction.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SpeechConfig" }
+          },
+          "image_config": {
+            "description": "Configuration for image interaction.",
+            "$ref": "#/components/schemas/ImageConfig"
+          },
+          "tool_choice": {
+            "description": "The tool choice configuration.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/ToolChoiceType" },
+              { "$ref": "#/components/schemas/ToolChoiceConfig" }
+            ]
+          }
+        }
+      },
+      "ToolChoiceConfig": {
+        "description": "The tool choice configuration containing allowed tools.",
+        "type": "object",
+        "properties": {
+          "allowed_tools": {
+            "description": "The allowed tools.",
+            "$ref": "#/components/schemas/AllowedTools"
+          }
+        }
+      },
+      "AllowedTools": {
+        "description": "The configuration for allowed tools.",
+        "type": "object",
+        "properties": {
+          "mode": {
+            "description": "The mode of the tool choice.",
+            "$ref": "#/components/schemas/ToolChoiceType"
+          },
+          "tools": {
+            "description": "The names of the allowed tools.",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "SpeechConfig": {
+        "description": "The configuration for speech interaction.",
+        "type": "object",
+        "properties": {
+          "voice": {
+            "description": "The voice of the speaker.",
+            "type": "string"
+          },
+          "language": {
+            "description": "The language of the speech.",
+            "type": "string"
+          },
+          "speaker": {
+            "description": "The speaker's name, it should match the speaker name given in the prompt.",
+            "type": "string"
+          }
+        }
+      },
+      "ImageConfig": {
+        "description": "The configuration for image interaction.",
+        "type": "object",
+        "properties": {
+          "aspect_ratio": {
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9",
+              "1:8",
+              "8:1",
+              "1:4",
+              "4:1"
+            ],
+            "x-google-enum-descriptions": [
+              "1:1 aspect ratio.",
+              "2:3 aspect ratio.",
+              "3:2 aspect ratio.",
+              "3:4 aspect ratio.",
+              "4:3 aspect ratio.",
+              "4:5 aspect ratio.",
+              "5:4 aspect ratio.",
+              "9:16 aspect ratio.",
+              "16:9 aspect ratio.",
+              "21:9 aspect ratio.",
+              "1:8 aspect ratio.",
+              "8:1 aspect ratio.",
+              "1:4 aspect ratio.",
+              "4:1 aspect ratio."
+            ]
+          },
+          "image_size": {
+            "enum": ["1K", "2K", "4K", "512"],
+            "x-google-enum-descriptions": [
+              "1K image size.",
+              "2K image size.",
+              "4K image size.",
+              "512 image size."
+            ]
+          }
+        }
+      },
+      "DynamicAgentConfig": {
+        "description": "Configuration for dynamic agents.",
+        "type": "object",
+        "properties": { "type": { "const": "dynamic" } },
+        "additionalProperties": {
+          "description": "For agents that are not supported statically in the API definition."
+        },
+        "required": ["type"]
+      },
+      "DeepResearchAgentConfig": {
+        "description": "Configuration for the Deep Research agent.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "deep-research" },
+          "thinking_summaries": {
+            "description": "Whether to include thought summaries in the response.",
+            "$ref": "#/components/schemas/ThinkingSummaries"
+          }
+        },
+        "required": ["type"]
+      },
+      "Tool": {
+        "description": "A tool that can be used by the model.",
+        "type": "object",
+        "oneOf": [
+          { "$ref": "#/components/schemas/Function" },
+          { "$ref": "#/components/schemas/CodeExecution" },
+          { "$ref": "#/components/schemas/UrlContext" },
+          { "$ref": "#/components/schemas/ComputerUse" },
+          { "$ref": "#/components/schemas/McpServer" },
+          { "$ref": "#/components/schemas/GoogleSearch" },
+          { "$ref": "#/components/schemas/FileSearch" },
+          { "$ref": "#/components/schemas/GoogleMaps" },
+          { "$ref": "#/components/schemas/Retrieval" }
+        ],
+        "discriminator": { "propertyName": "type" }
+      },
+      "Function": {
+        "description": "A tool that can be used by the model.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "function" },
+          "name": {
+            "description": "The name of the function.",
+            "type": "string"
+          },
+          "description": {
+            "description": "A description of the function.",
+            "type": "string"
+          },
+          "parameters": {
+            "description": "The JSON Schema for the function's parameters."
+          }
+        },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "function_calling",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [{\n      \"type\": \"function\",\n      \"name\": \"get_weather\",\n      \"description\": \"Get the current weather in a given location\",\n      \"parameters\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"location\": {\n            \"type\": \"string\",\n            \"description\": \"The city and state, e.g. San Francisco, CA\"\n          }\n        },\n        \"required\": [\"location\"]\n      }\n    }],\n    \"input\": \"What is the weather like in Boston, MA?\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "function_calling",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\n        \"type\": \"function\",\n        \"name\": \"get_weather\",\n        \"description\": \"Get the current weather in a given location\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"location\": {\n                    \"type\": \"string\",\n                    \"description\": \"The city and state, e.g. San Francisco, CA\"\n                }\n            },\n            \"required\": [\"location\"]\n        }\n    }],\n    input=\"What is the weather like in Boston?\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "function_calling",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{\n        type: 'function',\n        name: 'get_weather',\n        description: 'Get the current weather in a given location',\n        parameters: {\n            type: 'object',\n            properties: {\n                location: {\n                    type: 'string',\n                    description: 'The city and state, e.g. San Francisco, CA'\n                }\n            },\n            required: ['location']\n        }\n    }],\n    input: 'What is the weather like in Boston?'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "CodeExecution": {
+        "description": "A tool that can be used by the model to execute code.",
+        "type": "object",
+        "properties": { "type": { "const": "code_execution" } },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "code_execution",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [{\n      \"type\": \"code_execution\"\n    }],\n    \"input\": \"Calculate the first 10 Fibonacci numbers\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "code_execution",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\"type\": \"code_execution\"}],\n    input=\"Calculate the first 10 Fibonacci numbers\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "code_execution",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{ type: 'code_execution' }],\n    input: 'Calculate the first 10 Fibonacci numbers'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "UrlContext": {
+        "description": "A tool that can be used by the model to fetch URL context.",
+        "type": "object",
+        "properties": { "type": { "const": "url_context" } },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "url_context",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [{\n      \"type\": \"url_context\"\n    }],\n    \"input\": \"Summarize https://www.example.com\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "url_context",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\"type\": \"url_context\"}],\n    input=\"Summarize https://www.example.com\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "url_context",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{ type: 'url_context' }],\n    input: 'Summarize https://www.example.com'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "ComputerUse": {
+        "description": "A tool that can be used by the model to interact with the computer.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "computer_use" },
+          "environment": {
+            "description": "The environment being operated.",
+            "type": "string",
+            "x-google-enum-descriptions": ["Operates in a web browser."],
+            "enum": ["browser"]
+          },
+          "excludedPredefinedFunctions": {
+            "description": "The list of predefined functions that are excluded from the model call.",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "computer_use",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-2.5-computer-use-preview-10-2025\",\n    \"tools\": [{\n      \"type\": \"computer_use\",\n    }],\n    \"input\": \"Find a flight to Tokyo\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "computer_use",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-2.5-computer-use-preview-10-2025\",\n    tools=[{\"type\": \"computer_use\"}],\n    input=\"Find a flight to Tokyo\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "computer_use",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-2.5-computer-use-preview-10-2025',\n    tools: [{ type: 'computer_use'}],\n    input: 'Find a flight to Tokyo'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "McpServer": {
+        "description": "A MCPServer is a server that can be called by the model to perform actions.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "mcp_server" },
+          "name": {
+            "description": "The name of the MCPServer.",
+            "type": "string"
+          },
+          "url": {
+            "description": "The full URL for the MCPServer endpoint.\nExample: \"https://api.example.com/mcp\"",
+            "type": "string"
+          },
+          "headers": {
+            "description": "Optional: Fields for authentication headers, timeouts, etc., if needed.",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowed_tools": {
+            "description": "The allowed tools.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AllowedTools" }
+          }
+        },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "mcp_server",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [{\n      \"type\": \"mcp_server\",\n      \"name\": \"weather_service\",\n      \"url\": \"https://gemini-api-demos.uc.r.appspot.com/mcp\"\n    }],\n    \"input\": \"Today is 12-05-2025, what is the temperature today in London?\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "mcp_server",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\n        \"type\": \"mcp_server\",\n        \"name\": \"weather_service\",\n        \"url\": \"https://gemini-api-demos.uc.r.appspot.com/mcp\"\n    }],\n    input=\"Today is 12-05-2025, what is the temperature today in London?\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "mcp_server",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{\n        type: 'mcp_server',\n        name: 'weather_service',\n        url: 'https://gemini-api-demos.uc.r.appspot.com/mcp'\n    }],\n    input: 'Today is 12-05-2025, what is the temperature today in London?'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "GoogleSearch": {
+        "description": "A tool that can be used by the model to search Google.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_search" },
+          "search_types": {
+            "description": "The types of search grounding to enable.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "x-google-enum-descriptions": [
+                "Setting this field enables web search. Only text results are returned.",
+                "Setting this field enables image search. Image bytes are returned.",
+                "Setting this field enables enterprise web search."
+              ],
+              "enum": ["web_search", "image_search", "enterprise_web_search"]
+            }
+          }
+        },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "google_search",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [{\n      \"type\": \"google_search\"\n    }],\n    \"input\": \"Who is the current president of France?\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "google_search",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\"type\": \"google_search\"}],\n    input=\"Who is the current president of France?\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "google_search",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{ type: 'google_search' }],\n    input: 'Who is the current president of France?'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "FileSearch": {
+        "description": "A tool that can be used by the model to search files.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "file_search" },
+          "file_search_store_names": {
+            "description": "The file search store names to search.",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "top_k": {
+            "description": "The number of semantic retrieval chunks to retrieve.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "metadata_filter": {
+            "description": "Metadata filter to apply to the semantic retrieval documents and chunks.",
+            "type": "string"
+          }
+        },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "file_search",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [{\n      \"type\": \"file_search\",\n      \"file_search_store_names\": [\"fileSearchStores/m64d1sevsr4y-xfyawui3fxqg\"]\n    }],\n    \"input\": \"Who is the author of the book?\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "file_search",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\n        \"type\": \"file_search\",\n        \"file_search_store_names\": [\"fileSearchStores/m64d1sevsr4y-xfyawui3fxqg\"]\n    }],\n    input=\"Who is the author of the book?\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "file_search",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{\n        type: 'file_search',\n        file_search_store_names: ['fileSearchStores/m64d1sevsr4y-xfyawui3fxqg']\n    }],\n    input: 'Who is the author of the book?'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "GoogleMaps": {
+        "description": "A tool that can be used by the model to call Google Maps.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_maps" },
+          "enable_widget": {
+            "description": "Whether to return a widget context token in the tool call result of the\nresponse.",
+            "type": "boolean"
+          },
+          "latitude": {
+            "description": "The latitude of the user's location.",
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "description": "The longitude of the user's location.",
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": ["type"],
+        "x-codeSamples": [
+          {
+            "lang": "sh",
+            "label": "google_maps",
+            "source": "curl -X POST https://generativelanguage.googleapis.com/v1beta/interactions \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"gemini-3-flash-preview\",\n    \"tools\": [{\n      \"type\": \"google_maps\",\n      \"latitude\": 37.7749,\n      \"longitude\": -122.4194\n    }],\n    \"input\": \"What is the best food near me?\"\n  }'\n"
+          },
+          {
+            "lang": "python",
+            "label": "google_maps",
+            "source": "from google import genai\n\nclient = genai.Client()\nresponse = client.interactions.create(\n    model=\"gemini-3-flash-preview\",\n    tools=[{\n        \"type\": \"google_maps\",\n        \"latitude\": 37.7749,\n        \"longitude\": -122.4194\n    }],\n    input=\"What is the best food near me?\"\n)\nprint(response.outputs[0])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "google_maps",
+            "source": "import {GoogleGenAI} from '@google/genai';\n\nconst ai = new GoogleGenAI({});\nconst interaction = await ai.interactions.create({\n    model: 'gemini-3-flash-preview',\n    tools: [{\n        type: 'google_maps',\n        latitude: 37.7749,\n        longitude: -122.4194\n    }],\n    input: 'What is the best food near me?'\n});\nconsole.log(interaction.outputs[0]);\n"
+          }
+        ]
+      },
+      "Retrieval": {
+        "description": "A tool that can be used by the model to retrieve files.",
+        "type": "object",
+        "properties": {
+          "type": { "const": "retrieval" },
+          "retrieval_types": {
+            "description": "The types of file retrieval to enable.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "x-google-enum-descriptions": [""],
+              "enum": ["vertex_ai_search"]
+            }
+          },
+          "vertex_ai_search_config": {
+            "description": "Used to specify configuration for VertexAISearch.",
+            "$ref": "#/components/schemas/VertexAISearchConfig"
+          }
+        },
+        "required": ["type"]
+      },
+      "VertexAISearchConfig": {
+        "description": "Used to specify configuration for VertexAISearch.",
+        "type": "object",
+        "properties": {
+          "engine": {
+            "description": "Optional. Used to specify Vertex AI Search engine.",
+            "type": "string"
+          },
+          "datastores": {
+            "description": "Optional. Used to specify Vertex AI Search datastores.",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "Usage": {
+        "description": "Statistics on the interaction request's token usage.",
+        "type": "object",
+        "properties": {
+          "total_input_tokens": {
+            "description": "Number of tokens in the prompt (context).",
+            "type": "integer",
+            "format": "int32"
+          },
+          "input_tokens_by_modality": {
+            "description": "A breakdown of input token usage by modality.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ModalityTokens" }
+          },
+          "total_cached_tokens": {
+            "description": "Number of tokens in the cached part of the prompt (the cached content).",
+            "type": "integer",
+            "format": "int32"
+          },
+          "cached_tokens_by_modality": {
+            "description": "A breakdown of cached token usage by modality.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ModalityTokens" }
+          },
+          "total_output_tokens": {
+            "description": "Total number of tokens across all the generated responses.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "output_tokens_by_modality": {
+            "description": "A breakdown of output token usage by modality.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ModalityTokens" }
+          },
+          "total_tool_use_tokens": {
+            "description": "Number of tokens present in tool-use prompt(s).",
+            "type": "integer",
+            "format": "int32"
+          },
+          "tool_use_tokens_by_modality": {
+            "description": "A breakdown of tool-use token usage by modality.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ModalityTokens" }
+          },
+          "total_thought_tokens": {
+            "description": "Number of tokens of thoughts for thinking models.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_tokens": {
+            "description": "Total token count for the interaction request (prompt + responses + other\ninternal tokens).",
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ModalityTokens": {
+        "description": "The token count for a single response modality.",
+        "type": "object",
+        "properties": {
+          "modality": {
+            "description": "The modality associated with the token count.",
+            "$ref": "#/components/schemas/ResponseModality"
+          },
+          "tokens": {
+            "description": "Number of tokens for the modality.",
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "InteractionStartEvent": {
+        "type": "object",
+        "properties": {
+          "event_type": { "const": "interaction.start" },
+          "interaction": { "$ref": "#/components/schemas/Interaction" },
+          "event_id": {
+            "description": "The event_id token to be used to resume the interaction stream, from\nthis event.",
+            "type": "string"
+          }
+        },
+        "required": ["event_type", "interaction"],
+        "examples": [
+          {
+            "interaction_start": {
+              "summary": "Interaction Start",
+              "value": {
+                "event_type": "interaction.start",
+                "interaction": {
+                  "id": "v1_ChdTMjQ0YWJ5TUF1TzcxZThQdjRpcnFRcxIXUzI0NGFieU1BdU83MWU4UHY0aXJxUXM",
+                  "model": "gemini-3-flash-preview",
+                  "object": "interaction",
+                  "status": "in_progress"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "InteractionCompleteEvent": {
+        "type": "object",
+        "properties": {
+          "event_type": { "const": "interaction.complete" },
+          "interaction": {
+            "description": "Required. The completed interaction with empty outputs to reduce the payload size.\nUse the preceding ContentDelta events for the actual output.",
+            "$ref": "#/components/schemas/Interaction"
+          },
+          "event_id": {
+            "description": "The event_id token to be used to resume the interaction stream, from\nthis event.",
+            "type": "string"
+          }
+        },
+        "required": ["event_type", "interaction"],
+        "examples": [
+          {
+            "interaction_complete": {
+              "summary": "Interaction Complete",
+              "value": {
+                "event_type": "interaction.complete",
+                "interaction": {
+                  "created": "2025-12-09T18:45:40Z",
+                  "id": "v1_ChdTMjQ0YWJ5TUF1TzcxZThQdjRpcnFRcxIXUzI0NGFieU1BdU83MWU4UHY0aXJxUXM",
+                  "model": "gemini-3-flash-preview",
+                  "object": "interaction",
+                  "role": "model",
+                  "status": "completed",
+                  "updated": "2025-12-09T18:45:40Z",
+                  "usage": {
+                    "input_tokens_by_modality": [
+                      { "modality": "text", "tokens": 11 }
+                    ],
+                    "total_cached_tokens": 0,
+                    "total_input_tokens": 11,
+                    "total_output_tokens": 364,
+                    "total_thought_tokens": 1120,
+                    "total_tokens": 1495,
+                    "total_tool_use_tokens": 0
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "InteractionStatusUpdate": {
+        "type": "object",
+        "properties": {
+          "event_type": { "const": "interaction.status_update" },
+          "interaction_id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "The interaction is in progress.",
+              "The interaction requires action.",
+              "The interaction is completed.",
+              "The interaction is failed.",
+              "The interaction is cancelled.",
+              "The interaction is incomplete."
+            ],
+            "enum": [
+              "in_progress",
+              "requires_action",
+              "completed",
+              "failed",
+              "cancelled",
+              "incomplete"
+            ]
+          },
+          "event_id": {
+            "description": "The event_id token to be used to resume the interaction stream, from\nthis event.",
+            "type": "string"
+          }
+        },
+        "required": ["event_type", "interaction_id", "status"],
+        "examples": [
+          {
+            "interaction_status_update": {
+              "summary": "Interaction Status Update",
+              "value": {
+                "event_type": "interaction.status_update",
+                "interaction_id": "v1_ChdTMjQ0YWJ5TUF1TzcxZThQdjRpcnFRcxIXUzI0NGFieU1BdU83MWU4UHY0aXJxUXM",
+                "status": "in_progress"
+              }
+            }
+          }
+        ]
+      },
+      "ContentStart": {
+        "type": "object",
+        "properties": {
+          "event_type": { "const": "content.start" },
+          "index": { "type": "integer", "format": "int32" },
+          "content": { "$ref": "#/components/schemas/Content" },
+          "event_id": {
+            "description": "The event_id token to be used to resume the interaction stream, from\nthis event.",
+            "type": "string"
+          }
+        },
+        "required": ["event_type", "index", "content"],
+        "examples": [
+          {
+            "content_start": {
+              "summary": "Content Start",
+              "value": {
+                "event_type": "content.start",
+                "content": { "type": "text" },
+                "index": 1
+              }
+            }
+          }
+        ]
+      },
+      "ContentDelta": {
+        "type": "object",
+        "properties": {
+          "event_type": { "const": "content.delta" },
+          "index": { "type": "integer", "format": "int32" },
+          "delta": { "$ref": "#/components/schemas/ContentDeltaData" },
+          "event_id": {
+            "description": "The event_id token to be used to resume the interaction stream, from\nthis event.",
+            "type": "string"
+          }
+        },
+        "required": ["event_type", "index", "delta"],
+        "examples": [
+          {
+            "content_delta": {
+              "summary": "Content Delta",
+              "value": {
+                "event_type": "content.delta",
+                "delta": {
+                  "type": "text",
+                  "text": "Elara’s life was a symphony of quiet moments. A librarian, she found solace in the hushed aisles, the scent of aged paper, and the predictable rhythm of her days. Her small apartment, meticulously ordered, reflected this internal calm, save"
+                },
+                "index": 1
+              }
+            }
+          }
+        ]
+      },
+      "ContentDeltaData": {
+        "description": "The delta content data for a content block.",
+        "type": "object",
+        "oneOf": [
+          { "$ref": "#/components/schemas/TextDelta" },
+          { "$ref": "#/components/schemas/ImageDelta" },
+          { "$ref": "#/components/schemas/AudioDelta" },
+          { "$ref": "#/components/schemas/DocumentDelta" },
+          { "$ref": "#/components/schemas/VideoDelta" },
+          { "$ref": "#/components/schemas/ThoughtSummaryDelta" },
+          { "$ref": "#/components/schemas/ThoughtSignatureDelta" },
+          { "$ref": "#/components/schemas/FunctionCallDelta" },
+          { "$ref": "#/components/schemas/CodeExecutionCallDelta" },
+          { "$ref": "#/components/schemas/UrlContextCallDelta" },
+          { "$ref": "#/components/schemas/GoogleSearchCallDelta" },
+          { "$ref": "#/components/schemas/McpServerToolCallDelta" },
+          { "$ref": "#/components/schemas/FileSearchCallDelta" },
+          { "$ref": "#/components/schemas/GoogleMapsCallDelta" },
+          { "$ref": "#/components/schemas/FunctionResultDelta" },
+          { "$ref": "#/components/schemas/CodeExecutionResultDelta" },
+          { "$ref": "#/components/schemas/UrlContextResultDelta" },
+          { "$ref": "#/components/schemas/GoogleSearchResultDelta" },
+          { "$ref": "#/components/schemas/McpServerToolResultDelta" },
+          { "$ref": "#/components/schemas/FileSearchResultDelta" },
+          { "$ref": "#/components/schemas/GoogleMapsResultDelta" },
+          { "$ref": "#/components/schemas/TextAnnotationDelta" }
+        ],
+        "discriminator": { "propertyName": "type" }
+      },
+      "TextDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "text" },
+          "text": { "type": "string" }
+        },
+        "required": ["type", "text"]
+      },
+      "ImageDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "image" },
+          "data": { "type": "string", "format": "byte" },
+          "uri": { "type": "string" },
+          "mime_type": {
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "PNG image format",
+              "JPEG image format",
+              "WebP image format",
+              "HEIC image format",
+              "HEIF image format",
+              "GIF image format",
+              "BMP image format",
+              "TIFF image format"
+            ],
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/heic",
+              "image/heif",
+              "image/gif",
+              "image/bmp",
+              "image/tiff"
+            ]
+          },
+          "resolution": {
+            "description": "The resolution of the media.",
+            "$ref": "#/components/schemas/MediaResolution"
+          }
+        },
+        "required": ["type"]
+      },
+      "AudioDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "audio" },
+          "data": { "type": "string", "format": "byte" },
+          "uri": { "type": "string" },
+          "mime_type": {
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "WAV audio format",
+              "MP3 audio format",
+              "AIFF audio format",
+              "AAC audio format",
+              "OGG audio format",
+              "FLAC audio format",
+              "MPEG audio format",
+              "M4A audio format",
+              "L16 audio format"
+            ],
+            "enum": [
+              "audio/wav",
+              "audio/mp3",
+              "audio/aiff",
+              "audio/aac",
+              "audio/ogg",
+              "audio/flac",
+              "audio/mpeg",
+              "audio/m4a",
+              "audio/l16"
+            ]
+          },
+          "rate": {
+            "description": "The sample rate of the audio.",
+            "type": "integer",
+            "format": "int32"
+          },
+          "channels": {
+            "description": "The number of audio channels.",
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": ["type"]
+      },
+      "DocumentDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "document" },
+          "data": { "type": "string", "format": "byte" },
+          "uri": { "type": "string" },
+          "mime_type": {
+            "type": "string",
+            "x-google-enum-descriptions": ["PDF document format"],
+            "enum": ["application/pdf"]
+          }
+        },
+        "required": ["type"]
+      },
+      "VideoDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "video" },
+          "data": { "type": "string", "format": "byte" },
+          "uri": { "type": "string" },
+          "mime_type": {
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "MP4 video format",
+              "MPEG video format",
+              "MPG video format",
+              "MOV video format",
+              "AVI video format",
+              "FLV video format",
+              "WebM video format",
+              "WMV video format",
+              "3GPP video format"
+            ],
+            "enum": [
+              "video/mp4",
+              "video/mpeg",
+              "video/mpg",
+              "video/mov",
+              "video/avi",
+              "video/x-flv",
+              "video/webm",
+              "video/wmv",
+              "video/3gpp"
+            ]
+          },
+          "resolution": {
+            "description": "The resolution of the media.",
+            "$ref": "#/components/schemas/MediaResolution"
+          }
+        },
+        "required": ["type"]
+      },
+      "ThoughtSummaryDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "thought_summary" },
+          "content": {
+            "description": "A new summary item to be added to the thought.",
+            "$ref": "#/components/schemas/ThoughtSummaryContent"
+          }
+        },
+        "required": ["type"]
+      },
+      "ThoughtSignatureDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "thought_signature" },
+          "signature": {
+            "description": "Signature to match the backend source to be part of the generation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type"]
+      },
+      "FunctionCallDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "function_call" },
+          "name": { "type": "string" },
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {
+              "description": "Properties of the object."
+            }
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "name", "arguments", "id"]
+      },
+      "CodeExecutionCallDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "code_execution_call" },
+          "arguments": {
+            "$ref": "#/components/schemas/CodeExecutionCallArguments"
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "arguments", "id"]
+      },
+      "UrlContextCallDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "url_context_call" },
+          "arguments": {
+            "$ref": "#/components/schemas/UrlContextCallArguments"
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "arguments", "id"]
+      },
+      "GoogleSearchCallDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_search_call" },
+          "arguments": {
+            "$ref": "#/components/schemas/GoogleSearchCallArguments"
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "arguments", "id"]
+      },
+      "McpServerToolCallDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "mcp_server_tool_call" },
+          "name": { "type": "string" },
+          "server_name": { "type": "string" },
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {
+              "description": "Properties of the object."
+            }
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "name", "server_name", "arguments", "id"]
+      },
+      "FileSearchCallDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "file_search_call" },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "id"]
+      },
+      "GoogleMapsCallDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_maps_call" },
+          "arguments": {
+            "description": "The arguments to pass to the Google Maps tool.",
+            "$ref": "#/components/schemas/GoogleMapsCallArguments"
+          },
+          "id": {
+            "description": "Required. A unique ID for this specific tool call.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "id"]
+      },
+      "FunctionResultDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "function_result" },
+          "name": { "type": "string" },
+          "is_error": { "type": "boolean" },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          },
+          "result": {
+            "oneOf": [
+              { "type": "object" },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FunctionResultSubcontent"
+                },
+                "title": "FunctionResultSubcontentList"
+              },
+              { "type": "string" }
+            ]
+          }
+        },
+        "required": ["type", "call_id", "result"]
+      },
+      "CodeExecutionResultDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "code_execution_result" },
+          "result": { "type": "string" },
+          "is_error": { "type": "boolean" },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"]
+      },
+      "UrlContextResultDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "url_context_result" },
+          "result": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UrlContextResult" }
+          },
+          "is_error": { "type": "boolean" },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"]
+      },
+      "GoogleSearchResultDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_search_result" },
+          "result": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GoogleSearchResult" }
+          },
+          "is_error": { "type": "boolean" },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"]
+      },
+      "McpServerToolResultDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "mcp_server_tool_result" },
+          "name": { "type": "string" },
+          "server_name": { "type": "string" },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          },
+          "result": {
+            "oneOf": [
+              { "type": "object" },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FunctionResultSubcontent"
+                },
+                "title": "FunctionResultSubcontentList"
+              },
+              { "type": "string" }
+            ]
+          }
+        },
+        "required": ["type", "call_id", "result"]
+      },
+      "FileSearchResultDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "file_search_result" },
+          "result": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FileSearchResult" }
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "result", "call_id"]
+      },
+      "GoogleMapsResultDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "google_maps_result" },
+          "result": {
+            "description": "The results of the Google Maps.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/GoogleMapsResult" }
+          },
+          "call_id": {
+            "description": "Required. ID to match the ID from the function call block.",
+            "type": "string"
+          },
+          "signature": {
+            "description": "A signature hash for backend validation.",
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["type", "call_id"]
+      },
+      "TextAnnotationDelta": {
+        "type": "object",
+        "properties": {
+          "type": { "const": "text_annotation" },
+          "annotations": {
+            "description": "Citation information for model-generated content.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Annotation" }
+          }
+        },
+        "required": ["type"]
+      },
+      "ContentStop": {
+        "type": "object",
+        "properties": {
+          "event_type": { "const": "content.stop" },
+          "index": { "type": "integer", "format": "int32" },
+          "event_id": {
+            "description": "The event_id token to be used to resume the interaction stream, from\nthis event.",
+            "type": "string"
+          }
+        },
+        "required": ["event_type", "index"],
+        "examples": [
+          {
+            "content_stop": {
+              "summary": "Content Stop",
+              "value": { "event_type": "content.stop", "index": 1 }
+            }
+          }
+        ]
+      },
+      "ErrorEvent": {
+        "type": "object",
+        "properties": {
+          "event_type": { "const": "error" },
+          "error": { "$ref": "#/components/schemas/Error" },
+          "event_id": {
+            "description": "The event_id token to be used to resume the interaction stream, from\nthis event.",
+            "type": "string"
+          }
+        },
+        "required": ["event_type"],
+        "examples": [
+          {
+            "error_event": {
+              "summary": "Error Event",
+              "value": {
+                "event_type": "error",
+                "error": {
+                  "message": "Failed to get completed interaction: Result not found.",
+                  "code": "not_found"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Error": {
+        "description": "Error message from an interaction.",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "A URI that identifies the error type.",
+            "type": "string"
+          },
+          "message": {
+            "description": "A human-readable error message.",
+            "type": "string"
+          }
+        }
+      },
+      "MediaResolution": {
+        "type": "string",
+        "x-google-enum-descriptions": [
+          "Low resolution.",
+          "Medium resolution.",
+          "High resolution.",
+          "Ultra high resolution."
+        ],
+        "enum": ["low", "medium", "high", "ultra_high"]
+      },
+      "ToolChoiceType": {
+        "type": "string",
+        "x-google-enum-descriptions": [
+          "Auto tool choice.",
+          "Any tool choice.",
+          "No tool choice.",
+          "Validated tool choice."
+        ],
+        "enum": ["auto", "any", "none", "validated"]
+      },
+      "ThinkingLevel": {
+        "type": "string",
+        "x-google-enum-descriptions": [
+          "Little to no thinking.",
+          "Low thinking level.",
+          "Medium thinking level.",
+          "High thinking level."
+        ],
+        "enum": ["minimal", "low", "medium", "high"]
+      },
+      "ThinkingSummaries": {
+        "type": "string",
+        "x-google-enum-descriptions": [
+          "Auto thinking summaries.",
+          "No thinking summaries."
+        ],
+        "enum": ["auto", "none"]
+      },
+      "ResponseModality": {
+        "type": "string",
+        "x-google-enum-descriptions": [
+          "Indicates the model should return text.",
+          "Indicates the model should return images.",
+          "Indicates the model should return audio.",
+          "Indicates the model should return video.",
+          "Indicates the model should return documents."
+        ],
+        "enum": ["text", "image", "audio", "video", "document"]
+      },
+      "Interaction": {
+        "description": "The Interaction resource.",
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/ModelOption",
+            "description": "The name of the `Model` used for generating the interaction."
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AgentOption",
+            "description": "The name of the `Agent` used for generating the interaction."
+          },
+          "id": {
+            "description": "Required. Output only. A unique identifier for the interaction completion.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "status": {
+            "description": "Required. Output only. The status of the interaction.",
+            "readOnly": true,
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "The interaction is in progress.",
+              "The interaction requires action.",
+              "The interaction is completed.",
+              "The interaction is failed.",
+              "The interaction is cancelled.",
+              "The interaction is incomplete."
+            ],
+            "enum": [
+              "in_progress",
+              "requires_action",
+              "completed",
+              "failed",
+              "cancelled",
+              "incomplete"
+            ]
+          },
+          "created": {
+            "description": "Required. Output only. The time at which the response was created in ISO 8601 format\n(YYYY-MM-DDThh:mm:ssZ).",
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated": {
+            "description": "Required. Output only. The time at which the response was last updated in ISO 8601 format\n(YYYY-MM-DDThh:mm:ssZ).",
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time"
+          },
+          "role": {
+            "description": "Output only. The role of the interaction.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "outputs": {
+            "description": "Output only. Responses from the model.",
+            "readOnly": true,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Content" }
+          },
+          "system_instruction": {
+            "description": "System instruction for the interaction.",
+            "type": "string"
+          },
+          "tools": {
+            "description": "A list of tool declarations the model may call during interaction.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Tool" }
+          },
+          "usage": {
+            "description": "Output only. Statistics on the interaction request's token usage.",
+            "readOnly": true,
+            "$ref": "#/components/schemas/Usage"
+          },
+          "response_modalities": {
+            "description": "The requested modalities of the response (TEXT, IMAGE, AUDIO).",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ResponseModality" }
+          },
+          "response_format": {
+            "description": "Enforces that the generated response is a JSON object that complies with\nthe JSON schema specified in this field."
+          },
+          "response_mime_type": {
+            "description": "The mime type of the response. This is required if response_format is set.",
+            "type": "string"
+          },
+          "previous_interaction_id": {
+            "description": "The ID of the previous interaction, if any.",
+            "type": "string"
+          },
+          "service_tier": {
+            "description": "The service tier for the interaction.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "Flex service tier.",
+              "Standard service tier.",
+              "Priority service tier."
+            ],
+            "enum": ["flex", "standard", "priority"]
+          },
+          "input": { "$ref": "#/components/schemas/InteractionsInput" },
+          "generation_config": {
+            "description": "Input only. Configuration parameters for the model interaction.",
+            "writeOnly": true,
+            "$ref": "#/components/schemas/GenerationConfig"
+          },
+          "agent_config": {
+            "description": "Configuration parameters for the agent interaction.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/DynamicAgentConfig" },
+              { "$ref": "#/components/schemas/DeepResearchAgentConfig" }
+            ],
+            "discriminator": { "propertyName": "type" }
+          }
+        },
+        "required": ["id", "status", "created", "updated"],
+        "example": {
+          "created": "2025-12-04T15:01:45Z",
+          "id": "v1_ChdXS0l4YWZXTk9xbk0xZThQczhEcmlROBIXV0tJeGFmV05PcW5NMWU4UHM4RHJpUTg",
+          "model": "gemini-3-flash-preview",
+          "object": "interaction",
+          "outputs": [
+            {
+              "text": "Hello! I'm doing well, functioning as expected. Thank you for asking! How are you doing today?",
+              "type": "text"
+            }
+          ],
+          "role": "model",
+          "status": "completed",
+          "updated": "2025-12-04T15:01:45Z",
+          "usage": {
+            "input_tokens_by_modality": [{ "modality": "text", "tokens": 7 }],
+            "total_cached_tokens": 0,
+            "total_input_tokens": 7,
+            "total_output_tokens": 23,
+            "total_thought_tokens": 49,
+            "total_tokens": 79,
+            "total_tool_use_tokens": 0
+          }
+        }
+      },
+      "CreateModelInteractionParams": {
+        "description": "Parameters for creating model interactions",
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/ModelOption",
+            "description": "The name of the `Model` used for generating the interaction."
+          },
+          "stream": {
+            "description": "Input only. Whether the interaction will be streamed.",
+            "writeOnly": true,
+            "type": "boolean"
+          },
+          "store": {
+            "description": "Input only. Whether to store the response and request for later retrieval.",
+            "writeOnly": true,
+            "type": "boolean"
+          },
+          "background": {
+            "description": "Input only. Whether to run the model interaction in the background.",
+            "writeOnly": true,
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Required. Output only. A unique identifier for the interaction completion.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "status": {
+            "description": "Required. Output only. The status of the interaction.",
+            "readOnly": true,
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "The interaction is in progress.",
+              "The interaction requires action.",
+              "The interaction is completed.",
+              "The interaction is failed.",
+              "The interaction is cancelled.",
+              "The interaction is incomplete."
+            ],
+            "enum": [
+              "in_progress",
+              "requires_action",
+              "completed",
+              "failed",
+              "cancelled",
+              "incomplete"
+            ]
+          },
+          "created": {
+            "description": "Required. Output only. The time at which the response was created in ISO 8601 format\n(YYYY-MM-DDThh:mm:ssZ).",
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated": {
+            "description": "Required. Output only. The time at which the response was last updated in ISO 8601 format\n(YYYY-MM-DDThh:mm:ssZ).",
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time"
+          },
+          "role": {
+            "description": "Output only. The role of the interaction.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "outputs": {
+            "description": "Output only. Responses from the model.",
+            "readOnly": true,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Content" }
+          },
+          "system_instruction": {
+            "description": "System instruction for the interaction.",
+            "type": "string"
+          },
+          "tools": {
+            "description": "A list of tool declarations the model may call during interaction.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Tool" }
+          },
+          "usage": {
+            "description": "Output only. Statistics on the interaction request's token usage.",
+            "readOnly": true,
+            "$ref": "#/components/schemas/Usage"
+          },
+          "response_modalities": {
+            "description": "The requested modalities of the response (TEXT, IMAGE, AUDIO).",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ResponseModality" }
+          },
+          "response_format": {
+            "description": "Enforces that the generated response is a JSON object that complies with\nthe JSON schema specified in this field."
+          },
+          "response_mime_type": {
+            "description": "The mime type of the response. This is required if response_format is set.",
+            "type": "string"
+          },
+          "previous_interaction_id": {
+            "description": "The ID of the previous interaction, if any.",
+            "type": "string"
+          },
+          "service_tier": {
+            "description": "The service tier for the interaction.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "Flex service tier.",
+              "Standard service tier.",
+              "Priority service tier."
+            ],
+            "enum": ["flex", "standard", "priority"]
+          },
+          "input": { "$ref": "#/components/schemas/InteractionsInput" },
+          "generation_config": {
+            "description": "Input only. Configuration parameters for the model interaction.",
+            "writeOnly": true,
+            "$ref": "#/components/schemas/GenerationConfig"
+          }
+        },
+        "required": ["model", "input"]
+      },
+      "CreateAgentInteractionParams": {
+        "description": "Parameters for creating agent interactions",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentOption",
+            "description": "The name of the `Agent` used for generating the interaction."
+          },
+          "stream": {
+            "description": "Input only. Whether the interaction will be streamed.",
+            "writeOnly": true,
+            "type": "boolean"
+          },
+          "store": {
+            "description": "Input only. Whether to store the response and request for later retrieval.",
+            "writeOnly": true,
+            "type": "boolean"
+          },
+          "background": {
+            "description": "Input only. Whether to run the model interaction in the background.",
+            "writeOnly": true,
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Required. Output only. A unique identifier for the interaction completion.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "status": {
+            "description": "Required. Output only. The status of the interaction.",
+            "readOnly": true,
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "The interaction is in progress.",
+              "The interaction requires action.",
+              "The interaction is completed.",
+              "The interaction is failed.",
+              "The interaction is cancelled.",
+              "The interaction is incomplete."
+            ],
+            "enum": [
+              "in_progress",
+              "requires_action",
+              "completed",
+              "failed",
+              "cancelled",
+              "incomplete"
+            ]
+          },
+          "created": {
+            "description": "Required. Output only. The time at which the response was created in ISO 8601 format\n(YYYY-MM-DDThh:mm:ssZ).",
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated": {
+            "description": "Required. Output only. The time at which the response was last updated in ISO 8601 format\n(YYYY-MM-DDThh:mm:ssZ).",
+            "readOnly": true,
+            "type": "string",
+            "format": "date-time"
+          },
+          "role": {
+            "description": "Output only. The role of the interaction.",
+            "readOnly": true,
+            "type": "string"
+          },
+          "outputs": {
+            "description": "Output only. Responses from the model.",
+            "readOnly": true,
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Content" }
+          },
+          "system_instruction": {
+            "description": "System instruction for the interaction.",
+            "type": "string"
+          },
+          "tools": {
+            "description": "A list of tool declarations the model may call during interaction.",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Tool" }
+          },
+          "usage": {
+            "description": "Output only. Statistics on the interaction request's token usage.",
+            "readOnly": true,
+            "$ref": "#/components/schemas/Usage"
+          },
+          "response_modalities": {
+            "description": "The requested modalities of the response (TEXT, IMAGE, AUDIO).",
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ResponseModality" }
+          },
+          "response_format": {
+            "description": "Enforces that the generated response is a JSON object that complies with\nthe JSON schema specified in this field."
+          },
+          "response_mime_type": {
+            "description": "The mime type of the response. This is required if response_format is set.",
+            "type": "string"
+          },
+          "previous_interaction_id": {
+            "description": "The ID of the previous interaction, if any.",
+            "type": "string"
+          },
+          "service_tier": {
+            "description": "The service tier for the interaction.",
+            "type": "string",
+            "x-google-enum-descriptions": [
+              "Flex service tier.",
+              "Standard service tier.",
+              "Priority service tier."
+            ],
+            "enum": ["flex", "standard", "priority"]
+          },
+          "input": { "$ref": "#/components/schemas/InteractionsInput" },
+          "agent_config": {
+            "description": "Configuration parameters for the agent interaction.",
+            "oneOf": [
+              { "$ref": "#/components/schemas/DynamicAgentConfig" },
+              { "$ref": "#/components/schemas/DeepResearchAgentConfig" }
+            ],
+            "discriminator": { "propertyName": "type" }
+          }
+        },
+        "required": ["agent", "input"]
+      },
+      "InteractionsInput": {
+        "description": "The input for the interaction.",
+        "oneOf": [
+          {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Content" },
+            "title": "ContentList"
+          },
+          { "type": "string" },
+          {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Turn" },
+            "title": "TurnList"
+          },
+          { "$ref": "#/components/schemas/Content" }
+        ]
+      },
+      "InteractionSseEvent": {
+        "type": "object",
+        "oneOf": [
+          { "$ref": "#/components/schemas/InteractionStartEvent" },
+          { "$ref": "#/components/schemas/InteractionCompleteEvent" },
+          { "$ref": "#/components/schemas/InteractionStatusUpdate" },
+          { "$ref": "#/components/schemas/ContentStart" },
+          { "$ref": "#/components/schemas/ContentDelta" },
+          { "$ref": "#/components/schemas/ContentStop" },
+          { "$ref": "#/components/schemas/ErrorEvent" }
+        ],
+        "discriminator": { "propertyName": "event_type" }
+      },
+      "ModelOption": {
+        "title": "Model",
+        "description": "The model that will complete your prompt.\\n\\nSee [models](https://ai.google.dev/gemini-api/docs/models) for additional details.",
+        "anyOf": [
+          { "type": "string" },
+          {
+            "description": "An agentic capability model designed for direct interface interaction, allowing Gemini to perceive and navigate digital environments.",
+            "const": "gemini-2.5-computer-use-preview-10-2025",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our first hybrid reasoning model which supports a 1M token context window and has thinking budgets.",
+            "const": "gemini-2.5-flash",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our native image generation model, optimized for speed, flexibility, and contextual understanding. Text input and output is priced the same as 2.5 Flash.",
+            "const": "gemini-2.5-flash-image",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our smallest and most cost effective model, built for at scale usage.",
+            "const": "gemini-2.5-flash-lite",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "The latest model based on Gemini 2.5 Flash lite optimized for cost-efficiency, high throughput and high quality.",
+            "const": "gemini-2.5-flash-lite-preview-09-2025",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our native audio models optimized for higher quality audio outputs with better pacing, voice naturalness, verbosity, and mood.",
+            "const": "gemini-2.5-flash-native-audio-preview-12-2025",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "The latest model based on the 2.5 Flash model. 2.5 Flash Preview is best for large scale processing, low-latency, high volume tasks that require thinking, and agentic use cases.",
+            "const": "gemini-2.5-flash-preview-09-2025",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our 2.5 Flash text-to-speech model optimized for powerful, low-latency controllable speech generation.",
+            "const": "gemini-2.5-flash-preview-tts",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our state-of-the-art multipurpose model, which excels at coding and complex reasoning tasks.",
+            "const": "gemini-2.5-pro",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our 2.5 Pro text-to-speech audio model optimized for powerful, low-latency speech generation for more natural outputs and easier to steer prompts.",
+            "const": "gemini-2.5-pro-preview-tts",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
+            "const": "gemini-3-flash-preview",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "State-of-the-art image generation and editing model.",
+            "const": "gemini-3-pro-image-preview",
+            "x-stainless-nominal": "false`"
+          },
+          {
+            "description": "Our most intelligent model with SOTA reasoning and multimodal understanding, and powerful agentic and vibe coding capabilities.",
+            "const": "gemini-3-pro-preview",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our latest SOTA reasoning model with unprecedented depth and nuance, and powerful multimodal understanding and coding capabilities.",
+            "const": "gemini-3.1-pro-preview",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Pro-level visual intelligence with Flash-speed efficiency and reality-grounded generation capabilities.",
+            "const": "gemini-3.1-flash-image-preview",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our most cost-efficient model, optimized for high-volume agentic tasks, translation, and simple data processing.",
+            "const": "gemini-3.1-flash-lite-preview",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our low-latency, music generation model optimized for high-fidelity audio clips and precise rhythmic control.",
+            "const": "lyria-3-clip-preview",
+            "x-stainless-nominal": false
+          },
+          {
+            "description": "Our advanced, full-song generative model with deep compositional understanding, optimized for precise structural control and complex transitions across diverse musical styles.",
+            "const": "lyria-3-pro-preview",
+            "x-stainless-nominal": false
+          }
+        ]
+      },
+      "AgentOption": {
+        "title": "Agent",
+        "description": "The agent to interact with.",
+        "anyOf": [
+          { "type": "string" },
+          {
+            "description": "Gemini Deep Research Agent",
+            "const": "deep-research-pro-preview-12-2025",
+            "x-stainless-nominal": false
+          }
+        ]
+      }
+    }
+  }
+}

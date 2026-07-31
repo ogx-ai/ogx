@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -16,7 +16,17 @@ from typing import Any
 import yaml
 from fastapi.openapi.utils import get_openapi
 
-from . import app, schema_collection, schema_filtering, schema_transforms, state
+from . import (
+    app,
+    code_samples,
+    multi_sdk,
+    multipart_transforms,
+    responses_transforms,
+    schema_collection,
+    schema_filtering,
+    schema_transforms,
+    state,
+)
 
 
 def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
@@ -31,7 +41,7 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     """
     state.reset_generator_state()
     # Create the FastAPI app
-    fastapi_app = app.create_llama_stack_app()
+    fastapi_app = app.create_ogx_app()
 
     # Generate the OpenAPI schema
     openapi_schema = get_openapi(
@@ -68,7 +78,13 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     # FastAPI sometimes infers parameters as query params even when they should be in the request body
     openapi_schema = schema_transforms._remove_query_params_from_body_endpoints(openapi_schema)
 
-    # Add x-llama-stack-extra-body-params extension for ExtraBodyField parameters
+    # Normalize multipart binary fields to preserve backward-compatible schema shape.
+    openapi_schema = multipart_transforms.normalize_multipart_binary_fields(openapi_schema)
+
+    # Promote model fields marked with x-extra-body-field to x-ogx-extra-body-params
+    openapi_schema = schema_transforms._promote_model_extra_body_fields(openapi_schema)
+
+    # Add x-ogx-extra-body-params extension for ExtraBodyField parameters
     openapi_schema = schema_transforms._add_extra_body_params_extension(openapi_schema)
 
     # Remove request bodies from GET endpoints (GET requests should never have request bodies)
@@ -76,11 +92,25 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     # that FastAPI incorrectly added to GET endpoints are removed
     openapi_schema = schema_transforms._remove_request_bodies_from_get_endpoints(openapi_schema)
 
-    # Remove 'type: object' from schemas with properties (OpenAI spec conformance)
+    # Keep 'type: object' on schemas with properties (OpenAI uses it on 766/772),
+    # but strip it from the 6 specific schemas where OpenAI omits it.
     openapi_schema = schema_transforms._remove_type_object_from_openai_schemas(openapi_schema)
+
+    # Align Responses API property schemas with OpenResponses spec structure
+    openapi_schema = responses_transforms._fix_responses_schema_conformance(openapi_schema)
 
     # Extract duplicate union types to shared schema references
     openapi_schema = schema_transforms._extract_duplicate_union_types(openapi_schema)
+
+    # Add SDK code samples to API endpoints
+    openapi_schema = code_samples._add_openai_code_samples(openapi_schema)
+    openapi_schema = code_samples._add_anthropic_code_samples(openapi_schema)
+
+    # Add Google GenAI SDK code samples to Interactions API endpoints
+    openapi_schema = code_samples._add_google_code_samples(openapi_schema)
+
+    # Add oneOf response schemas and SDK detection headers to multi-SDK endpoints
+    openapi_schema = multi_sdk._add_multi_sdk_response_schemas(openapi_schema)
 
     # Split into stable (v1 only), experimental (v1alpha + v1beta), deprecated, and combined (stainless) specs
     # Each spec needs its own deep copy of the full schema to avoid cross-contamination
@@ -98,7 +128,7 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     combined_schema = schema_transforms._dedupe_create_response_request_input_union_for_stainless(combined_schema)
 
     base_description = (
-        "This is the specification of the Llama Stack that provides\n"
+        "This is the specification of the OGX that provides\n"
         "                    a set of endpoints and their corresponding interfaces that are\n"
         "    tailored to\n"
         "                    best leverage Llama Models."
@@ -107,22 +137,22 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     schema_configs = [
         (
             stable_schema,
-            "Llama Stack Specification",
+            "OGX Specification",
             "**✅ STABLE**: Production-ready APIs with backward compatibility guarantees.",
         ),
         (
             experimental_schema,
-            "Llama Stack Specification - Experimental APIs",
+            "OGX Specification - Experimental APIs",
             "**🧪 EXPERIMENTAL**: Pre-release APIs (v1alpha, v1beta) that may change before\n    becoming stable.",
         ),
         (
             deprecated_schema,
-            "Llama Stack Specification - Deprecated APIs",
+            "OGX Specification - Deprecated APIs",
             "**⚠️ DEPRECATED**: Legacy APIs that may be removed in future versions. Use for\n    migration reference only.",
         ),
         (
             combined_schema,
-            "Llama Stack Specification - Stable & Experimental APIs",
+            "OGX Specification - Stable & Experimental APIs",
             "**🔗 COMBINED**: This specification includes both stable production-ready APIs\n    and experimental pre-release APIs. Use stable APIs for production deployments\n    and experimental APIs for testing new features.",
         ),
     ]
@@ -161,7 +191,7 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Save the stable specification
-    yaml_path = output_path / "llama-stack-spec.yaml"
+    yaml_path = output_path / "ogx-spec.yaml"
     schema_transforms._write_yaml_file(yaml_path, stable_schema)
     # Post-process the YAML file to remove $defs section and fix references
     with open(yaml_path) as f:
@@ -194,16 +224,16 @@ def generate_openapi_spec(output_dir: str) -> dict[str, Any]:
 
     print(f"Generated YAML (stable): {yaml_path}")
 
-    experimental_yaml_path = output_path / "experimental-llama-stack-spec.yaml"
+    experimental_yaml_path = output_path / "experimental-ogx-spec.yaml"
     schema_transforms._write_yaml_file(experimental_yaml_path, experimental_schema)
     print(f"Generated YAML (experimental): {experimental_yaml_path}")
 
-    deprecated_yaml_path = output_path / "deprecated-llama-stack-spec.yaml"
+    deprecated_yaml_path = output_path / "deprecated-ogx-spec.yaml"
     schema_transforms._write_yaml_file(deprecated_yaml_path, deprecated_schema)
     print(f"Generated YAML (deprecated): {deprecated_yaml_path}")
 
     # Generate combined (stainless) spec
-    stainless_yaml_path = output_path / "stainless-llama-stack-spec.yaml"
+    stainless_yaml_path = output_path / "stainless-ogx-spec.yaml"
     schema_transforms._write_yaml_file(stainless_yaml_path, combined_schema)
     print(f"Generated YAML (stainless/combined): {stainless_yaml_path}")
 

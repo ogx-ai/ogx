@@ -1,4 +1,4 @@
-// Copyright (c) Meta Platforms, Inc. and affiliates.
+// Copyright (c) The OGX Contributors.
 // All rights reserved.
 //
 // This source code is licensed under the terms described in the LICENSE file in
@@ -6,7 +6,7 @@
 
 /**
  * Integration tests for Responses API.
- * Ported from: llama-stack/tests/integration/responses/test_basic_responses.py
+ * Ported from: ogx/tests/integration/responses/test_basic_responses.py
  *
  * IMPORTANT: Test cases and IDs must match EXACTLY with Python tests to use recorded API responses.
  */
@@ -14,7 +14,7 @@
 import { createTestClient, requireTextModel, getResponseOutputText } from '../setup';
 
 describe('Responses API - Basic', () => {
-  // Test cases matching llama-stack/tests/integration/responses/fixtures/test_cases.py
+  // Test cases matching ogx/tests/integration/responses/fixtures/test_cases.py
   const basicTestCases = [
     {
       id: 'earth',

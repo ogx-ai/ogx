@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -14,14 +14,14 @@ import numpy as np
 import pytest
 from tiktoken import get_encoding
 
-from llama_stack.core.datatypes import RerankerModel, VectorStoresConfig
-from llama_stack.providers.utils.memory.vector_store import (
+from ogx.core.datatypes import RerankerModel, VectorStoresConfig
+from ogx.providers.utils.memory.vector_store import (
     VectorStoreWithIndex,
     _validate_embedding,
     make_overlapped_chunks,
 )
-from llama_stack.providers.utils.vector_io.vector_utils import generate_chunk_id
-from llama_stack_api import (
+from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
+from ogx_api import (
     Chunk,
     ChunkMetadata,
     EmbeddedChunk,
@@ -376,7 +376,7 @@ class TestNeuralRerank:
     async def test_neural_rerank_reorders_chunks(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )
@@ -429,7 +429,7 @@ class TestNeuralRerank:
     async def test_neural_rerank_uses_default_model_from_config(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )
@@ -460,12 +460,12 @@ class TestNeuralRerank:
 
         # Verify rerank was called with the fully qualified model ID
         rerank_request = store.inference_api.rerank.call_args.args[0]
-        assert rerank_request.model == "transformers/Qwen/Qwen3-Reranker-0.6B"
+        assert rerank_request.model == "sentence-transformers/Qwen/Qwen3-Reranker-0.6B"
 
     async def test_neural_rerank_uses_model_from_params(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )
@@ -501,7 +501,7 @@ class TestNeuralRerank:
     async def test_neural_rerank_respects_max_chunks_limit(self):
         config = VectorStoresConfig(
             default_reranker_model=RerankerModel(
-                provider_id="transformers",
+                provider_id="sentence-transformers",
                 model_id="Qwen/Qwen3-Reranker-0.6B",
             ),
         )

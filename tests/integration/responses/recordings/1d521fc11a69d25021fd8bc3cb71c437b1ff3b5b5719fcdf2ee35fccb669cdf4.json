@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_chain_through_compaction[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Remember: the secret word is 'banana'."
+        },
+        {
+          "role": "assistant",
+          "content": "Got it, I'll remember the secret word is banana."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-1d521fc11a69",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "**Handoff Summary for Context Checkpoint Compaction**\n\n**1. Current Progress and Key Decisions Made:**\n   - The task involves creating a compact and comprehensive summary of a given context to pass to another LLM.\n   - Key decisions include focusing on brevity and clarity while retaining essential details and nuances.\n   - The secret word \"banana\" was established as part of the context, possibly serving as a verification tool or key identifier.\n\n**2. Important Context, Constraints, or User Preferences:**\n   - User prefers concise and structured information extraction.\n   - Emphasis is placed on maintaining accuracy and relevance in the transfer of information.\n   - The context involves ensuring continuity and consistency across LLM interactions.\n\n**3. What Remains to Be Done (Clear Next Steps):**\n   - Identify and outline the remaining tasks that need to be converted into compact checkpoints.\n   - Implement user feedback or adjustments based on the preferences highlighted.\n   - Verify and ensure the secret word \"banana\" is correctly integrated as per its intended purpose.\n\n**4. Critical Data, Examples, or References Needed to Continue:**\n   - Ensure any specific examples or reference material essential to understanding context are incorporated.\n   - Check for any additional instructions or nuances not yet addressed in the current summary.\n   - If applicable, include a brief outline or template of the desired format for compacted checkpoints.\n\nThis summary should help facilitate a seamless continuation of the task by the next LLM, ensuring they have the necessary context and direction.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_8706f899b3",
+        "usage": {
+          "completion_tokens": 301,
+          "prompt_tokens": 124,
+          "total_tokens": 425,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

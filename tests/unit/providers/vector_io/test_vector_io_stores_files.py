@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -23,7 +23,7 @@ import pytest
 def mock_resume_file_batches(request):
     """Mock the resume functionality to prevent stale file batches from being processed during tests."""
     with patch(
-        "llama_stack.providers.utils.memory.openai_vector_store_mixin.OpenAIVectorStoreMixin._resume_incomplete_batches",
+        "ogx.providers.utils.memory.openai_vector_store_mixin.OpenAIVectorStoreMixin._resume_incomplete_batches",
         new_callable=AsyncMock,
     ):
         yield

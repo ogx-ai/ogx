@@ -1,0 +1,85 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_roundtrip[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "We're building a book tracker app with FastAPI."
+        },
+        {
+          "role": "assistant",
+          "content": "Great choice! Use SQLite for the database."
+        },
+        {
+          "role": "user",
+          "content": "What tables do we need?"
+        },
+        {
+          "role": "assistant",
+          "content": "Users, Books, and ReadingStatus tables."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-699793266b0b",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "**Handoff Summary for Book Tracker App Development**\n\n**Current Progress and Key Decisions Made:**\n- The app is being developed using FastAPI.\n- SQLite has been chosen as the database for convenience and ease of use.\n- Initial database schema design includes three key tables:\n  - **Users**: Stores user information.\n  - **Books**: Contains details about books being tracked.\n  - **ReadingStatus**: Tracks the reading status of each book for each user.\n\n**Important Context, Constraints, or User Preferences:**\n- The app is intended to help users track and manage their book reading progress.\n- The system needs to support multiple users, allowing personalized book tracking.\n- Simplicity and scalability should be considered in design decisions to facilitate potential future enhancements.\n\n**What Remains to Be Done (Clear Next Steps):**\n1. Define the schema for each table:\n   - **Users Table**: Include fields such as `user_id` (primary key), `username`, `email`, and `password`.\n   - **Books Table**: Include fields such as `book_id` (primary key), `title`, `author`, `genre`, and `publication_year`.\n   - **ReadingStatus Table**: Include fields such as `status_id` (primary key), `user_id` (foreign key), `book_id` (foreign key), `status` (e.g., \"to read\", \"reading\", \"completed\"), and `progress` (e.g., percentage or current page).\n\n2. Implement the FastAPI endpoints:\n   - User registration and authentication.\n   - CRUD operations for books and reading statuses.\n\n3. Create sample data for testing to ensure the app components are working correctly.\n\n**Any Critical Data, Examples, or References Needed to Continue:**\n- Ensure that standard practices for user authentication and data security are implemented.\n- Reference FastAPI and SQLite documentation for API and database integration specifics.\n- Consider using libraries like SQLAlchemy for ORM capabilities if needed.\n\nBy following this structured plan, the next developer or LLM can seamlessly continue implementing the book tracker app's functionality using FastAPI and SQLite.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_621b5a0858",
+        "usage": {
+          "completion_tokens": 428,
+          "prompt_tokens": 146,
+          "total_tokens": 574,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

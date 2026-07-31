@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llama_stack.providers.inline.responses.builtin.responses.openai_responses import (
+from ogx.providers.inline.responses.builtin.responses.openai_responses import (
     OpenAIResponsesImpl,
 )
-from llama_stack.providers.utils.responses.responses_store import (
+from ogx.providers.utils.responses.responses_store import (
     ResponsesStore,
 )
-from llama_stack_api import Connectors
-from llama_stack_api.tools import ToolGroups, ToolRuntime
+from ogx_api import Connectors
+from ogx_api.tools import ToolGroups, ToolRuntime
 
 
 @pytest.fixture
@@ -56,12 +56,6 @@ def mock_conversations_api():
 
 
 @pytest.fixture
-def mock_safety_api():
-    safety_api = AsyncMock()
-    return safety_api
-
-
-@pytest.fixture
 def mock_prompts_api():
     prompts_api = AsyncMock()
     return prompts_api
@@ -87,7 +81,6 @@ def openai_responses_impl(
     mock_tool_runtime_api,
     mock_responses_store,
     mock_vector_io_api,
-    mock_safety_api,
     mock_conversations_api,
     mock_prompts_api,
     mock_files_api,
@@ -99,7 +92,7 @@ def openai_responses_impl(
         tool_runtime_api=mock_tool_runtime_api,
         responses_store=mock_responses_store,
         vector_io_api=mock_vector_io_api,
-        safety_api=mock_safety_api,
+        moderation_endpoint=None,
         conversations_api=mock_conversations_api,
         prompts_api=mock_prompts_api,
         files_api=mock_files_api,

@@ -1,0 +1,138 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_roundtrip[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "We're building a book tracker app with FastAPI."
+        },
+        {
+          "role": "assistant",
+          "content": "Great choice! Use SQLite for the database."
+        },
+        {
+          "role": "user",
+          "content": "What tables do we need?"
+        },
+        {
+          "role": "assistant",
+          "content": "Users, Books, and ReadingStatus tables."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-78986d6a3ed0",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary: FastAPI Book Tracker App\n\n#### **Current Progress and Key Decisions**\n1. The goal is to build a book tracker app using FastAPI.\n2. Key architectural choices:\n   - **Backend Framework**: FastAPI.\n   - **Database**: SQLite (chosen for simplicity and lightweight use case).\n3. Initial database schema discussion:\n   - **Core Tables**: `Users`, `Books`, and `ReadingStatus`.\n\n#### **Important Context, Constraints, or User Preferences**\n- Simplicity is a priority for the database and app structure.\n- The app should support basic user needs like tracking books and their reading progress.\n- Extensibility is ideal (e.g., the ability to add features like book ratings or borrowing status in the future).\n\n#### **What Remains to Be Done (Next Steps)**\n1. **Define Database Schema**:\n   - Finalize the schema for `Users`, `Books`, and `ReadingStatus` tables.\n   - Include relationships (e.g., a user can have many books, a book can have multiple statuses over time, etc.).\n2. **Set Up FastAPI Project**:\n   - Install dependencies (`FastAPI`, `sqlite`, `SQLAlchemy`/`Tortoise ORM`, etc.).\n   - Scaffold the FastAPI project structure.\n3. **Implement Core Functionality**:\n   - Create CRUD endpoints for managing users, books, and reading status.\n   - Validate payloads using Pydantic models.\n4. **Testing**:\n   - Write basic unit tests for the API.\n5. **Future Enhancements**:\n   - Add user authentication (JWT or OAuth2).\n   - Optional features like book recommendations or advanced tracking analytics.\n\n#### **Critical Data or Examples**\n1. **Table schemas (draft idea)**:\n   - `Users`: `id`, `username`, `email`, `password_hash`.\n   - `Books`: `id`, `title`, `author`, `description`, `created_by_user_id (FK)`.\n   - `ReadingStatus`: `id`, `user_id (FK)`, `book_id (FK)`, `status (\"Not Started\", \"Reading\", \"Completed\")`, `timestamp`.\n\n2. Example workflows:\n   - Add a new book to the app.\n   - Track progress (e.g., \"Mark book as Completed\").\n   - Query books by a user or status (e.g., \"Show me all completed books\").\n\n3. Suggested dependencies:\n   - FastAPI, SQLite, SQLAlchemy/Tortoise ORM, and Uvicorn for running the app.\n\n---\n\nThe next logical step is to **design and finalize the database schema** and then **scaffold the FastAPI app** for further development. Proceed with confidence!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            },
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "protected_material_code": {
+                "filtered": false,
+                "detected": false
+              },
+              "protected_material_text": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": null,
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 560,
+          "prompt_tokens": 146,
+          "total_tokens": 706,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "prompt_filter_results": [
+          {
+            "prompt_index": 0,
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "jailbreak": {
+                "filtered": false,
+                "detected": false
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

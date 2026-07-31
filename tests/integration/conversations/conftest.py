@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,7 +8,7 @@
 
 # Import fixtures from common module to make them available in this test directory
 from tests.integration.fixtures.common import (  # noqa: F401
-    llama_stack_client,
+    ogx_client,
     openai_client,
     require_server,
 )

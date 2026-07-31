@@ -1,0 +1,940 @@
+{
+  "test_id": "tests/integration/responses/test_basic_responses.py::test_include_logprobs_with_function_tools[txt=bedrock/openai.gpt-oss-20b-1:0]",
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b-1:0",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is the weather in Paris?"
+        }
+      ],
+      "logprobs": true,
+      "parallel_tool_calls": true,
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "type": "function",
+            "name": "get_weather",
+            "description": "Get weather information for a specified location",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "description": "The city name (e.g., 'New York', 'London')"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b-1:0",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "Kpvvp8ozVFlmOQSbHzljLCjuSFgEadAscJPk"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "<|channel|>",
+                    "bytes": [
+                      60,
+                      124,
+                      99,
+                      104,
+                      97,
+                      110,
+                      110,
+                      101,
+                      108,
+                      124,
+                      62
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "3INoPZ6cZiO3aoH42FcurvEqtePEmVdPCyDB5rLrTEjyrralJ6hm"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning>We need to use the get_weather function for Paris.</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "analysis",
+                    "bytes": [
+                      97,
+                      110,
+                      97,
+                      108,
+                      121,
+                      115,
+                      105,
+                      115
+                    ],
+                    "logprob": -4.768370445162873e-07,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "<|message|>",
+                    "bytes": [
+                      60,
+                      124,
+                      109,
+                      101,
+                      115,
+                      115,
+                      97,
+                      103,
+                      101,
+                      124,
+                      62
+                    ],
+                    "logprob": -3.576278118089249e-07,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "We",
+                    "bytes": [
+                      87,
+                      101
+                    ],
+                    "logprob": -0.896438479423523,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " need",
+                    "bytes": [
+                      32,
+                      110,
+                      101,
+                      101,
+                      100
+                    ],
+                    "logprob": -0.18019314110279083,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " to",
+                    "bytes": [
+                      32,
+                      116,
+                      111
+                    ],
+                    "logprob": -0.0028145008254796267,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " use",
+                    "bytes": [
+                      32,
+                      117,
+                      115,
+                      101
+                    ],
+                    "logprob": -1.2947624921798706,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " the",
+                    "bytes": [
+                      32,
+                      116,
+                      104,
+                      101
+                    ],
+                    "logprob": -0.4406219720840454,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " get",
+                    "bytes": [
+                      32,
+                      103,
+                      101,
+                      116
+                    ],
+                    "logprob": -0.5116081237792969,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "_weather",
+                    "bytes": [
+                      95,
+                      119,
+                      101,
+                      97,
+                      116,
+                      104,
+                      101,
+                      114
+                    ],
+                    "logprob": -2.0503786799963564e-05,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " function",
+                    "bytes": [
+                      32,
+                      102,
+                      117,
+                      110,
+                      99,
+                      116,
+                      105,
+                      111,
+                      110
+                    ],
+                    "logprob": -0.04917844012379646,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " for",
+                    "bytes": [
+                      32,
+                      102,
+                      111,
+                      114
+                    ],
+                    "logprob": -3.0880117416381836,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " Paris",
+                    "bytes": [
+                      32,
+                      80,
+                      97,
+                      114,
+                      105,
+                      115
+                    ],
+                    "logprob": -0.4182951152324677,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": ".",
+                    "bytes": [
+                      46
+                    ],
+                    "logprob": -0.014311647042632105,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "<|end|>",
+                    "bytes": [
+                      60,
+                      124,
+                      101,
+                      110,
+                      100,
+                      124,
+                      62
+                    ],
+                    "logprob": -0.29164373874664307,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "XyIQOK1Yoq4xC2tVOcEiAsV2uwFhIPaHVlew0aNCUjm6qPB0DfVfxjbj7j4c9Fa1Qx7EZ4qMlihQHHOL6DsBfiEZpzLJdn9HBCDxZuKCNN9Rvai"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "<|start|>",
+                    "bytes": [
+                      60,
+                      124,
+                      115,
+                      116,
+                      97,
+                      114,
+                      116,
+                      124,
+                      62
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "assistant",
+                    "bytes": [
+                      97,
+                      115,
+                      115,
+                      105,
+                      115,
+                      116,
+                      97,
+                      110,
+                      116
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "<|channel|>",
+                    "bytes": [
+                      60,
+                      124,
+                      99,
+                      104,
+                      97,
+                      110,
+                      110,
+                      101,
+                      108,
+                      124,
+                      62
+                    ],
+                    "logprob": -1.4305104514278355e-06,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "comment",
+                    "bytes": [
+                      99,
+                      111,
+                      109,
+                      109,
+                      101,
+                      110,
+                      116
+                    ],
+                    "logprob": -3.576278118089249e-07,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "6H0onmlpfcCuu1SD5CQ0kMdhGn50jDoXt"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "ary",
+                    "bytes": [
+                      97,
+                      114,
+                      121
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " to",
+                    "bytes": [
+                      32,
+                      116,
+                      111
+                    ],
+                    "logprob": -0.008661322295665741,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "oHbck3EZblACWSSgWBrfRaREF93Qy3JnbBdSvq8oezVYoYnglhJg1ir9o0CzARCoAuGkgp8G6c021w8XEWwSYwUqntvRK"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "=",
+                    "bytes": [
+                      61
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "hlKeYTXFesqk34VLL82dj8xYFYPqVBhJVZl65g6UhhuklDRYFsU53efbyy29ewyGa7VdIqKm7zTQ4RbC3rwqSYzf"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "functions",
+                    "bytes": [
+                      102,
+                      117,
+                      110,
+                      99,
+                      116,
+                      105,
+                      111,
+                      110,
+                      115
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": ".get",
+                    "bytes": [
+                      46,
+                      103,
+                      101,
+                      116
+                    ],
+                    "logprob": -2.145764938177308e-06,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "S8Z8VHmfgJSRQxplOloZzL0yMdyLRbkW8ee2RJ3nmX9L"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "_weather",
+                    "bytes": [
+                      95,
+                      119,
+                      101,
+                      97,
+                      116,
+                      104,
+                      101,
+                      114
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": " ",
+                    "bytes": [
+                      32
+                    ],
+                    "logprob": -0.00037329382030293345,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "0bI5ums6ZVbhICdDiaSGYHA0Brw4MaXiQ0ZmwyKkZbmbRKDmCCJOMEzuyXIJaIzCh"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "<|constrain|>",
+                    "bytes": [
+                      60,
+                      124,
+                      99,
+                      111,
+                      110,
+                      115,
+                      116,
+                      114,
+                      97,
+                      105,
+                      110,
+                      124,
+                      62
+                    ],
+                    "logprob": 0.0,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "SuNqPNJGysT5mcPBOfrWS74OpFpmhunagmk3Snk1zPW87RU"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": "chatcmpl-tool-98dae1602cfc4b0d",
+                    "function": {
+                      "arguments": "{\"",
+                      "name": "get_weather"
+                    },
+                    "type": "function"
+                  }
+                ]
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "json",
+                    "bytes": [
+                      106,
+                      115,
+                      111,
+                      110
+                    ],
+                    "logprob": -0.0008147019543685019,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "<|message|>",
+                    "bytes": [
+                      60,
+                      124,
+                      109,
+                      101,
+                      115,
+                      115,
+                      97,
+                      103,
+                      101,
+                      124,
+                      62
+                    ],
+                    "logprob": -0.00044919890933670104,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "{\"",
+                    "bytes": [
+                      123,
+                      34
+                    ],
+                    "logprob": -0.0010681406129151585,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "h3WUrTUnaPWeyIQJSXB4vtGWeD6BteXrSLVJKJ7uGOMfQtHMAPvHxwDf7TEYkX9RUusp0qr6JQsyLrlJcFRPBrt8HKXzihGnHosFPplGv6OhnEuo"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "location",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "\":\"",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "Paris",
+                      "name": null
+                    },
+                    "type": "function"
+                  },
+                  {
+                    "index": 0,
+                    "id": null,
+                    "function": {
+                      "arguments": "\"}",
+                      "name": null
+                    },
+                    "type": "function"
+                  }
+                ]
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "location",
+                    "bytes": [
+                      108,
+                      111,
+                      99,
+                      97,
+                      116,
+                      105,
+                      111,
+                      110
+                    ],
+                    "logprob": -4.768370445162873e-07,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "\":\"",
+                    "bytes": [
+                      34,
+                      58,
+                      34
+                    ],
+                    "logprob": -0.0004887578543275595,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "Paris",
+                    "bytes": [
+                      80,
+                      97,
+                      114,
+                      105,
+                      115
+                    ],
+                    "logprob": -3.361645576660521e-05,
+                    "top_logprobs": []
+                  },
+                  {
+                    "token": "\"}",
+                    "bytes": [
+                      34,
+                      125
+                    ],
+                    "logprob": -2.634490556374658e-05,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "UtI6nxxHzeESYjCK9LLyvNeSnZ2mphVXmF7PkQkzpfuDw8YYBzsdDGbEhfCs51AB4MD78g8QjUVcOdwrL2fmtlBwdlmEkQmUoJDc3Wypo6qw6nj56P0lflbzD9RjEEov"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "logprobs": {
+                "content": [
+                  {
+                    "token": "<|call|>",
+                    "bytes": [
+                      60,
+                      124,
+                      99,
+                      97,
+                      108,
+                      108,
+                      124,
+                      62
+                    ],
+                    "logprob": -2.384185506798531e-07,
+                    "top_logprobs": []
+                  }
+                ],
+                "refusal": null
+              },
+              "obfuscation": "YaaZN87IeKBDz09OwdqQSXyu1XqgVT4bz"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-a423d4acb53f",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 35,
+            "prompt_tokens": 142,
+            "total_tokens": 177,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": null
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

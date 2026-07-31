@@ -1,0 +1,99 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_chain_through_compaction[openai_client-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Remember: the secret word is 'banana'."
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "Got it, I'll remember the secret word is banana."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+            }
+          ]
+        }
+      ],
+      "config": {}
+    },
+    "endpoint": "/generate_content",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": {
+      "sdk_http_response": {
+        "headers": {
+          "Content-Type": "application/json; charset=UTF-8",
+          "Vary": "Origin, X-Origin, Referer",
+          "Content-Encoding": "gzip",
+          "Date": "Thu, 09 Apr 2026 14:34:33 GMT",
+          "Server": "scaffolding on HTTPServer2",
+          "X-XSS-Protection": "0",
+          "X-Frame-Options": "SAMEORIGIN",
+          "X-Content-Type-Options": "nosniff",
+          "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "Okay, here's the CONTEXT CHECKPOINT COMPACTION handoff summary:\n\n**Task:** Maintain awareness of the secret word \"banana\" and respond accordingly in future interactions. This is a memory retention and context-aware response task.\n\n**Current Progress & Key Decisions:**\n\n*   Confirmed understanding that the secret word is \"banana\".\n*   No specific tasks beyond remembering and reacting to the word \"banana\" have been given. The key decision is to *wait* for the secret word to be used by the user.\n\n**Important Context, Constraints, and User Preferences:**\n\n*   **Constraint:** The response to the use of the word \"banana\" *is not yet defined*. We need to wait for instructions on how to react when/if it's used.\n*   **User Preference:** The user wants responses to be concise, structured, and focused.\n*   **Important:** The word \"banana\" must not be revealed outside of a designated response (if a response is defined later).\n\n**What Remains to Be Done (Next Steps):**\n\n1.  **Monitor User Input:** Actively scan all subsequent user inputs for the presence of the word \"banana\".\n2.  **Awaiting Instructions:** Remain passive until the user provides instructions on *how* to react when the word \"banana\" is detected. This is the *highest priority*. Once the specific reaction is known, then:\n3.  **Execute Response:** If \"banana\" is detected AND a specific response is defined, execute that response.\n4.  **Maintain Context:** Continue remembering the secret word for future interactions.\n\n**Critical Data/References:**\n\n*   **Secret Word:** \"banana\"\n*   **Current Status:** Awaiting instructions on how to respond to the secret word.\n\n**End of Handoff Summary**\n"
+              }
+            ],
+            "role": "model"
+          },
+          "finish_reason": "STOP",
+          "avg_logprobs": -0.6096217506810239
+        }
+      ],
+      "create_time": "2026-04-09T14:34:30.785415Z",
+      "model_version": "gemini-2.0-flash",
+      "response_id": "9rjXaYf4L7mtz_IP2sDtyA8",
+      "usage_metadata": {
+        "candidates_token_count": 380,
+        "candidates_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 380
+          }
+        ],
+        "prompt_token_count": 113,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 113
+          }
+        ],
+        "total_token_count": 493,
+        "traffic_type": "ON_DEMAND"
+      },
+      "automatic_function_calling_history": []
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

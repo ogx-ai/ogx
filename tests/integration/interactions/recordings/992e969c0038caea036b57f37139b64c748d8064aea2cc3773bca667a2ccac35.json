@@ -1,0 +1,75 @@
+{
+  "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_tool_calling_round_trip[txt=gemini/gemini-2.5-flash-lite]",
+  "request": {
+    "test_id": "tests/integration/interactions/test_interactions.py::test_interactions_tool_calling_round_trip[txt=gemini/gemini-2.5-flash-lite]",
+    "url": "https://generativelanguage.googleapis.com/v1beta/interactions",
+    "method": "POST",
+    "payload": {
+      "model": "gemini-2.5-flash-lite",
+      "input": [
+        {
+          "role": "user",
+          "content": "What is the weather in Tokyo?"
+        },
+        {
+          "role": "model",
+          "content": [
+            {
+              "type": "function_call",
+              "id": "lsdifx64",
+              "name": "get_weather",
+              "arguments": {
+                "location": "Tokyo"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "function_response",
+              "id": "lsdifx64",
+              "name": "get_weather",
+              "response": {
+                "temperature_celsius": 22,
+                "condition": "Cloudy"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get the current weather for a location.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "City name"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ],
+      "stream": false
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "message": "Invalid content type: function_response",
+        "code": "invalid_request"
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

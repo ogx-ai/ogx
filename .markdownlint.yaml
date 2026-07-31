@@ -4,11 +4,26 @@ default: true
 # Disable line length limit - URLs, badges, and tables often exceed any reasonable limit
 MD013: false
 
+# Allow duplicate headings under different parent sections (e.g., Configuration under each provider)
+MD024:
+  siblings_only: true
+
+# Don't treat YAML frontmatter title as an H1 - Docusaurus pages use both frontmatter title and # heading
+MD025:
+  front_matter_title: ""
+
 # Allow inline HTML - project uses <details>, <summary>, and other HTML in markdown
 MD033: false
 
 # Don't require first line to be a top-level heading - generated reports and some docs don't follow this
 MD041: false
 
+# Allow non-descriptive link text like [here] - common in documentation
+MD059: false
+
 # Disable table column style - cosmetic pipe alignment, not auto-fixable, 300+ existing violations
 MD060: false
+
+# Allow bold text used as visual labels in generated conformance reports (conformance.mdx)
+# Bold method labels like **POST**, **GET** are intentional visual formatting, not heading substitutes
+MD036: false

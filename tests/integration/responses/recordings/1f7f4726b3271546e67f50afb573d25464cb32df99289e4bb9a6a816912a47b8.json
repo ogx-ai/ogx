@@ -1,0 +1,58 @@
+{
+  "test_id": "tests/integration/responses/test_responses_errors.py::TestResponsesAPIStreamingErrors::test_non_vision_model_returns_error_for_image_input[txt=bedrock/openai.gpt-oss-20b-1:0]",
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b-1:0",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Describe this image"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "https://example.com/test.jpg",
+                "detail": "auto"
+              }
+            }
+          ]
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b-1:0",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": null,
+    "is_streaming": false,
+    "is_exception": true,
+    "exception_data": {
+      "category": "provider_sdk",
+      "provider": "openai",
+      "type": "BadRequestError",
+      "message": "Error code: 400 - {'error': {'message': '{\"error\":{\"code\":\"validation_error\",\"message\":\"Model does not support image modality\",\"param\":null,\"type\":\"invalid_request_error\"}}', 'type': 'invalid_request_error', 'param': None, 'code': 'validation_error'}}",
+      "status_code": 400,
+      "body": {
+        "message": "{\"error\":{\"code\":\"validation_error\",\"message\":\"Model does not support image modality\",\"param\":null,\"type\":\"invalid_request_error\"}}",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "validation_error"
+      }
+    },
+    "exception_message": "Error code: 400 - {'error': {'message': '{\"error\":{\"code\":\"validation_error\",\"message\":\"Model does not support image modality\",\"param\":null,\"type\":\"invalid_request_error\"}}', 'type': 'invalid_request_error', 'param': None, 'code': 'validation_error'}}"
+  },
+  "id_normalization_mapping": {}
+}

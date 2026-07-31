@@ -1,0 +1,246 @@
+.installBlock {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto 1.5rem;
+  text-align: left;
+  overflow: hidden;
+}
+
+.tagline {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-secondary);
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.01em;
+}
+
+.taglineLink {
+  font-weight: 400;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+/* ========== TABS ========== */
+.tabRow {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 0.65rem;
+}
+
+.tab {
+  appearance: none;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+[data-theme='dark'] .tab {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.tab:hover {
+  border-color: var(--ifm-color-primary-lighter);
+  color: var(--ifm-color-primary);
+}
+
+.tabActive {
+  background: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  color: #fff;
+}
+
+.tabActive:hover {
+  color: #fff;
+  border-color: var(--ifm-color-primary);
+}
+
+/* ========== COMMAND ROW ========== */
+.commandRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme='dark'] .commandRow {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.prompt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: rgba(109, 40, 217, 0.08);
+  color: var(--ifm-color-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .prompt {
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.command {
+  flex: 1;
+  min-width: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--ifm-font-color-base);
+  white-space: pre;
+  overflow-x: auto;
+  text-align: left;
+}
+
+.commandReveal {
+  display: block;
+  animation: fadeIn 0.4s ease both;
+}
+
+.commandLine {
+  display: block;
+}
+
+.commandLine + .commandLine {
+  margin-top: 0.25rem;
+}
+
+.commandLineBlank {
+  display: block;
+  min-height: 1em;
+}
+
+.space {
+  white-space: pre;
+}
+
+.cursor {
+  display: none;
+}
+
+/* ========== SYNTAX COLORS ========== */
+.tokenBinary { color: #0369a1; font-weight: 700; }
+.tokenFlag { color: #2563eb; }
+.tokenPackage { color: #7c3aed; }
+.tokenCommand { color: #0f172a; font-weight: 600; }
+.tokenSub { color: #334155; }
+.tokenAccent { color: #047857; font-weight: 700; }
+
+[data-theme='dark'] .tokenBinary { color: #7dd3fc; }
+[data-theme='dark'] .tokenFlag { color: #93c5fd; }
+[data-theme='dark'] .tokenPackage { color: #c4b5fd; }
+[data-theme='dark'] .tokenCommand { color: #f1f5f9; }
+[data-theme='dark'] .tokenSub { color: #cbd5e1; }
+[data-theme='dark'] .tokenAccent { color: #5eead4; }
+
+/* ========== COPY BUTTON ========== */
+.copyBtn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 100px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .copyBtn {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.copyBtn:hover {
+  border-color: var(--ifm-color-primary-lighter);
+  background: rgba(109, 40, 217, 0.06);
+}
+
+[data-theme='dark'] .copyBtn:hover {
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.copyBtnCopied {
+  border-color: #059669 !important;
+  color: #059669;
+  background: rgba(5, 150, 105, 0.06) !important;
+}
+
+/* ========== ANIMATIONS ========== */
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commandReveal, .cursor { animation: none !important; }
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 640px) {
+  .commandRow {
+    flex-wrap: wrap;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .command {
+    font-size: 0.72rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .copyBtn {
+    width: 100%;
+    justify-content: center;
+    margin-top: 0.35rem;
+  }
+
+  .tabRow {
+    gap: 0.35rem;
+  }
+
+  .tab {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.72rem;
+  }
+
+  .tagline {
+    font-size: 0.78rem;
+  }
+
+  .tokenBinary {
+    margin-left: 0;
+  }
+}

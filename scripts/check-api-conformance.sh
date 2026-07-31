@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -42,10 +42,10 @@ if check_breaking_change_intended; then
 fi
 
 # Determine which spec to check (prefer stable, fall back to monolithic)
-if [ -f "docs/static/stable-llama-stack-spec.yaml" ]; then
-    SPEC="docs/static/stable-llama-stack-spec.yaml"
-elif [ -f "docs/static/llama-stack-spec.yaml" ]; then
-    SPEC="docs/static/llama-stack-spec.yaml"
+if [ -f "docs/static/stable-ogx-spec.yaml" ]; then
+    SPEC="docs/static/stable-ogx-spec.yaml"
+elif [ -f "docs/static/ogx-spec.yaml" ]; then
+    SPEC="docs/static/ogx-spec.yaml"
 else
     echo "No API spec found"
     exit 0

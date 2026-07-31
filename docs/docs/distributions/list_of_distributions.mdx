@@ -1,133 +1,68 @@
 ---
 title: Available Distributions
-description: List of available distributions for Llama Stack
+description: List of available distributions for OGX
 sidebar_label: Available Distributions
 sidebar_position: 2
 ---
 
 # Available Distributions
 
-Llama Stack provides several pre-configured distributions to help you get started quickly. Choose the distribution that best fits your hardware and use case.
+| Distribution | Use Case | Inference | Container Image |
+|-------------|----------|-----------|-----------------|
+| `starter` | General purpose, prototyping, production | Ollama, OpenAI, vLLM, Bedrock, and more | [`llamastack/distribution-starter`](https://hub.docker.com/r/llamastack/distribution-starter) |
+| `postgres-demo` | Starter with PostgreSQL storage | Same as starter | [`llamastack/distribution-postgres-demo`](https://hub.docker.com/r/llamastack/distribution-postgres-demo) |
+| `nvidia` | NVIDIA NeMo Microservices | NVIDIA NIM | — |
+| Custom | Your own provider mix | Any supported provider | — |
 
-## Quick Reference
+## Starter (Recommended)
 
-| Distribution | Use Case | Hardware Requirements | Provider |
-|--------------|----------|----------------------|----------|
-| `distribution-starter` | General purpose, prototyping | Any (CPU/GPU) | Ollama, Remote APIs |
-| Remote-hosted | Production, managed service | None | Partner providers |
-| iOS/Android SDK | Mobile applications | Mobile device | On-device inference |
-
-## Choose Your Distribution
-
-### 🚀 Getting Started (Recommended for Beginners)
-
-**Use `distribution-starter` if you want to:**
-- Prototype quickly without GPU requirements
-- Use remote inference providers (Fireworks, Together, vLLM etc.)
-- Run locally with Ollama for development
+The starter distribution works for most use cases. It includes all providers and auto-enables them based on available environment variables:
 
 ```bash
-docker pull llamastack/distribution-starter
+uv run ogx run starter
 ```
 
-**Guides:** [Starter Distribution Guide](self_hosted_distro/starter)
+It supports local inference (Ollama), cloud providers (OpenAI, Bedrock, Azure, etc.), and everything in between. See the [Starter Guide](self_hosted_distro/starter) for details.
 
-### 🖥️ Self-Hosted with GPU
+## PostgreSQL Demo
 
-**Use `distribution-builtin-gpu` if you:**
-- Have access to GPU hardware
-- Want maximum performance and control
-- Need to run inference locally
+A variant of the starter distribution pre-configured with PostgreSQL storage instead of SQLite. Suitable for production-like deployments and demos:
 
 ```bash
-docker pull llamastack/distribution-builtin-gpu
+docker run -it \
+  -p 8321:8321 \
+  -v ~/.ogx:/root/.ogx \
+  -e POSTGRES_HOST=host.docker.internal \
+  -e POSTGRES_PORT=5432 \
+  -e POSTGRES_DB=ogx \
+  -e POSTGRES_USER=ogx \
+  -e POSTGRES_PASSWORD=ogx \
+  ogxai/distribution-postgres-demo
 ```
 
-**Guides:** [Builtin GPU Guide](self_hosted_distro/builtin-gpu)
+## NVIDIA
 
-### 🖥️ Self-Hosted with NVIDA NeMo Microservices
+Optimized for NVIDIA NeMo Microservices. See the [NVIDIA Guide](self_hosted_distro/nvidia).
 
-**Use `nvidia` if you:**
-- Want to use Llama Stack with NVIDIA NeMo Microservices
+## Passthrough
 
-**Guides:** [NVIDIA Distribution Guide](self_hosted_distro/nvidia)
+A minimal distribution that forwards requests to a remote OGX server. See the [Passthrough Guide](self_hosted_distro/passthrough).
 
-### ☁️ Managed Hosting
+## Remote-Hosted
 
-**Use remote-hosted endpoints if you:**
-- Don't want to manage infrastructure
-- Need production-ready reliability
-- Prefer managed services
+Some partners host OGX endpoints that you can connect to directly. See [Remote-Hosted Distributions](./remote_hosted_distro/) for available options.
 
-**Partners:** [Fireworks.ai](https://fireworks.ai) and [Together.xyz](https://together.xyz)
+## Custom
 
-**Guides:** [Remote-Hosted Endpoints](./remote_hosted_distro/)
-
-### 📱 Mobile Development
-
-**Use mobile SDKs if you:**
-- Are building iOS or Android applications
-- Need on-device inference capabilities
-- Want offline functionality
-
-- [iOS SDK](ondevice_distro/ios_sdk)
-- [Android SDK](ondevice_distro/android_sdk)
-
-### 🔧 Custom Solutions
-
-**Build your own distribution if:**
-- None of the above fit your specific needs
-- You need custom configurations
-- You want to optimize for your specific use case
-
-**Guides:** [Building Custom Distributions](./building_distro)
-
-## Detailed Documentation
-
-### Self-Hosted Distributions
-
-```{toctree}
-:maxdepth: 1
-
-self_hosted_distro/starter
-self_hosted_distro/builtin-gpu
-```
-
-### Remote-Hosted Solutions
-
-```{toctree}
-:maxdepth: 1
-
-remote_hosted_distro/index
-```
-
-### Mobile SDKs
-
-```{toctree}
-:maxdepth: 1
-
-ondevice_distro/ios_sdk
-ondevice_distro/android_sdk
-```
-
-## Decision Flow
+Build your own distribution when you need a specific provider mix. See [Building Custom Distributions](./building_distro).
 
 ```mermaid
 graph TD
-    A[What's your use case?] --> B{Need mobile app?}
-    B -->|Yes| C[Use Mobile SDKs]
-    B -->|No| D{Have GPU hardware?}
-    D -->|Yes| E[Use Builtin GPU]
-    D -->|No| F{Want managed hosting?}
-    F -->|Yes| G[Use Remote-Hosted]
-    F -->|No| H[Use Starter Distribution]
+    A[What do you need?] --> B{Have specific hardware?}
+    B -->|NVIDIA| C[Use nvidia distro]
+    B -->|No| D{Want managed hosting?}
+    D -->|Yes| E[Use remote-hosted]
+    D -->|No| J{Need PostgreSQL storage?}
+    J -->|Yes| K[Use postgres-demo]
+    J -->|No| F[Use starter]
 ```
-
-## Next Steps
-
-1. **Choose your distribution** from the options above
-2. **Follow the setup guide** for your selected distribution
-3. **Configure your providers** with API keys or local models
-4. **Start building** with Llama Stack!
-
-For help choosing or troubleshooting, check our [Getting Started Guide](/docs/getting_started/quickstart) or [GitHub Issues](https://github.com/llamastack/llama-stack/issues).

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -31,9 +31,9 @@ SECTION_ORDER = [
 ]
 
 ORGANIZATION = {
-    "name": "llama-stack-client",
-    "docs": "https://llama-stack.readthedocs.io/en/latest/",
-    "contact": "llamastack@meta.com",
+    "name": "ogx-client",
+    "docs": "https://ogx.readthedocs.io/en/latest/",
+    "contact": "contributors@ogx.dev",
 }
 
 SECURITY = [{}, {"BearerAuth": []}]
@@ -42,58 +42,39 @@ SECURITY_SCHEMES = {"BearerAuth": {"type": "http", "scheme": "bearer"}}
 
 TARGETS = {
     "node": {
-        "package_name": "llama-stack-client",
-        "production_repo": "llamastack/llama-stack-client-typescript",
+        "package_name": "ogx-client",
+        "production_repo": "ogx-ai/ogx-client-typescript",
         "publish": {"npm": False},
     },
     "python": {
-        "package_name": "llama_stack_client",
-        "production_repo": "llamastack/llama-stack-client-python",
+        "package_name": "ogx_client",
+        "production_repo": "ogx-ai/ogx-client-python",
         "options": {"use_uv": True},
         "publish": {"pypi": True},
-        "project_name": "llama_stack_client",
+        "project_name": "ogx_client",
     },
     "go": {
-        "package_name": "llama-stack-client",
-        "production_repo": "llamastack/llama-stack-client-go",
+        "package_name": "ogx-client",
+        "production_repo": "ogx-ai/ogx-client-go",
         "options": {"enable_v2": True, "back_compat_use_shared_package": False},
     },
 }
 
 CLIENT_SETTINGS = {
-    "default_env_prefix": "LLAMA_STACK_CLIENT",
+    "default_env_prefix": "OGX_CLIENT",
     "opts": {
         "api_key": {
             "type": "string",
-            "read_env": "LLAMA_STACK_CLIENT_API_KEY",
+            "read_env": "OGX_CLIENT_API_KEY",
             "auth": {"security_scheme": "BearerAuth"},
             "nullable": True,
         }
     },
 }
 
-ENVIRONMENTS = {"production": "http://any-hosted-llama-stack.com"}
+ENVIRONMENTS = {"production": "http://any-hosted-ogx.com"}
 
 PAGINATION = [
-    {
-        "name": "datasets_iterrows",
-        "type": "offset",
-        "request": {
-            "dataset_id": {"type": "string"},
-            "start_index": {
-                "type": "integer",
-                "x-stainless-pagination-property": {"purpose": "offset_count_param"},
-            },
-            "limit": {"type": "integer"},
-        },
-        "response": {
-            "data": {"type": "array", "items": {"type": "object"}},
-            "next_index": {
-                "type": "integer",
-                "x-stainless-pagination-property": {"purpose": "offset_count_start_field"},
-            },
-        },
-    },
     {
         "name": "openai_cursor_page",
         "type": "cursor",
@@ -125,7 +106,7 @@ STREAMING = {
 SETTINGS = {
     "license": "MIT",
     "unwrap_response_fields": ["data"],
-    "file_header": "Copyright (c) Meta Platforms, Inc. and affiliates.\n"
+    "file_header": "Copyright (c) The OGX Contributors.\n"
     "All rights reserved.\n"
     "\n"
     "This source code is licensed under the terms described in the "
@@ -135,49 +116,6 @@ SETTINGS = {
 
 OPENAPI = {
     "transformations": [
-        {
-            "command": "mergeObject",
-            "reason": "Better return_type using enum",
-            "args": {
-                "target": ["$.components.schemas"],
-                "object": {
-                    "ReturnType": {
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {
-                                "enum": [
-                                    "string",
-                                    "number",
-                                    "boolean",
-                                    "array",
-                                    "object",
-                                    "json",
-                                    "union",
-                                    "chat_completion_input",
-                                    "completion_input",
-                                    "agent_turn_input",
-                                ]
-                            }
-                        },
-                        "required": ["type"],
-                        "type": "object",
-                    }
-                },
-            },
-        },
-        {
-            "command": "replaceProperties",
-            "reason": "Replace return type properties with better model (see above)",
-            "args": {
-                "filter": {
-                    "only": [
-                        "$.components.schemas.ScoringFn.properties.return_type",
-                        "$.components.schemas.RegisterScoringFunctionRequest.properties.return_type",
-                    ]
-                },
-                "value": {"$ref": "#/components/schemas/ReturnType"},
-            },
-        },
         {
             "command": "oneOfToAnyOf",
             "reason": "Prism (mock server) doesn't like one of our "
@@ -209,9 +147,7 @@ ALL_RESOURCES = {
             "interleaved_content_item": "InterleavedContentItem",
             "interleaved_content": "InterleavedContent",
             "param_type": "ParamType",
-            "safety_violation": "SafetyViolation",
             "sampling_params": "SamplingParams",
-            "scoring_result": "ScoringResult",
             "system_message": "SystemMessage",
             "health_info": "HealthInfo",
             "provider_info": "ProviderInfo",
@@ -225,6 +161,10 @@ ALL_RESOURCES = {
         "models": {
             "response_object_stream": "OpenAIResponseObjectStream",
             "response_object": "OpenAIResponseObject",
+            "compacted_response": "OpenAICompactedResponse",
+            "response_input": "OpenAIResponseInput",
+            "response_message": "OpenAIResponseMessage",
+            "response_output": "OpenAIResponseOutput",
         },
         "methods": {
             "create": {
@@ -240,6 +180,10 @@ ALL_RESOURCES = {
             "delete": {
                 "type": "http",
                 "endpoint": "delete /v1/responses/{response_id}",
+            },
+            "compact": {
+                "type": "http",
+                "endpoint": "post /v1/responses/compact",
             },
         },
         "subresources": {
@@ -341,7 +285,17 @@ ALL_RESOURCES = {
                         "type": "http",
                         "endpoint": "get /v1/chat/completions/{completion_id}",
                     },
-                }
+                },
+                "subresources": {
+                    "messages": {
+                        "methods": {
+                            "list": {
+                                "type": "http",
+                                "endpoint": "get /v1/chat/completions/{completion_id}/messages",
+                            }
+                        }
+                    }
+                },
             }
         },
     },
@@ -422,42 +376,6 @@ ALL_RESOURCES = {
     "routes": {
         "methods": {"list": {"paginated": False, "endpoint": "get /v1/inspect/routes"}},
     },
-    "moderations": {
-        "models": {"create_response": "ModerationObject"},
-        "methods": {"create": "post /v1/moderations"},
-    },
-    "safety": {
-        "models": {"run_shield_response": "RunShieldResponse"},
-        "methods": {"run_shield": "post /v1/safety/run-shield"},
-    },
-    "shields": {
-        "models": {"shield": "Shield", "list_shields_response": "ListShieldsResponse"},
-        "methods": {
-            "retrieve": "get /v1/shields/{identifier}",
-            "list": {"paginated": False, "endpoint": "get /v1/shields"},
-            "register": "post /v1/shields",
-            "delete": "delete /v1/shields/{identifier}",
-        },
-    },
-    "scoring": {
-        "methods": {
-            "score": "post /v1/scoring/score",
-            "score_batch": "post /v1/scoring/score-batch",
-        }
-    },
-    "scoring_functions": {
-        "models": {
-            "scoring_fn": "ScoringFn",
-            "scoring_fn_params": "ScoringFnParams",
-            "list_scoring_functions_response": "ListScoringFunctionsResponse",
-        },
-        "methods": {
-            "retrieve": "get /v1/scoring-functions/{scoring_fn_id}",
-            "list": {"paginated": False, "endpoint": "get /v1/scoring-functions"},
-            "register": "post /v1/scoring-functions",
-            "unregister": "delete /v1/scoring-functions/{scoring_fn_id}",
-        },
-    },
     "files": {
         "models": {
             "file": "OpenAIFileObject",
@@ -482,43 +400,6 @@ ALL_RESOURCES = {
     },
     "alpha": {
         "subresources": {
-            "benchmarks": {
-                "models": {
-                    "benchmark": "Benchmark",
-                    "list_benchmarks_response": "ListBenchmarksResponse",
-                },
-                "methods": {
-                    "retrieve": "get /v1alpha/eval/benchmarks/{benchmark_id}",
-                    "list": {
-                        "paginated": False,
-                        "endpoint": "get /v1alpha/eval/benchmarks",
-                    },
-                    "register": "post /v1alpha/eval/benchmarks",
-                    "unregister": "delete /v1alpha/eval/benchmarks/{benchmark_id}",
-                },
-            },
-            "eval": {
-                "models": {
-                    "evaluate_response": "EvaluateResponse",
-                    "benchmark_config": "BenchmarkConfig",
-                    "job": "Job",
-                },
-                "methods": {
-                    "evaluate_rows": "post /v1alpha/eval/benchmarks/{benchmark_id}/evaluations",
-                    "run_eval": "post /v1alpha/eval/benchmarks/{benchmark_id}/jobs",
-                    "evaluate_rows_alpha": "post /v1alpha/eval/benchmarks/{benchmark_id}/evaluations",
-                    "run_eval_alpha": "post /v1alpha/eval/benchmarks/{benchmark_id}/jobs",
-                },
-                "subresources": {
-                    "jobs": {
-                        "methods": {
-                            "cancel": "delete /v1alpha/eval/benchmarks/{benchmark_id}/jobs/{job_id}",
-                            "status": "get /v1alpha/eval/benchmarks/{benchmark_id}/jobs/{job_id}",
-                            "retrieve": "get /v1alpha/eval/benchmarks/{benchmark_id}/jobs/{job_id}/result",
-                        }
-                    }
-                },
-            },
             "admin": {
                 "methods": {
                     "list_providers": "get /v1alpha/admin/providers",
@@ -533,21 +414,6 @@ ALL_RESOURCES = {
                     "rerank": "post /v1alpha/inference/rerank",
                 },
             },
-        }
-    },
-    "beta": {
-        "subresources": {
-            "datasets": {
-                "models": {"list_datasets_response": "ListDatasetsResponse"},
-                "methods": {
-                    "register": "post /v1beta/datasets",
-                    "retrieve": "get /v1beta/datasets/{dataset_id}",
-                    "list": {"paginated": False, "endpoint": "get /v1beta/datasets"},
-                    "unregister": "delete /v1beta/datasets/{dataset_id}",
-                    "iterrows": "get /v1beta/datasetio/iterrows/{dataset_id}",
-                    "appendrows": "post /v1beta/datasetio/append-rows/{dataset_id}",
-                },
-            }
         }
     },
 }

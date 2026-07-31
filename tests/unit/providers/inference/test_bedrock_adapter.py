@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,13 +11,13 @@ import pytest
 from openai import AuthenticationError
 from pydantic import SecretStr
 
-from llama_stack.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
-from llama_stack.providers.remote.inference.bedrock.config import BedrockConfig
-from llama_stack_api import OpenAIChatCompletionRequestWithExtraBody
+from ogx.providers.remote.inference.bedrock.bedrock import BedrockInferenceAdapter
+from ogx.providers.remote.inference.bedrock.config import BedrockConfig
+from ogx_api import InternalServerError, OpenAIChatCompletionRequestWithExtraBody
 
 
 def test_adapter_initialization():
-    config = BedrockConfig(api_key="test-key", region_name="us-east-1")
+    config = BedrockConfig(aws_bedrock_bearer_token="test-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
 
     assert adapter.config.auth_credential.get_secret_value() == "test-key"
@@ -25,25 +25,25 @@ def test_adapter_initialization():
 
 
 def test_client_url_construction():
-    config = BedrockConfig(api_key="test-key", region_name="us-west-2")
+    config = BedrockConfig(aws_bedrock_bearer_token="test-key", region_name="us-west-2")
     adapter = BedrockInferenceAdapter(config=config)
 
-    assert adapter.get_base_url() == "https://bedrock-mantle.us-west-2.api.aws/v1"
+    assert adapter.get_base_url() == "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
 
 
 def test_api_key_from_config():
-    config = BedrockConfig(api_key="config-key", region_name="us-east-1")
+    config = BedrockConfig(aws_bedrock_bearer_token="config-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
     assert adapter.config.auth_credential.get_secret_value() == "config-key"
 
 
 def test_api_key_from_header_overrides_config():
     """Test API key from request header overrides config via client property"""
-    config = BedrockConfig(api_key="config-key", region_name="us-east-1")
+    config = BedrockConfig(aws_bedrock_bearer_token="config-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
-    adapter.provider_data_api_key_field = "aws_bearer_token_bedrock"
+    adapter.provider_data_api_key_field = "aws_bedrock_bearer_token"
     adapter.get_request_provider_data = MagicMock(
-        return_value=SimpleNamespace(aws_bearer_token_bedrock=SecretStr("header-key"))
+        return_value=SimpleNamespace(aws_bedrock_bearer_token=SecretStr("header-key"))
     )
 
     # The client property is where header override happens (in OpenAIMixin)
@@ -51,8 +51,8 @@ def test_api_key_from_header_overrides_config():
 
 
 async def test_authentication_error_handling():
-    """Test that AuthenticationError from OpenAI client is converted to ValueError with helpful message"""
-    config = BedrockConfig(api_key="invalid-key", region_name="us-east-1")
+    """Authentication failures should surface as a sanitized InternalServerError."""
+    config = BedrockConfig(aws_bedrock_bearer_token="invalid-key", region_name="us-east-1")
     adapter = BedrockInferenceAdapter(config=config)
 
     # Mock the parent class method to raise AuthenticationError
@@ -68,14 +68,19 @@ async def test_authentication_error_handling():
     BedrockInferenceAdapter.__bases__[0].openai_chat_completion = mock_super
 
     try:
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(InternalServerError) as exc_info:
             params = OpenAIChatCompletionRequestWithExtraBody(
                 model="test-model", messages=[{"role": "user", "content": "test"}]
             )
             await adapter.openai_chat_completion(params=params)
 
-        assert "AWS Bedrock authentication failed" in str(exc_info.value)
-        assert "Please verify your API key" in str(exc_info.value)
+        message = str(exc_info.value)
+        assert (
+            message == "Authentication failed because the provided request credential was rejected. "
+            "Please verify that the credential is valid, unexpired, and authorized for this request."
+        )
+        assert "Bedrock" not in message
+        assert "x-ogx-provider-data" not in message
     finally:
         # Restore original method
         BedrockInferenceAdapter.__bases__[0].openai_chat_completion = original_method

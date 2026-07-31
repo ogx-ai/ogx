@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import SecretStr
 
-from llama_stack.providers.remote.inference.vertexai.config import VertexAIConfig, VertexAIProviderDataValidator
-from llama_stack.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter
-from llama_stack_api import Model, ModelType
+from ogx.providers.remote.inference.vertexai.config import VertexAIConfig, VertexAIProviderDataValidator
+from ogx.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter
+from ogx_api import Model, ModelType
 
 from .conftest import _async_pager
 
@@ -26,18 +26,21 @@ class TestVertexAIAdapterInit:
         assert adapter.config == vertex_config
         assert adapter._default_client is None
 
-    async def test_initialize_sets_default_client(self, monkeypatch, adapter: VertexAIInferenceAdapter):
-        """Test that initialize sets default client."""
+    async def test_initialize_does_not_create_client(self, monkeypatch, adapter: VertexAIInferenceAdapter):
+        """Test that initialize does NOT create default client (lazy initialization)."""
         client = object()
 
         monkeypatch.setattr(adapter, "_create_client", lambda **kwargs: client)
 
         await adapter.initialize()
 
-        assert adapter._default_client is client
+        # With lazy initialization, client is NOT created during initialize()
+        assert adapter._default_client is None
 
-    async def test_initialize_failure_keeps_default_client_unset(self, monkeypatch, adapter: VertexAIInferenceAdapter):
-        """Test that initialize failure keeps default client unset."""
+    async def test_initialize_does_not_fail_on_client_creation_error(
+        self, monkeypatch, adapter: VertexAIInferenceAdapter
+    ):
+        """Test that initialize does not fail even if client creation would fail (lazy initialization)."""
 
         def _raise(**kwargs):
             """Raise a runtime error for failure-path testing."""
@@ -45,6 +48,7 @@ class TestVertexAIAdapterInit:
 
         monkeypatch.setattr(adapter, "_create_client", _raise)
 
+        # Should not raise because client is not created during initialize()
         await adapter.initialize()
 
         assert adapter._default_client is None
@@ -54,7 +58,7 @@ class TestVertexAIClientManagement:
     def test_create_client_with_access_token_uses_credentials(self, monkeypatch):
         """Test that create client with access token uses credentials."""
         client_ctor = MagicMock(return_value=object())
-        monkeypatch.setattr("llama_stack.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
+        monkeypatch.setattr("ogx.providers.remote.inference.vertexai.vertexai.Client", client_ctor)
 
         adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="test-project", location="global"))
         client = adapter._create_client(
@@ -125,13 +129,25 @@ class TestVertexAIClientManagement:
             access_token="config-token",
         )
 
-    def test_get_client_raises_when_no_client_available(self, monkeypatch):
-        """Test that get client raises when no client available."""
+    def test_get_client_creates_default_client_lazily(self, monkeypatch):
+        """Test that get client creates default client lazily when not available."""
         adapter = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
         monkeypatch.setattr(adapter, "_get_request_provider_overrides", lambda: None)
 
-        with pytest.raises(ValueError, match="Pass Vertex AI access token in the header"):
-            adapter._get_client()
+        client = object()
+        create_client = MagicMock(return_value=client)
+        monkeypatch.setattr(adapter, "_create_client", create_client)
+
+        # First call should create the client
+        result = adapter._get_client()
+        assert result is client
+        assert adapter._default_client is client
+        create_client.assert_called_once()
+
+        # Second call should reuse the same client
+        result2 = adapter._get_client()
+        assert result2 is client
+        assert create_client.call_count == 1  # Still only called once
 
 
 class TestVertexAIModelListing:

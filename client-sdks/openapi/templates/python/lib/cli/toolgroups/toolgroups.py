@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -20,7 +20,7 @@ def toolgroups():
     """Manage available tool groups."""
 
 
-@click.command(name="list", help="Show available llama toolgroups at distribution endpoint")
+@click.command(name="list", help="Show available toolgroups at distribution endpoint")
 @click.help_option("-h", "--help")
 @click.pass_context
 @handle_client_errors("list toolgroups")
@@ -47,7 +47,7 @@ def list_toolgroups(ctx):
 @click.pass_context
 @handle_client_errors("get toolgroup details")
 def get_toolgroup(ctx, toolgroup_id: str):
-    """Show available llama toolgroups at distribution endpoint"""
+    """Show details of a specific toolgroup at distribution endpoint"""
     client = ctx.obj["client"]
     console = Console()
 

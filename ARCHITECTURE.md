@@ -1,38 +1,38 @@
-# Llama Stack Architecture
+# OGX Architecture
 
-This document describes the internal architecture of Llama Stack for contributors and AI agents working with the codebase. For user-facing documentation, see [llamastack.github.io](https://llamastack.github.io/). For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
+This document describes the internal architecture of OGX for contributors and AI agents working with the codebase. For user-facing documentation, see [ogx-ai.github.io](https://ogx-ai.github.io/). For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## System Overview
 
-Llama Stack is a server that exposes a unified API for AI capabilities: inference, agents, safety, vector storage, evaluation, and more. It is provider-agnostic: the same API works whether the backend is Ollama, OpenAI, vLLM, Fireworks, or dozens of other services.
+OGX is a server that exposes a unified API for AI capabilities: inference, responses orchestration, vector storage, tool execution, evaluation, and more. It is provider-agnostic: the same API works whether the backend is Ollama, OpenAI, vLLM, Fireworks, or dozens of other services.
 
 The codebase is split into two packages:
 
-- **`llama-stack-api`** (`src/llama_stack_api/`) -- Lightweight package containing API protocol definitions (Python `Protocol` classes), Pydantic data types, and provider spec definitions. No server code, no provider implementations. Third-party providers depend only on this.
-- **`llama-stack`** (`src/llama_stack/`) -- The server implementation: provider resolution, routing, storage, CLI, and all built-in providers.
-- **`llama-stack-ui`** (`src/llama_stack_ui/`) -- Optional web UI for the chat playground and admin. Built with Next.js.
+- **`ogx-api`** (`src/ogx_api/`) -- Lightweight package containing API protocol definitions (Python `Protocol` classes), Pydantic data types, and provider spec definitions. No server code, no provider implementations. Third-party providers depend only on this.
+- **`ogx`** (`src/ogx/`) -- The server implementation: provider resolution, routing, storage, CLI, and all built-in providers.
+- **`ogx-ui`** (`src/ogx_ui/`) -- Optional web UI for the chat playground and admin. Built with Next.js.
 
 ## Request Flow
 
 ```text
-Client (llama-stack-client SDK or raw HTTP)
+Client (ogx-client SDK or raw HTTP)
   |
   v
-FastAPI Server  (src/llama_stack/core/server/server.py)
+FastAPI Server  (src/ogx/core/server/server.py)
   |
-  |-- AuthenticationMiddleware  (token validation, user extraction)
-  |-- QuotaMiddleware           (rate limiting per client)
+  |-- AuthenticationMiddleware  (token validation, user + tenant_id extraction)
+  |-- TenancyMiddleware         (enforces tenancy mode: disabled/single/multi)
+  |-- RouteAuthorizationMiddleware  (route-level access policies)
   |
   v
 Route Dispatch
   |
-  |-- FastAPI Router routes     (e.g. /v1/openai/* via fastapi_router_registry.py)
-  |-- Legacy @webmethod routes  (protocol methods with @webmethod decorator)
+  |-- FastAPI Router routes     (auto-discovered via fastapi_router_registry.py)
   |
   v
-Router  (src/llama_stack/core/routers/)
+Router  (src/ogx/core/routers/)
   |
-  |-- Looks up the resource (model, shield, etc.) in the RoutingTable
+  |-- Looks up the resource (model, vector store, tool group, etc.) in the RoutingTable
   |-- Resolves which provider handles this resource
   |-- Enforces access control policies
   |
@@ -48,7 +48,7 @@ External Service or Local Computation
 
 ### Detailed Flow Example: Chat Completion
 
-1. Client sends `POST /v1/openai/chat/completions` with `model: "ollama/llama3.2:3b-instruct-fp16"`.
+1. Client sends `POST /v1/chat/completions` with `model: "ollama/llama3.2:3b-instruct-fp16"`.
 2. `server.py` dispatches to the inference FastAPI router.
 3. The `InferenceRouter` (`core/routers/inference.py`) calls `routing_table.get_provider_impl(model_id)`.
 4. `CommonRoutingTableImpl` looks up the model in `DistributionRegistry`, finds it belongs to provider `ollama`.
@@ -65,11 +65,11 @@ Provider
   |
   |-- InlineProviderSpec    (runs in-process)
   |     provider_type: "inline::builtin"
-  |     module: "llama_stack.providers.inline.inference.builtin"
+  |     module: "ogx.providers.inline.inference.builtin"
   |
   |-- RemoteProviderSpec    (adapts an external service)
         provider_type: "remote::ollama"
-        module: "llama_stack.providers.remote.inference.ollama"
+        module: "ogx.providers.remote.inference.ollama"
 ```
 
 Each provider spec declares:
@@ -82,7 +82,7 @@ Each provider spec declares:
 
 ### Provider Registry
 
-`src/llama_stack/providers/registry/` contains one file per API (e.g., `inference.py`, `safety.py`). Each file defines an `available_providers()` function that returns all `ProviderSpec` objects for that API. The registry is loaded at startup by `get_provider_registry()` in `core/distribution.py`.
+`src/ogx/providers/registry/` contains one file per API (e.g., `inference.py`, `responses.py`). Each file defines an `available_providers()` function that returns all `ProviderSpec` objects for that API. The registry is loaded at startup by `get_provider_registry()` in `core/distribution.py`.
 
 ### Provider Resolution
 
@@ -107,26 +107,22 @@ Api.models (RoutingTable)  <-->  Api.inference (Router)
 
 The full list of auto-routed pairs is defined in `builtin_automatically_routed_apis()` in `core/distribution.py`:
 
-| Routing Table API     | Router API       |
-|-----------------------|------------------|
-| `Api.models`          | `Api.inference`  |
-| `Api.shields`         | `Api.safety`     |
-| `Api.datasets`        | `Api.datasetio`  |
-| `Api.scoring_functions` | `Api.scoring`  |
-| `Api.benchmarks`      | `Api.eval`       |
-| `Api.tool_groups`     | `Api.tool_runtime` |
-| `Api.vector_stores`   | `Api.vector_io`  |
+| Routing Table API   | Router API         |
+|---------------------|--------------------|
+| `Api.models`        | `Api.inference`    |
+| `Api.tool_groups`   | `Api.tool_runtime` |
+| `Api.vector_stores` | `Api.vector_io`    |
 
-## The API Layer (`llama_stack_api`)
+## The API Layer (`ogx_api`)
 
-The `llama_stack_api` package defines all public-facing types and protocols:
+The `ogx_api` package defines all public-facing types and protocols:
 
-- **Protocols** -- Python `Protocol` classes like `Inference`, `Safety`, `Agents` that define the API contract. Methods are annotated with `@webmethod` to specify HTTP routes.
-- **Data Types** -- Pydantic models for requests, responses, and resources (e.g., `Model`, `Shield`, `ChatCompletionRequest`).
+- **Protocols** -- Python `Protocol` classes like `Inference`, `Responses`, `Skills` that define the API contract. HTTP routes are defined via FastAPI routers in `fastapi_routes.py` modules.
+- **Data Types** -- Pydantic models for requests, responses, and resources (e.g., `Model`, `VectorStore`, `ChatCompletionRequest`).
 - **Provider Specs** -- `InlineProviderSpec`, `RemoteProviderSpec`, and related types that define how providers are declared.
 - **Internal utilities** -- KVStore and SqlStore abstract interfaces live here so third-party providers can use them without depending on the full server.
 
-Provider implementations import from `llama_stack_api` for type definitions and from `llama_stack.providers.utils` for shared functionality.
+Provider implementations import from `ogx_api` for type definitions and from `ogx.providers.utils` for shared functionality.
 
 ## Storage
 
@@ -149,7 +145,7 @@ storage:
 
 ### KVStore
 
-`src/llama_stack/core/storage/kvstore/` provides a key-value store abstraction (`KVStore`) with backends:
+`src/ogx/core/storage/kvstore/` provides a key-value store abstraction (`KVStore`) with backends:
 
 | Backend   | Config Class             | Use Case               |
 |-----------|--------------------------|------------------------|
@@ -158,11 +154,11 @@ storage:
 | PostgreSQL| `PostgresKVStoreConfig`  | Production deployments |
 | MongoDB   | `MongoDBKVStoreConfig`   | Document-oriented      |
 
-Used by: distribution registry, quota tracking, provider state.
+Used by: distribution registry, quota tracking, provider state, skills metadata.
 
 ### SqlStore
 
-`src/llama_stack/core/storage/sqlstore/` provides a SQL store abstraction (`SqlStore`) with SQLAlchemy backends:
+`src/ogx/core/storage/sqlstore/` provides a SQL store abstraction (`SqlStore`) with SQLAlchemy backends:
 
 | Backend    | Config Class             | Use Case               |
 |------------|--------------------------|------------------------|
@@ -171,23 +167,33 @@ Used by: distribution registry, quota tracking, provider state.
 
 Used by: inference store (chat completion logs), conversations, prompts.
 
+### AuthorizedSqlStore and Tenant Isolation
+
+`AuthorizedSqlStore` wraps a `SqlStore` and adds two independent enforcement layers:
+
+1. **Tenant isolation** -- a non-bypassable `WHERE tenant_id = ?` filter applied before any access control check. When tenancy is enabled (`single` or `multi` mode), every table gets a `tenant_id` column. Writes stamp the authenticated user's tenant_id; reads and mutations are scoped to it. Missing tenant context in `multi` mode produces a `1=0` clause (default deny -- see nothing).
+
+2. **ABAC (Attribute-Based Access Control)** -- `owner_principal` and `access_attributes` columns enable policy-based rules like `user is owner`. This operates within a tenant, not across tenants.
+
+Tenancy mode is set process-wide during `Stack.initialize()` via `set_default_tenancy_mode()`, so existing call sites using the `authorized_sqlstore()` factory work without changes.
+
 ### Distribution Registry
 
-`src/llama_stack/core/store/` implements `DistributionRegistry`, which tracks all registered resources (models, shields, datasets, etc.) across providers. It persists to the configured KVStore so resources survive server restarts.
+`src/ogx/core/store/` implements `DistributionRegistry`, which tracks all registered resources (models, vector stores, tool groups, prompts, etc.) across providers. It persists to the configured KVStore so resources survive server restarts.
 
 ## Configuration
 
 ### Run Config (`StackConfig`)
 
-A YAML file that defines everything about a running Llama Stack instance:
+A YAML file that defines everything about a running OGX instance:
 
 ```yaml
 version: 2
 distro_name: starter
 apis:
   - inference
-  - agents
-  - safety
+  - responses
+  - vector_io
   # ...
 providers:
   inference:
@@ -195,10 +201,6 @@ providers:
       provider_type: remote::ollama
       config:
         base_url: ${env.OLLAMA_URL:=http://localhost:11434/v1}
-  safety:
-    - provider_id: llama-guard
-      provider_type: inline::llama-guard
-      config: {}
 storage:
   type: sqlite
   db_path: ...
@@ -212,18 +214,18 @@ Key features:
 
 ### Distributions
 
-A distribution is a pre-built configuration that bundles specific providers for a target environment. Think of it like Kubernetes distributions (AKS, EKS, GKE): the core API stays the same, but each distribution wires different backends. `src/llama_stack/distributions/` contains these configurations (e.g., `starter`, `dell`, `nvidia`). Each distribution directory has:
+A distribution is a pre-built configuration that bundles specific providers for a target environment. Think of it like Kubernetes distributions (AKS, EKS, GKE): the core API stays the same, but each distribution wires different backends. `src/ogx/distributions/` contains these configurations (e.g., `starter`, `nvidia`). Each distribution directory has:
 
 - `config.yaml` -- the run config
 - Templates and codegen support via `template.py`
 
 ### Build Config
 
-Used by `llama stack build` to create container images. Declares which providers to include and what packages to install. Versioned separately from the run config.
+Used by `ogx build` to create container images. Declares which providers to include and what packages to install. Versioned separately from the run config.
 
 ## Recording and Replay Test System
 
-Integration tests use a record/replay system (`src/llama_stack/testing/api_recorder.py`) that intercepts OpenAI client calls to record real API responses, then replays them for fast, deterministic CI runs.
+Integration tests use a record/replay system (`src/ogx/testing/api_recorder.py`) that intercepts OpenAI client calls to record real API responses, then replays them for fast, deterministic CI runs.
 
 ### How It Works
 
@@ -231,7 +233,7 @@ Integration tests use a record/replay system (`src/llama_stack/testing/api_recor
 
 2. **Replay**: In CI, tests run in replay mode. The recorder matches incoming requests to stored responses by hashing the request parameters, returning cached responses instead of making real API calls.
 
-3. **Modes** (controlled by `--inference-mode` or `LLAMA_STACK_TEST_INFERENCE_MODE`):
+3. **Modes** (controlled by `--inference-mode` or `OGX_TEST_INFERENCE_MODE`):
    - `replay` (default) -- use cached responses
    - `record` -- force-record all interactions
    - `record-if-missing` -- record only when no cached response exists
@@ -249,7 +251,7 @@ For more details, see `tests/README.md` and `tests/integration/README.md`.
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `LlamaStack` | `core/stack.py` | Composite class implementing all API protocols |
+| `OGX` | `core/stack.py` | Composite class implementing all API protocols |
 | `Stack` | `core/stack.py` | Initialization, resource registration, lifecycle |
 | `StackApp` | `core/server/server.py` | FastAPI app wrapper |
 | `resolve_impls()` | `core/resolver.py` | Provider instantiation and dependency resolution |
@@ -263,16 +265,16 @@ For more details, see `tests/README.md` and `tests/integration/README.md`.
 
 ```text
 src/
-  llama_stack_api/          # API definitions package (separate pip package)
-    inference.py            # Inference protocol
-    agents.py               # Agents protocol
+  ogx_api/          # API definitions package (separate pip package)
+    inference/              # Inference protocol, models, FastAPI routes
+    responses/              # Responses API protocol and routes
     datatypes.py            # Shared data types
     providers/              # Provider spec types
     internal/               # KVStore/SqlStore interfaces
-  llama_stack/              # Server implementation
+  ogx/              # Server implementation
     core/
       server/               # FastAPI server, auth, routing
-      routers/              # API-specific routers (inference, safety, etc.)
+      routers/              # API-specific routers (inference, responses, etc.)
       routing_tables/       # Resource-to-provider mapping
       storage/              # KVStore and SqlStore backends
       store/                # Distribution registry
@@ -285,7 +287,7 @@ src/
       registry/             # Provider spec declarations
       utils/                # Shared provider utilities
     distributions/          # Pre-built distribution configs
-    cli/                    # CLI commands (llama stack run, build, etc.)
+    cli/                    # CLI commands (ogx stack run, build, etc.)
     testing/                # Test infrastructure (api_recorder)
 tests/
   unit/                     # Fast, isolated tests

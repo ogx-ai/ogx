@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -11,8 +11,8 @@ import pytest
 from fastapi import APIRouter, FastAPI
 from starlette.testclient import TestClient
 
-from llama_stack.core.server.server import ProviderDataMiddleware
-from llama_stack.core.testing_context import get_test_context
+from ogx.core.server.server import ProviderDataMiddleware
+from ogx.core.testing_context import get_test_context
 
 
 @pytest.fixture
@@ -35,8 +35,8 @@ def app_with_middleware():
 @pytest.fixture
 def test_mode_env(monkeypatch):
     """Set environment variables required for test context extraction."""
-    monkeypatch.setenv("LLAMA_STACK_TEST_INFERENCE_MODE", "replay")
-    monkeypatch.setenv("LLAMA_STACK_TEST_STACK_CONFIG_TYPE", "server")
+    monkeypatch.setenv("OGX_TEST_INFERENCE_MODE", "replay")
+    monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
 
 
 def test_middleware_returns_none_without_header(app_with_middleware, test_mode_env):
@@ -55,7 +55,7 @@ def test_middleware_extracts_test_id_from_header(app_with_middleware, test_mode_
     provider_data = json.dumps({"__test_id": "test-abc-123"})
     response = client.get(
         "/test-context",
-        headers={"X-LlamaStack-Provider-Data": provider_data},
+        headers={"X-OGX-Provider-Data": provider_data},
     )
 
     assert response.status_code == 200
@@ -68,7 +68,7 @@ def test_middleware_handles_empty_provider_data(app_with_middleware, test_mode_e
 
     response = client.get(
         "/test-context",
-        headers={"X-LlamaStack-Provider-Data": "{}"},
+        headers={"X-OGX-Provider-Data": "{}"},
     )
 
     assert response.status_code == 200
@@ -81,7 +81,7 @@ def test_middleware_handles_invalid_json(app_with_middleware, test_mode_env):
 
     response = client.get(
         "/test-context",
-        headers={"X-LlamaStack-Provider-Data": "not-valid-json"},
+        headers={"X-OGX-Provider-Data": "not-valid-json"},
     )
 
     assert response.status_code == 200
@@ -91,15 +91,15 @@ def test_middleware_handles_invalid_json(app_with_middleware, test_mode_env):
 def test_middleware_noop_without_test_mode(app_with_middleware):
     """Without test mode env vars, middleware should not extract test context."""
     # Ensure env vars are not set
-    os.environ.pop("LLAMA_STACK_TEST_INFERENCE_MODE", None)
-    os.environ.pop("LLAMA_STACK_TEST_STACK_CONFIG_TYPE", None)
+    os.environ.pop("OGX_TEST_INFERENCE_MODE", None)
+    os.environ.pop("OGX_TEST_STACK_CONFIG_TYPE", None)
 
     client = TestClient(app_with_middleware)
 
     provider_data = json.dumps({"__test_id": "test-abc-123"})
     response = client.get(
         "/test-context",
-        headers={"X-LlamaStack-Provider-Data": provider_data},
+        headers={"X-OGX-Provider-Data": provider_data},
     )
 
     assert response.status_code == 200

@@ -1,0 +1,85 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_basic_conversation[openai_client-txt=azure/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://ogx-test.openai.azure.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Help me plan a Python web app."
+        },
+        {
+          "role": "assistant",
+          "content": "I suggest FastAPI with SQLite."
+        },
+        {
+          "role": "user",
+          "content": "Add authentication too."
+        },
+        {
+          "role": "assistant",
+          "content": "Use OAuth2 with JWT tokens."
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a concise handoff summary of the conversation so far. Include:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-654a54ad8338",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary\n\n**Current Progress & Key Decisions:**\n- The user is planning a Python web app.\n- Chosen stack: FastAPI for the framework, SQLite for the database.\n- Authentication approach: OAuth2 with JWT tokens.\n\n**Context, Constraints, & Preferences:**\n- Lightweight stack favored (FastAPI and SQLite).\n- Secure authentication mechanism required.\n- User has not specified additional features or scalability requirements yet.\n\n**Next Steps:**\n1. Define the purpose and features of the web app (e.g., endpoints, business logic, etc.).\n2. Set up the project structure and include FastAPI for routing and SQLite for the database.\n3. Implement user authentication using OAuth2 with JWTs.\n4. Map out specific database schema (for SQLite) and app APIs.\n5. Discuss deployment plans and possible frameworks/tools (e.g., Docker, cloud platforms).\n\n**Critical Data or References:**\n- FastAPI documentation: [https://fastapi.tiangolo.com](https://fastapi.tiangolo.com)\n- Example for OAuth2 with JWT in FastAPI: [FastAPI Security Tutorial](https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/)\n- SQLite setup guide: [https://sqlite.org/index.html](https://sqlite.org/index.html) \n\n",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-11-20",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_af7f7349a4",
+        "usage": {
+          "completion_tokens": 262,
+          "prompt_tokens": 131,
+          "total_tokens": 393,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

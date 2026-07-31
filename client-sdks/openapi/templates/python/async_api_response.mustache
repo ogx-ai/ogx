@@ -9,18 +9,32 @@ T = TypeVar("T")
 
 class AsyncApiResponse(Generic[T]):
     """
-    Async API response object
+    Async API response object.
+
+    Supports two construction styles:
+    - Normal: AsyncApiResponse(response=httpx_response)
+    - Stainless-compatible: AsyncApiResponse(raw=httpx_response, cast_to=MyModel, stream=True, stream_cls=AsyncStream[T], ...)
+      Used by OGXAsLibraryClient to wrap in-process responses.
     """
 
-    def __init__(self, response: httpx.Response) -> None:
-        """
-        Initialize AsyncApiResponse.
-
-        :param response: httpx.Response object
-        """
-        self._response = response
+    def __init__(
+        self,
+        response: httpx.Response | None = None,
+        *,
+        raw: httpx.Response | None = None,
+        cast_to: Any = None,
+        stream: bool = False,
+        stream_cls: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        self._response = response or raw
+        if self._response is None:
+            raise ValueError("Either 'response' or 'raw' must be provided")
         self._data: T | None = None
         self._raw_data: bytes | None = None
+        self._cast_to = cast_to
+        self._stream = stream
+        self._stream_cls = stream_cls
 
     @property
     def status_code(self) -> int:
@@ -70,23 +84,39 @@ class AsyncApiResponse(Generic[T]):
         """
         Parse the response data.
 
+        Handles both normal and stainless-compatible construction styles.
+
         :param cast_to: Optional type to cast the response to
         :return: Parsed response data
         """
-        if cast_to is None:
+        # Stainless-compatible streaming: construct the stream class directly
+        if self._stream and self._stream_cls:
+            from typing import get_args
+            args = get_args(self._stream_cls)
+            chunk_type = args[0] if args else None
+            return self._stream_cls(  # type: ignore
+                response=self._response,
+                client=None,
+                cast_to=chunk_type,
+            )
+
+        # Stainless-compatible non-streaming: use stored cast_to
+        effective_cast_to = cast_to or self._cast_to
+        if effective_cast_to is None:
             return await self.json()  # type: ignore
 
         # Handle different response types
-        if cast_to == bytes:
+        if effective_cast_to == bytes:
             return await self.read()  # type: ignore
-        elif cast_to == str:
+        elif effective_cast_to == str:
             return await self.text()  # type: ignore
         else:
             # Assume JSON response that can be parsed
             json_data = await self.json()
-            if hasattr(cast_to, 'model_validate'):
-                # Pydantic model
-                return cast_to.model_validate(json_data)  # type: ignore
+            if hasattr(effective_cast_to, 'from_dict'):
+                return effective_cast_to.from_dict(json_data)  # type: ignore
+            elif hasattr(effective_cast_to, 'model_validate'):
+                return effective_cast_to.model_validate(json_data)  # type: ignore
             else:
                 return json_data  # type: ignore
 

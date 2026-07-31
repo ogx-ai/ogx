@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,17 +9,18 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from llama_stack.providers.inline.responses.builtin.responses.utils import (
+from ogx.providers.inline.responses.builtin.responses.utils import (
     _extract_citations_from_text,
     convert_chat_choice_to_response_message,
     convert_response_content_to_chat_content,
     convert_response_input_to_chat_messages,
     convert_response_text_to_chat_response_format,
+    extract_citations_from_text,
     get_message_type_by_role,
     is_function_tool_call,
 )
-from llama_stack_api import RetrieveFileContentRequest, RetrieveFileRequest
-from llama_stack_api.inference import (
+from ogx_api import RetrieveFileContentRequest, RetrieveFileRequest
+from ogx_api.inference import (
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
@@ -35,7 +36,8 @@ from llama_stack_api.inference import (
     OpenAIToolMessageParam,
     OpenAIUserMessageParam,
 )
-from llama_stack_api.openai_responses import (
+from ogx_api.openai_responses import (
+    MCPListToolsTool,
     OpenAIResponseAnnotationFileCitation,
     OpenAIResponseInputFunctionToolCallOutput,
     OpenAIResponseInputMessageContentFile,
@@ -46,6 +48,10 @@ from llama_stack_api.openai_responses import (
     OpenAIResponseMessage,
     OpenAIResponseOutputMessageContentOutputText,
     OpenAIResponseOutputMessageFunctionToolCall,
+    OpenAIResponseOutputMessageMCPCall,
+    OpenAIResponseOutputMessageMCPListTools,
+    OpenAIResponseOutputMessageReasoningContent,
+    OpenAIResponseOutputMessageReasoningItem,
     OpenAIResponseText,
     OpenAIResponseTextFormat,
 )
@@ -89,6 +95,27 @@ class TestConvertChatChoiceToResponseMessage:
         assert len(result.content) == 1
         assert isinstance(result.content[0], OpenAIResponseOutputMessageContentOutputText)
         assert result.content[0].text == ""
+
+    async def test_populates_fallback_citation_when_model_does_not_cite_inline(self):
+        """Regression test: file_search results were retrieved and used to answer, but the
+        model (e.g. a small local model) never echoed the `<|file-id|>` citation marker.
+        The response should still carry file_citation annotations for the retrieved files.
+        """
+        choice = OpenAIChoice(
+            message=OpenAIChatCompletionResponseMessage(
+                content="Global warming is caused by greenhouse gases trapping heat."
+            ),
+            finish_reason="stop",
+            index=0,
+        )
+
+        result = await convert_chat_choice_to_response_message(choice, citation_files={"file-abc123": "climate.pdf"})
+
+        assert isinstance(result.content[0], OpenAIResponseOutputMessageContentOutputText)
+        assert result.content[0].text == "Global warming is caused by greenhouse gases trapping heat."
+        assert len(result.content[0].annotations) == 1
+        assert result.content[0].annotations[0].file_id == "file-abc123"
+        assert result.content[0].annotations[0].filename == "climate.pdf"
 
 
 class TestConvertResponseContentToChatContent:
@@ -481,6 +508,306 @@ class TestIsFunctionToolCall:
         assert result is False
 
 
+class TestReasoningSupportInConversion:
+    """Tests for reasoning look-back in convert_response_input_to_chat_messages.
+
+    When a ReasoningItem appears in the input, it should be:
+    1. Skipped (not converted to its own CC message)
+    2. Attached as `reasoning=<text>` on the NEXT assistant message via _get_preceding_reasoning()
+
+    This applies to FunctionToolCalls, McpCalls, and ResponseMessages with role='assistant'.
+    """
+
+    async def test_reasoning_attached_to_function_tool_call(self):
+        """ReasoningItem before a FunctionToolCall should attach reasoning to the assistant message.
+
+        Scenario: Model reasons about which tool to call, then calls get_weather.
+        """
+        input_items = [
+            OpenAIResponseMessage(role="user", content="What's the weather in Tokyo?"),
+            OpenAIResponseOutputMessageReasoningItem(
+                id="rs_001",
+                summary=[],
+                content=[OpenAIResponseOutputMessageReasoningContent(text="Need to call get_weather for Tokyo.")],
+                status="completed",
+            ),
+            OpenAIResponseOutputMessageFunctionToolCall(
+                call_id="call_abc",
+                name="get_weather",
+                arguments='{"location":"Tokyo","unit":"celsius"}',
+            ),
+            OpenAIResponseInputFunctionToolCallOutput(
+                output='{"temperature": 27, "condition": "humid"}',
+                call_id="call_abc",
+            ),
+        ]
+
+        result = await convert_response_input_to_chat_messages(input_items)
+
+        assert len(result) == 3
+        # user message
+        assert isinstance(result[0], OpenAIUserMessageParam)
+        # assistant with reasoning attached
+        assert isinstance(result[1], OpenAIAssistantMessageParam)
+        assert result[1].tool_calls[0].function.name == "get_weather"
+        assert result[1].reasoning_content == "Need to call get_weather for Tokyo."
+        # tool result
+        assert isinstance(result[2], OpenAIToolMessageParam)
+        assert result[2].tool_call_id == "call_abc"
+
+    async def test_reasoning_attached_to_assistant_content_message(self):
+        """ReasoningItem before an assistant ResponseMessage should attach reasoning.
+
+        Scenario: resp_2 output from the MCP notebook -- model reasons then produces content.
+        Input: [user("Hi!"), McpListTools, ReasoningItem("greeting"), ResponseMessage(assistant, "Hi there!")]
+        Expected CC: [user("Hi!"), assistant(content="Hi there!", reasoning="greeting")]
+        """
+        input_items = [
+            OpenAIResponseMessage(role="user", content="Hi !"),
+            OpenAIResponseOutputMessageMCPListTools(
+                id="mcp_list_001",
+                server_label="gitmcp",
+                tools=[
+                    MCPListToolsTool(
+                        input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+                        name="search_docs",
+                        description="Search documentation",
+                    ),
+                ],
+            ),
+            OpenAIResponseOutputMessageReasoningItem(
+                id="rs_002",
+                summary=[],
+                content=[
+                    OpenAIResponseOutputMessageReasoningContent(
+                        text='The user says "Hi !". We respond politely.',
+                    )
+                ],
+                status="completed",
+            ),
+            OpenAIResponseMessage(
+                role="assistant",
+                content=[OpenAIResponseOutputMessageContentOutputText(text="Hi there! How can I help you today?")],
+                id="msg_001",
+                status="completed",
+            ),
+        ]
+
+        result = await convert_response_input_to_chat_messages(input_items)
+
+        assert len(result) == 2
+        # user
+        assert isinstance(result[0], OpenAIUserMessageParam)
+        assert result[0].content == "Hi !"
+        # assistant with reasoning from look-back
+        assert isinstance(result[1], OpenAIAssistantMessageParam)
+        assert result[1].reasoning_content == 'The user says "Hi !". We respond politely.'
+
+    async def test_mcp_tool_call_reasoning_lookback(self):
+        """ReasoningItem before an McpCall should attach reasoning to the assistant message.
+
+        This is the resp_3 scenario from the MCP notebook: resp_2 returned
+        [McpListTools, ReasoningItem, McpCall(search), ReasoningItem, McpCall(fetch),
+         ReasoningItem, OutputMessage]. When passed back as input for resp_3,
+        the McpCall assistant messages should carry their preceding reasoning.
+
+        Input (simplified from debug logs):
+          [user("Hi!"), McpListTools, ReasoningItem("greeting"), assistant("Hi there!"),
+           user("overview?"), McpListTools,
+           ReasoningItem("First search"), McpCall(search, output="Found: overview"),
+           ReasoningItem("Now fetch"), McpCall(fetch, output="tiktoken is a fast BPE..."),
+           ReasoningItem("Produce overview"), assistant("**tiktoken**..."),
+           user("thanks!")]
+
+        Expected CC output:
+          [user("Hi!"), assistant("Hi there!", reasoning="greeting"),
+           user("overview?"),
+           assistant(tool_calls=[search], reasoning="First search"), tool("Found: overview"),
+           assistant(tool_calls=[fetch], reasoning="Now fetch"), tool("tiktoken is..."),
+           assistant("**tiktoken**...", reasoning="Produce overview"),
+           user("thanks!")]
+        """
+        input_items = [
+            # Turn 1: greeting
+            OpenAIResponseMessage(role="user", content="Hi !"),
+            OpenAIResponseOutputMessageMCPListTools(
+                id="mcp_list_001",
+                server_label="gitmcp",
+                tools=[
+                    MCPListToolsTool(
+                        input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+                        name="search_tiktoken_documentation",
+                        description="Search tiktoken docs",
+                    ),
+                    MCPListToolsTool(
+                        input_schema={"type": "object", "properties": {"topic": {"type": "string"}}},
+                        name="fetch_tiktoken_documentation",
+                        description="Fetch tiktoken docs for a topic",
+                    ),
+                ],
+            ),
+            OpenAIResponseOutputMessageReasoningItem(
+                id="rs_greeting",
+                summary=[],
+                content=[OpenAIResponseOutputMessageReasoningContent(text="Friendly greeting back.")],
+                status="completed",
+            ),
+            OpenAIResponseMessage(
+                role="assistant",
+                content=[OpenAIResponseOutputMessageContentOutputText(text="Hi there! How can I help you today?")],
+                id="msg_greeting",
+                status="completed",
+            ),
+            # Turn 2: user asks about tiktoken
+            OpenAIResponseMessage(
+                role="user",
+                content="Give me very brief overview of tiktoken?",
+            ),
+            # Turn 2 output: MCP tool calls with reasoning
+            OpenAIResponseOutputMessageMCPListTools(
+                id="mcp_list_002",
+                server_label="gitmcp",
+                tools=[
+                    MCPListToolsTool(
+                        input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+                        name="search_tiktoken_documentation",
+                        description="Search tiktoken docs",
+                    ),
+                    MCPListToolsTool(
+                        input_schema={"type": "object", "properties": {"topic": {"type": "string"}}},
+                        name="fetch_tiktoken_documentation",
+                        description="Fetch tiktoken docs for a topic",
+                    ),
+                ],
+            ),
+            OpenAIResponseOutputMessageReasoningItem(
+                id="rs_search",
+                summary=[],
+                content=[
+                    OpenAIResponseOutputMessageReasoningContent(
+                        text="We need to use the provided tool functions. First search.",
+                    )
+                ],
+                status="completed",
+            ),
+            OpenAIResponseOutputMessageMCPCall(
+                id="fc_search",
+                name="search_tiktoken_documentation",
+                arguments='{"query":"tiktoken overview"}',
+                server_label="gitmcp",
+                output="Found Section: `overview`",
+            ),
+            OpenAIResponseOutputMessageReasoningItem(
+                id="rs_fetch",
+                summary=[],
+                content=[OpenAIResponseOutputMessageReasoningContent(text="Now fetch overview.")],
+                status="completed",
+            ),
+            OpenAIResponseOutputMessageMCPCall(
+                id="fc_fetch",
+                name="fetch_tiktoken_documentation",
+                arguments='{"topic":"overview"}',
+                server_label="gitmcp",
+                output="tiktoken is a fast BPE tokeniser for OpenAI models.",
+            ),
+            OpenAIResponseOutputMessageReasoningItem(
+                id="rs_summary",
+                summary=[],
+                content=[OpenAIResponseOutputMessageReasoningContent(text="We need to produce brief overview.")],
+                status="completed",
+            ),
+            OpenAIResponseMessage(
+                role="assistant",
+                content=[
+                    OpenAIResponseOutputMessageContentOutputText(
+                        text="**tiktoken** - a fast BPE tokenizer for OpenAI models.",
+                    )
+                ],
+                id="msg_summary",
+                status="completed",
+            ),
+            # Turn 3: user thanks
+            OpenAIResponseMessage(role="user", content="hmm. thanks ! this is helpful"),
+        ]
+
+        result = await convert_response_input_to_chat_messages(input_items)
+
+        # Expected: 9 messages
+        # [0] user("Hi!")
+        # [1] assistant("Hi there!", reasoning="Friendly greeting back.")
+        # [2] user("overview?")
+        # [3] assistant(tool_calls=[search], reasoning="...First search.")
+        # [4] tool("Found Section: overview")
+        # [5] assistant(tool_calls=[fetch], reasoning="Now fetch overview.")
+        # [6] tool("tiktoken is a fast BPE...")
+        # [7] assistant("**tiktoken**...", reasoning="...produce brief overview.")
+        # [8] user("thanks!")
+        assert len(result) == 9
+
+        # [0] user
+        assert isinstance(result[0], OpenAIUserMessageParam)
+        assert result[0].content == "Hi !"
+
+        # [1] assistant with greeting reasoning
+        assert isinstance(result[1], OpenAIAssistantMessageParam)
+        assert result[1].reasoning_content == "Friendly greeting back."
+
+        # [2] user
+        assert isinstance(result[2], OpenAIUserMessageParam)
+        assert result[2].content == "Give me very brief overview of tiktoken?"
+
+        # [3] assistant from McpCall(search) -- should have reasoning from look-back
+        assert isinstance(result[3], OpenAIAssistantMessageParam)
+        assert result[3].tool_calls is not None
+        assert result[3].tool_calls[0].function.name == "search_tiktoken_documentation"
+        assert result[3].reasoning_content == "We need to use the provided tool functions. First search."
+
+        # [4] tool result for search
+        assert isinstance(result[4], OpenAIToolMessageParam)
+        assert result[4].content == "Found Section: `overview`"
+        assert result[4].tool_call_id == "fc_search"
+
+        # [5] assistant from McpCall(fetch) -- should have reasoning from look-back
+        assert isinstance(result[5], OpenAIAssistantMessageParam)
+        assert result[5].tool_calls is not None
+        assert result[5].tool_calls[0].function.name == "fetch_tiktoken_documentation"
+        assert result[5].reasoning_content == "Now fetch overview."
+
+        # [6] tool result for fetch
+        assert isinstance(result[6], OpenAIToolMessageParam)
+        assert result[6].content == "tiktoken is a fast BPE tokeniser for OpenAI models."
+        assert result[6].tool_call_id == "fc_fetch"
+
+        # [7] assistant content message with reasoning
+        assert isinstance(result[7], OpenAIAssistantMessageParam)
+        assert result[7].reasoning_content == "We need to produce brief overview."
+
+        # [8] user
+        assert isinstance(result[8], OpenAIUserMessageParam)
+        assert result[8].content == "hmm. thanks ! this is helpful"
+
+    async def test_no_reasoning_when_no_preceding_reasoning_item(self):
+        """When there is no ReasoningItem before a tool call, reasoning should not be set."""
+        input_items = [
+            OpenAIResponseMessage(role="user", content="What's the weather?"),
+            OpenAIResponseOutputMessageFunctionToolCall(
+                call_id="call_no_reason",
+                name="get_weather",
+                arguments='{"location":"Tokyo"}',
+            ),
+            OpenAIResponseInputFunctionToolCallOutput(
+                output='{"temperature": 27}',
+                call_id="call_no_reason",
+            ),
+        ]
+
+        result = await convert_response_input_to_chat_messages(input_items)
+
+        assert len(result) == 3
+        assert isinstance(result[1], OpenAIAssistantMessageParam)
+        assert not hasattr(result[1], "reasoning")
+
+
 class TestExtractCitationsFromText:
     def test_extract_citations_and_annotations(self):
         text = "Start [not-a-file]. New source <|file-abc123|>. "
@@ -502,3 +829,84 @@ class TestExtractCitationsFromText:
         assert cleaned_text[expected_annotations[0].index] == "."
         assert cleaned_text[expected_annotations[1].index] == "?"
         assert cleaned_text[expected_annotations[2].index] == "!"
+
+    def test_extract_citations_accepts_bracket_and_paren_variants(self):
+        """Some models approximate the instructed `<|file-id|>` marker with brackets/parens."""
+        text = "Fact one [file-abc123]. Fact two (file-def456)."
+        file_mapping = {"file-abc123": "doc1.pdf", "file-def456": "doc2.txt"}
+
+        annotations, cleaned_text = _extract_citations_from_text(text, file_mapping)
+
+        assert cleaned_text == "Fact one. Fact two."
+        assert [a.file_id for a in annotations] == ["file-abc123", "file-def456"]
+
+    def test_extract_citations_preserves_unknown_file_id_markers(self):
+        """Regression test: a marker whose file id isn't in citation_files (e.g. stale or
+        mismatched) must not be silently deleted from the user-visible text — only markers
+        for recognized files are stripped out, since those become real annotations instead.
+        """
+        text = "Some fact <|file-unknown|>."
+        annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
+
+        assert annotations == []
+        assert cleaned_text == "Some fact <|file-unknown|>."
+
+    def test_extract_citations_preserves_unknown_marker_alongside_known_one(self):
+        """A mix of a known and an unknown marker: only the known one is stripped/cited."""
+        text = "Cited fact <|file-abc123|>. Uncited fact <|file-unknown|>."
+        annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
+
+        assert [a.file_id for a in annotations] == ["file-abc123"]
+        assert cleaned_text == "Cited fact. Uncited fact <|file-unknown|>."
+
+
+class TestExtractCitationsFromTextWithFallback:
+    def test_falls_back_to_retrieved_files_when_model_does_not_cite(self):
+        """Small/local models often ignore the citation-marker instruction entirely.
+
+        When that happens but file_search actually retrieved documents, we should still
+        surface file_citation annotations rather than silently returning an empty list.
+        """
+        text = "Global warming is caused by greenhouse gases."
+        citation_files = {"file-abc123": "climate.pdf"}
+
+        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+
+        assert cleaned_text == text
+        assert len(annotations) == 1
+        assert annotations[0].file_id == "file-abc123"
+        assert annotations[0].filename == "climate.pdf"
+        assert annotations[0].index == len(cleaned_text)
+
+    def test_fallback_cites_only_single_highest_scoring_file(self):
+        """When several files were retrieved but the model cited none of them, we should
+
+        attribute the answer to only the top-ranked file rather than every file retrieved
+        this turn, since the retrieval set doesn't imply the whole answer draws equally on
+        all of them. tool_executor.py orders citation_files by descending score, so the
+        fallback picks the first entry.
+        """
+        text = "Global warming is caused by greenhouse gases."
+        citation_files = {"file-abc123": "climate.pdf", "file-def456": "unrelated.pdf"}
+
+        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+
+        assert len(annotations) == 1
+        assert annotations[0].file_id == "file-abc123"
+        assert annotations[0].filename == "climate.pdf"
+        assert annotations[0].index == len(cleaned_text)
+
+    def test_no_fallback_when_no_files_were_retrieved(self):
+        annotations, cleaned_text = extract_citations_from_text("No sources used here.", {})
+
+        assert annotations == []
+        assert cleaned_text == "No sources used here."
+
+    def test_real_marker_citations_take_precedence_over_fallback(self):
+        text = "Cited fact <|file-abc123|>. Uncited fact."
+        citation_files = {"file-abc123": "doc1.pdf", "file-def456": "doc2.txt"}
+
+        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+
+        assert [a.file_id for a in annotations] == ["file-abc123"]
+        assert cleaned_text == "Cited fact. Uncited fact."

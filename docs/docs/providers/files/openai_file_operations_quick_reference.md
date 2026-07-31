@@ -2,13 +2,13 @@
 
 ## Overview
 
-As of release 0.2.14, Llama Stack provides comprehensive file operations and Vector Store API integration, following the [OpenAI Vector Store Files API specification](https://platform.openai.com/docs/api-reference/vector-stores-files).
+As of release 0.2.14, OGX provides comprehensive file operations and Vector Store API integration, following the [OpenAI Vector Store Files API specification](https://platform.openai.com/docs/api-reference/vector-stores-files).
 
-> **Note**: For detailed overview and implementation details, see [Overview](../openai_file_operations_support.md#overview) in the full documentation.
+> **Note**: For detailed overview and implementation details, see [Overview](openai_file_operations_support.md#overview) in the full documentation.
 
 ## Supported Providers
 
-> **Note**: For complete provider details and features, see [Supported Providers](../openai_file_operations_support.md#supported-providers) in the full documentation.
+> **Note**: For complete provider details and features, see [Supported Providers](openai_file_operations_support.md#supported-providers) in the full documentation.
 
 **Inline Providers**: FAISS, SQLite-vec, Milvus
 **Remote Providers**: ChromaDB, Qdrant, Weaviate, PGVector
@@ -53,7 +53,7 @@ results = await client.vector_stores.search(
 
 ## Configuration
 
-> **Note**: For detailed configuration examples and options, see [Configuration Examples](../openai_file_operations_support.md#configuration-examples) in the full documentation.
+> **Note**: For detailed configuration examples and options, see [Configuration Examples](openai_file_operations_support.md#configuration-examples) in the full documentation.
 
 **Basic Setup**: Configure vector_io and files providers in your config.yaml
 
@@ -66,19 +66,19 @@ results = await client.vector_stores.search(
 
 ## Performance Tips
 
-> **Note**: For detailed performance optimization strategies, see [Performance Considerations](../openai_file_operations_support.md#performance-considerations) in the full documentation.
+> **Note**: For detailed performance optimization strategies, see [Performance Considerations](openai_file_operations_support.md#performance-considerations) in the full documentation.
 
 **Quick Tips**: Choose provider based on your needs (speed vs. storage vs. scalability)
 
 ## Troubleshooting
 
-> **Note**: For comprehensive troubleshooting, see [Troubleshooting](../openai_file_operations_support.md#troubleshooting) in the full documentation.
+> **Note**: For comprehensive troubleshooting, see [Troubleshooting](openai_file_operations_support.md#troubleshooting) in the full documentation.
 
 **Quick Fixes**: Check file format compatibility, optimize chunk sizes, monitor storage
 
 ## Resources
 
 - [Full Documentation](openai_file_operations_support.md)
-- [Integration Guide](../concepts/file_operations_vector_stores.md)
-- [Files API](files_api.md)
-- [Provider Details](../vector_io/index.md)
+- [Integration Guide](../../concepts/file_operations_vector_stores)
+- Files API
+- [Provider Details](../vector_io/)

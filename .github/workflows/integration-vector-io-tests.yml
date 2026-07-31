@@ -12,8 +12,8 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
     paths:
-      - 'src/llama_stack/**'
-      - '!src/llama_stack_ui/**'
+      - 'src/ogx/**'
+      - '!src/ogx_ui/**'
       - 'tests/integration/vector_io/**'
       - 'tests/integration/conftest.py' # Test configuration that affects vector IO tests
       - 'uv.lock'
@@ -25,7 +25,7 @@ on:
       - main
       - 'release-[0-9]+.[0-9]+.x'
   schedule:
-    - cron: '0 0 * * *'  # (test on python 3.13) Daily at 12 AM UTC
+    - cron: '0 0 * * 1'  # (test on python 3.13) Weekly on Monday at 12 AM UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
@@ -34,10 +34,12 @@ concurrency:
 jobs:
   test-matrix:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
-        vector-io-provider: ["inline::faiss", "inline::sqlite-vec", "inline::milvus", "remote::chromadb", "remote::pgvector", "remote::weaviate", "remote::qdrant", "remote::elasticsearch", "remote::infinispan"]
-        python-version: ${{ github.event.schedule == '0 0 * * *' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
+        # Use a smaller set of providers on PRs to reduce runner contention
+        vector-io-provider: ${{ github.event_name == 'pull_request' && fromJSON('["inline::faiss", "inline::sqlite-vec", "remote::pgvector", "remote::neo4j"]') || fromJSON('["inline::faiss", "inline::sqlite-vec", "inline::milvus", "remote::chromadb", "remote::pgvector", "remote::weaviate", "remote::qdrant", "remote::elasticsearch", "remote::infinispan", "remote::neo4j"]') }}
+        python-version: ${{ github.event.schedule == '0 0 * * 1' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
       fail-fast: false # we want to run all tests regardless of failure
 
     steps:
@@ -73,30 +75,63 @@ jobs:
         run: |
           docker run -d \
             --name pgvector \
-            -e POSTGRES_USER=llamastack \
-            -e POSTGRES_PASSWORD=llamastack \
-            -e POSTGRES_DB=llamastack \
+            -e POSTGRES_USER=ogx \
+            -e POSTGRES_PASSWORD=ogx \
+            -e POSTGRES_DB=ogx \
             -p 5432:5432 \
             pgvector/pgvector:pg17
+
+      - name: Start Neo4j
+        if: matrix.vector-io-provider == 'remote::neo4j'
+        run: |
+          docker run --rm -d \
+            --name neo4j \
+            -p 7474:7474 -p 7687:7687 \
+            -e NEO4J_AUTH=neo4j/ogxpassword \
+            neo4j:2025.10
+
+      - name: Wait for Neo4j to be ready
+        if: matrix.vector-io-provider == 'remote::neo4j'
+        run: |
+          echo "Waiting for Neo4j to be ready..."
+          for _ in {1..60}; do
+            if docker exec neo4j cypher-shell -u neo4j -p ogxpassword 'RETURN 1 AS ok' >/dev/null 2>&1; then
+              echo "Neo4j is ready!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Neo4j failed to start"
+          docker logs neo4j
+          exit 1
 
       - name: Wait for PGVector to be ready
         if: matrix.vector-io-provider == 'remote::pgvector'
         run: |
           echo "Waiting for Postgres to be ready..."
-          for _ in {1..30}; do
-            if docker exec pgvector pg_isready -U llamastack > /dev/null 2>&1; then
-              echo "Postgres is ready!"
+          for i in {1..30}; do
+            if docker exec pgvector pg_isready -U ogx -d ogx > /dev/null 2>&1; then
+              echo "Postgres is ready after ${i}s!"
               break
             fi
-            echo "Not ready yet... ($i)"
+            echo "Not ready yet... (${i})"
             sleep 1
           done
 
       - name: Enable pgvector extension
         if: matrix.vector-io-provider == 'remote::pgvector'
         run: |
-          PGPASSWORD=llamastack psql -h localhost -U llamastack -d llamastack \
-            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          for i in {1..10}; do
+            if PGPASSWORD=ogx psql -h localhost -U ogx -d ogx \
+              -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>/dev/null; then
+              echo "pgvector extension enabled"
+              exit 0
+            fi
+            echo "psql not ready yet, retrying... (${i})"
+            sleep 2
+          done
+          echo "Failed to enable pgvector extension after retries"
+          exit 1
 
       - name: Setup Qdrant
         if: matrix.vector-io-provider == 'remote::qdrant'
@@ -184,9 +219,22 @@ jobs:
           docker logs infinispan
           exit 1
 
-      - name: Build Llama Stack
+      - name: Cache Hugging Face models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-${{ matrix.python-version }}-nomic-embed-text-v1.5
+
+      - name: Build OGX
         run: |
-          uv run --no-sync llama stack list-deps ci-tests | xargs -L1 uv pip install
+          uv run --no-sync ogx stack list-deps ci-tests | xargs -L1 uv pip install
+
+      - name: Pre-download embedding model
+        run: |
+          uv run --no-sync python - <<'PY'
+          from sentence_transformers import SentenceTransformer
+          SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
+          PY
 
       - name: Check Storage and Memory Available Before Tests
         if: ${{ always() }}
@@ -196,14 +244,16 @@ jobs:
 
       - name: Run Vector IO Integration Tests
         env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
           ENABLE_CHROMADB: ${{ matrix.vector-io-provider == 'remote::chromadb' && 'true' || '' }}
           CHROMADB_URL: ${{ matrix.vector-io-provider == 'remote::chromadb' && 'http://localhost:8000' || '' }}
           ENABLE_PGVECTOR: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'true' || '' }}
           PGVECTOR_HOST: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'localhost' || '' }}
           PGVECTOR_PORT: ${{ matrix.vector-io-provider == 'remote::pgvector' && '5432' || '' }}
-          PGVECTOR_DB: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'llamastack' || '' }}
-          PGVECTOR_USER: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'llamastack' || '' }}
-          PGVECTOR_PASSWORD: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'llamastack' || '' }}
+          PGVECTOR_DB: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'ogx' || '' }}
+          PGVECTOR_USER: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'ogx' || '' }}
+          PGVECTOR_PASSWORD: ${{ matrix.vector-io-provider == 'remote::pgvector' && 'ogx' || '' }}
           ENABLE_QDRANT: ${{ matrix.vector-io-provider == 'remote::qdrant' && 'true' || '' }}
           QDRANT_URL: ${{ matrix.vector-io-provider == 'remote::qdrant' && 'http://localhost:6333' || '' }}
           ENABLE_WEAVIATE: ${{ matrix.vector-io-provider == 'remote::weaviate' && 'true' || '' }}
@@ -213,9 +263,13 @@ jobs:
           INFINISPAN_URL: ${{ matrix.vector-io-provider == 'remote::infinispan' && 'http://localhost:11222' || '' }}
           INFINISPAN_USERNAME: ${{ matrix.vector-io-provider == 'remote::infinispan' && 'admin' || '' }}
           INFINISPAN_PASSWORD: ${{ matrix.vector-io-provider == 'remote::infinispan' && 'password' || '' }}
+          NEO4J_URI: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'bolt://localhost:7687' || '' }}
+          NEO4J_USER: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'neo4j' || '' }}
+          NEO4J_PASSWORD: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'ogxpassword' || '' }}
+          NEO4J_DATABASE: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'neo4j' || '' }}
         run: |
           uv run --no-sync \
-            pytest -sv --stack-config="files=inline::localfs,inference=inline::sentence-transformers?trust_remote_code=true,vector_io=${{ matrix.vector-io-provider }}" \
+            pytest -sv --stack-config="files=inline::localfs,inference=inline::sentence-transformers?trust_remote_code=true,vector_io=${{ matrix.vector-io-provider }},file_processors=inline::pypdf" \
             tests/integration/vector_io
 
       - name: Check Storage and Memory Available After Tests
@@ -249,9 +303,14 @@ jobs:
         run: |
           docker logs infinispan > infinispan.log
 
+      - name: Write Neo4j logs to file
+        if: ${{ always() && matrix.vector-io-provider == 'remote::neo4j' }}
+        run: |
+          docker logs neo4j > neo4j.log
+
       - name: Upload all logs to artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vector-io-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ env.SANITIZED_PROVIDER }}-${{ matrix.python-version }}
           path: |

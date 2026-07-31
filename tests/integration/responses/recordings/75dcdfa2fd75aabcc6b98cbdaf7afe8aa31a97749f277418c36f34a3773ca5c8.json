@@ -1,0 +1,370 @@
+{
+  "test_id": "tests/integration/responses/test_mcp_authentication.py::test_mcp_authorization_bearer[client_with_models-txt=bedrock/openai.gpt-oss-20b-1:0]",
+  "request": {
+    "method": "POST",
+    "url": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "openai.gpt-oss-20b-1:0",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is the boiling point of myawesomeliquid?"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "index": 0,
+              "id": "chatcmpl-tool-bff746045b27b031",
+              "type": "function",
+              "function": {
+                "name": "get_boiling_point",
+                "arguments": "{\"liquid_name\":\"myawesomeliquid\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "chatcmpl-tool-bff746045b27b031",
+          "content": [
+            {
+              "type": "text",
+              "text": "-100"
+            }
+          ]
+        }
+      ],
+      "parallel_tool_calls": true,
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "greet_everyone",
+            "parameters": {
+              "properties": {
+                "url": {
+                  "title": "Url",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "title": "greet_everyoneArguments",
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "get_boiling_point",
+            "description": "\n        Returns the boiling point of a liquid in Celsius or Fahrenheit.\n\n        :param liquid_name: The name of the liquid\n        :param celsius: Whether to return the boiling point in Celsius\n        :return: The boiling point of the liquid in Celcius or Fahrenheit\n        ",
+            "parameters": {
+              "properties": {
+                "liquid_name": {
+                  "title": "Liquid Name",
+                  "type": "string"
+                },
+                "celsius": {
+                  "default": true,
+                  "title": "Celsius",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "liquid_name"
+              ],
+              "title": "get_boiling_pointArguments",
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "service_tier": "default"
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "openai.gpt-oss-20b-1:0",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": [
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "",
+                "function_call": null,
+                "refusal": null,
+                "role": "assistant",
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "RTFJj3FHBq9EBCHjuAbxTxA2UMiAkZNRc9JBFgsM"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": null,
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "rOCellv3gWKGFLIZpZebMpQrbZucq6xfDuxUqkFnIgcItF8qb5AMe6d21JpCKb2Y7OLMLSLrbZF7EfNkTkjwxS0rs5HvZ5hq4nKDsPzOGzSO7QP0iAp2ij"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning>User asked: \"What is the boiling point of myawesomeliquid?\" We used function get_boiling_point and</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "eSmXMkoMKiW5go6f5ZmORxyNPHcfIKDADNcz0kFxuZTkTp1c55ZbW6Pk7CnayC0qK8FGO8KOSnKqzRu7mYsAPI"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning> got -100. The response should be a friendly</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "V99pewsvKotordFOYAZW02TkX6OKZVezp2cSVt4W7pS7vO"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning> answer. Probably not more function calls needed. Provide</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "XwrASSPw2etGxwqBIFWuX3HEp1V1HuDovFU5ocSUFCroxw3TsCdO3ijN3L3vAlZjYrwmRrCidfkv"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning> answer: -100\u00b0C? The</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "Edy3VWTVpl6w5bgA4Jvxsrev1INbmos9RaKMpUPxA241tGVmiZiTXg6J6PBZi5PDS1xhjb4lb3At5GH0yo2Zu2kv"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning> function default celsius true. So answer \"The boiling point of myaw</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "JY8RFKJrPqFQ3CgFRekEThQVGhXbXOEY0voll9EAR8B3yTCcMOq71bXgKW5vgmIgsftmPDm3YsjHokLVhkDTEadwOxxtwGdgAE"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "<reasoning>esomeliquid is -100\u00b0C.\"</reasoning>",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": null,
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "hS2yAGbCfJUVdKAJyk7BzJiykuSMTokVEIA6yLfd19fAqeXpwwdnmzGhb2b3MXRy4PaRPPX8XHZsUo3gY6FECeIqZliZ0C5gbelSmcgSyXpHf2tRysztExMO1qBO"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [
+            {
+              "delta": {
+                "content": "The boiling point of **myawesomeliquid** is **\u2212100\u202f\u00b0C**.",
+                "function_call": null,
+                "refusal": null,
+                "role": null,
+                "tool_calls": null
+              },
+              "finish_reason": "stop",
+              "index": 0,
+              "logprobs": null,
+              "obfuscation": "2e7hUP1FSSueiyhw6TVZO3525zZ3liVkZqII1j3MLcvMeHqO7BwifkI4ATIQ0nbFffn7u9q1TS90kVEiiSKnzipT9R89X0V8ZIFOPGfuHuX"
+            }
+          ],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": null
+        }
+      },
+      {
+        "__type__": "openai.types.chat.chat_completion_chunk.ChatCompletionChunk",
+        "__data__": {
+          "id": "rec-75dcdfa2fd75",
+          "choices": [],
+          "created": 0,
+          "model": "openai.gpt-oss-20b-1:0",
+          "object": "chat.completion.chunk",
+          "service_tier": "default",
+          "system_fingerprint": null,
+          "usage": {
+            "completion_tokens": 103,
+            "prompt_tokens": 271,
+            "total_tokens": 374,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 192
+            }
+          }
+        }
+      }
+    ],
+    "is_streaming": true
+  },
+  "id_normalization_mapping": {}
+}

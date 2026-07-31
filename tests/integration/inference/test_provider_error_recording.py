@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -37,7 +37,7 @@ class TestProviderErrorRecording:
     def test_provider_rejects_invalid_base64_image(self, openai_client, text_model_id):
         """A malformed base64 image triggers a provider-level BadRequestError.
 
-        This request passes through Llama Stack to the inference provider, which
+        This request passes through OGX to the inference provider, which
         rejects the invalid image data. The recording system captures this
         provider exception so that replay mode reproduces the exact same error.
         """

@@ -1,20 +1,35 @@
 # Remote-Hosted Distributions
 
-Remote-Hosted distributions are available endpoints serving Llama Stack API that you can directly connect to.
+Remote-hosted distributions are OGX endpoints hosted by partners that you can connect to directly.
 
-| Distribution | Endpoint | Inference | Agents | Memory | Safety |
-|-------------|----------|-----------|---------|---------|---------|------------|
-| Together | [https://llama-stack.together.ai](https://llama-stack.together.ai) | remote::together | builtin | remote::weaviate | builtin |
-| Fireworks | [https://llamastack-preview.fireworks.ai](https://llamastack-preview.fireworks.ai) | remote::fireworks | builtin | remote::weaviate | builtin |
+| Distribution | Endpoint | Inference |
+|-------------|----------|-----------|
+| Together | [https://llama-stack.together.ai](https://llama-stack.together.ai) | remote::together |
+| Fireworks | [https://llama-stack-preview.fireworks.ai](https://llama-stack-preview.fireworks.ai) | remote::fireworks |
 
-## Connecting to Remote-Hosted Distributions
+## Connecting
 
-You can use `llama-stack-client` to interact with these endpoints. For example, to list the available models served by the Fireworks endpoint:
+Point any OpenAI-compatible client at the endpoint:
 
-```bash
-$ pip install llama-stack-client
-$ llama-stack-client configure --endpoint https://llamastack-preview.fireworks.ai
-$ llama-stack-client models list
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://llama-stack.together.ai/v1",
+    api_key="your-together-api-key",
+)
+
+response = client.chat.completions.create(
+    model="meta-llama/Llama-3.2-3B-Instruct",
+    messages=[{"role": "user", "content": "Hello"}],
+)
+print(response.choices[0].message.content)
 ```
 
-Checkout the [llama-stack-client-python](https://github.com/meta-llama/llama-stack-client-python/blob/main/docs/cli_reference.md) repo for more details on how to use the `llama-stack-client` CLI. Checkout [llama-stack-app](https://github.com/meta-llama/llama-stack-apps/tree/main) for examples applications built on top of Llama Stack.
+Or use the CLI:
+
+```bash
+pip install ogx-client
+ogx-client configure --endpoint https://llama-stack.together.ai
+ogx-client models list
+```

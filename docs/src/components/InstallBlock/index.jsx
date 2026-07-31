@@ -1,0 +1,137 @@
+import React, {useEffect, useState} from 'react';
+import styles from './styles.module.css';
+
+const EXAMPLES = [
+  {
+    label: 'Server',
+    command: "uvx ogx go",
+    tokens: [
+      { text: 'uvx', style: 'tokenBinary' },
+      { text: 'ogx', style: 'tokenCommand' },
+      { text: 'go', style: 'tokenSub' },
+    ],
+  },
+  {
+    label: 'Library',
+    command: "from ogx.core.library_client import OGXAsLibraryClient\n\nclient = OGXAsLibraryClient(\"starter\")\nresponse = client.responses.create(model=\"llama-3.3-70b\", input=\"Hello\")",
+    lines: [
+      [
+        { text: 'from', style: 'tokenBinary' },
+        { text: 'ogx.core.library_client', style: 'tokenPackage' },
+        { text: 'import', style: 'tokenBinary' },
+        { text: 'OGXAsLibraryClient', style: 'tokenCommand' },
+      ],
+      [],
+      [
+        { text: 'client', style: 'tokenSub' },
+        { text: '=', style: 'tokenSub' },
+        { text: 'OGXAsLibraryClient("starter")', style: 'tokenCommand' },
+      ],
+      [
+        { text: 'response', style: 'tokenSub' },
+        { text: '=', style: 'tokenSub' },
+        { text: 'client.responses.create(', style: 'tokenCommand' },
+        { text: 'model="llama-3.3-70b",', style: 'tokenFlag' },
+        { text: 'input="Hello"', style: 'tokenAccent' },
+        { text: ')', style: 'tokenCommand' },
+      ],
+    ],
+  },
+];
+
+function CopyIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="10" height="10" rx="2" />
+      <path d="M5 15V7a2 2 0 0 1 2-2h8" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m5 13 4 4L19 7" />
+    </svg>
+  );
+}
+
+export default function InstallBlock() {
+  const [active, setActive] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(id);
+  }, [copied]);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(EXAMPLES[active].command);
+      setCopied(true);
+    } catch {
+      /* fallback */
+    }
+  };
+
+  return (
+    <div className={styles.installBlock}>
+      <p className={styles.tagline}>
+        Run as a server or import as a Python library{' '}
+        <a href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noopener noreferrer" className={styles.taglineLink}>(requires uv)</a>
+      </p>
+      <div className={styles.tabRow}>
+        {EXAMPLES.map((ex, i) => (
+          <button
+            key={ex.label}
+            type="button"
+            className={`${styles.tab} ${i === active ? styles.tabActive : ''}`}
+            onClick={() => { setActive(i); setCopied(false); }}
+          >
+            {ex.label}
+          </button>
+        ))}
+      </div>
+      <div className={styles.commandRow}>
+        <code className={styles.command}>
+          <span className={styles.commandReveal} key={active}>
+            {EXAMPLES[active].lines ? (
+              EXAMPLES[active].lines.map((line, li) => (
+                line.length === 0 ? (
+                  <span key={li} className={styles.commandLineBlank}>{' '}</span>
+                ) : (
+                  <span key={li} className={styles.commandLine}>
+                    {line.map((tok, ti) => (
+                      <span key={ti}>
+                        {ti > 0 && <span className={styles.space}> </span>}
+                        <span className={styles[tok.style]}>{tok.text}</span>
+                      </span>
+                    ))}
+                  </span>
+                )
+              ))
+            ) : (
+              EXAMPLES[active].tokens.map((tok, i) => (
+                <span key={i}>
+                  {i > 0 && <span className={styles.space}> </span>}
+                  <span className={styles[tok.style]}>{tok.text}</span>
+                </span>
+              ))
+            )}
+          </span>
+          <span className={styles.cursor} />
+        </code>
+        <button
+          type="button"
+          className={`${styles.copyBtn} ${copied ? styles.copyBtnCopied : ''}`}
+          onClick={handleCopy}
+          aria-label="Copy install command"
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
+          <span>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+      </div>
+    </div>
+  );
+}

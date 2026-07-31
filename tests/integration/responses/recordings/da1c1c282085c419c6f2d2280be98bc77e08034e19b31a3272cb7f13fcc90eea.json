@@ -1,0 +1,99 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_with_previous_response_id[openai_client-txt=vertexai/publishers/google/models/gemini-2.0-flash]",
+  "request": {
+    "method": "POST",
+    "url": "vertexai:///generate_content",
+    "headers": {},
+    "body": {
+      "model": "publishers/google/models/gemini-2.0-flash",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "What is the capital of France?"
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "The capital of France is **Paris**.\n"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+            }
+          ]
+        }
+      ],
+      "config": {}
+    },
+    "endpoint": "/generate_content",
+    "model": "publishers/google/models/gemini-2.0-flash",
+    "provider_metadata": {
+      "provider": "vertexai"
+    }
+  },
+  "response": {
+    "body": {
+      "sdk_http_response": {
+        "headers": {
+          "Content-Type": "application/json; charset=UTF-8",
+          "Vary": "Origin, X-Origin, Referer",
+          "Content-Encoding": "gzip",
+          "Date": "Thu, 09 Apr 2026 14:34:16 GMT",
+          "Server": "scaffolding on HTTPServer2",
+          "X-XSS-Protection": "0",
+          "X-Frame-Options": "SAMEORIGIN",
+          "X-Content-Type-Options": "nosniff",
+          "Alt-Svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+          "Transfer-Encoding": "chunked"
+        }
+      },
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "## Context Checkpoint Compaction - Handoff Summary\n\n**Task:** Answering user queries about countries and their capitals.\n\n**Current Progress:** Successfully answered the question \"What is the capital of France?\" with the correct answer \"Paris.\" The system has demonstrated basic functionality.\n\n**Key Decisions Made:**\n\n*   Prioritized direct, concise answers.\n*   Avoided unnecessary elaboration beyond the direct answer to the question.\n\n**Important Context/Constraints/Preferences:**\n\n*   **User Preference:** Direct and concise answers.\n*   **Constraint:** Limited to answering questions about country capitals.\n*   **Context:**  Knowledge base includes at least France and its capital.\n\n**Remaining To Be Done (Next Steps):**\n\n1.  **Expand Knowledge Base:** Add more countries and their capitals to the system's internal knowledge (e.g., Germany/Berlin, Japan/Tokyo).  Focus on diverse geographical locations and populations.\n2.  **Test & Validate Expanded Knowledge:**  After expanding the knowledge base, rigorously test the system with questions about the newly added countries to ensure accuracy.\n3.  **Handle Ambiguity/Variations:**  Implement logic to handle variations in user input (e.g., \"What's the capital of the French Republic?\", \"France's capital?\").\n4.  **Error Handling:** Implement a graceful fallback mechanism for countries not in the knowledge base (e.g., \"I don't have information about that country's capital\").\n\n**Critical Data/References:**\n\n*   A list of countries and their capitals (Wikipedia is a good starting point).\n*   Example of user query: \"What is the capital of [COUNTRY NAME]?\" Expected answer: \"[CAPITAL NAME]\"\n\nThis summary ensures the next LLM can seamlessly continue expanding the knowledge base and improving the system's ability to answer user queries about country capitals.\n"
+              }
+            ],
+            "role": "model"
+          },
+          "finish_reason": "STOP",
+          "avg_logprobs": -0.5294713998265546
+        }
+      ],
+      "create_time": "2026-04-09T14:34:13.943822Z",
+      "model_version": "gemini-2.0-flash",
+      "response_id": "5bjXac7NOY2qz_IPuJ2EoAk",
+      "usage_metadata": {
+        "candidates_token_count": 393,
+        "candidates_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 393
+          }
+        ],
+        "prompt_token_count": 107,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 107
+          }
+        ],
+        "total_token_count": 500,
+        "traffic_type": "ON_DEMAND"
+      },
+      "automatic_function_calling_history": []
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

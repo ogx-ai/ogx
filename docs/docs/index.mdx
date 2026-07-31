@@ -1,18 +1,20 @@
 ---
 sidebar_position: 1
-title: Welcome to Llama Stack
-description: Open-source agentic API server for building AI applications. OpenAI-compatible.
+title: Welcome to OGX
+description: Open-source AI application server. Inference, vector stores, tools, and agentic orchestration in one process.
 sidebar_label: Intro
 tags:
   - getting-started
   - overview
 ---
 
-# Welcome to Llama Stack
+import DocCardList from '@theme/DocCardList';
 
-**Open-source agentic API server for building AI applications. OpenAI-compatible. Any model, any infrastructure.**
+# Welcome to OGX
 
-Llama Stack is a drop-in replacement for the OpenAI API that you can run anywhere — your laptop, your datacenter, or the cloud. Use any OpenAI-compatible client or agentic framework. Swap between Llama, GPT, Gemini, Mistral, or any model without changing your application code.
+**Open-source AI application server. Not just inference routing, the full stack.**
+
+OGX composes inference, vector stores, file storage, tool calling, and agentic orchestration into a single OpenAI-compatible server. Use any client, any language, any model. Swap providers without changing application code.
 
 ```python
 from openai import OpenAI
@@ -23,6 +25,47 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "Hello"}],
 )
 ```
+
+## Choose your path
+
+<DocCardList items={[
+  {
+    type: 'link',
+    label: 'Quickstart',
+    href: '/docs/getting_started/quickstart',
+    description: 'Install and run OGX in under 5 minutes',
+  },
+  {
+    type: 'link',
+    label: 'API Reference',
+    href: '/docs/api-openai',
+    description: 'OpenAI-compatible API endpoints and usage',
+  },
+  {
+    type: 'link',
+    label: 'Providers',
+    href: '/docs/providers/',
+    description: 'Inference, vector store, file, and tool providers',
+  },
+  {
+    type: 'link',
+    label: 'Core Concepts',
+    href: '/docs/concepts/',
+    description: 'Architecture, APIs, distributions, and resources',
+  },
+  {
+    type: 'link',
+    label: 'Building Applications',
+    href: '/docs/building_applications/',
+    description: 'RAG, agents, tools, evals, and more',
+  },
+  {
+    type: 'link',
+    label: 'Distributions',
+    href: '/docs/distributions/',
+    description: 'Pre-packaged deployment configurations',
+  },
+]} />
 
 ## What you get
 
@@ -35,68 +78,52 @@ response = client.chat.completions.create(
 | **Files** | `/v1/files` | File upload and management |
 | **Batches** | `/v1/batches` | Offline batch processing |
 | **Models** | `/v1/models` | Model listing and management |
+| **Messages** | `/v1/messages` | Anthropic Messages API adapter |
 
-Llama Stack also provides additional APIs beyond the OpenAI specification, including **Prompts** for prompt template management and **File Processors** for document ingestion pipelines.
+Beyond the OpenAI specification, OGX provides **Prompts** for prompt template management, **File Processors** for document ingestion, and **Connectors** for external tool registration.
 
-The Responses API implementation conforms to the [Open Responses](https://www.openresponses.org/) specification. See the [API conformance report](./api-openai/conformance.mdx) for detailed coverage.
+The Responses API implementation conforms to the [Open Responses](https://www.openresponses.org/) specification. See the [API conformance report](/docs/api-openai/conformance) for detailed coverage.
 
-## Use any model, use any infrastructure
+## A server, not a library
 
-Llama Stack has a pluggable provider architecture. Develop locally with Ollama, deploy to production with vLLM, or connect to a managed service — the API stays the same.
+OGX is an HTTP server. Your application talks to a standard API over HTTP. This is a different architectural choice than SDK-level frameworks that abstract at the Python import level.
 
-**Inference providers:** Ollama, vLLM, TGI, Fireworks, Together, AWS Bedrock, Azure OpenAI, NVIDIA NIM, OpenAI, Anthropic, Gemini, Groq, SambaNova, Cerebras, WatsonX, and more.
+The consequence: your application is language-agnostic. Write it in Python, Go, TypeScript, or curl. Swap the server without touching application code. Replace the entire inference backend without redeploying your application.
 
-**Vector store providers:** FAISS, SQLite-vec, Milvus, ChromaDB, PGVector, Qdrant, Weaviate, Elasticsearch, Infinispan.
+## 50+ pluggable providers
 
-See the [provider documentation](./providers/index.mdx) for the full list and the [provider compatibility matrix](./api-openai/provider_matrix.md) for tested feature coverage across providers.
+OGX has a pluggable provider architecture across every API, not just inference.
+
+- **23 inference providers:** Ollama, vLLM, OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, Gemini, Vertex AI, NVIDIA NIM, Fireworks, Together AI, Groq, SambaNova, Cerebras, WatsonX, and more
+- **15 vector store providers:** FAISS, SQLite-vec, ChromaDB, Qdrant, Milvus, PGVector, Weaviate, Elasticsearch, and more
+- **Built-in guardrails support:** Responses guardrails call an external OpenAI-compatible moderation endpoint configured by `moderation_endpoint`
+- **7 tool runtimes:** File Search, Brave/Bing/Tavily/Nimble web search, Wolfram Alpha, MCP
+
+Develop locally with Ollama and FAISS. Deploy to production with vLLM and PGVector. Wrap Bedrock or Vertex without lock-in. Same API surface, different backend.
+
+See the [provider documentation](/docs/providers/) for the full list and the [provider compatibility matrix](./api-openai/provider_matrix.md) for tested feature coverage.
 
 ## Get started
 
 ```bash
 # One-line install
-curl -LsSf https://github.com/llamastack/llama-stack/raw/main/scripts/install.sh | bash
+curl -LsSf https://github.com/ogx-ai/ogx/raw/main/scripts/install.sh | bash
 
 # Or install via pip
-pip install llama-stack
+pip install ogx
 
 # Start the server
-llama stack run
+uv run ogx go --insecure
 ```
 
-Then connect with any OpenAI-compatible client.
+:::tip
+OGX works with any OpenAI-compatible client. Point your existing code at `http://localhost:8321/v1` and you're ready to go.
 
-<div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '2rem 0'}}>
-  <a href="/docs/getting_started/quickstart"
-     style={{
-       background: 'var(--ifm-color-primary)',
-       color: 'white',
-       padding: '0.75rem 1.5rem',
-       borderRadius: '0.5rem',
-       textDecoration: 'none',
-       fontWeight: 'bold'
-     }}>
-    Quick Start Guide
-  </a>
-  <a href="./api-openai"
-     style={{
-       border: '2px solid var(--ifm-color-primary)',
-       color: 'var(--ifm-color-primary)',
-       padding: '0.75rem 1.5rem',
-       borderRadius: '0.5rem',
-       textDecoration: 'none',
-       fontWeight: 'bold'
-     }}>
-    OpenAI API Compatibility
-  </a>
-  <a href="https://github.com/llamastack/llama-stack"
-     style={{
-       border: '2px solid #666',
-       color: '#666',
-       padding: '0.75rem 1.5rem',
-       borderRadius: '0.5rem',
-       textDecoration: 'none',
-       fontWeight: 'bold'
-     }}>
-    GitHub
-  </a>
-</div>
+OGX is secure by default. `--insecure` forces the server to listen on http. By default it runs on https with a self-signed cert. You'll have to skip cert verification or trust the automatically generated cert.
+:::
+
+[Quick Start Guide](/docs/getting_started/quickstart) | [OpenAI API Compatibility](./api-openai) | [GitHub](https://github.com/ogx-ai/ogx)
+
+## Found an issue with the docs?
+
+If you've found some issue with our documentation, please open up a Bug in our [GitHub Issues](https://github.com/ogx-ai/ogx/issues) referencing the page and the problem you are facing. Thank you for your help in improving our documentation!

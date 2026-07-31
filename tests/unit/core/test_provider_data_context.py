@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,7 +9,7 @@ import json
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from llama_stack.core.utils.context import preserve_contexts_async_generator
+from ogx.core.utils.context import preserve_contexts_async_generator
 
 # Define provider data context variable and context manager locally
 PROVIDER_DATA_VAR = ContextVar("provider_data", default=None)
@@ -17,7 +17,7 @@ PROVIDER_DATA_VAR = ContextVar("provider_data", default=None)
 
 @contextmanager
 def request_provider_data_context(headers):
-    val = headers.get("X-LlamaStack-Provider-Data")
+    val = headers.get("X-OGX-Provider-Data")
     provider_data = json.loads(val) if val else {}
     token = PROVIDER_DATA_VAR.set(provider_data)
     try:
@@ -45,7 +45,7 @@ async def async_event_gen():
 
 
 async def test_provider_data_context_cleared_between_sse_requests():
-    headers = {"X-LlamaStack-Provider-Data": json.dumps({"api_key": "abc"})}
+    headers = {"X-OGX-Provider-Data": json.dumps({"api_key": "abc"})}
     with request_provider_data_context(headers):
         gen1 = preserve_contexts_async_generator(sse_generator(async_event_gen()), [PROVIDER_DATA_VAR])
 

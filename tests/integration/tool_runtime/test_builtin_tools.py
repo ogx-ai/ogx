@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -15,12 +15,12 @@ import os
 import pytest
 
 
-def test_web_search_tool(llama_stack_client, text_model_id):
+def test_web_search_tool(ogx_client, text_model_id):
     """Test the web search tool functionality via the Responses API."""
     if "TAVILY_SEARCH_API_KEY" not in os.environ:
         pytest.skip("TAVILY_SEARCH_API_KEY not set, skipping test")
 
-    response = llama_stack_client.responses.create(
+    response = ogx_client.responses.create(
         model=text_model_id,
         input="What are the latest developments in quantum computing?",
         tools=[{"type": "web_search"}],

@@ -1,40 +1,40 @@
 ---
 title: APIs
-description: Available REST APIs and planned capabilities in Llama Stack
+description: How OGX's APIs work together
 sidebar_label: APIs
 sidebar_position: 1
 ---
 
 # APIs
 
-A Llama Stack API is described as a collection of REST endpoints following OpenAI API standards. We currently support the following APIs:
+OGX exposes OpenAI-compatible REST APIs. For the full endpoint list, see the [API Reference](/docs/api-overview).
 
-- **Inference**: run inference with a LLM
-- **Safety**: apply safety policies to the output at a Systems (not only model) level
-- **Agents**: run multi-step agentic workflows with LLMs with tool usage, memory (RAG), etc.
-- **DatasetIO**: interface with datasets and data loaders
-- **Scoring**: evaluate outputs of the system
-- **Eval**: generate outputs (via Inference or Agents) and perform scoring
-- **VectorIO**: perform operations on vector stores, such as adding documents, searching, and deleting documents
-- **Files**: manage file uploads, storage, and retrieval
-- **Post Training**: fine-tune a model
-- **Tool Runtime**: interact with various tools and protocols
-- **Responses**: generate responses from an LLM
+## Stability Levels
 
-We are working on adding a few more APIs to complete the application lifecycle. These will include:
-- **Batch Inference**: run inference on a dataset of inputs
-- **Batch Agents**: run agents on a dataset of inputs
-- **Batches**: OpenAI-compatible batch management for inference
+APIs are organized by maturity. Stable APIs (`/v1/`) follow semantic versioning and won't break between minor releases. Experimental APIs (`/v1alpha/`, `/v1beta/`) may change based on feedback. See [API Leveling](/docs/concepts/apis/api_leveling) for details.
 
+## How the APIs work together
 
-## OpenAI API Compatibility
-We are working on adding OpenAI API compatibility to Llama Stack. This will allow you to use Llama Stack with OpenAI API clients and tools.
+### Files + Vector Stores + Responses
 
-### File Operations and Vector Store Integration
+These three APIs combine to give you RAG in a few calls:
 
-The Files API and Vector Store APIs work together through file operations, enabling automatic document processing and search. This integration implements the [OpenAI Vector Store Files API specification](https://platform.openai.com/docs/api-reference/vector-stores-files) and allows you to:
-- Upload documents through the Files API
-- Automatically process and chunk documents into searchable vectors
-- Store processed content in vector databases based on the availability of [our providers](../../providers/index.mdx)
-- Search through documents using natural language queries
-For detailed information about this integration, see [File Operations and Vector Store Integration](../file_operations_vector_stores.md).
+1. Upload a document via `/v1/files`
+2. Create a vector store and attach the file via `/v1/vector_stores`
+3. OGX automatically chunks, embeds, and indexes the document
+4. Use `file_search` in a `/v1/responses` request to search it
+
+See [File Operations and Vector Store Integration](/docs/concepts/file_operations_vector_stores) for details.
+
+### Tool Runtime
+
+The Responses API orchestrates tools server-side. The model decides which tools to call, OGX executes them and feeds results back automatically:
+
+- **file_search** - searches your vector stores
+- **web_search** - queries configured search providers
+- **MCP** - connects to any MCP server
+- **Custom functions** - your own function tools
+
+### Providers and External APIs
+
+Not every provider supports every feature. See [API Providers](/docs/concepts/apis/api_providers) for how providers map to APIs, and [External APIs](/docs/concepts/apis/external) for extending OGX with custom endpoints.

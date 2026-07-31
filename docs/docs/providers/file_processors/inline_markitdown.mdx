@@ -1,0 +1,93 @@
+---
+description: |
+  [MarkItDown](https://github.com/microsoft/markitdown) is a lightweight, multi-format file processor
+  that converts documents to Markdown using Microsoft's MarkItDown library. It supports a wide range of
+  document types without the heavy ML dependencies required by Docling.
+
+  ## Supported Formats
+
+  - **Documents**: PDF, DOCX, PPTX, XLSX, RTF
+  - **Web**: HTML
+  - **Data**: CSV, JSON, XML
+  - **Code**: Python, JavaScript, TypeScript, Go, Rust, Java, C/C++, and more
+  - **Text**: TXT, Markdown, RST, LaTeX
+
+  ## Usage
+
+  Start OGX with the MarkItDown file processor:
+
+  ```bash
+  ogx stack run --providers "file_processors=inline::markitdown" --port 8321
+  ```
+
+  Or add it to a custom `run.yaml`:
+
+  ```yaml
+  file_processors:
+    - provider_id: markitdown
+      provider_type: inline::markitdown
+      config: {}
+  ```
+
+  ## When to Use
+
+  Choose `inline::markitdown` when you need multi-format support with minimal dependencies.
+  For structure-aware parsing with table, heading, and layout preservation, use `inline::docling`
+  or `remote::docling-serve` instead.
+sidebar_label: Markitdown
+title: inline::markitdown
+---
+
+# inline::markitdown
+
+## Description
+
+
+[MarkItDown](https://github.com/microsoft/markitdown) is a lightweight, multi-format file processor
+that converts documents to Markdown using Microsoft's MarkItDown library. It supports a wide range of
+document types without the heavy ML dependencies required by Docling.
+
+## Supported Formats
+
+- **Documents**: PDF, DOCX, PPTX, XLSX, RTF
+- **Web**: HTML
+- **Data**: CSV, JSON, XML
+- **Code**: Python, JavaScript, TypeScript, Go, Rust, Java, C/C++, and more
+- **Text**: TXT, Markdown, RST, LaTeX
+
+## Usage
+
+Start OGX with the MarkItDown file processor:
+
+```bash
+ogx stack run --providers "file_processors=inline::markitdown" --port 8321
+```
+
+Or add it to a custom `run.yaml`:
+
+```yaml
+file_processors:
+  - provider_id: markitdown
+    provider_type: inline::markitdown
+    config: {}
+```
+
+## When to Use
+
+Choose `inline::markitdown` when you need multi-format support with minimal dependencies.
+For structure-aware parsing with table, heading, and layout preservation, use `inline::docling`
+or `remote::docling-serve` instead.
+
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `default_chunk_overlap_tokens` | `int` | No | 400 | Default chunk overlap in tokens when chunking_strategy type is 'auto' |
+
+## Sample Configuration
+
+```yaml
+{}
+```

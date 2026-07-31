@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -61,9 +61,9 @@ def main():
         # Output env vars as bash export statements
         for key, value in config["env"].items():
             print(f"export {key}='{value}'")
-        # Output defaults as bash export statements with LLAMA_STACK_TEST_ prefix
+        # Output defaults as bash export statements with OGX_TEST_ prefix
         for key, value in config["defaults"].items():
-            env_key = f"LLAMA_STACK_TEST_{key.upper()}"
+            env_key = f"OGX_TEST_{key.upper()}"
             print(f"export {env_key}='{value}'")
     elif args.format == "json":
         import json

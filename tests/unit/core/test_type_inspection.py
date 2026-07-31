@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import Body, Query
 from pydantic import BaseModel
 
-from llama_stack.core.utils.type_inspection import is_body_param, is_unwrapped_body_param
+from ogx.core.utils.type_inspection import is_body_param, is_unwrapped_body_param
 
 
 class SampleModel(BaseModel):

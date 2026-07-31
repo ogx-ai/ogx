@@ -1,12 +1,12 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from llama_stack.cli.stack.utils import add_dependent_providers
-from llama_stack.core.datatypes import Provider
-from llama_stack.core.distribution import get_provider_registry
+from ogx.cli.stack.utils import add_dependent_providers
+from ogx.core.datatypes import Provider
+from ogx.core.distribution import get_provider_registry
 
 
 def test_add_dependent_providers_expands_required_apis():
@@ -55,7 +55,7 @@ def test_add_dependent_providers_include_configs():
         provider_registry=provider_registry,
         requested_provider_types=["inline::builtin"],
         include_configs=True,
-        distro_dir="~/.llama/distributions/providers-run",
+        distro_dir="~/.ogx/distributions/providers-run",
     )
 
     # Some providers like sentence-transformers don't need configuration,

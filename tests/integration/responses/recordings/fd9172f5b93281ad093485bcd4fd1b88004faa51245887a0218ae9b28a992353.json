@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/responses/test_compact_responses.py::TestCompactResponses::test_compact_response_is_retrievable[openai_client-txt=openai/gpt-4o]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello there!"
+        },
+        {
+          "role": "assistant",
+          "content": "Hi! How can I help?"
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o",
+    "provider_metadata": {
+      "openai_sdk_version": "2.30.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-fd9172f5b932",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary for CONTEXT CHECKPOINT COMPACTION Task\n\n**Current Progress and Key Decisions Made:**\n- Analyzed and condensed initial set of data points regarding user interactions and preferences to facilitate context compaction.\n- Identified primary themes and key decision points: user preference for detailed explanations, interest in specific domains (e.g., technology and science), and a favoring of concise, clear communication.\n- Established a baseline system prompt that aligns with these preferences\u2014ensuring responses are both engaging and informative.\n\n**Important Context, Constraints, or User Preferences:**\n- The user values clarity and precision above verbosity and prefers straightforward answers.\n- Constraints include maintaining response relevance to user queries while ensuring that factual accuracy is prioritized.\n- User enjoys interactive features, such as examples or scenario-based explanations. \n\n**What Remains to Be Done (Clear Next Steps):**\n1. Review and integrate additional user interaction data to ensure all context variations are compacted efficiently.\n2. Refine response templates to further align with identified user preferences.\n3. Test the compaction logic under varied input scenarios to ensure robustness.\n4. Finalize documentation of the compaction process for future reference.\n\n**Critical Data, Examples, or References Needed to Continue:**\n- Access to the latest set of user interaction logs and any previous reports on context compaction attempts.\n- Examples of specific user queries that highlight the importance of context compaction.\n- References to existing guidelines on maintaining user intent while minimizing contextual noise.\n\nThis summary ensures a seamless transition for another LLM to continue and complete the task effectively.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-2024-08-06",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_8706f899b3",
+        "usage": {
+          "completion_tokens": 315,
+          "prompt_tokens": 114,
+          "total_tokens": 429,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -110,8 +110,8 @@ from unittest.mock import AsyncMock  # noqa: E402
 
 import pytest  # noqa: E402
 
-from llama_stack.providers.remote.inference.vertexai.config import VertexAIConfig  # noqa: E402
-from llama_stack.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter  # noqa: E402
+from ogx.providers.remote.inference.vertexai.config import VertexAIConfig  # noqa: E402
+from ogx.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter  # noqa: E402
 
 
 async def _async_pager(items):
@@ -161,11 +161,6 @@ def patch_chat_completion_dependencies(monkeypatch):
         )
         captured: dict[str, Any] = {"fake_completion": fake_completion}
 
-        async def _provider_model_id(_: str) -> str:
-            """Return a fixed provider model identifier."""
-            return "gemini-2.5-flash"
-
-        monkeypatch.setattr(adapter, "_get_provider_model_id", _provider_model_id)
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
 
@@ -194,7 +189,7 @@ def patch_chat_completion_dependencies(monkeypatch):
                 return None, [{"role": "user", "parts": [{"text": "ok"}]}]
 
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.converters.convert_openai_messages_to_gemini",
+            "ogx.providers.remote.inference.vertexai.vertexai.converters.convert_openai_messages_to_gemini",
             _convert_messages,
         )
 
@@ -215,11 +210,11 @@ def patch_chat_completion_dependencies(monkeypatch):
             convert_tools = _convert_tools_passthrough
 
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.converters.convert_openai_tools_to_gemini",
+            "ogx.providers.remote.inference.vertexai.vertexai.converters.convert_openai_tools_to_gemini",
             convert_tools,
         )
         monkeypatch.setattr(
-            "llama_stack.providers.remote.inference.vertexai.vertexai.converters.convert_gemini_response_to_openai",
+            "ogx.providers.remote.inference.vertexai.vertexai.converters.convert_gemini_response_to_openai",
             lambda response, model: fake_completion,
         )
 

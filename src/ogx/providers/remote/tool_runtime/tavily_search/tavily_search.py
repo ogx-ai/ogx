@@ -1,0 +1,120 @@
+# Copyright (c) The OGX Contributors.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
+import json
+from typing import Any
+
+import httpx
+
+from ogx.core.request_headers import NeedsRequestProviderData
+from ogx_api import (
+    URL,
+    ListToolDefsResponse,
+    ToolDef,
+    ToolGroup,
+    ToolGroupsProtocolPrivate,
+    ToolInvocationResult,
+    ToolRuntime,
+)
+
+from .config import TavilySearchToolConfig
+
+
+class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequestProviderData):
+    """Tool runtime for performing AI-optimized web searches using the Tavily API."""
+
+    _CONTEXT_SIZE_TO_COUNT = {"low": 3, "medium": 5, "high": 10}
+
+    def __init__(self, config: TavilySearchToolConfig):
+        self.config = config
+        self._client: httpx.AsyncClient | None = None
+
+    async def initialize(self):
+        self._client = httpx.AsyncClient(timeout=self.config.to_httpx_timeout())
+
+    async def shutdown(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    async def register_toolgroup(self, toolgroup: ToolGroup) -> None:
+        pass
+
+    async def unregister_toolgroup(self, toolgroup_id: str) -> None:
+        return
+
+    def _get_api_key(self) -> str | None:
+        api_key = self.config.api_key.get_secret_value() if self.config.api_key else None
+
+        provider_data = self.get_request_provider_data()
+        if provider_data and provider_data.tavily_search_api_key:
+            api_key = provider_data.tavily_search_api_key.get_secret_value()
+
+        return api_key
+
+    async def list_runtime_tools(
+        self,
+        tool_group_id: str | None = None,
+        mcp_endpoint: URL | None = None,
+        authorization: str | None = None,
+    ) -> ListToolDefsResponse:
+        return ListToolDefsResponse(
+            data=[
+                ToolDef(
+                    name="web_search",
+                    description="Search the web for information",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The query to search for",
+                            }
+                        },
+                        "required": ["query"],
+                    },
+                )
+            ]
+        )
+
+    async def invoke_tool(
+        self, tool_name: str, kwargs: dict[str, Any], authorization: str | None = None
+    ) -> ToolInvocationResult:
+        api_key = self._get_api_key()
+        request_body: dict[str, Any] = {
+            "query": kwargs["query"],
+        }
+        if api_key:
+            request_body["api_key"] = api_key
+
+        allowed_domains = kwargs.get("allowed_domains")
+        if allowed_domains:
+            request_body["include_domains"] = allowed_domains
+
+        search_context_size = kwargs.get("search_context_size")
+        if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
+            request_body["max_results"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
+
+        if self._client is None:
+            raise RuntimeError("Failed to invoke tool: provider not initialized")
+        response = await self._client.post(
+            "https://api.tavily.com/search",
+            json=request_body,
+        )
+        response.raise_for_status()
+
+        response_json = response.json()
+        sources = []
+        for r in response_json.get("results", []):
+            if "url" in r:
+                sources.append({"url": r["url"]})
+        return ToolInvocationResult(
+            content=json.dumps(self._clean_tavily_response(response_json)),
+            metadata={"query": kwargs["query"], "sources": sources},
+        )
+
+    def _clean_tavily_response(self, search_response, top_k=3):
+        return {"query": search_response["query"], "top_k": search_response["results"]}

@@ -1,4 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# Copyright (c) The OGX Contributors.
 # All rights reserved.
 #
 # This source code is licensed under the terms described in the LICENSE file in
@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from llama_stack.core.routers.vector_io import VectorIORouter
-from llama_stack_api import (
+from ogx.core.routers.vector_io import VectorIORouter
+from ogx_api import (
     ModelNotFoundError,
     ModelType,
     ModelTypeError,
@@ -190,8 +190,8 @@ async def test_query_rewrite_functionality():
     """Test query rewriting at the router level."""
     from unittest.mock import MagicMock
 
-    from llama_stack.core.datatypes import QualifiedModel, RewriteQueryParams, VectorStoresConfig
-    from llama_stack_api import VectorStoreSearchResponsePage
+    from ogx.core.datatypes import QualifiedModel, RewriteQueryParams, VectorStoresConfig
+    from ogx_api import VectorStoreSearchResponsePage
 
     mock_routing_table = _mock_routing_table()
 
@@ -272,8 +272,8 @@ async def test_query_rewrite_with_custom_prompt():
     """Test query rewriting with custom prompt."""
     from unittest.mock import MagicMock
 
-    from llama_stack.core.datatypes import QualifiedModel, RewriteQueryParams, VectorStoresConfig
-    from llama_stack_api import VectorStoreSearchResponsePage
+    from ogx.core.datatypes import QualifiedModel, RewriteQueryParams, VectorStoresConfig
+    from ogx_api import VectorStoreSearchResponsePage
 
     mock_routing_table = _mock_routing_table()
 
@@ -314,7 +314,7 @@ async def test_query_rewrite_with_custom_prompt():
 
 async def test_search_without_rewrite():
     """Test that search without rewrite_query doesn't call inference API."""
-    from llama_stack_api import VectorStoreSearchResponsePage
+    from ogx_api import VectorStoreSearchResponsePage
 
     mock_routing_table = _mock_routing_table()
 

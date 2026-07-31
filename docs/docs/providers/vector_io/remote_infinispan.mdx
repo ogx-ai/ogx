@@ -1,6 +1,6 @@
 ---
 description: |
-  [Infinispan](https://infinispan.org/) is a remote vector database provider for Llama Stack. It
+  [Infinispan](https://infinispan.org/) is a remote vector database provider for OGX. It
   allows you to store and query vectors in a distributed Infinispan cluster via HTTP REST API.
   Infinispan provides high-performance, scalable data storage with support for both vector similarity
   search and full-text search capabilities.
@@ -116,7 +116,7 @@ title: remote::infinispan
 ## Description
 
 
-[Infinispan](https://infinispan.org/) is a remote vector database provider for Llama Stack. It
+[Infinispan](https://infinispan.org/) is a remote vector database provider for OGX. It
 allows you to store and query vectors in a distributed Infinispan cluster via HTTP REST API.
 Infinispan provides high-performance, scalable data storage with support for both vector similarity
 search and full-text search capabilities.
@@ -238,6 +238,9 @@ Set the `auth_mechanism` parameter to either `"digest"` or `"basic"`.
 | `persistence` | `KVStoreReference` | No |  | Config for KV store backend |
 | `persistence.namespace` | `str` | No |  | Key prefix for KVStore backends |
 | `persistence.backend` | `str` | No |  | Name of backend from storage.backends |
+| `metadata_store` | `SqlStoreReference \| None` | No |  | SQL store reference for tenant-isolated vector store metadata |
+| `metadata_store.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `metadata_store.backend` | `str` | No |  | Name of backend from storage.backends |
 
 ## Sample Configuration
 
