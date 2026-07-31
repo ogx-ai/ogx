@@ -45,7 +45,6 @@ from ogx_api import (
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
-    OpenAIChatCompletionWithReasoning,
     OpenAIChoice,
     OpenAIChoiceLogprobs,
     OpenAICompletion,
@@ -316,7 +315,7 @@ class InferenceRouter(Inference):
     async def openai_chat_completions_with_reasoning(
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
-    ) -> OpenAIChatCompletionWithReasoning | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
+    ) -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
         """Called by the Responses layer when a user requests reasoning.
 
         Routes to the provider's reasoning-aware CC implementation, which

@@ -22,7 +22,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/136 (20%) |
 | `base-vllm-subset` | `vllm` | `inference` only |
 | `vllm-reasoning` | `vllm` | `test_reasoning.py` only; Responses coverage: 3/136 (2%) |
-| `ollama-reasoning` | `ollama-reasoning` | 3 roots; Responses coverage: 2/136 (1%) |
+| `ollama-reasoning` | `ollama-reasoning` | 5 roots; Responses coverage: 3/136 (2%) |
 | `messages` | `ollama` | `messages` only |
 | `messages-openai` | `gpt` | `messages` only |
 | `interactions` | `gemini` | `interactions` only |
@@ -80,7 +80,7 @@ This section is derived from the same replay recordings used to generate `docs/d
 | Vertex AI | 70 | 70 | 51% |
 | WatsonX | 61 | 61 | 45% |
 | Bedrock | 27 | 27 | 20% |
+| Ollama | 3 | 3 | 2% |
 | vLLM | 3 | 3 | 2% |
-| Ollama | 2 | 2 | 1% |
 
 Total Responses features counted: 136.

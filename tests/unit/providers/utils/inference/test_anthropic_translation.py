@@ -260,6 +260,68 @@ class TestRequestTranslation:
         assert msg["tool_call_id"] == "toolu_123"
         assert msg["content"] == "72F and sunny"
 
+    def test_tool_result_after_text_is_emitted_before_the_user_text(self):
+        """A tool message must follow the assistant message that requested the call.
+
+        Anthropic accepts a user turn whose text precedes its tool_result blocks, but
+        OpenAI rejects a user message sitting between the tool call and its result.
+        """
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(role="user", content="What is the weather?"),
+                AnthropicMessage(
+                    role="assistant",
+                    content=[AnthropicToolUseBlock(id="toolu_123", name="get_weather", input={"city": "SF"})],
+                ),
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicTextBlock(text="and New York?"),
+                        AnthropicToolResultBlock(tool_use_id="toolu_123", content="72F and sunny"),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = anthropic_request_to_openai(request)
+
+        roles = [_msg_to_dict(m)["role"] for m in result.messages]
+        assert roles == ["user", "assistant", "tool", "user"]
+        tool_msg = _msg_to_dict(result.messages[2])
+        assert tool_msg["tool_call_id"] == "toolu_123"
+        assert tool_msg["content"] == "72F and sunny"
+        assert _msg_to_dict(result.messages[3])["content"] == "and New York?"
+
+    def test_tool_results_split_by_text_stay_adjacent(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="assistant",
+                    content=[
+                        AnthropicToolUseBlock(id="toolu_1", name="a", input={}),
+                        AnthropicToolUseBlock(id="toolu_2", name="b", input={}),
+                    ],
+                ),
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicToolResultBlock(tool_use_id="toolu_1", content="first"),
+                        AnthropicTextBlock(text="between"),
+                        AnthropicToolResultBlock(tool_use_id="toolu_2", content="second"),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = anthropic_request_to_openai(request)
+
+        roles = [_msg_to_dict(m)["role"] for m in result.messages]
+        assert roles == ["assistant", "tool", "tool", "user"]
+        assert [_msg_to_dict(m)["tool_call_id"] for m in result.messages[1:3]] == ["toolu_1", "toolu_2"]
+        assert _msg_to_dict(result.messages[3])["content"] == "between"
+
     def test_base64_image_in_user_message(self):
         request = AnthropicCreateMessageRequest(
             model="m",

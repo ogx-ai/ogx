@@ -342,14 +342,14 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
     if not has_inference:
         parser.error("No inference providers detected. Nothing to run.")
 
-    distro_dir = DISTRIBS_BASE_DIR / "letsgo-run" if args.persist_config else Path(tempfile.mkdtemp())
+    distro_dir = DISTRIBS_BASE_DIR / "go-run" if args.persist_config else Path(tempfile.mkdtemp())
     os.makedirs(distro_dir, exist_ok=True)
 
     try:
         run_config = run_config_from_dynamic_config_spec(
             dynamic_config_spec=providers_spec,
             distro_dir=distro_dir,
-            distro_name="letsgo-run",
+            distro_name="go-run",
         )
     except ValueError as e:
         cprint(str(e), color="red", file=sys.stderr)
@@ -950,16 +950,16 @@ async def _probe_provider_availability(
 
 
 class StackLetsGo(Subcommand):
-    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx letsgo' instead)."""
+    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx go' instead)."""
 
     def __init__(self, subparsers: Any) -> None:
         super().__init__()
         self.parser = subparsers.add_parser(
-            "letsgo",
-            prog="ogx stack letsgo",
+            "go",
+            prog="ogx stack go",
             description="""Auto-detect providers and start the stack.
 
-NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
+NOTE: 'ogx stack go' is deprecated. Use 'ogx go' instead.""",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
         self._add_arguments()
@@ -970,7 +970,7 @@ NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
 
     def _run_stack_lets_go_cmd(self, args: argparse.Namespace) -> None:
         warnings.warn(
-            "'ogx stack letsgo' is deprecated and will be removed in a future release. Use 'ogx letsgo' instead.",
+            "'ogx stack go' is deprecated and will be removed in a future release. Use 'ogx go' instead.",
             FutureWarning,
             stacklevel=1,
         )
