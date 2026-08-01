@@ -28,7 +28,6 @@ def available_providers() -> list[ProviderSpec]:
                 "fonttools>=4.60.2",
                 "pillow",
                 "pandas",
-                "scikit-learn",
                 "mcp>=1.28.1,<2.0",
             ]
             + kvstore_dependencies(),  # TODO make this dynamic based on the kvstore config

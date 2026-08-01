@@ -19,8 +19,7 @@ Install [Ollama](https://ollama.com/download), then pull a model and start the s
 
 ```bash
 ollama pull llama3.2:3b
-export OLLAMA_URL=http://localhost:11434/v1
-uvx --from 'ogx[starter]' ogx run starter
+uvx ogx go
 ```
 
 </TabItem>
@@ -28,7 +27,7 @@ uvx --from 'ogx[starter]' ogx run starter
 
 ```bash
 export OPENAI_API_KEY=sk-xxx
-uvx --from 'ogx[starter]' ogx run starter
+uvx ogx go
 ```
 
 </TabItem>
@@ -52,13 +51,14 @@ The `uvx` command above is great for trying things out. For a real project, inst
 
 ```bash
 uv init my-ai-app && cd my-ai-app
-uv add 'ogx[starter]' openai
-export OLLAMA_URL=http://localhost:11434/v1
-uv run ogx run starter
+uv add ogx openai
+uv run ogx go
 ```
 :::
 
-The server is now running at `http://localhost:8321`. You can use any OpenAI-compatible client.
+The server is now running at `https://localhost:8321`. You can use any OpenAI-compatible client.
+
+OGX is secure by default and listens on https. Passing `--insecure` forces the server to listen on http.
 
 ## Verify it works
 
@@ -68,16 +68,17 @@ Before writing any code, confirm the server is healthy and models are registered
 <TabItem value="curl" label="curl" default>
 
 ```bash
-curl -s http://localhost:8321/v1/models | python -m json.tool
+curl -k -s https://localhost:8321/v1/models | python -m json.tool
 ```
 
 </TabItem>
 <TabItem value="python" label="Python">
 
 ```python
+import httpx
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake", http_client=httpx.Client(verify=False))
 
 for model in client.models.list():
     print(model.id)
@@ -108,9 +109,10 @@ If the list is empty or the command fails, check the [Troubleshooting](#troubles
 Open a new terminal and run:
 
 ```python title="app.py"
+import httpx
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
+client = OpenAI(base_url="https://localhost:8321/v1", api_key="fake", http_client=httpx.Client(verify=False))
 
 response = client.responses.create(
     model="ollama/llama3.2:3b",
@@ -128,9 +130,10 @@ pip install openai && python app.py
 Upload a file, create a vector store, and ask questions about it:
 
 ```python
+import httpx
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake", http_client=httpx.Client(verify=False))
 
 # Upload a document
 file = client.files.create(
@@ -166,7 +169,7 @@ That's it. Same OpenAI SDK, local model, your own vector store.
 If you see `Address already in use`, another process is using port 8321. Either stop it or run on a different port:
 
 ```bash
-uvx --from 'ogx[starter]' ogx run starter --port 8322
+uvx ogx go --port 8322
 ```
 
 </details>

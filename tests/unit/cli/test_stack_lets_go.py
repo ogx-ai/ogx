@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Unit tests for `ogx letsgo` and `ogx stack letsgo` CLI commands."""
+"""Unit tests for `ogx go` and `ogx stack go` CLI commands."""
 
 import argparse
 import warnings
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ogx.cli.letsgo import LetsGo
+from ogx.cli.letsgo import LetsGo, LetsGoDeprecated
 from ogx.cli.stack.lets_go import (
     _CLAUDE_CODE_ALIASES,
     _CLAUDE_CODE_PROVIDER_PRIORITY,
@@ -33,6 +33,12 @@ def lets_go() -> StackLetsGo:
 def top_level_letsgo() -> LetsGo:
     subparsers = argparse.ArgumentParser().add_subparsers()
     return LetsGo(subparsers)
+
+
+@pytest.fixture
+def top_level_letsgo_deprecated() -> LetsGoDeprecated:
+    subparsers = argparse.ArgumentParser().add_subparsers()
+    return LetsGoDeprecated(subparsers)
 
 
 class TestArguments:
@@ -311,7 +317,7 @@ class TestDeprecation:
         future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
         assert len(future_warnings) == 1
         assert "deprecated" in str(future_warnings[0].message)
-        assert "ogx letsgo" in str(future_warnings[0].message)
+        assert "ogx go" in str(future_warnings[0].message)
 
     def test_top_level_letsgo_no_deprecation_warning(self, top_level_letsgo: LetsGo):
         with (
@@ -324,6 +330,20 @@ class TestDeprecation:
 
         future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
         assert len(future_warnings) == 0
+
+    def test_top_level_letsgo_deprecated_emits_deprecation_warning(self, top_level_letsgo_deprecated: LetsGoDeprecated):
+        with (
+            patch("ogx.cli.letsgo.run_letsgo_cmd"),
+            warnings.catch_warnings(record=True) as w,
+        ):
+            warnings.simplefilter("always")
+            args = top_level_letsgo_deprecated.parser.parse_args([])
+            top_level_letsgo_deprecated._run_cmd(args)
+
+        future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
+        assert len(future_warnings) == 1
+        assert "deprecated" in str(future_warnings[0].message)
+        assert "ogx go" in str(future_warnings[0].message)
 
 
 class TestClaudeCodeAliases:

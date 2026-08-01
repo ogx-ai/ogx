@@ -113,11 +113,13 @@ curl -LsSf https://github.com/ogx-ai/ogx/raw/main/scripts/install.sh | bash
 pip install ogx
 
 # Start the server
-ogx stack run
+uv run ogx go --insecure
 ```
 
 :::tip
 OGX works with any OpenAI-compatible client. Point your existing code at `http://localhost:8321/v1` and you're ready to go.
+
+OGX is secure by default. `--insecure` forces the server to listen on http. By default it runs on https with a self-signed cert. You'll have to skip cert verification or trust the automatically generated cert.
 :::
 
 [Quick Start Guide](/docs/getting_started/quickstart) | [OpenAI API Compatibility](./api-openai) | [GitHub](https://github.com/ogx-ai/ogx)
