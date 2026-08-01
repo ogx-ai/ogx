@@ -7,7 +7,7 @@
 import time
 
 from ogx.core.datatypes import CompressionConfig
-from ogx.providers.utils.inference.compression import (
+from ogx.providers.inline.responses.builtin.responses.compression import (
     _split_into_turns,
     apply_output_token_cap,
     compress_messages,

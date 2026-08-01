@@ -13,6 +13,7 @@ from openai import APIStatusError
 from openai.types.chat import ChatCompletionToolParam
 from opentelemetry import trace
 
+from ogx.core.datatypes import CompressionConfig
 from ogx.log import get_logger
 from ogx.providers.utils.inference.openai_compat import convert_tooldef_to_openai_tool
 from ogx.providers.utils.inference.prompt_adapter import interleaved_content_as_str
@@ -107,6 +108,7 @@ from ogx_api import (
 )
 from ogx_api.inference import ServiceTier
 
+from .compression import SummarizeCallback, maybe_compress_request
 from .types import (
     AssistantMessageWithReasoning,
     ChatCompletionContext,
@@ -260,8 +262,10 @@ class StreamingResponseOrchestrator:
         presence_penalty: float | None = None,
         extra_body: dict | None = None,
         stream_options: ResponseStreamOptions | None = None,
+        compression_config: CompressionConfig | None = None,
     ):
         self.inference_api = inference_api
+        self.compression_config = compression_config or CompressionConfig()
         self.ctx = ctx
         self.response_id = response_id
         self.created_at = created_at
@@ -567,6 +571,25 @@ class StreamingResponseOrchestrator:
                     presence_penalty=self.presence_penalty,
                     **(self.extra_body or {}),
                 )
+
+                # Context compression is a feature of this agentic loop, not the chat
+                # completions endpoint: it only touches the outgoing request, never the
+                # `messages`/`self.final_messages` history that gets persisted.
+                if self.compression_config.enabled:
+                    summarize: SummarizeCallback | None = None
+                    if self.compression_config.summarize_dropped_turns:
+
+                        async def summarize(
+                            request: OpenAIChatCompletionRequestWithExtraBody,
+                        ) -> OpenAIChatCompletion:
+                            response = await self.inference_api.openai_chat_completion(request)
+                            assert isinstance(response, OpenAIChatCompletion)
+                            return response
+
+                    await maybe_compress_request(
+                        params, self.compression_config, model_id=self.ctx.model, summarize=summarize
+                    )
+
                 # Use reasoning-aware method when reasoning is explicitly requested
                 completion_result: (
                     OpenAIChatCompletionWithReasoning

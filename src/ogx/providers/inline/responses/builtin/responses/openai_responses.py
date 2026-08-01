@@ -21,7 +21,7 @@ import tiktoken
 from pydantic import TypeAdapter
 
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
-from ogx.core.datatypes import VectorStoresConfig
+from ogx.core.datatypes import CompressionConfig, VectorStoresConfig
 from ogx.core.task import (
     RequestContext,
     activate_request_context,
@@ -142,6 +142,7 @@ class OpenAIResponsesImpl:
         vector_stores_config: VectorStoresConfig | None = None,
         compaction_config=None,
         memory_config: MemoryConfig | None = None,
+        compression_config: CompressionConfig | None = None,
     ):
         self.inference_api = inference_api
         self.tool_groups_api = tool_groups_api
@@ -164,6 +165,7 @@ class OpenAIResponsesImpl:
 
         self.compaction_config = compaction_config or CompactionConfig()
         self.memory_config = memory_config or MemoryConfig()
+        self.compression_config = compression_config or CompressionConfig()
         self._background_queue: asyncio.Queue[_BackgroundWorkItem] = asyncio.Queue(maxsize=BACKGROUND_QUEUE_MAX_SIZE)
         self._background_worker_tasks: set[asyncio.Task] = set()
         self._background_response_tasks: dict[str, asyncio.Task] = {}
@@ -1400,6 +1402,7 @@ class OpenAIResponsesImpl:
                 presence_penalty=request.presence_penalty,
                 stream_options=request.stream_options,
                 extra_body=extra_body,
+                compression_config=self.compression_config,
             )
 
             final_response = None

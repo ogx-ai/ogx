@@ -8,37 +8,45 @@ conversation histories (especially in agentic/tool-calling workloads) push more 
 tokens into every request, and requests that don't cap output length can generate more
 completion tokens than needed.
 
-Compression is applied uniformly to every chat completion request handled by
-`InferenceRouter` — both direct `/v1/chat/completions` calls and internal calls made by
-the Responses API orchestrator — regardless of which inference provider ultimately serves
-the request. It is **disabled by default**; enabling it changes nothing about a request
-until you opt in.
+Compression is a feature of the agentic Responses loop, not the Chat Completions
+endpoint. The `/v1/chat/completions` endpoint remains a faithful passthrough with no
+pre/post-processing of its own — the same contract OpenAI's endpoint has. The Responses
+API is already agentic (it drives multi-turn tool-calling loops, manages reasoning, and
+persists conversation state) and is free to adjust the outgoing request as appropriate;
+compression only touches the messages sent to the model on each inference call the
+Responses loop makes, never the persisted conversation history. It is **disabled by
+default**; enabling it changes nothing about a request until you opt in.
 
 ## Configuration Structure
 
-Compression is configured through a single top-level `compression:` section in your run
-config (the same level as `server:` or `vector_stores:`), not per-provider:
+Compression is configured per-provider, under the built-in `responses` provider's
+`compression_config`:
 
 ```yaml
-compression:
-  enabled: true
+providers:
+  responses:
+    - provider_id: builtin
+      provider_type: inline::builtin
+      config:
+        compression_config:
+          enabled: true
 
-  # Context compression: applied to outgoing messages before every inference call
-  max_context_tokens: 8000
-  dedupe_tool_outputs: true
-  max_tool_output_tokens: 1000
-  summarize_dropped_turns: true
-  summarization_model: null
-  summarization_prompt: "You are compressing older parts of a conversation..."
+          # Context compression: applied to outgoing messages before every inference call
+          max_context_tokens: 8000
+          dedupe_tool_outputs: true
+          max_tool_output_tokens: 1000
+          summarize_dropped_turns: true
+          summarization_model: null
+          summarization_prompt: "You are compressing older parts of a conversation..."
 
-  # Output token reduction
-  max_output_tokens: 1024
+          # Output token reduction
+          max_output_tokens: 1024
 
-  # Token counting
-  tokenizer_encoding: null
-  model_tokenizer_mappings:
-    llama: cl100k_base
-    mistral: cl100k_base
+          # Token counting
+          tokenizer_encoding: null
+          model_tokenizer_mappings:
+            llama: cl100k_base
+            mistral: cl100k_base
 ```
 
 ## Configuration Fields
@@ -70,21 +78,27 @@ compression:
    never split apart. The oldest turns are dropped first; the most recent turn is always
    kept, even if it alone exceeds the budget.
 4. **Summarization**, if enabled, replaces the dropped turns with a single system message
-   containing an LLM-generated summary, via a request that bypasses compression itself
-   (so the summarization call isn't recursively compressed). If the summarization call
+   containing an LLM-generated summary, via a direct inference call that isn't itself
+   subject to compression (compression only applies to requests built by the Responses
+   loop's own turn-taking, not this one-off summarization call). If the summarization call
    fails for any reason, the turns are dropped without a summary rather than failing the
    original request.
 
 ## Example: Long Agent Conversation
 
 ```yaml
-compression:
-  enabled: true
-  max_context_tokens: 16000
-  dedupe_tool_outputs: true
-  max_tool_output_tokens: 2000
-  summarize_dropped_turns: true
-  max_output_tokens: 2048
+providers:
+  responses:
+    - provider_id: builtin
+      provider_type: inline::builtin
+      config:
+        compression_config:
+          enabled: true
+          max_context_tokens: 16000
+          dedupe_tool_outputs: true
+          max_tool_output_tokens: 2000
+          summarize_dropped_turns: true
+          max_output_tokens: 2048
 ```
 
 With this configuration, a long-running agent conversation that accumulates many tool

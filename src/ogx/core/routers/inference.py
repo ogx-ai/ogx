@@ -15,10 +15,9 @@ from openai.types.chat import ChatCompletionToolParam as OpenAIChatCompletionToo
 from pydantic import TypeAdapter
 
 from ogx.core.access_control.access_control import is_action_allowed
-from ogx.core.datatypes import CompressionConfig, ModelWithOwner
+from ogx.core.datatypes import ModelWithOwner
 from ogx.core.request_headers import get_authenticated_user
 from ogx.log import get_logger
-from ogx.providers.utils.inference.compression import maybe_compress_request
 from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.telemetry.inference_metrics import (
     create_inference_metric_attributes,
@@ -85,12 +84,10 @@ class InferenceRouter(Inference):
         self,
         routing_table: RoutingTable,
         store: InferenceStore | None = None,
-        compression_config: CompressionConfig | None = None,
     ) -> None:
         logger.debug("Initializing InferenceRouter")
         self.routing_table = routing_table
         self.store = store
-        self.compression_config = compression_config
 
     async def initialize(self) -> None:
         logger.debug("InferenceRouter.initialize")
@@ -261,25 +258,6 @@ class InferenceRouter(Inference):
         if params.tool_choice == "none" and params.tools is not None:
             params.tool_choice = None
             params.tools = None
-
-        if self.compression_config and self.compression_config.enabled:
-            summarize = None
-            if self.compression_config.summarize_dropped_turns:
-
-                async def summarize(request: OpenAIChatCompletionRequestWithExtraBody) -> OpenAIChatCompletion:
-                    # Call the provider directly rather than self.openai_chat_completion so
-                    # this internal summarization request isn't recursively compressed.
-                    summarize_provider, summarize_resource_id = await self._get_model_provider(
-                        request.model, ModelType.llm
-                    )
-                    request.model = summarize_resource_id
-                    response = await summarize_provider.openai_chat_completion(request)
-                    assert isinstance(response, OpenAIChatCompletion)
-                    return response
-
-            await maybe_compress_request(
-                params, self.compression_config, model_id=request_model_id, summarize=summarize
-            )
 
         if params.stream:
             response_stream = await provider.openai_chat_completion(params)

@@ -726,7 +726,8 @@ DEFAULT_COMPRESSION_SUMMARIZATION_PROMPT = (
 
 class CompressionConfig(BaseModel):
     """Configuration for request-side context compression and output token capping,
-    applied uniformly to every inference call via InferenceRouter."""
+    applied to inference calls made by the agentic responses loop. The Chat Completions
+    endpoint is unaffected: it remains a faithful passthrough with no pre/post-processing."""
 
     enabled: bool = Field(
         default=False,
@@ -989,11 +990,6 @@ can be instantiated multiple times (with different configs) if necessary.
     vector_stores: VectorStoresConfig | None = Field(
         default=None,
         description="Configuration for vector stores, including default embedding model",
-    )
-
-    compression: CompressionConfig | None = Field(
-        default=None,
-        description="Configuration for request-side context compression and output token capping applied to all inference calls.",
     )
 
     connectors: list[ConnectorInput] = Field(

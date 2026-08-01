@@ -105,7 +105,10 @@ def _make_tool_call(call_id: str, name: str, arguments: str = "{}") -> OpenAICha
     )
 
 
-def _build_orchestrator(mcp_tool_to_server: dict[str, OpenAIResponseInputToolMCP]) -> StreamingResponseOrchestrator:
+def _build_orchestrator(
+    mcp_tool_to_server: dict[str, OpenAIResponseInputToolMCP],
+    compression_config=None,
+) -> StreamingResponseOrchestrator:
     mock_ctx = MagicMock(spec=ChatCompletionContext)
     mock_ctx.tool_context = MagicMock(spec=ToolContext)
     mock_ctx.tool_context.previous_tools = mcp_tool_to_server
@@ -133,6 +136,7 @@ def _build_orchestrator(mcp_tool_to_server: dict[str, OpenAIResponseInputToolMCP
         tool_executor=MagicMock(),
         instructions=None,
         moderation_endpoint=None,
+        compression_config=compression_config,
     )
 
 
@@ -431,6 +435,32 @@ class TestShouldSummarizeReasoning:
     def test_returns_true_for_auto(self):
         reasoning = OpenAIResponseReasoning(summary="auto")
         assert should_summarize_reasoning(reasoning) is True
+
+
+# ---------------------------------------------------------------------------
+# Compression config wiring
+#
+# Compression is a feature of this agentic loop (not the Chat Completions
+# endpoint): the orchestrator owns a CompressionConfig and applies it to the
+# outgoing request on each inference call. The compression algorithm itself
+# (dedup/truncate/window/summarize) is covered by test_compression.py; these
+# tests only cover that the config is threaded through correctly.
+# ---------------------------------------------------------------------------
+
+
+class TestCompressionConfigWiring:
+    def test_defaults_to_disabled_compression(self):
+        orch = _build_orchestrator({})
+        assert orch.compression_config.enabled is False
+
+    def test_stores_provided_compression_config(self):
+        from ogx.core.datatypes import CompressionConfig
+
+        compression_config = CompressionConfig(enabled=True, max_context_tokens=1000)
+        orch = _build_orchestrator({}, compression_config=compression_config)
+        assert orch.compression_config is compression_config
+        assert orch.compression_config.enabled is True
+        assert orch.compression_config.max_context_tokens == 1000
 
 
 class TestBuildSummaryPrompt:
