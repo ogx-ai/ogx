@@ -27,6 +27,8 @@ from .constants import (
     VECTOR_INSERT_DURATION,
     VECTOR_INSERTS_TOTAL,
     VECTOR_QUERIES_TOTAL,
+    VECTOR_QUERY_RESULT_COUNT,
+    VECTOR_QUERY_STAGE_DURATION,
     VECTOR_RETRIEVAL_DURATION,
     VECTOR_STORES_TOTAL,
 )
@@ -94,6 +96,19 @@ vector_retrieval_duration: Histogram = meter.create_histogram(
     explicit_bucket_boundaries_advisory=_DURATION_BUCKETS,
 )
 
+vector_query_stage_duration: Histogram = meter.create_histogram(
+    name=VECTOR_QUERY_STAGE_DURATION,
+    description="Duration of individual vector query stages",
+    unit="s",
+    explicit_bucket_boundaries_advisory=_DURATION_BUCKETS,
+)
+
+vector_query_result_count: Histogram = meter.create_histogram(
+    name=VECTOR_QUERY_RESULT_COUNT,
+    description="Number of chunks returned by vector query operations",
+    unit="1",
+)
+
 
 def create_vector_metric_attributes(
     vector_db: str | None = None,
@@ -101,6 +116,7 @@ def create_vector_metric_attributes(
     provider: str | None = None,
     status: str | None = None,
     search_mode: str | None = None,
+    stage: str | None = None,
 ) -> dict[str, str]:
     """Create a consistent attribute dictionary for vector IO metrics.
 
@@ -110,6 +126,7 @@ def create_vector_metric_attributes(
         provider: Provider ID (e.g., "chromadb", "faiss")
         status: Request outcome ("success", "error")
         search_mode: Search mode used (e.g., "vector", "keyword", "hybrid")
+        stage: Retrieval stage (e.g., "embedding", "backend_search", "neural_rerank")
 
     Returns:
         Dictionary of attributes with non-None values
@@ -126,5 +143,7 @@ def create_vector_metric_attributes(
         attributes["status"] = status
     if search_mode is not None:
         attributes["search_mode"] = search_mode
+    if stage is not None:
+        attributes["stage"] = stage
 
     return attributes

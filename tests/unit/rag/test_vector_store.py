@@ -8,7 +8,7 @@ import base64
 import mimetypes
 import os
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
@@ -21,6 +21,7 @@ from ogx.providers.utils.memory.vector_store import (
     make_overlapped_chunks,
 )
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
+from ogx.telemetry.vector_io_metrics import vector_query_result_count, vector_query_stage_duration
 from ogx_api import (
     Chunk,
     ChunkMetadata,
@@ -544,3 +545,51 @@ class TestNeuralRerank:
         # Verify max_num_results was passed to rerank
         rerank_request = store.inference_api.rerank.call_args.args[0]
         assert rerank_request.max_num_results == 2
+
+    async def test_query_chunks_records_stage_metrics(self):
+        config = VectorStoresConfig(
+            default_reranker_model=RerankerModel(
+                provider_id="transformers",
+                model_id="Qwen/Qwen3-Reranker-0.6B",
+            ),
+        )
+        store = self._make_vector_store_with_index(vector_stores_config=config)
+        store.index.query_vector.return_value = self._make_query_chunks_response(
+            [
+                ("Chunk A", 3.0, "doc-1"),
+                ("Chunk B", 2.0, "doc-2"),
+            ]
+        )
+        store.inference_api.rerank.return_value = RerankResponse(
+            data=[
+                RerankData(index=0, relevance_score=0.9),
+            ]
+        )
+
+        request = QueryChunksRequest(
+            vector_store_id="test-store",
+            query="test query",
+            params={
+                "reranker_type": "neural",
+                "reranker_params": {},
+            },
+        )
+
+        with (
+            patch.object(vector_query_stage_duration, "record") as mock_stage_duration,
+            patch.object(vector_query_result_count, "record") as mock_result_count,
+        ):
+            result = await store.query_chunks(request)
+
+        assert len(result.chunks) == 1
+        recorded_stages = [call.args[1]["stage"] for call in mock_stage_duration.call_args_list]
+        assert recorded_stages == ["embedding", "backend_search", "neural_rerank"]
+        for call in mock_stage_duration.call_args_list:
+            assert call.args[0] >= 0
+            assert call.args[1]["vector_db"] == "test-store"
+            assert call.args[1]["operation"] == "query"
+            assert call.args[1]["search_mode"] == "vector"
+            assert call.args[1]["status"] == "success"
+        mock_result_count.assert_called_once()
+        assert mock_result_count.call_args.args[0] == 1
+        assert mock_result_count.call_args.args[1]["vector_db"] == "test-store"

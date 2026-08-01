@@ -7,7 +7,7 @@ import io
 import threading
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING, Any
@@ -44,6 +44,11 @@ from ogx.providers.utils.inference.prompt_adapter import (
 )
 from ogx.providers.utils.vector_io.filters import Filter
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
+from ogx.telemetry.vector_io_metrics import (
+    create_vector_metric_attributes,
+    vector_query_result_count,
+    vector_query_stage_duration,
+)
 from ogx_api import (
     Chunk,
     ChunkForDeletion,
@@ -364,10 +369,19 @@ class VectorStoreWithIndex:
             reranker_params["neural_weights"] = params["neural_weights"]
 
         query_string = interleaved_content_as_str(request.query)
-        log.debug("query_chunks", query=query_string, mode=mode, k=k, reranker_type=reranker_type)
+        metric_attrs = create_vector_metric_attributes(
+            vector_db=request.vector_store_id,
+            operation="query",
+            search_mode=mode or "vector",
+        )
+        log.debug("Querying chunks", mode=mode, k=k, reranker_type=reranker_type, has_filters=filters is not None)
 
         if mode == "keyword":
-            response = await self.index.query_keyword(query_string, k, score_threshold, filters)
+            response = await self._record_query_stage(
+                "backend_search",
+                metric_attrs,
+                lambda: self.index.query_keyword(query_string, k, score_threshold, filters),
+            )
 
         else:
             if "embedding_dimensions" in params:
@@ -380,32 +394,70 @@ class VectorStoreWithIndex:
                 embeddings_request = OpenAIEmbeddingsRequestWithExtraBody(
                     model=self.vector_store.embedding_model, input=[query_string]
                 )
-            embeddings_response = await self.inference_api.openai_embeddings(embeddings_request)
+            embeddings_start_time = time.perf_counter()
+            try:
+                embeddings_response = await self.inference_api.openai_embeddings(embeddings_request)
+            except Exception:
+                self._record_query_stage_duration("embedding", metric_attrs, embeddings_start_time, "error")
+                raise
+            self._record_query_stage_duration("embedding", metric_attrs, embeddings_start_time, "success")
+
             np = _get_numpy()
             query_vector = np.array(embeddings_response.data[0].embedding, dtype=np.float32)
             if mode == "hybrid":
-                response = await self.index.query_hybrid(
-                    query_vector, query_string, k, score_threshold, reranker_type, reranker_params, filters
+                response = await self._record_query_stage(
+                    "backend_search",
+                    metric_attrs,
+                    lambda: self.index.query_hybrid(
+                        query_vector, query_string, k, score_threshold, reranker_type, reranker_params, filters
+                    ),
                 )
             else:
-                response = await self.index.query_vector(query_vector, k, score_threshold, filters)
+                response = await self._record_query_stage(
+                    "backend_search",
+                    metric_attrs,
+                    lambda: self.index.query_vector(query_vector, k, score_threshold, filters),
+                )
 
-        log.debug("query_chunks retrieved chunks before neural reranking", chunks_count=len(response.chunks))
-        for i, (chunk, score) in enumerate(zip(response.chunks, response.scores, strict=False)):
-            preview = chunk.content[:120] if isinstance(chunk.content, str) else str(chunk.content)[:120]
-            log.debug(
-                "Retrieved chunk preview",
-                chunk_index=i,
-                score=f"{score:.4f}",
-                document_id=chunk.metadata.get("document_id", "N/A"),
-                content=preview,
-            )
+        log.debug("Retrieved chunks before neural reranking", chunk_count=len(response.chunks))
 
         # Apply neural reranking if enabled
         if neural_reranking_enabled and response.chunks:
-            response = await self.apply_neural_rerank(query_string, response, desired_max_num_results, reranker_params)
+            response = await self._record_query_stage(
+                "neural_rerank",
+                metric_attrs,
+                lambda: self.apply_neural_rerank(query_string, response, desired_max_num_results, reranker_params),
+            )
 
+        vector_query_result_count.record(len(response.chunks), metric_attrs)
         return response
+
+    async def _record_query_stage(
+        self,
+        stage: str,
+        metric_attrs: dict[str, str],
+        operation: Callable[[], Awaitable[QueryChunksResponse]],
+    ) -> QueryChunksResponse:
+        start_time = time.perf_counter()
+        try:
+            result = await operation()
+        except Exception:
+            self._record_query_stage_duration(stage, metric_attrs, start_time, "error")
+            raise
+        self._record_query_stage_duration(stage, metric_attrs, start_time, "success")
+        return result
+
+    def _record_query_stage_duration(
+        self,
+        stage: str,
+        metric_attrs: dict[str, str],
+        start_time: float,
+        status: str,
+    ) -> None:
+        vector_query_stage_duration.record(
+            time.perf_counter() - start_time,
+            {**metric_attrs, "stage": stage, "status": status},
+        )
 
     async def apply_neural_rerank(
         self,
@@ -450,10 +502,10 @@ class VectorStoreWithIndex:
             )
 
         except Exception as e:
-            log.error(f"Neural reranking failed: {e}. Returning original results.")
+            log.error("Failed to neural rerank chunks, returning original results", error=str(e))
             return response
 
-        log.debug("Rerank response", data=rerank_response.data)
+        log.debug("Received neural rerank response", result_count=len(rerank_response.data))
 
         # Reorder chunks and scores based on neural rerank results
         reranked_chunks = []
@@ -463,16 +515,7 @@ class VectorStoreWithIndex:
                 reranked_chunks.append(response.chunks[reranked_chunk.index])
                 reranked_scores.append(reranked_chunk.relevance_score)
 
-        log.info(f"Neural rerank: reranked {len(reranked_chunks)} chunks using model={reranker_model}")
-        for i, (chunk, score) in enumerate(zip(reranked_chunks, reranked_scores, strict=False)):
-            preview = chunk.content[:120] if isinstance(chunk.content, str) else str(chunk.content)[:120]
-            log.debug(
-                "Reranked chunk preview",
-                chunk_index=i,
-                relevance_score=f"{score:.4f}",
-                document_id=chunk.metadata.get("document_id", "N/A"),
-                content=preview,
-            )
+        log.debug("Neural rerank completed", chunk_count=len(reranked_chunks), model=reranker_model)
 
         return QueryChunksResponse(chunks=reranked_chunks, scores=reranked_scores)
 

@@ -38,6 +38,8 @@ VECTOR_DOCUMENTS_RETRIEVED_TOTAL = f"{VECTOR_IO_PREFIX}.documents_retrieved_tota
 # Vector operation durations
 VECTOR_INSERT_DURATION = f"{VECTOR_IO_PREFIX}.insert_duration_seconds"
 VECTOR_RETRIEVAL_DURATION = f"{VECTOR_IO_PREFIX}.retrieval_duration_seconds"
+VECTOR_QUERY_STAGE_DURATION = f"{VECTOR_IO_PREFIX}.query_stage_duration_seconds"
+VECTOR_QUERY_RESULT_COUNT = f"{VECTOR_IO_PREFIX}.query_result_count"
 
 # Request Metrics
 # These constants define the names for OpenTelemetry metrics tracking API gateway request-level operations

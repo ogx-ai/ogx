@@ -21,6 +21,8 @@ from ogx.telemetry.vector_io_metrics import (
     vector_insert_duration,
     vector_inserts_total,
     vector_queries_total,
+    vector_query_result_count,
+    vector_query_stage_duration,
     vector_retrieval_duration,
     vector_stores_total,
 )
@@ -35,12 +37,14 @@ class TestVectorMetricAttributes:
             operation="chunks",
             provider="chromadb",
             status="success",
+            stage="backend_search",
         )
         assert attrs == {
             "vector_db": "vs_abc123",
             "operation": "chunks",
             "provider": "chromadb",
             "status": "success",
+            "stage": "backend_search",
         }
 
     def test_create_vector_metric_attributes_partial_fields(self):
@@ -77,7 +81,12 @@ class TestVectorMetricInstruments:
             assert hasattr(counter, "add")
 
     def test_histograms_exist(self):
-        for histogram in [vector_insert_duration, vector_retrieval_duration]:
+        for histogram in [
+            vector_insert_duration,
+            vector_retrieval_duration,
+            vector_query_stage_duration,
+            vector_query_result_count,
+        ]:
             assert histogram is not None
             assert hasattr(histogram, "record")
 
@@ -105,6 +114,8 @@ class TestVectorMetricInstruments:
         # Should not raise
         vector_insert_duration.record(1.234, attrs)
         vector_retrieval_duration.record(0.567, attrs)
+        vector_query_stage_duration.record(0.123, {**attrs, "stage": "backend_search"})
+        vector_query_result_count.record(5, attrs)
 
 
 class TestVectorMetricsConstants:
@@ -119,6 +130,8 @@ class TestVectorMetricsConstants:
             VECTOR_INSERT_DURATION,
             VECTOR_INSERTS_TOTAL,
             VECTOR_QUERIES_TOTAL,
+            VECTOR_QUERY_RESULT_COUNT,
+            VECTOR_QUERY_STAGE_DURATION,
             VECTOR_RETRIEVAL_DURATION,
             VECTOR_STORES_TOTAL,
         )
@@ -136,10 +149,13 @@ class TestVectorMetricsConstants:
             assert "vector_io" in name
             assert name.endswith("_total")
 
-        for name in [VECTOR_INSERT_DURATION, VECTOR_RETRIEVAL_DURATION]:
+        for name in [VECTOR_INSERT_DURATION, VECTOR_RETRIEVAL_DURATION, VECTOR_QUERY_STAGE_DURATION]:
             assert name.startswith("ogx.")
             assert "vector_io" in name
             assert name.endswith("_seconds")
+
+        assert VECTOR_QUERY_RESULT_COUNT.startswith("ogx.")
+        assert "vector_io" in VECTOR_QUERY_RESULT_COUNT
 
 
 class TestVectorIORouterMetricsIntegration:
