@@ -3,28 +3,36 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-fallback_version = "1.0.3.dev0"
+fallback_version = "1.2.1.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
 constraint-dependencies = [
-    "aiohttp>=3.13.4",                # CVE-2026-34514 + 9 more: CRLF injection, header leak, DoS
+    "aiohttp>=3.14.0",                # CVE-2026-34993: CookieJar.load() RCE
     "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
-    "cryptography>=46.0.7",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
+    "cryptography>=48.0.1",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
     "fonttools>=4.60.2",
     "gitpython>=3.1.47",               # Command injection via Git options bypass
     "h11>=0.16.0",
-    "pydantic>=2.11.9,<2.12.0",        # 2.12 breaks int coercion in openai.types.model.Model during test replay
+    "idna>=3.15",
+    "joserfc>=1.6.8",
+    "langgraph-checkpoint>=4.1.1",
+    "langgraph-sdk>=0.3.15",
+    "langsmith>=0.8.18",
     "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
-    "pillow>=12.2.0",                  # CVE-2026-40192 + 4 more: heap overflow, OOB write, DoS
+    "msgpack>=1.2.1",
+    "pillow>=12.3.0",                  # CVE-2026-42311: PSD RCE; CVE-2026-55379/55380/54060: font/GD DoS
     "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
-    "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
-    "python-multipart>=0.0.27",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
-    "python-socketio>=5.14.0",         # CVE-2025-61765: RCE via pickle deserialization
+    "pyasn1>=0.6.4",                   # CVE-2026-30922: DoS via unbounded recursion
+    "pydantic-settings>=2.14.2",
+    "python-engineio>=4.13.2",
+    "python-multipart>=0.0.31",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
+    "python-socketio>=5.16.2",         # CVE-2025-61765: RCE via pickle deserialization
+    "requests>=2.34.2",
     "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
-    "starlette>=0.49.1",
-    "tornado>=6.5.5",
-    "urllib3>=2.7.0",
+    "starlette>=1.3.1",                # CVE-2026-48710
+    "tornado>=6.5.6",
+    "urllib3>=2.7.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
     "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
     "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
@@ -54,48 +62,57 @@ dependencies = [
     "jinja2>=3.1.6",
     "jsonschema",
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
-    "openai>=2.30.0",
-    "python-dotenv",
-    "pyjwt[crypto]>=2.12.0",                          # Pull crypto to support RS256 for jwt. Requires 2.12.0+ to fix CVE-2026-32597.
+    "openai>=2.41.0",
+    "python-dotenv>=1.2.2",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
+    "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. CVE-2026-48526: auth bypass via forged JWTs.
     "pydantic>=2.11.9",
     "rich",
     "structlog>=24.1.0",
     "termcolor",
     "tiktoken",
     "uvicorn>=0.34.0",                                # server
-    "opentelemetry-sdk>=1.30.0",                      # server
+    "websockets>=14.0",                               # server - WebSocket transport for the Responses API
+    "opentelemetry-sdk>=1.42.1",                      # server
     "opentelemetry-exporter-otlp-proto-http>=1.30.0", # server
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30.0", # server (auto-instrumentation default)
+    "opentelemetry-exporter-prometheus>=0.60b1",      # server - Prometheus /metrics scrape endpoint; only pre-releases on PyPI
     "opentelemetry-distro>=0.60b1",                  # optional CLI instrumentation; only pre-releases on PyPI (latest 0.60b1)
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "mcp>=1.23.0",                                    # for connectors
+    "mcp>=1.28.1,<2.0",                                # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
+    "models-dev>=1.0.398",
 ]
 
 [project.optional-dependencies]
 client = [
-    "ogx-client>=1.0.2", # Optional for library-only usage
+    "ogx-client>=1.2.0", # Optional for library-only usage
+]
+openclient = [
+    "ogx-open-client>=1.0.2",
 ]
 starter = [
     "aiohttp",
-    "anthropic",
+    "anthropic>=0.105.2",
     "autoevals",
-    "boto3",
+    "boto3>=1.43.18",
     "chardet",
     "chromadb-client",
     "datasets>=4.0.0",
+    "docling-slim[service-client]>=2.103.0",  # AsyncDoclingServiceClient added in 2.103.0
     "einops",
     "elasticsearch>=8.16.0,<9.0.0",
     "emoji",
     "faiss-cpu",
     "fire",
     "fireworks-ai<=0.17.16",
-    "google-genai>=1.69.0",
+    "google-genai>=1.69.0,<2",
     "langdetect",
     "markitdown[all]",
     "matplotlib",
-    "nltk>=3.9.4",
+    "nltk>=3.10.0",                                      # CVE-2026-54293/CVE-2026-12243: path traversal in nltk.data.load()
+    "neo4j",
     "numpy",
     "ollama",
     "pandas",
@@ -103,22 +120,22 @@ starter = [
     "pgvector>=0.3.0",
     "pymilvus[milvus-lite]>=2.4.10",
     "pymongo",
-    "pypdf>=6.10.2",
+    "pypdf>=6.13.3",
     "pythainlp",
     "qdrant-client",
-    "redis",
+    "redis>=8.0.0",
     "requests",
     "safetensors",
-    "scikit-learn",
     "scipy",
-    "sentence-transformers",
+    "sentence-transformers>=5.6.0",
     "sentencepiece",
     "sqlite-vec",
     "together>=2",
     "tokenizers",
-    "torch",
+    "torch>=2.13.0",
     "tqdm",
     "tree_sitter",
+    "unstructured-client>=0.25.0",
     "weaviate-client>=4.16.5",
 ]
 
@@ -127,21 +144,21 @@ dev = [
     {include-group = "unit"},
     "pytest>=8.4",
     "pytest-timeout",
-    "pytest-asyncio>=1.0",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",
     "pytest-json-report",
-    "pytest-socket",                 # For blocking network access in unit tests
+    "pytest-socket>=0.8.0",                 # For blocking network access in unit tests
     "nbval",                         # For notebook testing
-    "black",
-    "ruff",
+    "black>=26.5.1",
+    "ruff>=0.15.14",
     "mypy",
     "pre-commit>=4.4.0",
     "ruamel.yaml",                   # needed for openapi generator
-    "openapi-spec-validator>=0.7.2",
-    "ogx-client>=1.0.2",
-    "boto3",
-    "torch>=2.6.0",
+    "openapi-spec-validator>=0.9.0",
+    "ogx-open-client>=1.0.2",
+    "boto3>=1.43.18",
+    "torch>=2.13.0",
 ]
 # Type checking dependencies - includes type stubs and optional runtime dependencies
 # needed for complete mypy coverage across all optional features
@@ -150,20 +167,20 @@ type_checking = [
     "types-setuptools",
     "types-jsonschema",
     "markitdown[all]",
-    "pypdf>=6.10.2",
+    "pypdf>=6.13.3",
     "pandas-stubs",
-    "types-psutil",
+    "types-psutil>=7.2.2.20260518",
     "types-tqdm",
     "boto3-stubs[s3]",
     "chardet",
-    "streamlit",
+    "streamlit>=1.58.0",
     "streamlit-option-menu",
     "pandas",
-    "anthropic",
-    "databricks-sdk",
+    "anthropic>=0.105.2",
+    "databricks-sdk>=0.114.0",
     "fairscale",
     "torchtune",
-    "trl",
+    "trl>=1.5.0",
     "peft",
     "datasets",
     "together",
@@ -173,37 +190,41 @@ type_checking = [
     "sqlite-vec",
     "faiss-cpu",
     "lm-format-enforcer",
-    "mcp>=1.23.0",
+    "mcp>=1.28.1,<2.0",
+    "neo4j",
     "ollama",
-    "langchain-openai",
-    "langchain-core",
+    "langchain-openai>=1.2.2",
+    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
     "langgraph",
-    "ogx-client>=1.0.2",
+    "ogx-open-client>=1.0.2",
 ]
 test-common = [
     "aiohttp",
     "aiosqlite",
     "asyncpg>=0.29.0",
     "chardet",
-    "mcp>=1.23.0",
+    "mcp>=1.28.1,<2.0",
+    "neo4j",
     "pgvector>=0.3.0",
     "psycopg2-binary>=2.9.0",
-    "pypdf>=6.10.2",
+    "pypdf>=6.13.3",
     "sqlalchemy[asyncio]>=2.0.41",
 ]
 # These are the dependencies required for running unit tests.
 unit = [
     {include-group = "test-common"},
-    "anthropic",
+    "anthropic>=0.105.2",
     "blobfile",
     "coverage",
-    "databricks-sdk",
+    "databricks-sdk>=0.114.0",
+    "docling-slim[service-client]>=2.103.0",  # AsyncDoclingServiceClient added in 2.103.0
     "faiss-cpu",
     "markitdown[all]",
     "moto[s3]>=5.1.10",
     "ollama",
     "sqlite-vec",
     "together",
+    "unstructured-client>=0.25.0",
 ]
 # These are the core dependencies required for running integration tests. They are shared across all
 # providers. If a provider requires additional dependencies, please add them to your environment
@@ -215,23 +236,23 @@ test = [
     "chromadb>=1.0.15",
     "datasets>=4.0.0",
     "elasticsearch>=8.16.0, <9.0.0",
-    "google-genai>=1.69.0",
-    "langchain-core",
-    "langchain-openai",
+    "google-genai>=1.69.0,<2",
+    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
+    "langchain-openai>=1.2.2",
     "langgraph",
     "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
     "pymilvus>=2.6.2",
     "qdrant-client",
     "requests",
-    "torch>=2.6.0",
-    "torchvision>=0.21.0",
+    "torch>=2.13.0",
+    "torchvision>=0.27.0",
     "transformers",
     "weaviate-client>=4.16.4",
 ]
 docs = [
     "setuptools",
     "sphinx-autobuild",
-    "myst-parser",
+    "myst-parser>=5.1.0",
     "sphinx",
     "sphinx-rtd-theme",
     "sphinx_rtd_dark_mode",
@@ -341,32 +362,14 @@ convention = "google"
 "benchmarking/**/*.py" = ["D101", "S104", "S110", "S311"] # Ignore docstring and security rules for benchmarking scripts
 "client-sdks/**/*.py" = ["D101", "S110", "S112", "S113"] # Ignore docstring and security rules for client SDKs
 "scripts/**/*.py" = ["D101", "S110", "S112", "S603", "S607"] # Ignore docstring and security rules for scripts
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_support.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_core.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_checkers_format.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/utils/ifeval_word_list.py" = [
-    "RUF001",
-]
-"src/ogx/providers/inline/scoring/basic/scoring_fn/fn_defs/regex_parser_multiple_choice_answer.py" = [
-    "RUF001",
-    "PLE2515",
-]
 "src/ogx/apis/**/__init__.py" = [
     "F403",
 ] # Using import * is acceptable (or at least tolerated) in an __init__.py of a package API
 # Security rule suppressions for known false positives
 "src/ogx/core/datatypes.py" = ["S105"] # Enum values like OAUTH2_TOKEN are not hardcoded secrets
 "src/ogx/distributions/**/*.py" = ["S106"] # Env var template defaults (e.g. ${env.PGVECTOR_PASSWORD:=})
-"src/ogx/providers/remote/inference/databricks/config.py" = ["S107"] # Env var template defaults in sample_run_config
-"src/ogx/providers/remote/inference/gemini/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/vector_io/neo4j/config.py" = ["S107"] # Env var template defaults in sample_run_config
 "src/ogx/providers/remote/vector_io/pgvector/config.py" = ["S107"] # Env var template defaults in sample_run_config
-"src/ogx/providers/remote/inference/oci/auth.py" = ["S106"] # pass_phrase="none" placeholder
 "src/ogx/cli/**/*.py" = ["S603", "S607"] # CLI tools legitimately invoke subprocesses
 "src/ogx/core/utils/exec.py" = ["S603"] # Command execution utility
 "src/ogx/core/storage/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
@@ -396,17 +399,12 @@ exclude = [
     # All files now have type annotations! 🎉
     #
     # ============================================================================
-    # Section 2: Files that need strict typing issues fixed (109 files)
+    # Section 2: Files that need strict typing issues fixed (91 files)
     # ============================================================================
     # These files have some type hints but fail strict type checking due to
     # incomplete annotations, Any usage, or other strict mode violations.
     #
-    # Core files (4 files)
-    "^src/ogx/core/server/quota\\.py$",
-    "^src/ogx/core/server/routes\\.py$",
-    "^src/ogx/core/server/server\\.py$",
-    "^src/ogx/core/store/registry\\.py$",
-    # CLI files (8 files)
+    # CLI files (7 files)
     "^src/ogx/cli/stack/_list_deps\\.py$",
     "^src/ogx/cli/stack/list_apis\\.py$",
     "^src/ogx/cli/stack/list_deps\\.py$",
@@ -414,22 +412,13 @@ exclude = [
     "^src/ogx/cli/stack/run\\.py$",
     "^src/ogx/cli/stack/utils\\.py$",
     "^src/ogx/cli/subcommand\\.py$",
-    "^src/ogx/cli/utils\\.py$",
-    # Providers - Inline (27 files)
+    # Providers - Inline (22 files)
     "^src/ogx/providers/inline/batches/reference/__init__\\.py$",
     "^src/ogx/providers/inline/batches/reference/batches\\.py$",
-    "^src/ogx/providers/inline/eval/builtin/__init__\\.py$",
-    "^src/ogx/providers/inline/eval/builtin/eval\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/__init__\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/adapter\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/pypdf\\.py$",
     "^src/ogx/providers/inline/files/localfs/__init__\\.py$",
-    "^src/ogx/providers/inline/inference/sentence_transformers/__init__\\.py$",
-    "^src/ogx/providers/inline/inference/sentence_transformers/config\\.py$",
-    "^src/ogx/providers/inline/inference/sentence_transformers/sentence_transformers\\.py$",
-    "^src/ogx/providers/inline/inference/transformers/__init__\\.py$",
-    "^src/ogx/providers/inline/inference/transformers/config\\.py$",
-    "^src/ogx/providers/inline/inference/transformers/transformers\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/__init__\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/context_retriever\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/file_search\\.py$",
@@ -440,74 +429,23 @@ exclude = [
     "^src/ogx/providers/inline/vector_io/qdrant/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/sqlite_vec\\.py$",
-    # Providers - Remote (43 files)
-    "^src/ogx/providers/remote/eval/nvidia/__init__\\.py$",
-    "^src/ogx/providers/remote/eval/nvidia/config\\.py$",
-    "^src/ogx/providers/remote/eval/nvidia/eval\\.py$",
+    # Providers - Remote
     "^src/ogx/providers/remote/files/openai/__init__\\.py$",
     "^src/ogx/providers/remote/files/s3/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/anthropic/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/anthropic/anthropic\\.py$",
-    "^src/ogx/providers/remote/inference/anthropic/config\\.py$",
-    "^src/ogx/providers/remote/inference/azure/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/azure/config\\.py$",
-    "^src/ogx/providers/remote/inference/cerebras/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/cerebras/config\\.py$",
-    "^src/ogx/providers/remote/inference/databricks/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/fireworks/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/fireworks/config\\.py$",
-    "^src/ogx/providers/remote/inference/gemini/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/gemini/config\\.py$",
-    "^src/ogx/providers/remote/inference/gemini/gemini\\.py$",
-    "^src/ogx/providers/remote/inference/groq/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/groq/config\\.py$",
-    "^src/ogx/providers/remote/inference/llama_cpp_server/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/llama_cpp_server/config\\.py$",
-    "^src/ogx/providers/remote/inference/llama_openai_compat/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/llama_openai_compat/config\\.py$",
-    "^src/ogx/providers/remote/inference/ollama/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/ollama/config\\.py$",
     "^src/ogx/providers/remote/inference/ollama/ollama\\.py$",
-    "^src/ogx/providers/remote/inference/openai/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/openai/config\\.py$",
-    "^src/ogx/providers/remote/inference/sambanova/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/sambanova/config\\.py$",
-    "^src/ogx/providers/remote/inference/together/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/together/config\\.py$",
-    "^src/ogx/providers/remote/inference/together/together\\.py$",
-    "^src/ogx/providers/remote/inference/vertexai/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/vertexai/config\\.py$",
-    "^src/ogx/providers/remote/inference/vertexai/vertexai\\.py$",
-    "^src/ogx/providers/remote/inference/vllm/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/vllm/config\\.py$",
     "^src/ogx/providers/remote/vector_io/infinispan/__init__\\.py$",
     "^src/ogx/providers/remote/vector_io/infinispan/infinispan\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/__init__\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/oci26ai\\.py$",
-    # Providers - Utils (26 files)
+    # Providers - Utils
     "^src/ogx/providers/utils/bedrock/client\\.py$",
     "^src/ogx/providers/utils/bedrock/config\\.py$",
     "^src/ogx/providers/utils/bedrock/refreshable_boto_session\\.py$",
-    "^src/ogx/providers/utils/common/data_schema_validator\\.py$",
     "^src/ogx/providers/utils/common/data_url\\.py$",
-    "^src/ogx/providers/utils/datasetio/url_utils\\.py$",
-    "^src/ogx/providers/utils/inference/embedding_mixin\\.py$",
     "^src/ogx/providers/utils/inference/inference_store\\.py$",
     "^src/ogx/providers/utils/inference/model_registry\\.py$",
-    "^src/ogx/providers/utils/inference/openai_compat\\.py$",
-    "^src/ogx/providers/utils/inference/openai_mixin\\.py$",
-    "^src/ogx/providers/utils/inference/prompt_adapter\\.py$",
-    "^src/ogx/providers/utils/kvstore/kvstore\\.py$",
-    "^src/ogx/providers/utils/kvstore/postgres/postgres\\.py$",
-    "^src/ogx/providers/utils/kvstore/redis/redis\\.py$",
     "^src/ogx/providers/utils/memory/vector_store\\.py$",
     "^src/ogx/providers/utils/responses/responses_store\\.py$",
-    "^src/ogx/providers/utils/scheduler\\.py$",
-    "^src/ogx/providers/utils/scoring/aggregation_utils\\.py$",
-    "^src/ogx/providers/utils/scoring/base_scoring_fn\\.py$",
-    "^src/ogx/providers/utils/telemetry/dataset_mixin\\.py$",
-    "^src/ogx/providers/utils/telemetry/trace_protocol\\.py$",
-    "^src/ogx/providers/utils/telemetry/tracing\\.py$",
     "^src/ogx/providers/utils/tools/mcp\\.py$",
     "^src/ogx/providers/utils/tools/ttl_dict\\.py$",
     "^src/ogx/providers/utils/vector_io/vector_utils\\.py$",
@@ -519,7 +457,7 @@ exclude = [
     "^src/ogx/testing/api_recorder\\.py$",
     #
     # ============================================================================
-    # Directory Excludes (35 directories)
+    # Directory Excludes (19 directories)
     # ============================================================================
     # These are entire directories excluded from type checking. Files within
     # these directories need to be analyzed individually and moved to Section 1
@@ -528,23 +466,10 @@ exclude = [
     # Core directories
     "^src/ogx/core/routers/",
     "^src/ogx/core/routing_tables/",
-    # Provider directories - Inline
-    "^src/ogx/providers/inline/datasetio/localfs/",
-    "^src/ogx/providers/inline/scoring/basic/",
-    "^src/ogx/providers/inline/scoring/braintrust/",
-    "^src/ogx/providers/inline/scoring/llm_as_judge/",
     # Provider directories - Remote
-    "^src/ogx/providers/remote/agents/sample/",
-    "^src/ogx/providers/remote/datasetio/huggingface/",
-    "^src/ogx/providers/remote/datasetio/nvidia/",
     "^src/ogx/providers/remote/inference/bedrock/",
-    "^src/ogx/providers/remote/inference/nvidia/",
     "^src/ogx/providers/remote/inference/oci/",
-    "^src/ogx/providers/remote/inference/passthrough/",
-    "^src/ogx/providers/remote/inference/runpod/",
-
     "^src/ogx/providers/remote/inference/watsonx/",
-    "^src/ogx/providers/remote/post_training/nvidia/",
     "^src/ogx/providers/remote/tool_runtime/bing_search/",
     "^src/ogx/providers/remote/tool_runtime/brave_search/",
     "^src/ogx/providers/remote/tool_runtime/model_context_protocol/",
@@ -574,6 +499,8 @@ module = [
     "google.genai.*",
     "docling.*",
     "docling_core.*",
+    "unstructured.*",
+    "unstructured_client.*",
 ]
 ignore_missing_imports = true
 

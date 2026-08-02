@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Ban, ChevronRight, Code2, Loader2, Terminal } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { processCitations } from "@/lib/citations";
 import {
   Collapsible,
   CollapsibleContent,
@@ -122,11 +123,16 @@ type MessagePart =
   | FilePart
   | StepStartPart;
 
+export type { FileCitation } from "@/lib/citations";
+import type { FileCitation } from "@/lib/citations";
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | (string & {});
   content: string;
   createdAt?: Date;
+  annotations?: FileCitation[];
+  fileIdMap?: Record<string, string>;
   experimental_attachments?: Attachment[];
   toolInvocations?: ToolInvocation[];
   parts?: MessagePart[];
@@ -145,10 +151,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   showTimeStamp = false,
   animation = "scale",
   actions,
+  annotations,
+  fileIdMap,
   experimental_attachments,
   toolInvocations,
   parts,
 }) => {
+  const displayContent = useMemo(
+    () => processCitations(content, annotations, fileIdMap).cleaned,
+    [content, annotations, fileIdMap]
+  );
+
   const files = useMemo(() => {
     return experimental_attachments?.map(attachment => {
       const dataArray = dataUrlToUint8Array(attachment.url);
@@ -254,7 +267,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   return (
     <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
       <div className={cn(chatBubbleVariants({ isUser, animation }))}>
-        <MarkdownRenderer>{content}</MarkdownRenderer>
+        <MarkdownRenderer>{displayContent}</MarkdownRenderer>
         {actions ? (
           <div className="absolute -bottom-4 right-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground opacity-0 transition-opacity group-hover/message:opacity-100">
             {actions}

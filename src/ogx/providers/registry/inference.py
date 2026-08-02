@@ -39,7 +39,7 @@ def available_providers() -> list[ProviderSpec]:
             # CrossEncoder depends on torchao.quantization
             pip_packages=[
                 "torch torchvision torchao>=0.12.0 --extra-index-url https://download.pytorch.org/whl/cpu",
-                "sentence-transformers --no-deps",
+                "sentence-transformers",  # we installed cpu versions of pytorch so sentence-transformers doesn't pull in cuda deps
                 # required by some SentenceTransformers architectures for tensor rearrange/merge ops
                 "einops",
                 # fast HF tokenization backend used by SentenceTransformers models
@@ -51,19 +51,6 @@ def available_providers() -> list[ProviderSpec]:
             config_class="ogx.providers.inline.inference.sentence_transformers.config.SentenceTransformersInferenceConfig",
             description="Sentence Transformers inference provider for text embeddings and similarity search.",
         ),
-        InlineProviderSpec(
-            api=Api.inference,
-            provider_type="inline::transformers",
-            pip_packages=[
-                "torch --extra-index-url https://download.pytorch.org/whl/cpu",
-                "transformers",
-                "tokenizers",
-                "safetensors",
-            ],
-            module="ogx.providers.inline.inference.transformers",
-            config_class="ogx.providers.inline.inference.transformers.config.TransformersInferenceConfig",
-            description="Transformers inference provider for neural rerank.",
-        ),
         RemoteProviderSpec(
             api=Api.inference,
             adapter_type="cerebras",
@@ -73,6 +60,26 @@ def available_providers() -> list[ProviderSpec]:
             config_class="ogx.providers.remote.inference.cerebras.CerebrasImplConfig",
             provider_data_validator="ogx.providers.remote.inference.cerebras.config.CerebrasProviderDataValidator",
             description="Cerebras inference provider for running models on Cerebras Cloud platform.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
+            adapter_type="mistral",
+            provider_type="remote::mistral",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.mistral",
+            config_class="ogx.providers.remote.inference.mistral.MistralImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.mistral.config.MistralProviderDataValidator",
+            description="Mistral AI inference provider for accessing Mistral models via the Mistral API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
+            adapter_type="deepseek",
+            provider_type="remote::deepseek",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.deepseek",
+            config_class="ogx.providers.remote.inference.deepseek.DeepSeekImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.deepseek.config.DeepSeekProviderDataValidator",
+            description="DeepSeek inference provider for accessing DeepSeek models via the DeepSeek API.",
         ),
         RemoteProviderSpec(
             api=Api.inference,
@@ -125,7 +132,10 @@ def available_providers() -> list[ProviderSpec]:
             module="ogx.providers.remote.inference.bedrock",
             config_class="ogx.providers.remote.inference.bedrock.BedrockConfig",
             provider_data_validator="ogx.providers.remote.inference.bedrock.config.BedrockProviderDataValidator",
-            description="AWS Bedrock inference provider using OpenAI compatible endpoint.",
+            description=(
+                "AWS Bedrock inference provider for the OpenAI-compatible runtime, "
+                "with AWS credential-chain auth by default and an optional bearer-token override."
+            ),
         ),
         RemoteProviderSpec(
             api=Api.inference,
@@ -192,7 +202,7 @@ def available_providers() -> list[ProviderSpec]:
             adapter_type="vertexai",
             provider_type="remote::vertexai",
             pip_packages=[
-                "google-genai>=1.69.0",
+                "google-genai>=1.69.0,<2",
             ],
             module="ogx.providers.remote.inference.vertexai",
             config_class="ogx.providers.remote.inference.vertexai.VertexAIConfig",
@@ -239,6 +249,16 @@ Short names like vertexai/gemini-2.5-flash also work in API requests.""",
         ),
         RemoteProviderSpec(
             api=Api.inference,
+            adapter_type="meta",
+            provider_type="remote::meta",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.meta",
+            config_class="ogx.providers.remote.inference.meta.MetaConfig",
+            provider_data_validator="ogx.providers.remote.inference.meta.config.MetaProviderDataValidator",
+            description="Meta AI inference provider for the OpenAI-compatible api.meta.ai endpoint, with native Chat Completions, Responses, and Messages API support.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
             adapter_type="sambanova",
             provider_type="remote::sambanova",
             pip_packages=[],
@@ -246,16 +266,6 @@ Short names like vertexai/gemini-2.5-flash also work in API requests.""",
             config_class="ogx.providers.remote.inference.sambanova.SambaNovaImplConfig",
             provider_data_validator="ogx.providers.remote.inference.sambanova.config.SambaNovaProviderDataValidator",
             description="SambaNova inference provider for running models on SambaNova's dataflow architecture.",
-        ),
-        RemoteProviderSpec(
-            api=Api.inference,
-            adapter_type="passthrough",
-            provider_type="remote::passthrough",
-            pip_packages=[],
-            module="ogx.providers.remote.inference.passthrough",
-            config_class="ogx.providers.remote.inference.passthrough.PassthroughImplConfig",
-            provider_data_validator="ogx.providers.remote.inference.passthrough.PassthroughProviderDataValidator",
-            description="Passthrough inference provider for connecting to any external inference service not directly supported.",
         ),
         RemoteProviderSpec(
             api=Api.inference,

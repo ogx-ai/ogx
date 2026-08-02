@@ -18,15 +18,19 @@ async function proxyRequest(request: NextRequest, method: string) {
 
     console.log(`Proxying ${method} ${url.pathname} -> ${targetUrl}`);
 
+    // Check if this is a multipart/form-data request (file uploads)
+    const contentType = request.headers.get("content-type") || "";
+    const isMultipart = contentType.includes("multipart/form-data");
+
     // Prepare headers (exclude host and other problematic headers)
     const headers = new Headers();
     request.headers.forEach((value, key) => {
-      // Skip headers that might cause issues in proxy
-      if (
-        !["host", "connection", "content-length"].includes(key.toLowerCase())
-      ) {
-        headers.set(key, value);
-      }
+      const lower = key.toLowerCase();
+      // Skip headers that cause issues in proxy
+      // Keep content-length for multipart uploads so the backend can parse them
+      if (lower === "host" || lower === "connection") return;
+      if (lower === "content-length" && !isMultipart) return;
+      headers.set(key, value);
     });
 
     // Prepare the request options
@@ -37,9 +41,16 @@ async function proxyRequest(request: NextRequest, method: string) {
 
     // Add body for methods that support it
     if (["POST", "PUT", "PATCH"].includes(method) && request.body) {
-      requestOptions.body = request.body;
-      // Required for ReadableStream bodies in newer Node.js versions
-      requestOptions.duplex = "half" as RequestDuplex;
+      if (isMultipart) {
+        // Buffer multipart bodies so content-length is accurate
+        const bodyBuffer = await request.arrayBuffer();
+        requestOptions.body = bodyBuffer;
+        headers.set("content-length", bodyBuffer.byteLength.toString());
+      } else {
+        requestOptions.body = request.body;
+        // Required for ReadableStream bodies in newer Node.js versions
+        requestOptions.duplex = "half" as RequestDuplex;
+      }
     }
 
     // Make the request to FastAPI backend
@@ -61,16 +72,41 @@ async function proxyRequest(request: NextRequest, method: string) {
       return proxyResponse;
     }
 
-    // Check content type to handle binary vs text responses appropriately
-    const contentType = response.headers.get("content-type") || "";
+    // Check response content type to handle different response types
+    const responseContentType = response.headers.get("content-type") || "";
+
+    // Handle SSE (Server-Sent Events) streaming responses
+    const isStreamingResponse =
+      responseContentType.includes("text/event-stream") ||
+      responseContentType.includes("application/x-ndjson");
+
+    if (isStreamingResponse && response.body) {
+      // Pass through the stream directly without buffering
+      const proxyResponse = new NextResponse(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+      });
+
+      // Copy response headers
+      response.headers.forEach((value, key) => {
+        if (!["connection", "transfer-encoding"].includes(key.toLowerCase())) {
+          proxyResponse.headers.set(key, value);
+        }
+      });
+
+      return proxyResponse;
+    }
+
     const isBinaryContent =
-      contentType.includes("application/pdf") ||
-      contentType.includes("application/msword") ||
-      contentType.includes("application/vnd.openxmlformats-officedocument") ||
-      contentType.includes("application/octet-stream") ||
-      contentType.includes("image/") ||
-      contentType.includes("video/") ||
-      contentType.includes("audio/");
+      responseContentType.includes("application/pdf") ||
+      responseContentType.includes("application/msword") ||
+      responseContentType.includes(
+        "application/vnd.openxmlformats-officedocument"
+      ) ||
+      responseContentType.includes("application/octet-stream") ||
+      responseContentType.includes("image/") ||
+      responseContentType.includes("video/") ||
+      responseContentType.includes("audio/");
 
     let responseData: string | ArrayBuffer;
 

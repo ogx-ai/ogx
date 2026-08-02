@@ -13,6 +13,7 @@ registry/
   inference.py         # Inference providers (20+ remote + 2 inline)
   interactions.py      # Interaction providers
   responses.py         # Responses API providers (inline::builtin)
+  skills.py            # Skills API providers (inline::builtin)
   tool_runtime.py      # Tool runtime providers
   vector_io.py         # Vector I/O providers
 ```

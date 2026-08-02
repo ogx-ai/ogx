@@ -17,9 +17,9 @@ import logging  # allow-direct-logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ogx_api.common.responses import Order
 from ogx_api.openai_responses import (
@@ -214,6 +214,151 @@ def _preserve_context_for_sse(event_gen: AsyncIterator[str]) -> AsyncIterator[st
     return wrapper()
 
 
+# Fields that the WebSocket response.create event forbids (they only apply to
+# the HTTP streaming transport) and the discriminator we strip before building
+# the request.
+_WS_STRIPPED_FIELDS = ("type", "stream", "stream_options", "background")
+
+
+def _ws_normalize_input(input_value: Any) -> list[Any]:
+    """Normalize a response.create `input` to a list of items for context reuse."""
+    if input_value is None:
+        return []
+    if isinstance(input_value, str):
+        return [{"type": "message", "role": "user", "content": input_value}]
+    if isinstance(input_value, list):
+        return list(input_value)
+    return [input_value]
+
+
+async def _send_ws_error(
+    websocket: WebSocket,
+    status: int,
+    code: str,
+    message: str,
+    param: str | None = None,
+) -> None:
+    """Send a WebSocket error envelope (matches the OpenResponses error event).
+
+    Sending is best-effort: if the client has already disconnected (a common
+    cause of the failure we are reporting), the send raises and is suppressed so
+    it does not mask the original error or produce a spurious traceback.
+    """
+    try:
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "error",
+                    "status": status,
+                    "error": {"code": code, "message": message, "param": param},
+                }
+            )
+        )
+    except Exception:
+        logger.debug("Failed to send WebSocket error envelope; client likely disconnected")
+
+
+async def _handle_ws_responses_turn(
+    websocket: WebSocket,
+    impl: Responses,
+    raw: str,
+    session_cache: dict[str, tuple[list[Any], list[Any]]],
+) -> None:
+    """Process a single `response.create` event received over the WebSocket.
+
+    Streams each response event back as an individual JSON text frame. For
+    `store=false` turns, the response output is cached connection-locally so a
+    follow-up `previous_response_id` on the same connection can continue a chain
+    that was never persisted server-side.
+    """
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        await _send_ws_error(websocket, 400, "invalid_json", "Failed to parse WebSocket message as JSON.")
+        return
+    if not isinstance(payload, dict):
+        await _send_ws_error(
+            websocket, 400, "invalid_request", "Failed to read response.create event; expected a JSON object."
+        )
+        return
+
+    for field in _WS_STRIPPED_FIELDS:
+        payload.pop(field, None)
+
+    store = payload.get("store", True)
+    previous_response_id = payload.get("previous_response_id")
+    building_on: str | None = None
+
+    # store=false chains are not persisted, so continuation is served from the
+    # connection-local cache rather than the responses store.
+    if previous_response_id is not None and store is False:
+        cached = session_cache.get(previous_response_id)
+        if cached is None:
+            await _send_ws_error(
+                websocket,
+                404,
+                "previous_response_not_found",
+                f"Previous response '{previous_response_id}' was not found.",
+                param="previous_response_id",
+            )
+            return
+        prev_input, prev_output = cached
+        payload["input"] = [*prev_input, *prev_output, *_ws_normalize_input(payload.get("input"))]
+        payload.pop("previous_response_id", None)
+        building_on = previous_response_id
+
+    sent_input = _ws_normalize_input(payload.get("input"))
+
+    try:
+        request = CreateResponseRequest(**{**payload, "stream": True})
+    except ValidationError as exc:
+        await _send_ws_error(websocket, 400, "invalid_request", str(exc))
+        return
+
+    final_response: OpenAIResponseObject | None = None
+    failed = False
+    try:
+        result = await impl.create_openai_response(request)
+        if not isinstance(result, AsyncIterator):
+            await _send_ws_error(websocket, 500, "server_error", "Expected a streaming response over WebSocket.")
+            return
+        async for event in result:
+            await websocket.send_text(event.model_dump_json())
+            event_type = getattr(event, "type", None)
+            # An incomplete response (e.g. truncated at max_output_tokens) is a
+            # successful terminal state and remains continuable, matching the
+            # HTTP previous_response_id path which can continue any stored
+            # terminal response. Only response.failed is treated as a failure.
+            if event_type in ("response.completed", "response.incomplete"):
+                final_response = getattr(event, "response", None)
+            elif event_type == "response.failed":
+                final_response = getattr(event, "response", None)
+                failed = True
+    except Exception as exc:
+        logger.exception("WebSocket responses turn failed")
+        failed = True
+        http_exc = try_translate_to_http_exception(exc)
+        status = http_exc.status_code if http_exc else 500
+        detail = http_exc.detail if http_exc else "Internal server error: An unexpected error occurred."
+        await _send_ws_error(websocket, status, "server_error", detail)
+
+    if failed:
+        # A failed continuation evicts the response it built on, so subsequent
+        # turns referencing it report previous_response_not_found.
+        if building_on is not None:
+            session_cache.pop(building_on, None)
+    elif final_response is not None and store is False:
+        # Only the latest response in a chain is ever needed for continuation.
+        # Evict the predecessor when extending it so a long-lived connection does
+        # not accumulate every turn's (growing) history.
+        if building_on is not None:
+            session_cache.pop(building_on, None)
+        session_cache[final_response.id] = (
+            sent_input,
+            [item.model_dump() for item in final_response.output],
+        )
+
+
 def create_router(impl: Responses) -> APIRouter:
     """Create a FastAPI router for the Responses API.
 
@@ -229,6 +374,20 @@ def create_router(impl: Responses) -> APIRouter:
         responses=standard_responses,
         route_class=FormURLEncodedRoute,
     )
+
+    @router.websocket("/responses")
+    async def create_openai_response_ws(websocket: WebSocket) -> None:
+        await websocket.accept()
+        # Connection-local cache of store=false response output, keyed by response
+        # id. Lets a follow-up previous_response_id on the same socket continue a
+        # chain that was never persisted. A fresh connection starts empty.
+        session_cache: dict[str, tuple[list[Any], list[Any]]] = {}
+        try:
+            while True:
+                raw = await websocket.receive_text()
+                await _handle_ws_responses_turn(websocket, impl, raw, session_cache)
+        except WebSocketDisconnect:
+            return
 
     @router.post(
         "/responses/compact",

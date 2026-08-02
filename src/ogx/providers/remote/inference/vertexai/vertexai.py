@@ -140,7 +140,7 @@ class GeminiCompletionSamplingParams(BaseModel):
 class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     """Inference adapter for Google Vertex AI platform."""
 
-    # extra="allow" lets the routing infra inject model_store, __provider_id__, etc.
+    # extra="allow" lets the routing infra inject model_store, __provider_spec__, etc.
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
     config: VertexAIConfig
@@ -155,6 +155,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         "models/text-embedding-004": {"embedding_dimension": 768, "context_length": 2048},
         "models/gemini-embedding-001": {"embedding_dimension": 3072, "context_length": 2048},
     }
+
+    __provider_id__: str  # automatically set by the resolver when instantiating the provider
 
     async def _close_managed_httpx_client(self) -> None:
         if self._http_options is None:
@@ -192,9 +194,9 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             # Don't create the client here - it will be created lazily on first use
             # This avoids calling _ensure_http_options() in the temporary startup event loop
             logger.info(
-                "VertexAI provider initialized for project=%s location=%s (client will be created on first use)",
-                self.config.project,
-                self.config.location,
+                "VertexAI provider initialized (client will be created on first use)",
+                project=self.config.project,
+                location=self.config.location,
             )
         except Exception:
             logger.warning(
@@ -211,9 +213,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     async def register_model(self, model: Model) -> Model:
         provider_resource_id = model.provider_resource_id or model.identifier
         if not await self.check_model_availability(provider_resource_id):
-            raise ValueError(
-                f"Model {provider_resource_id} is not available from provider {self.__provider_id__}"  # type: ignore[attr-defined]
-            )
+            raise ValueError(f"Model {provider_resource_id} is not available from provider {self.__provider_id__}")
         return model
 
     async def unregister_model(self, model_id: str) -> None:
@@ -265,8 +265,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             await self.list_models()
         except Exception:
             logger.warning(
-                "Failed to list VertexAI models for availability check; accepting model '%s' without validation.",
-                model,
+                "Failed to list VertexAI models for availability check; accepting model without validation.",
+                model=model,
                 exc_info=True,
             )
             return True
@@ -315,7 +315,30 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 access_token = self.config.auth_credential.get_secret_value() if self.config.auth_credential else None
                 return self._create_client(project=project, location=location, access_token=access_token)
 
-        # Lazily create the default client on first use
+        # Lazily create the default client on first use.
+        # If we already have a cached client, verify it is still usable before
+        # returning it — a previous request may have left connections tied to an
+        # event loop that is now closed (e.g., after a temporary startup loop).
+        if self._default_client is not None:
+            try:
+                # Touch the underlying httpx client to detect event loop binding
+                # issues.  If the client was created in a now-closed loop,
+                # accessing its transport raises RuntimeError.
+                if self._http_options is not None:
+                    _client = getattr(self._http_options, "httpx_async_client", None)
+                    if _client is not None and _client.is_closed:
+                        logger.info(
+                            "VertexAI default client transport is closed; recreating",
+                            project=self.config.project,
+                        )
+                        self._default_client = None
+            except RuntimeError:
+                logger.warning(
+                    "VertexAI default client is bound to a closed event loop; recreating",
+                    project=self.config.project,
+                )
+                self._default_client = None
+
         if self._default_client is None:
             access_token = self.config.auth_credential.get_secret_value() if self.config.auth_credential else None
             try:
@@ -340,16 +363,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                     'as { "vertex_access_token": <your access token> }'
                 ) from None
         return self._default_client
-
-    async def _get_provider_model_id(self, model: str) -> str:
-        # model_store is injected at runtime by the routing infra
-        if hasattr(self, "model_store") and self.model_store and await self.model_store.has_model(model):  # type: ignore[attr-defined]
-            model_obj: Model = await self.model_store.get_model(model)  # type: ignore[attr-defined]
-            if model_obj.provider_resource_id is None:
-                raise ValueError(f"Model {model} has no provider_resource_id")
-            return model_obj.provider_resource_id
-
-        return model
 
     async def list_provider_model_ids(self) -> list[str]:
         """List model IDs available from the configured Vertex AI project.
@@ -386,8 +399,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             provider_model_ids = await self.list_provider_model_ids()
         except Exception:
             logger.error(
-                "%s.list_provider_model_ids() failed",
-                self.__class__.__name__,
+                "Failed to list provider model IDs",
+                provider=self.__class__.__name__,
                 exc_info=True,
             )
             raise
@@ -399,7 +412,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 continue
             if metadata := self.embedding_model_metadata.get(provider_model_id):
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.embedding,
@@ -407,7 +420,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 )
             else:
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.llm,
@@ -736,7 +749,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 
@@ -820,7 +833,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         prompts = self._validate_completion_prompt(params.prompt)
         self._warn_unsupported_completion_params(params)
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
         config = self._build_completion_config(params)
@@ -907,11 +920,11 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         # passthrough. Log and ignore extra body parameters rather than silently dropping.
         if params.model_extra:
             logger.debug(
-                "VertexAI embeddings does not support extra body parameters; model_extra will be ignored: %s",
-                list(params.model_extra.keys()),
+                "VertexAI embeddings does not support extra body parameters; model_extra will be ignored",
+                ignored_keys=list(params.model_extra.keys()),
             )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 

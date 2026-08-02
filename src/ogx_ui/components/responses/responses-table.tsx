@@ -7,7 +7,7 @@ import {
 } from "@/lib/types";
 import { LogsTable, LogTableRow } from "@/components/logs/logs-table";
 import { usePagination } from "@/hooks/use-pagination";
-import type { ResponseListResponse } from "llama-stack-client/resources/responses/responses";
+import type { ResponseListResponse } from "ogx-client/resources/responses/responses";
 import {
   isMessageInput,
   isMessageItem,

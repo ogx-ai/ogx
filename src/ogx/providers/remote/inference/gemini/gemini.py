@@ -82,7 +82,7 @@ class GeminiInferenceAdapter(OpenAIMixin):
 
         # Build request params conditionally to avoid NotGiven/Omit type mismatch
         request_params: dict[str, Any] = {
-            "model": await self._get_provider_model_id(params.model),
+            "model": params.model,
             "input": params.input,
         }
         if params.encoding_format is not None:

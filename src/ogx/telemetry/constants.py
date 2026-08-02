@@ -33,6 +33,7 @@ VECTOR_DELETES_TOTAL = f"{VECTOR_IO_PREFIX}.deletes_total"
 VECTOR_STORES_TOTAL = f"{VECTOR_IO_PREFIX}.stores_total"
 VECTOR_FILES_TOTAL = f"{VECTOR_IO_PREFIX}.files_total"
 VECTOR_CHUNKS_PROCESSED_TOTAL = f"{VECTOR_IO_PREFIX}.chunks_processed_total"
+VECTOR_DOCUMENTS_RETRIEVED_TOTAL = f"{VECTOR_IO_PREFIX}.documents_retrieved_total"
 
 # Vector operation durations
 VECTOR_INSERT_DURATION = f"{VECTOR_IO_PREFIX}.insert_duration_seconds"
@@ -53,7 +54,10 @@ INFERENCE_PREFIX = f"{ogx_prefix}.inference"
 INFERENCE_DURATION = f"{INFERENCE_PREFIX}.duration_seconds"
 INFERENCE_TIME_TO_FIRST_TOKEN = f"{INFERENCE_PREFIX}.time_to_first_token_seconds"
 INFERENCE_TOKENS_PER_SECOND = f"{INFERENCE_PREFIX}.tokens_per_second"
+INFERENCE_MODEL_TYPE_USED_TOTAL = f"{INFERENCE_PREFIX}.model_type_used_total"
 
 # Responses API Metrics
 RESPONSES_PREFIX = f"{ogx_prefix}.responses"
 RESPONSES_PARAMETER_USAGE_TOTAL = f"{RESPONSES_PREFIX}.parameter_usage_total"
+RESPONSES_TOOL_TYPES_USED_TOTAL = f"{RESPONSES_PREFIX}.tool_types_used_total"
+RESPONSES_AGENTIC_CALLS_TOTAL = f"{RESPONSES_PREFIX}.agentic_calls_total"

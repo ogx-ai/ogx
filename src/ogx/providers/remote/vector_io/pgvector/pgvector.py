@@ -8,6 +8,7 @@ import asyncio
 import heapq
 import json
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import asyncpg
@@ -172,23 +173,27 @@ class PGVectorIndex(EmbeddingIndex):
         self,
         vector_store: VectorStore,
         dimension: int,
-        pool: asyncpg.Pool,
+        pool_factory: Callable[[], Awaitable[asyncpg.Pool]],
         distance_metric: str,
         vector_index: PGVectorIndexConfig,
         kvstore: KVStore | None = None,
     ):
         self.vector_store = vector_store
         self.dimension = dimension
-        self.pool = pool
+        self._pool_factory = pool_factory
         self.kvstore = kvstore
         self.check_distance_metric_availability(distance_metric)
         self.distance_metric = distance_metric
         self.vector_index = vector_index
         self.table_name = None
 
+    async def _get_pool(self) -> asyncpg.Pool:
+        return await self._pool_factory()
+
     async def initialize(self) -> None:
         try:
-            async with self.pool.acquire() as conn:
+            pool = await self._get_pool()
+            async with pool.acquire() as conn:
                 # Sanitize the table name by replacing hyphens with underscores
                 # SQL doesn't allow hyphens in table names, and vector_store.identifier may contain hyphens
                 # when created with patterns like "test-vector-db-{uuid4()}"
@@ -253,7 +258,8 @@ class PGVectorIndex(EmbeddingIndex):
                 )
             )
 
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.executemany(
                 f"""
                 INSERT INTO {self._quoted_table} (id, document, embedding, content_text, tokenized_content)
@@ -292,7 +298,8 @@ class PGVectorIndex(EmbeddingIndex):
 
         pgvector_search_function = self.get_pgvector_search_function()
 
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             # Keep query-level search tuning transaction-local and scoped to the
             # same transaction as the SELECT statement.
             async with conn.transaction():
@@ -356,7 +363,8 @@ class PGVectorIndex(EmbeddingIndex):
         """
         filter_clause, filter_params, next_idx = self._translate_filters(filters, param_idx=2)
 
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             filter_sql = f" AND ({filter_clause})" if filter_clause else ""
 
             rows = await conn.fetch(
@@ -533,13 +541,15 @@ class PGVectorIndex(EmbeddingIndex):
         return operator.join(clauses), params, param_idx
 
     async def delete(self):
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute(f"DROP TABLE IF EXISTS {self._quoted_table}")
 
     async def delete_chunks(self, chunks_for_deletion: list[ChunkForDeletion]) -> None:
         """Remove chunks from the PostgreSQL table."""
         chunk_ids = [c.chunk_id for c in chunks_for_deletion]
-        async with self.pool.acquire() as conn:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute(f"DELETE FROM {self._quoted_table} WHERE id = ANY($1::text[])", chunk_ids)
 
     def get_pgvector_index_operator_class(self) -> str:
@@ -794,6 +804,39 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                     self.pool = None
                     self._pool_initialized = False
 
+            # Ensure the vector extension exists before creating the pool.
+            # The pool's init callback (register_vector) requires the extension
+            # to be present — without this, it raises ValueError on first connect.
+            conn = await asyncpg.connect(
+                host=self.config.host,
+                port=self.config.port,
+                database=self.config.db,
+                user=self.config.user,
+                password=self.config.password.get_secret_value() if self.config.password else None,
+            )
+            try:
+                version = await check_extension_version(conn)
+                if version:
+                    log.info("Vector extension version", version=version)
+                else:
+                    await create_vector_extension(conn)
+
+                try:
+                    await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+                except asyncpg.PostgresError:
+                    log.debug("pg_stat_statements not available, skipping")
+
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS metadata_store (
+                        key TEXT PRIMARY KEY,
+                        data JSONB
+                    )
+                    """
+                )
+            finally:
+                await conn.close()
+
             pool = await asyncpg.create_pool(
                 host=self.config.host,
                 port=self.config.port,
@@ -807,33 +850,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 init=self._init_connection,
                 reset=self._reset_connection,
             )
-
-            try:
-                if not self._pool_initialized:
-                    async with pool.acquire() as conn:
-                        version = await check_extension_version(conn)
-                        if version:
-                            log.info("Vector extension version", version=version)
-                        else:
-                            await create_vector_extension(conn)
-
-                        try:
-                            await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
-                        except asyncpg.PostgresError:
-                            log.debug("pg_stat_statements not available, skipping")
-
-                        await conn.execute(
-                            """
-                            CREATE TABLE IF NOT EXISTS metadata_store (
-                                key TEXT PRIMARY KEY,
-                                data JSONB
-                            )
-                            """
-                        )
-                    self._pool_initialized = True
-            except Exception:
-                await pool.close()
-                raise
+            self._pool_initialized = True
 
             self.pool = pool
             return self.pool
@@ -850,7 +867,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         await self.initialize_openai_vector_stores()
 
         try:
-            pool = await self._ensure_pool()
+            await self._ensure_pool()
         except Exception as e:
             log.exception("Could not connect to PGVector database server")
             raise RuntimeError("Could not connect to PGVector database server") from e
@@ -865,7 +882,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 pgvector_index = PGVectorIndex(
                     vector_store=vector_store,
                     dimension=vector_store.embedding_dimension,
-                    pool=pool,
+                    pool_factory=self._ensure_pool,
                     kvstore=self.kvstore,
                     distance_metric=self.config.distance_metric,
                     vector_index=self.config.vector_index,
@@ -905,7 +922,7 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         pgvector_index = PGVectorIndex(
             vector_store=vector_store,
             dimension=vector_store.embedding_dimension,
-            pool=pool,
+            pool_factory=self._ensure_pool,
             kvstore=self.kvstore,
             distance_metric=self.config.distance_metric,
             vector_index=self.config.vector_index,
@@ -951,11 +968,11 @@ class PGVectorVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
             raise VectorStoreNotFoundError(vector_store_id)
 
         vector_store = VectorStore.model_validate_json(vector_store_data)
-        pool = await self._ensure_pool()
         index = PGVectorIndex(
             vector_store,
             vector_store.embedding_dimension,
-            pool,
+            pool_factory=self._ensure_pool,
+            kvstore=self.kvstore,
             distance_metric=self.config.distance_metric,
             vector_index=self.config.vector_index,
         )

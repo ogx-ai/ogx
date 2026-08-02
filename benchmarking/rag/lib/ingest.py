@@ -43,6 +43,7 @@ def ingest_corpus(
     vector_store_name: str,
     checkpoint_path: str,
     resume: bool = False,
+    chunking_strategy: dict | None = None,
 ) -> tuple[str, IDMapping]:
     """Upload a corpus and create a vector store.
 
@@ -52,6 +53,7 @@ def ingest_corpus(
         vector_store_name: Name for the vector store.
         checkpoint_path: Path for checkpoint JSON.
         resume: If True, skip already-uploaded files and reuse existing vector store.
+        chunking_strategy: Optional chunking strategy dict (e.g. {"type": "contextual", ...}).
 
     Returns:
         (vector_store_id, id_mapping)
@@ -119,20 +121,29 @@ def ingest_corpus(
     # Phase 2: Attach files to vector store in large batches
     if unattached_ids:
         num_attach_batches = (len(unattached_ids) + ATTACH_BATCH_SIZE - 1) // ATTACH_BATCH_SIZE
-        logger.info(f"Attaching {len(unattached_ids)} files to vector store in {num_attach_batches} batches...")
+        strategy_label = chunking_strategy.get("type", "auto") if chunking_strategy else "auto"
+        logger.info(
+            f"Attaching {len(unattached_ids)} files to vector store in {num_attach_batches} batches "
+            f"(chunking: {strategy_label})..."
+        )
 
         for attach_batch in progress_bar(
             batched(unattached_ids, ATTACH_BATCH_SIZE),
             desc="Attaching batches",
             total=num_attach_batches,
         ):
-            retry_with_backoff(
-                lambda fids=attach_batch: client.vector_stores.file_batches.create(
-                    vector_store_id=vs_id,
-                    file_ids=fids,
-                )
-            )
-            _poll_vector_store(client, vs_id)
+            attach_kwargs: dict = {
+                "vector_store_id": vs_id,
+                "file_ids": attach_batch,
+            }
+            if chunking_strategy:
+                attach_kwargs["extra_body"] = {"chunking_strategy": chunking_strategy}
+            retry_with_backoff(lambda kw=attach_kwargs: client.vector_stores.file_batches.create(**kw))
+
+        # Wait for all files to finish processing
+        poll_timeout = 3600 if chunking_strategy else 600
+        expected_total = len(unattached_ids)
+        _poll_vector_store(client, vs_id, timeout=poll_timeout, expected_total=expected_total)
 
         # Clear unattached list
         ckpt.set("unattached_file_ids", [])
@@ -141,15 +152,48 @@ def ingest_corpus(
     return vs_id, mapping
 
 
-def _poll_vector_store(client: OpenAI, vs_id: str, timeout: float = 600) -> None:
+STALE_COUNT_THRESHOLD = 60
+
+
+def _poll_vector_store(client: OpenAI, vs_id: str, timeout: float = 600, expected_total: int | None = None) -> None:
     """Poll until vector store processing is complete."""
     start = time.time()
+    last_log = 0.0
+    last_done = -1
+    stale_rounds = 0
     while time.time() - start < timeout:
         vs = client.vector_stores.retrieve(vs_id)
         counts = vs.file_counts
-        if counts.in_progress == 0:
+        done = counts.completed + counts.failed
+        still_processing = counts.in_progress > 0 or (expected_total and done < expected_total)
+        if not still_processing:
             if counts.failed > 0:
                 logger.warning(f"Vector store {vs_id}: {counts.failed} files failed")
+            logger.info(
+                f"Vector store {vs_id} processing complete: "
+                f"{counts.completed} completed, {counts.failed} failed, {counts.total} total"
+            )
             return
+
+        if done == last_done and counts.in_progress == 0:
+            stale_rounds += 1
+            if stale_rounds >= STALE_COUNT_THRESHOLD:
+                logger.warning(
+                    f"Vector store {vs_id} count stale for {stale_rounds} polls — "
+                    f"accepting {done}/{expected_total} as final"
+                )
+                return
+        else:
+            stale_rounds = 0
+        last_done = done
+
+        now = time.time()
+        if now - last_log >= 30:
+            logger.info(
+                f"Waiting for vector store: {counts.completed} completed, "
+                f"{counts.in_progress} in progress, {counts.failed} failed "
+                f"(target: {expected_total or 'any'})"
+            )
+            last_log = now
         time.sleep(POLL_INTERVAL)
     logger.warning(f"Vector store {vs_id} polling timed out after {timeout}s")

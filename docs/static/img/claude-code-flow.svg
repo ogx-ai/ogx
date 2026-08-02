@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 280" font-family="'Archivo','Public Sans',-apple-system,BlinkMacSystemFont,sans-serif">
+  <style>
+    :root {
+      --bg: #0e1520;
+      --grid-stroke: #fff;
+      --grid-opacity: 0.04;
+      --col-label: #4b6478;
+      --col-divider: #1e2d3d;
+      --flow-stroke: #1a5c5e;
+      --flow-dot: #2dbdc2;
+      --card-bg: #131e2a;
+      --card-stroke: #1e3040;
+      --item-bg: #182838;
+      --item-text: #7fb8c4;
+      --server-bg: #0d1a24;
+      --server-accent: #0d7377;
+      --server-label: #e0f5f5;
+      --section-label: #2dbdc2;
+      --block-bg: #111f2d;
+      --block-stroke: #1a3545;
+      --block-title: #5da8b0;
+      --block-text: #6b8d96;
+      --muted-text: #3d5a6e;
+      --shadow-opacity: 0.12;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8f9fa;
+        --grid-stroke: #000;
+        --grid-opacity: 0.04;
+        --col-label: #6b7d8e;
+        --col-divider: #d8dee4;
+        --flow-stroke: #0d7377;
+        --flow-dot: #0d7377;
+        --card-bg: #ffffff;
+        --card-stroke: #d8dee4;
+        --item-bg: #f0f3f5;
+        --item-text: #2d4a56;
+        --server-bg: #ffffff;
+        --server-accent: #0d7377;
+        --server-label: #ffffff;
+        --section-label: #0b6165;
+        --block-bg: #f5f7f8;
+        --block-stroke: #d8dee4;
+        --block-title: #0b6165;
+        --block-text: #4a6570;
+        --muted-text: #6b7d8e;
+        --shadow-opacity: 0.06;
+      }
+    }
+  </style>
+  <defs>
+    <filter id="s"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="var(--shadow-opacity, 0.12)"/></filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="780" height="280" rx="8" fill="var(--bg)"/>
+
+  <!-- Subtle grid -->
+  <g opacity="var(--grid-opacity)">
+    <pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40,0 L0,0 0,40" fill="none" stroke="var(--grid-stroke)" stroke-width="0.5"/>
+    </pattern>
+    <rect width="780" height="280" fill="url(#g)"/>
+  </g>
+
+  <!-- Column labels -->
+  <text x="95" y="28" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">CLAUDE CODE</text>
+  <text x="390" y="28" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">OGX</text>
+  <text x="670" y="28" text-anchor="middle" fill="var(--col-label)" font-size="10" font-weight="700" letter-spacing="1.5">PROVIDERS</text>
+
+  <!-- Column dividers -->
+  <line x1="210" y1="18" x2="210" y2="260" stroke="var(--col-divider)" stroke-width="1"/>
+  <line x1="555" y1="18" x2="555" y2="260" stroke="var(--col-divider)" stroke-width="1"/>
+
+  <!-- ========== CLAUDE CODE (left) ========== -->
+  <g filter="url(#s)">
+    <rect x="20" y="45" width="170" height="210" rx="6" fill="var(--card-bg)" stroke="var(--card-stroke)" stroke-width="1"/>
+
+    <g transform="translate(32, 62)">
+      <rect width="146" height="26" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="17" fill="var(--item-text)" font-size="9.5" font-weight="500">Anthropic SDK</text>
+    </g>
+
+    <g transform="translate(32, 96)">
+      <rect width="146" height="26" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="17" fill="var(--item-text)" font-size="9.5" font-weight="500">Tool use (file, shell)</text>
+    </g>
+
+    <g transform="translate(32, 130)">
+      <rect width="146" height="26" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="17" fill="var(--item-text)" font-size="9.5" font-weight="500">Extended thinking</text>
+    </g>
+
+    <g transform="translate(32, 164)">
+      <rect width="146" height="26" rx="4" fill="var(--item-bg)"/>
+      <text x="10" y="17" fill="var(--item-text)" font-size="9.5" font-weight="500">Multi-turn streaming</text>
+    </g>
+
+    <text x="105" y="218" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">POST /v1/messages</text>
+    <text x="105" y="232" text-anchor="middle" fill="var(--muted-text)" font-size="7.5">Thinks it's talking</text>
+    <text x="105" y="243" text-anchor="middle" fill="var(--muted-text)" font-size="7.5">to Anthropic</text>
+  </g>
+
+  <!-- ========== OGX SERVER (center) ========== -->
+  <g filter="url(#s)">
+    <rect x="225" y="45" width="315" height="210" rx="6" fill="var(--server-bg)" stroke="var(--server-accent)" stroke-width="1.5"/>
+
+    <rect x="225" y="45" width="315" height="28" rx="6" fill="var(--server-accent)"/>
+    <rect x="225" y="67" width="315" height="6" fill="var(--server-accent)"/>
+    <text x="382" y="65" text-anchor="middle" fill="var(--server-label)" font-size="11" font-weight="700" letter-spacing="1">OGX SERVER</text>
+
+    <!-- Messages API endpoint -->
+    <text x="240" y="95" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">MESSAGES API</text>
+    <g transform="translate(237, 102)">
+      <rect width="291" height="32" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="14" fill="var(--block-title)" font-size="8.5" font-weight="600">/v1/messages</text>
+      <line x1="10" y1="19" x2="281" y2="19" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="28" fill="var(--block-text)" font-size="7.5">messages  count_tokens  streaming</text>
+    </g>
+
+    <!-- Translation layer -->
+    <text x="240" y="152" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">TRANSLATION</text>
+    <g transform="translate(237, 158)">
+      <rect width="291" height="32" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="14" fill="var(--block-title)" font-size="8.5" font-weight="600">Format conversion</text>
+      <line x1="10" y1="19" x2="281" y2="19" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="28" fill="var(--block-text)" font-size="7.5">Anthropic format  &#x2192;  OpenAI format  (or native passthrough)</text>
+    </g>
+
+    <!-- Model aliasing -->
+    <text x="240" y="208" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">MODEL ALIASING</text>
+    <g transform="translate(237, 214)">
+      <rect width="291" height="28" rx="4" fill="var(--block-bg)" stroke="var(--block-stroke)" stroke-width="0.5"/>
+      <text x="10" y="18" fill="var(--block-text)" font-size="7.5">claude-haiku &#x2192; vllm/Qwen3    claude-sonnet &#x2192; openai/gpt-4o</text>
+    </g>
+  </g>
+
+  <!-- ========== PROVIDERS (right) ========== -->
+  <g filter="url(#s)">
+    <rect x="570" y="45" width="192" height="210" rx="6" fill="var(--card-bg)" stroke="var(--card-stroke)" stroke-width="1"/>
+
+    <text x="585" y="72" fill="var(--section-label)" font-size="9" font-weight="700" letter-spacing="0.5">INFERENCE</text>
+
+    <g transform="translate(582, 80)">
+      <rect width="84" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">OpenAI</text>
+    </g>
+    <g transform="translate(672, 80)">
+      <rect width="78" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">vLLM</text>
+    </g>
+    <g transform="translate(582, 110)">
+      <rect width="84" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">Ollama</text>
+    </g>
+    <g transform="translate(672, 110)">
+      <rect width="78" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">Groq</text>
+    </g>
+    <g transform="translate(582, 140)">
+      <rect width="84" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">Fireworks</text>
+    </g>
+    <g transform="translate(672, 140)">
+      <rect width="78" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">Together</text>
+    </g>
+    <g transform="translate(582, 170)">
+      <rect width="84" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">Bedrock</text>
+    </g>
+    <g transform="translate(672, 170)">
+      <rect width="78" height="24" rx="3" fill="var(--item-bg)"/>
+      <text x="8" y="16" fill="var(--item-text)" font-size="9">Cerebras</text>
+    </g>
+
+    <text x="666" y="222" text-anchor="middle" fill="var(--muted-text)" font-size="8" font-weight="600" letter-spacing="0.5">Any model, any backend</text>
+    <text x="666" y="234" text-anchor="middle" fill="var(--muted-text)" font-size="7.5">Local or cloud</text>
+  </g>
+
+  <!-- ========== FLOW LINES ========== -->
+  <!-- Claude Code → OGX -->
+  <path d="M190,120 L225,120" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M190,160 L225,160" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+
+  <!-- OGX → Providers -->
+  <path d="M540,120 L570,120" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+  <path d="M540,160 L570,160" stroke="var(--flow-stroke)" stroke-width="1.5" fill="none" stroke-dasharray="4,3" opacity="0.5"/>
+
+  <!-- Animated dots: Claude Code → OGX -->
+  <circle r="3" fill="var(--flow-dot)" opacity="0.8">
+    <animateMotion dur="1.6s" repeatCount="indefinite" path="M190,120 L225,120"/>
+  </circle>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.8">
+    <animateMotion dur="1.6s" repeatCount="indefinite" begin="0.5s" path="M190,160 L225,160"/>
+  </circle>
+
+  <!-- Animated dots: OGX → Providers -->
+  <circle r="3" fill="var(--flow-dot)" opacity="0.6">
+    <animateMotion dur="1.4s" repeatCount="indefinite" begin="0.3s" path="M540,120 L570,120"/>
+  </circle>
+  <circle r="3" fill="var(--flow-dot)" opacity="0.6">
+    <animateMotion dur="1.4s" repeatCount="indefinite" begin="0.9s" path="M540,160 L570,160"/>
+  </circle>
+
+  <!-- Tagline -->
+  <text x="390" y="272" text-anchor="middle" fill="var(--muted-text)" font-size="9" font-weight="600" letter-spacing="1.5">
+    USE CLAUDE CODE WITH ANY MODEL  ·  NO CODE CHANGES REQUIRED
+  </text>
+</svg>

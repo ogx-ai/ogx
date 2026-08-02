@@ -1,0 +1,29 @@
+---
+description: "Nimble Search tool for web search via Nimble's SERP-backed search API."
+sidebar_label: Remote - Nimble-Search
+title: remote::nimble-search
+---
+
+# remote::nimble-search
+
+## Description
+
+Nimble Search tool for web search via Nimble's SERP-backed search API.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `timeout` | `float` | No | 30.0 | Overall HTTP timeout in seconds for requests to external services. |
+| `connect_timeout` | `float` | No | 10.0 | TCP connect timeout in seconds. Shorter than the overall timeout to fail fast on unreachable hosts. |
+| `api_key` | `SecretStr \| None` | No |  | The Nimble API key, sent as a Bearer token. Can be overridden per-request via the X-OGX-Provider-Data header. |
+| `max_results` | `int` | No | 3 | The maximum number of results to return |
+| `search_depth` | `Literal[lite, deep]` | No | lite | Content richness: 'lite' returns title, URL, and description; 'deep' returns full page content |
+
+## Sample Configuration
+
+```yaml
+api_key: ${env.NIMBLE_API_KEY:=}
+max_results: 3
+search_depth: lite
+```

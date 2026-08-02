@@ -4,9 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 from collections.abc import AsyncIterator
+from functools import cache
+from typing import Any
 from urllib.parse import urljoin
 
 import httpx
+import models_dev as _models_dev
 from pydantic import ConfigDict
 
 from ogx.core.request_headers import get_authenticated_user
@@ -14,6 +17,7 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
@@ -30,14 +34,58 @@ from ogx_api import (
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIChatCompletionWithReasoning,
+    OpenAIDeveloperMessageParam,
+    OpenAISystemMessageParam,
     RerankData,
     RerankResponse,
 )
 from ogx_api.inference import RerankRequest
+from ogx_api.messages.models import (
+    ANTHROPIC_VERSION,
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 from .config import VLLMInferenceAdapterConfig
 
 log = get_logger(name=__name__, category="inference::vllm")
+
+
+def _is_embedding_model(model_id: str, model: _models_dev.Model) -> bool:
+    return (model.family is not None and "embed" in model.family) or "embed" in model_id.lower()
+
+
+@cache
+def _models_dev_index() -> dict[str, _models_dev.Model]:
+    index: dict[str, _models_dev.Model] = {}
+    # Sort so huggingface is processed last: vLLM serves HF model IDs and the
+    # huggingface provider entry is the most authoritative source for them.
+    for provider in sorted(_models_dev.providers(), key=lambda p: p.id == "huggingface"):
+        for model_id, model in provider.models.items():
+            if _is_embedding_model(model_id, model):
+                index[model_id] = model
+    return index
+
+
+def _lookup_models_dev(identifier: str) -> _models_dev.Model | None:
+    return _models_dev_index().get(identifier)
+
+
+def _convert_developer_messages(messages: list[Any]) -> list[Any]:
+    converted_messages: list[Any] = []
+    for message in messages:
+        if isinstance(message, OpenAIDeveloperMessageParam):
+            converted_messages.append(OpenAISystemMessageParam(content=message.content, name=message.name))
+        elif isinstance(message, dict) and message.get("role") == "developer":
+            converted_message = message.copy()
+            converted_message["role"] = "system"
+            converted_messages.append(converted_message)
+        else:
+            converted_messages.append(message)
+    return converted_messages
 
 
 class VLLMInferenceAdapter(OpenAIMixin):
@@ -128,6 +176,8 @@ class VLLMInferenceAdapter(OpenAIMixin):
         if params.max_tokens is None and self.config.max_tokens:
             params.max_tokens = self.config.max_tokens
 
+        params.messages = _convert_developer_messages(params.messages)
+
         return await super().openai_chat_completion(params)
 
     def _prepare_reasoning_params(self, params: OpenAIChatCompletionRequestWithExtraBody) -> None:
@@ -168,9 +218,12 @@ class VLLMInferenceAdapter(OpenAIMixin):
         params.messages = mapped_messages
 
         result = await self.openai_chat_completion(params)
+        # narrow the result type to AsyncIterator for the reasoning wrapper below
+        if not isinstance(result, AsyncIterator):
+            raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
         async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:  # type: ignore[union-attr]
+            async for chunk in result:
                 reasoning = None
                 for choice in chunk.choices or []:
                     reasoning = getattr(choice.delta, "reasoning", None) or getattr(
@@ -183,19 +236,99 @@ class VLLMInferenceAdapter(OpenAIMixin):
 
         return _wrap_chunks()
 
+    def _get_base_url_without_version(self) -> str:
+        """Get the base URL with any trailing /v1 suffix removed."""
+        base_url = str(self.get_base_url()).rstrip("/")
+        if base_url.endswith("/v1"):
+            base_url = base_url[:-3]
+        return base_url
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Handle Anthropic Messages via native /v1/messages endpoint."""
+        url = f"{self._get_base_url_without_version()}/v1/messages"
+        body = params.model_dump(exclude_none=True)
+        body["model"] = params.model
+        headers = {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+        }
+
+        api_key = self._get_api_key_from_config_or_provider_data()
+        if api_key and api_key != "NO KEY REQUIRED":
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        if params.stream:
+            return passthrough_anthropic_stream(
+                url=url,
+                req_body=body,
+                headers=headers,
+                httpx_client_kwargs=self._build_httpx_client_kwargs(),
+            )
+
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            resp = await client.post(url, json=body, headers=headers, timeout=300)
+            resp.raise_for_status()
+            return AnthropicMessageResponse(**resp.json())
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        """Forward count_tokens to vLLM's /v1/messages/count_tokens endpoint."""
+        url = f"{self._get_base_url_without_version()}/v1/messages/count_tokens"
+        body = params.model_dump(exclude_none=True)
+        body["model"] = params.model
+        headers = {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+        }
+
+        api_key = self._get_api_key_from_config_or_provider_data()
+        if api_key and api_key != "NO KEY REQUIRED":
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            resp = await client.post(url, json=body, headers=headers, timeout=30)
+            resp.raise_for_status()
+            return AnthropicCountTokensResponse(**resp.json())
+
     def construct_model_from_identifier(self, identifier: str) -> Model:
-        # vLLM's /v1/models response does not expose a model task/type field, so classify by name.
-        if "embed" in identifier.lower():
+        # vLLM's /v1/models response does not expose a model task/type field,
+        # so we classify with models.dev with a name fallback.
+        md = _lookup_models_dev(identifier)
+        is_embedding = md is not None or "embed" in identifier.lower()
+
+        if is_embedding:
+            metadata: dict[str, int] = {}
+            if md is not None:
+                if md.limit.output:
+                    metadata["embedding_dimension"] = md.limit.output
+                if md.limit.context:
+                    metadata["context_length"] = md.limit.context
+                log.debug(
+                    "Classified embedding model via models.dev",
+                    identifier=identifier,
+                    family=md.family,
+                    metadata=metadata,
+                )
+            else:
+                log.debug(
+                    "Classified embedding model via name heuristic (not in models.dev)",
+                    identifier=identifier,
+                )
             return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                provider_id=self.__provider_id__,
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.embedding,
-                metadata={},
+                metadata=metadata,
             )
         if "rerank" in identifier.lower():
             return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                provider_id=self.__provider_id__,
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.rerank,
@@ -230,7 +363,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
         #   "To indicate that the rerank API is not part of the standard OpenAI API,
         #    we have located it at `/rerank`. Please update your client accordingly.
         #    (Note: Conforms to JinaAI rerank API)" - vLLM 0.15.1
-        endpoint = self.get_base_url().replace("/v1", "") + "/rerank"  # TODO: find a better solution
+        endpoint = self._get_base_url_without_version() + "/rerank"
 
         headers: dict[str, str] = {}
         api_key = self._get_api_key_from_config_or_provider_data()

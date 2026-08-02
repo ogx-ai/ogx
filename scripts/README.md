@@ -12,6 +12,7 @@ scripts/
   provider_codegen.py          # Regenerate provider registry and routing code
   generate_ci_matrix.py        # Generate CI test matrix from provider/distribution data
   gen-ci-docs.py               # Generate CI documentation
+  generate_target_models_docs.py # Generate integration target model documentation
   run_openapi_generator.sh     # Run OpenAPI spec generation
   check-api-conformance.sh     # Check API conformance
   check_file_size.py           # Check file sizes

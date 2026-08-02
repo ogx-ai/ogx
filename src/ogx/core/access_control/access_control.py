@@ -13,6 +13,7 @@ from ogx.log import get_logger
 from .conditions import (
     Condition,
     ProtectedResource,
+    has_tenant_scope_mismatch,
     parse_conditions,
 )
 from .datatypes import (
@@ -162,6 +163,9 @@ def is_action_allowed(
     if not user:
         decision = True
         reason = "no auth"
+    elif has_tenant_scope_mismatch(resource, user):
+        decision = False
+        reason = "tenant scope mismatch"
     else:
         if not len(policy):
             policy = default_policy()

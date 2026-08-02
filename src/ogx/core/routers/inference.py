@@ -22,6 +22,7 @@ from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.telemetry.inference_metrics import (
     create_inference_metric_attributes,
     inference_duration,
+    inference_model_type_used_total,
     inference_time_to_first_token,
     inference_tokens_per_second,
 )
@@ -44,7 +45,6 @@ from ogx_api import (
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
-    OpenAIChatCompletionWithReasoning,
     OpenAIChoice,
     OpenAIChoiceLogprobs,
     OpenAICompletion,
@@ -61,6 +61,13 @@ from ogx_api import (
     RoutingTable,
 )
 from ogx_api.inference.models import RerankRequest
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 logger = get_logger(name=__name__, category="core::routers")
 
@@ -170,14 +177,18 @@ class InferenceRouter(Inference):
         self,
         params: RerankRequest,
     ) -> RerankResponse:
+        request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.rerank)
+        inference_model_type_used_total.add(
+            1, {"type": "reranker", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
         return await provider.rerank(params)
 
     async def openai_completion(
         self,
         params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
-    ) -> OpenAICompletion:
+    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
         logger.debug(
             "InferenceRouter.openai_completion: model=, stream=, prompt",
             model=params.model,
@@ -186,14 +197,34 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         if params.stream:
-            return await provider.openai_completion(params)
+            response_stream = await provider.openai_completion(params)
+            # Providers respond with their internal model id, so rewrite each
+            # chunk to carry the fully qualified model id the client requested
+            # (mirrors the non-streaming path below and the chat-streaming path).
+            return self._rewrite_completion_stream_model_id(response_stream, request_model_id)
 
         response = await provider.openai_completion(params)
         response.model = request_model_id
         return response
+
+    async def _rewrite_completion_stream_model_id(
+        self,
+        response: AsyncIterator[OpenAICompletion],
+        fully_qualified_model_id: str,
+    ) -> AsyncIterator[OpenAICompletion]:
+        """Yield streamed completion chunks with the requested model id restored."""
+        async for chunk in response:
+            # Skip None chunks, mirroring stream_tokens_and_compute_metrics_openai_chat
+            if chunk is None:
+                continue
+            chunk.model = fully_qualified_model_id
+            yield chunk
 
     async def openai_chat_completion(
         self,
@@ -207,6 +238,9 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         # Use the OpenAI client for a bit of extra input validation without
@@ -281,14 +315,18 @@ class InferenceRouter(Inference):
     async def openai_chat_completions_with_reasoning(
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
-    ) -> OpenAIChatCompletionWithReasoning | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
+    ) -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
         """Called by the Responses layer when a user requests reasoning.
 
         Routes to the provider's reasoning-aware CC implementation, which
         handles mapping reasoning fields to/from the provider's format.
         If the provider doesn't support reasoning, raises an error.
         """
+        request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
         # Not all providers implement openai_chat_completions_with_reasoning.
         # the Responses layer catches them and falls back to regular CC
@@ -308,11 +346,30 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.embedding)
+        inference_model_type_used_total.add(
+            1, {"type": "embedding", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         response = await provider.openai_embeddings(params)
         response.model = request_model_id
         return response
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_messages(params)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_count_tokens(params)
 
     async def list_chat_completions(
         self,

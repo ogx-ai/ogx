@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import type { VectorStore } from "llama-stack-client/resources/vector-stores/vector-stores";
-import type { VectorStoreFile } from "llama-stack-client/resources/vector-stores/files";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
+import type { VectorStoreFile } from "ogx-client/resources/vector-stores/files";
 import { VectorStoreDetailView } from "@/components/vector-stores/vector-store-detail";
 
 export default function VectorStoreDetailPage() {
@@ -65,6 +65,15 @@ export default function VectorStoreDetailPage() {
     fetchFiles();
   }, [id, client.vectorStores.files]);
 
+  const refetchFiles = async () => {
+    try {
+      const result = await client.vectorStores.files.list(id);
+      setFiles((result as { data: VectorStoreFile[] }).data);
+    } catch (err) {
+      console.error("Failed to refresh files:", err);
+    }
+  };
+
   return (
     <VectorStoreDetailView
       store={store}
@@ -74,6 +83,7 @@ export default function VectorStoreDetailPage() {
       errorStore={errorStore}
       errorFiles={errorFiles}
       id={id}
+      onFilesChanged={refetchFiles}
     />
   );
 }

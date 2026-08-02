@@ -15,7 +15,7 @@ from ogx.core.datatypes import User
 from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore, SqlRecord
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
 from ogx.core.storage.sqlstore.sqlstore import PostgresSqlStoreConfig, SqliteSqlStoreConfig
-from ogx_api.internal.sqlstore import ColumnType
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 
 @patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
@@ -530,6 +530,93 @@ def test_json_array_contains_value_uses_backend_specific_sql():
     )
     assert postgres_sql == "CAST(access_attributes->'roles' AS jsonb) @> CAST(:attr_roles_0 AS jsonb)"
     assert postgres_param == '["admin"]'
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_upsert_enforces_access_control(mock_get_authenticated_user):
+    """Test that upsert() raises AccessDeniedError when user lacks permission on existing row."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_upsert_acl.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "title": ColumnType.STRING,
+            },
+        )
+
+        owner = User("alice", {"roles": ["admin"], "teams": ["eng"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "title": "Original"})
+
+        other_user = User("bob", {"roles": ["viewer"], "teams": ["marketing"]})
+        mock_get_authenticated_user.return_value = other_user
+
+        with pytest.raises(AccessDeniedError):
+            await sqlstore.upsert("docs", {"id": "doc1", "title": "Hijacked"}, conflict_columns=["id"])
+
+        mock_get_authenticated_user.return_value = owner
+        row = await sqlstore.fetch_one("docs", where={"id": "doc1"})
+        assert row is not None
+        assert row["title"] == "Original"
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_upsert_preserves_ownership(mock_get_authenticated_user):
+    """Test that upsert() on conflict does not transfer ownership to the caller."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_upsert_ownership.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "title": ColumnType.STRING,
+            },
+        )
+
+        owner = User("alice", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = owner
+        await sqlstore.insert("docs", {"id": "doc1", "title": "Original"})
+
+        teammate = User("carol", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = teammate
+        await sqlstore.upsert("docs", {"id": "doc1", "title": "Updated"}, conflict_columns=["id"])
+
+        raw = await base_sqlstore.fetch_one("docs", where={"id": "doc1"})
+        assert raw is not None
+        assert raw["title"] == "Updated"
+        assert raw["owner_principal"] == "alice"
+        assert raw["access_attributes"] == {"roles": ["admin"]}
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_upsert_insert_path_sets_ownership(mock_get_authenticated_user):
+    """Test that upsert() on a new row correctly sets ownership."""
+    with TemporaryDirectory() as tmp_dir:
+        base_sqlstore = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/test_upsert_insert.db"))
+        sqlstore = AuthorizedSqlStore(base_sqlstore, default_policy())
+
+        await sqlstore.create_table(
+            table="docs",
+            schema={
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "title": ColumnType.STRING,
+            },
+        )
+
+        user = User("alice", {"roles": ["admin"]})
+        mock_get_authenticated_user.return_value = user
+        await sqlstore.upsert("docs", {"id": "doc1", "title": "New"}, conflict_columns=["id"])
+
+        raw = await base_sqlstore.fetch_one("docs", where={"id": "doc1"})
+        assert raw is not None
+        assert raw["title"] == "New"
+        assert raw["owner_principal"] == "alice"
+        assert raw["access_attributes"] == {"roles": ["admin"]}
 
 
 @patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")

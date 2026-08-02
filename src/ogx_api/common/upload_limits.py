@@ -69,7 +69,26 @@ async def read_upload_with_size_limit(
                 raise FileTooLargeError(file_size=total_bytes, max_size=max_upload_bytes)
             chunks.append(chunk)
     except TypeError:
-        # file.read() doesn't accept a size argument — read all at once
+        # file.read() doesn't accept a size argument — try the underlying
+        # synchronous file object for bounded chunked reads before resorting
+        # to an unbounded read.
+        underlying = getattr(file, "_buf", None) or getattr(file, "file", None)
+        if underlying is not None and callable(getattr(underlying, "read", None)):
+            try:
+                while True:
+                    chunk = underlying.read(_READ_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    total_bytes += len(chunk)
+                    if total_bytes > max_upload_bytes:
+                        raise FileTooLargeError(file_size=total_bytes, max_size=max_upload_bytes) from None
+                    chunks.append(chunk)
+                return b"".join(chunks)
+            except TypeError:
+                pass
+
+        # Last resort: declared_size was already validated above so if it was
+        # set the read is bounded; otherwise we have no way to chunk.
         content: bytes = await file.read()
         if len(content) > max_upload_bytes:
             raise FileTooLargeError(file_size=len(content), max_size=max_upload_bytes) from None

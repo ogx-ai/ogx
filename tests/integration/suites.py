@@ -97,6 +97,16 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
+    "vllm-gpu-gpt-oss": Setup(
+        name="vllm-gpu",
+        description="vLLM GPU provider with gpt-oss:20b reasoning model",
+        env={
+            "VLLM_URL": "http://localhost:8000/v1",
+        },
+        defaults={
+            "text_model": "vllm/gpt-oss:20b",
+        },
+    ),
     "ollama-reasoning": Setup(
         name="ollama",
         description="Local Ollama provider with a reasoning-capable model (deepseek-r1)",
@@ -186,7 +196,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         name="cerebras",
         description="Cerebras models",
         defaults={
-            "text_model": "cerebras/llama-3.3-70b",
+            "text_model": "cerebras/gpt-oss-120b",
         },
     ),
     "databricks": Setup(
@@ -302,7 +312,9 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="ollama-reasoning",
         roots=[
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_basic_streaming",
             "tests/integration/responses/test_reasoning.py::test_reasoning_non_streaming",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_with_tool_call",
             "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_passthrough",
         ],
         default_setup="ollama-reasoning",

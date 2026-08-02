@@ -2,6 +2,8 @@
 
 Integration tests verify complete workflows across different providers using OGX's record-replay system.
 
+For the list of target models per provider and their CI lanes, see [TARGET_MODELS.md](TARGET_MODELS.md).
+
 ## Quick Start
 
 ```bash

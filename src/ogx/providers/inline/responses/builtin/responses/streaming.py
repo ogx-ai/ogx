@@ -113,8 +113,10 @@ from .types import (
     ChatCompletionResult,
 )
 from .utils import (
+    StreamingCitationCleaner,
     convert_chat_choice_to_response_message,
     convert_mcp_tool_choice,
+    extract_citations_from_text,
     is_function_tool_call,
     run_guardrails,
     should_summarize_reasoning,
@@ -127,6 +129,8 @@ tracer = trace.get_tracer(__name__)
 # Built-in tool names that the server knows how to execute itself.
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
 _SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+
+_MAX_HALLUCINATED_TOOL_RETRIES = 3
 
 _GUARDRAIL_BATCH_CHARS = 200
 
@@ -191,6 +195,8 @@ def extract_openai_error(exc: Exception) -> tuple[str, str]:
 
     if raw_code and isinstance(raw_code, str):
         final_code: str = _RESPONSES_API_ERROR_CODES[raw_code] if raw_code in _RESPONSES_API_ERROR_CODES else raw_code
+    elif isinstance(raw_code, int) and 400 <= raw_code < 500:
+        final_code = "invalid_prompt"
     else:
         final_code = "server_error"
 
@@ -232,7 +238,9 @@ class StreamingResponseOrchestrator:
         max_infer_iters: int,
         tool_executor,  # Will be the tool execution logic from the main class
         instructions: str | None,
-        moderation_endpoint: str | None,
+        skills: list[str] | None = None,
+        moderation_endpoint: str | None = None,
+        moderation_headers: dict[str, str] | None = None,
         enable_guardrails: bool = False,
         connectors_api: Connectors | None = None,
         prompt: OpenAIResponsePrompt | None = None,
@@ -244,6 +252,7 @@ class StreamingResponseOrchestrator:
         max_output_tokens: int | None = None,
         service_tier: ServiceTier | None = None,
         metadata: dict[str, str] | None = None,
+        safety_identifier: str | None = None,
         include: list[ResponseItemInclude] | None = None,
         store: bool | None = True,
         truncation: ResponseTruncation | None = None,
@@ -260,6 +269,7 @@ class StreamingResponseOrchestrator:
         self.max_infer_iters = max_infer_iters
         self.tool_executor = tool_executor
         self.moderation_endpoint = moderation_endpoint
+        self.moderation_headers = moderation_headers
         self.connectors_api = connectors_api
         self.enable_guardrails = enable_guardrails
         self.prompt = prompt
@@ -267,6 +277,7 @@ class StreamingResponseOrchestrator:
         self.previous_response_id = previous_response_id
         # System message that is inserted into the model's context
         self.instructions = instructions
+        self.skills = skills
         # Whether to allow more than one function tool call generated per turn.
         self.parallel_tool_calls = parallel_tool_calls
         # Max number of total calls to built-in tools that can be processed in a response
@@ -278,6 +289,7 @@ class StreamingResponseOrchestrator:
         # This allows us to update it with the actual tier returned by the provider
         self.service_tier = service_tier.value if service_tier is not None else None
         self.metadata = metadata
+        self.safety_identifier = safety_identifier
         self.truncation = truncation
         self.top_logprobs = top_logprobs
         self.stream_options = stream_options
@@ -328,10 +340,11 @@ class StreamingResponseOrchestrator:
             top_logprobs=self.top_logprobs if self.top_logprobs is not None else 0,
             tools=self.ctx.available_tools(),
             tool_choice=self.ctx.tool_choice or OpenAIResponseInputToolChoiceMode.auto,
-            truncation=self.truncation or "disabled",
+            truncation=self.truncation or ResponseTruncation.disabled,
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
+            safety_identifier=self.safety_identifier,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
@@ -381,14 +394,16 @@ class StreamingResponseOrchestrator:
             incomplete_details=incomplete_details,
             usage=self.accumulated_usage,
             instructions=self.instructions,
+            skills=self.skills,
             prompt=self.prompt,
-            parallel_tool_calls=self.parallel_tool_calls,
+            parallel_tool_calls=self.parallel_tool_calls if self.parallel_tool_calls is not None else True,
             max_tool_calls=self.max_tool_calls,
             reasoning=self.reasoning,
             max_output_tokens=self.max_output_tokens,
             service_tier=self.service_tier or "default",
             metadata=self.metadata,
-            truncation=self.truncation or "disabled",
+            safety_identifier=self.safety_identifier,
+            truncation=self.truncation or ResponseTruncation.disabled,
             presence_penalty=self.presence_penalty if self.presence_penalty is not None else 0.0,
             store=self.store,
             prompt_cache_key=self.prompt_cache_key,
@@ -416,9 +431,10 @@ class StreamingResponseOrchestrator:
             input_violation_message = await run_guardrails(
                 self.moderation_endpoint,
                 combined_text,
+                headers=self.moderation_headers,
             )
             if input_violation_message:
-                logger.info("Input guardrail violation", input_violation_message=input_violation_message)
+                logger.debug("Input guardrail violation", input_violation_message=input_violation_message)
                 yield await self._create_refusal_response(input_violation_message)
                 return
 
@@ -471,6 +487,7 @@ class StreamingResponseOrchestrator:
                 chat_tool_choice = processed_tool_choice.model_dump()
 
         n_iter = 0
+        n_hallucinated_retries = 0
         messages = self.ctx.messages.copy()
         final_status = "completed"
         incomplete_reason: str | None = None
@@ -526,7 +543,7 @@ class StreamingResponseOrchestrator:
                 # Merge user stream_options with default include_usage
                 effective_stream_options = {"include_usage": True}
                 if self.stream_options:
-                    effective_stream_options.update(self.stream_options)
+                    effective_stream_options.update({k: v for k, v in self.stream_options if v is not None})
 
                 params = OpenAIChatCompletionRequestWithExtraBody(
                     model=self.ctx.model,
@@ -552,11 +569,12 @@ class StreamingResponseOrchestrator:
                 )
                 # Use reasoning-aware method when reasoning is explicitly requested
                 completion_result: (
-                    OpenAIChatCompletion
-                    | AsyncIterator[OpenAIChatCompletionChunk]
-                    | OpenAIChatCompletionWithReasoning
+                    OpenAIChatCompletionWithReasoning
+                    | OpenAIChatCompletion
                     | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]
-                )
+                    | AsyncIterator[OpenAIChatCompletionChunk]
+                    | None
+                ) = None
                 if self.reasoning and self.reasoning.effort and self.reasoning.effort != "none":
                     try:
                         # Pass a copy — the router mutates params.model (strips provider prefix).
@@ -581,6 +599,7 @@ class StreamingResponseOrchestrator:
                         completion_result_data = stream_event_or_result
                     else:
                         yield stream_event_or_result
+
                 # If violation detected, skip the rest of processing since we already sent refusal
                 if self.violation_detected:
                     return
@@ -605,6 +624,7 @@ class StreamingResponseOrchestrator:
                     non_function_tool_calls,
                     approvals,
                     next_turn_messages,
+                    has_hallucinated_retries,
                 ) = self._separate_tool_calls(current_response, messages, completion_result_data.reasoning_content)
                 # add any approval requests required
                 for tool_call in approvals:
@@ -685,8 +705,21 @@ class StreamingResponseOrchestrator:
                 ):
                     yield stream_event
                 messages = next_turn_messages
-                if not function_tool_calls and not non_function_tool_calls:
+                if not function_tool_calls and not non_function_tool_calls and not has_hallucinated_retries:
                     break
+
+                if has_hallucinated_retries:
+                    n_hallucinated_retries += 1
+                    if n_hallucinated_retries >= _MAX_HALLUCINATED_TOOL_RETRIES:
+                        logger.warning(
+                            "Exiting inference loop; model keeps hallucinating tool names",
+                            retries=n_hallucinated_retries,
+                        )
+                        final_status = "incomplete"
+                        incomplete_reason = "max_iterations_exceeded"
+                        break
+                else:
+                    n_hallucinated_retries = 0
 
                 if function_tool_calls:
                     logger.info("Exiting inference loop since there is a function (client-side) tool call")
@@ -763,28 +796,33 @@ class StreamingResponseOrchestrator:
 
     def _separate_tool_calls(
         self, current_response, messages, reasoning_content: str | None = None
-    ) -> tuple[list, list, list, list]:
-        """Separate tool calls into function and non-function categories."""
+    ) -> tuple[list, list, list, list, bool]:
+        """Separate tool calls into function and non-function categories.
+
+        Returns (function_tool_calls, non_function_tool_calls, approvals,
+        next_turn_messages, has_hallucinated_retries).  The last flag is True
+        when the model hallucinated a tool name in a server-only loop and an
+        error was fed back — the caller should re-enter the inference loop.
+        """
         function_tool_calls = []
         non_function_tool_calls = []
         approvals = []
         next_turn_messages = messages.copy()
+        has_hallucinated_retries = False
 
         for choice in current_response.choices:
             # Convert response message to input message format for multi-turn.
-            # Use AssistantMessageWithReasoning if reasoning was present in the
-            # CC response. Providers will be check for this AssistantMessageWithReasoning
-            # message
+            # Assign base type first, then narrow to AssistantMessageWithReasoning
+            # if reasoning was present in the CC response.
+            message: OpenAIAssistantMessageParam | AssistantMessageWithReasoning = OpenAIAssistantMessageParam(
+                content=choice.message.content,
+                tool_calls=choice.message.tool_calls,
+            )
             if reasoning_content:
                 message = AssistantMessageWithReasoning(
                     content=choice.message.content,
                     tool_calls=choice.message.tool_calls,
                     reasoning_content=reasoning_content,
-                )
-            else:
-                message = OpenAIAssistantMessageParam(  # type: ignore[assignment]
-                    content=choice.message.content,
-                    tool_calls=choice.message.tool_calls,
                 )
             next_turn_messages.append(message)
             logger.debug("Choice message content", content=choice.message.content)
@@ -802,16 +840,40 @@ class StreamingResponseOrchestrator:
                         and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES
                         and tool_call.function.name not in self.mcp_tool_to_server
                     ):
-                        # The model called a tool name that is neither a registered function tool,
-                        # nor a server-side built-in, nor an MCP tool — it hallucinated a name.
-                        # Return it to the client as a function_call output item rather than
-                        # crashing the server with an unhandled ValueError.
-                        logger.warning(
-                            "Model called unrecognized tool ; treating as a client-side function call.",
-                            name=tool_call.function.name,
-                        )
-                        function_tool_calls.append(tool_call)
-                        executed_tool_calls.append(tool_call)
+                        # The model hallucinated a tool name — it doesn't match
+                        # any registered function tool, server-side built-in, or
+                        # MCP tool.
+                        has_client_tools = any(t.type == "function" for t in self.ctx.response_tools)
+                        if has_client_tools:
+                            # A client is expected to handle function calls, so
+                            # surface the hallucinated name as a client-side
+                            # function call to avoid a server 500.
+                            logger.warning(
+                                "Model called unrecognized tool; treating as a client-side function call",
+                                name=tool_call.function.name,
+                            )
+                            function_tool_calls.append(tool_call)
+                            executed_tool_calls.append(tool_call)
+                        else:
+                            # Server-only loop — no client will ever supply a
+                            # result for this call. Feed an error back to the
+                            # model so it can self-correct on the next iteration.
+                            logger.warning(
+                                "Model called unrecognized tool; returning error to model",
+                                name=tool_call.function.name,
+                            )
+                            available = sorted(self.mcp_tool_to_server.keys())
+                            next_turn_messages.append(
+                                OpenAIToolMessageParam(
+                                    tool_call_id=tool_call.id,
+                                    content=(
+                                        f"Error: tool '{tool_call.function.name}' is not available. "
+                                        f"Available tools are: {', '.join(available)}. "
+                                        "Please use one of these tools instead."
+                                    ),
+                                )
+                            )
+                            has_hallucinated_retries = True
                     else:
                         if self._approval_required(tool_call.function.name):
                             approval_response = self.ctx.approval_response(
@@ -843,7 +905,7 @@ class StreamingResponseOrchestrator:
                     else:
                         next_turn_messages.pop()
 
-        return function_tool_calls, non_function_tool_calls, approvals, next_turn_messages
+        return function_tool_calls, non_function_tool_calls, approvals, next_turn_messages, has_hallucinated_retries
 
     def _accumulate_chunk_usage(self, chunk: OpenAIChatCompletionChunk) -> None:
         """Accumulate usage from a streaming chunk into the response usage format."""
@@ -1043,6 +1105,10 @@ class StreamingResponseOrchestrator:
         refusal_text_accumulated = []
         pending_guardrail_events: list[OpenAIResponseObjectStream] = []
         chars_since_last_check = 0
+        # Cleans citation markers out of delta text as it streams, so a client
+        # reconstructing output from deltas sees the same text as content_part.done /
+        # output_item.done (which clean the fully accumulated text once streaming ends).
+        citation_cleaner = StreamingCitationCleaner(self.citation_files)
 
         async for raw_chunk in completion_result:
             # Providers returning OpenAIChatCompletionChunkWithReasoning wrap
@@ -1105,21 +1171,27 @@ class StreamingResponseOrchestrator:
                             ),
                             sequence_number=self.sequence_number,
                         )
-                    self.sequence_number += 1
+                    # Withhold citation markers (and any text that might still turn into
+                    # one) from the delta stream, so it stays consistent with the cleaned
+                    # text in content_part.done / output_item.done below. A marker split
+                    # across chunk boundaries can cause this to yield nothing for a chunk.
+                    cleaned_delta = citation_cleaner.feed(chunk_choice.delta.content)
+                    if cleaned_delta:
+                        self.sequence_number += 1
 
-                    text_delta_event = OpenAIResponseObjectStreamResponseOutputTextDelta(
-                        content_index=content_index,
-                        delta=chunk_choice.delta.content,
-                        item_id=message_item_id,
-                        logprobs=chunk_logprobs if chunk_logprobs is not None else [],
-                        output_index=message_output_index,
-                        sequence_number=self.sequence_number,
-                    )
-                    # Buffer text delta events for guardrail check
-                    if self.enable_guardrails:
-                        pending_guardrail_events.append(text_delta_event)
-                    else:
-                        yield text_delta_event
+                        text_delta_event = OpenAIResponseObjectStreamResponseOutputTextDelta(
+                            content_index=content_index,
+                            delta=cleaned_delta,
+                            item_id=message_item_id,
+                            logprobs=chunk_logprobs if chunk_logprobs is not None else [],
+                            output_index=message_output_index,
+                            sequence_number=self.sequence_number,
+                        )
+                        # Buffer text delta events for guardrail check
+                        if self.enable_guardrails:
+                            pending_guardrail_events.append(text_delta_event)
+                        else:
+                            yield text_delta_event
 
                 # Collect content for final response
                 content_delta = chunk_choice.delta.content or ""
@@ -1146,6 +1218,7 @@ class StreamingResponseOrchestrator:
                             yield event
                     reasoning_part_emitted = True
                     reasoning_text_accumulated.append(reasoning_content)
+                    chars_since_last_check += len(reasoning_content)
 
                 # Handle refusal content if present
                 if chunk_choice.delta.refusal:
@@ -1166,7 +1239,7 @@ class StreamingResponseOrchestrator:
                 # chunk: OpenAIChatCompletionChunk annotation above.
                 if chunk_choice.delta.tool_calls:
                     for tool_call in chunk_choice.delta.tool_calls:
-                        response_tool_call = chat_response_tool_calls.get(tool_call.index, None)  # type: ignore[arg-type]
+                        response_tool_call = chat_response_tool_calls.get(tool_call.index, None)
                         # Create new tool call entry if this is the first chunk for this index
                         is_new_tool_call = response_tool_call is None
                         if is_new_tool_call:
@@ -1178,16 +1251,16 @@ class StreamingResponseOrchestrator:
                             if tool_call_dict.get("function") and tool_call_dict["function"].get("arguments") is None:
                                 tool_call_dict["function"]["arguments"] = ""
                             response_tool_call = OpenAIChatCompletionToolCall(**tool_call_dict)
-                            chat_response_tool_calls[tool_call.index] = response_tool_call  # type: ignore[index]
+                            chat_response_tool_calls[tool_call.index] = response_tool_call
 
                             # Create item ID for this tool call for streaming events
                             tool_call_item_id = f"fc_{uuid.uuid4()}"
-                            tool_call_item_ids[tool_call.index] = tool_call_item_id  # type: ignore[index]
+                            tool_call_item_ids[tool_call.index] = tool_call_item_id
 
                             # Emit output_item.added event for the new function call
                             self.sequence_number += 1
-                            is_mcp_tool = tool_call.function.name and tool_call.function.name in self.mcp_tool_to_server  # type: ignore[union-attr]
-                            if not is_mcp_tool and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES:  # type: ignore[union-attr]
+                            is_mcp_tool = tool_call.function.name and tool_call.function.name in self.mcp_tool_to_server
+                            if not is_mcp_tool and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES:
                                 # for MCP tools (and even other non-function tools) we emit an output message item later
                                 function_call_item = OpenAIResponseOutputMessageFunctionToolCall(
                                     arguments="",  # Will be filled incrementally via delta events
@@ -1236,20 +1309,21 @@ class StreamingResponseOrchestrator:
                                     response_tool_call.function.arguments or ""
                                 ) + tool_call.function.arguments
 
-            # Batched output safety validation. If we have only buffered reasoning events and
-            # no assistant text yet, flush per chunk so reasoning can stream in real time.
+            # Batched output safety validation — reasoning text is included in moderation
+            # checks because reasoning events are user-visible in the stream.
             guardrail_check_due = chars_since_last_check >= _GUARDRAIL_BATCH_CHARS
             if pending_guardrail_events and not any(chat_response_content):
                 guardrail_check_due = True
 
             if self.enable_guardrails and guardrail_check_due:
-                accumulated_text = "".join(chat_response_content)
+                accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
                 violation_message = await run_guardrails(
                     self.moderation_endpoint,
                     accumulated_text,
+                    headers=self.moderation_headers,
                 )
                 if violation_message:
-                    logger.info("Output guardrail violation", violation_message=violation_message)
+                    logger.debug("Output guardrail violation", violation_message=violation_message)
                     pending_guardrail_events.clear()
                     yield await self._create_refusal_response(violation_message)
                     self.violation_detected = True
@@ -1261,13 +1335,14 @@ class StreamingResponseOrchestrator:
 
         # Final guardrail check on remaining buffered content
         if self.enable_guardrails and pending_guardrail_events:
-            accumulated_text = "".join(chat_response_content)
+            accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
             violation_message = await run_guardrails(
                 self.moderation_endpoint,
                 accumulated_text,
+                headers=self.moderation_headers,
             )
             if violation_message:
-                logger.info("Output guardrail violation", violation_message=violation_message)
+                logger.debug("Output guardrail violation", violation_message=violation_message)
                 pending_guardrail_events.clear()
                 yield await self._create_refusal_response(violation_message)
                 self.violation_detected = True
@@ -1305,7 +1380,25 @@ class StreamingResponseOrchestrator:
 
         # Emit content_part.done event if text content was streamed (before content gets cleared)
         if content_part_emitted:
+            # Flush any text the citation cleaner was still withholding (e.g. a marker-like
+            # sequence that never completed) so delta-reconstructed text catches up with
+            # the cleaned text below before the round closes out. Guardrail buffering
+            # doesn't apply here: the moderation check above already ran over the full raw
+            # accumulated text, which includes whatever this flush contains.
+            flushed_delta = citation_cleaner.flush()
+            if flushed_delta:
+                self.sequence_number += 1
+                yield OpenAIResponseObjectStreamResponseOutputTextDelta(
+                    content_index=content_index,
+                    delta=flushed_delta,
+                    item_id=message_item_id,
+                    logprobs=[],
+                    output_index=message_output_index,
+                    sequence_number=self.sequence_number,
+                )
+
             final_text = "".join(chat_response_content)
+            part_annotations, part_clean_text = extract_citations_from_text(final_text, self.citation_files)
             self.sequence_number += 1
             yield OpenAIResponseObjectStreamResponseContentPartDone(
                 content_index=content_index,
@@ -1313,7 +1406,8 @@ class StreamingResponseOrchestrator:
                 item_id=message_item_id,
                 output_index=message_output_index,
                 part=OpenAIResponseContentPartOutputText(
-                    text=final_text,
+                    text=part_clean_text,
+                    annotations=list(part_annotations),
                     logprobs=[],
                 ),
                 sequence_number=self.sequence_number,
@@ -1348,10 +1442,11 @@ class StreamingResponseOrchestrator:
             content_parts = []
             if content_part_emitted:
                 final_text = "".join(chat_response_content)
+                final_annotations, final_clean_text = extract_citations_from_text(final_text, self.citation_files)
                 content_parts.append(
                     OpenAIResponseOutputMessageContentOutputText(
-                        text=final_text,
-                        annotations=[],
+                        text=final_clean_text,
+                        annotations=list(final_annotations),
                         logprobs=chat_response_logprobs if chat_response_logprobs else [],
                     )
                 )

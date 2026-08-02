@@ -4,7 +4,6 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import asyncio
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,15 +23,11 @@ from ogx_api import ToolDef
 from ogx_api.inference.models import (
     OpenAIAssistantMessageParam,
     OpenAIChatCompletion,
-    OpenAIChatCompletionChunk,
-    OpenAIChatCompletionChunkWithReasoning,
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
     OpenAIChatCompletionUsage,
     OpenAIChoice,
-    OpenAIChoiceDelta,
-    OpenAIChunkChoice,
 )
 from ogx_api.openai_responses import (
     OpenAIResponseInputToolMCP,
@@ -58,6 +53,8 @@ def mock_context():
     context.tool_context = AsyncMock()
     context.tool_context.previous_tools = {}
     context.messages = []
+    context.tool_choice = None
+    context.available_tools = MagicMock(return_value=[])
     return context
 
 
@@ -168,7 +165,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 1
         assert len(result_messages) == 2
@@ -187,7 +184,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 3
         assert len(result_messages) == 2, (
@@ -208,7 +205,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 2
         assert "user_msg" in result_messages
@@ -230,7 +227,7 @@ class TestAllDeferredOrDenied:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(approvals) == 0
         assert len(result_messages) == 2
@@ -261,7 +258,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 1
         assert non_function[0].id == "call_1"
@@ -289,7 +286,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time, tc_news])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 1
@@ -323,7 +320,7 @@ class TestMixedApproval:
         response = _make_response([tc_weather, tc_time])
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 1
         assert len(approvals) == 0
@@ -356,7 +353,7 @@ class TestMixedApproval:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, _, _, result_messages = orch._separate_tool_calls(response, messages)
+        _, _, _, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert result_messages[0] == "system_msg"
         assert result_messages[1] == "user_msg"
@@ -377,7 +374,7 @@ class TestAllExecuted:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 0
@@ -403,7 +400,7 @@ class TestAllExecuted:
         response = _make_response(tool_calls)
         messages = ["system_msg", "user_msg"]
 
-        _, non_function, approvals, result_messages = orch._separate_tool_calls(response, messages)
+        _, non_function, approvals, result_messages, _ = orch._separate_tool_calls(response, messages)
 
         assert len(non_function) == 2
         assert len(approvals) == 0
@@ -573,56 +570,3 @@ class TestSummarizeReasoning:
         call_args = mock_inference.openai_chat_completion.call_args[0][0]
         user_msg = call_args.messages[1].content
         assert "Preserve the key logical steps" in user_msg
-
-
-async def test_guardrailed_reasoning_streams_before_completion(
-    mock_inference_api, mock_context, mock_moderation_endpoint
-):
-    """Guardrail batching should not buffer reasoning-only deltas until stream completion."""
-    mock_context.model = "test-model"
-    mock_context.temperature = None
-    mock_context.top_p = None
-    mock_context.frequency_penalty = None
-
-    orchestrator = StreamingResponseOrchestrator(
-        inference_api=mock_inference_api,
-        ctx=mock_context,
-        response_id="resp_reasoning_guardrails",
-        created_at=0,
-        text=MagicMock(),
-        max_infer_iters=1,
-        tool_executor=MagicMock(),
-        instructions=None,
-        moderation_endpoint=mock_moderation_endpoint,
-        enable_guardrails=True,
-    )
-
-    gate = asyncio.Event()
-
-    async def completion_result() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-        chunk = OpenAIChatCompletionChunk(
-            id="chatcmpl_reasoning",
-            choices=[
-                OpenAIChunkChoice(
-                    index=0,
-                    delta=OpenAIChoiceDelta(content=None, role="assistant"),
-                    finish_reason=None,
-                )
-            ],
-            created=1,
-            model="test-model",
-            object="chat.completion.chunk",
-        )
-        yield OpenAIChatCompletionChunkWithReasoning(chunk=chunk, reasoning_content="thinking...")
-
-        await gate.wait()
-
-    stream = orchestrator._process_streaming_chunks(completion_result(), output_messages=[])
-
-    # If reasoning is buffered until completion, this call will time out.
-    first_event = await asyncio.wait_for(anext(stream), timeout=0.5)
-    assert first_event.type in {"response.content_part.added", "response.reasoning_text.delta"}
-
-    gate.set()
-    async for _ in stream:
-        pass

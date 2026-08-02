@@ -4,13 +4,12 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import base64
 import json
 import logging  # allow-direct-logging
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from ogx.core.datatypes import (
@@ -82,7 +81,10 @@ def http_app(mock_auth_endpoint):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -94,6 +96,35 @@ def http_app(mock_auth_endpoint):
 @pytest.fixture
 def http_client(http_app):
     return TestClient(http_app)
+
+
+@pytest.fixture
+def ws_app(mock_auth_endpoint):
+    app = FastAPI()
+    auth_config = AuthenticationConfig(
+        provider_config=CustomAuthConfig(
+            type=AuthProviderType.CUSTOM,
+            endpoint=mock_auth_endpoint,
+        ),
+        access_policy=[],
+    )
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
+
+    @app.websocket("/ws")
+    async def ws_endpoint(websocket: WebSocket):
+        await websocket.accept()
+        await websocket.send_text("authenticated")
+        await websocket.close()
+
+    return app
+
+
+@pytest.fixture
+def ws_client(ws_app):
+    return TestClient(ws_app)
 
 
 @pytest.fixture
@@ -120,13 +151,7 @@ def mock_http_middleware(mock_auth_endpoint):
         ),
         access_policy=[],
     )
-    return AuthenticationMiddleware(mock_app, auth_config, {}), mock_app
-
-
-@pytest.fixture
-def mock_impls():
-    """Mock implementations for scope testing"""
-    return {}
+    return AuthenticationMiddleware(mock_app, auth_config), mock_app
 
 
 @pytest.fixture
@@ -140,7 +165,7 @@ def middleware_with_mocks(mock_auth_endpoint):
         ),
         access_policy=[],
     )
-    middleware = AuthenticationMiddleware(mock_app, auth_config, {})
+    middleware = AuthenticationMiddleware(mock_app, auth_config)
 
     from ogx.core.server.routes import RouteAuthInfo
 
@@ -162,7 +187,6 @@ def middleware_with_mocks(mock_auth_endpoint):
     import ogx.core.server.auth
 
     ogx.core.server.auth.find_matching_route = mock_find_matching_route
-    ogx.core.server.auth.initialize_route_impls = lambda impls: {}
 
     return middleware, mock_app
 
@@ -226,6 +250,26 @@ def test_http_auth_service_error(http_client, valid_api_key, suppress_auth_error
     assert "Authentication service error" in response.json()["error"]["message"]
 
 
+# WebSocket Endpoint Tests
+def test_websocket_missing_auth_header_rejected(ws_client, suppress_auth_errors):
+    with pytest.raises(WebSocketDisconnect):
+        with ws_client.websocket_connect("/ws") as websocket:
+            websocket.receive_text()
+
+
+@patch("httpx.AsyncClient.post", new=mock_post_failure)
+def test_websocket_invalid_authentication_rejected(ws_client, invalid_api_key, suppress_auth_errors):
+    with pytest.raises(WebSocketDisconnect):
+        with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {invalid_api_key}"}) as websocket:
+            websocket.receive_text()
+
+
+@patch("httpx.AsyncClient.post", new=mock_post_success)
+def test_websocket_valid_authentication_accepted(ws_client, valid_api_key):
+    with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {valid_api_key}"}) as websocket:
+        assert websocket.receive_text() == "authenticated"
+
+
 def test_http_auth_request_payload(http_client, valid_api_key, mock_auth_endpoint, suppress_auth_errors):
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_response = MockResponse(200, {"message": "Authentication successful"})
@@ -260,6 +304,8 @@ async def test_http_middleware_with_access_attributes(mock_http_middleware, mock
     middleware, mock_app = mock_http_middleware
     mock_receive = AsyncMock()
     mock_send = AsyncMock()
+
+    mock_scope["app"] = mock_app
 
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_response = MockResponse(
@@ -305,7 +351,10 @@ def oauth2_app():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -333,9 +382,42 @@ def test_invalid_auth_header_format_oauth2(oauth2_client):
 
 
 @pytest.fixture
-def jwt_token_valid():
+def rsa_key_pair():
+    """Generate an RSA key pair for JWT signing/verification tests."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_key = private_key.public_key()
+    public_numbers = public_key.public_numbers()
+    # Build JWK for mock JWKS endpoint
+    import base64
+
+    def _int_to_base64url(n, length=None):
+        b = n.to_bytes((n.bit_length() + 7) // 8, byteorder="big")
+        return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+    jwk = {
+        "kid": "rsa-test-key",
+        "kty": "RSA",
+        "alg": "RS256",
+        "use": "sig",
+        "n": _int_to_base64url(public_numbers.n),
+        "e": _int_to_base64url(public_numbers.e),
+    }
+    return private_pem, jwk
+
+
+@pytest.fixture
+def jwt_token_valid(rsa_key_pair):
     import jwt
 
+    private_pem, _ = rsa_key_pair
     return jwt.encode(
         {
             "sub": "my-user",
@@ -343,46 +425,33 @@ def jwt_token_valid():
             "scope": "foo bar",
             "aud": "ogx",
         },
-        key="foobarbaz",
-        algorithm="HS256",
-        headers={"kid": "1234567890"},
+        key=private_pem,
+        algorithm="RS256",
+        headers={"kid": "rsa-test-key"},
     )
 
 
 @pytest.fixture
-def mock_jwks_urlopen():
+def mock_jwks_urlopen(rsa_key_pair):
     """Mock urllib.request.urlopen for PyJWKClient JWKS requests."""
+    _, jwk = rsa_key_pair
     with patch("urllib.request.urlopen") as mock_urlopen:
-        # Mock the JWKS response for PyJWKClient
         mock_response = Mock()
-        mock_response.read.return_value = json.dumps(
-            {
-                "keys": [
-                    {
-                        "kid": "1234567890",
-                        "kty": "oct",
-                        "alg": "HS256",
-                        "use": "sig",
-                        "k": base64.b64encode(b"foobarbaz").decode(),
-                    }
-                ]
-            }
-        ).encode()
+        mock_response.read.return_value = json.dumps({"keys": [jwk]}).encode()
         mock_urlopen.return_value.__enter__.return_value = mock_response
         yield mock_urlopen
 
 
 @pytest.fixture
-def mock_jwks_urlopen_with_auth_required():
+def mock_jwks_urlopen_with_auth_required(rsa_key_pair):
     """Mock urllib.request.urlopen that requires Bearer token for JWKS requests."""
+    _, jwk = rsa_key_pair
     with patch("urllib.request.urlopen") as mock_urlopen:
 
         def side_effect(request, **kwargs):
-            # Check if Authorization header is present
             auth_header = request.headers.get("Authorization") if hasattr(request, "headers") else None
 
             if not auth_header or not auth_header.startswith("Bearer "):
-                # Simulate 401 Unauthorized
                 import urllib.error
 
                 raise urllib.error.HTTPError(
@@ -393,21 +462,8 @@ def mock_jwks_urlopen_with_auth_required():
                     fp=None,
                 )
 
-            # Mock the JWKS response for PyJWKClient
             mock_response = Mock()
-            mock_response.read.return_value = json.dumps(
-                {
-                    "keys": [
-                        {
-                            "kid": "1234567890",
-                            "kty": "oct",
-                            "alg": "HS256",
-                            "use": "sig",
-                            "k": base64.b64encode(b"foobarbaz").decode(),
-                        }
-                    ]
-                }
-            ).encode()
+            mock_response.read.return_value = json.dumps({"keys": [jwk]}).encode()
             return mock_response
 
         mock_urlopen.side_effect = side_effect
@@ -433,7 +489,7 @@ def oauth2_app_with_jwks_token():
         provider_config=OAuth2TokenAuthConfig(
             type=AuthProviderType.OAUTH2_TOKEN,
             jwks=OAuth2JWKSConfig(
-                uri="http://mock-authz-service/token/introspect",
+                uri="http://mock-authz-service/jwks",
                 key_recheck_period=3600,
                 token="my-jwks-token",
             ),
@@ -441,7 +497,10 @@ def oauth2_app_with_jwks_token():
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -614,7 +673,47 @@ def test_get_attributes_from_claims():
     assert set(attributes["roles"]) == {"admin", "user"}
 
 
-# TODO: add more tests for oauth2 token provider
+# Tests for introspection SSL defaults and JWT algorithm allowlist
+
+
+def test_introspection_default_uses_system_certs():
+    """Introspection should verify TLS by default (ssl_ctxt=None), not skip it (ssl_ctxt=False)."""
+    from ogx.core.server.auth_providers import OAuth2TokenAuthProvider
+
+    config = OAuth2TokenAuthConfig(
+        type=AuthProviderType.OAUTH2_TOKEN,
+        introspection=OAuth2IntrospectionConfig(
+            url="https://auth.example.com/introspect",
+            client_id="myclient",
+            client_secret="mysecret",
+        ),
+        verify_tls=True,
+    )
+    OAuth2TokenAuthProvider(config)
+
+    # The fix ensures ssl_ctxt defaults to None (system CA) instead of False
+    assert config.verify_tls is True
+    assert config.tls_cafile is None
+
+
+@pytest.mark.parametrize("bad_algorithm", ["HS256", "none", "EdDSA"])
+def test_jwt_rejects_non_fips_algorithm(bad_algorithm, suppress_auth_errors):
+    """JWT validation should reject non-FIPS algorithms like HS256, none, and EdDSA."""
+    from ogx.core.server.auth_providers import FIPS_APPROVED_JWT_ALGORITHMS
+
+    # Verify these algorithms are NOT in the allowlist
+    assert bad_algorithm not in FIPS_APPROVED_JWT_ALGORITHMS
+
+
+def test_jwt_fips_allowlist_contents():
+    """Verify the FIPS-approved JWT algorithm allowlist contains only expected asymmetric algorithms."""
+    from ogx.core.server.auth_providers import FIPS_APPROVED_JWT_ALGORITHMS
+
+    expected = {"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"}
+    assert set(FIPS_APPROVED_JWT_ALGORITHMS) == expected
+    # No symmetric algorithms
+    for alg in FIPS_APPROVED_JWT_ALGORITHMS:
+        assert not alg.startswith("HS"), f"Symmetric algorithm {alg} should not be in FIPS allowlist"
 
 
 # oauth token introspection tests
@@ -637,7 +736,10 @@ def introspection_app(mock_introspection_endpoint):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -667,7 +769,10 @@ def introspection_app_with_custom_mapping(mock_introspection_endpoint):
         ),
         access_policy=[],
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -798,7 +903,10 @@ def kubernetes_auth_app(mock_kubernetes_api_server):
             },
         },
     )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config, impls={})
+    app.add_middleware(
+        AuthenticationMiddleware,
+        auth_config=auth_config,
+    )
 
     @app.get("/test")
     def test_endpoint():
@@ -918,7 +1026,7 @@ async def test_unauthenticated_endpoint_access_health(middleware_with_mocks):
     middleware, mock_app = middleware_with_mocks
 
     # Test request to /health without auth header (level prefix v1 is added by router)
-    scope = {"type": "http", "path": "/health", "headers": [], "method": "GET"}
+    scope = {"type": "http", "path": "/health", "headers": [], "method": "GET", "app": mock_app}
     receive = AsyncMock()
     send = AsyncMock()
 
@@ -937,7 +1045,7 @@ async def test_unauthenticated_endpoint_denied_for_other_paths(middleware_with_m
     middleware, mock_app = middleware_with_mocks
 
     # Test request to /models/list without auth header
-    scope = {"type": "http", "path": "/models/list", "headers": [], "method": "GET"}
+    scope = {"type": "http", "path": "/models/list", "headers": [], "method": "GET", "app": mock_app}
     receive = AsyncMock()
     send = AsyncMock()
 

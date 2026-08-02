@@ -5,11 +5,16 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Update constraint-dependencies in pyproject.toml for Dependabot PRs.
+"""Update dependency version floors in pyproject.toml for Dependabot PRs.
 
 Dependabot's uv ecosystem only modifies uv.lock directly. This script
-updates the >= lower bound in [tool.uv] constraint-dependencies so that
-pyproject.toml remains the source of truth.
+keeps pyproject.toml in sync by updating the >= lower bound wherever the
+dependency is declared:
+
+1. If found in a regular dependency array ([project] dependencies,
+   [project.optional-dependencies], [dependency-groups]) — update in place.
+2. Else if found in [tool.uv] constraint-dependencies — update in place.
+3. Else — add a new entry to constraint-dependencies.
 """
 
 import argparse
@@ -51,13 +56,83 @@ def find_constraint_line(lines: list[str], pkg_name: str) -> int | None:
     return None
 
 
-def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, bool, str]:
-    """Update the >= lower bound in a constraint-dependencies line.
+def find_dependency_lines(lines: list[str], pkg_name: str) -> list[int]:
+    """Find all dependency lines for a package outside constraint-dependencies."""
+    constraint_section = find_constraint_section(lines)
+    exclude_start, exclude_end = constraint_section if constraint_section else (-1, -1)
+
+    pattern = re.compile(rf'^\s*"{normalize_pkg_pattern(pkg_name)}[\[>=<,"\s]', re.IGNORECASE)
+    matches = []
+    for i, line in enumerate(lines):
+        if exclude_start <= i <= exclude_end:
+            continue
+        if pattern.match(line):
+            matches.append(i)
+    return matches
+
+
+def _canonical_sort_key(line: str) -> str:
+    """Extract the package name from a constraint line for alphabetical sorting."""
+    m = re.match(r'^\s*"([^>=<\[" ]+)', line)
+    return m.group(1).lower().replace("-", "").replace("_", "").replace(".", "") if m else ""
+
+
+def insert_constraint(lines: list[str], pkg_name: str, version: str) -> tuple[list[str], bool, str]:
+    """Insert a new constraint-dependencies entry in alphabetical order.
+
+    Returns (new_lines, changed, reason).
+    """
+    section = find_constraint_section(lines)
+    if section is None:
+        return lines, False, "constraint-dependencies section not found in pyproject.toml"
+
+    start, end = section
+
+    new_entry = f'    "{pkg_name}>={version}",\n'
+    new_key = _canonical_sort_key(new_entry)
+
+    insert_at = end
+    for i in range(start + 1, end + 1):
+        if _canonical_sort_key(lines[i]) > new_key:
+            insert_at = i
+            break
+
+    lines.insert(insert_at, new_entry)
+    return lines, True, f"{pkg_name}: added to constraint-dependencies with >={version}"
+
+
+def add_floor(line: str, pkg_name: str, version: str) -> tuple[str, bool, str]:
+    """Add a >= floor to a dependency line that has no version specifier.
+
+    Transforms  "pkg"  or  "pkg",  into  "pkg>=version"  or  "pkg>=version",
+    preserving extras, whitespace, trailing comma, and inline comments.
 
     Returns (new_line, changed, reason).
     """
     pkg_pattern = normalize_pkg_pattern(pkg_name)
-    lower_bound_pattern = re.compile(rf'("{pkg_pattern}>=)([\d]+(?:\.[\d]+)*)', re.IGNORECASE)
+    bare_pattern = re.compile(
+        rf'(?P<pre>\s*")(?P<name>{pkg_pattern})(?P<extras>\[[^\]]*\])?(?P<post>")',
+        re.IGNORECASE,
+    )
+    match = bare_pattern.search(line)
+    if not match:
+        return line, False, f"could not parse dependency line for {pkg_name}"
+
+    extras = match.group("extras") or ""
+    new_line = bare_pattern.sub(
+        rf"\g<pre>\g<name>{extras}>={version}\g<post>",
+        line,
+    )
+    return new_line, True, f"{pkg_name}: added >= floor {version}"
+
+
+def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, bool, str]:
+    """Update the >= lower bound in a dependency line.
+
+    Returns (new_line, changed, reason).
+    """
+    pkg_pattern = normalize_pkg_pattern(pkg_name)
+    lower_bound_pattern = re.compile(rf'("{pkg_pattern}(?:\[[^\]]*\])?>=)([\d]+(?:\.[\d]+)*)', re.IGNORECASE)
 
     match = lower_bound_pattern.search(line)
     if not match:
@@ -67,7 +142,9 @@ def update_constraint(line: str, pkg_name: str, new_version: str) -> tuple[str, 
     if parse_version(new_version) <= parse_version(old_version):
         return line, False, (f"{pkg_name}: new version {new_version} <= current floor {old_version}")
 
-    upper_bound_match = re.search(rf'"{pkg_pattern}>=[^"]*,<([\d]+(?:\.[\d]+)*)"', line, re.IGNORECASE)
+    upper_bound_match = re.search(
+        rf'"{pkg_pattern}(?:\[[^\]]*\])?>=(?:[^"]*),<([\d]+(?:\.[\d]+)*)"', line, re.IGNORECASE
+    )
     if upper_bound_match:
         upper_version = upper_bound_match.group(1)
         if parse_version(new_version) >= parse_version(upper_version):
@@ -96,22 +173,56 @@ def main() -> int:
     content = pyproject_path.read_text()
     lines = content.splitlines(keepends=True)
 
-    line_idx = find_constraint_line(lines, args.dependency_name)
-    if line_idx is None:
-        print(f"SKIP: {args.dependency_name} not found in constraint-dependencies")
-        print("updated=false")
+    constraint_idx = find_constraint_line(lines, args.dependency_name)
+    dep_indices = find_dependency_lines(lines, args.dependency_name)
+
+    # 1. If in constraint-dependencies, that's the authoritative version spec — update there
+    if constraint_idx is not None:
+        new_line, changed, reason = update_constraint(
+            lines[constraint_idx], args.dependency_name, args.dependency_version
+        )
+        if not changed:
+            print(f"SKIP: {reason}")
+            print("updated=false")
+            return 0
+        lines[constraint_idx] = new_line
+        pyproject_path.write_text("".join(lines))
+        print(f"UPDATED: {reason}")
+        print("updated=true")
         return 0
 
-    new_line, changed, reason = update_constraint(lines[line_idx], args.dependency_name, args.dependency_version)
+    # 2. Update in place in regular dependency arrays — either bump an existing
+    #    >= floor or add one when the dep is bare (no version specifier).
+    if dep_indices:
+        any_changed = False
+        skip_reasons = []
+        for idx in dep_indices:
+            new_line, changed, reason = update_constraint(lines[idx], args.dependency_name, args.dependency_version)
+            if not changed and "no >= lower bound" in reason:
+                new_line, changed, reason = add_floor(lines[idx], args.dependency_name, args.dependency_version)
+            if changed:
+                lines[idx] = new_line
+                any_changed = True
+                print(f"UPDATED (dependencies): {reason}")
+            else:
+                skip_reasons.append(reason)
+        if any_changed:
+            pyproject_path.write_text("".join(lines))
+            print("updated=true")
+        else:
+            for r in skip_reasons:
+                print(f"SKIP (dependencies): {r}")
+            print("updated=false")
+        return 0
 
+    # 3. Not found anywhere — add to constraint-dependencies
+    lines, changed, reason = insert_constraint(lines, args.dependency_name, args.dependency_version)
     if not changed:
         print(f"SKIP: {reason}")
         print("updated=false")
         return 0
-
-    lines[line_idx] = new_line
     pyproject_path.write_text("".join(lines))
-    print(f"UPDATED: {reason}")
+    print(f"ADDED: {reason}")
     print("updated=true")
     return 0
 

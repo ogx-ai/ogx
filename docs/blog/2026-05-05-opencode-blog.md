@@ -1,6 +1,6 @@
 ---
 slug: opencode-blog
-title: "OpenCode ❤️ OGX"
+title: "OGX ❤️ OpenCode"
 authors: [nathan-weinberg]
 tags: []
 date: 2026-05-05
