@@ -205,7 +205,13 @@ from .datatypes import (
     ToolGroupsProtocolPrivate,
     VectorStoresProtocolPrivate,
 )
-from .file_processors import FileProcessors, ProcessFileRequest, ProcessFileResponse
+from .file_processors import (
+    FileProcessors,
+    ListProcessFileJobsResponse,
+    ProcessFileJob,
+    ProcessFileRequest,
+    ProcessFileResponse,
+)
 from .filters import COMPARISON_FILTER_TYPES, COMPOUND_FILTER_TYPES, ComparisonFilter, CompoundFilter, Filter
 from .files import (
     DeleteFileRequest,
@@ -937,6 +943,8 @@ __all__ = [
     "OpenAIUserMessageParam",
     "PaginatedResponse",
     "ParamType",
+    "ListProcessFileJobsResponse",
+    "ProcessFileJob",
     "ProcessFileRequest",
     "ProcessFileResponse",
     "Prompt",

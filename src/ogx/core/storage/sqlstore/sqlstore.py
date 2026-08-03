@@ -86,6 +86,19 @@ async def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
             raise ValueError(f"Unknown sqlstore type {backend_config.type}")
 
 
+async def get_system_sqlstore(reference: SqlStoreReference) -> SqlStore:
+    """Return a plain SqlStore for internal/system tables that are not user-scoped.
+
+    Unlike authorized_sqlstore(), this performs no per-request access-control
+    filtering and captures no per-request owner. It is intended only for
+    infrastructure tables — such as the job queue — that are shared across
+    processes (the server and its workers) and therefore have no meaningful
+    per-request owner. Do not use it for user-facing data; use
+    authorized_sqlstore() for that.
+    """
+    return await _sqlstore_impl(reference)
+
+
 def register_sqlstore_backends(backends: dict[str, StorageBackendConfig]) -> None:
     """Register the set of available SQL store backends for reference resolution."""
     global _SQLSTORE_BACKENDS

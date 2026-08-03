@@ -9,6 +9,7 @@ core/
   server/              # FastAPI server, auth middleware, quota middleware
   routers/             # API-specific routers (inference, vector_io, tool_runtime)
   routing_tables/      # Resource-to-provider mapping tables
+  jobs/                # Out-of-process job execution (durable queue + worker pool)
   storage/             # KVStore and SqlStore backends
   store/               # Distribution registry (persists registered resources)
   access_control/      # Access control policy enforcement

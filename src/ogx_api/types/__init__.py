@@ -123,7 +123,7 @@ from ogx_api.conversations import (
 )
 
 # File processors
-from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
+from ogx_api.file_processors import ListProcessFileJobsResponse, ProcessFileJob, ProcessFileRequest, ProcessFileResponse
 
 # Files
 from ogx_api.files import (
@@ -588,6 +588,8 @@ __all__ = [
     "RetrieveItemRequest",
     "UpdateConversationRequest",
     # File processors
+    "ListProcessFileJobsResponse",
+    "ProcessFileJob",
     "ProcessFileRequest",
     "ProcessFileResponse",
     # Files
