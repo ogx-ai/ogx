@@ -209,17 +209,22 @@ fi
 CLI_NAME="${CLI_NAME:-ogx}"
 
 if [ -n "$RUN_CONFIG_PATH" ] && [ -f "$RUN_CONFIG_PATH" ]; then
-  exec $CMD_PREFIX "$CLI_NAME" stack run "$RUN_CONFIG_PATH" "$@"
+  exec $CMD_PREFIX "$CLI_NAME" stack run --insecure "$RUN_CONFIG_PATH" "$@"
 fi
 
 if [ -n "$DISTRO_NAME" ]; then
-  exec $CMD_PREFIX "$CLI_NAME" stack run "$DISTRO_NAME" "$@"
+  exec $CMD_PREFIX "$CLI_NAME" stack run --insecure "$DISTRO_NAME" "$@"
 fi
 
-exec $CMD_PREFIX "$CLI_NAME" stack run "$@"
+exec $CMD_PREFIX "$CLI_NAME" stack run --insecure "$@"
 EOF
 RUN chmod +x /usr/local/bin/ogx-entrypoint.sh
 
-RUN mkdir -p "/.${CLI_NAME}" /.cache && chmod -R g+rw /app "/.${CLI_NAME}" /.cache
+RUN mkdir -p "/.${CLI_NAME}" /.cache && \
+    chmod -R g+rw /app "/.${CLI_NAME}" /.cache && \
+    chown -R 1001:0 /app "/.${CLI_NAME}" /.cache
+
+ENV HOME=/
+USER 1001
 
 ENTRYPOINT ["/usr/local/bin/ogx-entrypoint.sh"]

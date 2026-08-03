@@ -5,16 +5,15 @@
 # the root directory of this source tree.
 
 import asyncio
-import concurrent.futures
 import os
 import sys
 import traceback
 import warnings
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
 from importlib.metadata import version as parse_version
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import yaml
@@ -23,6 +22,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from openai import BadRequestError
+from packaging.version import InvalidVersion, Version
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ogx.core.access_control.access_control import AccessDeniedError
@@ -88,7 +88,7 @@ def _format_google_error_response(status_code: int, message: str) -> JSONRespons
 
 def _is_interactions_path(request: Request) -> bool:
     """Check if the request targets the Google Interactions API."""
-    return request.url.path.startswith("/v1alpha/interactions")
+    return bool(request.url.path.startswith("/v1alpha/interactions"))
 
 
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -133,39 +133,6 @@ class StackApp(FastAPI):
         super().__init__(*args, **kwargs)
         self.stack: Stack = Stack(config)
 
-        # Initialize stack in a temporary event loop to set up impls for route registration.
-        # Storage backends use lazy engine initialization, so connections are created on
-        # first use in the correct event loop, avoiding event loop mismatch issues.
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(asyncio.run, self.stack.initialize())  # type: ignore[no-untyped-call]
-            future.result()
-
-        # Reset SQL engines that may have been created in the temporary event loop
-        # (e.g. by register_connectors → list_connectors → fetch_all) so they are
-        # recreated lazily in uvicorn's request-handling event loop.
-        from ogx.core.storage.sqlstore.sqlstore import reset_sqlstore_engines
-
-        reset_sqlstore_engines()
-
-        # Reset provider clients that may have been created in the temporary
-        # event loop during model listing (refresh_registry_once).
-        # Like SQL engines, the Google genai Client eagerly binds an internal
-        # httpx.AsyncClient to the current event loop, and the cached client
-        # becomes unusable after the temporary loop is terminated.
-        #
-        # Top-level impls are routing tables (CommonRoutingTableImpl), not the
-        # actual provider adapters. Walk into impls_by_provider_id to reach
-        # the real providers (e.g., VertexAIInferenceAdapter).
-        if self.stack.impls:
-            for impl in self.stack.impls.values():
-                reset_fn = getattr(impl, "_reset_client", None)
-                if reset_fn is not None:
-                    reset_fn()
-                for provider in getattr(impl, "impls_by_provider_id", {}).values():
-                    reset_fn = getattr(provider, "_reset_client", None)
-                    if reset_fn is not None:
-                        reset_fn()
-
 
 @asynccontextmanager
 async def lifespan(app: StackApp) -> AsyncIterator[None]:
@@ -178,10 +145,56 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
 
     logger.info("Starting up OGX server", version=server_version)
     assert app.stack is not None
-    app.stack.create_registry_refresh_task()  # type: ignore[no-untyped-call]
+
+    # Initialize stack in uvicorn's event loop — no more temp-loop workaround.
+    # This runs before any requests are served, so routers can safely access
+    # impls at request time without event-loop binding issues.
+    await app.stack.initialize()
+
+    # Register routers from initialized impls.
+    # Router registration is deferred to lifespan because impls are None
+    # until Stack.initialize() completes.
+    impls = app.stack.impls
+    assert impls is not None
+
+    # Load and register external API routers if configured
+    external_apis = load_external_apis(app.stack.run_config)
+    if external_apis:
+        register_external_api_routers(external_apis)
+
+    if app.stack.run_config.apis:
+        apis_to_serve = set(app.stack.run_config.apis)
+    else:
+        apis_to_serve = set(impls.keys())
+
+    for inf in builtin_automatically_routed_apis():
+        # if we do not serve the corresponding router API, we should not serve the routing table API
+        if inf.router_api.value not in apis_to_serve:
+            continue
+        apis_to_serve.add(inf.routing_table_api.value)
+
+    apis_to_serve.add("admin")
+    apis_to_serve.add("inspect")
+    apis_to_serve.add("providers")
+    apis_to_serve.add("prompts")
+    apis_to_serve.add("conversations")
+
+    for api_str in apis_to_serve:
+        api = Api(api_str)
+        impl = impls[api]
+        router = build_fastapi_router(api, impl)
+        if router:
+            app.include_router(router)
+            logger.debug("Registered FastAPI router", api=str(api))
+
+    logger.debug("Serving APIs", apis=list(apis_to_serve))
+
+    # Start the registry refresh background task
+    app.stack.create_registry_refresh_task()
+
     yield
     logger.info("Shutting down")
-    await app.stack.shutdown()  # type: ignore[no-untyped-call]
+    await app.stack.shutdown()
 
 
 async def _send_error_response(send: Send, status: int, message: str) -> None:
@@ -197,6 +210,27 @@ async def _send_error_response(send: Send, status: int, message: str) -> None:
     await send({"type": "http.response.body", "body": error_msg})
 
 
+class HSTSMiddleware:
+    """Adds Strict-Transport-Security header to all HTTPS responses."""
+
+    def __init__(self, app: ASGIApp, max_age: int = 31536000) -> None:
+        self.app = app
+        self.hsts_value = f"max-age={max_age}; includeSubDomains".encode()
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
+        if scope["type"] == "http":
+
+            async def send_with_hsts(message: MutableMapping[str, Any]) -> None:
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    headers.append([b"strict-transport-security", self.hsts_value])
+                    message["headers"] = headers
+                await send(message)
+
+            return await self.app(scope, receive, send_with_hsts)
+        return await self.app(scope, receive, send)
+
+
 class ClientVersionMiddleware:
     """ASGI middleware that rejects requests from clients with incompatible major.minor versions."""
 
@@ -210,19 +244,25 @@ class ClientVersionMiddleware:
             client_version = headers.get(b"x-ogx-client-version", b"").decode()
             if client_version:
                 try:
-                    client_version_parts = tuple(map(int, client_version.split(".")[:2]))
-                    server_version_parts = tuple(map(int, self.server_version.split(".")[:2]))
-                    if client_version_parts != server_version_parts:
+                    if not _client_version_is_compatible(client_version, self.server_version):
                         return await _send_error_response(
                             send,
                             status=httpx.codes.UPGRADE_REQUIRED,
                             message=f"Client version {client_version} is not compatible with server version {self.server_version}. Please update your client.",
                         )
-                except (ValueError, IndexError):
+                except InvalidVersion:
                     # If version parsing fails, let the request through
                     pass
 
         return await self.app(scope, receive, send)
+
+
+def _client_version_is_compatible(client_version: str, server_version: str) -> bool:
+    client = Version(client_version)
+    server = Version(server_version)
+    if client.is_devrelease or server.is_devrelease or client.local or server.local:
+        return True
+    return (client.major, client.minor) == (server.major, server.minor)
 
 
 class ProviderDataMiddleware:
@@ -250,7 +290,7 @@ class ProviderDataMiddleware:
                         sync_test_context_from_provider_data,
                     )
 
-                    test_context_token = sync_test_context_from_provider_data()  # type: ignore[no-untyped-call]
+                    test_context_token = sync_test_context_from_provider_data()
                     reset_fn = reset_test_context
                 try:
                     return await self.app(scope, receive, send)
@@ -259,6 +299,28 @@ class ProviderDataMiddleware:
                         reset_fn(test_context_token)
 
         return await self.app(scope, receive, send)
+
+
+def validate_auth_security(config: StackConfig) -> None:
+    """Validate auth provider TLS settings.
+
+    Raises SystemExit if verify_tls=False unless insecure mode is enabled.
+    """
+    if not config.server.auth:
+        return
+    provider_config = config.server.auth.provider_config
+    if not provider_config or not hasattr(provider_config, "verify_tls") or provider_config.verify_tls:
+        return
+
+    if config.server.insecure:
+        logger.warning(
+            "TLS verification is disabled in auth provider config (verify_tls=False). "
+            "This is insecure and should only be used for local development or testing."
+        )
+        return
+    raise SystemExit(
+        "FATAL: verify_tls=False in auth provider config. TLS verification is required. Use '--insecure' to override."
+    )
 
 
 class ZstdDecompressionMiddleware:
@@ -319,6 +381,13 @@ class ZstdDecompressionMiddleware:
                     message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
                 )
 
+            if decompressed_body is None:
+                return await _send_error_response(
+                    send,
+                    status=500,
+                    message="Failed to decompress request body",
+                )
+
             # Strip content-encoding header and update content-length
             new_headers = [
                 (k, v) for k, v in scope["headers"] if k.lower() not in (b"content-encoding", b"content-length")
@@ -331,12 +400,14 @@ class ZstdDecompressionMiddleware:
             # responses stay alive until the client actually disconnects.
             body_sent = False
 
-            async def receive_decompressed() -> dict:  # type: ignore[type-arg]
+            async def receive_decompressed() -> MutableMapping[str, Any]:
                 nonlocal body_sent
                 if not body_sent:
                     body_sent = True
                     return {"type": "http.request", "body": decompressed_body, "more_body": False}
-                return await receive()
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
 
             return await self.app(scope, receive_decompressed, send)
         except Exception as e:
@@ -345,12 +416,14 @@ class ZstdDecompressionMiddleware:
             # Replay the original compressed body since decompression failed
             body_sent = False
 
-            async def receive_original() -> dict:  # type: ignore[type-arg]
+            async def receive_original() -> MutableMapping[str, Any]:
                 nonlocal body_sent
                 if not body_sent:
                     body_sent = True
                     return {"type": "http.request", "body": compressed_body, "more_body": False}
-                return await receive()
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
 
             return await self.app(scope, receive_original, send)
 
@@ -402,13 +475,23 @@ def create_app() -> StackApp:
         config=config,
     )
 
+    # Add HSTS middleware when TLS is configured and HSTS is not disabled
+    if config.server.tls_certfile and config.server.tls_keyfile and config.server.hsts_max_age > 0:
+        app.add_middleware(HSTSMiddleware, max_age=config.server.hsts_max_age)
+
     if not os.environ.get("OGX_DISABLE_VERSION_CHECK"):
         app.add_middleware(ClientVersionMiddleware)
 
     app.add_middleware(ProviderDataMiddleware)
 
-    impls = app.stack.impls
-    assert impls is not None
+    validate_auth_security(config)
+
+    if not (config.server.auth and config.server.auth.provider_config):
+        logger.warning(
+            "Authentication is not configured. All API endpoints are accessible without credentials. "
+            "See https://ogx-ai.github.io/docs/distributions/configuration#authentication-configuration"
+            " to configure authentication.",
+        )
 
     if config.server.auth:
         # Add route authorization middleware if route_policy is configured
@@ -435,42 +518,10 @@ def create_app() -> StackApp:
         logger.info("Enabling tenancy enforcement (no auth)", mode=config.server.tenancy.mode.value)
         app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
-    # Load and register external API routers if configured
-    external_apis = load_external_apis(config)
-    if external_apis:
-        register_external_api_routers(external_apis)
-
-    if config.apis:
-        apis_to_serve = set(config.apis)
-    else:
-        apis_to_serve = set(impls.keys())
-
-    for inf in builtin_automatically_routed_apis():
-        # if we do not serve the corresponding router API, we should not serve the routing table API
-        if inf.router_api.value not in apis_to_serve:
-            continue
-        apis_to_serve.add(inf.routing_table_api.value)
-
-    apis_to_serve.add("admin")
-    apis_to_serve.add("inspect")
-    apis_to_serve.add("providers")
-    apis_to_serve.add("prompts")
-    apis_to_serve.add("conversations")
-
     # Add request metrics middleware.
     # Added last so it runs first (outermost), wrapping auth.
     # Route mapping is built lazily on the first request from scope["app"].
     app.add_middleware(RequestMetricsMiddleware)
-
-    for api_str in apis_to_serve:
-        api = Api(api_str)
-        impl = impls[api]
-        router = build_fastapi_router(api, impl)
-        if router:
-            app.include_router(router)
-            logger.debug("Registered FastAPI router", api=str(api))
-
-    logger.debug("Serving APIs", apis=list(apis_to_serve))
 
     app.add_middleware(ZstdDecompressionMiddleware)
 

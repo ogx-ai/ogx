@@ -140,7 +140,7 @@ class GeminiCompletionSamplingParams(BaseModel):
 class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     """Inference adapter for Google Vertex AI platform."""
 
-    # extra="allow" lets the routing infra inject model_store, __provider_id__, etc.
+    # extra="allow" lets the routing infra inject model_store, __provider_spec__, etc.
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
     config: VertexAIConfig
@@ -155,6 +155,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         "models/text-embedding-004": {"embedding_dimension": 768, "context_length": 2048},
         "models/gemini-embedding-001": {"embedding_dimension": 3072, "context_length": 2048},
     }
+
+    __provider_id__: str  # automatically set by the resolver when instantiating the provider
 
     async def _close_managed_httpx_client(self) -> None:
         if self._http_options is None:
@@ -202,29 +204,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 exc_info=True,
             )
 
-    def _reset_client(self) -> None:
-        """Reset cached client and HTTP options after a temporary event loop exits.
-
-        When StackApp.__init__ runs stack.initialize() inside a temporary event
-        loop (via ThreadPoolExecutor), model listing may trigger lazy client
-        creation via _get_client().  The Google genai Client eagerly creates an
-        internal httpx.AsyncClient bound to the temporary loop.  After the
-        temporary loop is closed, the cached client holds connections tied to
-        the dead loop, causing ``RuntimeError: Event loop is closed`` on the
-        first inference request.
-
-        This method clears the cached client without awaiting async close
-        (the temporary loop is already terminated) so that a fresh client is
-        created on the next _get_client() call — this time on uvicorn's
-        request-handling event loop.
-
-        Compare ``reset_sqlstore_engines()`` which serves the same purpose for
-        SQL engines.
-        """
-        self._default_client = None
-        self._http_options = None
-        self._http_options_initialized = False
-
     async def shutdown(self) -> None:
         await self._close_managed_httpx_client()
         self._http_options = None
@@ -234,9 +213,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     async def register_model(self, model: Model) -> Model:
         provider_resource_id = model.provider_resource_id or model.identifier
         if not await self.check_model_availability(provider_resource_id):
-            raise ValueError(
-                f"Model {provider_resource_id} is not available from provider {self.__provider_id__}"  # type: ignore[attr-defined]
-            )
+            raise ValueError(f"Model {provider_resource_id} is not available from provider {self.__provider_id__}")
         return model
 
     async def unregister_model(self, model_id: str) -> None:
@@ -387,16 +364,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 ) from None
         return self._default_client
 
-    async def _get_provider_model_id(self, model: str) -> str:
-        # model_store is injected at runtime by the routing infra
-        if hasattr(self, "model_store") and self.model_store and await self.model_store.has_model(model):  # type: ignore[attr-defined]
-            model_obj: Model = await self.model_store.get_model(model)  # type: ignore[attr-defined]
-            if model_obj.provider_resource_id is None:
-                raise ValueError(f"Model {model} has no provider_resource_id")
-            return model_obj.provider_resource_id
-
-        return model
-
     async def list_provider_model_ids(self) -> list[str]:
         """List model IDs available from the configured Vertex AI project.
 
@@ -445,7 +412,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 continue
             if metadata := self.embedding_model_metadata.get(provider_model_id):
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.embedding,
@@ -453,7 +420,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 )
             else:
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.llm,
@@ -782,7 +749,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 
@@ -866,7 +833,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         prompts = self._validate_completion_prompt(params.prompt)
         self._warn_unsupported_completion_params(params)
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
         config = self._build_completion_config(params)
@@ -957,7 +924,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 ignored_keys=list(params.model_extra.keys()),
             )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 

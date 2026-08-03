@@ -29,6 +29,7 @@ from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
 from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
+from ogx.core.server_tls import generate_self_signed_cert
 from ogx.core.stack import extract_env_var_references, replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.core.utils.dynamic import instantiate_class_type
@@ -203,6 +204,12 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Enable debug logging during provider scanning and server startup.",
     )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        default=False,
+        help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
+    )
 
 
 def _add_file_search_and_responses(run_config: StackConfig) -> None:
@@ -335,14 +342,14 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
     if not has_inference:
         parser.error("No inference providers detected. Nothing to run.")
 
-    distro_dir = DISTRIBS_BASE_DIR / "letsgo-run" if args.persist_config else Path(tempfile.mkdtemp())
+    distro_dir = DISTRIBS_BASE_DIR / "go-run" if args.persist_config else Path(tempfile.mkdtemp())
     os.makedirs(distro_dir, exist_ok=True)
 
     try:
         run_config = run_config_from_dynamic_config_spec(
             dynamic_config_spec=providers_spec,
             distro_dir=distro_dir,
-            distro_name="letsgo-run",
+            distro_name="go-run",
         )
     except ValueError as e:
         cprint(str(e), color="red", file=sys.stderr)
@@ -455,6 +462,15 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
 
     config_dict = run_config.model_dump(mode="json")
 
+    if not args.insecure:
+        cert_path, key_path = generate_self_signed_cert(distro_dir)
+        if "server" not in config_dict:
+            config_dict["server"] = {}
+        config_dict["server"]["tls_certfile"] = str(cert_path)
+        config_dict["server"]["tls_keyfile"] = str(key_path)
+        config_dict["server"]["insecure"] = False
+        cprint(f"  ✓ Generated self-signed TLS certificate → {cert_path}", color="green")
+
     config_file = distro_dir / "config.yaml"
     logger.info("Writing generated config to", config_file=config_file)
     with open(config_file, "w") as f:
@@ -466,6 +482,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
             port=args.port,
             enable_ui=args.enable_ui,
             providers=None,
+            insecure=args.insecure,
         ),
     }
 
@@ -933,16 +950,16 @@ async def _probe_provider_availability(
 
 
 class StackLetsGo(Subcommand):
-    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx letsgo' instead)."""
+    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx go' instead)."""
 
     def __init__(self, subparsers: Any) -> None:
         super().__init__()
         self.parser = subparsers.add_parser(
-            "letsgo",
-            prog="ogx stack letsgo",
+            "go",
+            prog="ogx stack go",
             description="""Auto-detect providers and start the stack.
 
-NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
+NOTE: 'ogx stack go' is deprecated. Use 'ogx go' instead.""",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
         self._add_arguments()
@@ -953,7 +970,7 @@ NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
 
     def _run_stack_lets_go_cmd(self, args: argparse.Namespace) -> None:
         warnings.warn(
-            "'ogx stack letsgo' is deprecated and will be removed in a future release. Use 'ogx letsgo' instead.",
+            "'ogx stack go' is deprecated and will be removed in a future release. Use 'ogx go' instead.",
             FutureWarning,
             stacklevel=1,
         )

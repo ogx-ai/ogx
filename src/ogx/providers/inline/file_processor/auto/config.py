@@ -15,9 +15,13 @@ class AutoFileProcessorConfig(BaseModel):
     """Configuration for the auto file processor.
 
     The auto file processor dispatches to the appropriate backend based on file
-    MIME type. It always includes PyPDF for PDF and text files. When a supported
-    document-conversion backend is available, it routes office formats (DOCX,
-    PPTX, XLSX, HTML) there instead of rejecting them.
+    MIME type. When configured with a ``priority`` list, it interrogates sibling
+    file processor providers to build a MIME type dispatch map. The first provider
+    in the priority list that supports a given MIME type wins.
+
+    When no ``priority`` is configured, it falls back to built-in PyPDF (PDF and
+    text files) and MarkItDown (office, media) backends. This legacy behavior is
+    deprecated and will be removed in a future release.
     """
 
     default_chunk_size_tokens: int = Field(
@@ -37,6 +41,15 @@ class AutoFileProcessorConfig(BaseModel):
 
     clean_text: bool = Field(
         default=True, description="Whether to clean extracted text (remove extra whitespace, normalize line breaks)"
+    )
+
+    priority: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Ordered list of sibling provider IDs to dispatch to. Each provider "
+            "declares the MIME types it supports; the first provider in the list "
+            "that supports a given MIME type handles it."
+        ),
     )
 
     @classmethod

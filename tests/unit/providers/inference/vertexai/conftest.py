@@ -161,11 +161,6 @@ def patch_chat_completion_dependencies(monkeypatch):
         )
         captured: dict[str, Any] = {"fake_completion": fake_completion}
 
-        async def _provider_model_id(_: str) -> str:
-            """Return a fixed provider model identifier."""
-            return "gemini-2.5-flash"
-
-        monkeypatch.setattr(adapter, "_get_provider_model_id", _provider_model_id)
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
 

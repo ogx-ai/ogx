@@ -97,6 +97,7 @@ const sidebars: SidebarsConfig = {
         'distributions/list_of_distributions',
         'distributions/building_distro',
         'distributions/customizing_run_yaml',
+        'distributions/openai_compatible_gateways',
         'distributions/importing_as_library',
         'distributions/configuration',
         'distributions/starting_ogx_server',
@@ -191,7 +192,6 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'providers/inference/index' },
           items: [
             'providers/inference/inline_sentence-transformers',
-            'providers/inference/inline_transformers',
             'providers/inference/remote_anthropic',
             'providers/inference/remote_azure',
             'providers/inference/remote_bedrock',
@@ -335,6 +335,7 @@ const sidebars: SidebarsConfig = {
         'references/ogx_cli_reference/index',
         'references/ogx_client_cli_reference',
         'references/python_sdk_reference/index',
+        'references/python_sdk_reference/migration',
       ],
     },
   ],

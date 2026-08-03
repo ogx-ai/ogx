@@ -4,12 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from ogx_api import Inference
-
 from .config import NVIDIAConfig
 
 
-async def get_adapter_impl(config: NVIDIAConfig, _deps) -> Inference:
+async def get_adapter_impl(config: NVIDIAConfig, _deps):
     # import dynamically so `ogx list-deps` does not fail due to missing dependencies
     from .nvidia import NVIDIAInferenceAdapter
 

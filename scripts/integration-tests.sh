@@ -371,9 +371,14 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     export OTEL_BSP_EXPORT_TIMEOUT="2000"
     export OTEL_METRIC_EXPORT_INTERVAL="200"
 
+    # Start the standalone metrics scrape server (default port 9464) so the metrics
+    # endpoint integration tests (tests/integration/inspect/test_metrics_endpoint.py) can
+    # scrape it. Exported so both the server process and the pytest process observe the flag.
+    export OGX_METRICS_ENDPOINT_ENABLED="1"
+
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup ogx stack run $stack_config >server-main.log 2>&1 &
+    nohup ogx stack run $stack_config --insecure >server-main.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
     for i in {1..60}; do

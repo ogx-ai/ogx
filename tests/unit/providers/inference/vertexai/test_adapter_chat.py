@@ -15,7 +15,13 @@ import pytest
 
 from ogx.providers.remote.inference.vertexai.config import VertexAIConfig
 from ogx.providers.remote.inference.vertexai.vertexai import VertexAIInferenceAdapter, _build_http_options
-from ogx.providers.utils.inference.model_registry import NetworkConfig, ProxyConfig, TimeoutConfig, TLSConfig
+from ogx.providers.utils.inference.network_config import (
+    LimitsConfig,
+    NetworkConfig,
+    ProxyConfig,
+    TimeoutConfig,
+    TLSConfig,
+)
 from ogx_api.inference.models import OpenAIChatCompletionRequestWithExtraBody
 
 from .conftest import _make_fake_streaming_chunk
@@ -311,6 +317,14 @@ class TestVertexAINetworkConfig:
         assert result is not None
         assert hasattr(result, "httpx_async_client")
         assert result.httpx_async_client is not None
+
+    def test_build_http_options_limits_produces_httpx_client(self):
+        """Test that connection pool limits produce an httpx client with those limits set."""
+        result = _build_http_options(NetworkConfig(limits=LimitsConfig(max_connections=250)))
+        assert result is not None
+        client = result.httpx_async_client
+        assert client is not None
+        assert client._transport._pool._max_connections == 250
 
     def test_build_http_options_no_proxy_logs_warning(self, caplog):
         """Test that build http options no proxy logs warning."""
