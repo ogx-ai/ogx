@@ -13,7 +13,7 @@ from ogx_api import (
 )
 
 # Common dependencies for all vector IO providers that support document processing
-DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.13.0"]
+DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.14.2"]
 
 
 def available_providers() -> list[ProviderSpec]:
