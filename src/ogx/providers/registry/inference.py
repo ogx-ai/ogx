@@ -314,4 +314,14 @@ https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm
             config_class="ogx.providers.remote.inference.llama_cpp_server.config.LlamaCppServerConfig",
             description="llama.cpp inference provider for connecting to llama.cpp servers with OpenAI-compatible API.",
         ),
+        RemoteProviderSpec(
+            api=Api.inference,
+            adapter_type="novita",
+            provider_type="remote::novita",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.novita",
+            config_class="ogx.providers.remote.inference.novita.NovitaImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.novita.config.NovitaProviderDataValidator",
+            description="Novita AI inference provider for accessing a broad catalog of open models via Novita's OpenAI-compatible API.",
+        ),
     ]
