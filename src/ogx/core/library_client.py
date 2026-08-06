@@ -173,6 +173,30 @@ class LibraryClientHttpxResponse:
         self.headers = response.headers
 
 
+class _SSEAsyncByteStream(httpx.AsyncByteStream):
+    """Adapter that wraps a FastAPI StreamingResponse body_iterator as an httpx AsyncByteStream.
+
+    Enables lazy async iteration of SSE events from an in-process FastAPI handler,
+    preserving time-to-first-token benefits instead of buffering the entire stream.
+    """
+
+    def __init__(self, body_iterator: Any) -> None:
+        self._body_iterator = body_iterator
+
+    async def __aiter__(self):
+        async for chunk in self._body_iterator:
+            if isinstance(chunk, str):
+                yield chunk.encode("utf-8")
+            elif isinstance(chunk, memoryview):
+                yield bytes(chunk)
+            else:
+                yield chunk
+
+    async def aclose(self) -> None:
+        if hasattr(self._body_iterator, "aclose"):
+            await self._body_iterator.aclose()
+
+
 async def _route_call_in_process(
     *,
     method: str,
@@ -184,6 +208,7 @@ async def _route_call_in_process(
     provider_data: dict[str, Any] | None,
     sanitize_headers: Any,
     convert_body: Any,
+    async_streaming: bool = False,
 ) -> Any:
     """Route an API call in-process instead of over HTTP.
 
@@ -199,6 +224,10 @@ async def _route_call_in_process(
     :param provider_data: Optional provider data dict for X-OGX-Provider-Data header
     :param sanitize_headers: Callable to sanitize header dicts
     :param convert_body: Callable to convert body dicts to function kwargs
+    :param async_streaming: When True, streaming responses use an AsyncByteStream
+        for lazy iteration (used by the async library client). When False, streaming
+        responses are buffered into bytes (used by the sync library client, which
+        cannot lazily consume an async iterator from its sync call_api path).
     :return: RESTResponse wrapping the in-process result
     """
     from urllib.parse import parse_qs, urlparse
@@ -291,30 +320,39 @@ async def _route_call_in_process(
 
         # Build the response
         if isinstance(result, StreamingResponse):
-            # Streaming response — collect SSE chunks into a sync-iterable response.
-            # TODO: This buffers the entire stream before returning, losing time-to-first-token
-            # benefits. For true incremental streaming, we'd need a SyncByteStream adapter that
-            # bridges the async generator to sync iter_bytes() via a queue (similar to
-            # _stream_request). Acceptable for now since in-process library mode is primarily
-            # used for testing, not latency-sensitive production streaming.
             content_type = result.media_type or "text/event-stream"
 
-            chunks: list[bytes] = []
-            async for chunk in result.body_iterator:
-                if isinstance(chunk, str):
-                    chunks.append(chunk.encode("utf-8"))
-                elif isinstance(chunk, memoryview):
-                    chunks.append(bytes(chunk))
-                else:
-                    chunks.append(chunk)
-            all_content = b"".join(chunks)
+            if async_streaming:
+                # Wrap the body_iterator as an AsyncByteStream for lazy async
+                # iteration, preserving time-to-first-token benefits.
+                mock_response = httpx.Response(
+                    status_code=result.status_code,
+                    stream=_SSEAsyncByteStream(result.body_iterator),
+                    headers={"Content-Type": content_type},
+                    request=httpx.Request(method=method, url=url),
+                )
+            else:
+                # Buffer the entire stream for sync callers. The sync library
+                # client cannot lazily consume an async iterator from its
+                # synchronous call_api path (Stream.iter_bytes() requires a
+                # SyncByteStream). The sync client already has a separate lazy
+                # streaming path via _stream_request() for the stainless SDK.
+                chunks: list[bytes] = []
+                async for chunk in result.body_iterator:
+                    if isinstance(chunk, str):
+                        chunks.append(chunk.encode("utf-8"))
+                    elif isinstance(chunk, memoryview):
+                        chunks.append(bytes(chunk))
+                    else:
+                        chunks.append(chunk)
+                all_content = b"".join(chunks)
 
-            mock_response = httpx.Response(
-                status_code=result.status_code,
-                content=all_content,
-                headers={"Content-Type": content_type},
-                request=httpx.Request(method=method, url=url),
-            )
+                mock_response = httpx.Response(
+                    status_code=result.status_code,
+                    content=all_content,
+                    headers={"Content-Type": content_type},
+                    request=httpx.Request(method=method, url=url),
+                )
             return RESTResponse(mock_response)
 
         # Handle FastAPI Response objects
@@ -729,6 +767,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             provider_data=self.provider_data,
             sanitize_headers=self._sanitize_headers,
             convert_body=self._convert_body,
+            async_streaming=True,
         )
 
     async def shutdown(self) -> None:
