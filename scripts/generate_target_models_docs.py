@@ -73,6 +73,7 @@ INTENTIONALLY_UNMAPPED_REGISTRY_PROVIDERS = {
     "mistral",
     "meta",
     "nvidia",
+    "novita",
     "oci",
     "runpod",
     "sambanova",
