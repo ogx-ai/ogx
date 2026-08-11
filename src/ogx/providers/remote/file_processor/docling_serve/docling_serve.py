@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 from docling.datamodel.base_models import OutputFormat
+from docling.datamodel.service.chunking import HybridChunkerOptions
 from docling.datamodel.service.options import ConvertDocumentsOptions
 from docling.service_client import AsyncDoclingServiceClient, ChunkerKind
 from fastapi import UploadFile
@@ -72,6 +73,11 @@ class DoclingServeFileProcessor:
         if self.config.api_key:
             headers["X-Api-Key"] = self.config.api_key.get_secret_value()
         return headers
+
+    def _get_max_tokens(self, chunking_strategy: VectorStoreChunkingStrategy) -> int:
+        if chunking_strategy.type == "static":
+            return chunking_strategy.static.max_chunk_size_tokens
+        return self.config.default_chunk_size_tokens
 
     async def process_file(
         self,
@@ -288,16 +294,11 @@ class DoclingServeFileProcessor:
         url = f"{self.config.base_url}/v1/chunk/hybrid/file"
         headers = self._get_headers()
 
-        if chunking_strategy.type == "auto":
-            max_tokens = self.config.default_chunk_size_tokens
-        elif chunking_strategy.type == "static":
-            max_tokens = chunking_strategy.static.max_chunk_size_tokens
-        else:
-            max_tokens = self.config.default_chunk_size_tokens
-
         options: dict[str, str] = {
-            "chunking_max_tokens": str(max_tokens),
+            "chunking_max_tokens": str(self._get_max_tokens(chunking_strategy)),
         }
+        if self.config.chunking_use_markdown_tables:
+            options["chunking_use_markdown_tables"] = "true"
 
         async with httpx.AsyncClient(timeout=300.0) as client:
             try:
@@ -385,11 +386,22 @@ class DoclingServeFileProcessor:
                 job_timeout=300.0,
             ) as client:
                 try:
-                    job = await client.submit_chunk(
-                        source=tmp_path,
-                        chunker=ChunkerKind.HYBRID,
-                        options=ConvertDocumentsOptions(),
-                    )
+                    if self.config.chunking_use_markdown_tables:
+                        job = await client.submit_chunk(
+                            source=tmp_path,
+                            chunker=ChunkerKind.HYBRID,
+                            options=ConvertDocumentsOptions(),
+                            chunking_options=HybridChunkerOptions(
+                                max_tokens=self._get_max_tokens(chunking_strategy),
+                                use_markdown_tables=True,
+                            ),
+                        )
+                    else:
+                        job = await client.submit_chunk(
+                            source=tmp_path,
+                            chunker=ChunkerKind.HYBRID,
+                            options=ConvertDocumentsOptions(),
+                        )
                     response = await job.result()
                 except httpx.HTTPStatusError as e:
                     # Chunking endpoint not supported (e.g., IBM Docling SaaS)

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from docling.datamodel.service.chunking import HybridChunkerOptions
 from fastapi import UploadFile
 from pydantic import SecretStr
 
@@ -143,6 +144,7 @@ class TestDoclingServeFileProcessor:
         call_kwargs = mock_post.call_args
         assert "/v1/chunk/hybrid/file" in call_kwargs.args[0]
         assert call_kwargs.kwargs["data"]["chunking_max_tokens"] == "512"
+        assert "chunking_use_markdown_tables" not in call_kwargs.kwargs["data"]
 
         assert len(response.chunks) == 3
         assert response.chunks[0].content == "First chunk of text."
@@ -161,6 +163,20 @@ class TestDoclingServeFileProcessor:
         assert "/v1/chunk/hybrid/file" in call_kwargs.args[0]
         assert call_kwargs.kwargs["data"]["chunking_max_tokens"] == "256"
         assert len(response.chunks) == 3
+
+    async def test_process_file_markdown_table_chunking(self, files_api: AsyncMock, upload_file: UploadFile):
+        config = DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            chunking_use_markdown_tables=True,
+            mode="sync",
+        )
+        processor = DoclingServeFileProcessor(config, files_api=files_api)
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
+
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CHUNK_RESPONSE)) as mock_post:
+            await processor.process_file(request, file=upload_file)
+
+        assert mock_post.call_args.kwargs["data"]["chunking_use_markdown_tables"] == "true"
 
     async def test_chunking_empty_response(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
@@ -339,12 +355,14 @@ class TestDoclingServeFileProcessorConfig:
         assert config.base_url == "http://localhost:5001"
         assert config.api_key is None
         assert config.default_chunk_size_tokens >= 100
+        assert config.chunking_use_markdown_tables is False
         assert config.mode == "async"
 
     def test_sample_run_config(self):
         sample = DoclingServeFileProcessorConfig.sample_run_config()
         assert "base_url" in sample
         assert "api_key" in sample
+        assert "chunking_use_markdown_tables" in sample
 
 
 class TestIBMSaaSCompatibility:
@@ -449,11 +467,13 @@ class TestIBMSaaSCompatibility:
                 assert len(result.chunks) > 0
                 assert result.metadata["conversion_method"] == "async"
 
-    async def test_local_docker_allows_chunking(self, upload_file: UploadFile):
+    @pytest.mark.parametrize("use_markdown_tables", [False, True])
+    async def test_local_docker_allows_chunking(self, upload_file: UploadFile, use_markdown_tables: bool):
         """Local docling-serve should allow chunking (successful response)."""
         # Local config
         local_config = DoclingServeFileProcessorConfig(
             base_url="http://localhost:5001",
+            chunking_use_markdown_tables=use_markdown_tables,
             mode="async",
         )
         processor = DoclingServeFileProcessor(local_config, files_api=AsyncMock())
@@ -480,6 +500,15 @@ class TestIBMSaaSCompatibility:
 
             # Should succeed without raising InvalidParameterError
             result = await processor.process_file(request, file=upload_file)
+
+            submit_kwargs = mock_instance.submit_chunk.await_args.kwargs
+            if use_markdown_tables:
+                chunking_options = submit_kwargs["chunking_options"]
+                assert isinstance(chunking_options, HybridChunkerOptions)
+                assert chunking_options.max_tokens == 512
+                assert chunking_options.use_markdown_tables is True
+            else:
+                assert "chunking_options" not in submit_kwargs
 
         assert result.chunks is not None
         assert len(result.chunks) > 0

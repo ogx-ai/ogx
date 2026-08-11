@@ -110,6 +110,7 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
 | `base_url` | `str` | No | http://localhost:5001 | Base URL of the Docling Serve instance. Do not include /v1 suffix - AsyncDoclingServiceClient adds it automatically. For backward compatibility, /v1 suffix will be stripped if present. |
 | `api_key` | `SecretStr \| None` | No |  | API key for authenticating with Docling Serve (optional, required if server has DOCLING_SERVE_API_KEY set) |
 | `default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `chunking_use_markdown_tables` | `bool` | No | False | Serialize tables inside chunks as markdown tables instead of row triplets |
 | `mode` | `Literal[async, sync, auto]` | No | async | API mode: 'async' (use asynchronous submit/poll endpoints, recommended for both local and SaaS), 'sync' (use synchronous endpoints, fallback option), or 'auto' (detect server capabilities) |
 
 ## Sample Configuration
@@ -117,5 +118,6 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
 ```yaml
 base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001}
 api_key: ${env.DOCLING_SERVE_API_KEY:=}
+chunking_use_markdown_tables: ${env.DOCLING_SERVE_CHUNKING_USE_MARKDOWN_TABLES:=false}
 mode: ${env.DOCLING_SERVE_MODE:=async}
 ```
