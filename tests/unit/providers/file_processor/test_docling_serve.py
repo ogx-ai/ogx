@@ -41,9 +41,30 @@ CONVERT_RESPONSE = {
 
 CHUNK_RESPONSE = {
     "chunks": [
-        {"text": "First chunk of text.", "meta": {"headings": ["Introduction"]}},
-        {"text": "Second chunk of text.", "meta": {}},
-        {"text": "Third chunk of text.", "meta": {"headings": ["Conclusion"]}},
+        {
+            "filename": "test.pdf",
+            "chunk_index": 0,
+            "text": "First chunk of text.",
+            "headings": ["Introduction"],
+            "doc_items": ["#/texts/0"],
+            "page_numbers": [1],
+        },
+        {
+            "filename": "test.pdf",
+            "chunk_index": 1,
+            "text": "Second chunk of text.",
+            "headings": None,
+            "doc_items": ["#/texts/1"],
+            "page_numbers": None,
+        },
+        {
+            "filename": "test.pdf",
+            "chunk_index": 2,
+            "text": "Third chunk of text.",
+            "headings": ["Conclusion"],
+            "doc_items": ["#/texts/2"],
+            "page_numbers": [2, 3],
+        },
     ],
 }
 
@@ -205,15 +226,18 @@ class TestDoclingServeFileProcessor:
         ids = [c.chunk_id for c in response.chunks]
         assert len(ids) == len(set(ids))
 
-    async def test_headings_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
+    async def test_structural_metadata_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
         with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
         assert response.chunks[0].metadata["headings"] == ["Introduction"]
+        assert response.chunks[0].metadata["page_numbers"] == [1]
         assert "headings" not in response.chunks[1].metadata
+        assert "page_numbers" not in response.chunks[1].metadata
         assert response.chunks[2].metadata["headings"] == ["Conclusion"]
+        assert response.chunks[2].metadata["page_numbers"] == [2, 3]
 
     async def test_chunk_window_set(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
@@ -473,7 +497,14 @@ class TestIBMSaaSCompatibility:
 
             # Mock submit_chunk() returning a successful job
             mock_job = AsyncMock()
-            mock_chunk = SimpleNamespace(text="Chunk content", meta=SimpleNamespace(headings=None))
+            mock_chunk = SimpleNamespace(
+                filename="test.pdf",
+                chunk_index=0,
+                text="Chunk content",
+                headings=["Introduction"],
+                doc_items=["#/texts/0"],
+                page_numbers=[1, 2],
+            )
             mock_response = SimpleNamespace(chunks=[mock_chunk])
             mock_job.result.return_value = mock_response
             mock_instance.submit_chunk.return_value = mock_job
@@ -483,4 +514,6 @@ class TestIBMSaaSCompatibility:
 
         assert result.chunks is not None
         assert len(result.chunks) > 0
+        assert result.chunks[0].metadata["headings"] == ["Introduction"]
+        assert result.chunks[0].metadata["page_numbers"] == [1, 2]
         assert result.metadata["conversion_method"] == "async"

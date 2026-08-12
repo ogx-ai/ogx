@@ -343,9 +343,14 @@ class DoclingServeFileProcessor:
                 **document_metadata,
             }
 
-            headings = raw_chunk.get("meta", {}).get("headings", None)
+            legacy_meta = raw_chunk.get("meta") or {}
+            headings = raw_chunk.get("headings") or legacy_meta.get("headings")
             if headings:
                 meta["headings"] = headings
+
+            page_numbers = raw_chunk.get("page_numbers") or legacy_meta.get("page_numbers")
+            if page_numbers:
+                meta["page_numbers"] = page_numbers
 
             chunks.append(
                 Chunk(
@@ -426,13 +431,14 @@ class DoclingServeFileProcessor:
                 **document_metadata,
             }
 
-            # Extract headings from meta object
-            headings = None
-            if hasattr(raw_chunk, "meta") and hasattr(raw_chunk.meta, "headings"):
-                headings = raw_chunk.meta.headings
-
+            legacy_meta = getattr(raw_chunk, "meta", None)
+            headings = getattr(raw_chunk, "headings", None) or getattr(legacy_meta, "headings", None)
             if headings:
                 meta["headings"] = headings
+
+            page_numbers = getattr(raw_chunk, "page_numbers", None) or getattr(legacy_meta, "page_numbers", None)
+            if page_numbers:
+                meta["page_numbers"] = page_numbers
 
             chunks.append(
                 Chunk(
