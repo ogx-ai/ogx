@@ -265,6 +265,15 @@ class AuthServiceUnavailableError(OGXError):
         super().__init__(message)
 
 
+class UntrustedProxyError(OGXError):
+    """raised when a request fails trusted-proxy verification (CIDR or HMAC)"""
+
+    status_code: httpx.codes = httpx.codes.FORBIDDEN
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class InvalidParameterError(ValueError, OGXError):
     """Raised when a request parameter violates validation constraints.
 

@@ -400,6 +400,52 @@ class UpstreamHeaderAuthConfig(BaseModel):
             "Example: {'X-MaaS-Group': 'teams', 'X-MaaS-Subscription': 'namespaces'}"
         ),
     )
+    trusted_proxy_cidrs: list[str] | None = Field(
+        default=None,
+        description=(
+            "CIDR allowlist for trusted proxy source IPs. "
+            "When set, requests from IPs outside these ranges are rejected with 403. "
+            "Example: ['10.96.0.0/12', '10.244.0.0/16']"
+        ),
+    )
+    trusted_proxy_secret: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Shared HMAC-SHA256 secret for proxy signature verification. "
+            "When set, the upstream proxy must sign identity headers and include "
+            "the signature in the trusted_proxy_signature_header. "
+            "Must be at least 32 characters."
+        ),
+    )
+    trusted_proxy_signature_header: str = Field(
+        default="x-ogx-proxy-signature",
+        description="HTTP header containing the HMAC-SHA256 signature from the upstream proxy.",
+    )
+
+    @field_validator("trusted_proxy_secret")
+    @classmethod
+    def validate_secret_length(cls, v: SecretStr | None) -> SecretStr | None:
+        if v is None:
+            return v
+        if len(v.get_secret_value()) < 32:
+            raise ValueError("trusted_proxy_secret must be at least 32 characters for HMAC-SHA256 security")
+        return v
+
+    @field_validator("trusted_proxy_cidrs")
+    @classmethod
+    def validate_cidrs(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        import ipaddress
+
+        if not v:
+            raise ValueError("trusted_proxy_cidrs must contain at least one entry when set")
+        for cidr in v:
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as e:
+                raise ValueError(f"Invalid CIDR notation '{cidr}': {e}") from e
+        return v
 
 
 AuthProviderConfig = Annotated[
