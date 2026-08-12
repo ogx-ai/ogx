@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from docling_core.types.io import DocumentStream
 from fastapi import UploadFile
 from pydantic import SecretStr
 
@@ -448,6 +449,10 @@ class TestIBMSaaSCompatibility:
                 assert result.chunks is not None
                 assert len(result.chunks) > 0
                 assert result.metadata["conversion_method"] == "async"
+                source = mock_instance.submit.await_args.kwargs["source"]
+                assert isinstance(source, DocumentStream)
+                assert source.name == "test.pdf"
+                assert source.stream.getvalue() == b"%PDF-fake-content"
 
     async def test_local_docker_allows_chunking(self, upload_file: UploadFile):
         """Local docling-serve should allow chunking (successful response)."""
@@ -481,6 +486,11 @@ class TestIBMSaaSCompatibility:
             # Should succeed without raising InvalidParameterError
             result = await processor.process_file(request, file=upload_file)
 
+            submit_kwargs = mock_instance.submit_chunk.await_args.kwargs
+            source = submit_kwargs["source"]
+            assert isinstance(source, DocumentStream)
+            assert source.name == "test.pdf"
+            assert source.stream.getvalue() == b"%PDF-fake-content"
         assert result.chunks is not None
         assert len(result.chunks) > 0
         assert result.metadata["conversion_method"] == "async"
