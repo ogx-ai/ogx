@@ -12,8 +12,10 @@ import numpy as np
 import pytest
 
 from ogx_api import (
+    ChunkMetadata,
     EmbeddedChunk,
     OpenAICreateVectorStoreRequestWithExtraBody,
+    OpenAISearchVectorStoreRequest,
     QueryChunksResponse,
     VectorStore,
 )
@@ -196,8 +198,6 @@ async def test_search_vector_store_ignores_rewrite_query(vector_io_adapter):
 
     # Test that rewrite_query=True doesn't cause an error (it's ignored at mixin level)
     # The mixin should process the search request without attempting to rewrite the query
-    from ogx_api import OpenAISearchVectorStoreRequest
-
     request = OpenAISearchVectorStoreRequest(
         query="test query",
         max_num_results=5,
@@ -211,6 +211,52 @@ async def test_search_vector_store_ignores_rewrite_query(vector_io_adapter):
     # Search should succeed - the mixin ignores rewrite_query and just does the search
     assert result is not None
     assert result.search_query == ["test query"]  # Original query preserved
+
+
+async def test_search_vector_store_includes_structured_metadata_on_request(vector_io_adapter):
+    vector_store_id = "test_store_metadata"
+    vector_io_adapter.openai_vector_stores[vector_store_id] = {
+        "id": vector_store_id,
+        "name": "Test Store",
+        "description": "",
+        "vector_store_id": "test_db",
+        "embedding_model": "test/embedding",
+    }
+    metadata = {
+        "document_id": "file-123",
+        "filename": "guide.pdf",
+        "headings": ["Introduction", "Architecture"],
+        "page_numbers": [1, 2],
+    }
+    chunk = EmbeddedChunk(
+        content="Chunk text",
+        chunk_id="chunk-123",
+        metadata=metadata,
+        chunk_metadata=ChunkMetadata(chunk_id="chunk-123", document_id="file-123"),
+        embedding=[0.1, 0.2],
+        embedding_model="test/embedding",
+        embedding_dimension=2,
+    )
+    vector_io_adapter.query_chunks = AsyncMock(return_value=QueryChunksResponse(chunks=[chunk], scores=[0.9]))
+
+    default_result = await vector_io_adapter.openai_search_vector_store(
+        vector_store_id=vector_store_id,
+        request=OpenAISearchVectorStoreRequest(query="architecture"),
+    )
+    included_result = await vector_io_adapter.openai_search_vector_store(
+        vector_store_id=vector_store_id,
+        request=OpenAISearchVectorStoreRequest(query="architecture", include_metadata=True),
+    )
+
+    assert default_result.data[0].content[0].metadata is None
+    assert default_result.data[0].attributes == {
+        "document_id": "file-123",
+        "filename": "guide.pdf",
+        "headings": "Introduction, Architecture",
+        "page_numbers": "1, 2",
+    }
+    assert included_result.data[0].content[0].metadata == metadata
+    assert included_result.data[0].content[0].chunk_metadata == chunk.chunk_metadata
 
 
 async def test_search_vector_store_propagates_backend_errors(vector_io_adapter):
@@ -228,8 +274,6 @@ async def test_search_vector_store_propagates_backend_errors(vector_io_adapter):
         raise KeyError("chunk_content")
 
     vector_io_adapter.query_chunks = mock_query_chunks
-
-    from ogx_api import OpenAISearchVectorStoreRequest
 
     request = OpenAISearchVectorStoreRequest(query="test query", max_num_results=5)
     with pytest.raises(KeyError, match="chunk_content"):

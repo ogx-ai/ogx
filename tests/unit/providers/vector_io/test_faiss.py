@@ -173,6 +173,37 @@ async def test_meta_index_populated_on_add_chunks(faiss_index, sample_chunks, sa
     assert faiss_index._meta_index["document_id"]["mock-doc-2"] == {1}
 
 
+async def test_meta_index_supports_structured_metadata(faiss_index, embedding_dimension):
+    metadata = {
+        "headings": ["Introduction", "Architecture"],
+        "page_numbers": [1, 2],
+        "details": {"language": "en"},
+    }
+    chunk = EmbeddedChunk(
+        content="Chunk text",
+        chunk_id="structured-metadata-chunk",
+        metadata=metadata,
+        chunk_metadata=ChunkMetadata(chunk_id="structured-metadata-chunk", document_id="document-1"),
+        embedding=np.random.rand(embedding_dimension).astype(np.float32).tolist(),
+        embedding_model="test-embedding-model",
+        embedding_dimension=embedding_dimension,
+    )
+
+    await faiss_index.add_chunks([chunk])
+
+    from ogx.providers.utils.vector_io.filters import ComparisonFilter
+
+    headings = faiss_index._resolve_filter_positions(
+        ComparisonFilter(key="headings", value=["Introduction", "Architecture"], type="eq")
+    )
+    details = faiss_index._resolve_filter_positions(
+        ComparisonFilter(key="details", value={"language": "en"}, type="eq")
+    )
+    assert headings == {0}
+    assert details == {0}
+    assert faiss_index.chunk_by_index[0].metadata == metadata
+
+
 async def test_meta_index_updated_on_delete_chunks(faiss_index, sample_chunks, sample_embeddings, embedding_dimension):
     """After deleting a chunk, its position should be removed and remaining positions shifted."""
     from ogx.providers.utils.memory.vector_store import ChunkForDeletion

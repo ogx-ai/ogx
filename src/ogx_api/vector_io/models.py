@@ -286,6 +286,13 @@ class VectorStoreSearchResponse(BaseModel):
     attributes: dict[str, str | float | bool] | None = None
     content: list[VectorStoreContent]
 
+    @field_validator("attributes", mode="before")
+    @classmethod
+    def _validate_attributes(cls, v: dict[str, Any] | None) -> dict[str, str | float | bool] | None:
+        if v is None:
+            return None
+        return _sanitize_vector_store_attributes(v)
+
 
 @json_schema_type
 class VectorStoreSearchResponsePage(BaseModel):
@@ -822,6 +829,9 @@ class OpenAISearchVectorStoreRequest(BaseModel):
     ranking_options: SearchRankingOptions | None = Field(default=None, description="Options for ranking results.")
     rewrite_query: bool = Field(default=False, description="Whether to rewrite the query for better results.")
     search_mode: str | None = Field(default="vector", description="The search mode to use (e.g., 'vector', 'keyword').")
+    include_metadata: bool = Field(
+        default=False, description="Whether to include structured chunk metadata in results."
+    )
 
 
 @json_schema_type

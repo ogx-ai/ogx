@@ -92,6 +92,20 @@ def _list_op(mv: Any, fv: Any, *, negate: bool) -> bool:
     return (mv not in fv) if negate else (mv in fv)
 
 
+def _metadata_index_key(value: Any) -> Any:
+    if isinstance(value, dict):
+        items = ((str(key), _metadata_index_key(item)) for key, item in value.items())
+        return ("dict", tuple(sorted(items)))
+    if isinstance(value, list):
+        return ("list", tuple(_metadata_index_key(item) for item in value))
+
+    try:
+        hash(value)
+    except TypeError:
+        return (type(value).__qualname__, repr(value))
+    return value
+
+
 _COMPARISON_OPS: dict[str, Any] = {
     "eq": lambda mv, fv: mv == fv,
     "ne": lambda mv, fv: mv != fv,
@@ -157,7 +171,8 @@ class FaissIndex(EmbeddingIndex):
                 # Rebuild inverted metadata index from loaded chunks
                 for pos, chunk in self.chunk_by_index.items():
                     for key, val in chunk.metadata.items():
-                        self._meta_index.setdefault(key, {}).setdefault(val, set()).add(pos)
+                        index_key = _metadata_index_key(val)
+                        self._meta_index.setdefault(key, {}).setdefault(index_key, set()).add(pos)
             except Exception as e:
                 logger.debug("Failed to deserialize Faiss index", error=str(e), exc_info=True)
                 raise ValueError(
@@ -204,7 +219,8 @@ class FaissIndex(EmbeddingIndex):
             faiss_pos = indexlen + i
             self.chunk_by_index[faiss_pos] = embedded_chunk
             for key, val in embedded_chunk.metadata.items():
-                self._meta_index.setdefault(key, {}).setdefault(val, set()).add(faiss_pos)
+                index_key = _metadata_index_key(val)
+                self._meta_index.setdefault(key, {}).setdefault(index_key, set()).add(faiss_pos)
 
         async with self.chunk_id_lock:
             self.index.add(embeddings)
@@ -269,16 +285,16 @@ class FaissIndex(EmbeddingIndex):
         # ComparisonFilter
         key, value, op_type = filter_obj.key, filter_obj.value, filter_obj.type
         if op_type == "eq":
-            return self._meta_index.get(key, {}).get(value, set()).copy()
+            return self._meta_index.get(key, {}).get(_metadata_index_key(value), set()).copy()
         if op_type == "in":
             result: set[int] = set()
             for v in value:
-                result |= self._meta_index.get(key, {}).get(v, set())
+                result |= self._meta_index.get(key, {}).get(_metadata_index_key(v), set())
             return result
         if op_type == "nin":
             excluded: set[int] = set()
             for v in value:
-                excluded |= self._meta_index.get(key, {}).get(v, set())
+                excluded |= self._meta_index.get(key, {}).get(_metadata_index_key(v), set())
             all_positions = {pos for s in self._meta_index.get(key, {}).values() for pos in s}
             return all_positions - excluded
         # Range ops and ne: linear scan over chunk_by_index metadata

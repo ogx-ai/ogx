@@ -1148,7 +1148,7 @@ class OpenAIVectorStoreMixin(ABC):
             data = []
             for embedded_chunk, score in zip(response.chunks, response.scores, strict=False):
                 chunk = embedded_chunk
-                content = self._chunk_to_vector_store_content(chunk)
+                content = self._chunk_to_vector_store_content(chunk, include_metadata=request.include_metadata)
 
                 response_data_item = VectorStoreSearchResponse(
                     file_id=chunk.metadata.get("document_id", ""),
