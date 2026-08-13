@@ -8,9 +8,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from ogx.core.datatypes import AuthenticationConfig, LocalApiKeyAuthConfig
+from ogx.core.datatypes import (
+    AuthenticationConfig,
+    LocalApiKeyAuthConfig,
+    StackConfig,
+    TenancyConfig,
+)
 from ogx.core.server.auth import AuthenticationMiddleware
 from ogx.core.server.auth_providers import LocalApiKeyAuthProvider, TokenValidationError
+from ogx.core.server.server import validate_auth_security
 
 KEY1 = "ogk_abc123"
 KEY2 = "ogk_def456"
@@ -136,13 +142,6 @@ def test_authenticated_endpoint_empty_bearer_token(local_api_key_client):
 
 class TestLocalApiKeyTenancyValidation:
     def _make_config(self, tenancy_mode, default_tenant_id=None):
-        from ogx.core.datatypes import (
-            AuthenticationConfig,
-            LocalApiKeyAuthConfig,
-            StackConfig,
-            TenancyConfig,
-        )
-
         return StackConfig(
             version=2,
             distro_name="test",
@@ -159,20 +158,14 @@ class TestLocalApiKeyTenancyValidation:
         )
 
     def test_multi_tenancy_errors(self):
-        from ogx.core.server.server import validate_auth_security
-
         config = self._make_config("multi")
         with pytest.raises(SystemExit, match="local_api_key.*multi"):
             validate_auth_security(config)
 
     def test_single_tenancy_passes(self):
-        from ogx.core.server.server import validate_auth_security
-
         config = self._make_config("single", default_tenant_id="acme-corp")
         validate_auth_security(config)
 
     def test_disabled_tenancy_passes(self):
-        from ogx.core.server.server import validate_auth_security
-
         config = self._make_config("disabled")
         validate_auth_security(config)
