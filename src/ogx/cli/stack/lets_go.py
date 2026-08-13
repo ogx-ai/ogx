@@ -12,6 +12,7 @@ import importlib
 import inspect
 import logging  # allow-direct-logging :: for direct logging control in _suppress_provider_logs
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -209,6 +210,12 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=False,
         help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
+    )
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        default=False,
+        help="Disable authentication entirely (generates no server.auth block in config).",
     )
 
 
@@ -470,6 +477,22 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
         config_dict["server"]["tls_keyfile"] = str(key_path)
         config_dict["server"]["insecure"] = False
         cprint(f"  ✓ Generated self-signed TLS certificate → {cert_path}", color="green")
+
+    # ── Auth config injection ──
+    if not args.no_auth:
+        api_keys = [f"ogk_{secrets.token_urlsafe(24)}" for _ in range(3)]
+        if "server" not in config_dict:
+            config_dict["server"] = {}
+        config_dict["server"]["auth"] = {
+            "provider_config": {"type": "local_api_key", "api_keys": api_keys},
+        }
+        cprint("  ✓ Simple authentication enabled", color="green")
+        cprint("    Here are keys you can use for authentication:", color="green")
+        for key in api_keys:
+            cprint(f"      {key}", color="yellow")
+        cprint(f'    curl -k -H "Authorization: Bearer {api_keys[0]}" \\', color="cyan")
+        cprint(f"      https://localhost:{args.port}/v1/chat/completions", color="cyan")
+        cprint("", color="green")
 
     config_file = distro_dir / "config.yaml"
     logger.info("Writing generated config to", config_file=config_file)
