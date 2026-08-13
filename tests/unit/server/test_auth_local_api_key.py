@@ -19,7 +19,6 @@ INVALID_KEY = "ogk_invalid"
 _CONFIG = LocalApiKeyAuthConfig(api_keys=[KEY1, KEY2])
 
 
-@pytest.mark.asyncio
 async def test_valid_token_returns_user_with_attributes():
     provider = LocalApiKeyAuthProvider(_CONFIG)
     user = await provider.validate_token(KEY1)
@@ -27,14 +26,12 @@ async def test_valid_token_returns_user_with_attributes():
     assert user.attributes == {"roles": ["admin", "owner"], "teams": [KEY1]}
 
 
-@pytest.mark.asyncio
 async def test_invalid_token_raises():
     provider = LocalApiKeyAuthProvider(_CONFIG)
     with pytest.raises(TokenValidationError, match="Invalid or missing API key"):
         await provider.validate_token(INVALID_KEY)
 
 
-@pytest.mark.asyncio
 async def test_all_keys_work():
     provider = LocalApiKeyAuthProvider(_CONFIG)
     u1 = await provider.validate_token(KEY1)
@@ -43,7 +40,6 @@ async def test_all_keys_work():
     assert u2.attributes["roles"] == ["admin", "owner"]
 
 
-@pytest.mark.asyncio
 async def test_attributes_are_immutable():
     provider = LocalApiKeyAuthProvider(_CONFIG)
     user = await provider.validate_token(KEY1)
