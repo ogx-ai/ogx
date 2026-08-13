@@ -506,7 +506,13 @@ class SearchRankingOptions(BaseModel):
         weights contains "neural".
     """
 
-    ranker: str | None = None
+    ranker: str | None = Field(
+        default=None,
+        description=(
+            'Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and '
+            '"classifier". Other string values are accepted for OpenAI API compatibility but are not supported.'
+        ),
+    )
     # NOTE: OpenAI File Search Tool requires threshold to be between 0 and 1, however
     # we don't guarantee that the score is between 0 and 1, so will leave this unconstrained
     # and let the provider handle it

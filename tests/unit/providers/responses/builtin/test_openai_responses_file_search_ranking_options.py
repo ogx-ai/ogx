@@ -10,6 +10,16 @@ from ogx_api.openai_responses import OpenAIResponseInputToolFileSearch
 from ogx_api.vector_io import SearchRankingOptions, VectorStoreSearchResponsePage
 
 
+def test_ranking_options_schema_documents_supported_rankers():
+    """The API schema should explain which ranker values OGX supports."""
+    ranker_schema = SearchRankingOptions.model_json_schema()["properties"]["ranker"]
+
+    assert ranker_schema["description"] == (
+        'Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and "classifier". '
+        "Other string values are accepted for OpenAI API compatibility but are not supported."
+    )
+
+
 async def test_file_search_forwards_ranking_options_weights(mock_vector_io_api):
     """Test that file_search forwards ranking_options.weights to vector store search."""
     query = "What is machine learning?"
