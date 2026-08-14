@@ -552,6 +552,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         ("remote::anthropic", None, "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", None),
         ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY", None),
         ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY", None),
+        ("remote::meta", None, "https://api.meta.ai/v1", "META_API_KEY", None),
     ]
 
     passed: list[str] = []
