@@ -14,14 +14,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from ogx.core.datatypes import AuthenticationConfig, AuthProviderType, GitHubTokenAuthConfig
-from ogx.core.server.auth import AuthenticationMiddleware
+from ogx.core.server.middleware.auth import AuthenticationMiddleware
 
 
 @pytest.fixture
 def suppress_auth_errors(caplog):
     """Suppress expected ERROR logs for tests that deliberately trigger authentication errors"""
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth")
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth_providers")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth_providers")
 
 
 class MockResponse:
@@ -90,7 +90,7 @@ def test_authenticated_endpoint_with_invalid_bearer_format(github_token_client):
     assert "Invalid Authorization header format" in response.json()["error"]["message"]
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_authenticated_endpoint_with_valid_github_token(mock_client_class, github_token_client):
     """Test accessing protected endpoint with valid GitHub token"""
     # Mock the GitHub API responses
@@ -132,7 +132,7 @@ def test_authenticated_endpoint_with_valid_github_token(mock_client_class, githu
     assert calls[0][1]["headers"]["Authorization"] == "Bearer github_token_123"
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_authenticated_endpoint_with_invalid_github_token(mock_client_class, github_token_client, suppress_auth_errors):
     """Test accessing protected endpoint with invalid GitHub token"""
     # Mock the GitHub API to return 401 Unauthorized
@@ -149,7 +149,7 @@ def test_authenticated_endpoint_with_invalid_github_token(mock_client_class, git
     )
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_github_enterprise_support(mock_client_class):
     """Test GitHub Enterprise support with custom API base URL"""
     app = FastAPI()
@@ -207,10 +207,10 @@ def test_github_enterprise_support(mock_client_class):
     assert calls[1][1]["params"] == {"per_page": 100, "page": 1}
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_github_token_extracts_org_attributes(mock_client_class):
     """Test that organization memberships are extracted into user attributes"""
-    from ogx.core.server.auth_providers import GitHubTokenAuthProvider
+    from ogx.core.server.middleware.auth_providers import GitHubTokenAuthProvider
 
     config = GitHubTokenAuthConfig(
         type=AuthProviderType.GITHUB_TOKEN,
@@ -237,10 +237,10 @@ def test_github_token_extracts_org_attributes(mock_client_class):
     assert "org-b" in user.attributes["teams"]
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_github_token_handles_org_fetch_failure(mock_client_class, caplog):
     """Test that authentication succeeds even if fetching orgs fails"""
-    from ogx.core.server.auth_providers import GitHubTokenAuthProvider
+    from ogx.core.server.middleware.auth_providers import GitHubTokenAuthProvider
 
     config = GitHubTokenAuthConfig(
         type=AuthProviderType.GITHUB_TOKEN,
@@ -267,10 +267,10 @@ def test_github_token_handles_org_fetch_failure(mock_client_class, caplog):
     assert user.attributes.get("teams", []) == []
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_github_token_multiple_orgs(mock_client_class):
     """Test with user who belongs to multiple organizations"""
-    from ogx.core.server.auth_providers import GitHubTokenAuthProvider
+    from ogx.core.server.middleware.auth_providers import GitHubTokenAuthProvider
 
     config = GitHubTokenAuthConfig(
         type=AuthProviderType.GITHUB_TOKEN,
@@ -300,10 +300,10 @@ def test_github_token_multiple_orgs(mock_client_class):
     assert set(user.attributes["teams"]) == {"org-1", "org-2", "org-3", "org-4"}
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_github_token_fetches_paginated_orgs(mock_client_class):
     """Test that organization memberships are fetched across all GitHub org pages."""
-    from ogx.core.server.auth_providers import GitHubTokenAuthProvider
+    from ogx.core.server.middleware.auth_providers import GitHubTokenAuthProvider
 
     config = GitHubTokenAuthConfig(
         type=AuthProviderType.GITHUB_TOKEN,
@@ -339,10 +339,10 @@ def test_github_token_fetches_paginated_orgs(mock_client_class):
     assert calls[2][1]["params"] == {"per_page": 100, "page": 2}
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.middleware.auth_providers.httpx.AsyncClient")
 def test_github_token_preserves_partial_orgs_if_later_page_fails(mock_client_class):
     """Test that already-fetched organizations are preserved if a later org page fails."""
-    from ogx.core.server.auth_providers import GitHubTokenAuthProvider
+    from ogx.core.server.middleware.auth_providers import GitHubTokenAuthProvider
 
     config = GitHubTokenAuthConfig(
         type=AuthProviderType.GITHUB_TOKEN,

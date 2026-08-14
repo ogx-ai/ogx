@@ -16,7 +16,7 @@ from ogx.core.datatypes import (
     CustomAuthConfig,
     User,
 )
-from ogx.core.server.auth import (
+from ogx.core.server.middleware.auth import (
     AuthenticationMiddleware,
     RouteAuthorizationMiddleware,
 )

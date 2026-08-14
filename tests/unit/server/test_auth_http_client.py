@@ -9,7 +9,7 @@ import httpx
 from ogx.core.datatypes import (
     CustomAuthConfig,
 )
-from ogx.core.server.auth_providers import (
+from ogx.core.server.middleware.auth_providers import (
     CustomAuthProvider,
 )
 

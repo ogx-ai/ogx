@@ -15,7 +15,7 @@ from ogx.core.access_control.conditions import parse_conditions
 from ogx.core.access_control.datatypes import RouteAccessRule
 from ogx.core.datatypes import AuthenticationConfig, TenancyConfig, TenancyMode, User
 from ogx.core.request_headers import user_from_scope
-from ogx.core.server.auth_providers import create_auth_provider
+from ogx.core.server.middleware.auth_providers import create_auth_provider
 from ogx.core.server.routes import (
     RouteImpls,
     build_route_impls_from_routes,

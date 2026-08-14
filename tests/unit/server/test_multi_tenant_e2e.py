@@ -22,7 +22,7 @@ from ogx.core.datatypes import (
     TenancyMode,
     UpstreamHeaderAuthConfig,
 )
-from ogx.core.server.auth import AuthenticationMiddleware, TenancyMiddleware
+from ogx.core.server.middleware.auth import AuthenticationMiddleware, TenancyMiddleware
 from ogx.core.server.fastapi_router_registry import build_fastapi_router
 from ogx.core.server.routes import RouteAuthInfo
 from ogx.core.server.server import ProviderDataMiddleware
@@ -47,8 +47,8 @@ from ogx_api import Api
 
 @pytest.fixture
 def suppress_auth_errors(caplog):
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth")
-    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.auth_providers")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth")
+    caplog.set_level(logging.CRITICAL, logger="ogx.core.server.middleware.auth_providers")
 
 
 def _headers(principal: str, tenant_id: str) -> dict[str, str]:
@@ -88,7 +88,7 @@ def _make_app_and_client(
         app.add_middleware(AuthenticationMiddleware, auth_config=auth_config)
 
     monkeypatch.setattr(
-        "ogx.core.server.auth.find_matching_route",
+        "ogx.core.server.middleware.auth.find_matching_route",
         lambda method, path, route_impls: (None, {}, path, RouteAuthInfo(require_authentication=True)),
     )
 

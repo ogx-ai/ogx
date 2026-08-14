@@ -52,7 +52,7 @@ from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
 from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
 
-from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
+from .middleware.auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
 from .metrics import RequestMetricsMiddleware
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
