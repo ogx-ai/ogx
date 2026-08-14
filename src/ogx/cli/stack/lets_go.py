@@ -210,6 +210,12 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
         default=False,
         help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
     )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host to bind the server to",
+    )
 
 
 def _add_file_search_and_responses(run_config: StackConfig) -> None:
@@ -470,6 +476,8 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
         config_dict["server"]["tls_keyfile"] = str(key_path)
         config_dict["server"]["insecure"] = False
         cprint(f"  ✓ Generated self-signed TLS certificate → {cert_path}", color="green")
+
+    config_dict["server"]["host"] = args.host
 
     config_file = distro_dir / "config.yaml"
     logger.info("Writing generated config to", config_file=config_file)
