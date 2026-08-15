@@ -22,6 +22,7 @@ from ogx.core.datatypes import (
     CustomAuthConfig,
     GitHubTokenAuthConfig,
     KubernetesAuthProviderConfig,
+    LocalApiKeyAuthConfig,
     OAuth2TokenAuthConfig,
     UpstreamHeaderAuthConfig,
     User,
@@ -115,6 +116,32 @@ class AuthProvider(ABC):
     def get_auth_error_message(self, scope: Scope | None = None) -> str:
         """Return provider-specific authentication error message."""
         return "Authentication required"
+
+
+class LocalApiKeyAuthProvider(AuthProvider):
+    """Validates requests against a configured set of API keys.
+
+    Any valid key is treated as both an admin and an owner, granting full
+    access to all resources. The resolved user has ``roles=admin,owner`` and
+    ``teams=<key>`` so the default access-policy rules (``user in owners`` /
+    ``user is owner``) work as expected. This provider does not resolve a
+    tenant ID, so it is incompatible with multi-tenant mode.
+    """
+
+    def __init__(self, config: LocalApiKeyAuthConfig) -> None:
+        self.config = config
+        self._valid_keys: set[str] = set(config.api_keys)
+
+    async def validate_token(self, token: str, scope: Scope | None = None) -> User:
+        if token not in self._valid_keys:
+            raise TokenValidationError("Invalid or missing API key")
+        return User(
+            principal=token,
+            attributes={"roles": ["admin", "owner"], "teams": [token]},
+        )
+
+    async def close(self) -> None:
+        pass
 
 
 def get_attributes_from_claims(claims: dict[str, Any], mapping: dict[str, str]) -> dict[str, list[str]]:
@@ -732,6 +759,8 @@ def create_auth_provider(config: AuthenticationConfig) -> AuthProvider:
     """Factory function to create the appropriate auth provider."""
     provider_config = config.provider_config
 
+    if isinstance(provider_config, LocalApiKeyAuthConfig):
+        return LocalApiKeyAuthProvider(provider_config)
     if isinstance(provider_config, CustomAuthConfig):
         return CustomAuthProvider(provider_config)
     elif isinstance(provider_config, OAuth2TokenAuthConfig):

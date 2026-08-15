@@ -202,6 +202,7 @@ class OAuth2IntrospectionConfig(BaseModel):
 class AuthProviderType(StrEnum):
     """Supported authentication provider types."""
 
+    LOCAL_API_KEY = "local_api_key"
     OAUTH2_TOKEN = "oauth2_token"
     GITHUB_TOKEN = "github_token"
     CUSTOM = "custom"
@@ -303,6 +304,15 @@ class CustomAuthConfig(BaseModel):
     )
 
 
+class LocalApiKeyAuthConfig(BaseModel):
+    """Simple API key authentication for single-key deployments."""
+
+    type: Literal[AuthProviderType.LOCAL_API_KEY] = AuthProviderType.LOCAL_API_KEY
+    api_keys: list[str] = Field(
+        description="API keys that clients can send via the Authorization: Bearer header.",
+    )
+
+
 class GitHubTokenAuthConfig(BaseModel):
     """Configuration for GitHub token authentication."""
 
@@ -394,6 +404,7 @@ class UpstreamHeaderAuthConfig(BaseModel):
 
 AuthProviderConfig = Annotated[
     OAuth2TokenAuthConfig
+    | LocalApiKeyAuthConfig
     | GitHubTokenAuthConfig
     | CustomAuthConfig
     | KubernetesAuthProviderConfig
