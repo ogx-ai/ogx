@@ -61,7 +61,7 @@ CHUNK_RESPONSE = {
             "filename": "test.pdf",
             "chunk_index": 2,
             "text": "Third chunk of text.",
-            "headings": ["Conclusion"],
+            "headings": ["Safety, Security", "Conclusion"],
             "doc_items": ["#/texts/2"],
             "page_numbers": [2, 3],
         },
@@ -232,12 +232,30 @@ class TestDoclingServeFileProcessor:
         with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
-        assert response.chunks[0].metadata["headings"] == ["Introduction"]
-        assert response.chunks[0].metadata["page_numbers"] == [1]
+        assert response.chunks[0].metadata["headings"] == "Introduction"
+        assert response.chunks[0].metadata["page_numbers"] == "1"
         assert "headings" not in response.chunks[1].metadata
         assert "page_numbers" not in response.chunks[1].metadata
-        assert response.chunks[2].metadata["headings"] == ["Conclusion"]
-        assert response.chunks[2].metadata["page_numbers"] == [2, 3]
+        assert response.chunks[2].metadata["headings"] == "Safety, Security > Conclusion"
+        assert response.chunks[2].metadata["page_numbers"] == "2, 3"
+
+    async def test_legacy_nested_headings_keep_existing_list_type(
+        self, processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
+        legacy_response = {
+            "chunks": [
+                {
+                    "text": "Legacy chunk shape.",
+                    "meta": {"headings": ["Legacy heading"]},
+                }
+            ]
+        }
+
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(legacy_response)):
+            response = await processor.process_file(request, file=upload_file)
+
+        assert response.chunks[0].metadata["headings"] == ["Legacy heading"]
 
     async def test_chunk_window_set(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
@@ -514,6 +532,6 @@ class TestIBMSaaSCompatibility:
 
         assert result.chunks is not None
         assert len(result.chunks) > 0
-        assert result.chunks[0].metadata["headings"] == ["Introduction"]
-        assert result.chunks[0].metadata["page_numbers"] == [1, 2]
+        assert result.chunks[0].metadata["headings"] == "Introduction"
+        assert result.chunks[0].metadata["page_numbers"] == "1, 2"
         assert result.metadata["conversion_method"] == "async"
