@@ -17,6 +17,7 @@ from docling.datamodel.service.chunking import HybridChunkerOptions
 from docling.datamodel.service.options import ConvertDocumentsOptions
 from docling.datamodel.service.targets import ZipTarget
 from docling.service_client import RawServiceResult
+from docling_core.types.io import DocumentStream
 from fastapi import UploadFile
 from pydantic import SecretStr
 
@@ -83,9 +84,9 @@ CHUNK_RESPONSE = [
         "chunk_index": 2,
         "text": "Third chunk of text.",
         "num_tokens": 5,
-        "headings": ["Conclusion"],
+        "headings": ["Safety, Security", "Conclusion"],
         "doc_items": ["#/texts/2"],
-        "page_numbers": [2],
+        "page_numbers": [2, 3],
     },
 ]
 
@@ -270,18 +271,18 @@ class TestDoclingServeFileProcessor:
         ids = [c.chunk_id for c in response.chunks]
         assert len(ids) == len(set(ids))
 
-    async def test_headings_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
+    async def test_structural_metadata_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
         with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
-        assert response.chunks[0].metadata["headings"] == ["Introduction"]
-        assert response.chunks[0].metadata["page_numbers"] == [1]
+        assert response.chunks[0].metadata["headings"] == "Introduction"
+        assert response.chunks[0].metadata["page_numbers"] == "1"
         assert "headings" not in response.chunks[1].metadata
         assert "page_numbers" not in response.chunks[1].metadata
-        assert response.chunks[2].metadata["headings"] == ["Conclusion"]
-        assert response.chunks[2].metadata["page_numbers"] == [2]
+        assert response.chunks[2].metadata["headings"] == "Safety, Security > Conclusion"
+        assert response.chunks[2].metadata["page_numbers"] == "2, 3"
 
     async def test_chunk_window_set(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
@@ -518,6 +519,10 @@ class TestIBMSaaSCompatibility:
                 assert result.chunks is not None
                 assert len(result.chunks) > 0
                 assert result.metadata["conversion_method"] == "async"
+                source = mock_instance.submit.await_args.kwargs["source"]
+                assert isinstance(source, DocumentStream)
+                assert source.name == "test.pdf"
+                assert source.stream.getvalue() == b"%PDF-fake-content"
 
     @pytest.mark.parametrize("use_markdown_tables", [False, True])
     async def test_local_docker_allows_chunking(self, upload_file: UploadFile, use_markdown_tables: bool):
@@ -556,6 +561,10 @@ class TestIBMSaaSCompatibility:
             result = await processor.process_file(request, file=upload_file)
 
             submit_kwargs = mock_instance.submit.await_args.kwargs
+            source = submit_kwargs["source"]
+            assert isinstance(source, DocumentStream)
+            assert source.name == "test.pdf"
+            assert source.stream.getvalue() == b"%PDF-fake-content"
             options = submit_kwargs["options"]
             assert isinstance(options, ConvertDocumentsOptions)
             assert options.to_formats == ["chunks"]
@@ -563,7 +572,8 @@ class TestIBMSaaSCompatibility:
             assert options.chunking_options.max_tokens == 512
             assert options.chunking_options.use_markdown_tables is use_markdown_tables
             assert isinstance(submit_kwargs["target"], ZipTarget)
-
         assert result.chunks is not None
         assert len(result.chunks) > 0
+        assert result.chunks[0].metadata["headings"] == "Introduction"
+        assert result.chunks[0].metadata["page_numbers"] == "1"
         assert result.metadata["conversion_method"] == "async"

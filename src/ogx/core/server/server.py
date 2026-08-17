@@ -28,6 +28,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from ogx.core.access_control.access_control import AccessDeniedError
 from ogx.core.datatypes import (
     AuthenticationRequiredError,
+    LocalApiKeyAuthConfig,
     StackConfig,
     TenancyMode,
 )
@@ -309,6 +310,19 @@ def validate_auth_security(config: StackConfig) -> None:
     if not config.server.auth:
         return
     provider_config = config.server.auth.provider_config
+
+    # Hard error: local_api_key doesn't resolve tenant IDs, so multi-tenancy
+    # is incompatible. The admin will get runtime 401s with no explanation.
+    tenancy_mode = config.server.tenancy.mode
+    if isinstance(provider_config, LocalApiKeyAuthConfig) and tenancy_mode == TenancyMode.MULTI:
+        raise SystemExit(
+            "server.auth.provider_config.type is 'local_api_key' but "
+            "server.tenancy.mode is 'multi'. The local_api_key provider does "
+            "not resolve tenant IDs. Use tenancy mode 'single' or 'disabled' "
+            "instead, or switch to an auth provider that resolves tenant_ids "
+            "(oauth2_token, kubernetes, upstream_header, custom)."
+        )
+
     if not provider_config or not hasattr(provider_config, "verify_tls") or provider_config.verify_tls:
         return
 

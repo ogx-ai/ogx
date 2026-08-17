@@ -6,11 +6,9 @@
 
 import json
 import os
-import tempfile
 import time
 import uuid
 from io import BytesIO
-from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
 
@@ -21,10 +19,12 @@ from docling.datamodel.service.options import ConvertDocumentsOptions
 from docling.datamodel.service.responses import ChunkedDocumentResultItem
 from docling.datamodel.service.targets import ZipTarget
 from docling.service_client import AsyncDoclingServiceClient, RawServiceResult
+from docling_core.types.io import DocumentStream
 from fastapi import UploadFile
 
 from ogx.log import get_logger
 from ogx.providers.utils.files.response import response_body_bytes
+from ogx.providers.utils.files.structural_metadata import structural_metadata_as_attributes
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 from ogx_api.common.errors import InvalidParameterError
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
@@ -120,10 +120,12 @@ class DoclingServeFileProcessor:
                 "document_id": document_id,
                 **document_metadata,
             }
-            if raw_chunk.headings:
-                metadata["headings"] = raw_chunk.headings
-            if raw_chunk.page_numbers:
-                metadata["page_numbers"] = raw_chunk.page_numbers
+            metadata.update(
+                structural_metadata_as_attributes(
+                    headings=raw_chunk.headings,
+                    page_numbers=raw_chunk.page_numbers,
+                )
+            )
 
             chunks.append(
                 Chunk(
@@ -187,7 +189,7 @@ class DoclingServeFileProcessor:
                 log.info(
                     "Converting with async endpoints using AsyncDoclingServiceClient from docling-slim",
                     mode=self.config.mode,
-                    sdk_version="docling-slim>=2.95.0",
+                    sdk_version="docling-slim>=2.117.0",
                 )
                 if chunking_strategy:
                     chunks = await self._convert_and_chunk_async(
@@ -291,37 +293,33 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert file using async endpoints with AsyncDoclingServiceClient."""
-        # AsyncDoclingServiceClient requires a file path via temp file
-        with tempfile.NamedTemporaryFile() as tmp:
-            tmp.write(content)
-            tmp_path = Path(tmp.name)
+        source = DocumentStream(name=filename, stream=BytesIO(content))
+        async with AsyncDoclingServiceClient(
+            url=self.config.base_url,
+            api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
+            job_timeout=300.0,
+        ) as client:
+            job = await client.submit(
+                source=source,
+                options=ConvertDocumentsOptions(to_formats=[OutputFormat.MARKDOWN]),
+            )
+            result = await job.result()
 
-            async with AsyncDoclingServiceClient(
-                url=self.config.base_url,
-                api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
-                job_timeout=300.0,
-            ) as client:
-                job = await client.submit(
-                    source=tmp_path,
-                    options=ConvertDocumentsOptions(to_formats=[OutputFormat.MARKDOWN]),
-                )
-                result = await job.result()
-
-            # Handle both local docling-serve (ConversionResult with .document)
-            # and IBM SaaS (PresignedUrlConvertResponse with .documents and presigned URLs)
-            md_content = ""
-            if hasattr(result, "documents"):
-                # IBM SaaS: PresignedUrlConvertResponse with presigned URLs
-                if result.documents and result.documents[0].artifacts:
-                    artifact = result.documents[0].artifacts[0]
-                    # Download markdown from presigned URL
-                    async with httpx.AsyncClient() as http_client:
-                        response = await http_client.get(str(artifact.uri))
-                        response.raise_for_status()
-                        md_content = response.text
-            elif hasattr(result, "document"):
-                # Local docling-serve: ConversionResult with direct document
-                md_content = result.document.export_to_markdown() if result.document else ""
+        # Handle both local docling-serve (ConversionResult with .document)
+        # and IBM SaaS (PresignedUrlConvertResponse with .documents and presigned URLs)
+        md_content = ""
+        if hasattr(result, "documents"):
+            # IBM SaaS: PresignedUrlConvertResponse with presigned URLs
+            if result.documents and result.documents[0].artifacts:
+                artifact = result.documents[0].artifacts[0]
+                # Download markdown from presigned URL
+                async with httpx.AsyncClient() as http_client:
+                    response = await http_client.get(str(artifact.uri))
+                    response.raise_for_status()
+                    md_content = response.text
+        elif hasattr(result, "document"):
+            # Local docling-serve: ConversionResult with direct document
+            md_content = result.document.export_to_markdown() if result.document else ""
 
         if not md_content or not md_content.strip():
             return []
@@ -397,38 +395,34 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert and chunk a file via Docling Serve's asynchronous convert endpoint."""
-        # AsyncDoclingServiceClient requires a file path via temp file
-        with tempfile.NamedTemporaryFile() as tmp:
-            tmp.write(content)
-            tmp_path = Path(tmp.name)
-
-            async with AsyncDoclingServiceClient(
-                url=self.config.base_url,
-                api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
-                job_timeout=300.0,
-            ) as client:
-                try:
-                    job = await client.submit(
-                        source=tmp_path,
-                        options=ConvertDocumentsOptions(
-                            to_formats=[OutputFormat.CHUNKS],
-                            chunking_options=self._get_chunking_options(chunking_strategy),
+        source = DocumentStream(name=filename, stream=BytesIO(content))
+        async with AsyncDoclingServiceClient(
+            url=self.config.base_url,
+            api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
+            job_timeout=300.0,
+        ) as client:
+            try:
+                job = await client.submit(
+                    source=source,
+                    options=ConvertDocumentsOptions(
+                        to_formats=[OutputFormat.CHUNKS],
+                        chunking_options=self._get_chunking_options(chunking_strategy),
+                    ),
+                    target=ZipTarget(),
+                )
+                response = await job.result()
+            except httpx.HTTPStatusError as e:
+                # Chunk output is unavailable on older Docling Serve releases.
+                if e.response.status_code in (404, 405):
+                    raise InvalidParameterError(
+                        param_name="chunking_strategy",
+                        value=chunking_strategy.model_dump() if chunking_strategy else None,
+                        constraint=(
+                            "Chunk output through the convert endpoint is not supported by this Docling instance. "
+                            "Either remove 'chunking_strategy' from your request or upgrade Docling Serve."
                         ),
-                        target=ZipTarget(),
-                    )
-                    response = await job.result()
-                except httpx.HTTPStatusError as e:
-                    # Chunk output is unavailable on older Docling Serve releases.
-                    if e.response.status_code in (404, 405):
-                        raise InvalidParameterError(
-                            param_name="chunking_strategy",
-                            value=chunking_strategy.model_dump() if chunking_strategy else None,
-                            constraint=(
-                                "Chunk output through the convert endpoint is not supported by this Docling instance. "
-                                "Either remove 'chunking_strategy' from your request or upgrade Docling Serve."
-                            ),
-                        ) from e
-                    raise
+                    ) from e
+                raise
 
         if not isinstance(response, RawServiceResult):
             raise ValueError("Failed to read Docling chunks: the convert endpoint did not return a ZIP archive")
