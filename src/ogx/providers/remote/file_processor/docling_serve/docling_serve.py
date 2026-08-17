@@ -4,7 +4,6 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import json
 import os
 import time
 import uuid
@@ -356,7 +355,7 @@ class DoclingServeFileProcessor:
         headers = self._get_headers()
         chunking_options = self._get_chunking_options(chunking_strategy)
         options = {
-            "to_formats": json.dumps([OutputFormat.CHUNKS.value]),
+            "to_formats": [OutputFormat.CHUNKS.value],
             "chunking_options": chunking_options.model_dump_json(exclude_none=True),
             "target_type": "zip",
         }

@@ -185,7 +185,7 @@ class TestDoclingServeFileProcessor:
 
         call_kwargs = mock_post.call_args
         assert "/v1/convert/file" in call_kwargs.args[0]
-        assert json.loads(call_kwargs.kwargs["data"]["to_formats"]) == ["chunks"]
+        assert call_kwargs.kwargs["data"]["to_formats"] == ["chunks"]
         chunking_options = json.loads(call_kwargs.kwargs["data"]["chunking_options"])
         assert chunking_options["max_tokens"] == 512
         assert chunking_options["use_markdown_tables"] is False
