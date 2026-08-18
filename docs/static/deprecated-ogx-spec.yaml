@@ -12,7 +12,39 @@ info:
   version: v1
 servers:
 - url: http://any-hosted-ogx.com
-paths: {}
+paths:
+  /v1alpha/file-processors/process:
+    post:
+      responses:
+        '200':
+          description: The processed file chunks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFileResponse'
+        '400':
+          description: Bad Request
+          $ref: '#/components/responses/BadRequest400'
+        '429':
+          description: Too Many Requests
+          $ref: '#/components/responses/TooManyRequests429'
+        '500':
+          description: Internal Server Error
+          $ref: '#/components/responses/InternalServerError500'
+        default:
+          description: Default Response
+          $ref: '#/components/responses/DefaultError'
+      tags:
+      - File Processors
+      summary: Process a file into chunks ready for vector database storage.
+      description: Deprecated. This endpoint blocks until processing completes, which can hold a connection open for large files. Use POST /file-processors/jobs to submit the file asynchronously and poll GET /file-processors/jobs/{job_id} for the result. Supports direct upload via multipart form or processing files already uploaded to file storage via file_id. Exactly one of file or file_id must be provided.
+      operationId: process_file_v1alpha_file_processors_process_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_process_file_v1alpha_file_processors_process_post'
+      deprecated: true
 components:
   schemas:
     Error:
@@ -6403,6 +6435,32 @@ components:
         Represents token usage details including input tokens, output tokens, a
         breakdown of output tokens, and the total tokens used. Only populated on
         batches created after September 7, 2025.
+    Body_process_file_v1alpha_file_processors_process_post:
+      properties:
+        file:
+          anyOf:
+          - type: string
+            contentMediaType: application/octet-stream
+          - type: 'null'
+          description: The File object to be uploaded and processed. Mutually exclusive with file_id.
+        file_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of file already uploaded to file storage. Mutually exclusive with file.
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional processing options. Provider-specific parameters (e.g., OCR settings, output format).
+        chunking_strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional chunking strategy for splitting content into chunks. Must be valid JSON string.
+      type: object
+      title: Body_process_file_v1alpha_file_processors_process_post
     ChatCompletionMessage:
       properties:
         id:
@@ -6686,6 +6744,16 @@ components:
       - cached_tokens
       title: InputTokensDetails
       description: A detailed breakdown of the input tokens.
+    JobStatus:
+      type: string
+      enum:
+      - completed
+      - in_progress
+      - failed
+      - scheduled
+      - cancelled
+      title: JobStatus
+      description: Status of a job execution.
     ListConnectorsResponse:
       properties:
         data:
@@ -6698,6 +6766,24 @@ components:
       - data
       title: ListConnectorsResponse
       description: Response containing a list of configured connectors
+    ListProcessFileJobsResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ProcessFileJob'
+          type: array
+          title: Data
+          description: The list of file-processing jobs.
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether more jobs are available after this page.
+          default: false
+      type: object
+      required:
+      - data
+      title: ListProcessFileJobsResponse
+      description: Response model listing file-processing jobs.
     ListSkillVersionsResponse:
       properties:
         object:
@@ -7412,6 +7498,44 @@ components:
       - reasoning_tokens
       title: OutputTokensDetails
       description: A detailed breakdown of the output tokens.
+    ProcessFileJob:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+          description: Unique identifier for the job.
+        status:
+          $ref: '#/components/schemas/JobStatus'
+          description: Current execution status of the job.
+        created_at:
+          type: integer
+          title: Created At
+          description: Unix timestamp (seconds) for when the job was created.
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/ProcessFileResponse'
+            title: ProcessFileResponse
+          - type: 'null'
+          description: The processed file result. Present only once the job has completed successfully.
+          title: ProcessFileResponse
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Error message. Present only if the job failed.
+      type: object
+      required:
+      - job_id
+      - status
+      - created_at
+      title: ProcessFileJob
+      description: |-
+        An asynchronous file-processing job.
+
+        Returned when a file is submitted for processing via the job-based API. Poll
+        by job_id until ``status`` is terminal (completed/failed/cancelled). When
+        completed, ``result`` holds the processed chunks; when failed, ``error``
+        explains why.
     ProcessFileResponse:
       properties:
         chunks:
@@ -7448,6 +7572,7 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+          description: Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and "classifier". Other string values are accepted for OpenAI API compatibility but are not supported.
         score_threshold:
           anyOf:
           - type: number
@@ -8727,6 +8852,18 @@ components:
             The container image to use for this implementation. If one is provided, pip_packages will be ignored.
             If a provider depends on other providers, the dependencies MUST NOT specify a container image.
           nullable: true
+        execution_mode:
+          default: inline
+          description: |2
+
+            How this provider's work is executed. 'inline' runs the implementation in the server
+            process (default, unchanged behavior). 'worker' runs the implementation in a separate
+            worker process via the job queue, so long or large operations do not block the server.
+          enum:
+          - inline
+          - worker
+          title: Execution Mode
+          type: string
         description:
           anyOf:
           - type: string
@@ -9466,16 +9603,6 @@ components:
       - batch_id
       title: CancelBatchRequest
       type: object
-    JobStatus:
-      description: Status of a job execution.
-      enum:
-      - completed
-      - in_progress
-      - failed
-      - scheduled
-      - cancelled
-      title: JobStatus
-      type: string
     Job:
       description: A job execution instance with status tracking.
       properties:

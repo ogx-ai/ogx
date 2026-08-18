@@ -171,7 +171,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
     embedding_provider = Provider(
         provider_id="sentence-transformers",
         provider_type="inline::sentence-transformers",
-        config=SentenceTransformersInferenceConfig(trust_remote_code=True).model_dump(),
+        config=SentenceTransformersInferenceConfig(trust_remote_code=False).model_dump(),
     )
     responses_provider = Provider(
         provider_id="builtin",

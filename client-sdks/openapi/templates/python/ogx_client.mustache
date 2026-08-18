@@ -15,6 +15,7 @@ from {{packageName}}.api_client import ApiClient
 from {{packageName}}.async_api_client import AsyncApiClient
 from {{packageName}}.configuration import Configuration
 {{#apiInfo}}{{#apis}}from {{apiPackage}}.{{classFilename}} import {{classname}}
+from {{apiPackage}}.{{classFilename}} import Async{{classname}}
 {{/apis}}{{/apiInfo}}
 
 
@@ -239,6 +240,7 @@ class AsyncOgxClient:
                 configuration = Configuration.get_default_copy()
 
         self.configuration = configuration
+        self.base_url = self.configuration.base_url
 
         # Create the async API client
         self.api_client = AsyncApiClient(
@@ -267,8 +269,8 @@ class AsyncOgxClient:
         for header_k, header_v in custom_headers.items():
             self.api_client.set_default_header(header_k, header_v)
 
-        # Initialize all API instances
-{{#apiInfo}}{{#apis}}        self.{{baseName}} = {{classname}}(self.api_client)
+        # Initialize all async API instances
+{{#apiInfo}}{{#apis}}        self.{{baseName}} = Async{{classname}}(self.api_client)
 {{/apis}}{{/apiInfo}}
         # Nested API structure
 

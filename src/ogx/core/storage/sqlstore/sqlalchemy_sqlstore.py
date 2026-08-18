@@ -12,6 +12,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    Index,
     Integer,
     MetaData,
     String,
@@ -201,6 +202,24 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             if self._engine is not None:
                 async with self._engine.begin() as conn:
                     await conn.run_sync(self.metadata.create_all, checkfirst=True)
+
+    async def create_index(self, index_name: str, table: str, columns: Sequence[str]) -> None:
+        """Create an index if it does not already exist."""
+        if table not in self.metadata.tables:
+            raise ValueError(f"Failed to create index '{index_name}': table '{table}' is not registered.")
+        table_obj = self.metadata.tables[table]
+        missing = [column for column in columns if column not in table_obj.c]
+        if missing:
+            raise ValueError(
+                f"Failed to create index '{index_name}': columns {missing} are not registered on table '{table}'."
+            )
+        index = next((candidate for candidate in table_obj.indexes if candidate.name == index_name), None)
+        if index is None:
+            index = Index(index_name, *(table_obj.c[column] for column in columns))
+        await self._ensure_engine()
+        assert self._engine is not None
+        async with self._engine.begin() as connection:
+            await connection.run_sync(lambda sync_connection: index.create(sync_connection, checkfirst=True))
 
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
