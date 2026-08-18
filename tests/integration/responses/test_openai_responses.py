@@ -265,17 +265,17 @@ class TestOpenAIResponses:
         assert response2.truncation == "disabled"
         assert len(response2.output_text.strip()) > 0
 
-    def test_openai_response_with_truncation_auto_error(self, openai_client, text_model_id):
-        """Test that truncation='auto' returns an error since it is not yet supported."""
-        with pytest.raises(Exception) as exc_info:
-            openai_client.responses.create(
-                model=text_model_id,
-                input=[{"role": "user", "content": "Hello"}],
-                truncation="auto",
-            )
+    def test_openai_response_with_truncation_auto(self, openai_client, text_model_id):
+        """Test that truncation='auto' passes through for normal requests."""
+        response = openai_client.responses.create(
+            model=text_model_id,
+            input=[{"role": "user", "content": "What is 2+2?"}],
+            truncation="auto",
+        )
 
-        error_message = str(exc_info.value).lower()
-        assert "truncation" in error_message or "auto" in error_message or "not supported" in error_message
+        assert response.id.startswith("resp_")
+        assert response.truncation == "auto"
+        assert len(response.output_text.strip()) > 0
 
     def test_openai_response_with_top_p(self, openai_client, text_model_id):
         """Test OpenAI response with top_p parameter."""
