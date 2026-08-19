@@ -462,6 +462,22 @@ async def test_create_openai_response_with_truncation_auto_streaming(
     calls = mock_inference_api.openai_chat_completion.call_args_list
     assert calls[0].args[0].model == model
 
+    # First call: full history (4 from previous response + 1 new user message)
+    first_call_messages = calls[0].args[0].messages
+    assert len(first_call_messages) == 5
+    assert first_call_messages[0].content == "First question - old context A"
+    assert first_call_messages[1].content == "First answer A"
+    assert first_call_messages[2].content == "Second question - old context B"
+    assert first_call_messages[3].content == "First answer B"
+    assert first_call_messages[4].content == "Third question"
+
+    # Second call: oldest turn (A + "First answer A" dropped, B + B + new input
+    retry_messages = calls[1].args[0].messages
+    assert len(retry_messages) == 3
+    assert retry_messages[0].content == "Second question - old context B"
+    assert retry_messages[1].content == "First answer B"
+    assert retry_messages[2].content == "Third question"
+
 
 async def test_create_openai_response_with_prompt_cache_key_and_previous_response(
     openai_responses_impl, mock_responses_store, mock_inference_api

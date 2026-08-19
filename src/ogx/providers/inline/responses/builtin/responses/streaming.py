@@ -495,6 +495,7 @@ class StreamingResponseOrchestrator:
                 chat_tool_choice = processed_tool_choice.model_dump()
 
         messages: list[OpenAIMessageParam] = self.ctx.messages.copy()
+        inference_succeeded = False
         for _ in range(self.max_infer_iters):
             ic = _InferenceResult()
             try:
@@ -506,6 +507,7 @@ class StreamingResponseOrchestrator:
                     ic,
                 ):
                     yield event
+                inference_succeeded = True
             except ModelNotFoundError:
                 raise
             except _ContextLengthRetryError:
@@ -521,7 +523,10 @@ class StreamingResponseOrchestrator:
 
             break  # success; exit retry loop
 
-        self.final_messages = messages.copy()
+        # _run_inference_loop sets self.final_messages on success (includes assistant response).
+        # For context-length retry where no more turns to drop, set from truncated messages.
+        if not inference_succeeded:
+            self.final_messages = messages.copy()
 
         if ic.final_status == "incomplete":
             self.sequence_number += 1
@@ -814,6 +819,9 @@ class StreamingResponseOrchestrator:
             if last_completion_result and last_completion_result.finish_reason == "length":
                 ic.final_status = "incomplete"
                 ic.incomplete_reason = "length"
+
+            # Store final messages (includes assistant response from last turn)
+            self.final_messages = messages.copy()
 
         except ModelNotFoundError:
             raise
