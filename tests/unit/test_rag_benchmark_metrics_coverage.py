@@ -14,10 +14,18 @@ the same in the output unless the counts are reported alongside.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("pytrec_eval")
 pytest.importorskip("evaluate")
+
+# `benchmarking/` is not a package and is not on the path by default.
+_BENCHMARKING_ROOT = Path(__file__).resolve().parents[2]
+if str(_BENCHMARKING_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BENCHMARKING_ROOT))
 
 from benchmarking.rag.lib.metrics import retrieval_metrics  # noqa: E402
 

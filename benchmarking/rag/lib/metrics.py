@@ -21,7 +21,7 @@ def retrieval_metrics(
     qrels: dict[str, dict[str, int]],
     results: dict[str, dict[str, float]],
     k_values: list[int] | None = None,
-) -> dict[str, float]:
+) -> dict[str, float | int]:
     """Compute retrieval metrics using pytrec_eval.
 
     Args:
@@ -104,7 +104,7 @@ _rouge_scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
 def answer_metrics(
     predictions: dict[str, str],
     ground_truths: dict[str, str | list[str]],
-) -> dict[str, float]:
+) -> dict[str, float | int]:
     """Compute aggregated answer quality metrics.
 
     Uses HuggingFace `evaluate` (SQuAD metric) for EM/F1 and `rouge-score` for ROUGE-L.
