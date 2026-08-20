@@ -7,8 +7,9 @@
 import inspect
 import sys
 from typing import Any, Protocol
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from pydantic import BaseModel, Field
 
 from ogx.core.datatypes import Api, Provider, StackConfig
@@ -149,3 +150,121 @@ async def test_resolve_impls_basic():
     assert impl.foo == "baz"
     assert impl.__provider_id__ == "sample_provider"
     assert impl.__provider_spec__ == provider_spec
+
+
+async def test_resolve_impls_inference_store_disabled_skips_persistence() -> None:
+    """An inference store reference with `enabled: false` must not construct an InferenceStore.
+
+    When `storage.stores.inference.enabled` is false, the auto-router factory
+    skips constructing (and initializing) the InferenceStore entirely and builds
+    the InferenceRouter with no store dependency. No table is created and no
+    background write workers are started, so no chat completion payload is ever
+    persisted.
+    """
+    provider_spec = InlineProviderSpec(
+        api=Api.inference,
+        provider_type="sample",
+        module="test_module",
+        config_class="test_resolver.SampleConfig",
+        api_dependencies=[],
+    )
+
+    provider_registry = {Api.inference: {provider_spec.provider_type: provider_spec}}
+
+    run_config = make_run_config(
+        distro_name="test_image",
+        providers={
+            "inference": [
+                Provider(
+                    provider_id="sample_provider",
+                    provider_type="sample",
+                    config=SampleConfig.sample_run_config(),
+                )
+            ]
+        },
+        storage=StorageConfig(
+            backends={
+                "kv_default": SqliteKVStoreConfig(db_path=":memory:"),
+                "sql_default": SqliteSqlStoreConfig(db_path=":memory:"),
+            },
+            stores=ServerStoresConfig(
+                metadata=KVStoreReference(backend="kv_default", namespace="registry"),
+                inference=InferenceStoreReference(backend="sql_default", table_name="inference_store", enabled=False),
+                conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
+            ),
+        ),
+    )
+
+    dist_registry = MagicMock()
+
+    mock_module = MagicMock()
+    impl = SampleImpl(SampleConfig(foo="baz"), {}, provider_spec)
+    add_protocol_methods(SampleImpl, Inference)
+
+    mock_module.get_provider_impl = AsyncMock(return_value=impl)
+    mock_module.get_provider_impl.__text_signature__ = "()"
+    sys.modules["test_module"] = mock_module
+
+    with patch("ogx.core.routers.InferenceStore") as mock_inference_store:
+        impls = await resolve_impls(run_config, provider_registry, dist_registry, policy={})
+
+    mock_inference_store.assert_not_called()
+
+    router = impls[Api.inference]
+    assert isinstance(router, InferenceRouter)
+    assert router.store is None
+
+
+async def test_resolve_impls_inference_store_reference_null_raises() -> None:
+    """A null inference store reference is a configuration error, not a disable switch.
+
+    Disabling persistence is expressed with `inference.enabled: false`; a null
+    reference keeps failing stack resolution with the pre-existing configuration
+    error instead of silently disabling the store.
+    """
+    provider_spec = InlineProviderSpec(
+        api=Api.inference,
+        provider_type="sample",
+        module="test_module",
+        config_class="test_resolver.SampleConfig",
+        api_dependencies=[],
+    )
+
+    provider_registry = {Api.inference: {provider_spec.provider_type: provider_spec}}
+
+    run_config = make_run_config(
+        distro_name="test_image",
+        providers={
+            "inference": [
+                Provider(
+                    provider_id="sample_provider",
+                    provider_type="sample",
+                    config=SampleConfig.sample_run_config(),
+                )
+            ]
+        },
+        storage=StorageConfig(
+            backends={
+                "kv_default": SqliteKVStoreConfig(db_path=":memory:"),
+                "sql_default": SqliteSqlStoreConfig(db_path=":memory:"),
+            },
+            stores=ServerStoresConfig(
+                metadata=KVStoreReference(backend="kv_default", namespace="registry"),
+                inference=None,
+                conversations=SqlStoreReference(backend="sql_default", table_name="conversations"),
+            ),
+        ),
+    )
+
+    dist_registry = MagicMock()
+
+    mock_module = MagicMock()
+    impl = SampleImpl(SampleConfig(foo="baz"), {}, provider_spec)
+    add_protocol_methods(SampleImpl, Inference)
+
+    mock_module.get_provider_impl = AsyncMock(return_value=impl)
+    mock_module.get_provider_impl.__text_signature__ = "()"
+    sys.modules["test_module"] = mock_module
+
+    with pytest.raises(ValueError, match="storage.stores.inference must be configured in run config"):
+        await resolve_impls(run_config, provider_registry, dist_registry, policy={})
