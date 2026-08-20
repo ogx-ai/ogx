@@ -303,8 +303,11 @@ def openai_response_to_anthropic(response: OpenAIChatCompletion, request_model: 
         if response.usage.prompt_tokens_details and hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
             cache_read = response.usage.prompt_tokens_details.cached_tokens
 
+        # OpenAI's prompt_tokens includes cached tokens; Anthropic's input_tokens
+        # excludes them (total input = input_tokens + cache_read + cache_creation),
+        # so the cached portion must be subtracted or consumers count it twice.
         usage = AnthropicUsage(
-            input_tokens=response.usage.prompt_tokens or 0,
+            input_tokens=max((response.usage.prompt_tokens or 0) - (cache_read or 0), 0),
             output_tokens=response.usage.completion_tokens or 0,
             cache_read_input_tokens=cache_read,
         )
@@ -430,7 +433,9 @@ async def openai_stream_to_anthropic(
     yield MessageDeltaEvent(
         delta=_MessageDelta(stop_reason=stop_reason),
         usage=AnthropicUsage(
-            input_tokens=input_tokens,
+            # Same convention translation as the non-streaming path: Anthropic's
+            # input_tokens excludes the cached portion of OpenAI's prompt_tokens.
+            input_tokens=max(input_tokens - (cache_read_tokens or 0), 0),
             output_tokens=output_tokens,
             cache_read_input_tokens=cache_read_tokens,
         ),
