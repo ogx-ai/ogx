@@ -75,6 +75,16 @@ async def _make_milvus_adapter(kvstore_config, tmp_path, monkeypatch):
 
 
 async def _make_chroma_adapter(kvstore_config, tmp_path, monkeypatch):
+    # Always fake the Chroma HTTP client: with chromadb installed locally the
+    # module stub above is skipped, and a real client would try to reach
+    # localhost:8000 during initialize(), making the test environment-dependent.
+    fake_client = MagicMock()
+    fake_client.get_or_create_collection = AsyncMock(
+        side_effect=lambda name, metadata=None: SimpleNamespace(name=name, metadata=metadata)
+    )
+    fake_client.get_collection = AsyncMock(side_effect=lambda name: SimpleNamespace(name=name))
+    fake_client.delete_collection = AsyncMock()
+    monkeypatch.setattr(chroma_module.chromadb, "AsyncHttpClient", AsyncMock(return_value=fake_client))
     config = RemoteChromaVectorIOConfig(
         url="http://localhost:8000",
         persistence=kvstore_config,

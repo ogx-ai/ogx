@@ -309,7 +309,7 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
             await self.cache[vector_store_id].index.delete()
             del self.cache[vector_store_id]
         else:
-            log.warning(f"Vector DB {vector_store_id} not found")
+            log.warning("Vector DB not found", vector_store_id=vector_store_id)
 
         if self.kvstore is None:
             raise RuntimeError("KVStore not initialized. Call initialize() before unregistering vector stores.")
