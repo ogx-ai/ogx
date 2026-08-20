@@ -540,7 +540,7 @@ class StreamingResponseOrchestrator:
                 response=final_response,
                 sequence_number=self.sequence_number,
             )
-        else:
+        if ic.final_status == "completed":
             self.sequence_number += 1
             final_response = self._snapshot_response("completed", output_messages)
             yield OpenAIResponseObjectStreamResponseCompleted(
@@ -835,6 +835,7 @@ class StreamingResponseOrchestrator:
                 raise _ContextLengthRetryError() from exc
             self.final_messages = messages.copy()
             self.sequence_number += 1
+            ic.final_status = "failed"
 
             if isinstance(exc, APIStatusError) or (hasattr(exc, "status_code") and hasattr(exc, "body")):
                 logger.warning("Provider SDK error during response generation", exc=exc)
