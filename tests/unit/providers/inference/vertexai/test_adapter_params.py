@@ -260,7 +260,7 @@ class TestServiceTier:
         [
             pytest.param("flex", "flex", id="flex"),
             pytest.param("priority", "priority", id="priority"),
-            pytest.param("default", "standard", id="default_maps_to_standard"),
+            pytest.param("default", _OMITTED, id="default_omitted"),
             pytest.param("auto", _OMITTED, id="auto_omitted"),
             pytest.param(None, _OMITTED, id="none_omitted"),
         ],
