@@ -9,7 +9,7 @@ from typing import Any
 import tiktoken
 from pydantic import BaseModel, Field, field_validator
 
-from ogx.core.datatypes import VectorStoresConfig
+from ogx.core.datatypes import CompressionConfig, VectorStoresConfig
 from ogx.core.storage.datatypes import ResponsesStoreReference
 
 DEFAULT_SUMMARIZATION_PROMPT = (
@@ -237,6 +237,12 @@ class BuiltinResponsesImplConfig(BaseModel):
     memory_config: MemoryConfig = Field(
         default_factory=MemoryConfig,
         description="Configuration for Responses memory reads and writes.",
+    )
+
+    compression_config: CompressionConfig = Field(
+        default_factory=CompressionConfig,
+        description="Configuration for request-side context compression and output token capping, "
+        "applied to inference calls made by the agentic responses loop. Disabled by default.",
     )
 
     moderation_endpoint: str | None = Field(
