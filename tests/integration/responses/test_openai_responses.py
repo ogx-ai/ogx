@@ -267,6 +267,9 @@ class TestOpenAIResponses:
 
     def test_openai_response_with_truncation_auto(self, openai_client, text_model_id):
         """Test that truncation='auto' passes through for normal requests."""
+        if text_model_id.startswith("vertexai/"):
+            pytest.skip("Vertex AI recordings not available for this test")
+
         response = openai_client.responses.create(
             model=text_model_id,
             input=[{"role": "user", "content": "What is 2+2?"}],
