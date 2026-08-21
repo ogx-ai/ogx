@@ -32,10 +32,6 @@ class DoclingServeFileProcessorConfig(BaseModel):
         le=4096,
         description="Default chunk size in tokens when chunking_strategy type is 'auto'",
     )
-    chunking_use_markdown_tables: bool = Field(
-        default=False,
-        description="Serialize tables inside chunks as markdown tables instead of row triplets",
-    )
     mode: Literal["async", "sync", "auto"] = Field(
         default="async",
         description=(
@@ -49,6 +45,5 @@ class DoclingServeFileProcessorConfig(BaseModel):
         return {
             "base_url": "${env.DOCLING_SERVE_URL:=http://localhost:5001}",
             "api_key": "${env.DOCLING_SERVE_API_KEY:=}",
-            "chunking_use_markdown_tables": "${env.DOCLING_SERVE_CHUNKING_USE_MARKDOWN_TABLES:=false}",
             "mode": "${env.DOCLING_SERVE_MODE:=async}",
         }

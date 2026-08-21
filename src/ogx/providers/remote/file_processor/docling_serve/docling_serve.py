@@ -83,10 +83,22 @@ class DoclingServeFileProcessor:
             return chunking_strategy.static.max_chunk_size_tokens
         return self.config.default_chunk_size_tokens
 
-    def _get_chunking_options(self, chunking_strategy: VectorStoreChunkingStrategy) -> HybridChunkerOptions:
+    def _get_chunking_options(
+        self,
+        chunking_strategy: VectorStoreChunkingStrategy,
+        request_options: dict[str, Any] | None,
+    ) -> HybridChunkerOptions:
+        use_markdown_tables = (request_options or {}).get("use_markdown_tables", False)
+        if not isinstance(use_markdown_tables, bool):
+            raise InvalidParameterError(
+                param_name="options.use_markdown_tables",
+                value=use_markdown_tables,
+                constraint="Must be a boolean.",
+            )
+
         return HybridChunkerOptions(
             max_tokens=self._get_max_tokens(chunking_strategy),
-            use_markdown_tables=self.config.chunking_use_markdown_tables,
+            use_markdown_tables=use_markdown_tables,
         )
 
     def _chunks_from_archive(
@@ -192,7 +204,13 @@ class DoclingServeFileProcessor:
                 )
                 if chunking_strategy:
                     chunks = await self._convert_and_chunk_async(
-                        content, filename, mime_type, document_id, chunking_strategy, document_metadata
+                        content,
+                        filename,
+                        mime_type,
+                        document_id,
+                        chunking_strategy,
+                        document_metadata,
+                        request.options,
                     )
                 else:
                     chunks = await self._convert_no_chunk_async(
@@ -216,7 +234,13 @@ class DoclingServeFileProcessor:
             log.info("Using sync endpoints", mode=self.config.mode)
             if chunking_strategy:
                 chunks = await self._convert_and_chunk(
-                    content, filename, mime_type, document_id, chunking_strategy, document_metadata
+                    content,
+                    filename,
+                    mime_type,
+                    document_id,
+                    chunking_strategy,
+                    document_metadata,
+                    request.options,
                 )
             else:
                 chunks = await self._convert_no_chunk(content, filename, mime_type, document_id, document_metadata)
@@ -349,11 +373,12 @@ class DoclingServeFileProcessor:
         document_id: str,
         chunking_strategy: VectorStoreChunkingStrategy,
         document_metadata: dict[str, Any],
+        request_options: dict[str, Any] | None,
     ) -> list[Chunk]:
         """Convert and chunk a file via Docling Serve's synchronous convert endpoint."""
         url = f"{self.config.base_url}/v1/convert/file"
         headers = self._get_headers()
-        chunking_options = self._get_chunking_options(chunking_strategy)
+        chunking_options = self._get_chunking_options(chunking_strategy, request_options)
         options = {
             "to_formats": [OutputFormat.CHUNKS.value],
             "chunking_options": chunking_options.model_dump_json(exclude_none=True),
@@ -392,6 +417,7 @@ class DoclingServeFileProcessor:
         document_id: str,
         chunking_strategy: VectorStoreChunkingStrategy,
         document_metadata: dict[str, Any],
+        request_options: dict[str, Any] | None,
     ) -> list[Chunk]:
         """Convert and chunk a file via Docling Serve's asynchronous convert endpoint."""
         source = DocumentStream(name=filename, stream=BytesIO(content))
@@ -405,7 +431,7 @@ class DoclingServeFileProcessor:
                     source=source,
                     options=ConvertDocumentsOptions(
                         to_formats=[OutputFormat.CHUNKS],
-                        chunking_options=self._get_chunking_options(chunking_strategy),
+                        chunking_options=self._get_chunking_options(chunking_strategy, request_options),
                     ),
                     target=ZipTarget(),
                 )

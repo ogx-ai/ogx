@@ -23,6 +23,7 @@ from pydantic import SecretStr
 
 from ogx.providers.remote.file_processor.docling_serve.config import DoclingServeFileProcessorConfig
 from ogx.providers.remote.file_processor.docling_serve.docling_serve import DoclingServeFileProcessor
+from ogx_api.common.errors import InvalidParameterError
 from ogx_api.file_processors import ProcessFileRequest
 from ogx_api.vector_io import (
     VectorStoreChunkingStrategyAuto,
@@ -212,17 +213,30 @@ class TestDoclingServeFileProcessor:
     async def test_process_file_markdown_table_chunking(self, files_api: AsyncMock, upload_file: UploadFile):
         config = DoclingServeFileProcessorConfig(
             base_url="http://localhost:5001",
-            chunking_use_markdown_tables=True,
             mode="sync",
         )
         processor = DoclingServeFileProcessor(config, files_api=files_api)
-        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyAuto(),
+            options={"use_markdown_tables": True},
+        )
 
         with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)) as mock_post:
             await processor.process_file(request, file=upload_file)
 
         chunking_options = json.loads(mock_post.call_args.kwargs["data"]["chunking_options"])
         assert chunking_options["use_markdown_tables"] is True
+
+    async def test_process_file_rejects_non_boolean_markdown_table_option(
+        self, processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyAuto(),
+            options={"use_markdown_tables": "true"},
+        )
+
+        with pytest.raises(InvalidParameterError, match="options.use_markdown_tables"):
+            await processor.process_file(request, file=upload_file)
 
     async def test_chunking_empty_response(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
@@ -408,14 +422,13 @@ class TestDoclingServeFileProcessorConfig:
         assert config.base_url == "http://localhost:5001"
         assert config.api_key is None
         assert config.default_chunk_size_tokens >= 100
-        assert config.chunking_use_markdown_tables is False
         assert config.mode == "async"
 
     def test_sample_run_config(self):
         sample = DoclingServeFileProcessorConfig.sample_run_config()
         assert "base_url" in sample
         assert "api_key" in sample
-        assert "chunking_use_markdown_tables" in sample
+        assert set(sample) == {"base_url", "api_key", "mode"}
 
 
 class TestIBMSaaSCompatibility:
@@ -530,7 +543,6 @@ class TestIBMSaaSCompatibility:
         # Local config
         local_config = DoclingServeFileProcessorConfig(
             base_url="http://localhost:5001",
-            chunking_use_markdown_tables=use_markdown_tables,
             mode="async",
         )
         processor = DoclingServeFileProcessor(local_config, files_api=AsyncMock())
@@ -538,7 +550,8 @@ class TestIBMSaaSCompatibility:
         request = ProcessFileRequest(
             chunking_strategy=VectorStoreChunkingStrategyStatic(
                 static=VectorStoreChunkingStrategyStaticConfig(max_chunk_size_tokens=512)
-            )
+            ),
+            options={"use_markdown_tables": use_markdown_tables},
         )
 
         # Mock AsyncDoclingServiceClient to simulate successful chunking
