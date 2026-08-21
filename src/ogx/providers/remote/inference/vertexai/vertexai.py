@@ -543,7 +543,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         different vocabulary for the same concept:
 
         - ``"auto"``     → ``None``        (omit; let the API decide)
-        - ``"default"``  → ``"standard"``  (Gemini's default tier)
+        - ``"default"``  → ``None``        (omit; Vertex AI rejects ``"standard"``)
         - ``"flex"``     → ``"flex"``
         - ``"priority"`` → ``"priority"``
 
@@ -554,7 +554,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
 
         _map: dict[str, str | None] = {
             "auto": None,
-            "default": "standard",
+            "default": None,
             "flex": "flex",
             "priority": "priority",
         }
