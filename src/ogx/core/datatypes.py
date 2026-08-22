@@ -4,15 +4,17 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import re
 import warnings
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
+from ogx.core.server_tls import ServerTLSConfig, validate_fips_tls
 from ogx.core.storage.datatypes import (
     KVStoreReference,
     StorageBackendType,
@@ -27,9 +29,6 @@ from ogx_api import (
     ModelInput,
     ProviderSpec,
     Resource,
-    Safety,
-    Shield,
-    ShieldInput,
     ToolGroup,
     ToolGroupInput,
     ToolRuntime,
@@ -53,14 +52,14 @@ class RegistryEntrySource(StrEnum):
 
 
 class User(BaseModel):
-    """An authenticated user with a principal identity and optional access control attributes."""
+    """An authenticated user with a principal identity, optional tenant, and access control attributes."""
 
     principal: str
-    # further attributes that may be used for access control decisions
+    tenant_id: str | None = None
     attributes: dict[str, list[str]] | None = None
 
-    def __init__(self, principal: str, attributes: dict[str, list[str]] | None):
-        super().__init__(principal=principal, attributes=attributes)
+    def __init__(self, principal: str, attributes: dict[str, list[str]] | None, *, tenant_id: str | None = None):
+        super().__init__(principal=principal, tenant_id=tenant_id, attributes=attributes)
 
 
 class ResourceWithOwner(Resource):
@@ -78,12 +77,6 @@ class ModelWithOwner(Model, ResourceWithOwner):
     pass
 
 
-class ShieldWithOwner(Shield, ResourceWithOwner):
-    """A Shield resource extended with ownership information for access control."""
-
-    pass
-
-
 class VectorStoreWithOwner(VectorStore, ResourceWithOwner):
     """A VectorStore resource extended with ownership information for access control."""
 
@@ -96,19 +89,19 @@ class ToolGroupWithOwner(ToolGroup, ResourceWithOwner):
     pass
 
 
-RoutableObject = Model | Shield | VectorStore | ToolGroup
+RoutableObject = Model | VectorStore | ToolGroup
 
 RoutableObjectWithProvider = Annotated[
-    ModelWithOwner | ShieldWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
+    ModelWithOwner | VectorStoreWithOwner | ToolGroupWithOwner,
     Field(discriminator="type"),
 ]
 
-RoutedProtocol = Inference | Safety | VectorIO | ToolRuntime
+RoutedProtocol = Inference | VectorIO | ToolRuntime
 
 
-# Example: /inference, /safety
+# Example: /inference, /vector_io
 class AutoRoutedProviderSpec(ProviderSpec):
-    """Provider spec for automatically routed APIs like inference and safety that delegate to a routing table."""
+    """Provider spec for automatically routed APIs like inference and vector_io that delegate to a routing table."""
 
     provider_type: str = "router"
     config_class: str = ""
@@ -121,9 +114,9 @@ class AutoRoutedProviderSpec(ProviderSpec):
     )
 
 
-# Example: /models, /shields
+# Example: /models, /vector_stores
 class RoutingTableProviderSpec(ProviderSpec):
-    """Provider spec for routing table APIs like models and shields that manage resource registries."""
+    """Provider spec for routing table APIs like models and vector_stores that manage resource registries."""
 
     provider_type: str = "routing_table"
     config_class: str = ""
@@ -202,18 +195,54 @@ class OAuth2IntrospectionConfig(BaseModel):
 
     url: str
     client_id: str
-    client_secret: str
+    client_secret: SecretStr
     send_secret_in_body: bool = False
 
 
 class AuthProviderType(StrEnum):
     """Supported authentication provider types."""
 
+    LOCAL_API_KEY = "local_api_key"
     OAUTH2_TOKEN = "oauth2_token"
     GITHUB_TOKEN = "github_token"
     CUSTOM = "custom"
     KUBERNETES = "kubernetes"
     UPSTREAM_HEADER = "upstream_header"
+
+
+_TENANT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9\-_]{0,127}$")
+
+
+def _validate_tenant_id(value: str) -> str:
+    normalized = value.strip().lower()
+    if not normalized:
+        raise ValueError("tenant_id must not be empty or blank")
+    if not _TENANT_ID_RE.match(normalized):
+        raise ValueError(f"tenant_id must match [a-z0-9][a-z0-9-_]{{0,127}}: {value!r}")
+    return normalized
+
+
+class TenancyMode(StrEnum):
+    """Multi-tenancy deployment modes."""
+
+    DISABLED = "disabled"
+    SINGLE = "single"
+    MULTI = "multi"
+
+
+class TenancyConfig(BaseModel):
+    """Multi-tenancy isolation configuration."""
+
+    mode: TenancyMode = Field(default=TenancyMode.DISABLED, description="Tenancy mode: disabled, single, or multi")
+    default_tenant_id: str | None = Field(default=None, description="Tenant ID for single-tenant mode")
+
+    @model_validator(mode="after")
+    def validate_tenancy(self) -> Self:
+        if self.mode == TenancyMode.SINGLE and not self.default_tenant_id:
+            raise ValueError("default_tenant_id is required when tenancy mode is 'single'")
+        if self.default_tenant_id:
+            self.default_tenant_id = _validate_tenant_id(self.default_tenant_id)
+        return self
 
 
 class OAuth2TokenAuthConfig(BaseModel):
@@ -234,6 +263,10 @@ class OAuth2TokenAuthConfig(BaseModel):
             "tenant": "namespaces",
             "namespace": "namespaces",
         },
+    )
+    tenant_claim: str | None = Field(
+        default=None,
+        description="JWT claim to extract as tenant_id (e.g. 'tenant', 'org'). When set, the claim value is used as the tenant partition key.",
     )
     jwks: OAuth2JWKSConfig | None = Field(default=None, description="JWKS configuration")
     introspection: OAuth2IntrospectionConfig | None = Field(
@@ -264,6 +297,19 @@ class CustomAuthConfig(BaseModel):
     endpoint: str = Field(
         ...,
         description="Custom authentication endpoint URL",
+    )
+    tenant_field: str | None = Field(
+        default=None,
+        description="Field name in the auth endpoint response to extract as tenant_id",
+    )
+
+
+class LocalApiKeyAuthConfig(BaseModel):
+    """Simple API key authentication for single-key deployments."""
+
+    type: Literal[AuthProviderType.LOCAL_API_KEY] = AuthProviderType.LOCAL_API_KEY
+    api_keys: list[str] = Field(
+        description="API keys that clients can send via the Authorization: Bearer header.",
     )
 
 
@@ -301,6 +347,10 @@ class KubernetesAuthProviderConfig(BaseModel):
         },
         description="Mapping of Kubernetes user claims to access attributes",
     )
+    tenant_claim: str | None = Field(
+        default=None,
+        description="Kubernetes claim to extract as tenant_id (resolved via claims_mapping path syntax)",
+    )
 
     @field_validator("api_server_url")
     @classmethod
@@ -333,6 +383,10 @@ class UpstreamHeaderAuthConfig(BaseModel):
     principal_header: str = Field(
         description="HTTP header containing the authenticated user's identity (e.g. x-auth-user-id)",
     )
+    tenant_header: str | None = Field(
+        default=None,
+        description="HTTP header containing the tenant ID (e.g. x-tenant-id). Used as the hard partition key for tenant isolation.",
+    )
     attributes_header: str | None = Field(
         default=None,
         description="HTTP header containing JSON-encoded user attributes for access control (e.g. x-auth-attributes)",
@@ -350,6 +404,7 @@ class UpstreamHeaderAuthConfig(BaseModel):
 
 AuthProviderConfig = Annotated[
     OAuth2TokenAuthConfig
+    | LocalApiKeyAuthConfig
     | GitHubTokenAuthConfig
     | CustomAuthConfig
     | KubernetesAuthProviderConfig
@@ -671,15 +726,6 @@ class VectorStoresConfig(BaseModel):
     )
 
 
-class SafetyConfig(BaseModel):
-    """Configuration for default moderations model."""
-
-    default_shield_id: str | None = Field(
-        default=None,
-        description="ID of the shield to use for when `model` is not specified in the `moderations` API request.",
-    )
-
-
 class QuotaPeriod(StrEnum):
     """Time period for request quota enforcement."""
 
@@ -746,7 +792,6 @@ class RegisteredResources(BaseModel):
     """Registry of resources available in the distribution."""
 
     models: list[ModelInput] = Field(default_factory=list)
-    shields: list[ShieldInput] = Field(default_factory=list)
     vector_stores: list[VectorStoreInput] = Field(default_factory=list)
     tool_groups: list[ToolGroupInput] = Field(default_factory=list, deprecated=True)
 
@@ -765,53 +810,27 @@ class RegisteredResources(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    """Configuration for the HTTP(S) server including TLS, authentication, and quotas."""
+    """Configuration for the HTTP server including TLS and authentication."""
 
-    port: int = Field(
-        default=8321,
-        description="Port to listen on",
-        ge=1024,
-        le=65535,
-    )
-    tls_certfile: str | None = Field(
-        default=None,
-        description="Path to TLS certificate file for HTTPS",
-    )
-    tls_keyfile: str | None = Field(
-        default=None,
-        description="Path to TLS key file for HTTPS",
-    )
-    tls_cafile: str | None = Field(
-        default=None,
-        description="Path to TLS CA file for HTTPS with mutual TLS authentication",
-    )
-    auth: AuthenticationConfig | None = Field(
-        default=None,
-        description="Authentication configuration for the server",
-    )
-    host: str | None = Field(
-        default=None,
-        description="The host the server should listen on",
-    )
-    quota: QuotaConfig | None = Field(
-        default=None,
-        description="Per client quota request configuration",
-    )
-    cors: bool | CORSConfig | None = Field(
-        default=None,
-        description="CORS configuration for cross-origin requests. Can be:\n"
-        "- true: Enable localhost CORS for development\n"
-        "- {allow_origins: [...], allow_methods: [...], ...}: Full configuration",
-    )
-    workers: int = Field(
-        default=1,
-        description="Number of workers to use for the server",
-    )
+    port: int = Field(default=8321, description="Port to listen on", ge=1024, le=65535)
+    tls_certfile: str | None = Field(default=None, description="Path to TLS certificate file for HTTPS")
+    tls_keyfile: str | None = Field(default=None, description="Path to TLS key file for HTTPS")
+    tls_cafile: str | None = Field(default=None, description="Path to TLS CA file for mTLS authentication")
+    auth: AuthenticationConfig | None = Field(default=None, description="Authentication configuration")
+    tenancy: TenancyConfig = Field(default_factory=TenancyConfig, description="Multi-tenancy isolation configuration")
+    host: str | None = Field(default=None, description="The host the server should listen on")
+    workers: int = Field(default=1, description="Number of workers to use for the server")
     registry_refresh_interval_seconds: int = Field(
-        default=300,
-        description="Interval in seconds between registry refreshes for syncing model information from providers",
-        gt=0,
+        default=300, description="Interval in seconds between registry refreshes for syncing model information", gt=0
     )
+    insecure: bool = Field(default=False, description="Disable TLS enforcement. For local development only.")
+    tls_config: ServerTLSConfig | None = Field(default=None, description="TLS cipher suite configuration.")
+    hsts_max_age: int = Field(default=31536000, description="HSTS max-age in seconds (0 to disable).", ge=0)
+
+    @model_validator(mode="after")
+    def validate_tls(self) -> "ServerConfig":
+        self.tls_config = validate_fips_tls(self.insecure, self.tls_certfile, self.tls_keyfile, self.tls_config)
+        return self
 
 
 class StackConfig(BaseModel):
@@ -881,11 +900,6 @@ can be instantiated multiple times (with different configs) if necessary.
     vector_stores: VectorStoresConfig | None = Field(
         default=None,
         description="Configuration for vector stores, including default embedding model",
-    )
-
-    safety: SafetyConfig | None = Field(
-        default=None,
-        description="Configuration for default moderations model",
     )
 
     connectors: list[ConnectorInput] = Field(
@@ -973,4 +987,5 @@ can be instantiated multiple times (with different configs) if necessary.
         _ensure_backend(stores.responses, sql_backends, "storage.stores.responses")
         _ensure_backend(stores.prompts, sql_backends, "storage.stores.prompts")
         _ensure_backend(stores.connectors, sql_backends, "storage.stores.connectors")
+        _ensure_backend(stores.vector_stores, sql_backends, "storage.stores.vector_stores")
         return self

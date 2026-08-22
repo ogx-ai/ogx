@@ -7,8 +7,9 @@ Server core for OGX: routing, provider resolution, storage, and the FastAPI serv
 ```text
 core/
   server/              # FastAPI server, auth middleware, quota middleware
-  routers/             # API-specific routers (inference, safety, eval, etc.)
+  routers/             # API-specific routers (inference, vector_io, tool_runtime)
   routing_tables/      # Resource-to-provider mapping tables
+  jobs/                # Out-of-process job execution (durable queue + worker pool)
   storage/             # KVStore and SqlStore backends
   store/               # Distribution registry (persists registered resources)
   access_control/      # Access control policy enforcement
@@ -27,13 +28,16 @@ core/
 ## Request Lifecycle
 
 1. `server.py` receives an HTTP request and dispatches to the correct handler.
-2. The handler calls a **Router** (e.g., `InferenceRouter`) which consults the **RoutingTable** to find the provider for the requested resource.
-3. The router delegates to the provider implementation.
-4. The provider either computes locally (inline) or calls an external service (remote).
+2. Authentication middleware validates the token, extracts the user identity and `tenant_id`.
+3. Tenancy middleware enforces the configured mode (disabled/single/multi) and stores `tenant_id` in the request scope.
+4. The handler calls a **Router** (e.g., `InferenceRouter`) which consults the **RoutingTable** to find the provider for the requested resource.
+5. The router delegates to the provider implementation.
+6. The provider either computes locally (inline) or calls an external service (remote).
+7. Storage operations go through `AuthorizedSqlStore`, which applies tenant isolation (`WHERE tenant_id = ?`) before ABAC policy checks.
 
 ## Key Classes
 
 - `Stack` (`stack.py`) -- Orchestrates initialization: loads config, resolves providers, registers resources, starts background tasks.
 - `resolve_impls()` (`resolver.py`) -- The provider resolution engine. Validates providers against the registry, sorts by dependency order, instantiates each one.
 - `CommonRoutingTableImpl` (`routing_tables/common.py`) -- Base class for all routing tables. Manages the mapping from resource identifiers to provider implementations.
-- `DistributionRegistry` (`store/`) -- Persistent registry of all resources (models, shields, etc.) across providers.
+- `DistributionRegistry` (`store/`) -- Persistent registry of all resources (models, vector stores, tool groups, etc.) across providers.

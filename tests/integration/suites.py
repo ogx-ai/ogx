@@ -48,16 +48,13 @@ class Setup(BaseModel):
 SETUP_DEFINITIONS: dict[str, Setup] = {
     "ollama": Setup(
         name="ollama",
-        description="Local Ollama provider with text + safety models",
+        description="Local Ollama provider with text models",
         env={
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
-            "SAFETY_MODEL": "ollama/llama-guard3:1b",
         },
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
             "embedding_model": "ollama/nomic-embed-text:v1.5",
-            "safety_model": "ollama/llama-guard3:1b",
-            "safety_shield": "llama-guard",
         },
     ),
     "ollama-vision": Setup(
@@ -76,7 +73,6 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="Server-mode tests with Postgres-backed persistence",
         env={
             "OLLAMA_URL": "http://0.0.0.0:11434/v1",
-            "SAFETY_MODEL": "ollama/llama-guard3:1b",
             "POSTGRES_HOST": "127.0.0.1",
             "POSTGRES_PORT": "5432",
             "POSTGRES_DB": "ogx",
@@ -87,8 +83,6 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
             "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
-            "safety_model": "ollama/llama-guard3:1b",
-            "safety_shield": "llama-guard",
         },
     ),
     "vllm": Setup(
@@ -101,6 +95,16 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "text_model": "vllm/Qwen/Qwen3-0.6B",
             "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
             "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
+        },
+    ),
+    "vllm-gpu-gpt-oss": Setup(
+        name="vllm-gpu",
+        description="vLLM GPU provider with gpt-oss:20b reasoning model",
+        env={
+            "VLLM_URL": "http://localhost:8000/v1",
+        },
+        defaults={
+            "text_model": "vllm/gpt-oss:20b",
         },
     ),
     "ollama-reasoning": Setup(
@@ -192,7 +196,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         name="cerebras",
         description="Cerebras models",
         defaults={
-            "text_model": "cerebras/llama-3.3-70b",
+            "text_model": "cerebras/gpt-oss-120b",
         },
     ),
     "databricks": Setup(
@@ -308,7 +312,9 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="ollama-reasoning",
         roots=[
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_basic_streaming",
             "tests/integration/responses/test_reasoning.py::test_reasoning_non_streaming",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_with_tool_call",
             "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_passthrough",
         ],
         default_setup="ollama-reasoning",

@@ -7,9 +7,9 @@ sidebar_position: 2
 
 # Architecture
 
-OGX is an AI application server that composes inference, vector stores, file storage, safety, tools, and agentic orchestration behind a unified, OpenAI-compatible API. It is provider-agnostic: the same API works whether the backend is Ollama, OpenAI, vLLM, Bedrock, or dozens of other services.
+OGX is an AI application server that composes inference, vector stores, file storage, tools, and agentic orchestration behind a unified, OpenAI-compatible API. It is provider-agnostic: the same API works whether the backend is Ollama, OpenAI, vLLM, Bedrock, or dozens of other services.
 
-This is a server-level abstraction, not a library. Your application talks to OGX over HTTP. It doesn't import a Python SDK, doesn't couple to a specific framework, and doesn't manage provider connections. The server handles provider routing, tool execution, safety checks, and multi-turn orchestration. Your application makes HTTP calls.
+This is a server-level abstraction, not a library. Your application talks to OGX over HTTP. It doesn't import a Python SDK, doesn't couple to a specific framework, and doesn't manage provider connections. The server handles provider routing, tool execution, guardrail checks, and multi-turn orchestration. Your application makes HTTP calls.
 
 <img src="/img/architecture-animated.svg" alt="OGX Architecture" style={{width: '100%', maxWidth: '800px', margin: '0 auto', display: 'block'}} />
 
@@ -17,9 +17,9 @@ This is a server-level abstraction, not a library. Your application talks to OGX
 
 OGX exposes three API families through a single server:
 
-- **OpenAI API** — Chat Completions, Responses, Embeddings, Vector Stores, Files, Batches, Models, Moderations, Conversations. This is the primary API surface. Any OpenAI SDK works.
+- **OpenAI API** — Chat Completions, Responses, Embeddings, Vector Stores, Files, Batches, Models, Conversations. This is the primary API surface. Any OpenAI SDK works.
 - **Anthropic API** — Messages endpoint (`/v1/messages`). An adapter that translates Anthropic-format requests to the inference API. Teams using the Anthropic SDK can point it at OGX without code changes. See the [Messages provider docs](/docs/providers/messages/) for current limitations.
-- **Native APIs** — Connectors, Tools, File Processors, and Safety shields. These extend beyond the OpenAI and Anthropic specs for capabilities like MCP tool registration and document ingestion.
+- **Native APIs** — Connectors, Tools, and File Processors. These extend beyond the OpenAI and Anthropic specs for capabilities like MCP tool registration and document ingestion.
 
 The Responses API (`/v1/responses`) deserves special attention. It implements server-side agentic orchestration: when a model requests tool calls, the server executes them (file search, web search, MCP tools), feeds results back, and repeats until the model produces a final response. Your application sends one request and gets back a complete, tool-augmented answer. This orchestration runs on the server, not in your application code.
 
@@ -90,7 +90,6 @@ Many APIs use automatic routing so multiple providers can serve different resour
 | Routing Table | Router | Purpose |
 |--------------|--------|---------|
 | `Api.models` | `Api.inference` | Route to correct inference provider per model |
-| `Api.shields` | `Api.safety` | Route to correct safety provider per shield |
 | `Api.vector_stores` | `Api.vector_io` | Route to correct vector store provider |
 | `Api.tool_groups` | `Api.tool_runtime` | Route to correct tool runtime |
 

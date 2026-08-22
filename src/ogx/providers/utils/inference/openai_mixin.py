@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import base64
 import ssl
 import uuid
@@ -14,9 +15,10 @@ from typing import Any
 import httpx
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.chat import ChatCompletionChunk
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.log import get_logger
 from ogx.providers.utils.inference.http_client import (
     _merge_network_config_into_client,
@@ -43,6 +45,13 @@ from ogx_api import (
     OpenAIMessageParam,
     validate_embeddings_input_is_text,
 )
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 logger = get_logger(name=__name__, category="providers::utils")
 
@@ -67,8 +76,10 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
     Expected Dependencies:
     - self.model_store: Injected by the OGX distribution system at runtime.
-      This provides model registry functionality for looking up registered models.
-      The model_store is set in routing_tables/common.py during provider initialization.
+      Used by check_model_availability() to check pre-registered models. Model name ->
+      provider model id resolution is NOT done here: InferenceRouter resolves params.model
+      to the provider_resource_id before calling any provider method, so provider code can
+      assume params.model is already the provider-specific id.
     """
 
     # Allow extra fields so the routing infra can inject model_store, __provider_id__, etc.
@@ -106,9 +117,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     # Format: {"model_id": {"embedding_dimension": 1536, "context_length": 8192}}
     embedding_model_metadata: dict[str, dict[str, int]] = {}
 
-    # Cache of available models keyed by model ID
-    # This is set in list_models() and used in check_model_availability()
-    _model_cache: dict[str, Model] = {}
+    _model_cache: dict[str, Model] = PrivateAttr(default_factory=dict)
 
     # Optional field name in provider data to look for API key, which takes precedence
     provider_data_api_key_field: str | None = None
@@ -117,6 +126,14 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     # SSL context construction touches disk and is expensive
     # Trade-off: SSL context changes require server restart
     shared_ssl_context: ssl.SSLContext | bool = Field(default_factory=ssl.create_default_context, exclude=True)
+
+    _cached_client: AsyncOpenAI | None = PrivateAttr(default=None)
+    _cached_client_key: tuple[str, str] | None = PrivateAttr(default=None)
+    _superseded_clients: list[AsyncOpenAI] = PrivateAttr(default_factory=list)
+
+    # these are injected by the distribution system at runtime to provide model registry functionality
+    __provider_id__: str
+    model_store: ModelsRoutingTable | None = None
 
     def get_api_key(self) -> str | None:
         """
@@ -176,14 +193,14 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """
         if metadata := self.embedding_model_metadata.get(identifier):
             return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                provider_id=self.__provider_id__,
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.embedding,
                 metadata=metadata,
             )
         return Model(
-            provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+            provider_id=self.__provider_id__,
             provider_resource_id=identifier,
             identifier=identifier,
             model_type=ModelType.llm,
@@ -199,10 +216,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
         :return: An iterable of model IDs or None if not implemented
         """
-        client = self.client
-        async with client:
-            model_ids = [m.id async for m in client.models.list()]
-        return model_ids
+        return [m.id async for m in self.client.models.list()]
 
     async def initialize(self) -> None:
         """
@@ -215,26 +229,23 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         pass
 
     async def shutdown(self) -> None:
-        """
-        Shutdown the OpenAI mixin.
-
-        This method provides a default implementation that does nothing.
-        Subclasses can override this method to perform cleanup tasks
-        such as closing connections, releasing resources, etc.
-        """
-        pass
+        """Shutdown the OpenAI mixin, closing all cached HTTP clients."""
+        for old_client in self._superseded_clients:
+            await old_client.close()
+        self._superseded_clients.clear()
+        if self._cached_client is not None:
+            await self._cached_client.close()
+            self._cached_client = None
+            self._cached_client_key = None
 
     @property
     def client(self) -> AsyncOpenAI:
         """
         Get an AsyncOpenAI client instance.
 
-        Uses the abstract methods get_api_key() and get_base_url() which must be
-        implemented by child classes.
-
-        Network configuration from config.network is automatically applied.
-        Users can also provide the API key via the provider data header, which
-        is used instead of any config API key.
+        Caches the client keyed by (api_key, base_url) for connection reuse.
+        When the key changes (e.g. per-request provider_data), a new client
+        is created and cached in its place.
         """
 
         api_key = self._get_api_key_from_config_or_provider_data()
@@ -244,19 +255,18 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 message += f' Please provide a valid API key in the provider data header, e.g. x-ogx-provider-data: {{"{self.provider_data_api_key_field}": "<API_KEY>"}}.'
             raise ValueError(message)
 
+        base_url = self.get_base_url()
+        cache_key = (api_key, base_url)
+
+        if self._cached_client is not None and self._cached_client_key == cache_key:
+            return self._cached_client
+
+        if self._cached_client is not None:
+            self._superseded_clients.append(self._cached_client)
+
         extra_params = self.get_extra_client_params()
         network_kwargs = build_network_client_kwargs(self.config.network)
 
-        # Handle http_client creation/merging:
-        # - If get_extra_client_params() provides an http_client (e.g., OCI with custom auth),
-        #   merge network config into it. The merge behavior:
-        #   * Preserves auth from get_extra_client_params() (provider-specific auth like OCI signer)
-        #   * Preserves headers from get_extra_client_params() as base
-        #   * Applies network config (TLS, proxy, timeout, headers) on top
-        #   * Network config headers take precedence over provider headers (allows override)
-        # - Otherwise, if network config exists, create http_client from it
-        # - Otherwise, use a cached SSL context for performance
-        # This allows providers with custom auth to still use standard network settings
         if "http_client" in extra_params:
             if network_kwargs:
                 extra_params["http_client"] = _merge_network_config_into_client(
@@ -267,11 +277,15 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         else:
             extra_params["http_client"] = DefaultAsyncHttpxClient(verify=self.shared_ssl_context)
 
-        return AsyncOpenAI(
+        client = AsyncOpenAI(
             api_key=api_key,
-            base_url=self.get_base_url(),
+            base_url=base_url,
             **extra_params,
         )
+
+        self._cached_client = client
+        self._cached_client_key = cache_key
+        return client
 
     def _get_api_key_from_config_or_provider_data(self) -> str | None:
         api_key = self.get_api_key()
@@ -296,27 +310,6 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 f"Model '{provider_model_id}' is not in the allowed models list. "
                 f"Allowed models: {self.config.allowed_models}"
             )
-
-    async def _get_provider_model_id(self, model: str) -> str:
-        """
-        Get the provider-specific model ID from the model store.
-
-        This is a utility method that looks up the registered model and returns
-        the provider_resource_id that should be used for actual API calls.
-
-        :param model: The registered model name/identifier
-        :return: The provider-specific model ID (e.g., "gpt-4")
-        """
-        # self.model_store is injected by the distribution system at runtime
-        if not await self.model_store.has_model(model):  # type: ignore[attr-defined]
-            return model
-
-        # Look up the registered model to get the provider-specific model ID
-        model_obj: Model = await self.model_store.get_model(model)  # type: ignore[attr-defined]
-        # provider_resource_id is str | None, but we expect it to be str for OpenAI calls
-        if model_obj.provider_resource_id is None:
-            raise ValueError(f"Model {model} has no provider_resource_id")
-        return model_obj.provider_resource_id
 
     async def _postprocess_chunk(self, resp: Any, stream: bool | None) -> Any:
         if stream:
@@ -366,7 +359,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             params.stream_options, params.stream or False, self.supports_stream_options
         )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
 
         completion_kwargs = await prepare_openai_completion_params(
@@ -409,7 +402,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             params.stream_options, params.stream or False, self.supports_stream_options
         )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
 
         messages = params.messages
@@ -430,7 +423,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 # else it's a string and we don't need to modify it
                 return m
 
-            messages = [await _localize_image_url(m) for m in messages]
+            messages = list(await asyncio.gather(*[_localize_image_url(m) for m in messages]))
 
         request_params = await prepare_openai_completion_params(
             model=provider_model_id,
@@ -456,7 +449,6 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             top_logprobs=params.top_logprobs,
             top_p=params.top_p,
             user=params.user,
-            safety_identifier=params.safety_identifier,
             service_tier=params.service_tier,
             reasoning_effort=params.reasoning_effort,
             prompt_cache_key=params.prompt_cache_key,
@@ -481,7 +473,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         if not self.supports_tokenized_embeddings_input:
             validate_embeddings_input_is_text(params)
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
 
         # Build request params conditionally to avoid NotGiven/Omit type mismatch
@@ -545,7 +537,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             return model
 
         if not await self.check_model_availability(model.provider_model_id):
-            raise ValueError(f"Model {model.provider_model_id} is not available from provider {self.__provider_id__}")  # type: ignore[attr-defined]
+            raise ValueError(f"Model {model.provider_model_id} is not available from provider {self.__provider_id__}")
         return model
 
     async def unregister_model(self, model_id: str) -> None:
@@ -606,7 +598,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """
         # First check if the model is pre-registered in the model store
         if hasattr(self, "model_store") and self.model_store:
-            qualified_model = f"{self.__provider_id__}/{model}"  # type: ignore[attr-defined]
+            qualified_model = f"{self.__provider_id__}/{model}"
             if await self.model_store.has_model(qualified_model):
                 return True
 
@@ -617,6 +609,49 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
 
     async def should_refresh_models(self) -> bool:
         return self.config.refresh_models
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Handle Anthropic Messages API via translation to OpenAI chat completions."""
+        from ogx.providers.utils.inference.anthropic_translation import (
+            anthropic_request_to_openai,
+            openai_response_to_anthropic,
+            openai_stream_to_anthropic,
+        )
+
+        openai_params = anthropic_request_to_openai(params)
+        self._validate_model_allowed(openai_params.model)
+
+        result = await self.openai_chat_completion(openai_params)
+
+        if isinstance(result, AsyncIterator):
+            return openai_stream_to_anthropic(result, params.model)
+
+        return openai_response_to_anthropic(result, params.model)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        msg_request = AnthropicCreateMessageRequest(
+            model=params.model,
+            messages=params.messages,
+            max_tokens=1,
+            system=params.system,
+            tools=params.tools,
+            stream=False,
+        )
+
+        result = await self.anthropic_messages(msg_request)
+
+        # narrow the from AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]
+        # to AnthropicMessageResponse for type checking
+        if not isinstance(result, AnthropicMessageResponse):
+            raise RuntimeError("Received streaming response from non-streaming request")
+
+        return AnthropicCountTokensResponse(input_tokens=result.usage.input_tokens)
 
     #
     # The model_dump implementations are to avoid serializing the extra fields,

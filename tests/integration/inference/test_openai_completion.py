@@ -8,6 +8,7 @@
 import time
 
 import pytest
+from openai import OpenAI
 from pydantic import BaseModel
 
 from ..helpers import assert_text_contains
@@ -55,6 +56,7 @@ def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id)
         #  https://go.microsoft.com/fwlink/?linkid=2197993.'}}"}
         "remote::llama-openai-compat",
         "remote::watsonx",  # WatsonX only has /v1/chat/completions, no /v1/completions
+        "remote::deepseek",  # DeepSeek does not support /v1/completions
     ):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support OpenAI completions.")
 
@@ -106,6 +108,7 @@ def skip_if_doesnt_support_n(client_with_models, model_id):
         "remote::cerebras",
         "remote::databricks",  # Bad request: parameter "n" must be equal to 1 for streaming mode
         "remote::watsonx",
+        "remote::deepseek",  # n > 1 is not supported
     ):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support n param.")
 
@@ -143,6 +146,14 @@ def skip_if_provider_doesnt_support_tool_calling(client_with_models, model_id):
         "remote::bedrock",  # Bedrock's OpenAI endpoint doesn't support tool calling
     ):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support tool calling.")
+
+
+def skip_if_doesnt_support_json_schema(client_with_models, model_id):
+    provider = provider_from_model(client_with_models, model_id)
+    if provider.provider_type in (
+        "remote::deepseek",  # DeepSeek doesn't support response_format type 'json_schema'
+    ):
+        pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support json_schema response_format.")
 
 
 @pytest.mark.parametrize(
@@ -247,6 +258,7 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
     question = tc["question"]
     expected = tc["expected"]
 
+    request_options = {"timeout": 120} if isinstance(compat_client, OpenAI) else {}
     response = compat_client.chat.completions.create(
         model=text_model_id,
         messages=[
@@ -256,6 +268,7 @@ def test_openai_chat_completion_non_streaming(compat_client, client_with_models,
             }
         ],
         stream=False,
+        **request_options,
     )
     message_content = response.choices[0].message.content
     assert len(message_content) > 0
@@ -780,8 +793,9 @@ def test_openai_chat_completion_with_tool_choice_none(openai_client, text_model_
         "inference:chat_completion:structured_output",
     ],
 )
-def test_openai_chat_completion_structured_output(openai_client, text_model_id, test_case):
-    # Note: Skip condition may need adjustment for OpenAI client
+def test_openai_chat_completion_structured_output(openai_client, client_with_models, text_model_id, test_case):
+    skip_if_doesnt_support_json_schema(client_with_models, text_model_id)
+
     class AnswerFormat(BaseModel):
         first_name: str
         last_name: str

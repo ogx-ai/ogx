@@ -22,7 +22,6 @@ async def get_provider_impl(
         config,
         deps[Api.inference],
         deps[Api.vector_io],
-        deps.get(Api.safety),
         deps[Api.tool_runtime],
         deps[Api.tool_groups],
         deps[Api.conversations],
@@ -30,6 +29,7 @@ async def get_provider_impl(
         deps[Api.files],
         deps[Api.connectors],
         policy,
+        skills_api=deps.get(Api.skills),
     )
     await impl.initialize()
     return impl

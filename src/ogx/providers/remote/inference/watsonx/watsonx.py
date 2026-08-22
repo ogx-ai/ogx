@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import time
 from collections.abc import AsyncIterator, Iterable
 from typing import Any
@@ -13,6 +14,7 @@ from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 
 from ogx.log import get_logger
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
+from ogx.providers.utils.inference.http_client import build_network_client_kwargs
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
     Model,
@@ -45,6 +47,8 @@ class WatsonXInferenceAdapter(OpenAIMixin):
     def __init__(self, config: WatsonXConfig):
         super().__init__(config=config)
         self._iam_token_cache: dict[str, tuple[str, float]] = {}
+        self._iam_token_lock = asyncio.Lock()
+        self._iam_refresh_tasks: dict[str, asyncio.Task[str]] = {}
         self._model_specs_cache: list[dict[str, Any]] | None = None
 
     def get_base_url(self) -> str:
@@ -74,8 +78,35 @@ class WatsonXInferenceAdapter(OpenAIMixin):
             if time.time() < expiry - 60:
                 return token
 
+        refresh_task: asyncio.Task[str] | None = None
+        async with self._iam_token_lock:
+            cached = self._iam_token_cache.get(api_key)
+            if cached:
+                token, expiry = cached
+                if time.time() < expiry - 60:
+                    return token
+
+            refresh_task = self._iam_refresh_tasks.get(api_key)
+            if refresh_task is not None and refresh_task.done():
+                self._iam_refresh_tasks.pop(api_key, None)
+                refresh_task = None
+
+            if refresh_task is None:
+                refresh_task = asyncio.create_task(self._exchange_iam_token(api_key))
+                self._iam_refresh_tasks[api_key] = refresh_task
+
         try:
-            async with httpx.AsyncClient() as http_client:
+            # Shield shared refresh work from request cancellation.
+            return await asyncio.shield(refresh_task)
+        finally:
+            if refresh_task.done():
+                async with self._iam_token_lock:
+                    if self._iam_refresh_tasks.get(api_key) is refresh_task:
+                        self._iam_refresh_tasks.pop(api_key, None)
+
+    async def _exchange_iam_token(self, api_key: str) -> str:
+        try:
+            async with httpx.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
                 resp = await http_client.post(
                     "https://iam.cloud.ibm.com/identity/token",
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -210,7 +241,7 @@ class WatsonXInferenceAdapter(OpenAIMixin):
     async def _fetch_model_specs(self) -> list[dict[str, Any]]:
         """Retrieve foundation model specifications from the WatsonX API."""
         url = f"{str(self.config.base_url)}/ml/v1/foundation_model_specs?version={WATSONX_API_VERSION}"
-        async with httpx.AsyncClient() as http_client:
+        async with httpx.AsyncClient(**build_network_client_kwargs(self.config.network)) as http_client:
             response = await http_client.get(url, headers={"Content-Type": "application/json"}, timeout=30)
             response.raise_for_status()
             data = response.json()

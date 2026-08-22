@@ -1,5 +1,5 @@
 ---
-description: "Implements the Anthropic Messages API with two modes: native passthrough for providers that support /v1/messages natively (e.g. Ollama, vLLM), and automatic translation for all other providers by converting between Anthropic and OpenAI Chat Completions formats."
+description: "Implements the Anthropic Messages API by delegating to the inference API's anthropic_messages() method. OpenAIMixin provides default translation via openai_chat_completion. Providers with native /v1/messages support (e.g., Ollama, vLLM) override with direct passthrough. Message batch operations are implemented locally."
 sidebar_label: Builtin
 title: inline::builtin
 ---
@@ -8,10 +8,22 @@ title: inline::builtin
 
 ## Description
 
-Implements the Anthropic Messages API with two modes: native passthrough for providers that support /v1/messages natively (e.g. Ollama, vLLM), and automatic translation for all other providers by converting between Anthropic and OpenAI Chat Completions formats.
+Implements the Anthropic Messages API by delegating to the inference API's anthropic_messages() method. OpenAIMixin provides default translation via openai_chat_completion. Providers with native /v1/messages support (e.g., Ollama, vLLM) override with direct passthrough. Message batch operations are implemented locally.
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `kvstore` | `KVStoreReference` | No |  | Configuration for the key-value store backend used by message batches. |
+| `kvstore.namespace` | `str` | No |  | Key prefix for KVStore backends |
+| `kvstore.backend` | `str` | No |  | Name of backend from storage.backends |
+| `max_concurrent_batches` | `int` | No | 1 | Maximum number of concurrent message batches to process simultaneously. |
+| `max_concurrent_requests_per_batch` | `int` | No | 10 | Maximum number of concurrent requests to process per batch. |
 
 ## Sample Configuration
 
 ```yaml
-{}
+kvstore:
+  namespace: message_batches
+  backend: kv_default
 ```

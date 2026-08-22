@@ -25,19 +25,19 @@ class ExtraBodyField[T]:
             self,
             input: str,
             model: str,
-            shields: Annotated[
-                list[str] | None, ExtraBodyField("List of shields to apply")
+            labels: Annotated[
+                list[str] | None, ExtraBodyField("List of labels to apply")
             ] = None,
         ) -> ResponseObject:
-            # shields is available here with proper typing
-            if shields:
-                print(f"Using shields: {shields}")
+            # labels is available here with proper typing
+            if labels:
+                print(f"Using labels: {labels}")
         ```
 
         Client usage:
         ```python
         client.responses.create(
-            input="hello", model="llama-3", extra_body={"shields": ["shield-1"]}
+            input="hello", model="llama-3", extra_body={"labels": ["topic-a"]}
         )
         ```
     """
@@ -246,6 +246,17 @@ def remove_null_from_anyof(schema: dict[str, Any], *, add_nullable: bool = False
             schema["type"] = schema["type"][0]
         if has_null and add_nullable:
             schema["nullable"] = True
+
+
+def remove_default_from_schema(schema: dict[str, Any]) -> None:
+    """Remove the default value from a JSON schema."""
+    schema.pop("default", None)
+
+
+def flatten_nullable_remove_default(schema: dict[str, Any]) -> None:
+    """Remove null from anyOf and strip default values from schema."""
+    remove_null_from_anyof(schema)
+    schema.pop("default", None)
 
 
 def nullable_openai_style(schema: dict[str, Any]) -> None:

@@ -23,7 +23,7 @@ setup_logging()
 import pytest
 import requests
 import yaml
-from ogx_client import OgxClient
+from ogx_open_client import OgxClient
 from openai import OpenAI
 
 from ogx.core.datatypes import QualifiedModel, RerankerModel, VectorStoresConfig
@@ -182,7 +182,7 @@ def client_with_models(
     model_ids = {m.id for m in client.models.list().data}
 
     if text_model_id and text_model_id not in model_ids:
-        raise ValueError(f"text_model_id {text_model_id} not found")
+        raise ValueError(f"text_model_id {text_model_id} not found in {model_ids}")
     if vision_model_id and vision_model_id not in model_ids:
         raise ValueError(f"vision_model_id {vision_model_id} not found")
     if judge_model_id and judge_model_id not in model_ids:
@@ -197,11 +197,6 @@ def client_with_models(
 
 
 @pytest.fixture(scope="session")
-def available_shields(ogx_client):
-    return [shield.identifier for shield in ogx_client.shields.list()]
-
-
-@pytest.fixture(scope="session")
 def model_providers(ogx_client):
     return {x.provider_id for x in ogx_client.providers.list() if x.api == "inference"}
 
@@ -213,7 +208,6 @@ def skip_if_no_model(request):
         "vision_model_id",
         "embedding_model_id",
         "judge_model_id",
-        "shield_id",
         "rerank_model_id",
     ]
     test_func = request.node.function
@@ -347,7 +341,9 @@ def instantiate_ogx_client(session):
             rerank_model_opt = session.config.getoption("rerank_model") or ""
             reranker_model = None
             if rerank_model_opt:
-                provider_id_of_reranker = rerank_model_opt.split("/")[0] if "/" in rerank_model_opt else "transformers"
+                provider_id_of_reranker = (
+                    rerank_model_opt.split("/")[0] if "/" in rerank_model_opt else "sentence-transformers"
+                )
                 passed_reranker_model = extract_model(rerank_model_opt, "Qwen/Qwen3-Reranker-0.6B")
                 reranker_model = RerankerModel(
                     provider_id=provider_id_of_reranker,

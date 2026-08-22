@@ -3,7 +3,6 @@ distro_name: postgres-demo
 apis:
 - responses
 - inference
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -17,8 +16,6 @@ providers:
       tls_verify: ${env.VLLM_TLS_VERIFY:=true}
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
-  - provider_id: transformers
-    provider_type: inline::transformers
   vector_io:
   - provider_id: ${env.ENABLE_CHROMADB:+chromadb}
     provider_type: remote::chromadb
@@ -27,19 +24,11 @@ providers:
       persistence:
         namespace: vector_io::chroma_remote
         backend: kv_default
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
       persistence:
-        agent_state:
-          namespace: responses
-          backend: kv_default
         responses:
           table_name: responses
           backend: sql_default
@@ -105,10 +94,8 @@ registered_resources:
     model_type: embedding
   - metadata: {}
     model_id: Qwen/Qwen3-Reranker-0.6B
-    provider_id: transformers
+    provider_id: sentence-transformers
     model_type: rerank
-  shields:
-  - shield_id: meta-llama/Llama-Guard-3-8B
-  vector_dbs: []
+  vector_stores: []
 server:
   port: 8321

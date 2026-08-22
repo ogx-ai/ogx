@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
 from ogx.log import get_logger
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx_api import (
     Batches,
     BatchNotFoundError,
@@ -396,9 +397,7 @@ class ReferenceBatchesImpl(Batches):
         file_content_response = await self.files_api.openai_retrieve_file_content(
             RetrieveFileContentRequest(file_id=batch.input_file_id)
         )
-        # Handle both bytes and memoryview types - convert to bytes unconditionally
-        # (bytes(x) returns x if already bytes, creates new bytes from memoryview otherwise)
-        body_bytes = bytes(file_content_response.body)
+        body_bytes = await response_body_bytes(file_content_response)
         file_content = body_bytes.decode("utf-8")
         for line_num, line in enumerate(file_content.strip().split("\n"), 1):
             if line.strip():  # skip empty lines

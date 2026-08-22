@@ -53,8 +53,6 @@ async def register_object_with_provider(obj: RoutableObject, p: Any) -> Routable
 
     if api == Api.inference:
         return await p.register_model(obj)
-    elif api == Api.safety:
-        return await p.register_shield(obj)
     elif api == Api.vector_io:
         return await p.register_vector_store(obj)
     elif api == Api.tool_runtime:
@@ -78,8 +76,6 @@ async def unregister_object_from_provider(obj: RoutableObject, p: Any) -> None:
         return await p.unregister_vector_store(obj.identifier)
     elif api == Api.inference:
         return await p.unregister_model(obj.identifier)
-    elif api == Api.safety:
-        return await p.unregister_shield(obj.identifier)
     elif api == Api.tool_runtime:
         return await p.unregister_toolgroup(obj.identifier)
     else:
@@ -119,8 +115,6 @@ class CommonRoutingTableImpl(RoutingTable):
             api = get_impl_api(p)
             if api == Api.inference:
                 p.model_store = self
-            elif api == Api.safety:
-                p.shield_store = self
             elif api == Api.vector_io:
                 p.vector_store_store = self
             elif api == Api.tool_runtime:
@@ -135,15 +129,12 @@ class CommonRoutingTableImpl(RoutingTable):
 
     async def get_provider_impl(self, routing_key: str, provider_id: str | None = None) -> Any:
         from .models import ModelsRoutingTable
-        from .shields import ShieldsRoutingTable
         from .toolgroups import ToolGroupsRoutingTable
         from .vector_stores import VectorStoresRoutingTable
 
         def apiname_object():
             if isinstance(self, ModelsRoutingTable):
                 return ("Inference", "model")
-            elif isinstance(self, ShieldsRoutingTable):
-                return ("Safety", "shield")
             elif isinstance(self, VectorStoresRoutingTable):
                 return ("VectorIO", "vector_store")
             elif isinstance(self, ToolGroupsRoutingTable):

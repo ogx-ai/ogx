@@ -22,7 +22,6 @@ apis:
 - responses
 - inference
 - vector_io
-- safety
 providers:
   inference:
   - provider_id: ollama
@@ -37,14 +36,11 @@ providers:
         type: sqlite
         namespace: null
         db_path: ${env.SQLITE_STORE_DIR:=~/.ogx/distributions/ollama}/faiss_store.db
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config: {}
   responses:
   - provider_id: builtin
     provider_type: inline::builtin
     config:
+      moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
       persistence:
         agent_state:
           backend: kv_default
@@ -80,7 +76,6 @@ models:
   model_id: ${env.INFERENCE_MODEL}
   provider_id: ollama
   provider_model_id: null
-shields: []
 server:
   port: 8321
   auth:
@@ -98,7 +93,6 @@ apis:
 - responses
 - inference
 - vector_io
-- safety
 ```
 
 ## Providers
@@ -256,8 +250,9 @@ server:
   port: 8321  # Port to listen on (default: 8321)
   tls_certfile: "/path/to/cert.pem"  # Optional: Path to TLS certificate for HTTPS
   tls_keyfile: "/path/to/key.pem"    # Optional: Path to TLS key for HTTPS
-  cors: true  # Optional: Enable CORS (dev mode) or full config object
   registry_refresh_interval_seconds: 300  # Optional: Interval between registry refreshes (default: 300)
+  tenancy:                           # Optional: Multi-tenancy isolation (default: disabled)
+    mode: "disabled"                 # "disabled", "single", or "multi"
 ```
 
 ### Registry Refresh Interval
@@ -270,29 +265,6 @@ server:
 ```
 
 The value must be a positive integer representing seconds.
-
-### CORS Configuration
-
-CORS (Cross-Origin Resource Sharing) can be configured in two ways:
-
-**Local development** (allows localhost origins only):
-```yaml
-server:
-  cors: true
-```
-
-**Explicit configuration** (custom origins and settings):
-```yaml
-server:
-  cors:
-    allow_origins: ["https://myapp.com", "https://app.example.com"]
-    allow_methods: ["GET", "POST", "PUT", "DELETE"]
-    allow_headers: ["Content-Type", "Authorization"]
-    allow_credentials: true
-    max_age: 3600
-```
-
-When `cors: true`, the server enables secure localhost-only access for local development. For production, specify exact origins to maintain security.
 
 ### Authentication Configuration
 
@@ -335,6 +307,24 @@ This allows you to:
 - Other auth config fields (like `route_policy`) can still be used independently when `provider_config` is disabled
 
 The server supports multiple authentication providers:
+
+#### Local API Key Provider
+
+Validates a shared secret API key against a list of allowed keys:
+
+```yaml
+server:
+  auth:
+    provider_config:
+      type: "local_api_key"
+      api_keys:
+      - "ogk_mykey1"
+      - "ogk_mykey2"
+```
+
+This is the simplest authentication provider — any key in the list authenticates successfully and is granted `admin` and `owner` [roles](../configuration.mdx#access-control) so the default owner-based access-controls work out of the box. Use it for development, internal services, or when you prefer to manage keys outside an identity provider.
+
+The token is validated as `Authorization: Bearer <key>` and the key string itself becomes the user principal. Because this provider does not resolve a `tenant_id`, it is only compatible with `server.tenancy.mode` `single` or `disabled` — startup will fail with `multi`.
 
 #### OAuth 2.0/OpenID Connect Provider with Kubernetes
 
@@ -539,7 +529,7 @@ resources of a type, e.g. model::*, or a regex pattern with the
 "regex:" prefix, e.g. regex:model::(llama|mistral)-3\\.\\d+-.*. If the
 principal or resource are not specified, they will match all requests.
 
-The valid resource types are model, shield, vector_db, dataset,
+The valid resource types are model, vector_db, dataset,
 scoring_function, benchmark, tool, tool_group and session. In
 addition, stored data such as conversations, conversation items,
 responses, and files use the `sql_record::<table_name>` resource
@@ -669,47 +659,201 @@ Regex patterns can be used to match resources based on naming conventions. For e
 - Use anchors (`^` and `$`) when you need exact matching (default behavior uses `re.match()` which anchors at the start but not the end)
 - Invalid regex patterns will log a warning and be treated as non-matches
 
-### Multi-Tenant Isolation for Conversations and Responses
+### Multi-Tenancy
 
-In a multi-tenant deployment, you typically want to ensure that each
-user's conversations, responses, and files are isolated from other
-users. Unlike registry resources (models, shields, etc.) which are
-identified by types like `model::my-model`, stored data uses the
-`sql_record::<table_name>::<record_id>` resource type pattern. Each
-record is automatically stamped with the authenticated user's identity
-when created, and the `user is owner` condition can be used to restrict
-access to only the user who created the record.
+OGX provides two layers of data isolation that can be used independently
+or together:
 
-The relevant `sql_record` table names are:
+1. **Tenant isolation** (`server.tenancy`) — a hard partition key
+   (`tenant_id`) applied to every stored row. Tenants cannot see each
+   other's data regardless of access policy. This is the primary
+   isolation boundary for multi-tenant deployments.
+2. **Owner-based access control** (`access_policy` with `user is owner`)
+   — attribute-based rules that control which user within a tenant can
+   read, update, or delete a given record. This is a sharing mechanism
+   within a tenant, not an isolation boundary on its own.
 
-| Table Name | Description |
-|---|---|
-| `openai_conversations` | Conversation sessions |
-| `conversation_items` | Messages and items within conversations |
-| `responses` | Stored responses (table name is configurable in provider config) |
-| `openai_files` | Uploaded files |
+For production multi-tenant deployments, use tenant isolation. Owner-based
+access control is useful for single-tenant setups where you want per-user
+record isolation, or as an additional layer within a tenant.
 
-The following example shows a complete access policy that allows any
-authenticated user to use models and create new resources, while
-ensuring that conversations, responses, and files can only be accessed
-by the user who created them:
+#### Tenancy Modes
+
+The `server.tenancy` section configures tenant isolation. There are
+three modes:
+
+| Mode | Behavior |
+|------|----------|
+| `disabled` (default) | No tenant column, no filtering. Current behavior preserved. |
+| `single` | All records are stamped with a single configured `default_tenant_id`. Useful for dedicated single-tenant deployments that want a migration path to `multi`. |
+| `multi` | Every request must resolve a `tenant_id` from authentication. Requests without a tenant are rejected (401). Records are partitioned by tenant. |
+
+#### Tenant Resolution by Auth Provider
+
+Each authentication provider can resolve a `tenant_id` from the
+incoming request. The resolution mechanism depends on the provider type:
+
+| Provider | Config field | Source |
+|----------|-------------|--------|
+| `upstream_header` | `tenant_header` | HTTP header set by the upstream gateway |
+| `oauth2_token` | `tenant_claim` | JWT claim (JWKS) or introspection response field |
+| `kubernetes` | `tenant_claim` | Kubernetes user claim (resolved via `claims_mapping`) |
+| `custom` | `tenant_field` | Field in the auth endpoint JSON response |
+
+Tenant IDs are validated and normalized: lowercase, alphanumeric with
+hyphens and underscores, max 128 characters, matching
+`[a-z0-9][a-z0-9-_]{0,127}`.
+
+#### Example: Single-Tenant Deployment
+
+A dedicated deployment where all data belongs to one tenant. No auth
+required — useful for development or single-customer deployments:
 
 ```yaml
 server:
   port: 8321
+  tenancy:
+    mode: "single"
+    default_tenant_id: "acme-corp"
+```
+
+All records are automatically stamped with `tenant_id: "acme-corp"`.
+This creates a clean migration path — when you later move to `multi`
+mode, existing data is already tagged.
+
+#### Example: Multi-Tenant with Upstream Gateway (Authorino, Istio)
+
+The most common production pattern. An upstream gateway (Authorino,
+Istio, or a reverse proxy) authenticates the request and injects
+identity headers. OGX trusts these headers and extracts the tenant from
+a dedicated header:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "upstream_header"
+      principal_header: "x-auth-user-id"
+      tenant_header: "x-tenant-id"
+      attributes_header: "x-auth-attributes"
+```
+
+The gateway is responsible for setting `x-tenant-id` on every request.
+If the header is missing, OGX rejects the request with a 401.
+
+#### Example: Multi-Tenant with OAuth2/OIDC (Keycloak)
+
+Extract the tenant from a JWT claim. Configure your identity provider
+to include a tenant claim in the token:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
   auth:
     provider_config:
       type: "oauth2_token"
+      tenant_claim: "tenant"
+      jwks:
+        uri: ${env.KEYCLOAK_URL}/realms/ogx/protocol/openid-connect/certs
+      issuer: ${env.KEYCLOAK_URL}/realms/ogx
+      audience: "ogx"
+```
+
+This reads the `tenant` claim from the JWT payload. For example, a
+decoded token with `{"sub": "alice", "tenant": "acme-corp", ...}` would
+resolve `tenant_id: "acme-corp"`. Any claim name can be used — set
+`tenant_claim` to match your IdP's token structure (e.g., `"org"`,
+`"organization_id"`, `"tid"`).
+
+#### Example: Multi-Tenant with Kubernetes Auth
+
+Use a Kubernetes user claim as the tenant identifier. The `tenant_claim`
+is resolved through the same `claims_mapping` path used for access
+attributes:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "kubernetes"
+      api_server_url: "https://kubernetes.default.svc"
+      tenant_claim: "extra.tenant"
+      claims_mapping:
+        username: "roles"
+        groups: "roles"
+```
+
+Here `tenant_claim: "extra.tenant"` extracts the first value from
+`userInfo.extra.tenant` (for example, `"tenant-a"`) as the tenant
+partition key. Use a claim whose value already matches the tenant ID
+format; raw Kubernetes usernames such as
+`system:serviceaccount:tenant-a:default` are not valid tenant IDs.
+
+#### Example: Multi-Tenant with Custom Auth Endpoint
+
+Extract the tenant from your custom auth endpoint's response. The
+endpoint must return the tenant identifier in a known field:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "custom"
+      endpoint: "https://auth.example.com/validate"
+      tenant_field: "tenant_id"
+```
+
+The custom endpoint's JSON response should include the tenant field:
+
+```json
+{
+  "principal": "alice",
+  "attributes": {
+    "roles": ["user"],
+    "teams": ["ml-team"]
+  },
+  "tenant_id": "acme-corp",
+  "message": "Authentication successful"
+}
+```
+
+#### Combining Tenant Isolation with Access Control
+
+Tenant isolation and access control operate at different levels. Tenant
+isolation partitions data between organizations. Access control governs
+what individual users can do within their tenant. For full production
+isolation, use both:
+
+```yaml
+server:
+  port: 8321
+  tenancy:
+    mode: "multi"
+  auth:
+    provider_config:
+      type: "oauth2_token"
+      tenant_claim: "tenant"
       jwks:
         uri: "https://my-auth-provider.com/jwks"
     access_policy:
-    # Allow all authenticated users to use configured models for inference
+    # All authenticated users can use configured models
     - permit:
         actions: [read]
         resource: model::*
       description: Any authenticated user can use configured models
 
-    # File isolation
+    # File isolation — users can only access their own files
     - permit:
         actions: [create]
         resource: sql_record::openai_files::*
@@ -754,19 +898,76 @@ server:
       description: Users can only access their own responses
 ```
 
-With this policy:
-- Any user with a valid token can call inference endpoints and create new conversations, responses, and files.
-- A user can only list, read, update, or delete their own conversations, responses, and files. Attempts to access another user's resources will be denied.
-- The `user is owner` condition works by comparing the authenticated user's principal (from the JWT token) against the `owner_principal` stored on each record.
+With this configuration:
+- **Tenant isolation** ensures that users in `acme-corp` never see data
+  from `beta-inc`, regardless of access policy rules.
+- **Owner isolation** ensures that Alice within `acme-corp` cannot read
+  Bob's conversations, even though they share a tenant.
+- The `user is owner` condition compares the authenticated user's
+  principal (from the JWT `sub` claim) against the `owner_principal`
+  stored on each record.
+
+:::note
+Tenant isolation is enforced at the storage layer independently of
+access policies. Even if the access policy permits all actions, a user
+can only see rows that match their `tenant_id`. This is a non-bypassable
+filter — there is no policy rule that can override it.
+:::
+
+#### Owner-Based Isolation Without Tenancy
+
+For single-tenant deployments or development environments where you want
+per-user record isolation without a tenant partition, you can use
+`user is owner` conditions in the access policy alone:
+
+```yaml
+server:
+  port: 8321
+  auth:
+    provider_config:
+      type: "oauth2_token"
+      jwks:
+        uri: "https://my-auth-provider.com/jwks"
+    access_policy:
+    - permit:
+        actions: [read]
+        resource: model::*
+      description: Any authenticated user can use configured models
+    - permit:
+        actions: [create]
+        resource: sql_record::*
+      description: Any authenticated user can create records
+    - permit:
+        actions: [read, update, delete]
+        resource: sql_record::*
+      when: user is owner
+      description: Users can only access records they created
+```
+
+This provides user-level isolation through access control but does not
+create a hard tenant boundary. If two users share an attribute value
+(e.g., `teams=["engineering"]`), a policy using `user in owner teams`
+could grant cross-user access. For production multi-tenant deployments,
+use `server.tenancy.mode: "multi"` instead.
 
 :::note
 If no explicit `access_policy` is specified, OGX applies a
 default policy where all users can access resources defined in config
 (like models) but dynamically created resources can only be accessed by
-the user that created them. However, for production multi-tenant
-deployments it is recommended to define an explicit policy like the
-example above.
+the user that created them.
 :::
+
+#### SQL Record Table Names
+
+The following table names are used for `sql_record` resource types in
+access policies:
+
+| Table Name | Description |
+|---|---|
+| `openai_conversations` | Conversation sessions |
+| `conversation_items` | Messages and items within conversations |
+| `responses` | Stored responses (table name is configurable in provider config) |
+| `openai_files` | Uploaded files |
 
 ### Route-Level Authorization
 
@@ -1014,128 +1215,6 @@ For a request to succeed:
 2. User must pass resource authorization (can read `model::llama-3-2-3b`)
 3. Both checks must pass
 
-### Quota Configuration
-
-The `quota` section allows you to enable server-side request throttling for both
-authenticated and anonymous clients. This is useful for preventing abuse, enforcing
-fairness across tenants, and controlling infrastructure costs without requiring
-client-side rate limiting or external proxies.
-
-Quotas are disabled by default. When enabled, each client is tracked using either:
-
-* Their authenticated `client_id` (derived from the Bearer token), or
-* Their IP address (fallback for anonymous requests)
-
-Quota state is stored in a SQLite-backed key-value store, and rate limits are applied
-within a configurable time window (currently only `day` is supported).
-
-#### Example
-
-```yaml
-server:
-  quota:
-    kvstore:
-      type: sqlite
-      db_path: ./quotas.db
-    anonymous_max_requests: 100
-    authenticated_max_requests: 1000
-    period: day
-```
-
-#### Configuration Options
-
-| Field                        | Description                                                                |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `kvstore`                    | Required. Backend storage config for tracking request counts.              |
-| `kvstore.type`               | Must be `"sqlite"` for now. Other backends may be supported in the future. |
-| `kvstore.db_path`            | File path to the SQLite database.                                          |
-| `anonymous_max_requests`     | Max requests per period for unauthenticated clients.                       |
-| `authenticated_max_requests` | Max requests per period for authenticated clients.                         |
-| `period`                     | Time window for quota enforcement. Only `"day"` is supported.              |
-
-> Note: if `authenticated_max_requests` is set but no authentication provider is
-configured, the server will fall back to applying `anonymous_max_requests` to all
-clients.
-
-#### Example with Authentication Enabled
-
-```yaml
-server:
-  port: 8321
-  auth:
-    provider_config:
-      type: custom
-      endpoint: https://auth.example.com/validate
-  quota:
-    kvstore:
-      type: sqlite
-      db_path: ./quotas.db
-    anonymous_max_requests: 100
-    authenticated_max_requests: 1000
-    period: day
-```
-
-If a client exceeds their limit, the server responds with:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Content-Type: application/json
-
-{
-  "error": {
-    "message": "Quota exceeded"
-  }
-}
-```
-
-### CORS Configuration
-
-Configure CORS to allow web browsers to make requests from different domains. Disabled by default.
-
-#### Quick Setup
-
-For development, use the simple boolean flag:
-
-```yaml
-server:
-  cors: true  # Auto-enables localhost with any port
-```
-
-This automatically allows `http://localhost:*` and `https://localhost:*` with secure defaults.
-
-#### Custom Configuration
-
-For specific origins and full control:
-
-```yaml
-server:
-  cors:
-    allow_origins: ["https://myapp.com", "https://staging.myapp.com"]
-    allow_credentials: true
-    allow_methods: ["GET", "POST", "PUT", "DELETE"]
-    allow_headers: ["Content-Type", "Authorization"]
-    allow_origin_regex: "https://.*\\.example\\.com"  # Optional regex pattern
-    expose_headers: ["X-Total-Count"]
-    max_age: 86400
-```
-
-#### Configuration Options
-
-| Field                | Description                                    | Default |
-| -------------------- | ---------------------------------------------- | ------- |
-| `allow_origins`      | List of allowed origins. Use `["*"]` for any. | `["*"]` |
-| `allow_origin_regex` | Regex pattern for allowed origins (optional). | `None`  |
-| `allow_methods`      | Allowed HTTP methods.                          | `["*"]` |
-| `allow_headers`      | Allowed headers.                               | `["*"]` |
-| `allow_credentials`  | Allow credentials (cookies, auth headers).    | `false` |
-| `expose_headers`     | Headers exposed to browser.                   | `[]`    |
-| `max_age`            | Preflight cache time (seconds).               | `600`   |
-
-**Security Notes**:
-- `allow_credentials: true` requires explicit origins (no wildcards)
-- `cors: true` enables localhost access only (secure for development)
-- For public APIs, always specify exact allowed origins
-
 ### TLS Context Caching
 
 When OGX makes outbound HTTPS connections to external services (such as remote inference providers, authentication endpoints, or other APIs), it optimizes performance by creating and reusing SSL contexts. An SSL context (`ssl.SSLContext`) is created once during provider initialization and shared across all subsequent connections to that endpoint.
@@ -1166,72 +1245,19 @@ To apply TLS bundle updates:
 2. Restart the OGX server to reload all SSL contexts
 3. Verify outbound connections to external services work correctly
 
-## Extending to handle Safety
+## Configuring Responses Guardrails
 
-Configuring Safety can be a little involved so it is instructive to go through an example.
+Safety and Shields APIs were removed. Responses guardrails now call an external OpenAI-compatible moderation endpoint directly.
 
-The Safety API works with the associated Resource called a `Shield`. Providers can support various kinds of Shields. Good examples include the [Llama Guard](https://ai.meta.com/research/publications/llama-guard-llm-based-input-output-safeguard-for-human-ai-conversations/) system-safety models, or [Bedrock Guardrails](https://aws.amazon.com/bedrock/guardrails/).
-
-To configure a Bedrock Shield, you would need to add:
-- A Safety API provider instance with type `remote::bedrock`
-- A Shield resource served by this provider.
+To enable guardrails, configure `moderation_endpoint` on the builtin responses provider:
 
 ```yaml
-...
 providers:
-  safety:
-  - provider_id: bedrock
-    provider_type: remote::bedrock
+  responses:
+  - provider_id: builtin
+    provider_type: inline::builtin
     config:
-      aws_access_key_id: ${env.AWS_ACCESS_KEY_ID}
-      aws_secret_access_key: ${env.AWS_SECRET_ACCESS_KEY}
-...
-shields:
-- provider_id: bedrock
-  params:
-    guardrailVersion: ${env.GUARDRAIL_VERSION}
-  provider_shield_id: ${env.GUARDRAIL_ID}
-...
+      moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
 ```
 
-The situation is more involved if the Shield needs _Inference_ of an associated model. This is the case with Llama Guard. In that case, you would need to add:
-- A Safety API provider instance with type `inline::llama-guard`
-- An Inference API provider instance for serving the model.
-- A Model resource associated with this provider.
-- A Shield resource served by the Safety provider.
-
-The yaml configuration for this setup, assuming you were using vLLM as your inference server, would look like:
-```yaml
-...
-providers:
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config: {}
-  inference:
-  # this vLLM server serves the "normal" inference model (e.g., llama3.2:3b)
-  - provider_id: vllm-0
-    provider_type: remote::vllm
-    config:
-      url: ${env.VLLM_URL:=http://localhost:8000}
-  # this vLLM server serves the llama-guard model (e.g., llama-guard:3b)
-  - provider_id: vllm-1
-    provider_type: remote::vllm
-    config:
-      url: ${env.SAFETY_VLLM_URL:=http://localhost:8001}
-...
-models:
-- metadata: {}
-  model_id: ${env.INFERENCE_MODEL}
-  provider_id: vllm-0
-  provider_model_id: null
-- metadata: {}
-  model_id: ${env.SAFETY_MODEL}
-  provider_id: vllm-1
-  provider_model_id: null
-shields:
-- provider_id: llama-guard
-  shield_id: ${env.SAFETY_MODEL}   # Llama Guard shields are identified by the corresponding LlamaGuard model
-  provider_shield_id: null
-...
-```
+With this configured, guardrail IDs passed in Responses requests are forwarded as the `model` in moderation requests to that endpoint.

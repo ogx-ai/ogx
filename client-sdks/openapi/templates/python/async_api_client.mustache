@@ -4,86 +4,118 @@
 
 from __future__ import annotations
 
-import asyncio
+import re
+import ssl
 
-from typing import Any
 import httpx
-from httpx import AsyncClient, Timeout
 
+from {{packageName}}.api_client import ApiClient
 from {{packageName}}.configuration import Configuration
-from {{packageName}}.async_api_response import AsyncApiResponse
-from {{packageName}}.async_stream import AsyncStream
-from {{packageName}}.exceptions import ApiException
+from {{packageName}}.exceptions import ApiException, ApiValueError
+from {{packageName}} import rest
 
 
-class AsyncApiClient:
-    """Async API client for OpenAPI client library builds.
+class AsyncApiClient(ApiClient):
+    """Async API client that extends ApiClient with async HTTP transport.
 
-    This client handles asynchronous client-server communication using httpx.
+    Inherits all serialization, deserialization, and parameter handling from
+    ApiClient. Overrides only the HTTP transport layer (call_api, close, and
+    context managers) to use httpx.AsyncClient for async I/O.
 
     :param configuration: Configuration object for this client
-    :param http_client: Optional httpx.AsyncClient instance
     :param header_name: Optional header to pass when making calls to the API
     :param header_value: Optional header value to pass when making calls to the API
     :param cookie: Optional cookie to include in the header when making calls to the API
+    :param http_client: Optional pre-configured httpx.AsyncClient instance
     """
 
     def __init__(
         self,
         configuration: Configuration | None = None,
-        http_client: AsyncClient | None = None,
         header_name: str | None = None,
         header_value: str | None = None,
         cookie: str | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        # Use default configuration if none is provided
-        if configuration is None:
-            configuration = Configuration.get_default()
-        self.configuration = configuration
+        # Initialize the parent ApiClient (sets up configuration, default_headers,
+        # cookie, user_agent, client_side_validation, and rest_client).
+        # The rest_client is lazy so no sync httpx.Client is actually created.
+        super().__init__(
+            configuration=configuration,
+            header_name=header_name,
+            header_value=header_value,
+            cookie=cookie,
+        )
 
-        # Set up default headers
-        self.default_headers: dict[str, str] = {}
-        if header_name is not None and header_value is not None:
-            self.default_headers[header_name] = header_value
-
-        # Set default User-Agent
-        self.default_headers['User-Agent'] = '{{{httpUserAgent}}}{{^httpUserAgent}}OpenAPI-Generator/{{{packageVersion}}}/python{{/httpUserAgent}}'
-
-        self.cookie = cookie
-
-        # Create or use provided httpx AsyncClient
+        # Set up the async HTTP client
         if http_client is not None:
-            self._client = http_client
-            self._client_provided = True
+            self._async_client = http_client
+            self._async_client_provided = True
         else:
-            # Build httpx client with configuration
-            timeout = Timeout(
-                timeout=configuration.timeout if hasattr(configuration, 'timeout') else 60.0
+            self._async_client = None  # lazy initialization
+            self._async_client_provided = False
+
+    def _create_async_client(self) -> httpx.AsyncClient:
+        """Create and configure httpx.AsyncClient instance."""
+        configuration = self.configuration
+
+        # Build SSL context (same as RESTClientObject)
+        ssl_context = ssl.create_default_context(
+            cafile=configuration.ssl_ca_cert,
+            cadata=configuration.ca_cert_data,
+        )
+        if configuration.cert_file:
+            ssl_context.load_cert_chain(
+                configuration.cert_file, keyfile=configuration.key_file
+            )
+        if not configuration.verify_ssl:
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+        limits = httpx.Limits(
+            max_connections=configuration.connection_pool_maxsize
+        )
+
+        timeout = configuration.timeout if configuration.timeout is not None else 5 * 60
+
+        http2 = getattr(configuration, 'http2', False)
+
+        proxy = None
+        if configuration.proxy:
+            proxy = httpx.Proxy(
+                url=configuration.proxy,
+                headers=configuration.proxy_headers
             )
 
-            client_args = {
-                'timeout': timeout,
-                'headers': self.default_headers,
-                'verify': configuration.verify_ssl if hasattr(configuration, 'verify_ssl') else True,
-            }
+        transport = None
+        if configuration.retries is not None:
+            transport = httpx.AsyncHTTPTransport(retries=configuration.retries)
 
-            if hasattr(configuration, 'host') and configuration.host:
-                client_args['base_url'] = configuration.host
+        try:
+            return httpx.AsyncClient(
+                limits=limits,
+                verify=ssl_context,
+                proxy=proxy,
+                transport=transport,
+                http2=http2,
+                timeout=timeout,
+                trust_env=True,
+                follow_redirects=getattr(configuration, 'follow_redirects', True),
+            )
+        except ImportError:
+            if http2:
+                raise ImportError(
+                    "HTTP/2 support requires the 'h2' package. "
+                    "Install it with: pip install h2"
+                )
+            raise
 
-            if hasattr(configuration, 'ssl_ca_cert') and configuration.ssl_ca_cert:
-                client_args['verify'] = configuration.ssl_ca_cert
-
-            if hasattr(configuration, 'cert_file') and configuration.cert_file:
-                cert_tuple = (configuration.cert_file,)
-                if hasattr(configuration, 'key_file') and configuration.key_file:
-                    cert_tuple = (configuration.cert_file, configuration.key_file)
-                client_args['cert'] = cert_tuple
-
-            if hasattr(configuration, 'proxy') and configuration.proxy:
-                client_args['proxies'] = configuration.proxy
-
-            self._client = AsyncClient(**client_args)
-            self._client_provided = False
+    @property
+    def async_client(self) -> httpx.AsyncClient:
+        """Lazy initialization of httpx.AsyncClient."""
+        if self._async_client is None:
+            self._async_client = self._create_async_client()
+        return self._async_client
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -95,74 +127,122 @@ class AsyncApiClient:
 
     async def close(self):
         """Close the async HTTP client."""
-        if not self._client_provided:
-            await self._client.aclose()
+        if self._async_client is not None and not self._async_client_provided:
+            await self._async_client.aclose()
+            self._async_client = None
 
-    @property
-    def user_agent(self) -> str:
-        """User agent for this API client."""
-        return self.default_headers.get('User-Agent', '')
-
-    @user_agent.setter
-    def user_agent(self, value: str):
-        """Set the user agent."""
-        self.default_headers['User-Agent'] = value
-
-    def set_default_header(self, header_name: str, header_value: str):
-        """Set a default header."""
-        self.default_headers[header_name] = header_value
-
-    async def request(
+    async def call_api(
         self,
-        method: str,
-        url: str,
-        headers: dict[str, str] | None = None,
-        params: dict[str, Any] | None = None,
-        json: Any | None = None,
-        data: Any | None = None,
-        files: dict[str, Any] | None = None,
-        stream: bool = False,
-    ) -> AsyncApiResponse | AsyncStream:
+        method,
+        url,
+        header_params=None,
+        body=None,
+        post_params=None,
+        _request_timeout=None
+    ) -> rest.RESTResponse:
+        """Makes the HTTP request (asynchronous).
+
+        Uses the same signature and return type as ApiClient.call_api so that
+        generated API classes work identically.
+
+        :param method: Method to call.
+        :param url: Path to method endpoint.
+        :param header_params: Header parameters to be placed in the request header.
+        :param body: Request body.
+        :param post_params: Request post form parameters.
+        :param _request_timeout: timeout setting for this request.
+        :return: RESTResponse
         """
-        Make an async HTTP request.
+        method = method.upper()
+        assert method in [
+            'GET', 'HEAD', 'DELETE', 'POST', 'PUT', 'PATCH', 'OPTIONS'
+        ]
 
-        :param method: HTTP method (GET, POST, etc.)
-        :param url: Request URL
-        :param headers: Optional headers dict
-        :param params: Optional query parameters
-        :param json: Optional JSON body
-        :param data: Optional form data
-        :param files: Optional files to upload
-        :param stream: Whether to stream the response
-        :return: AsyncApiResponse or AsyncStream object
-        """
-        # Merge headers
-        request_headers = self.default_headers.copy()
-        if headers:
-            request_headers.update(headers)
-
-        # Add cookie if present
-        if self.cookie:
-            request_headers['Cookie'] = self.cookie
-
-        try:
-            response = await self._client.request(
-                method=method,
-                url=url,
-                headers=request_headers,
-                params=params,
-                json=json,
-                data=data,
-                files=files,
+        if post_params and body:
+            raise ApiValueError(
+                "body parameter cannot be used with post_params parameter."
             )
 
-            if stream:
-                return AsyncStream(response, self)
-            else:
-                return AsyncApiResponse(response)
+        post_params = post_params or {}
+        header_params = header_params or {}
 
-        except httpx.HTTPError as e:
+        # Build request arguments
+        args = {
+            "method": method,
+            "url": url,
+            "headers": header_params,
+        }
+
+        # Handle timeout
+        if _request_timeout is not None:
+            if isinstance(_request_timeout, (int, float)):
+                args["timeout"] = _request_timeout
+            elif isinstance(_request_timeout, tuple) and len(_request_timeout) == 2:
+                args["timeout"] = httpx.Timeout(
+                    connect=_request_timeout[0], read=_request_timeout[1]
+                )
+
+        # Handle different content types
+        if method in ['POST', 'PUT', 'PATCH', 'OPTIONS', 'DELETE']:
+            content_type = header_params.get('Content-Type', '')
+
+            if not content_type or re.search('json', content_type, re.IGNORECASE):
+                if 'Content-Type' not in header_params:
+                    header_params['Content-Type'] = 'application/json'
+                if body is not None:
+                    args["json"] = body
+            elif content_type == 'application/x-www-form-urlencoded':
+                args["data"] = dict(post_params)
+            elif content_type == 'multipart/form-data':
+                del header_params['Content-Type']
+
+                files = []
+                data = {}
+                for param in post_params:
+                    k, v = param
+                    if isinstance(v, tuple) and len(v) == 3:
+                        files.append((k, v))
+                    elif isinstance(v, dict):
+                        for subkey, subval in v.items():
+                            data[f"{k}[{subkey}]"] = str(subval) if not isinstance(subval, str) else subval
+                    else:
+                        if isinstance(v, int):
+                            v = str(v)
+                        data[k] = v
+
+                if files:
+                    args["files"] = files
+                if data:
+                    args["data"] = data
+            elif isinstance(body, (str, bytes)):
+                args["content"] = body
+            elif content_type.startswith('text/') and isinstance(body, bool):
+                request_body = "true" if body else "false"
+                args["content"] = request_body
+            else:
+                msg = """Cannot prepare a request message for provided
+                         arguments. Please check that your arguments match
+                         declared content type."""
+                raise ApiException(status=0, reason=msg)
+
+        request = self.async_client.build_request(**args)
+
+        # Call _prepare_request hook if parent client has it
+        if hasattr(self, '_parent_client') and self._parent_client is not None:
+            if hasattr(self._parent_client, '_prepare_request'):
+                result = self._parent_client._prepare_request(request)
+                # Support both sync and async _prepare_request hooks
+                if result is not None and hasattr(result, '__await__'):
+                    await result
+
+        try:
+            r = await self.async_client.send(request, stream=True)
+        except httpx.HTTPStatusError as e:
+            raise ApiException(status=e.response.status_code, reason=str(e))
+        except httpx.RequestError as e:
             raise ApiException(status=0, reason=str(e))
+
+        return rest.RESTResponse(r)
 
     _default = None
 
@@ -170,8 +250,8 @@ class AsyncApiClient:
     def get_default(cls):
         """Return new instance of AsyncApiClient.
 
-        This method returns a newly created instance based on the default constructor,
-        or returns a copy of the default AsyncApiClient.
+        This method returns a newly created instance based on the default
+        constructor, or returns a copy of the default AsyncApiClient.
 
         :return: The AsyncApiClient object.
         """

@@ -66,36 +66,34 @@ def convert_id(_id: str) -> str:
 class QdrantIndex(EmbeddingIndex):
     """Embedding index backed by a Qdrant collection."""
 
-    def __init__(self, client: AsyncQdrantClient, collection_name: str):
+    def __init__(self, client: AsyncQdrantClient, vector_store: VectorStore):
         self.client = client
-        self.collection_name = collection_name
+        self.collection_name = vector_store.identifier
+        self.dimension = vector_store.embedding_dimension
 
     async def initialize(self) -> None:
-        # Qdrant collections are created on-demand in add_chunks
-        # If the collection does not exist, it will be created in add_chunks.
-        pass
+        if await self.client.collection_exists(self.collection_name):
+            return
+
+        await self.client.create_collection(
+            self.collection_name,
+            vectors_config=models.VectorParams(size=self.dimension, distance=models.Distance.COSINE),
+        )
+        await self.client.create_payload_index(
+            collection_name=self.collection_name,
+            field_name="chunk_content.content",
+            field_schema=models.TextIndexParams(
+                type="text",
+                tokenizer=models.TokenizerType.WORD,
+                min_token_len=2,
+                max_token_len=20,
+                lowercase=True,
+            ),
+        )
 
     async def add_chunks(self, chunks: list[EmbeddedChunk]):
         if not chunks:
             return
-
-        if not await self.client.collection_exists(self.collection_name):
-            await self.client.create_collection(
-                self.collection_name,
-                vectors_config=models.VectorParams(size=len(chunks[0].embedding), distance=models.Distance.COSINE),
-            )
-            # Create text index for keyword search functionality
-            await self.client.create_payload_index(
-                collection_name=self.collection_name,
-                field_name="chunk_content.content",
-                field_schema=models.TextIndexParams(
-                    type="text",
-                    tokenizer=models.TokenizerType.WORD,
-                    min_token_len=2,
-                    max_token_len=20,
-                    lowercase=True,
-                ),
-            )
 
         points = []
         for chunk in chunks:
@@ -129,7 +127,6 @@ class QdrantIndex(EmbeddingIndex):
     async def query_vector(
         self, embedding: NDArray, k: int, score_threshold: float, filters: Any = None
     ) -> QueryChunksResponse:
-        # Filters are not yet implemented for Qdrant provider
         if filters is not None:
             raise NotImplementedError("Qdrant provider does not yet support native filtering")
 
@@ -322,7 +319,7 @@ class QdrantIndex(EmbeddingIndex):
         return QueryChunksResponse(chunks=chunks, scores=scores)
 
     async def delete(self):
-        await self.client.delete_collection(collection_name=self.collection_name)
+        await self.client.delete_collection(collection_name=self.collection_name, timeout=30)
 
 
 class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
@@ -334,6 +331,7 @@ class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         inference_api: Inference,
         files_api: Files | None = None,
         file_processor_api: FileProcessors | None = None,
+        policy: list | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -343,11 +341,17 @@ class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         self.cache = {}
         self.vector_store_table = None
         self._qdrant_lock = asyncio.Lock()
+        self._policy = policy or []
 
     async def initialize(self) -> None:
-        client_config = self.config.model_dump(exclude_none=True, exclude={"persistence"})
+        client_config = self.config.model_dump(exclude_none=True, exclude={"persistence", "metadata_store"})
         self.client = AsyncQdrantClient(**client_config)
         self.kvstore = await kvstore_impl(self.config.persistence)
+
+        if self.config.metadata_store:
+            from ogx.core.storage.sqlstore import authorized_sqlstore
+
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         start_key = VECTOR_DBS_PREFIX
         end_key = f"{VECTOR_DBS_PREFIX}\xff"
@@ -355,11 +359,11 @@ class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
 
         for vector_store_data in stored_vector_stores:
             vector_store = VectorStore.model_validate_json(vector_store_data)
-            index = VectorStoreWithIndex(
-                vector_store, QdrantIndex(self.client, vector_store.identifier), self.inference_api
-            )
+            qdrant_index = QdrantIndex(self.client, vector_store)
+            await qdrant_index.initialize()
+            index = VectorStoreWithIndex(vector_store, qdrant_index, self.inference_api)
             self.cache[vector_store.identifier] = index
-        self.openai_vector_stores = await self._load_openai_vector_stores()
+        await self.initialize_openai_vector_stores()
 
     async def shutdown(self) -> None:
         await self.client.close()
@@ -372,9 +376,11 @@ class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
         await self.kvstore.set(key=key, value=vector_store.model_dump_json())
 
+        qdrant_index = QdrantIndex(self.client, vector_store)
+        await qdrant_index.initialize()
         index = VectorStoreWithIndex(
             vector_store=vector_store,
-            index=QdrantIndex(self.client, vector_store.identifier),
+            index=qdrant_index,
             inference_api=self.inference_api,
         )
 
@@ -403,9 +409,11 @@ class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
             raise VectorStoreNotFoundError(vector_store_id)
 
         vector_store = VectorStore.model_validate_json(vector_store_data)
+        qdrant_index = QdrantIndex(client=self.client, vector_store=vector_store)
+        await qdrant_index.initialize()
         index = VectorStoreWithIndex(
             vector_store=vector_store,
-            index=QdrantIndex(client=self.client, collection_name=vector_store.identifier),
+            index=qdrant_index,
             inference_api=self.inference_api,
         )
         self.cache[vector_store_id] = index

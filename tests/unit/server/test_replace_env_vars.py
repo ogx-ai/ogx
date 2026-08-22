@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from ogx.core.stack import EnvVarError, replace_env_vars
+from ogx.core.stack import EnvVarError, extract_env_var_references, replace_env_vars
 
 
 @pytest.fixture
@@ -40,6 +40,40 @@ def test_simple_replacement_raises_when_not_set(setup_env_vars):
     with pytest.raises(EnvVarError) as exc_info:
         replace_env_vars("${env.NOT_SET}")
     assert exc_info.value.var_name == "NOT_SET"
+
+
+def test_ignore_unresolved_returns_empty_for_bare_env_var(setup_env_vars):
+    result = replace_env_vars("${env.NOT_SET}", ignore_unresolved=True)
+    assert result is None
+
+
+def test_ignore_unresolved_still_resolves_set_vars(setup_env_vars):
+    assert replace_env_vars("${env.TEST_VAR}", ignore_unresolved=True) == "test_value"
+
+
+def test_ignore_unresolved_skips_resource_with_bare_env_var(setup_env_vars):
+    """Bare ${env.VAR} in a model_id should skip the item when ignore_unresolved=True."""
+    data = {
+        "models": [
+            {"model_id": "${env.INFERENCE_MODEL}", "provider_id": "nvidia"},
+            {"model_id": "always-present", "provider_id": "other"},
+        ]
+    }
+    result = replace_env_vars(data, ignore_unresolved=True)
+    assert len(result["models"]) == 1
+    assert result["models"][0]["model_id"] == "always-present"
+
+
+def test_ignore_unresolved_preserves_defaults_and_conditionals(setup_env_vars):
+    data = {
+        "url": "${env.BASE_URL:=https://example.com}",
+        "key": "${env.API_KEY:=}",
+        "opt": "${env.OPTIONAL:+enabled}",
+    }
+    result = replace_env_vars(data, ignore_unresolved=True)
+    assert result["url"] == "https://example.com"
+    assert result["key"] is None
+    assert result["opt"] is None
 
 
 def test_default_value_when_not_set(setup_env_vars):
@@ -150,41 +184,21 @@ def test_resource_with_empty_model_id_skipped(setup_env_vars):
     assert result["models"][0]["model_id"] == "always-present"
 
 
-def test_resource_with_empty_shield_id_skipped(setup_env_vars):
-    """Test that resources with empty shield_id from conditional env vars are skipped."""
-    data = {
-        "shields": [
-            {"shield_id": "${env.SHIELD_ID:+my-shield}", "provider_id": "test-provider"},
-            {"shield_id": "always-present", "provider_id": "another-provider"},
-        ]
-    }
-    # SHIELD_ID is not set, so first shield should be skipped
-    result = replace_env_vars(data)
-    assert len(result["shields"]) == 1
-    assert result["shields"][0]["shield_id"] == "always-present"
-
-
 def test_multiple_resources_with_conditional_ids(setup_env_vars):
     """Test that multiple resource types with conditional IDs are handled correctly."""
-    os.environ["INCLUDE_SHIELD"] = "yes"
+    os.environ["INCLUDE_MODEL"] = "yes"
     try:
         data = {
-            "shields": [
-                {"shield_id": "${env.INCLUDE_SHIELD:+included-shield}", "provider_id": "p1"},
-                {"shield_id": "${env.EXCLUDE_SHIELD:+excluded-shield}", "provider_id": "p2"},
-            ],
             "models": [
-                {"model_id": "${env.EXCLUDE_MODEL:+excluded-model}", "provider_id": "p1"},
+                {"model_id": "${env.INCLUDE_MODEL:+included-model}", "provider_id": "p1"},
+                {"model_id": "${env.EXCLUDE_MODEL:+excluded-model}", "provider_id": "p2"},
             ],
         }
         result = replace_env_vars(data)
-        # Only the shield with INCLUDE_SHIELD set should remain
-        assert len(result["shields"]) == 1
-        assert result["shields"][0]["shield_id"] == "included-shield"
-        # Model with unset env var should be skipped
-        assert len(result["models"]) == 0
+        assert len(result["models"]) == 1
+        assert result["models"][0]["model_id"] == "included-model"
     finally:
-        del os.environ["INCLUDE_SHIELD"]
+        del os.environ["INCLUDE_MODEL"]
 
 
 def test_auth_provider_disabled_when_type_not_set(setup_env_vars):
@@ -301,3 +315,47 @@ def test_auth_provider_with_complex_config(setup_env_vars):
     finally:
         del os.environ["ENABLE_AUTH"]
         del os.environ["KEYCLOAK_URL"]
+
+
+class TestExtractEnvVarReferences:
+    def test_simple_string_reference(self):
+        refs = extract_env_var_references("${env.FOO}")
+        assert refs == ["FOO"]
+
+    def test_nested_dict_references(self):
+        config = {"api_key": "${env.API_KEY}", "nested": {"secret": "${env.SECRET}"}}
+        refs = extract_env_var_references(config)
+        assert sorted(refs) == ["API_KEY", "SECRET"]
+
+    def test_list_values(self):
+        config = {"keys": ["${env.KEY1}", "${env.KEY2}"]}
+        refs = extract_env_var_references(config)
+        assert sorted(refs) == ["KEY1", "KEY2"]
+
+    def test_default_value_syntax(self):
+        config = {"key": "${env.FOO:=default}"}
+        refs = extract_env_var_references(config)
+        assert refs == ["FOO"]
+
+    def test_conditional_syntax(self):
+        config = {"key": "${env.FOO:+value}"}
+        refs = extract_env_var_references(config)
+        assert refs == ["FOO"]
+
+    def test_no_env_vars(self):
+        refs = extract_env_var_references({"key": "plain-value"})
+        assert refs == []
+
+    def test_mixed_references_and_plain(self):
+        config = {"a": "${env.ALPHA}", "b": "nope", "c": 42, "d": ["${env.BETA}"]}
+        refs = extract_env_var_references(config)
+        assert sorted(refs) == ["ALPHA", "BETA"]
+
+    def test_duplicate_references(self):
+        config = {"a": "${env.KEY}", "b": "${env.KEY}"}
+        refs = extract_env_var_references(config)
+        assert refs == ["KEY", "KEY"]
+
+    def test_non_string_iterables(self):
+        refs = extract_env_var_references({"num": 123, "flag": True, "nothing": None})
+        assert refs == []

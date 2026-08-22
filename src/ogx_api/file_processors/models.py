@@ -18,6 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ogx_api.common.job_types import JobStatus
 from ogx_api.schema_utils import json_schema_type
 from ogx_api.vector_io import Chunk, VectorStoreChunkingStrategy
 
@@ -63,7 +64,36 @@ class ProcessFileRequest(BaseModel):
     )
 
 
+@json_schema_type
+class ProcessFileJob(BaseModel):
+    """An asynchronous file-processing job.
+
+    Returned when a file is submitted for processing via the job-based API. Poll
+    by job_id until ``status`` is terminal (completed/failed/cancelled). When
+    completed, ``result`` holds the processed chunks; when failed, ``error``
+    explains why.
+    """
+
+    job_id: str = Field(..., description="Unique identifier for the job.")
+    status: JobStatus = Field(..., description="Current execution status of the job.")
+    created_at: int = Field(..., description="Unix timestamp (seconds) for when the job was created.")
+    result: ProcessFileResponse | None = Field(
+        default=None, description="The processed file result. Present only once the job has completed successfully."
+    )
+    error: str | None = Field(default=None, description="Error message. Present only if the job failed.")
+
+
+@json_schema_type
+class ListProcessFileJobsResponse(BaseModel):
+    """Response model listing file-processing jobs."""
+
+    data: list[ProcessFileJob] = Field(..., description="The list of file-processing jobs.")
+    has_more: bool = Field(default=False, description="Whether more jobs are available after this page.")
+
+
 __all__ = [
+    "ListProcessFileJobsResponse",
+    "ProcessFileJob",
     "ProcessFileRequest",
     "ProcessFileResponse",
 ]

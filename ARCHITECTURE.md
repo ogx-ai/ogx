@@ -4,7 +4,7 @@ This document describes the internal architecture of OGX for contributors and AI
 
 ## System Overview
 
-OGX is a server that exposes a unified API for AI capabilities: inference, agents, safety, vector storage, evaluation, and more. It is provider-agnostic: the same API works whether the backend is Ollama, OpenAI, vLLM, Fireworks, or dozens of other services.
+OGX is a server that exposes a unified API for AI capabilities: inference, responses orchestration, vector storage, tool execution, evaluation, and more. It is provider-agnostic: the same API works whether the backend is Ollama, OpenAI, vLLM, Fireworks, or dozens of other services.
 
 The codebase is split into two packages:
 
@@ -20,8 +20,9 @@ Client (ogx-client SDK or raw HTTP)
   v
 FastAPI Server  (src/ogx/core/server/server.py)
   |
-  |-- AuthenticationMiddleware  (token validation, user extraction)
-  |-- QuotaMiddleware           (rate limiting per client)
+  |-- AuthenticationMiddleware  (token validation, user + tenant_id extraction)
+  |-- TenancyMiddleware         (enforces tenancy mode: disabled/single/multi)
+  |-- RouteAuthorizationMiddleware  (route-level access policies)
   |
   v
 Route Dispatch
@@ -31,7 +32,7 @@ Route Dispatch
   v
 Router  (src/ogx/core/routers/)
   |
-  |-- Looks up the resource (model, shield, etc.) in the RoutingTable
+  |-- Looks up the resource (model, vector store, tool group, etc.) in the RoutingTable
   |-- Resolves which provider handles this resource
   |-- Enforces access control policies
   |
@@ -81,7 +82,7 @@ Each provider spec declares:
 
 ### Provider Registry
 
-`src/ogx/providers/registry/` contains one file per API (e.g., `inference.py`, `safety.py`). Each file defines an `available_providers()` function that returns all `ProviderSpec` objects for that API. The registry is loaded at startup by `get_provider_registry()` in `core/distribution.py`.
+`src/ogx/providers/registry/` contains one file per API (e.g., `inference.py`, `responses.py`). Each file defines an `available_providers()` function that returns all `ProviderSpec` objects for that API. The registry is loaded at startup by `get_provider_registry()` in `core/distribution.py`.
 
 ### Provider Resolution
 
@@ -106,22 +107,18 @@ Api.models (RoutingTable)  <-->  Api.inference (Router)
 
 The full list of auto-routed pairs is defined in `builtin_automatically_routed_apis()` in `core/distribution.py`:
 
-| Routing Table API     | Router API       |
-|-----------------------|------------------|
-| `Api.models`          | `Api.inference`  |
-| `Api.shields`         | `Api.safety`     |
-| `Api.datasets`        | `Api.datasetio`  |
-| `Api.scoring_functions` | `Api.scoring`  |
-| `Api.benchmarks`      | `Api.eval`       |
-| `Api.tool_groups`     | `Api.tool_runtime` |
-| `Api.vector_stores`   | `Api.vector_io`  |
+| Routing Table API   | Router API         |
+|---------------------|--------------------|
+| `Api.models`        | `Api.inference`    |
+| `Api.tool_groups`   | `Api.tool_runtime` |
+| `Api.vector_stores` | `Api.vector_io`    |
 
 ## The API Layer (`ogx_api`)
 
 The `ogx_api` package defines all public-facing types and protocols:
 
-- **Protocols** -- Python `Protocol` classes like `Inference`, `Safety` that define the API contract. HTTP routes are defined via FastAPI routers in `fastapi_routes.py` modules.
-- **Data Types** -- Pydantic models for requests, responses, and resources (e.g., `Model`, `Shield`, `ChatCompletionRequest`).
+- **Protocols** -- Python `Protocol` classes like `Inference`, `Responses`, `Skills` that define the API contract. HTTP routes are defined via FastAPI routers in `fastapi_routes.py` modules.
+- **Data Types** -- Pydantic models for requests, responses, and resources (e.g., `Model`, `VectorStore`, `ChatCompletionRequest`).
 - **Provider Specs** -- `InlineProviderSpec`, `RemoteProviderSpec`, and related types that define how providers are declared.
 - **Internal utilities** -- KVStore and SqlStore abstract interfaces live here so third-party providers can use them without depending on the full server.
 
@@ -157,7 +154,7 @@ storage:
 | PostgreSQL| `PostgresKVStoreConfig`  | Production deployments |
 | MongoDB   | `MongoDBKVStoreConfig`   | Document-oriented      |
 
-Used by: distribution registry, quota tracking, provider state.
+Used by: distribution registry, quota tracking, provider state, skills metadata.
 
 ### SqlStore
 
@@ -170,9 +167,19 @@ Used by: distribution registry, quota tracking, provider state.
 
 Used by: inference store (chat completion logs), conversations, prompts.
 
+### AuthorizedSqlStore and Tenant Isolation
+
+`AuthorizedSqlStore` wraps a `SqlStore` and adds two independent enforcement layers:
+
+1. **Tenant isolation** -- a non-bypassable `WHERE tenant_id = ?` filter applied before any access control check. When tenancy is enabled (`single` or `multi` mode), every table gets a `tenant_id` column. Writes stamp the authenticated user's tenant_id; reads and mutations are scoped to it. Missing tenant context in `multi` mode produces a `1=0` clause (default deny -- see nothing).
+
+2. **ABAC (Attribute-Based Access Control)** -- `owner_principal` and `access_attributes` columns enable policy-based rules like `user is owner`. This operates within a tenant, not across tenants.
+
+Tenancy mode is set process-wide during `Stack.initialize()` via `set_default_tenancy_mode()`, so existing call sites using the `authorized_sqlstore()` factory work without changes.
+
 ### Distribution Registry
 
-`src/ogx/core/store/` implements `DistributionRegistry`, which tracks all registered resources (models, shields, datasets, etc.) across providers. It persists to the configured KVStore so resources survive server restarts.
+`src/ogx/core/store/` implements `DistributionRegistry`, which tracks all registered resources (models, vector stores, tool groups, prompts, etc.) across providers. It persists to the configured KVStore so resources survive server restarts.
 
 ## Configuration
 
@@ -185,8 +192,8 @@ version: 2
 distro_name: starter
 apis:
   - inference
-  - agents
-  - safety
+  - responses
+  - vector_io
   # ...
 providers:
   inference:
@@ -194,10 +201,6 @@ providers:
       provider_type: remote::ollama
       config:
         base_url: ${env.OLLAMA_URL:=http://localhost:11434/v1}
-  safety:
-    - provider_id: llama-guard
-      provider_type: inline::llama-guard
-      config: {}
 storage:
   type: sqlite
   db_path: ...
@@ -265,14 +268,13 @@ src/
   ogx_api/          # API definitions package (separate pip package)
     inference/              # Inference protocol, models, FastAPI routes
     responses/              # Responses API protocol and routes
-    safety/                 # Safety protocol and routes
     datatypes.py            # Shared data types
     providers/              # Provider spec types
     internal/               # KVStore/SqlStore interfaces
   ogx/              # Server implementation
     core/
       server/               # FastAPI server, auth, routing
-      routers/              # API-specific routers (inference, safety, etc.)
+      routers/              # API-specific routers (inference, responses, etc.)
       routing_tables/       # Resource-to-provider mapping
       storage/              # KVStore and SqlStore backends
       store/                # Distribution registry

@@ -347,7 +347,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
 
     stop_server() {
         echo "Stopping OGX Server..."
-        pids=$(lsof -i :$OGX_PORT | awk 'NR>1 {print $2}')
+        pids=$(lsof -i :$OGX_PORT 2>/dev/null | awk 'NR>1 {print $2}' || true)
         if [[ -n "$pids" ]]; then
             echo "Killing OGX Server processes: $pids"
             kill -9 $pids
@@ -371,9 +371,14 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     export OTEL_BSP_EXPORT_TIMEOUT="2000"
     export OTEL_METRIC_EXPORT_INTERVAL="200"
 
+    # Start the standalone metrics scrape server (default port 9464) so the metrics
+    # endpoint integration tests (tests/integration/inspect/test_metrics_endpoint.py) can
+    # scrape it. Exported so both the server process and the pytest process observe the flag.
+    export OGX_METRICS_ENDPOINT_ENABLED="1"
+
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup ogx stack run $stack_config >server.log 2>&1 &
+    nohup ogx stack run $stack_config --insecure >server-main.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
     for i in {1..60}; do
@@ -384,7 +389,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
         if [[ $i -eq 60 ]]; then
             echo "❌ OGX Server failed to start"
             echo "Server logs:"
-            cat server.log
+            cat server-main.log
             exit 1
         fi
         sleep 1
@@ -395,7 +400,7 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     else
         echo "❌ OGX Server is not accessible on IPv6 loopback"
         echo "Server logs:"
-        cat server.log
+        cat server-main.log
         exit 1
     fi
     echo ""
@@ -503,9 +508,15 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     [ -n "${GROQ_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GROQ_API_KEY=$GROQ_API_KEY"
     [ -n "${GEMINI_API_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e GEMINI_API_KEY=$GEMINI_API_KEY"
     [ -n "${OLLAMA_URL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OLLAMA_URL=$OLLAMA_URL"
-    [ -n "${SAFETY_MODEL:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e SAFETY_MODEL=$SAFETY_MODEL"
+    [ -n "${AWS_BEDROCK_BEARER_TOKEN:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEDROCK_BEARER_TOKEN=$AWS_BEDROCK_BEARER_TOKEN"
     [ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK"
     [ -n "${AWS_DEFAULT_REGION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
+    [ -n "${AWS_ACCESS_KEY_ID:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID"
+    [ -n "${AWS_SECRET_ACCESS_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
+    [ -n "${AWS_SESSION_TOKEN:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN"
+    [ -n "${AWS_ROLE_ARN:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_ROLE_ARN=$AWS_ROLE_ARN"
+    [ -n "${AWS_WEB_IDENTITY_TOKEN_FILE:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_WEB_IDENTITY_TOKEN_FILE=$AWS_WEB_IDENTITY_TOKEN_FILE"
+    [ -n "${AWS_ROLE_SESSION_NAME:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_ROLE_SESSION_NAME=$AWS_ROLE_SESSION_NAME"
     [ -n "${VERTEX_AI_PROJECT:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_PROJECT=$VERTEX_AI_PROJECT"
     [ -n "${VERTEX_AI_LOCATION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_LOCATION=$VERTEX_AI_LOCATION"
 
@@ -567,7 +578,7 @@ fi
 
 # Run tests
 echo "=== Running Integration Tests ==="
-EXCLUDE_TESTS="builtin_tool or safety_with_image or code_interpreter or test_rag"
+EXCLUDE_TESTS="builtin_tool or code_interpreter or test_rag"
 
 PYTEST_PATTERN="not( $EXCLUDE_TESTS )"
 if [[ -n "$TEST_PATTERN" ]]; then
@@ -631,7 +642,7 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         $EXTRA_PARAMS \
         --color=yes \
         --embedding-model=sentence-transformers/nomic-ai/nomic-embed-text-v1.5 \
-        --rerank-model=transformers/Qwen/Qwen3-Reranker-0.6B \
+        --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?
 else
@@ -650,8 +661,8 @@ else
     echo "❌ Tests failed"
     echo ""
     # Output server or container logs based on stack config
-    if [[ "$STACK_CONFIG" == *"server:"* && -f "server.log" ]]; then
-        echo "--- Server side failures can be located inside server.log (available from artifacts on CI) ---"
+    if [[ "$STACK_CONFIG" == *"server:"* && -f "server-main.log" ]]; then
+        echo "--- Server side failures can be located inside server-main.log (available from artifacts on CI) ---"
     elif [[ "$STACK_CONFIG" == *"docker:"* ]]; then
         docker_log_file="docker-${DISTRO}-${INFERENCE_MODE}.log"
         if [[ -f "$docker_log_file" ]]; then

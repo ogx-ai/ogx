@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from redis.asyncio import Redis  # type: ignore[import-not-found]
+from redis.asyncio import Redis
 
 from ogx_api.internal.kvstore import KVStore
 
@@ -46,7 +46,6 @@ class RedisKVStoreImpl(KVStore):
         value = await client.get(key)
         if value is None:
             return None
-        await client.ttl(key)
         if isinstance(value, bytes):
             return value.decode("utf-8")
         if isinstance(value, str):

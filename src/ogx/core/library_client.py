@@ -5,13 +5,17 @@
 # the root directory of this source tree.
 
 import asyncio
+import atexit
+import concurrent.futures
 import inspect
 import json
 import logging  # allow-direct-logging
 import os
+import queue
 import sys
+import threading
 import typing
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Mapping
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
@@ -24,7 +28,7 @@ from fastapi import Response as FastAPIResponse
 from ogx.core.utils.type_inspection import is_body_param, is_unwrapped_body_param
 
 try:
-    from ogx_client import (
+    from ogx_open_client import (
         NOT_GIVEN,
         APIResponse,
         AsyncAPIResponse,
@@ -32,8 +36,20 @@ try:
         AsyncStream,
         OgxClient,
     )
-except ImportError as e:
-    raise ImportError("ogx-client is not installed. Please install it with `uv pip install ogx[client]`.") from e
+except ImportError:
+    try:
+        from ogx_client import (  # type: ignore[import-not-found,assignment,no-redef]
+            NOT_GIVEN,
+            APIResponse,
+            AsyncAPIResponse,
+            AsyncOgxClient,
+            AsyncStream,
+            OgxClient,
+        )
+    except ImportError as e:
+        raise ImportError(
+            "ogx-open-client is not installed. Please install it with `uv pip install ogx[openclient]` or `uv pip install ogx[client]`."
+        ) from e
 
 from pydantic import BaseModel, TypeAdapter
 from rich.console import Console
@@ -49,10 +65,17 @@ from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.context import preserve_contexts_async_generator
 from ogx.core.utils.exec import in_notebook
 from ogx.log import get_logger, setup_logging
+from ogx.providers.utils.files.response import response_body_bytes
 
 logger = get_logger(name=__name__, category="core")
 
 T = TypeVar("T")
+
+_INIT_TIMEOUT: float = 60.0
+_SHUTDOWN_TIMEOUT: float = 10.0
+_CLEANUP_TIMEOUT: float = 5.0
+_HANG_GUARD_TIMEOUT: float = 600.0
+_STREAM_HEARTBEAT_INTERVAL: float = 1.0
 
 
 def convert_pydantic_to_json_value(value: Any) -> Any:
@@ -144,19 +167,228 @@ class LibraryClientUploadFile:
 class LibraryClientHttpxResponse:
     """LibraryClient httpx Response object for FastAPI Response conversion."""
 
-    def __init__(self, response: FastAPIResponse) -> None:
-        if isinstance(response.body, bytes):
-            self.content = response.body
-        elif isinstance(response.body, memoryview):
-            self.content = bytes(response.body)
-        else:
-            self.content = response.body.encode()
+    def __init__(self, response: FastAPIResponse, content: bytes) -> None:
+        self.content = content
         self.status_code = response.status_code
         self.headers = response.headers
 
 
+class _SSEAsyncByteStream(httpx.AsyncByteStream):
+    """Adapter that wraps a FastAPI StreamingResponse body_iterator as an httpx AsyncByteStream.
+
+    Enables lazy async iteration of SSE events from an in-process FastAPI handler,
+    preserving time-to-first-token benefits instead of buffering the entire stream.
+    """
+
+    def __init__(self, body_iterator: Any) -> None:
+        self._body_iterator = body_iterator
+
+    async def __aiter__(self):
+        async for chunk in self._body_iterator:
+            if isinstance(chunk, str):
+                yield chunk.encode("utf-8")
+            elif isinstance(chunk, memoryview):
+                yield bytes(chunk)
+            else:
+                yield chunk
+
+    async def aclose(self) -> None:
+        if hasattr(self._body_iterator, "aclose"):
+            await self._body_iterator.aclose()
+
+
+async def _route_call_in_process(
+    *,
+    method: str,
+    url: str,
+    header_params: dict[str, str] | None,
+    body: Any,
+    post_params: list | None,
+    route_impls: RouteImpls,
+    provider_data: dict[str, Any] | None,
+    sanitize_headers: Any,
+    convert_body: Any,
+    async_streaming: bool = False,
+) -> Any:
+    """Route an API call in-process instead of over HTTP.
+
+    Shared implementation for both sync and async library clients. Executes
+    FastAPI endpoint handlers directly, avoiding network I/O.
+
+    :param method: HTTP method (GET, POST, etc.)
+    :param url: Full URL including path and query string
+    :param header_params: Request headers
+    :param body: JSON request body
+    :param post_params: Form/multipart post parameters
+    :param route_impls: Initialized route implementations
+    :param provider_data: Optional provider data dict for X-OGX-Provider-Data header
+    :param sanitize_headers: Callable to sanitize header dicts
+    :param convert_body: Callable to convert body dicts to function kwargs
+    :param async_streaming: When True, streaming responses use an AsyncByteStream
+        for lazy iteration (used by the async library client). When False, streaming
+        responses are buffered into bytes (used by the sync library client, which
+        cannot lazily consume an async iterator from its sync call_api path).
+    :return: RESTResponse wrapping the in-process result
+    """
+    from urllib.parse import parse_qs, urlparse
+
+    from fastapi.responses import StreamingResponse
+
+    try:
+        from ogx_open_client.rest import RESTResponse
+    except ImportError:
+        from ogx_client.rest import RESTResponse  # type: ignore[import-not-found,assignment,no-redef]
+
+    # Extract path from full URL (strip http://localhost:port prefix)
+    parsed = urlparse(url)
+    path = parsed.path
+    query_string = parsed.query
+
+    # Build request headers with provider data
+    request_headers = sanitize_headers(header_params)
+    if provider_data:
+        keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
+        if all(key not in request_headers for key in keys):
+            request_headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
+
+    with request_provider_data_context(request_headers):
+        # Build the body dict from JSON body and/or post_params
+        request_body: Any = {}
+        if body and isinstance(body, dict):
+            request_body = body.copy()
+        elif body and isinstance(body, list):
+            request_body = body
+
+        # Handle multipart form data (file uploads)
+        if post_params:
+            for param in post_params:
+                if isinstance(param, list | tuple) and len(param) == 2:
+                    k, v = param
+                    if isinstance(v, tuple) and len(v) == 3:
+                        # File tuple: (filename, content, content_type)
+                        filename, content, _content_type = v
+                        if isinstance(content, bytes):
+                            request_body[k] = LibraryClientUploadFile(filename, content)
+                        else:
+                            request_body[k] = v
+                    elif isinstance(v, dict):
+                        request_body[k] = v
+                    else:
+                        request_body[k] = v
+
+        # Parse query params and merge into body.
+        # In a normal HTTP framework, query params and body fields occupy
+        # separate namespaces. Here we flatten them into a single dict so
+        # we can call the route handler directly. A collision should never
+        # happen with the current API design, but we log a warning if it
+        # does so it doesn't silently go unnoticed.
+        if query_string:
+            query_params = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(query_string).items()}
+            if isinstance(request_body, dict):
+                collisions = set(query_params.keys()) & set(request_body.keys())
+                if collisions:
+                    logger.warning(
+                        "Query params collide with body fields, body takes precedence",
+                        colliding_keys=collisions,
+                        path=path,
+                    )
+                query_params.update(request_body)
+                request_body = query_params
+            else:
+                request_body.update(query_params)
+
+        # Find the matching route handler
+        matched_func, path_params, route_path, _ = find_matching_route(method, path, route_impls)
+
+        # Merge path params into body
+        if isinstance(request_body, dict):
+            request_body.update(path_params)
+
+        # Convert body to proper function kwargs
+        exclude_params: set[str] = set()
+        if isinstance(request_body, dict):
+            for k, v in request_body.items():
+                if isinstance(v, LibraryClientUploadFile):
+                    exclude_params.add(k)
+            request_body = convert_body(matched_func, request_body, exclude_params=exclude_params)
+
+        # Execute the endpoint handler
+        if isinstance(request_body, dict):
+            result = await matched_func(**request_body)
+        else:
+            result = await matched_func(request_body)
+
+        # Build the response
+        if isinstance(result, StreamingResponse):
+            content_type = result.media_type or "text/event-stream"
+
+            if async_streaming:
+                # Wrap the body_iterator as an AsyncByteStream for lazy async
+                # iteration, preserving time-to-first-token benefits.
+                mock_response = httpx.Response(
+                    status_code=result.status_code,
+                    stream=_SSEAsyncByteStream(result.body_iterator),
+                    headers={"Content-Type": content_type},
+                    request=httpx.Request(method=method, url=url),
+                )
+            else:
+                # Buffer the entire stream for sync callers. The sync library
+                # client cannot lazily consume an async iterator from its
+                # synchronous call_api path (Stream.iter_bytes() requires a
+                # SyncByteStream). The sync client already has a separate lazy
+                # streaming path via _stream_request() for the stainless SDK.
+                chunks: list[bytes] = []
+                async for chunk in result.body_iterator:
+                    if isinstance(chunk, str):
+                        chunks.append(chunk.encode("utf-8"))
+                    elif isinstance(chunk, memoryview):
+                        chunks.append(bytes(chunk))
+                    else:
+                        chunks.append(chunk)
+                all_content = b"".join(chunks)
+
+                mock_response = httpx.Response(
+                    status_code=result.status_code,
+                    content=all_content,
+                    headers={"Content-Type": content_type},
+                    request=httpx.Request(method=method, url=url),
+                )
+            return RESTResponse(mock_response)
+
+        # Handle FastAPI Response objects
+        if isinstance(result, FastAPIResponse):
+            resp = LibraryClientHttpxResponse(result, await response_body_bytes(result))
+            return RESTResponse(
+                httpx.Response(
+                    status_code=resp.status_code,
+                    content=resp.content if isinstance(resp.content, bytes) else resp.content.encode("utf-8"),
+                    headers=dict(resp.headers),
+                    request=httpx.Request(method=method, url=url),
+                )
+            )
+
+        # Non-streaming JSON response
+        json_content = json.dumps(convert_pydantic_to_json_value(result))
+        status_code = httpx.codes.OK
+        if method.upper() == "DELETE" and result is None:
+            status_code = httpx.codes.NO_CONTENT
+            json_content = ""
+
+        mock_response = httpx.Response(
+            status_code=status_code,
+            content=json_content.encode("utf-8") if json_content else b"",
+            headers={"Content-Type": "application/json"},
+            request=httpx.Request(method=method, url=url),
+        )
+        return RESTResponse(mock_response)
+
+
 class OGXAsLibraryClient(OgxClient):
-    """Synchronous client that runs a OGX distribution in-process as a library."""
+    """Synchronous client that runs a OGX distribution in-process as a library.
+
+    This is a sync-on-async implementation wrapping `AsyncOGXAsLibraryClient` class,
+    starting a daemon loop thread, which will be shut down when the main thread exits.
+    """
 
     def __init__(
         self,
@@ -170,24 +402,47 @@ class OGXAsLibraryClient(OgxClient):
             config_path_or_distro_name, custom_provider_registry, provider_data, skip_logger_removal
         )
         self.provider_data = provider_data
+        self._shutdown_lock: threading.Lock = threading.Lock()
+        self._shutdown = False
 
+        # stick with one loop and run it in a dedicated daemon thread
         self.loop = asyncio.new_event_loop()
+        self.loop_thread = threading.Thread(
+            target=self._run_event_loop, daemon=True, name="ogx-lib-sync-client-event-loop"
+        )
+        self.loop_thread.start()
 
-        # use a new event loop to avoid interfering with the main event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(self.async_client.initialize())
+            future = asyncio.run_coroutine_threadsafe(self.async_client.initialize(), self.loop)
+            future.result(timeout=_INIT_TIMEOUT)  # Block until initialization completes + timeout if hangs
+        except Exception:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.loop_thread.join(timeout=_CLEANUP_TIMEOUT)
+            raise
+
+        atexit.register(self.shutdown)  # Safety net: if the user forgets to shutdown properly
+
+        # Patch api_client.call_api to route requests in-process instead of over HTTP.
+        # The generated SDK's call chain is: API method → api_client.call_api() → rest.request() → httpx.
+        # We intercept at call_api so the request never reaches httpx/network.
+        # Only applies to ogx_open_client; the stainless SDK uses a request() override instead.
+        if hasattr(self, "api_client") and hasattr(self.api_client, "call_api"):
+            self._original_call_api = self.api_client.call_api
+            self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
+
+    def _run_event_loop(self) -> None:
+        """Runs forever in the background thread."""
+        asyncio.set_event_loop(self.loop)
+        try:
+            self.loop.run_forever()
         finally:
-            asyncio.set_event_loop(None)
+            self.loop.close()  # Close the loop when the thread is instructed to stop
 
     def initialize(self) -> None:
-        """
-        Deprecated method for backward compatibility.
-        """
+        """Deprecated method for backward compatibility."""
         pass
 
-    def shutdown(self) -> None:
+    def shutdown(self, timeout: float = _SHUTDOWN_TIMEOUT) -> None:
         """Shutdown the client and release all resources.
 
         This method should be called when you're done using the client to properly
@@ -197,18 +452,40 @@ class OGXAsLibraryClient(OgxClient):
 
         This method is idempotent and can be called multiple times safely.
 
+        Args:
+            timeout: Maximum seconds to wait for graceful shutdown before forcing close.
+
+        **IMPORTANT!** `shutdown()` is not safe to call concurrently with requests!
+        Use the client as a context manager to assure proper shutdown.
+
         Example:
-            client = OGXAsLibraryClient("starter")
-            # ... use the client ...
-            client.shutdown()
+            with OGXAsLibraryClient("starter") as client:
+                # ... use the client ...
         """
-        loop = self.loop
-        asyncio.set_event_loop(loop)
+        # Guard against calling shutdown before init finishes, or multiple times
+        with self._shutdown_lock:
+            if self._shutdown:
+                return
+            self._shutdown = True
+        if not self.loop.is_running():
+            return
+
+        future = asyncio.run_coroutine_threadsafe(self.async_client.shutdown(), self.loop)
         try:
-            loop.run_until_complete(self.async_client.shutdown())
-        finally:
-            loop.close()
-            asyncio.set_event_loop(None)
+            future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            logger.warning("Async client shutdown timed out", timeout=timeout)
+            future.cancel()
+        except Exception as e:
+            logger.warning("Unexpected error during async client shutdown", exception=e)
+
+        # Safely instruct the background loop to stop
+        self.loop.call_soon_threadsafe(self.loop.stop)
+
+        # Wait for the thread to actually exit
+        self.loop_thread.join(timeout=timeout)
+        if self.loop_thread.is_alive():
+            logger.error("Background event loop thread failed to join (zombie thread)")
 
     def __enter__(self) -> "OGXAsLibraryClient":
         """Enter the context manager.
@@ -227,33 +504,135 @@ class OGXAsLibraryClient(OgxClient):
         self.shutdown()
 
     def request(self, *args: Any, **kwargs: Any) -> Any:
-        loop = self.loop
-        asyncio.set_event_loop(loop)
-
+        # Route streaming vs non-streaming
         if kwargs.get("stream"):
+            return self._stream_request(*args, **kwargs)
 
-            def sync_generator() -> Generator[Any, None, None]:
-                try:
-                    async_stream = loop.run_until_complete(self.async_client.request(*args, **kwargs))
-                    while True:
-                        chunk = loop.run_until_complete(async_stream.__anext__())
-                        yield chunk
-                except StopAsyncIteration:
-                    pass
-                finally:
-                    pending = asyncio.all_tasks(loop)
-                    if pending:
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        coro = self.async_client.request(*args, **kwargs)
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        # the giant timeout here is to prevent it from hanging forever:
+        return future.result(timeout=_HANG_GUARD_TIMEOUT)
 
-            return sync_generator()
-        else:
+    def _stream_request(self, *args: Any, **kwargs: Any) -> Generator[Any, None, None]:
+        """Thread-safe synchronous generator wrapper around an async generator."""
+        # 32 chunks of buffering. LLM token rate makes OOM from unbounded queue unlikely
+        # but a bound prevents runaway memory if the consumer stalls.
+        q: queue.Queue = queue.Queue(maxsize=32)
+
+        async def _consume() -> None:
+            async_gen = None
             try:
-                result = loop.run_until_complete(self.async_client.request(*args, **kwargs))
+                async_gen = await self.async_client.request(*args, **kwargs)
+                async for chunk in async_gen:
+                    while True:
+                        try:
+                            q.put_nowait(("chunk", chunk))
+                            break
+                        except queue.Full:
+                            await asyncio.sleep(0.01)
+
+                while True:
+                    try:
+                        q.put_nowait(("done", None))
+                        break
+                    except queue.Full:
+                        await asyncio.sleep(0.01)
+
+            except asyncio.CancelledError:
+                pass
+            except Exception as err:
+                while True:
+                    try:
+                        q.put_nowait(("error", err))
+                        break
+                    except queue.Full:
+                        await asyncio.sleep(0.01)
             finally:
-                pending = asyncio.all_tasks(loop)
-                if pending:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            return result
+                if async_gen is not None:
+                    if hasattr(async_gen, "aclose"):
+                        await async_gen.aclose()
+                    elif hasattr(async_gen, "close"):
+                        close = async_gen.close()
+                        if asyncio.iscoroutine(close):
+                            await close
+
+        future = asyncio.run_coroutine_threadsafe(_consume(), self.loop)
+
+        try:
+            while True:
+                try:
+                    # Timeout prevents the sync thread from hanging forever if the loop dies or shutdown is called.
+                    msg_type, payload = q.get(timeout=1.0)
+                except queue.Empty as err:
+                    with self._shutdown_lock:
+                        if self._shutdown:
+                            raise RuntimeError("Client was shut down during streaming") from err
+
+                    if not self.loop.is_running():
+                        raise RuntimeError("Event loop crashed during streaming") from err
+                    continue
+
+                if msg_type == "chunk":
+                    yield payload
+                elif msg_type == "error":
+                    raise payload
+                elif msg_type == "done":
+                    break
+        finally:
+            future.cancel()
+
+    def _in_process_call_api(
+        self,
+        method,
+        url,
+        header_params=None,
+        body=None,
+        post_params=None,
+        _request_timeout=None,
+    ):
+        """Route API calls in-process instead of over HTTP.
+
+        Intercepts the generated SDK's call_api() to execute FastAPI endpoint
+        handlers directly, avoiding network I/O. The method signature matches
+        ApiClient.call_api() so it can be used as a drop-in replacement.
+        """
+
+        coro = self._async_in_process_call(
+            method=method,
+            url=url,
+            header_params=header_params,
+            body=body,
+            post_params=post_params,
+        )
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        return future.result(timeout=_HANG_GUARD_TIMEOUT)
+
+    async def _async_in_process_call(
+        self,
+        *,
+        method: str,
+        url: str,
+        header_params: dict[str, str] | None = None,
+        body: Any = None,
+        post_params: list | None = None,
+    ):
+        """Async implementation of in-process API call routing.
+
+        Delegates to the shared _route_call_in_process function.
+        """
+        async_client = self.async_client
+        assert async_client.route_impls is not None, "Client not initialized"
+        return await _route_call_in_process(
+            method=method,
+            url=url,
+            header_params=header_params,
+            body=body,
+            post_params=post_params,
+            route_impls=async_client.route_impls,
+            provider_data=async_client.provider_data,
+            sanitize_headers=async_client._sanitize_headers,
+            convert_body=async_client._convert_body,
+        )
 
 
 class AsyncOGXAsLibraryClient(AsyncOgxClient):
@@ -349,7 +728,47 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             console.print(yaml.dump(safe_config, indent=2))
 
         self.route_impls = initialize_route_impls(self.impls)
+
+        # Patch api_client.call_api to route requests in-process instead of over HTTP.
+        # The generated async SDK's call chain is:
+        #   Async*Api method → await api_client.call_api() → httpx.AsyncClient → network
+        # We intercept at call_api so the request never reaches the network.
+        # Only applies to ogx_open_client; the stainless SDK uses a request() override instead.
+        if hasattr(self, "api_client") and hasattr(self.api_client, "call_api"):
+            self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
+
         return True
+
+    async def _in_process_call_api(
+        self,
+        method,
+        url,
+        header_params=None,
+        body=None,
+        post_params=None,
+        _request_timeout=None,
+    ):
+        """Route API calls in-process instead of over HTTP.
+
+        Intercepts the generated async SDK's call_api() to execute FastAPI endpoint
+        handlers directly, avoiding network I/O. The method signature matches
+        AsyncApiClient.call_api() so it can be used as a drop-in replacement.
+
+        Delegates to the shared _route_call_in_process function.
+        """
+        assert self.route_impls is not None, "Client not initialized"
+        return await _route_call_in_process(
+            method=method,
+            url=url,
+            header_params=header_params,
+            body=body,
+            post_params=post_params,
+            route_impls=self.route_impls,
+            provider_data=self.provider_data,
+            sanitize_headers=self._sanitize_headers,
+            convert_body=self._convert_body,
+            async_streaming=True,
+        )
 
     async def shutdown(self) -> None:
         """Shutdown the client and release all resources.
@@ -400,26 +819,61 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             raise ValueError("Client not initialized. Please call initialize() first.")
 
         # Create headers with provider data if available
-        headers = options.headers or {}
+        request_headers = self._sanitize_headers(options.headers)
         if self.provider_data:
             keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
-            if all(key not in headers for key in keys):
-                headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
+            if all(key not in request_headers for key in keys):
+                request_headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
 
         # Use context manager for provider data
-        with request_provider_data_context(headers):
+        with request_provider_data_context(request_headers):
             if stream:
                 response = await self._call_streaming(
                     cast_to=cast_to,
                     options=options,
+                    request_headers=request_headers,
                     stream_cls=stream_cls,
                 )
             else:
                 response = await self._call_non_streaming(
                     cast_to=cast_to,
                     options=options,
+                    request_headers=request_headers,
                 )
             return response
+
+    @staticmethod
+    def _coerce_header_component(value: Any) -> str | None:
+        if value is None or value is NOT_GIVEN:
+            return None
+        if value.__class__.__name__ == "Omit":
+            return None
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                return value.decode("latin-1")
+        if isinstance(value, str):
+            return value
+        if isinstance(value, int | float | bool):
+            return str(value)
+        return None
+
+    @classmethod
+    def _sanitize_headers(cls, headers: Any) -> dict[str, str]:
+        if headers is None or headers is NOT_GIVEN or headers.__class__.__name__ == "Omit":
+            return {}
+        if not isinstance(headers, Mapping):
+            return {}
+
+        sanitized_headers: dict[str, str] = {}
+        for key, value in headers.items():
+            normalized_key = cls._coerce_header_component(key)
+            normalized_value = cls._coerce_header_component(value)
+            if normalized_key is None or normalized_value is None:
+                continue
+            sanitized_headers[normalized_key] = normalized_value
+        return sanitized_headers
 
     def _handle_file_uploads(self, options: Any, body: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
         """Handle file uploads from OpenAI client and add them to the request body."""
@@ -451,6 +905,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         *,
         cast_to: Any,
         options: Any,
+        request_headers: dict[str, str],
     ) -> Any:
         assert self.route_impls is not None  # Should be guaranteed by request() method, assertion for mypy
         path = options.url
@@ -478,7 +933,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
 
         # Handle FastAPI Response objects (e.g., from file content retrieval)
         if isinstance(result, FastAPIResponse):
-            return LibraryClientHttpxResponse(result)
+            return LibraryClientHttpxResponse(result, await response_body_bytes(result))
 
         json_content = json.dumps(convert_pydantic_to_json_value(result))
 
@@ -502,11 +957,11 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
                 method=options.method,
                 url=options.url,
                 params=options.params,
-                headers=options.headers or {},
+                headers=request_headers,
                 json=convert_pydantic_to_json_value(filtered_body),
             ),
         )
-        response = APIResponse(
+        response: APIResponse[Any] = APIResponse(
             raw=mock_response,
             client=self,
             cast_to=cast_to,
@@ -521,6 +976,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         *,
         cast_to: Any,
         options: Any,
+        request_headers: dict[str, str],
         stream_cls: Any,
     ) -> Any:
         assert self.route_impls is not None  # Should be guaranteed by request() method, assertion for mypy
@@ -573,7 +1029,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
                 method=options.method,
                 url=options.url,
                 params=options.params,
-                headers=options.headers or {},
+                headers=request_headers,
                 json=convert_pydantic_to_json_value(body),
             ),
         )
@@ -584,7 +1040,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         # mypy can't track runtime variables inside the [...] of a generic, so ignore that check
         args = get_args(stream_cls)
         stream_cls = AsyncStream[args[0]]  # type: ignore[valid-type]
-        response = AsyncAPIResponse(
+        response: AsyncAPIResponse = AsyncAPIResponse(  # type: ignore[call-arg]
             raw=mock_response,
             client=self,
             cast_to=cast_to,

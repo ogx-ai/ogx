@@ -11,7 +11,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from sqlalchemy.engine import URL
 
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 
@@ -88,10 +89,13 @@ class PostgresKVStoreConfig(CommonConfig):
     port: int | str = 5432
     db: str = "ogx"
     user: str
-    password: str | None = None
+    password: SecretStr | None = None
     ssl_mode: str | None = None
     ca_cert_path: str | None = None
     table_name: str = "ogx_kvstore"
+    pool_size: int = Field(default=5, ge=1, description="Number of persistent connections in the pool")
+    max_overflow: int = Field(default=10, ge=0, description="Max additional connections beyond pool_size")
+    command_timeout: float = Field(default=30.0, gt=0, description="Timeout in seconds for individual SQL statements")
 
     @classmethod
     def sample_run_config(cls, table_name: str = "ogx_kvstore", **kwargs: object) -> dict[str, str]:
@@ -161,7 +165,7 @@ class SqlAlchemySqlStoreConfig(BaseModel):
 
     @property
     @abstractmethod
-    def engine_str(self) -> str: ...
+    def engine_str(self) -> str | URL: ...
 
     # TODO: move this when we have a better way to specify dependencies with internal APIs
     @classmethod
@@ -201,14 +205,21 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     port: int | str = 5432
     db: str = "ogx"
     user: str
-    password: str | None = None
+    password: SecretStr | None = None
     pool_size: int = Field(default=10, ge=1, description="Number of persistent connections in the pool")
     max_overflow: int = Field(default=20, ge=0, description="Max additional connections beyond pool_size")
-    pool_recycle: int = Field(default=-1, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
+    pool_recycle: int = Field(default=3600, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
 
     @property
-    def engine_str(self) -> str:
-        return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db}"
+    def engine_str(self) -> URL:
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=self.user,
+            password=self.password.get_secret_value() if self.password else None,
+            host=self.host,
+            port=int(self.port),
+            database=self.db,
+        )
 
     @classmethod
     def pip_packages(cls) -> list[str]:
@@ -225,7 +236,7 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
             "password": "${env.POSTGRES_PASSWORD:=ogx}",
             "pool_size": "${env.POSTGRES_POOL_SIZE:=10}",
             "max_overflow": "${env.POSTGRES_MAX_OVERFLOW:=20}",
-            "pool_recycle": "${env.POSTGRES_POOL_RECYCLE:=-1}",
+            "pool_recycle": "${env.POSTGRES_POOL_RECYCLE:=3600}",
             "pool_pre_ping": "${env.POSTGRES_POOL_PRE_PING:=true}",
         }
 
@@ -267,8 +278,8 @@ StorageBackendConfig = Annotated[
 ]
 
 
-class InferenceStoreReference(SqlStoreReference):
-    """Inference store configuration with queue tuning."""
+class _QueuedSqlStoreReference(SqlStoreReference):
+    """Base for SQL store references with background write-queue tuning."""
 
     max_write_queue_size: int = Field(
         default=10000,
@@ -280,7 +291,18 @@ class InferenceStoreReference(SqlStoreReference):
     )
 
 
-class ResponsesStoreReference(InferenceStoreReference):
+class InferenceStoreReference(_QueuedSqlStoreReference):
+    """Inference store configuration with queue tuning."""
+
+    enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether the store is enabled; when false, the store is not constructed and payloads are not persisted"
+        ),
+    )
+
+
+class ResponsesStoreReference(_QueuedSqlStoreReference):
     """Responses store configuration with queue tuning."""
 
     table_name: str = Field(
@@ -324,6 +346,10 @@ class ServerStoresConfig(BaseModel):
     connectors: SqlStoreReference | None = Field(
         default=SqlStoreReference(backend="sql_default", table_name="connectors"),
         description="Connectors store configuration (uses SQL backend)",
+    )
+    vector_stores: SqlStoreReference | None = Field(
+        default=None,
+        description="Vector store metadata configuration (uses SQL backend)",
     )
 
     @model_validator(mode="before")

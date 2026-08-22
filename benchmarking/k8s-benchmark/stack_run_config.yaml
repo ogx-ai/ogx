@@ -4,8 +4,6 @@ apis:
 - agents
 - files
 - inference
-- files
-- safety
 - tool_runtime
 - vector_io
 providers:
@@ -19,9 +17,6 @@ providers:
       tls_verify: ${env.VLLM_TLS_VERIFY:=true}
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
-    config: {}
-  - provider_id: transformers
-    provider_type: inline::transformers
     config: {}
   files:
   - provider_id: builtin-files
@@ -39,11 +34,6 @@ providers:
       persistence:
         namespace: vector_io::chroma_remote
         backend: kv_default
-  safety:
-  - provider_id: llama-guard
-    provider_type: inline::llama-guard
-    config:
-      excluded_categories: []
   agents:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -115,13 +105,11 @@ registered_resources:
     model_type: embedding
   - metadata: {}
     model_id: Qwen/Qwen3-Reranker-0.6B
-    provider_id: transformers
+    provider_id: sentence-transformers
     model_type: rerank
   - model_id: ${env.INFERENCE_MODEL}
     provider_id: vllm-inference
     model_type: llm
-  shields:
-  - shield_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
   vector_dbs: []
   datasets: []
   scoring_fns: []

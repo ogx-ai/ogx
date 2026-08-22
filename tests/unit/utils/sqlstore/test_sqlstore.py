@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import inspect
 
 from ogx.core.storage.datatypes import PostgresSqlStoreConfig
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
@@ -48,6 +49,28 @@ async def test_sqlstore_shutdown_disposes_engine():
         assert store._engine is None, (
             "Engine not disposed after shutdown. This causes process hang on exit with aiosqlite >= 0.22"
         )
+
+
+async def test_sqlstore_create_index_is_idempotent() -> None:
+    with TemporaryDirectory() as tmp_dir:
+        store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/indexes.db"))
+        await store.create_table(
+            "items",
+            {"id": ColumnType.STRING, "tenant": ColumnType.STRING, "created_at": ColumnType.INTEGER},
+        )
+
+        await store.create_index("idx_items_tenant_created", "items", ["tenant", "created_at"])
+        await store.create_index("idx_items_tenant_created", "items", ["tenant", "created_at"])
+
+        assert store._engine is not None
+        async with store._engine.connect() as connection:
+            indexes = await connection.run_sync(lambda sync_connection: inspect(sync_connection).get_indexes("items"))
+        assert [index["name"] for index in indexes].count("idx_items_tenant_created") == 1
+        assert next(index for index in indexes if index["name"] == "idx_items_tenant_created")["column_names"] == [
+            "tenant",
+            "created_at",
+        ]
+        await store.shutdown()
 
 
 async def test_sqlite_sqlstore():
@@ -559,7 +582,7 @@ async def test_postgres_pool_config_defaults():
     cfg = PostgresSqlStoreConfig(user="test", password="test")
     assert cfg.pool_size == 10
     assert cfg.max_overflow == 20
-    assert cfg.pool_recycle == -1
+    assert cfg.pool_recycle == 3600
 
 
 async def test_postgres_pool_kwargs_propagate_to_engine():
@@ -602,3 +625,34 @@ async def test_pool_recycle_is_configurable():
         pool_recycle=300,
     )
     assert cfg.pool_recycle == 300
+
+
+async def test_late_table_creation_after_engine_init():
+    """Tables registered after the engine has started are still physically created.
+
+    When one provider triggers _ensure_engine (via a data operation) before another
+    provider registers its tables, the late tables must still be created in the
+    database. Regression test for the 'no such table: responses' CI failure.
+    """
+    with TemporaryDirectory() as tmp_dir:
+        db_path = tmp_dir + "/late_table.db"
+        config = SqliteSqlStoreConfig(db_path=db_path)
+        store = SqlAlchemySqlStoreImpl(config)
+
+        await store.create_table(
+            "early_table",
+            {"id": ColumnDefinition(type=ColumnType.STRING, primary_key=True), "data": ColumnType.STRING},
+        )
+        await store.insert("early_table", {"id": "1", "data": "hello"})
+
+        await store.create_table(
+            "late_table",
+            {"id": ColumnDefinition(type=ColumnType.STRING, primary_key=True), "value": ColumnType.STRING},
+        )
+        await store.insert("late_table", {"id": "a", "value": "world"})
+
+        result = await store.fetch_all("late_table")
+        assert len(result.data) == 1
+        assert result.data[0]["value"] == "world"
+
+        await store.shutdown()

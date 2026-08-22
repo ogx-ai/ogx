@@ -1,0 +1,96 @@
+{
+  "test_id": null,
+  "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "gpt-4o-mini",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Remember the compaction code word: slate."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "OK."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Compress this conversation for later continuation."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work."
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "gpt-4o-mini",
+    "provider_metadata": {
+      "openai_sdk_version": "2.38.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-4c4e47bc4f67",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "### Handoff Summary for CONTEXT CHECKPOINT COMPACTION\n\n#### Current Progress and Key Decisions Made\n- User initiated a conversation focused on compressing and summarizing information for easy continuation.\n- The code word \"slate\" was established for reference in future tasks.\n\n#### Important Context, Constraints, or User Preferences\n- User prefers concise, structured responses when summarizing or handing off tasks.\n- Effectiveness in maintaining context during transitions is critical.\n\n#### What Remains to Be Done (Next Steps)\n1. Await further instructions or inquiries from the user.\n2. Be prepared to provide detailed summaries or compaction based on new user inputs related to prior discussions.\n\n#### Critical Data, Examples, or References Needed\n- The established compaction code word \"slate\" for context reference.\n- Familiarity with previous topics discussed may be necessary if the user revisits or expands on those themes.\n\nThis summary should enable a smooth transition and continuation of tasks with the user.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": [],
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "gpt-4o-mini-2024-07-18",
+        "object": "chat.completion",
+        "service_tier": "default",
+        "system_fingerprint": "fp_aa2771c053",
+        "usage": {
+          "completion_tokens": 194,
+          "prompt_tokens": 126,
+          "total_tokens": 320,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -131,7 +131,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             if doc.metadata.distance is None:
@@ -201,7 +201,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             score = doc.metadata.score if doc.metadata.score is not None else 0.0
@@ -275,7 +275,7 @@ class WeaviateIndex(EmbeddingIndex):
                 chunk_dict = json.loads(chunk_json)
                 chunk = load_embedded_chunk_with_backward_compat(chunk_dict)
             except Exception:
-                log.exception(f"Failed to parse document: {chunk_json}")
+                log.exception("Failed to parse document", chunk_content_length=len(chunk_json))
                 continue
 
             score = doc.metadata.score if doc.metadata.score is not None else 0.0
@@ -298,6 +298,7 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         inference_api: Inference,
         files_api: Files | None,
         file_processor_api: FileProcessors | None = None,
+        policy: list | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -307,18 +308,21 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         self.cache = {}
         self.vector_store_table = None
         self.metadata_collection_name = "openai_vector_stores_metadata"
+        self._policy = policy or []
 
     def _get_client(self) -> weaviate.WeaviateClient:
         if "localhost" in self.config.weaviate_cluster_url:
-            log.info("Using Weaviate locally in container")
             host, port = self.config.weaviate_cluster_url.split(":")
-            key = "local_test"
+            key = f"local::{host}::{port}"
+            if key in self.client_cache:
+                return self.client_cache[key]
+            log.info("Using Weaviate locally in container")
             client = weaviate.connect_to_local(host=host, port=port)
         else:
-            log.info("Using Weaviate remote cluster with URL")
             key = f"{self.config.weaviate_cluster_url}::{self.config.weaviate_api_key}"
             if key in self.client_cache:
                 return self.client_cache[key]
+            log.info("Using Weaviate remote cluster with URL")
             client = weaviate.connect_to_weaviate_cloud(
                 cluster_url=self.config.weaviate_cluster_url,
                 auth_credentials=Auth.api_key(self.config.weaviate_api_key),
@@ -334,6 +338,11 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
         else:
             self.kvstore = None
             log.info("No kvstore configured, registry will not persist across restarts")
+
+        if self.config.metadata_store:
+            from ogx.core.storage.sqlstore import authorized_sqlstore
+
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         # Load existing vector DB definitions
         if self.kvstore is not None:
@@ -370,6 +379,10 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 ],
             )
 
+        if self.kvstore is not None:
+            key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+            await self.kvstore.set(key=key, value=vector_store.model_dump_json())
+
         self.cache[vector_store.identifier] = VectorStoreWithIndex(
             vector_store, WeaviateIndex(client=client, collection_name=sanitized_collection_name), self.inference_api
         )
@@ -377,11 +390,13 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
     async def unregister_vector_store(self, vector_store_id: str) -> None:
         client = self._get_client()
         sanitized_collection_name = sanitize_collection_name(vector_store_id, weaviate_format=True)
-        if vector_store_id not in self.cache or client.collections.exists(sanitized_collection_name) is False:
-            return
-        client.collections.delete(sanitized_collection_name)
-        await self.cache[vector_store_id].index.delete()
-        del self.cache[vector_store_id]
+        if vector_store_id in self.cache and client.collections.exists(sanitized_collection_name):
+            client.collections.delete(sanitized_collection_name)
+            await self.cache[vector_store_id].index.delete()
+            del self.cache[vector_store_id]
+
+        if self.kvstore is not None:
+            await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def _get_and_cache_vector_store_index(self, vector_store_id: str) -> VectorStoreWithIndex | None:
         if vector_store_id in self.cache:

@@ -28,8 +28,12 @@ from ogx_api.openai_responses import (
     OpenAIResponseInputToolMCP,
     OpenAIResponseInputToolWebSearch,
     OpenAIResponseMessage,
+    OpenAIResponseObjectStreamResponseContentPartDone,
+    OpenAIResponseObjectStreamResponseOutputItemDone,
+    OpenAIResponseObjectStreamResponseOutputTextDelta,
     WebSearchToolTypes,
 )
+from ogx_api.responses.models import CreateResponseRequest
 from ogx_api.tools import ListToolDefsResponse, ToolDef, ToolInvocationResult
 from ogx_api.vector_io import (
     VectorStoreContent,
@@ -73,14 +77,16 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
         openai_responses_impl.responses_store.upsert_response_object.reset_mock()
 
         result = await openai_responses_impl.create_openai_response(
-            input=input_text,
-            model=model,
-            temperature=0.1,
-            tools=[
-                OpenAIResponseInputToolWebSearch(
-                    name=tool_name,
-                )
-            ],
+            CreateResponseRequest(
+                input=input_text,
+                model=model,
+                temperature=0.1,
+                tools=[
+                    OpenAIResponseInputToolWebSearch(
+                        type=tool_name,
+                    )
+                ],
+            )
         )
 
         # Verify
@@ -92,7 +98,10 @@ async def test_create_openai_response_with_string_input_with_tools(openai_respon
 
         second_call = mock_inference_api.openai_chat_completion.call_args_list[1]
         second_params = second_call.args[0]
-        assert second_params.messages[-1].content == "Dublin"
+        # web_search results are wrapped in untrusted-content delimiters (#6263)
+        # before being fed back to the model -- the raw content is no longer
+        # passed through verbatim.
+        assert "Dublin" in second_params.messages[-1].content
         assert second_params.temperature == 0.1
 
         openai_responses_impl.tool_groups_api.get_tool.assert_called_once_with("web_search")
@@ -143,19 +152,21 @@ async def test_create_openai_response_with_tool_call_type_none(openai_responses_
 
     # Execute
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=True,
-        temperature=0.1,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_weather",
-                description="Get current temperature for a given location.",
-                parameters={
-                    "location": "string",
-                },
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            temperature=0.1,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get current temperature for a given location.",
+                    parameters={
+                        "location": "string",
+                    },
+                )
+            ],
+        )
     )
 
     # Check that we got the content from our mocked tool execution result
@@ -241,15 +252,17 @@ async def test_create_openai_response_with_tool_call_function_arguments_none(ope
     # Function does not accept arguments
     mock_inference_api.openai_chat_completion.return_value = fake_stream_toolcall()
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=True,
-        temperature=0.1,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_current_time", description="Get current time for system's timezone", parameters={}
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            temperature=0.1,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_current_time", description="Get current time for system's timezone", parameters={}
+                )
+            ],
+        )
     )
     chunks = [chunk async for chunk in result]
     assert [chunk.type for chunk in chunks] == [
@@ -265,17 +278,19 @@ async def test_create_openai_response_with_tool_call_function_arguments_none(ope
     # Function accepts optional arguments
     mock_inference_api.openai_chat_completion.return_value = fake_stream_toolcall()
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=True,
-        temperature=0.1,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_current_time",
-                description="Get current time for system's timezone",
-                parameters={"timezone": "string"},
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            temperature=0.1,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_current_time",
+                    description="Get current time for system's timezone",
+                    parameters={"timezone": "string"},
+                )
+            ],
+        )
     )
     chunks = [chunk async for chunk in result]
     assert [chunk.type for chunk in chunks] == [
@@ -291,17 +306,19 @@ async def test_create_openai_response_with_tool_call_function_arguments_none(ope
     # Function accepts optional arguments with additional optional fields
     mock_inference_api.openai_chat_completion.return_value = fake_stream_toolcall()
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=True,
-        temperature=0.1,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_current_time",
-                description="Get current time for system's timezone",
-                parameters={"timezone": "string", "location": "string"},
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            temperature=0.1,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_current_time",
+                    description="Get current time for system's timezone",
+                    parameters={"timezone": "string", "location": "string"},
+                )
+            ],
+        )
     )
     chunks = [chunk async for chunk in result]
     assert [chunk.type for chunk in chunks] == [
@@ -328,13 +345,15 @@ async def test_reuse_mcp_tool_list(
     )
 
     res1 = await openai_responses_impl.create_openai_response(
-        input="What is 2+2?",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        store=True,
-        tools=[
-            OpenAIResponseInputToolFunction(name="fake", parameters=None),
-            OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
-        ],
+        CreateResponseRequest(
+            input="What is 2+2?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=True,
+            tools=[
+                OpenAIResponseInputToolFunction(name="fake", parameters=None),
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+            ],
+        )
     )
     args = mock_responses_store.upsert_response_object.call_args
     data = args.kwargs["response_object"].model_dump()
@@ -344,13 +363,15 @@ async def test_reuse_mcp_tool_list(
     mock_responses_store.get_response_object.return_value = stored
 
     res2 = await openai_responses_impl.create_openai_response(
-        previous_response_id=res1.id,
-        input="Now what is 3+3?",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        store=True,
-        tools=[
-            OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
-        ],
+        CreateResponseRequest(
+            previous_response_id=res1.id,
+            input="Now what is 3+3?",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=True,
+            tools=[
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+            ],
+        )
     )
     assert len(mock_inference_api.openai_chat_completion.call_args_list) == 2
     second_call = mock_inference_api.openai_chat_completion.call_args_list[1]
@@ -391,12 +412,14 @@ async def test_mcp_tool_connector_id_resolved_to_server_url(
 
     # Create a response using connector_id instead of server_url
     result = await openai_responses_impl.create_openai_response(
-        input="Test connector resolution",
-        model="meta-llama/Llama-3.1-8B-Instruct",
-        store=True,
-        tools=[
-            OpenAIResponseInputToolMCP(server_label="my-label", connector_id="my-mcp-connector"),
-        ],
+        CreateResponseRequest(
+            input="Test connector resolution",
+            model="meta-llama/Llama-3.1-8B-Instruct",
+            store=True,
+            tools=[
+                OpenAIResponseInputToolMCP(server_label="my-label", connector_id="my-mcp-connector"),
+            ],
+        )
     )
 
     # Verify the connector_id was resolved via the connectors API
@@ -558,6 +581,42 @@ async def test_file_search_results_include_chunk_metadata_attributes(mock_vector
     ]
 
 
+async def test_file_search_works_without_explicit_vector_stores_config(mock_vector_io_api):
+    """Test that file_search works when vector_stores_config is not passed to ToolExecutor."""
+    query = "What is machine learning?"
+    vector_store_id = "test_vector_store"
+
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=[query],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="doc-123",
+                filename="ml-intro.md",
+                content=[VectorStoreContent(type="text", text="Machine learning is a subset of AI")],
+                score=0.95,
+                attributes={},
+            ),
+        ],
+    )
+
+    tool_executor = ToolExecutor(
+        tool_groups_api=None,  # type: ignore
+        tool_runtime_api=None,  # type: ignore
+        vector_io_api=mock_vector_io_api,
+        mcp_session_manager=None,
+    )
+
+    file_search_tool = OpenAIResponseInputToolFileSearch(vector_store_ids=[vector_store_id])
+    result = await tool_executor._execute_file_search_via_vector_store(
+        query=query,
+        response_file_search_tool=file_search_tool,
+    )
+
+    mock_vector_io_api.openai_search_vector_store.assert_called_once()
+    assert result.content is not None
+
+
 async def test_tool_call_arguments_arrive_in_subsequent_delta(openai_responses_impl, mock_inference_api):
     """Test that tool call arguments are correctly accumulated when the model streams
     arguments=None in the first delta and actual arguments in a subsequent delta.
@@ -623,17 +682,23 @@ async def test_tool_call_arguments_arrive_in_subsequent_delta(openai_responses_i
     mock_inference_api.openai_chat_completion.return_value = fake_stream_vllm_style()
 
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=True,
-        temperature=0.1,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_weather",
-                description="Get current temperature for a given location.",
-                parameters={"type": "object", "properties": {"location": {"type": "string"}}, "required": ["location"]},
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            temperature=0.1,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get current temperature for a given location.",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                )
+            ],
+        )
     )
     chunks = [chunk async for chunk in result]
 
@@ -727,16 +792,22 @@ async def test_tool_call_arguments_split_across_multiple_deltas(openai_responses
     mock_inference_api.openai_chat_completion.return_value = fake_stream_split_args()
 
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=True,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_weather",
-                description="Get current temperature for a given location.",
-                parameters={"type": "object", "properties": {"location": {"type": "string"}}, "required": ["location"]},
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_weather",
+                    description="Get current temperature for a given location.",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                )
+            ],
+        )
     )
     chunks = [chunk async for chunk in result]
 
@@ -784,16 +855,18 @@ async def test_tool_call_no_parameters_still_returns_empty_json(openai_responses
     mock_inference_api.openai_chat_completion.return_value = fake_stream_no_args()
 
     result = await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=True,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                name="get_current_time",
-                description="Get the current time",
-                parameters={},
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=True,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    name="get_current_time",
+                    description="Get the current time",
+                    parameters={},
+                )
+            ],
+        )
     )
     chunks = [chunk async for chunk in result]
 
@@ -818,18 +891,24 @@ async def test_function_tool_strict_field_excluded_when_none(openai_responses_im
 
     # Execute with function tool that has strict=None (default)
     await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=False,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                type="function",
-                name="get_weather",
-                description="Get weather information",
-                parameters={"type": "object", "properties": {"location": {"type": "string"}}, "required": ["location"]},
-                # strict is None by default
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    type="function",
+                    name="get_weather",
+                    description="Get weather information",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                    # strict is None by default
+                )
+            ],
+        )
     )
 
     # Verify the call was made
@@ -863,18 +942,24 @@ async def test_function_tool_strict_field_included_when_set(openai_responses_imp
 
     # Execute with function tool that has strict=True
     await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=False,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                type="function",
-                name="get_weather",
-                description="Get weather information",
-                parameters={"type": "object", "properties": {"location": {"type": "string"}}, "required": ["location"]},
-                strict=True,  # Explicitly set to True
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    type="function",
+                    name="get_weather",
+                    description="Get weather information",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                    strict=True,  # Explicitly set to True
+                )
+            ],
+        )
     )
 
     # Verify the call was made
@@ -905,18 +990,24 @@ async def test_function_tool_strict_false_included(openai_responses_impl, mock_i
 
     # Execute with function tool that has strict=False
     await openai_responses_impl.create_openai_response(
-        input=input_text,
-        model=model,
-        stream=False,
-        tools=[
-            OpenAIResponseInputToolFunction(
-                type="function",
-                name="get_weather",
-                description="Get weather information",
-                parameters={"type": "object", "properties": {"location": {"type": "string"}}, "required": ["location"]},
-                strict=False,  # Explicitly set to False
-            )
-        ],
+        CreateResponseRequest(
+            input=input_text,
+            model=model,
+            stream=False,
+            tools=[
+                OpenAIResponseInputToolFunction(
+                    type="function",
+                    name="get_weather",
+                    description="Get weather information",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                        "required": ["location"],
+                    },
+                    strict=False,  # Explicitly set to False
+                )
+            ],
+        )
     )
 
     # Verify the call was made
@@ -927,3 +1018,275 @@ async def test_function_tool_strict_false_included(openai_responses_impl, mock_i
     tool_function = params.tools[0]["function"]
     assert "strict" in tool_function, "strict field should be included when explicitly set to False"
     assert tool_function["strict"] is False, "strict field should be False"
+
+
+async def test_file_search_citation_populated_when_model_cites_inline(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """Regression test for annotations never being populated for file_search results.
+
+    Round 1: the model calls file_search. Round 2: the model answers, citing the
+    retrieved file with the instructed `<|file-id|>` marker. The final response's
+    output_text annotations should contain a matching file_citation.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            )
+        ],
+    )
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        fake_stream("file_search_final_answer_completion.yaml"),
+    ]
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+        )
+    )
+
+    messages = [item for item in result.output if isinstance(item, OpenAIResponseMessage)]
+    assert len(messages) == 1
+    text_content = messages[0].content[0]
+    assert text_content.text == "Global warming is caused by greenhouse gases."
+    assert len(text_content.annotations) == 1
+    assert text_content.annotations[0].file_id == "file-abc123"
+    assert text_content.annotations[0].filename == "climate.pdf"
+
+
+async def test_file_search_citation_falls_back_when_model_does_not_cite(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """When a weak/local model ignores the citation-marker instruction entirely, the
+    response should still attribute the answer to the single highest-scoring retrieved
+    file rather than returning empty annotations, and rather than citing every file
+    retrieved this turn (which would overstate how many sources actually back the answer).
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            ),
+            VectorStoreSearchResponse(
+                file_id="file-def456",
+                filename="unrelated.pdf",
+                score=0.3,
+                content=[VectorStoreContent(type="text", text="Some other, less relevant chunk.")],
+            ),
+        ],
+    )
+
+    async def uncited_final_answer():
+        yield ChatCompletionChunk(
+            id="chat-completion-458",
+            created=1234567892,
+            model="ollama/llama3.2:3b",
+            object="chat.completion.chunk",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        role="assistant",
+                        content="Global warming is caused by greenhouse gases trapping heat.",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+        )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        uncited_final_answer(),
+    ]
+
+    result = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+        )
+    )
+
+    messages = [item for item in result.output if isinstance(item, OpenAIResponseMessage)]
+    assert len(messages) == 1
+    text_content = messages[0].content[0]
+    assert text_content.text == "Global warming is caused by greenhouse gases trapping heat."
+    assert len(text_content.annotations) == 1
+    assert text_content.annotations[0].file_id == "file-abc123"
+    assert text_content.annotations[0].filename == "climate.pdf"
+
+
+async def test_file_search_citation_falls_back_when_model_does_not_cite_streaming(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """Same scenario as test_file_search_citation_falls_back_when_model_does_not_cite, but
+    driven through the actual `stream=True` SSE path rather than the aggregated response.
+
+    The two non-streaming citation tests above only ever inspect the final aggregated
+    OpenAIResponseObject; they never consume the raw event stream, so they never exercise
+    (i.e. assert against) the content_part.done / output_item.done events built directly in
+    streaming.py's per-chunk processing loop. This drives the same fixtures through
+    `request.stream=True` and asserts those streamed events themselves carry the
+    single-highest-scoring-file fallback citation, not one annotation per retrieved file.
+    Two files are retrieved (with different scores) so that "cite only the best one" is
+    actually distinguishable from the old "cite every retrieved file" behavior.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            ),
+            VectorStoreSearchResponse(
+                file_id="file-def456",
+                filename="unrelated.pdf",
+                score=0.3,
+                content=[VectorStoreContent(type="text", text="Some other, less relevant chunk.")],
+            ),
+        ],
+    )
+
+    async def uncited_final_answer():
+        yield ChatCompletionChunk(
+            id="chat-completion-458",
+            created=1234567892,
+            model="ollama/llama3.2:3b",
+            object="chat.completion.chunk",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(
+                        role="assistant",
+                        content="Global warming is caused by greenhouse gases trapping heat.",
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+        )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        uncited_final_answer(),
+    ]
+
+    stream = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+            stream=True,
+        )
+    )
+
+    content_part_done_events = []
+    output_item_done_message_events = []
+    async for event in stream:
+        if isinstance(event, OpenAIResponseObjectStreamResponseContentPartDone):
+            content_part_done_events.append(event)
+        elif isinstance(event, OpenAIResponseObjectStreamResponseOutputItemDone) and isinstance(
+            event.item, OpenAIResponseMessage
+        ):
+            output_item_done_message_events.append(event)
+
+    # The final answer round is the only one that streams actual text content.
+    final_content_part_events = [e for e in content_part_done_events if e.part.text]
+    assert len(final_content_part_events) == 1
+    part = final_content_part_events[0].part
+    assert part.text == "Global warming is caused by greenhouse gases trapping heat."
+    assert len(part.annotations) == 1
+    assert part.annotations[0].file_id == "file-abc123"
+    assert part.annotations[0].filename == "climate.pdf"
+
+    final_output_item_events = [e for e in output_item_done_message_events if e.item.content]
+    assert len(final_output_item_events) == 1
+    item_content = final_output_item_events[0].item.content[0]
+    assert item_content.text == "Global warming is caused by greenhouse gases trapping heat."
+    assert len(item_content.annotations) == 1
+    assert item_content.annotations[0].file_id == "file-abc123"
+    assert item_content.annotations[0].filename == "climate.pdf"
+
+
+async def test_streaming_deltas_stay_consistent_with_final_text_when_marker_split_across_chunks(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api
+):
+    """Regression test: text delta events must stay consistent with the cleaned text in
+    content_part.done, even when a citation marker is split across multiple raw provider
+    chunks (a real possibility with live token-by-token streaming). Concatenating every
+    delta's text must reproduce exactly the cleaned final text, and no individual delta may
+    ever leak a fragment of the raw marker syntax.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["What is global warming?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-abc123",
+                filename="climate.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="Greenhouse gases trap heat.")],
+            )
+        ],
+    )
+
+    async def split_marker_final_answer():
+        # "<|file-abc123|>" is deliberately split across three separate chunk deltas.
+        chunks_content = ["Global warming is caused by greenhouse gases ", "<|file-abc", "123|>", "."]
+        for i, delta_text in enumerate(chunks_content):
+            yield ChatCompletionChunk(
+                id="chat-completion-999",
+                created=1234567893,
+                model="ollama/llama3.2:3b",
+                object="chat.completion.chunk",
+                choices=[
+                    Choice(
+                        index=0,
+                        delta=ChoiceDelta(role="assistant", content=delta_text),
+                        finish_reason="stop" if i == len(chunks_content) - 1 else None,
+                    )
+                ],
+            )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        split_marker_final_answer(),
+    ]
+
+    stream = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="What is global warming in two lines?",
+            model="ollama/llama3.2:3b",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+            stream=True,
+        )
+    )
+
+    delta_texts = []
+    content_part_done_text = None
+    async for event in stream:
+        if isinstance(event, OpenAIResponseObjectStreamResponseOutputTextDelta):
+            delta_texts.append(event.delta)
+            assert "<|file-" not in event.delta, "raw marker syntax must never leak into a delta"
+            assert "|>" not in event.delta, "raw marker syntax must never leak into a delta"
+        elif isinstance(event, OpenAIResponseObjectStreamResponseContentPartDone) and event.part.text:
+            content_part_done_text = event.part.text
+
+    assert content_part_done_text == "Global warming is caused by greenhouse gases."
+    assert "".join(delta_texts) == content_part_done_text

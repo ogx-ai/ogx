@@ -4,7 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from collections.abc import Generator, Mapping
+import asyncio
+from collections.abc import AsyncGenerator, Generator, Mapping
 from typing import Any, override
 
 import httpx
@@ -55,6 +56,28 @@ class HttpxOciAuth(httpx.Auth):
 
         yield request
 
+    @override
+    async def async_auth_flow(self, request: httpx.Request) -> AsyncGenerator[httpx.Request, httpx.Response]:
+        try:
+            content = request.content
+        except httpx.RequestNotRead:
+            content = await request.aread()
+
+        def _sign(content: bytes) -> dict:
+            req = requests.Request(
+                method=request.method,
+                url=str(request.url),
+                headers=dict(request.headers),
+                data=content,
+            )
+            prepared_request = req.prepare()
+            self.signer.do_request_sign(prepared_request)  # type: ignore
+            return dict(prepared_request.headers)
+
+        signed_headers = await asyncio.to_thread(_sign, content)
+        request.headers.update(signed_headers)
+        yield request
+
 
 class OciInstancePrincipalAuth(HttpxOciAuth):
     """OCI authentication using instance principal credentials."""
@@ -78,6 +101,6 @@ class OciUserPrincipalAuth(HttpxOciAuth):
             user=config["user"],
             fingerprint=config["fingerprint"],
             private_key_file_location=config.get("key_file"),
-            pass_phrase="none",  # type: ignore
+            pass_phrase="none",  # noqa: S106
             private_key_content=key_content,
         )

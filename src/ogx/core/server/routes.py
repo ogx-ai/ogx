@@ -9,6 +9,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from fastapi.routing import APIRoute
+
 from ogx.core.server.fastapi_router_registry import (
     _ROUTER_FACTORIES,
     build_fastapi_router,
@@ -101,3 +103,44 @@ def find_matching_route(method: str, path: str, route_impls: RouteImpls) -> Rout
             return func, path_params, route_path, webmethod
 
     raise ValueError(f"No endpoint found for {path}")
+
+
+def _collect_api_routes(routes: list[Any]) -> list[APIRoute]:
+    """Collect all APIRoute objects, recursing into included routers."""
+    api_routes: list[APIRoute] = []
+    for route in routes:
+        if isinstance(route, APIRoute):
+            api_routes.append(route)
+        elif hasattr(route, "original_router"):
+            # FastAPI >= 0.137 wraps include_router() results in _IncludedRouter
+            api_routes.extend(_collect_api_routes(route.original_router.routes))
+        elif hasattr(route, "routes"):
+            api_routes.extend(_collect_api_routes(route.routes))
+    return api_routes
+
+
+def build_route_impls_from_routes(routes: list[Any]) -> RouteImpls:
+    """Build RouteImpls from mounted FastAPI routes.
+
+    This is used by middleware to introspect registered routes without needing
+    the provider impls. Routes are introspected from the FastAPI router directly
+    rather than built from scratch during server startup.
+
+    Args:
+        routes: The list of routes from app.router.routes
+
+    Returns:
+        RouteImpls mapping method -> path regex -> (endpoint, path, RouteAuthInfo)
+    """
+    route_impls: RouteImpls = {}
+    for route in _collect_api_routes(routes):
+        methods = [m for m in (route.methods or []) if m != "HEAD"]
+        if not methods:
+            continue
+        method = methods[0].lower()
+        if method not in route_impls:
+            route_impls[method] = {}
+        is_public = (route.openapi_extra or {}).get(PUBLIC_ROUTE_KEY, False)
+        auth_info = RouteAuthInfo(require_authentication=not is_public)
+        route_impls[method][_convert_path_to_regex(route.path)] = (route.endpoint, route.path, auth_info)
+    return route_impls

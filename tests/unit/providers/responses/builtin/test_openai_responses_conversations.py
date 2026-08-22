@@ -31,6 +31,7 @@ from ogx_api.openai_responses import (
     OpenAIResponseObjectStreamResponseOutputItemDone,
     OpenAIResponseOutputMessageContentOutputText,
 )
+from ogx_api.responses.models import CreateResponseRequest
 
 
 @pytest.fixture
@@ -41,7 +42,6 @@ def responses_impl_with_conversations(
     mock_responses_store,
     mock_vector_io_api,
     mock_conversations_api,
-    mock_safety_api,
     mock_prompts_api,
     mock_files_api,
     mock_connectors_api,
@@ -54,7 +54,7 @@ def responses_impl_with_conversations(
         responses_store=mock_responses_store,
         vector_io_api=mock_vector_io_api,
         conversations_api=mock_conversations_api,
-        safety_api=mock_safety_api,
+        moderation_endpoint=None,
         prompts_api=mock_prompts_api,
         files_api=mock_files_api,
         connectors_api=mock_connectors_api,
@@ -75,7 +75,7 @@ class TestConversationValidation:
 
         with pytest.raises(ConversationNotFoundError):
             await responses_impl_with_conversations.create_openai_response(
-                input="Hello", model="test-model", conversation=conv_id, stream=False
+                CreateResponseRequest(input="Hello", model="test-model", conversation=conv_id, stream=False)
             )
 
 
@@ -218,7 +218,7 @@ class TestIntegrationWorkflow:
         conversation_id = "conv_" + "a" * 48
 
         response = await responses_impl_with_conversations.create_openai_response(
-            input=input_text, model="test-model", conversation=conversation_id, stream=False
+            CreateResponseRequest(input=input_text, model="test-model", conversation=conversation_id, stream=False)
         )
 
         assert response is not None
@@ -234,7 +234,7 @@ class TestIntegrationWorkflow:
             InvalidParameterError, match="Must match format 'conv_' followed by 48 lowercase hex characters"
         ):
             await responses_impl_with_conversations.create_openai_response(
-                input="Hello", model="test-model", conversation="invalid_id", stream=False
+                CreateResponseRequest(input="Hello", model="test-model", conversation="invalid_id", stream=False)
             )
 
     async def test_create_response_with_nonexistent_conversation(
@@ -246,7 +246,7 @@ class TestIntegrationWorkflow:
 
         with pytest.raises(ConversationNotFoundError) as exc_info:
             await responses_impl_with_conversations.create_openai_response(
-                input="Hello", model="test-model", conversation=conv_id, stream=False
+                CreateResponseRequest(input="Hello", model="test-model", conversation=conv_id, stream=False)
             )
 
         assert "not found" in str(exc_info.value)
@@ -256,7 +256,9 @@ class TestIntegrationWorkflow:
     ):
         with pytest.raises(InvalidParameterError, match="Provide only one") as exc_info:
             await responses_impl_with_conversations.create_openai_response(
-                input="test", model="test", conversation="conv_123", previous_response_id="resp_123"
+                CreateResponseRequest(
+                    input="test", model="test", conversation="conv_123", previous_response_id="resp_123"
+                )
             )
 
         assert "previous_response_id" in str(exc_info.value)
@@ -302,11 +304,9 @@ class TestStoreFalseConversationLeak:
         mock_inference_api.openai_chat_completion.return_value = self._fake_stream()
 
         result = await responses_impl_with_conversations.create_openai_response(
-            input="What is 2+2?",
-            model="test-model",
-            store=False,
-            conversation=conv_id,
-            stream=False,
+            CreateResponseRequest(
+                input="What is 2+2?", model="test-model", store=False, conversation=conv_id, stream=False
+            )
         )
 
         assert result.status == "completed"
@@ -330,11 +330,9 @@ class TestStoreFalseConversationLeak:
         mock_inference_api.openai_chat_completion.return_value = self._fake_stream()
 
         result = await responses_impl_with_conversations.create_openai_response(
-            input="What is 2+2?",
-            model="test-model",
-            store=True,
-            conversation=conv_id,
-            stream=False,
+            CreateResponseRequest(
+                input="What is 2+2?", model="test-model", store=True, conversation=conv_id, stream=False
+            )
         )
 
         assert result.status == "completed"
@@ -359,11 +357,9 @@ class TestStoreFalseConversationLeak:
 
         chunks = []
         async for chunk in await responses_impl_with_conversations.create_openai_response(
-            input="What is 2+2?",
-            model="test-model",
-            store=False,
-            conversation=conv_id,
-            stream=True,
+            CreateResponseRequest(
+                input="What is 2+2?", model="test-model", store=False, conversation=conv_id, stream=True
+            )
         ):
             chunks.append(chunk)
 

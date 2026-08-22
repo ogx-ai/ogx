@@ -5,32 +5,32 @@
 # the root directory of this source tree.
 
 import asyncio
-import concurrent.futures
 import os
 import sys
 import traceback
 import warnings
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
 from importlib.metadata import version as parse_version
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import yaml
 import zstandard
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import BadRequestError
+from packaging.version import InvalidVersion, Version
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ogx.core.access_control.access_control import AccessDeniedError
 from ogx.core.datatypes import (
     AuthenticationRequiredError,
+    LocalApiKeyAuthConfig,
     StackConfig,
-    process_cors_config,
+    TenancyMode,
 )
 from ogx.core.distribution import builtin_automatically_routed_apis
 from ogx.core.exceptions import translate_exception
@@ -40,7 +40,6 @@ from ogx.core.request_headers import (
     user_from_scope,
 )
 from ogx.core.server.fastapi_router_registry import (
-    _ROUTER_FACTORIES,
     build_fastapi_router,
     register_external_api_routers,
 )
@@ -54,9 +53,8 @@ from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
 from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
 
-from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware
-from .metrics import RequestMetricsMiddleware, build_route_to_api_map
-from .quota import QuotaMiddleware
+from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
+from .metrics import RequestMetricsMiddleware
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 
@@ -81,6 +79,19 @@ if os.environ.get("OGX_TRACE_WARNINGS"):
     warnings.showwarning = warn_with_traceback
 
 
+def _format_google_error_response(status_code: int, message: str) -> JSONResponse:
+    """Create a Google-format error JSONResponse for the Interactions API."""
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": {"code": status_code, "message": message}},
+    )
+
+
+def _is_interactions_path(request: Request) -> bool:
+    """Check if the request targets the Google Interactions API."""
+    return bool(request.url.path.startswith("/v1alpha/interactions"))
+
+
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle uncaught exceptions by translating them to JSON error responses.
 
@@ -93,6 +104,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     """
     traceback.print_exception(type(exc), exc, exc.__traceback__)
     http_exc = translate_exception(exc)
+
+    # Interactions API uses the Google error envelope for all errors,
+    # including request validation errors that are caught before the
+    # handler runs.
+    if _is_interactions_path(request):
+        message = str(http_exc.detail) if isinstance(http_exc.detail, str) else str(exc)
+        return _format_google_error_response(http_exc.status_code, message)
 
     # OpenAI-compat Vector Stores endpoints treat many "not found" conditions as 400s.
     # Our core exceptions model these as ResourceNotFoundError (mapped to 404 by default),
@@ -116,13 +134,6 @@ class StackApp(FastAPI):
         super().__init__(*args, **kwargs)
         self.stack: Stack = Stack(config)
 
-        # Initialize stack in a temporary event loop to set up impls for route registration.
-        # Storage backends use lazy engine initialization, so connections are created on
-        # first use in the correct event loop, avoiding event loop mismatch issues.
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(asyncio.run, self.stack.initialize())  # type: ignore[no-untyped-call]
-            future.result()
-
 
 @asynccontextmanager
 async def lifespan(app: StackApp) -> AsyncIterator[None]:
@@ -135,10 +146,56 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
 
     logger.info("Starting up OGX server", version=server_version)
     assert app.stack is not None
-    app.stack.create_registry_refresh_task()  # type: ignore[no-untyped-call]
+
+    # Initialize stack in uvicorn's event loop — no more temp-loop workaround.
+    # This runs before any requests are served, so routers can safely access
+    # impls at request time without event-loop binding issues.
+    await app.stack.initialize()
+
+    # Register routers from initialized impls.
+    # Router registration is deferred to lifespan because impls are None
+    # until Stack.initialize() completes.
+    impls = app.stack.impls
+    assert impls is not None
+
+    # Load and register external API routers if configured
+    external_apis = load_external_apis(app.stack.run_config)
+    if external_apis:
+        register_external_api_routers(external_apis)
+
+    if app.stack.run_config.apis:
+        apis_to_serve = set(app.stack.run_config.apis)
+    else:
+        apis_to_serve = set(impls.keys())
+
+    for inf in builtin_automatically_routed_apis():
+        # if we do not serve the corresponding router API, we should not serve the routing table API
+        if inf.router_api.value not in apis_to_serve:
+            continue
+        apis_to_serve.add(inf.routing_table_api.value)
+
+    apis_to_serve.add("admin")
+    apis_to_serve.add("inspect")
+    apis_to_serve.add("providers")
+    apis_to_serve.add("prompts")
+    apis_to_serve.add("conversations")
+
+    for api_str in apis_to_serve:
+        api = Api(api_str)
+        impl = impls[api]
+        router = build_fastapi_router(api, impl)
+        if router:
+            app.include_router(router)
+            logger.debug("Registered FastAPI router", api=str(api))
+
+    logger.debug("Serving APIs", apis=list(apis_to_serve))
+
+    # Start the registry refresh background task
+    app.stack.create_registry_refresh_task()
+
     yield
     logger.info("Shutting down")
-    await app.stack.shutdown()  # type: ignore[no-untyped-call]
+    await app.stack.shutdown()
 
 
 async def _send_error_response(send: Send, status: int, message: str) -> None:
@@ -154,12 +211,33 @@ async def _send_error_response(send: Send, status: int, message: str) -> None:
     await send({"type": "http.response.body", "body": error_msg})
 
 
+class HSTSMiddleware:
+    """Adds Strict-Transport-Security header to all HTTPS responses."""
+
+    def __init__(self, app: ASGIApp, max_age: int = 31536000) -> None:
+        self.app = app
+        self.hsts_value = f"max-age={max_age}; includeSubDomains".encode()
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
+        if scope["type"] == "http":
+
+            async def send_with_hsts(message: MutableMapping[str, Any]) -> None:
+                if message["type"] == "http.response.start":
+                    headers = list(message.get("headers", []))
+                    headers.append([b"strict-transport-security", self.hsts_value])
+                    message["headers"] = headers
+                await send(message)
+
+            return await self.app(scope, receive, send_with_hsts)
+        return await self.app(scope, receive, send)
+
+
 class ClientVersionMiddleware:
     """ASGI middleware that rejects requests from clients with incompatible major.minor versions."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        self.server_version = parse_version("ogx")
+        self.server_version = parse_version("ogx-api")
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         if scope["type"] == "http":
@@ -167,19 +245,25 @@ class ClientVersionMiddleware:
             client_version = headers.get(b"x-ogx-client-version", b"").decode()
             if client_version:
                 try:
-                    client_version_parts = tuple(map(int, client_version.split(".")[:2]))
-                    server_version_parts = tuple(map(int, self.server_version.split(".")[:2]))
-                    if client_version_parts != server_version_parts:
+                    if not _client_version_is_compatible(client_version, self.server_version):
                         return await _send_error_response(
                             send,
                             status=httpx.codes.UPGRADE_REQUIRED,
                             message=f"Client version {client_version} is not compatible with server version {self.server_version}. Please update your client.",
                         )
-                except (ValueError, IndexError):
+                except InvalidVersion:
                     # If version parsing fails, let the request through
                     pass
 
         return await self.app(scope, receive, send)
+
+
+def _client_version_is_compatible(client_version: str, server_version: str) -> bool:
+    client = Version(client_version)
+    server = Version(server_version)
+    if client.is_devrelease or server.is_devrelease or client.local or server.local:
+        return True
+    return (client.major, client.minor) == (server.major, server.minor)
 
 
 class ProviderDataMiddleware:
@@ -194,7 +278,7 @@ class ProviderDataMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
-        if scope["type"] == "http":
+        if scope["type"] in ("http", "websocket"):
             headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
             user = user_from_scope(dict(scope))
 
@@ -207,7 +291,7 @@ class ProviderDataMiddleware:
                         sync_test_context_from_provider_data,
                     )
 
-                    test_context_token = sync_test_context_from_provider_data()  # type: ignore[no-untyped-call]
+                    test_context_token = sync_test_context_from_provider_data()
                     reset_fn = reset_test_context
                 try:
                     return await self.app(scope, receive, send)
@@ -216,6 +300,146 @@ class ProviderDataMiddleware:
                         reset_fn(test_context_token)
 
         return await self.app(scope, receive, send)
+
+
+def validate_auth_security(config: StackConfig) -> None:
+    """Validate auth provider TLS settings.
+
+    Raises SystemExit if verify_tls=False unless insecure mode is enabled.
+    """
+    if not config.server.auth:
+        return
+    provider_config = config.server.auth.provider_config
+
+    # Hard error: local_api_key doesn't resolve tenant IDs, so multi-tenancy
+    # is incompatible. The admin will get runtime 401s with no explanation.
+    tenancy_mode = config.server.tenancy.mode
+    if isinstance(provider_config, LocalApiKeyAuthConfig) and tenancy_mode == TenancyMode.MULTI:
+        raise SystemExit(
+            "server.auth.provider_config.type is 'local_api_key' but "
+            "server.tenancy.mode is 'multi'. The local_api_key provider does "
+            "not resolve tenant IDs. Use tenancy mode 'single' or 'disabled' "
+            "instead, or switch to an auth provider that resolves tenant_ids "
+            "(oauth2_token, kubernetes, upstream_header, custom)."
+        )
+
+    if not provider_config or not hasattr(provider_config, "verify_tls") or provider_config.verify_tls:
+        return
+
+    if config.server.insecure:
+        logger.warning(
+            "TLS verification is disabled in auth provider config (verify_tls=False). "
+            "This is insecure and should only be used for local development or testing."
+        )
+        return
+    raise SystemExit(
+        "FATAL: verify_tls=False in auth provider config. TLS verification is required. Use '--insecure' to override."
+    )
+
+
+class ZstdDecompressionMiddleware:
+    """
+    ASGI middleware that decompresses zstd-encoded request bodies.
+
+    If the request body is not zstd-encoded, it passes through unchanged.
+    If decompression fails, it logs a warning and passes the original compressed body to the app.
+    If the decompressed body exceeds 100 MB, it returns a 413 Payload Too Large response.
+
+    This is useful for Codex CLI requests that send zstd-compressed payloads to reduce bandwidth usage.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        headers = {k.lower(): v for k, v in scope.get("headers", [])}
+        content_encoding = headers.get(b"content-encoding", b"").decode().lower()
+
+        if content_encoding != "zstd":
+            return await self.app(scope, receive, send)
+
+        # Collect the full request body first (needed for both success and fallback)
+        body_parts: list[bytes] = []
+        while True:
+            message = await receive()
+            body_parts.append(message.get("body", b""))
+            if not message.get("more_body", False):
+                break
+
+        compressed_body = b"".join(body_parts)
+
+        try:
+            max_decompressed_size = 100 * 1024 * 1024  # 100 MB
+
+            def _decompress_zstd(compressed: bytes, max_size: int) -> tuple[bytes | None, bool]:
+                decompressor = zstandard.ZstdDecompressor()
+                reader = decompressor.stream_reader(compressed)
+                try:
+                    data = reader.read(max_size)
+                    is_oversized = bool(reader.read(1))
+                    return (None, True) if is_oversized else (data, False)
+                finally:
+                    reader.close()
+
+            decompressed_body, oversized = await asyncio.to_thread(
+                _decompress_zstd, compressed_body, max_decompressed_size
+            )
+
+            if oversized:
+                return await _send_error_response(
+                    send,
+                    status=413,
+                    message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
+                )
+
+            if decompressed_body is None:
+                return await _send_error_response(
+                    send,
+                    status=500,
+                    message="Failed to decompress request body",
+                )
+
+            # Strip content-encoding header and update content-length
+            new_headers = [
+                (k, v) for k, v in scope["headers"] if k.lower() not in (b"content-encoding", b"content-length")
+            ]
+            new_headers.append((b"content-length", str(len(decompressed_body)).encode()))
+            scope["headers"] = new_headers
+
+            # Feed the decompressed body back, then delegate to the
+            # original receive for disconnect detection so streaming
+            # responses stay alive until the client actually disconnects.
+            body_sent = False
+
+            async def receive_decompressed() -> MutableMapping[str, Any]:
+                nonlocal body_sent
+                if not body_sent:
+                    body_sent = True
+                    return {"type": "http.request", "body": decompressed_body, "more_body": False}
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
+
+            return await self.app(scope, receive_decompressed, send)
+        except Exception as e:
+            logger.warning("Failed to decompress zstd request body, falling back to compressed data", error=str(e))
+
+            # Replay the original compressed body since decompression failed
+            body_sent = False
+
+            async def receive_original() -> MutableMapping[str, Any]:
+                nonlocal body_sent
+                if not body_sent:
+                    body_sent = True
+                    return {"type": "http.request", "body": compressed_body, "more_body": False}
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
+
+            return await self.app(scope, receive_original, send)
 
 
 def create_app() -> StackApp:
@@ -265,177 +489,53 @@ def create_app() -> StackApp:
         config=config,
     )
 
+    # Add HSTS middleware when TLS is configured and HSTS is not disabled
+    if config.server.tls_certfile and config.server.tls_keyfile and config.server.hsts_max_age > 0:
+        app.add_middleware(HSTSMiddleware, max_age=config.server.hsts_max_age)
+
     if not os.environ.get("OGX_DISABLE_VERSION_CHECK"):
         app.add_middleware(ClientVersionMiddleware)
 
     app.add_middleware(ProviderDataMiddleware)
 
-    impls = app.stack.impls
-    assert impls is not None
+    validate_auth_security(config)
+
+    if not (config.server.auth and config.server.auth.provider_config):
+        logger.warning(
+            "Authentication is not configured. All API endpoints are accessible without credentials. "
+            "See https://ogx-ai.github.io/docs/distributions/configuration#authentication-configuration"
+            " to configure authentication.",
+        )
 
     if config.server.auth:
         # Add route authorization middleware if route_policy is configured
         # This can work independently of authentication
         # NOTE: Add this FIRST because middleware wraps in reverse order (last added runs first)
-        # We want: Request → Auth → RouteAuth → App
+        # We want: Request → Auth → Tenancy → RouteAuth → App
         if config.server.auth.route_policy:
             logger.info("Enabling route-level authorization", rule_count=len(config.server.auth.route_policy))
             app.add_middleware(RouteAuthorizationMiddleware, route_policy=config.server.auth.route_policy)
+
+        # Tenancy middleware applies tenant mode enforcement after auth resolution
+        if config.server.tenancy.mode != TenancyMode.DISABLED:
+            logger.info("Enabling tenancy enforcement", mode=config.server.tenancy.mode.value)
+            app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
         # Add authentication middleware only if provider is configured
         # This runs FIRST in the middleware chain (last added = first to run)
         if config.server.auth.provider_config:
             logger.info("Enabling authentication", provider=config.server.auth.provider_config.type.value)
-            app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth, impls=impls)
-    else:
-        if config.server.quota:
-            quota = config.server.quota
-            logger.warning(
-                "Configured authenticated_max_requests (%d) but no auth is enabled; "
-                "falling back to anonymous_max_requests (%d) for all the requests",
-                quota.authenticated_max_requests,
-                quota.anonymous_max_requests,
-            )
+            app.add_middleware(AuthenticationMiddleware, auth_config=config.server.auth)
 
-    if config.server.quota:
-        logger.info("Enabling quota middleware for authenticated and anonymous clients")
+    elif config.server.tenancy.mode != TenancyMode.DISABLED:
+        # Tenancy without auth: single mode injects default tenant on every request
+        logger.info("Enabling tenancy enforcement (no auth)", mode=config.server.tenancy.mode.value)
+        app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
-        quota = config.server.quota
-        anonymous_max_requests = quota.anonymous_max_requests
-        # if auth is disabled, use the anonymous max requests
-        authenticated_max_requests = quota.authenticated_max_requests if config.server.auth else anonymous_max_requests
-
-        kv_config = quota.kvstore
-        window_map = {"day": 86400}
-        window_seconds = window_map[quota.period.value]
-
-        app.add_middleware(
-            QuotaMiddleware,
-            kv_config=kv_config,
-            anonymous_max_requests=anonymous_max_requests,
-            authenticated_max_requests=authenticated_max_requests,
-            window_seconds=window_seconds,
-        )
-
-    if config.server.cors:
-        logger.info("Enabling CORS")
-        cors_config = process_cors_config(config.server.cors)
-        if cors_config:
-            app.add_middleware(CORSMiddleware, **cors_config.model_dump())
-
-    # Load and register external API routers if configured
-    external_apis = load_external_apis(config)
-    if external_apis:
-        register_external_api_routers(external_apis)
-
-    if config.apis:
-        apis_to_serve = set(config.apis)
-    else:
-        apis_to_serve = set(impls.keys())
-
-    for inf in builtin_automatically_routed_apis():
-        # if we do not serve the corresponding router API, we should not serve the routing table API
-        if inf.router_api.value not in apis_to_serve:
-            continue
-        apis_to_serve.add(inf.routing_table_api.value)
-
-    apis_to_serve.add("admin")
-    apis_to_serve.add("inspect")
-    apis_to_serve.add("providers")
-    apis_to_serve.add("prompts")
-    apis_to_serve.add("conversations")
-    apis_to_serve.add("connectors")
-
-    # Build route-to-API mapping and add request metrics middleware.
-    # Added last so it runs first (outermost), wrapping auth/quota/cors.
-    route_to_api = build_route_to_api_map(_ROUTER_FACTORIES, impls)
-    app.add_middleware(RequestMetricsMiddleware, route_to_api=route_to_api)
-
-    for api_str in apis_to_serve:
-        api = Api(api_str)
-        impl = impls[api]
-        router = build_fastapi_router(api, impl)
-        if router:
-            app.include_router(router)
-            logger.debug("Registered FastAPI router", api=str(api))
-
-    logger.debug("Serving APIs", apis=list(apis_to_serve))
-
-    # Decompress zstd-encoded request bodies (e.g. from Codex CLI)
-    # Must be a raw ASGI middleware to intercept the body before Starlette reads it
-    class ZstdDecompressionMiddleware:
-        def __init__(self, app: ASGIApp) -> None:
-            self.app = app
-
-        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
-            if scope["type"] != "http":
-                return await self.app(scope, receive, send)
-
-            headers = {k.lower(): v for k, v in scope.get("headers", [])}
-            content_encoding = headers.get(b"content-encoding", b"").decode().lower()
-
-            if content_encoding != "zstd":
-                return await self.app(scope, receive, send)
-
-            # Collect the full request body first (needed for both success and fallback)
-            body_parts: list[bytes] = []
-            while True:
-                message = await receive()
-                body_parts.append(message.get("body", b""))
-                if not message.get("more_body", False):
-                    break
-
-            compressed_body = b"".join(body_parts)
-
-            try:
-                max_decompressed_size = 100 * 1024 * 1024  # 100 MB
-                decompressor = zstandard.ZstdDecompressor()
-                # Use streaming decompression to handle frames without content size
-                reader = decompressor.stream_reader(compressed_body)
-                decompressed_body = reader.read(max_decompressed_size)
-                if reader.read(1):
-                    reader.close()
-                    return await _send_error_response(
-                        send,
-                        status=413,
-                        message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
-                    )
-                reader.close()
-
-                # Strip content-encoding header and update content-length
-                new_headers = [
-                    (k, v) for k, v in scope["headers"] if k.lower() not in (b"content-encoding", b"content-length")
-                ]
-                new_headers.append((b"content-length", str(len(decompressed_body)).encode()))
-                scope["headers"] = new_headers
-
-                # Feed the decompressed body back, then delegate to the
-                # original receive for disconnect detection so streaming
-                # responses stay alive until the client actually disconnects.
-                body_sent = False
-
-                async def receive_decompressed() -> dict:  # type: ignore[type-arg]
-                    nonlocal body_sent
-                    if not body_sent:
-                        body_sent = True
-                        return {"type": "http.request", "body": decompressed_body, "more_body": False}
-                    return await receive()
-
-                return await self.app(scope, receive_decompressed, send)
-            except Exception as e:
-                logger.warning("Failed to decompress zstd request body, falling back to compressed data", error=str(e))
-
-                # Replay the original compressed body since decompression failed
-                body_sent = False
-
-                async def receive_original() -> dict:  # type: ignore[type-arg]
-                    nonlocal body_sent
-                    if not body_sent:
-                        body_sent = True
-                        return {"type": "http.request", "body": compressed_body, "more_body": False}
-                    return await receive()
-
-                return await self.app(scope, receive_original, send)
+    # Add request metrics middleware.
+    # Added last so it runs first (outermost), wrapping auth.
+    # Route mapping is built lazily on the first request from scope["app"].
+    app.add_middleware(RequestMetricsMiddleware)
 
     app.add_middleware(ZstdDecompressionMiddleware)
 

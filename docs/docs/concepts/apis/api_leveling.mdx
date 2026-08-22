@@ -9,6 +9,15 @@ sidebar_position: 4
 
 In order to provide a stable experience in OGX, the various APIs need different stability levels indicating the level of support, backwards compatibility, and overall production readiness.
 
+OGX ships two related but distinct stability surfaces:
+
+1. **The HTTP API surface** — routes mounted under `/v1`, `/v1beta`, `/v1alpha`. These are what application developers consume over the wire.
+2. **The `ogx-api` Python package** — the typed contract used by external/out-of-tree provider implementations and by SDK code generation. These are what provider authors import.
+
+Both surfaces follow the same level taxonomy below, but the rules for what "stable" means differ slightly between them. See [Public Datatype Stability](#public-datatype-stability) for the package surface and [Data storage compatibility](#data-storage-compatibility) for what happens to bytes on disk across upgrades.
+
+> **Versioning terminology.** OGX releases follow `X.Y.Z` SemVer. **X-stream** changes are major releases (e.g. `1.x` → `2.0`); **Y-stream** changes are minor releases (e.g. `1.4.x` → `1.5.0`); **Z-stream** changes are patch releases (e.g. `1.4.2` → `1.4.3`). The terms "major version bump" and "X-stream release" are used interchangeably.
+
 ## Different Levels
 
 ### v1alpha
@@ -32,7 +41,7 @@ In order to provide a stable experience in OGX, the various APIs need different 
 
 #### Graduation Criteria
 
-- an API can graduate from `v1beta` to `v1` if the API surface and datatypes are complete as identified by the team. The parameters and return types that are mandatory for each route are stable. All aspects of graduating from `v1alpha1` to `v1beta` apply as well.
+- an API can graduate from `v1beta` to `v1` if the API surface and datatypes are complete as identified by the team. The parameters and return types that are mandatory for each route are stable. All aspects of graduating from `v1alpha` to `v1beta` apply as well.
 - Optional parameters, routes, or parts of the return type can be added after graduating to `v1`
 
 ### v1 (stable)
@@ -42,7 +51,7 @@ In order to provide a stable experience in OGX, the various APIs need different 
   - Y-stream breaking changes must go through the proper approval and announcement process.
 - Datatypes for a route and its return types cannot change between Z-streams
   - Y-stream datatype changes should be sparing, unless the changes are additional net-new parameters
-- Must have proper conformance testing as outlined in https://github.com/ogx-ai/ogx/issues/3237
+- Must have conformance testing in place. See [Conformance Testing](#conformance-testing) below for the suites that apply today.
 
 ### v2+ (Major Versions)
 
@@ -64,7 +73,14 @@ When a `/v2` API is introduced, a clear and generous deprecation policy for the 
 
 ### Deprecated APIs
 
-Deprecated APIs are those that are no longer actively maintained or supported. Deprecated APIs are marked with the flag `deprecated = True` in the OpenAPI spec. These APIs will be removed in a future release.
+Deprecated APIs are those that are no longer actively maintained or supported. Deprecated routes are marked with `deprecated=True` on the FastAPI `@router.<method>(...)` decorator in `src/ogx_api/<api>/fastapi_routes.py`, which surfaces as `deprecated: true` in the generated OpenAPI spec.
+
+#### Deprecation timeline
+
+- A `/v1` route or public datatype may not be removed in the same Y-stream in which it is marked deprecated.
+- A deprecated `/v1` surface must remain available for at least **one full Y-stream** after the release that introduces the `deprecated` flag, and removal must be called out in the release notes for the Y-stream that drops it.
+- `/v1alpha` and `/v1beta` surfaces have no minimum deprecation window, but should still ship the `deprecated` flag for at least one Z-stream before removal so SDK consumers see the warning.
+- Renames are deprecations. Add the new name, mark the old name `deprecated`, and follow the timeline above — do not swap names in place.
 
 ### API Stability vs. Provider Stability
 
@@ -72,14 +88,148 @@ The leveling introduced in this document relates to the stability of the API and
 
 Providers can iterate as much as they want on functionality as long as they work within the bounds of an API. If they need to change the API, then the API should not be `/v1`, or those breaking changes can only happen on a y-stream release basis.
 
-### Public surfaces of the `ogx-api` package
+## Public Datatype Stability
 
-The [`ogx-api`](https://pypi.org/project/ogx-api/) Python package — consumed by external/out-of-tree providers and SDK code generation — exposes two distinct public surfaces, each with its own stability rules:
+OGX publishes a separate Python package, [`ogx-api`](https://pypi.org/project/ogx-api/), used by external/out-of-tree providers and by SDK code generation. They `from ogx_api import X` rather than calling over HTTP, which makes the package itself a load-bearing public contract.
 
-- **`ogx_api.provider`** — the Provider SDK: `Api` enum, `ProviderSpec` family, protocol classes (`Inference`, `Responses`, `VectorIO`, …), schema utilities, `Resource` base classes, version constants, validators. Levelled as a single cohesive contract; currently `v1`-stable. Removals or signature changes require a major version bump of `ogx-api`.
-- **`ogx_api.types`** — API datatypes: request/response Pydantic models, content blocks, errors, value types. Each datatype's level is inherited from the highest-stability route that references it (a type used by any `/v1` route is `v1`-stable).
+`ogx-api` exposes **two distinct public surfaces**, each with its own stability rules and its own sub-namespace:
 
-Top-level imports (`from ogx_api import X`) remain supported for backwards compatibility and resolve to the same objects as the namespaced imports. New code should prefer the explicit namespace path to make the contract boundary obvious. Sub-module imports (`from ogx_api.responses import ...`) remain unsupported and are not covered by this policy.
+| Surface | Namespace | Consumers | Levelled by | Current level |
+|---|---|---|---|---|
+| **API datatypes** | `ogx_api.types` | HTTP clients, generated SDKs, codegen | the route(s) that reference the type | mixed (per type) |
+| **Provider SDK** | `ogx_api.provider` | Out-of-tree provider authors | a single level for the whole surface | `v1` |
+
+The public surface of each is **only** what is re-exported from that namespace's `__all__`. Top-level imports (`from ogx_api import X`) remain supported for backwards compatibility and resolve to the same objects as the namespaced imports — but new code should prefer the explicit namespace path so the contract boundary is obvious. Sub-module imports (`from ogx_api.responses import ...`) are unsupported and not covered by this policy. If a symbol you need is not re-exported from one of the two namespaces, file a bug — do not reach into a submodule.
+
+### Surface 1 — API datatypes (`ogx_api.types`)
+
+These are the request/response Pydantic models, content blocks, and shared value types referenced by route signatures (e.g. `OpenAIResponseObject`, `ChatCompletionRequest`, `Message`, `ToolCall`).
+
+#### Level inheritance
+
+Each datatype's level is the **highest stability level of any route that references it**:
+
+- A type only referenced by `/v1alpha` routes is `v1alpha`.
+- A type referenced by any `/v1beta` route is at least `v1beta`.
+- A type referenced by any `/v1` route is `v1`, regardless of whether it is also referenced by less-stable routes.
+
+A type cannot be downgraded by adding it to a less-stable route. Once a type is `v1`, it is `v1`.
+
+#### Compatibility rules
+
+| Level | Allowed (Z-stream) | Allowed (Y-stream) |
+|---|---|---|
+| `v1alpha` | Anything | Anything |
+| `v1beta` | Add optional fields; widen unions | Rename/remove fields with `BREAKING CHANGE` acknowledgment |
+| `v1` | Add optional fields with safe defaults; widen unions | Add optional fields; deprecate (do not remove) fields. Removals require a major version bump. |
+
+**Breaking** for a `v1` datatype:
+
+- Renaming a field (use deprecation: add new name, keep old name, mark deprecated; see [Deprecation timeline](#deprecation-timeline)).
+- Changing a field's type in any non-widening way (`str` → `int`, narrowing a `Literal[...]`).
+- Changing a field from optional to required.
+- Removing a member from a `Literal[...]` or `Enum` accepted on input.
+- Tightening validation such that previously-accepted values are now rejected.
+- Removing or renaming a Pydantic model class.
+
+**Non-breaking**:
+
+- Adding a new optional field with a safe default.
+- Adding a new member to a `Literal[...]` or `Enum` returned from the server. Clients must handle unknown values gracefully; exhaustive switches are the client author's responsibility.
+- Loosening validation.
+- Adding a new model class.
+
+### Surface 2 — Provider SDK (`ogx_api.provider`)
+
+These are the symbols an external provider imports to register itself with the OGX server. They include:
+
+- The `Api` enum.
+- Provider spec types: `ProviderSpec`, `InlineProviderSpec`, `RemoteProviderSpec`, `AdapterSpec`, and the `api_dependencies` machinery.
+- Protocol classes: `Inference`, `Responses`, `VectorIO`, `Safety`, `Files`, `Batches`, etc. — the abstract interfaces a provider implements.
+- Configuration base classes and the `webmethod(...)` decorator + `WebMethod` model.
+- Registry helpers and resource base classes (`Resource`, `ResourceType`).
+
+#### One level for the surface
+
+Unlike API datatypes, the Provider SDK is levelled **as a single cohesive surface**, not per-symbol. An external provider depends on many of these symbols at once; piecemeal stability is not useful to them.
+
+**The Provider SDK is `v1`-stable.** External providers can rely on the surface being source-compatible across Y-streams. New capabilities are added through purely additive, non-breaking changes; anything else is a major-version event.
+
+#### Compatibility rules
+
+**Non-breaking** (allowed on any Y-stream or Z-stream):
+
+- Adding a new method to a protocol class **with a default implementation** that raises `NotImplementedError` or returns a sensible default. The version it was added in must be recorded in the docstring.
+- Adding a new optional field to a config class or `ProviderSpec` with a safe default.
+- Adding a new `Api` enum member (appended; never inserted in the middle if ordinal value is observable).
+- Adding a new protocol class or new symbol to the surface.
+- Loosening type signatures (widening parameter types, narrowing return types).
+
+**Breaking** (require a major version bump of `ogx-api` — i.e. `2.0`, not allowed on a Y-stream):
+
+- Adding an abstract method to an existing protocol class without a default.
+- Removing or renaming any method, protocol class, config class, or spec field.
+- Changing a method signature in any non-widening way (renaming a parameter, narrowing an accepted type, removing a kwarg).
+- Removing or reordering `Api` enum members.
+- Tightening type signatures on existing methods.
+
+#### Deprecation in the Provider SDK
+
+Removals at `v1` are not allowed mid-major-version, but **deprecations are**. To remove a Provider SDK symbol:
+
+1. Mark it deprecated (Python `warnings.warn(DeprecationWarning, stacklevel=2)` from the symbol, plus a `Deprecated since X.Y; will be removed in 2.0` note in the docstring).
+2. Keep it functional and exported until the next X-stream release.
+3. Remove it in that X-stream release.
+
+This applies symmetrically to renames: add the new name, alias the old name with a deprecation warning, drop the old name in the next X-stream release.
+
+#### Pinning recommendation for external providers
+
+While `ogx-api` is pre-`1.0` (today, `0.7.x`), external providers should pin a Y-stream-compatible range:
+
+```toml
+# pre-1.0
+dependencies = ["ogx-api>=0.7,<0.8"]
+```
+
+Once `ogx-api` reaches `1.0`, the package follows [SemVer](https://semver.org/) and the recommended pin is:
+
+```toml
+# post-1.0
+dependencies = ["ogx-api>=1.0,<2.0"]
+```
+
+A breaking change in *either* surface (an API datatype graduating past `v1` rules, or a Provider SDK removal) requires a major version bump of `ogx-api`.
+
+### Datatypes outside both surfaces
+
+Internal helpers and base classes that are not part of either surface should not be re-exported from `ogx_api.types` or `ogx_api.provider`. If a symbol must be public for an external provider but doesn't fit cleanly into the API datatype track, it belongs in the Provider SDK surface.
+
+Shared resource/value types (`Model`, `Shield`, `ToolGroup`, `VectorStore`) live canonically in `ogx_api.types` and are re-exported from `ogx_api.provider` for convenience — these are the only symbols intentionally present in both namespaces.
+
+### Configuration files
+
+Distribution `config.yaml` files — and the `StackConfig` / provider config Pydantic models that parse them — are themselves `ogx_api.types` datatypes and are governed by the same rules as any other `v1` datatype:
+
+- A `config.yaml` that loads on `1.4.2` must load on `1.4.3`. No config schema changes within a Z-stream.
+- A `config.yaml` that loads on `1.4.2` must load on `1.5.0`. New optional fields with safe defaults are non-breaking across a Y-stream upgrade; required-field additions are not.
+- Removing or renaming a config field requires the deprecate-then-remove cycle described under [Deprecation timeline](#deprecation-timeline). Renames are deprecations.
+- A breaking config schema change requires a major version bump of OGX itself (e.g. `1.5.0` → `2.0.0`).
+
+Enforcement is wired up in `.github/workflows/backward-compat.yml`, which on every PR loads `main`'s and the latest published release's `config.yaml` against the PR branch.
+
+## Data storage compatibility
+
+Beyond config and API datatypes, OGX persists state to disk: the kvstore (sqlite/postgres/redis), the sqlstore (sqlite/postgres), the responses store, vector stores, and file storage. None of these schemas are part of the `ogx_api` package — they are server-internal — but upgrading users still depend on them surviving across releases.
+
+The contract for stored data, in the `1.x` line:
+
+- **Z-stream upgrades** (e.g. `1.4.2` → `1.4.3`): no schema changes. Data written by `1.4.2` is readable by `1.4.3` and vice versa.
+- **Y-stream upgrades** (e.g. `1.4.2` → `1.5.0`): data written by `1.4.2` must remain readable by `1.5.0` with no manual operator action. Schema changes are limited to additive, auto-migrating ones — new optional columns, new tables, new kvstore keys with safe defaults. The infrastructure for this lives in `src/ogx/core/storage/` and is exercised by `tests/unit/utils/kvstore/test_kvstore_contract.py` and `tests/unit/core/test_sqlstore_add_column.py`.
+- **X-stream (major) upgrades** (e.g. `1.5.0` → `2.0.0`): may require an explicit, documented migration. A migration script and release-notes callout are mandatory; a major version is the only release where data may need operator intervention to load.
+- **Downgrades**: out of scope. A server downgraded from `1.5.0` to `1.4.2` is not guaranteed to load data written by `1.5.0`. Operators who need rollback should snapshot before upgrading.
+
+Test recordings under `tests/integration/*/recordings/` are developer artifacts and are not part of this contract.
 
 ### Approval and Announcement Process for Breaking Changes
 
@@ -95,19 +245,32 @@ If a PR has proper approvals, labels, and commit/title hygiene, the failing API 
 
 ### Migration of API routes under `/v1alpha`, `/v1beta`, and `/v1`
 
-Instead of placing every API under `/v1`, any API that is not fully stable or complete should go under `/v1alpha` or `/v1beta`. For example, at the time of this writing,  `post_training` belongs here, as well as any OpenAI-compatible API whose surface does not exactly match the upstream OpenAI API it mimics.
+Instead of placing every API under `/v1`, any API that is not fully stable or complete should go under `/v1alpha` or `/v1beta`. Any OpenAI-compatible API whose surface does not exactly match the upstream OpenAI API it mimics should also live below `/v1` until it does.
 
 This migration is crucial as we get OGX in the hands of users who intend to productize various APIs. A clear view of what is stable and what is actively being developed will enable users to pick and choose various APIs to build their products on.
 
 This migration will be a breaking change for any API moving out of `/v1`. Ideally, this should happen before 0.3.0 and especially 1.0.0.
 
-### `x-stability` tags in the OpenAPI spec for oasdiff
+### Conformance Testing
 
-`x-stability` tags allow tools like oasdiff to enforce different rules for different stability levels; these tags should match the routes: [oasdiff stability](https://github.com/oasdiff/oasdiff/blob/main/docs/STABILITY.md)
+`/v1` graduation requires conformance testing. The suites that exist today, and what each one enforces:
 
-### Testing
+- **`backward-compat.yml`** — runs on every PR. Three jobs:
+  - `check-main-compatibility`: validates that `config.yaml` files from `main` still load against the PR branch (catches breaking changes to `src/ogx/core/datatypes.py`, `src/ogx/providers/datatypes.py`, and distribution configs).
+  - `test-integration-main`: runs the `base` integration suite against `main`'s `ci-tests/config.yaml`.
+  - `test-integration-release` / `check-schema-release-compatibility`: runs the same checks against the **latest published release**'s configs, to catch user-upgrade breakage. Informational.
+  - All three honor the `BREAKING CHANGE`/`feat!:` acknowledgment described above.
+- **`openresponses-conformance.yml`** — runs the OpenResponses Zod-schema conformance suite against a live OGX server. Gaps are tracked in `tests/integration/openresponses/CONFORMANCE_GAPS.md`. Currently informational (`continue-on-error: true`); should become required before the Responses API graduates to `/v1` stable.
+- **External-spec coverage** — `scripts/openai_coverage.py`, `scripts/anthropic_coverage.py`, and `scripts/google_interactions_coverage.py` produce `docs/static/{openai,anthropic,google-interactions}-coverage.json`, tracking how much of each upstream spec we cover. These are coverage reports, not pass/fail gates, but they are the source of truth for "does our `/v1/chat/completions` actually match OpenAI's surface."
+- **`test-external.yml`, `test-external-provider-module.yml`** — exercise the Provider SDK surface by building and running an out-of-tree provider against the in-tree `ogx-api`. These are the gate that catches Provider SDK breaking changes.
 
-The testing of each stable API is already outlined in [issue #3237](https://github.com/ogx-ai/ogx/issues/3237) and is being worked on. These sorts of conformance tests should apply primarily to `/v1` APIs only, with `/v1alpha` and `/v1beta` having any tests the maintainers see fit as well as basic testing to ensure the routing works properly.
+These suites apply primarily to `/v1` APIs and to the Provider SDK. `/v1alpha` and `/v1beta` routes get whatever tests the maintainers see fit, plus basic routing tests.
+
+#### Outstanding work before 1.0
+
+- Promote `openresponses-conformance.yml` from informational to required for `/v1` Responses.
+- Add a job that diffs the public `ogx_api.__init__.__all__` between PR and `main` and applies the Provider SDK rules above (additive only, no removals/renames without a major version bump).
+- Add a Provider SDK conformance suite that asserts every `Api` enum member has a corresponding protocol class with a documented `added in` version on each abstract method.
 
 ### New APIs going forward
 

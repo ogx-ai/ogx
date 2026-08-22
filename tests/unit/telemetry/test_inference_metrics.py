@@ -15,6 +15,7 @@ from ogx.core.routers.inference import InferenceRouter
 from ogx.telemetry.inference_metrics import (
     create_inference_metric_attributes,
     inference_duration,
+    inference_model_type_used_total,
     inference_time_to_first_token,
     inference_tokens_per_second,
 )
@@ -81,6 +82,15 @@ class TestInferenceMetricInstruments:
         assert inference_tokens_per_second is not None
         assert hasattr(inference_tokens_per_second, "record")
 
+    def test_inference_model_type_used_total_exists(self):
+        assert inference_model_type_used_total is not None
+        assert hasattr(inference_model_type_used_total, "add")
+
+    def test_inference_model_type_used_total_can_record(self):
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": "openai/gpt-4o-mini", "provider": "openai"}
+        )
+
     def test_inference_duration_can_record(self):
         attrs = create_inference_metric_attributes(
             model="openai/gpt-4o-mini",
@@ -115,6 +125,7 @@ class TestInferenceMetricsConstants:
     def test_metric_names_follow_convention(self):
         from ogx.telemetry.constants import (
             INFERENCE_DURATION,
+            INFERENCE_MODEL_TYPE_USED_TOTAL,
             INFERENCE_TIME_TO_FIRST_TOKEN,
             INFERENCE_TOKENS_PER_SECOND,
         )
@@ -122,13 +133,16 @@ class TestInferenceMetricsConstants:
         assert INFERENCE_DURATION.startswith("ogx.")
         assert INFERENCE_TIME_TO_FIRST_TOKEN.startswith("ogx.")
         assert INFERENCE_TOKENS_PER_SECOND.startswith("ogx.")
+        assert INFERENCE_MODEL_TYPE_USED_TOTAL.startswith("ogx.")
 
         assert "inference" in INFERENCE_DURATION
         assert "inference" in INFERENCE_TIME_TO_FIRST_TOKEN
         assert "inference" in INFERENCE_TOKENS_PER_SECOND
+        assert "inference" in INFERENCE_MODEL_TYPE_USED_TOTAL
 
         assert INFERENCE_DURATION.endswith("_seconds")
         assert INFERENCE_TIME_TO_FIRST_TOKEN.endswith("_seconds")
+        assert INFERENCE_MODEL_TYPE_USED_TOTAL.endswith("_total")
 
 
 def _make_router_and_provider():
@@ -389,3 +403,86 @@ class TestStreamingInferenceMetrics:
             mock_record.assert_called_once()
             attrs = mock_record.call_args[1]["attributes"]
             assert attrs["status"] == "error"
+
+
+class TestModelTypeUsedMetrics:
+    """Test that inference router records model_type_used_total for each entry point."""
+
+    async def test_chat_completion_records_completion_type(self):
+        router, mock_provider = _make_router_and_provider()
+        mock_provider.openai_chat_completion = AsyncMock(return_value=_make_completion_response())
+        params = _make_chat_params(stream=False)
+
+        with patch.object(inference_model_type_used_total, "add") as mock_add:
+            await router.openai_chat_completion(params)
+
+            mock_add.assert_called_once()
+            attrs = mock_add.call_args[0][1]
+            assert attrs["type"] == "completion"
+            assert attrs["model"] == "openai/gpt-4o-mini"
+            assert attrs["provider"] == "openai"
+
+    async def test_embeddings_records_embedding_type(self):
+        routing_table = MagicMock()
+        mock_model = MagicMock()
+        mock_model.identifier = "openai/text-embedding-3-small"
+        mock_model.model_type = ModelType.embedding
+        mock_model.provider_resource_id = "text-embedding-3-small"
+
+        mock_provider = AsyncMock()
+        mock_provider.__provider_id__ = "openai"
+        mock_provider.openai_embeddings = AsyncMock(return_value=MagicMock(model="text-embedding-3-small"))
+
+        routing_table.get_object_by_identifier = AsyncMock(return_value=mock_model)
+        routing_table.get_provider_impl = AsyncMock(return_value=mock_provider)
+
+        router = InferenceRouter(routing_table=routing_table)
+
+        from ogx_api import OpenAIEmbeddingsRequestWithExtraBody
+
+        params = OpenAIEmbeddingsRequestWithExtraBody(
+            model="openai/text-embedding-3-small",
+            input="test text",
+        )
+
+        with patch.object(inference_model_type_used_total, "add") as mock_add:
+            await router.openai_embeddings(params)
+
+            mock_add.assert_called_once()
+            attrs = mock_add.call_args[0][1]
+            assert attrs["type"] == "embedding"
+            assert attrs["model"] == "openai/text-embedding-3-small"
+            assert attrs["provider"] == "openai"
+
+    async def test_rerank_records_reranker_type(self):
+        routing_table = MagicMock()
+        mock_model = MagicMock()
+        mock_model.identifier = "cohere/rerank-v3"
+        mock_model.model_type = ModelType.rerank
+        mock_model.provider_resource_id = "rerank-v3"
+
+        mock_provider = AsyncMock()
+        mock_provider.__provider_id__ = "cohere"
+        mock_provider.rerank = AsyncMock(return_value=MagicMock())
+
+        routing_table.get_object_by_identifier = AsyncMock(return_value=mock_model)
+        routing_table.get_provider_impl = AsyncMock(return_value=mock_provider)
+
+        router = InferenceRouter(routing_table=routing_table)
+
+        from ogx_api.inference.models import RerankRequest
+
+        params = RerankRequest(
+            model="cohere/rerank-v3",
+            query="test query",
+            items=["doc1", "doc2"],
+        )
+
+        with patch.object(inference_model_type_used_total, "add") as mock_add:
+            await router.rerank(params)
+
+            mock_add.assert_called_once()
+            attrs = mock_add.call_args[0][1]
+            assert attrs["type"] == "reranker"
+            assert attrs["model"] == "cohere/rerank-v3"
+            assert attrs["provider"] == "cohere"

@@ -4,7 +4,6 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import asyncio
 import base64
 import mimetypes
 import re
@@ -13,6 +12,7 @@ from collections.abc import AsyncIterator, Sequence
 
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import AssistantMessageWithReasoning
+from ogx.providers.utils.files.response import response_body_bytes
 from ogx_api import (
     Files,
     Inference,
@@ -60,12 +60,11 @@ from ogx_api import (
     OpenAISystemMessageParam,
     OpenAIToolMessageParam,
     OpenAIUserMessageParam,
-    ResponseGuardrailSpec,
     RetrieveFileContentRequest,
     RetrieveFileRequest,
-    RunModerationRequest,
-    Safety,
 )
+
+APPROX_CHARS_PER_TOKEN = 4
 
 
 async def extract_bytes_from_file(file_id: str, files_api: Files) -> bytes:
@@ -79,7 +78,7 @@ async def extract_bytes_from_file(file_id: str, files_api: Files) -> bytes:
     """
     try:
         response = await files_api.openai_retrieve_file_content(RetrieveFileContentRequest(file_id=file_id))
-        return bytes(response.body)
+        return await response_body_bytes(response)
     except Exception as e:
         raise ValueError(f"Failed to retrieve file content for file_id '{file_id}': {str(e)}") from e
 
@@ -117,7 +116,7 @@ async def convert_chat_choice_to_response_message(
     """Convert an OpenAI Chat Completion choice into an OpenAI Response output message."""
     output_content = choice.message.content or ""
 
-    annotations, clean_text = _extract_citations_from_text(output_content, citation_files or {})
+    annotations, clean_text = extract_citations_from_text(output_content, citation_files or {})
     logprobs = choice.logprobs.content if choice.logprobs and choice.logprobs.content else []
 
     return OpenAIResponseMessage(
@@ -308,6 +307,7 @@ async def convert_response_input_to_chat_messages(
         for input_item in input:
             if isinstance(input_item, OpenAIResponseInputFunctionToolCallOutput):
                 tool_call_results[input_item.call_id] = await _build_tool_result_messages(input_item, files_api)
+        had_tool_call_results = bool(tool_call_results)
 
         for i, input_item in enumerate(input):
             if isinstance(input_item, OpenAIResponseInputFunctionToolCallOutput):
@@ -382,9 +382,9 @@ async def convert_response_input_to_chat_messages(
                     raise ValueError(
                         f"OGX OpenAI Responses does not yet support message role '{input_item.role}' in this context"
                     )
-                # Skip user messages that duplicate the last user message in previous_messages
-                # This handles cases where input includes context for function_call_outputs
-                if previous_messages and input_item.role == "user":
+                # Skip user messages that duplicate the last user message in previous_messages,
+                # but only when function_call_outputs are present (the user resent context for them)
+                if previous_messages and input_item.role == "user" and had_tool_call_results:
                     last_user_msg = None
                     for prev_msg in reversed(previous_messages):
                         if isinstance(prev_msg, OpenAIUserMessageParam):
@@ -480,19 +480,41 @@ async def get_message_type_by_role(role: str) -> type[OpenAIMessageParam] | None
     return role_to_type.get(role)  # type: ignore[return-value]  # Pydantic models use ModelMetaclass
 
 
+CITATION_MARKER_REGEX = re.compile(
+    r"<\|(?P<file_id_pipe>file-[A-Za-z0-9_-]+)\|>"
+    r"|\[(?P<file_id_bracket>file-[A-Za-z0-9_-]+)\]"
+    r"|\((?P<file_id_paren>file-[A-Za-z0-9_-]+)\)"
+)
+
+# Matches an in-progress citation marker at the very end of a string, including a possible
+# single space right before it (since a known marker's preceding space gets dropped by
+# _extract_citations_from_text, and that only happens correctly if the space and the
+# marker end up cleaned together — see StreamingCitationCleaner). Also matches a bare
+# trailing space on its own, since it might turn out to precede a marker in the next
+# chunk. Used to withhold text from streamed deltas until either a marker completes (and
+# gets cleaned) or a later chunk proves it wasn't a marker after all (and gets flushed
+# through as literal text).
+_PENDING_CITATION_MARKER_TAIL_REGEX = re.compile(
+    r"(?: ?<(?:\|(?:file-[A-Za-z0-9_-]*)?)?| ?\[(?:file-[A-Za-z0-9_-]*)?| ?\((?:file-[A-Za-z0-9_-]*)?| )$"
+)
+
+
 def _extract_citations_from_text(
     text: str, citation_files: dict[str, str]
 ) -> tuple[list[OpenAIResponseAnnotationFileCitation], str]:
     """Extract citation markers from text and create annotations
 
     Args:
-        text: The text containing citation markers like [file-Cn3MSNn72ENTiiq11Qda4A]
+        text: The text containing citation markers like <|file-Cn3MSNn72ENTiiq11Qda4A|>.
+            The primary marker format is `<|file-id|>`, but `[file-id]` and `(file-id)`
+            are also accepted since weaker models often approximate the instructed
+            format rather than reproduce it exactly.
         citation_files: Dictionary mapping file_id to filename
 
     Returns:
         Tuple of (annotations_list, clean_text_without_markers)
     """
-    file_id_regex = re.compile(r"<\|(?P<file_id>file-[A-Za-z0-9_-]+)\|>")
+    file_id_regex = CITATION_MARKER_REGEX
 
     annotations = []
     parts = []
@@ -503,15 +525,19 @@ def _extract_citations_from_text(
         # segment before the marker
         prefix = text[last_end : m.start()]
 
-        # drop one space if it exists (since marker is at sentence end)
-        if prefix.endswith(" "):
+        fid = m.group("file_id_pipe") or m.group("file_id_bracket") or m.group("file_id_paren")
+        is_known = fid in citation_files
+
+        # drop one space if it exists (since marker is at sentence end); only do this when
+        # the marker itself is about to be removed below, otherwise we'd merge the prefix
+        # and the marker text together with no space between them
+        if is_known and prefix.endswith(" "):
             prefix = prefix[:-1]
 
         parts.append(prefix)
         total_len += len(prefix)
 
-        fid = m.group(1)
-        if fid in citation_files:
+        if is_known:
             annotations.append(
                 OpenAIResponseAnnotationFileCitation(
                     file_id=fid,
@@ -519,12 +545,90 @@ def _extract_citations_from_text(
                     index=total_len,  # index points to punctuation
                 )
             )
+        else:
+            # Unrecognized marker (e.g. a stale/mismatched file id): preserve it verbatim
+            # rather than silently deleting user-visible text we can't actually attribute.
+            marker_text = m.group(0)
+            parts.append(marker_text)
+            total_len += len(marker_text)
 
         last_end = m.end()
 
     parts.append(text[last_end:])
     cleaned_text = "".join(parts)
     return annotations, cleaned_text
+
+
+def extract_citations_from_text(
+    text: str, citation_files: dict[str, str]
+) -> tuple[list[OpenAIResponseAnnotationFileCitation], str]:
+    """Extract citation markers from text, with a fallback for models that don't cite inline.
+
+    Delegates to `_extract_citations_from_text` for marker-based extraction. Some models
+    (particularly small/local ones served e.g. via Ollama) don't reliably reproduce the
+    inline citation marker even when instructed to. If file_search actually retrieved
+    documents for this response, attribute the answer to the single most relevant one
+    rather than silently returning no annotations just because the model didn't echo the
+    marker. Attributing every retrieved file would imply the whole answer draws equally
+    on all of them, which usually isn't true and isn't what OpenAI's API does.
+
+    Args:
+        text: The text possibly containing citation markers.
+        citation_files: Dictionary mapping file_id to filename for files retrieved this turn,
+            ordered by descending relevance score (see tool_executor.py).
+
+    Returns:
+        Tuple of (annotations_list, clean_text_without_markers)
+    """
+    annotations, clean_text = _extract_citations_from_text(text, citation_files)
+    if not annotations and citation_files:
+        file_id, filename = next(iter(citation_files.items()))
+        annotations = [OpenAIResponseAnnotationFileCitation(file_id=file_id, filename=filename, index=len(clean_text))]
+    return annotations, clean_text
+
+
+class StreamingCitationCleaner:
+    """Incrementally strips citation markers from streamed text deltas.
+
+    content_part.done / output_item.done events clean the fully accumulated text via
+    `extract_citations_from_text`. Without this, delta events would carry the raw,
+    unprocessed text (markers and all), so a client that reconstructs output purely from
+    deltas would end up disagreeing with the final payload. Feeding every delta through
+    this cleaner keeps the two consistent.
+
+    Markers can be split across chunk boundaries (e.g. one chunk ends in "<|file-abc" and
+    the next starts with "123|>"), so a marker-looking sequence at the end of the buffered
+    text is withheld until it either completes (and gets cleaned) or a later feed()/flush()
+    call proves it wasn't a marker after all (and gets emitted as literal text).
+
+    Note: this only cleans complete markers, so if a space that would normally be dropped
+    before a marker (see `_extract_citations_from_text`) lands in a different feed() call
+    than the marker itself, that single space is not retroactively removed. This is a
+    minor cosmetic difference from the final text, not a correctness issue.
+    """
+
+    def __init__(self, citation_files: dict[str, str]):
+        self._citation_files = citation_files
+        self._buffer = ""
+
+    def feed(self, delta: str) -> str:
+        """Feed newly arrived raw text; return the portion now safe to emit to the client."""
+        self._buffer += delta
+        pending_match = _PENDING_CITATION_MARKER_TAIL_REGEX.search(self._buffer)
+        safe_upto = pending_match.start() if pending_match else len(self._buffer)
+        safe_text, self._buffer = self._buffer[:safe_upto], self._buffer[safe_upto:]
+        if not safe_text:
+            return ""
+        _, cleaned = _extract_citations_from_text(safe_text, self._citation_files)
+        return cleaned
+
+    def flush(self) -> str:
+        """Flush any remaining buffered text once no more input is coming this round."""
+        if not self._buffer:
+            return ""
+        _, cleaned = _extract_citations_from_text(self._buffer, self._citation_files)
+        self._buffer = ""
+        return cleaned
 
 
 def is_function_tool_call(
@@ -548,79 +652,71 @@ def is_function_tool_call(
     return False
 
 
-async def resolve_guardrail_model_ids(safety_api: Safety, guardrail_ids: list[str]) -> list[str]:
-    """Resolve guardrail identifiers to concrete shield model IDs.
-
-    Call once and pass the result to run_guardrails() to avoid repeated lookups.
-    """
-    # TODO: list_shields not in Safety interface but available at runtime via API routing
-    shields_list = await safety_api.routing_table.list_shields()  # type: ignore[attr-defined]
-    model_ids = []
-    for guardrail_id in guardrail_ids:
-        matching_shields = [shield for shield in shields_list.data if shield.identifier == guardrail_id]
-        if matching_shields:
-            model_ids.append(matching_shields[0].provider_resource_id)
-        else:
-            raise ValueError(f"No shield found with identifier '{guardrail_id}'")
-    return model_ids
-
-
 async def run_guardrails(
-    safety_api: Safety | None,
+    moderation_endpoint: str | None,
     messages: str,
-    guardrail_ids: list[str],
-    model_ids: list[str] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> str | None:
-    """Run guardrails against messages and return violation message if blocked."""
-    if not messages:
+    """Run content moderation by calling an external OpenAI-compatible moderation endpoint.
+
+    The endpoint must conform to the OpenAI Moderations API response format:
+    {"id": "...", "model": "...", "results": [{"flagged": bool, "categories": {...}, ...}]}
+
+    This function fails closed: any error communicating with the moderation endpoint
+    or parsing its response returns a blocking message rather than allowing content through.
+    """
+    if not messages or not moderation_endpoint:
         return None
 
-    if safety_api is None:
-        return None
+    import httpx
 
-    if model_ids is None:
-        model_ids = await resolve_guardrail_model_ids(safety_api, guardrail_ids)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+        try:
+            resp = await client.post(moderation_endpoint, json={"input": messages}, headers=headers)
+            resp.raise_for_status()
+        except (httpx.HTTPError, httpx.InvalidURL):
+            logger.warning("Failed to call moderation endpoint", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation service unavailable"
 
-    guardrail_tasks = [
-        safety_api.run_moderation(RunModerationRequest(input=messages, model=model_id)) for model_id in model_ids
-    ]
-    responses = await asyncio.gather(*guardrail_tasks)
+    try:
+        data = resp.json()
+    except Exception:
+        logger.warning("Failed to parse moderation response as JSON", endpoint=moderation_endpoint)
+        return "Failed to validate content: moderation service returned invalid response"
 
-    for response in responses:
-        for result in response.results:
-            if result.flagged:
-                message = result.user_message or "Content blocked by safety guardrails"
-                flagged_categories = (
-                    [cat for cat, flagged in result.categories.items() if flagged] if result.categories else []
-                )
-                violation_type = result.metadata.get("violation_type", []) if result.metadata else []
+    results = data.get("results") if isinstance(data, dict) else None
+    if not isinstance(results, list):
+        logger.warning(
+            "Moderation endpoint returned unexpected format (expected OpenAI-compatible "
+            "response with 'results' array, see https://platform.openai.com/docs/api-reference/moderations)",
+            endpoint=moderation_endpoint,
+            response_keys=list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+        )
+        return "Failed to validate content: moderation response has unexpected format"
+    if not results:
+        logger.warning("Moderation endpoint returned no results", endpoint=moderation_endpoint)
+        return "Failed to validate content: moderation response has unexpected format"
 
-                if flagged_categories:
-                    message += f" (flagged for: {', '.join(flagged_categories)})"
-                if violation_type:
-                    message += f" (violation type: {', '.join(violation_type)})"
+    for result in results:
+        if not isinstance(result, dict):
+            logger.warning("Failed to parse moderation result entry", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        flagged = result.get("flagged")
+        if not isinstance(flagged, bool):
+            logger.warning("Failed to parse moderation result flagged field", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        categories = result.get("categories", {})
+        if not isinstance(categories, dict):
+            logger.warning("Failed to parse moderation result categories", endpoint=moderation_endpoint)
+            return "Failed to validate content: moderation response has unexpected format"
+        if flagged:
+            flagged_cats = [c for c, f in categories.items() if f]
+            msg = "Content blocked by safety guardrails"
+            if flagged_cats:
+                msg += f" (flagged for: {', '.join(flagged_cats)})"
+            return msg
 
-                return message
-
-    # No violations found
     return None
-
-
-def extract_guardrail_ids(guardrails: list | None) -> list[str]:
-    """Extract guardrail IDs from guardrails parameter, handling both string IDs and ResponseGuardrailSpec objects."""
-    if not guardrails:
-        return []
-
-    guardrail_ids = []
-    for guardrail in guardrails:
-        if isinstance(guardrail, str):
-            guardrail_ids.append(guardrail)
-        elif isinstance(guardrail, ResponseGuardrailSpec):
-            guardrail_ids.append(guardrail.type)
-        else:
-            raise ValueError(f"Unknown guardrail format: {guardrail}, expected str or ResponseGuardrailSpec")
-
-    return guardrail_ids
 
 
 def convert_mcp_tool_choice(

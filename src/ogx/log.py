@@ -37,7 +37,6 @@ CATEGORIES = [
     "router",
     "inference",
     "agents",
-    "safety",
     "tools",
     "client",
     "openai",

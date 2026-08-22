@@ -52,16 +52,6 @@ def config_with_distro_name_int():
             - provider_id: provider1
               provider_type: remote::ollama
               config: {{}}
-          safety:
-            - provider_id: provider1
-              provider_type: inline::llama-guard
-              config:
-                llama_guard_shield:
-                  model: Llama-Guard-3-1B
-                  excluded_categories: []
-                  disable_input_check: false
-                  disable_output_check: false
-                enable_prompt_guard: false
           memory:
             - provider_id: provider1
               provider_type: inline::builtin
@@ -104,16 +94,6 @@ def up_to_date_config():
             - provider_id: provider1
               provider_type: remote::ollama
               config: {{}}
-          safety:
-            - provider_id: provider1
-              provider_type: inline::llama-guard
-              config:
-                llama_guard_shield:
-                  model: Llama-Guard-3-1B
-                  excluded_categories: []
-                  disable_input_check: false
-                  disable_output_check: false
-                enable_prompt_guard: false
           memory:
             - provider_id: provider1
               provider_type: inline::builtin
@@ -140,16 +120,6 @@ def old_config():
               config:
                 api_key: sk-test
               routing_key: Llama3.1-8B-Instruct
-          safety:
-            - routing_key: ["shield1", "shield2"]
-              provider_type: inline::llama-guard
-              config:
-                llama_guard_shield:
-                  model: Llama-Guard-3-1B
-                  excluded_categories: []
-                  disable_input_check: false
-                  disable_output_check: false
-                enable_prompt_guard: false
           memory:
             - routing_key: vector
               provider_type: inline::builtin
@@ -178,10 +148,7 @@ def test_parse_and_maybe_upgrade_config_up_to_date(up_to_date_config):
 def test_parse_and_maybe_upgrade_config_old_format(old_config):
     result = parse_and_maybe_upgrade_config(old_config)
     assert result.version == OGX_RUN_CONFIG_VERSION
-    assert all(api in result.providers for api in ["inference", "safety", "memory"])
-    safety_provider = result.providers["safety"][0]
-    assert safety_provider.provider_type == "inline::llama-guard"
-    assert "llama_guard_shield" in safety_provider.config
+    assert all(api in result.providers for api in ["inference", "memory"])
 
     inference_providers = result.providers["inference"]
     assert len(inference_providers) == 2
@@ -277,6 +244,7 @@ def test_providers_flag_generates_config_with_api_keys():
         image_type=None,
         distro_name=None,
         enable_ui=False,
+        dry_run=False,
     )
 
     # Mock _uvicorn_run to prevent starting a server

@@ -5,14 +5,21 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ogx_api.skills import Skills
 
 from opentelemetry import metrics
 
 from ogx.core.datatypes import AccessRule
-from ogx.core.storage.kvstore import InmemoryKVStoreImpl, kvstore_impl
 from ogx.log import get_logger
 from ogx.providers.utils.responses.responses_store import ResponsesStore
-from ogx.telemetry.constants import RESPONSES_PARAMETER_USAGE_TOTAL
+from ogx.telemetry.constants import (
+    RESPONSES_AGENTIC_CALLS_TOTAL,
+    RESPONSES_PARAMETER_USAGE_TOTAL,
+    RESPONSES_TOOL_TYPES_USED_TOTAL,
+)
 from ogx_api import (
     CancelResponseRequest,
     CompactResponseRequest,
@@ -33,10 +40,10 @@ from ogx_api import (
     Prompts,
     Responses,
     RetrieveResponseRequest,
-    Safety,
     ToolGroups,
     ToolRuntime,
     VectorIO,
+    WebSearchToolTypes,
 )
 
 from .config import BuiltinResponsesImplConfig
@@ -52,6 +59,18 @@ _parameter_usage_total = _meter.create_counter(
     unit="1",
 )
 
+_tool_types_used_total = _meter.create_counter(
+    name=RESPONSES_TOOL_TYPES_USED_TOTAL,
+    description="Counts tool types present in Responses API calls",
+    unit="1",
+)
+
+_agentic_calls_total = _meter.create_counter(
+    name=RESPONSES_AGENTIC_CALLS_TOTAL,
+    description="Total Responses API calls that include tools (agentic calls)",
+    unit="1",
+)
+
 _REQUIRED_FIELDS = {"input", "model"}
 
 
@@ -62,6 +81,21 @@ def _record_parameter_usage(request: CreateResponseRequest, operation: str) -> N
         _parameter_usage_total.add(1, {"operation": operation, "parameter": field_name})
 
 
+def _record_tool_usage(request: CreateResponseRequest) -> None:
+    """Record tool type usage and agentic call counts."""
+    if not request.tools:
+        return
+    _agentic_calls_total.add(1)
+    seen_types: set[str] = set()
+    for tool in request.tools:
+        tool_type = tool.type
+        if tool_type in WebSearchToolTypes:
+            tool_type = "web_search"
+        if tool_type not in seen_types:
+            seen_types.add(tool_type)
+            _tool_types_used_total.add(1, {"tool_type": tool_type})
+
+
 class BuiltinResponsesImpl(Responses):
     """Built-in responses implementing the Agents API with tool use and responses support."""
 
@@ -70,7 +104,6 @@ class BuiltinResponsesImpl(Responses):
         config: BuiltinResponsesImplConfig,
         inference_api: Inference,
         vector_io_api: VectorIO,
-        safety_api: Safety | None,
         tool_runtime_api: ToolRuntime,
         tool_groups_api: ToolGroups,
         conversations_api: Conversations,
@@ -78,23 +111,22 @@ class BuiltinResponsesImpl(Responses):
         files_api: Files,
         connectors_api: Connectors,
         policy: list[AccessRule],
+        skills_api: "Skills | None" = None,
     ):
         self.config = config
         self.inference_api = inference_api
         self.vector_io_api = vector_io_api
-        self.safety_api = safety_api
         self.tool_runtime_api = tool_runtime_api
         self.tool_groups_api = tool_groups_api
         self.conversations_api = conversations_api
         self.prompts_api = prompts_api
         self.files_api = files_api
-        self.in_memory_store = InmemoryKVStoreImpl()
         self.openai_responses_impl: OpenAIResponsesImpl | None = None
         self.policy = policy
         self.connectors_api = connectors_api
+        self.skills_api = skills_api
 
     async def initialize(self) -> None:
-        self.persistence_store = await kvstore_impl(self.config.persistence.agent_state)
         self.responses_store = ResponsesStore(self.config.persistence.responses, self.policy)
         await self.responses_store.initialize()
         if not self.responses_store.sql_store:
@@ -105,13 +137,16 @@ class BuiltinResponsesImpl(Responses):
             tool_runtime_api=self.tool_runtime_api,
             responses_store=self.responses_store,
             vector_io_api=self.vector_io_api,
-            safety_api=self.safety_api,
+            moderation_endpoint=self.config.moderation_endpoint,
+            moderation_headers=self.config.moderation_headers,
             conversations_api=self.conversations_api,
             prompts_api=self.prompts_api,
             files_api=self.files_api,
             vector_stores_config=self.config.vector_stores_config,
             connectors_api=self.connectors_api,
+            skills_api=self.skills_api,
             compaction_config=self.config.compaction_config,
+            memory_config=self.config.memory_config,
         )
         await self.openai_responses_impl.initialize()
 
@@ -137,41 +172,9 @@ class BuiltinResponsesImpl(Responses):
         yielding response stream events (streaming).
         """
         _record_parameter_usage(request, operation="create_response")
+        _record_tool_usage(request)
         assert self.openai_responses_impl is not None, "OpenAI responses not initialized"
-        result = await self.openai_responses_impl.create_openai_response(
-            input=request.input,
-            model=request.model,
-            prompt=request.prompt,
-            instructions=request.instructions,
-            previous_response_id=request.previous_response_id,
-            prompt_cache_key=request.prompt_cache_key,
-            conversation=request.conversation,
-            store=request.store,
-            stream=request.stream,
-            temperature=request.temperature,
-            top_p=request.top_p,
-            frequency_penalty=request.frequency_penalty,
-            text=request.text,
-            tool_choice=request.tool_choice,
-            tools=request.tools,
-            include=request.include,
-            max_infer_iters=request.max_infer_iters,
-            guardrails=request.guardrails,
-            parallel_tool_calls=request.parallel_tool_calls,
-            max_tool_calls=request.max_tool_calls,
-            max_output_tokens=request.max_output_tokens,
-            reasoning=request.reasoning,
-            safety_identifier=request.safety_identifier,
-            service_tier=request.service_tier,
-            metadata=request.metadata,
-            background=request.background,
-            truncation=request.truncation,
-            top_logprobs=request.top_logprobs,
-            presence_penalty=request.presence_penalty,
-            extra_body=request.model_extra,
-            stream_options=request.stream_options,
-            context_management=request.context_management,
-        )
+        result = await self.openai_responses_impl.create_openai_response(request)
         return result
 
     async def list_openai_responses(
@@ -208,6 +211,7 @@ class BuiltinResponsesImpl(Responses):
             instructions=request.instructions,
             previous_response_id=request.previous_response_id,
             prompt_cache_key=request.prompt_cache_key,
+            extra_body=request.model_extra,
         )
 
     async def delete_openai_response(

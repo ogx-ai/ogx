@@ -1,6 +1,6 @@
-name: Integration Responses & Conversations Auth Tests
+name: Integration Responses, Conversations & Prompts Auth Tests
 
-run-name: Run responses and conversations auth tests with Kubernetes authentication
+run-name: Run responses, conversations, and prompts auth tests with Kubernetes authentication
 
 on:
   push:
@@ -121,6 +121,10 @@ jobs:
                 provider_type: remote::openai
                 config:
                   api_key: \${env.OPENAI_API_KEY}
+              - provider_id: sentence-transformers
+                provider_type: inline::sentence-transformers
+                config:
+                  trust_remote_code: true
             vector_io:
               - provider_id: faiss
                 provider_type: inline::faiss
@@ -137,9 +141,6 @@ jobs:
                 provider_type: inline::builtin
                 config:
                   persistence:
-                    agent_state:
-                      namespace: responses
-                      backend: kv_default
                     responses:
                       table_name: responses
                       backend: sql_default
@@ -166,10 +167,18 @@ jobs:
               prompts:
                 table_name: prompts
                 backend: sql_default
+              vector_stores:
+                table_name: vector_store_metadata
+                backend: sql_default
           models:
           - model_id: openai/gpt-4o
             model_type: llm
             provider_id: openai
+          - model_id: sentence-transformers/nomic-ai/nomic-embed-text-v1.5
+            model_type: embedding
+            provider_id: sentence-transformers
+            metadata:
+              embedding_dimension: 768
           server:
             port: 8321
             auth:
@@ -178,6 +187,16 @@ jobs:
                     actions: [read]
                     resource: model::*
                   description: Any authenticated user can use configured models (inference, responses)
+                - permit:
+                    actions: [create]
+                    resource: vector_store::*
+                  description: Any authenticated user can create vector stores (routing table)
+                - permit:
+                    actions: [read, update, delete]
+                    resource: vector_store::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector stores (routing table)
                 - permit:
                     actions: [create]
                     resource: sql_record::openai_files::*
@@ -218,6 +237,56 @@ jobs:
                   when:
                     - user is owner
                   description: Users can access their own responses
+                - permit:
+                    actions: [create]
+                    resource: sql_record::prompts::*
+                  description: Any authenticated user can create prompts
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::prompts::*
+                  when:
+                    - user is owner
+                  description: Users can only access their own prompts
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_stores::*
+                  description: Any authenticated user can create vector stores
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_stores::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector stores
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_store_files::*
+                  description: Any authenticated user can create vector store files
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_store_files::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector store files
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_store_file_contents::*
+                  description: Any authenticated user can create vector store file contents
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_store_file_contents::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector store file contents
+                - permit:
+                    actions: [create]
+                    resource: sql_record::vector_store_file_batches::*
+                  description: Any authenticated user can create vector store file batches
+                - permit:
+                    actions: [read, update, delete]
+                    resource: sql_record::vector_store_file_batches::*
+                  when:
+                    - user is owner
+                  description: Users can access their own vector store file batches
           EOF
           yq eval '.server.auth.provider_config.type = "${{ matrix.auth-provider }}"' -i "$run_dir/config.yaml"
           yq eval '.server.auth.provider_config.tls_cafile = "${{ env.KUBERNETES_CA_CERT_PATH }}"' -i "$run_dir/config.yaml"
@@ -230,7 +299,7 @@ jobs:
           # avoid line breaks in the server log, especially because we grep it below.
           export OGX_LOG_WIDTH=200
           # OPENAI_API_KEY is set via env at step level
-          nohup uv run ogx stack run "$run_dir/config.yaml" > server.log 2>&1 &
+          nohup uv run ogx stack run "$run_dir/config.yaml" --insecure > server.log 2>&1 &
 
       - name: Wait for OGX server to be ready
         run: |

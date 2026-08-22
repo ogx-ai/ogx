@@ -13,7 +13,7 @@ from ogx_api import (
 )
 
 # Common dependencies for all vector IO providers that support document processing
-DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.10.0"]
+DEFAULT_VECTOR_IO_DEPS = ["chardet", "pypdf>=6.13.0"]
 
 
 def available_providers() -> list[ProviderSpec]:
@@ -373,7 +373,7 @@ See [Chroma's documentation](https://docs.trychroma.com/docs/overview/introducti
             api=Api.vector_io,
             adapter_type="pgvector",
             provider_type="remote::pgvector",
-            pip_packages=["psycopg2-binary"] + DEFAULT_VECTOR_IO_DEPS,
+            pip_packages=["asyncpg", "pgvector>=0.3.0"] + DEFAULT_VECTOR_IO_DEPS,
             module="ogx.providers.remote.vector_io.pgvector",
             config_class="ogx.providers.remote.vector_io.pgvector.PGVectorVectorIOConfig",
             api_dependencies=[Api.inference],
@@ -610,6 +610,39 @@ Please refer to the inline provider documentation.
         ),
         RemoteProviderSpec(
             api=Api.vector_io,
+            adapter_type="neo4j",
+            provider_type="remote::neo4j",
+            pip_packages=["neo4j"] + DEFAULT_VECTOR_IO_DEPS,
+            module="ogx.providers.remote.vector_io.neo4j",
+            config_class="ogx.providers.remote.vector_io.neo4j.Neo4jVectorIOConfig",
+            api_dependencies=[Api.inference],
+            optional_api_dependencies=[Api.files, Api.models, Api.file_processors],
+            description="""
+[Neo4j](https://neo4j.com/) is a remote graph database provider for OGX VectorIO.
+It supports vector search with Neo4j vector indexes, keyword search with full-text
+indexes, hybrid search with OGX reranking, and optional graph-aware expansion through
+relationships between retrieved chunks.
+
+## Features
+
+- Vector search over chunk embeddings
+- Keyword search over chunk text
+- Hybrid search using OGX reranking
+- Optional graph-aware retrieval through related chunks
+- OpenAI-compatible vector store lifecycle through OGX
+
+## Usage
+
+Run Neo4j locally:
+
+```bash
+docker run -d --name ogx-neo4j -p 7474:7474 -p 7687:7687 \\
+  -e NEO4J_AUTH=neo4j/ogxpassword neo4j:2025.10
+```
+""",
+        ),
+        RemoteProviderSpec(
+            api=Api.vector_io,
             adapter_type="milvus",
             provider_type="remote::milvus",
             pip_packages=["pymilvus>=2.6.2"] + DEFAULT_VECTOR_IO_DEPS,
@@ -818,7 +851,7 @@ For more details on TLS configuration, refer to the [TLS setup guide](https://mi
         InlineProviderSpec(
             api=Api.vector_io,
             provider_type="inline::milvus",
-            pip_packages=["pymilvus[milvus-lite]>=2.4.10"] + DEFAULT_VECTOR_IO_DEPS,
+            pip_packages=["pymilvus[milvus-lite]>=2.6.2"] + DEFAULT_VECTOR_IO_DEPS,
             module="ogx.providers.inline.vector_io.milvus",
             config_class="ogx.providers.inline.vector_io.milvus.MilvusVectorIOConfig",
             api_dependencies=[Api.inference],

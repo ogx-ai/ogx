@@ -6,10 +6,9 @@
 
 """Connectors API package.
 
-This package contains the Connectors API definition, models, and FastAPI router.
+This package contains the Connectors API definition and models.
 """
 
-from . import fastapi_routes
 from .api import Connectors
 from .models import (
     CommonConnectorFields,
@@ -34,5 +33,4 @@ __all__ = [
     "ListConnectorsResponse",
     "ListConnectorToolsRequest",
     "ListToolsResponse",
-    "fastapi_routes",
 ]

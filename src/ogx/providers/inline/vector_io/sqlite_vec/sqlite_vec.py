@@ -49,7 +49,9 @@ def _get_sqlite_vec() -> Any:
         return _sqlite_vec
 
 
+from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.storage.kvstore import kvstore_impl
+from ogx.core.storage.sqlstore import authorized_sqlstore
 from ogx.log import get_logger
 from ogx.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
 from ogx.providers.utils.memory.vector_store import (
@@ -102,6 +104,12 @@ OPENAI_VECTOR_STORES_FILES_PREFIX = f"openai_vector_stores_files:sqlite_vec:{VER
 OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX = f"openai_vector_stores_files_contents:sqlite_vec:{VERSION}::"
 
 
+def _prepare_fts_query(query_string: str) -> str:
+    terms = re.findall(r"[\w]+", query_string, flags=re.UNICODE)
+    operator = " " if re.fullmatch(r"[\w\s]+", query_string, flags=re.UNICODE) else " OR "
+    return operator.join(f'"{term}"' for term in terms)
+
+
 def serialize_vector(vector: list[float]) -> bytes:
     """Serialize a list of floats into a compact binary representation."""
     return struct.pack(f"{len(vector)}f", *vector)
@@ -109,10 +117,19 @@ def serialize_vector(vector: list[float]) -> bytes:
 
 def _create_sqlite_connection(db_path: str):
     """Create a SQLite connection with sqlite_vec extension loaded."""
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, timeout=5.0)
     connection.enable_load_extension(True)
     _get_sqlite_vec().load(connection)
     connection.enable_load_extension(False)
+
+    # Enable WAL mode for better concurrency with multiple workers,
+    # matching the pragmas used by the SQL store backend.
+    cur = connection.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA busy_timeout=5000")
+    cur.execute("PRAGMA synchronous=NORMAL")
+    cur.close()
+
     return connection
 
 
@@ -377,6 +394,9 @@ class SQLiteVecIndex(EmbeddingIndex):
         """
         # Translate filters to SQL WHERE clause
         filter_clause, filter_params = self._translate_filters(filters)
+        fts_query = _prepare_fts_query(query_string)
+        if not fts_query:
+            return QueryChunksResponse(chunks=[], scores=[])
 
         def _execute_query():
             connection = _create_sqlite_connection(self.db_path)
@@ -392,7 +412,7 @@ class SQLiteVecIndex(EmbeddingIndex):
                     ORDER BY score ASC
                     LIMIT ?;
                 """
-                cur.execute(query_sql, (query_string, *filter_params, k))
+                cur.execute(query_sql, (fts_query, *filter_params, k))
                 return cur.fetchall()
             finally:
                 cur.close()
@@ -449,8 +469,10 @@ class SQLiteVecIndex(EmbeddingIndex):
             reranker_params = {}
 
         # Get results from both search methods, passing filters to each
-        vector_response = await self.query_vector(embedding, k, score_threshold, filters)
-        keyword_response = await self.query_keyword(query_string, k, score_threshold, filters)
+        vector_response, keyword_response = await asyncio.gather(
+            self.query_vector(embedding, k, score_threshold, filters),
+            self.query_keyword(query_string, k, score_threshold, filters),
+        )
 
         # Convert responses to score dictionaries using chunk_id (EmbeddedChunk inherits from Chunk)
         vector_scores = {
@@ -532,6 +554,7 @@ class SQLiteVecVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPro
         inference_api: Inference,
         files_api: Files | None,
         file_processor_api: FileProcessors | None = None,
+        policy: list[AccessRule] | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -539,9 +562,13 @@ class SQLiteVecVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresPro
         self.config = config
         self.cache: dict[str, VectorStoreWithIndex] = {}
         self.vector_store_table = None
+        self._policy = policy or []
 
     async def initialize(self) -> None:
         self.kvstore = await kvstore_impl(self.config.persistence)
+
+        if self.config.metadata_store:
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         start_key = VECTOR_DBS_PREFIX
         end_key = f"{VECTOR_DBS_PREFIX}\xff"

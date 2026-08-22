@@ -22,6 +22,7 @@ from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.telemetry.inference_metrics import (
     create_inference_metric_attributes,
     inference_duration,
+    inference_model_type_used_total,
     inference_time_to_first_token,
     inference_tokens_per_second,
 )
@@ -44,7 +45,6 @@ from ogx_api import (
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
-    OpenAIChatCompletionWithReasoning,
     OpenAIChoice,
     OpenAIChoiceLogprobs,
     OpenAICompletion,
@@ -61,8 +61,20 @@ from ogx_api import (
     RoutingTable,
 )
 from ogx_api.inference.models import RerankRequest
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 logger = get_logger(name=__name__, category="core::routers")
+
+
+def _log_background_task_error(task: asyncio.Task) -> None:
+    if not task.cancelled() and (exc := task.exception()):
+        logger.error("Failed to store chat completion in background", error=str(exc))
 
 
 class InferenceRouter(Inference):
@@ -165,14 +177,18 @@ class InferenceRouter(Inference):
         self,
         params: RerankRequest,
     ) -> RerankResponse:
+        request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.rerank)
+        inference_model_type_used_total.add(
+            1, {"type": "reranker", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
         return await provider.rerank(params)
 
     async def openai_completion(
         self,
         params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
-    ) -> OpenAICompletion:
+    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
         logger.debug(
             "InferenceRouter.openai_completion: model=, stream=, prompt",
             model=params.model,
@@ -181,14 +197,34 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         if params.stream:
-            return await provider.openai_completion(params)
+            response_stream = await provider.openai_completion(params)
+            # Providers respond with their internal model id, so rewrite each
+            # chunk to carry the fully qualified model id the client requested
+            # (mirrors the non-streaming path below and the chat-streaming path).
+            return self._rewrite_completion_stream_model_id(response_stream, request_model_id)
 
         response = await provider.openai_completion(params)
         response.model = request_model_id
         return response
+
+    async def _rewrite_completion_stream_model_id(
+        self,
+        response: AsyncIterator[OpenAICompletion],
+        fully_qualified_model_id: str,
+    ) -> AsyncIterator[OpenAICompletion]:
+        """Yield streamed completion chunks with the requested model id restored."""
+        async for chunk in response:
+            # Skip None chunks, mirroring stream_tokens_and_compute_metrics_openai_chat
+            if chunk is None:
+                continue
+            chunk.model = fully_qualified_model_id
+            yield chunk
 
     async def openai_chat_completion(
         self,
@@ -202,6 +238,9 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         # Use the OpenAI client for a bit of extra input validation without
@@ -268,21 +307,26 @@ class InferenceRouter(Inference):
 
         # Store the response with the ID that will be returned to the client
         if self.store:
-            asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            task = asyncio.create_task(self.store.store_chat_completion(response, params.messages))
+            task.add_done_callback(_log_background_task_error)
 
         return response
 
     async def openai_chat_completions_with_reasoning(
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
-    ) -> OpenAIChatCompletionWithReasoning | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
+    ) -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
         """Called by the Responses layer when a user requests reasoning.
 
         Routes to the provider's reasoning-aware CC implementation, which
         handles mapping reasoning fields to/from the provider's format.
         If the provider doesn't support reasoning, raises an error.
         """
+        request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        inference_model_type_used_total.add(
+            1, {"type": "completion", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
         # Not all providers implement openai_chat_completions_with_reasoning.
         # the Responses layer catches them and falls back to regular CC
@@ -302,11 +346,30 @@ class InferenceRouter(Inference):
         )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.embedding)
+        inference_model_type_used_total.add(
+            1, {"type": "embedding", "model": request_model_id, "provider": provider.__provider_id__}
+        )
         params.model = provider_resource_id
 
         response = await provider.openai_embeddings(params)
         response.model = request_model_id
         return response
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_messages(params)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_count_tokens(params)
 
     async def list_chat_completions(
         self,
@@ -351,27 +414,27 @@ class InferenceRouter(Inference):
         return response
 
     async def health(self) -> dict[str, HealthResponse]:
-        health_statuses = {}
-        timeout = 1  # increasing the timeout to 1 second for health checks
-        for provider_id, impl in self.routing_table.impls_by_provider_id.items():
+        timeout = 1
+        impls_snapshot = dict(self.routing_table.impls_by_provider_id)
+
+        async def _check_one(provider_id: str, impl: object) -> tuple[str, HealthResponse]:
             try:
-                # check if the provider has a health method
                 if not hasattr(impl, "health"):
-                    continue
-                health = await asyncio.wait_for(impl.health(), timeout=timeout)
-                health_statuses[provider_id] = health
+                    return provider_id, HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
+                result = await asyncio.wait_for(impl.health(), timeout=timeout)
+                return provider_id, result
             except TimeoutError:
-                health_statuses[provider_id] = HealthResponse(
+                return provider_id, HealthResponse(
                     status=HealthStatus.ERROR,
                     message=f"Health check timed out after {timeout} seconds",
                 )
             except NotImplementedError:
-                health_statuses[provider_id] = HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
+                return provider_id, HealthResponse(status=HealthStatus.NOT_IMPLEMENTED)
             except Exception as e:
-                health_statuses[provider_id] = HealthResponse(
-                    status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}"
-                )
-        return health_statuses
+                return provider_id, HealthResponse(status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}")
+
+        results = await asyncio.gather(*[_check_one(pid, impl) for pid, impl in impls_snapshot.items()])
+        return dict(results)
 
     async def stream_tokens_and_compute_metrics_openai_chat(
         self,
@@ -555,4 +618,5 @@ class InferenceRouter(Inference):
                     object="chat.completion",
                 )
                 logger.debug("InferenceRouter.completion_response", final_response=final_response)
-                asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                task = asyncio.create_task(self.store.store_chat_completion(final_response, messages))
+                task.add_done_callback(_log_background_task_error)

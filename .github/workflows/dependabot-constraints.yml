@@ -1,0 +1,245 @@
+# Computes constraint-dependency updates for Dependabot PRs.
+# This workflow runs with read-only permissions for security.
+# A companion workflow (commit-constraint-updates.yml) commits the results.
+#
+# SECURITY NOTE: This workflow uses pull_request (not pull_request_target).
+# Security measures:
+# 1. Runs with read-only permissions (no write access to repo)
+# 2. Only runs for PRs on dependabot/uv/ branches (created exclusively by Dependabot)
+# 3. Results uploaded as artifacts; companion workflow handles commits
+name: Dependabot constraint-dependencies
+
+run-name: Update constraint-dependencies for Dependabot PR
+
+on:
+  pull_request:
+    paths:
+      - 'uv.lock'
+      - 'src/ogx_api/uv.lock'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+# Read-only permissions - no write access
+permissions:
+  contents: read
+
+jobs:
+  update-constraints:
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'dependabot/uv/')
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Parse dependency info from Dependabot commit
+        id: parse
+        run: |
+          commit_msg=$(git log -1 --format="%B")
+
+          # Extract dependency-name and dependency-version from the structured
+          # updated-dependencies block in the Dependabot commit message
+          dep_name=$(echo "$commit_msg" | grep -oP '(?<=dependency-name: ).+' | head -1 | tr -d "[:space:]'\"")
+          dep_version=$(echo "$commit_msg" | grep -oP '(?<=dependency-version: ).+' | head -1 | tr -d "[:space:]'\"")
+
+          if [ -z "$dep_name" ] || [ -z "$dep_version" ]; then
+            echo "Could not parse dependency info from commit message"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "dep_name=$dep_name"
+            echo "dep_version=$dep_version"
+            echo "skip=false"
+          } >> "$GITHUB_OUTPUT"
+          echo "Parsed: $dep_name $dep_version"
+
+      - name: Determine target pyproject from changed lock files
+        if: steps.parse.outputs.skip != 'true'
+        id: target
+        run: |
+          pyprojects=""
+          if git diff HEAD~1 --name-only | grep -q '^uv\.lock$'; then
+            pyprojects="pyproject.toml"
+          fi
+          if git diff HEAD~1 --name-only | grep -q '^src/ogx_api/uv\.lock$'; then
+            pyprojects="$pyprojects src/ogx_api/pyproject.toml"
+          fi
+          pyprojects=$(echo "$pyprojects" | xargs)
+
+          if [ -z "$pyprojects" ]; then
+            echo "No lock file changes detected, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Target pyproject files: $pyprojects"
+            echo "pyprojects=$pyprojects" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update dependency version floors in pyproject.toml
+        if: steps.parse.outputs.skip != 'true' && steps.target.outputs.skip != 'true'
+        id: update
+        env:
+          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
+          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
+        run: |
+          changed=false
+
+          for pyproject in $TARGET_PYPROJECTS; do
+            echo "--- Checking $pyproject ---"
+            output=$(python3 .github/scripts/update_constraint_deps.py \
+              --dependency-name "$DEP_NAME" \
+              --dependency-version "$DEP_VERSION" \
+              --pyproject "$pyproject")
+
+            echo "$output"
+
+            if echo "$output" | grep -q "updated=true"; then
+              changed=true
+            fi
+          done
+
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Update pip_packages version floors in provider registry
+        if: steps.parse.outputs.skip != 'true'
+        id: registry
+        env:
+          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
+          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+        run: |
+          output=$(python3 .github/scripts/update_registry_deps.py \
+            --dependency-name "$DEP_NAME" \
+            --dependency-version "$DEP_VERSION")
+
+          echo "$output"
+
+          if echo "$output" | grep -q "updated=true"; then
+            changed_files=$(echo "$output" | grep "^changed_files=" | cut -d= -f2)
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "changed_files=$changed_files" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate uv.lock files
+        if: steps.update.outputs.changed == 'true'
+        env:
+          TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
+        run: |
+          if echo " $TARGET_PYPROJECTS " | grep -q ' src/ogx_api/pyproject.toml '; then
+            echo "Regenerating src/ogx_api/uv.lock"
+            uv lock --directory src/ogx_api
+          fi
+          # Always regenerate root uv.lock: ogx-api is a workspace dependency
+          # of the root project, so any change to src/ogx_api/pyproject.toml
+          # also invalidates the root lock file.
+          echo "Regenerating root uv.lock"
+          uv lock
+
+      - name: Create PR metadata artifact
+        if: steps.parse.outputs.skip != 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$PR_HEAD_REPO" != "$REPO" ]; then
+            IS_FORK_PR="true"
+          else
+            IS_FORK_PR="false"
+          fi
+
+          mkdir -p pr-metadata
+          cat > pr-metadata/pr-info.json <<EOF
+          {
+            "pr_number": "${PR_NUMBER}",
+            "pr_head_ref": "${PR_HEAD_REF}",
+            "pr_head_sha": "${PR_HEAD_SHA}",
+            "pr_head_repo": "${PR_HEAD_REPO}",
+            "is_fork_pr": "${IS_FORK_PR}"
+          }
+          EOF
+          cat pr-metadata/pr-info.json
+
+      - name: Upload PR metadata
+        if: steps.parse.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-metadata-constraints-${{ github.run_id }}
+          path: pr-metadata/
+          retention-days: 1
+
+      - name: Prepare constraint update artifact
+        if: steps.parse.outputs.skip != 'true'
+        env:
+          PYPROJECT_CHANGED: ${{ steps.update.outputs.changed }}
+          REGISTRY_CHANGED: ${{ steps.registry.outputs.changed }}
+          REGISTRY_FILES: ${{ steps.registry.outputs.changed_files }}
+          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
+          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
+        run: |
+          if [ "$PYPROJECT_CHANGED" = "true" ] || [ "$REGISTRY_CHANGED" = "true" ]; then
+            CHANGED=true
+          else
+            CHANGED=false
+          fi
+
+          mkdir -p constraint-update
+          cat > constraint-update/change-info.json <<EOF
+          {
+            "changed": "${CHANGED}",
+            "dep_name": "${DEP_NAME}",
+            "dep_version": "${DEP_VERSION}",
+            "registry_changed": "${REGISTRY_CHANGED}"
+          }
+          EOF
+
+          if [ "$PYPROJECT_CHANGED" = "true" ]; then
+            # Always include root uv.lock since ogx-api is a workspace
+            # dependency — any sub-package change invalidates the root lock.
+            if [ -f pyproject.toml ]; then
+              cp pyproject.toml constraint-update/
+            fi
+            cp uv.lock constraint-update/
+            if echo " $TARGET_PYPROJECTS " | grep -q ' src/ogx_api/pyproject.toml '; then
+              mkdir -p constraint-update/src/ogx_api
+              cp src/ogx_api/pyproject.toml constraint-update/src/ogx_api/
+              cp src/ogx_api/uv.lock constraint-update/src/ogx_api/
+            fi
+          fi
+
+          if [ "$REGISTRY_CHANGED" = "true" ]; then
+            IFS=',' read -ra FILES <<< "$REGISTRY_FILES"
+            for f in "${FILES[@]}"; do
+              mkdir -p "constraint-update/$(dirname "$f")"
+              cp "$f" "constraint-update/$f"
+            done
+          fi
+
+      - name: Upload constraint update
+        if: steps.parse.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: constraint-update-${{ github.run_id }}
+          path: constraint-update/
+          retention-days: 1

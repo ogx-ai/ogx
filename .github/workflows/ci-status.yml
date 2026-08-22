@@ -19,9 +19,10 @@ concurrency:
 jobs:
   ci-status:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     permissions:
       checks: read
+      pull-requests: read
     steps:
       - name: Wait for CI checks to complete
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -44,10 +45,38 @@ jobs:
 
             const terminalStatuses = new Set(['completed']);
             const successConclusions = new Set(['success', 'skipped', 'neutral']);
-            const failureConclusions = new Set(['failure', 'cancelled', 'timed_out']);
+            const failureConclusions = new Set(['failure', 'timed_out', 'cancelled', 'action_required', 'startup_failure', 'stale']);
+            const replayCheckPrefix = 'Integration Tests (';
+            const recordCheckPrefix = 'record-providers (';
+
+            function pathTriggersReplay(path) {
+              if (path.startsWith('src/ogx_ui/')) return false;
+              return path.startsWith('src/ogx/') ||
+                path.startsWith('tests/') ||
+                path === 'uv.lock' ||
+                path === 'pyproject.toml' ||
+                path === '.github/workflows/integration-tests.yml' ||
+                path === '.github/actions/setup-ollama/action.yml' ||
+                path === '.github/actions/setup-test-environment/action.yml' ||
+                path === '.github/actions/run-and-record-tests/action.yml' ||
+                path === 'scripts/integration-tests.sh' ||
+                path === 'scripts/generate_ci_matrix.py';
+            }
+
+            let replayRequired = context.eventName === 'merge_group';
+            if (context.payload.pull_request) {
+              const changedFiles = await github.paginate(github.rest.pulls.listFiles, {
+                owner,
+                repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              replayRequired = changedFiles.some(file => pathTriggersReplay(file.filename));
+              core.info(`Replay required: ${replayRequired} (${changedFiles.length} changed file(s) checked)`);
+            }
 
             while (true) {
-              const { data: checkRuns } = await github.rest.checks.listForRef({
+              const checkRuns = await github.paginate(github.rest.checks.listForRef, {
                 owner,
                 repo,
                 ref: sha,
@@ -55,7 +84,7 @@ jobs:
               });
 
               // Filter to only GitHub Actions checks, excluding ourselves and bots
-              const relevant = checkRuns.check_runs.filter(cr => {
+              const relevant = checkRuns.filter(cr => {
                 if (excludedChecks.has(cr.name)) return false;
                 if (cr.app && excludedApps.has(cr.app.slug)) return false;
                 // Only include GitHub Actions checks
@@ -71,8 +100,11 @@ jobs:
 
               const pending = relevant.filter(cr => !terminalStatuses.has(cr.status));
               const completed = relevant.filter(cr => terminalStatuses.has(cr.status));
+              const replayChecks = relevant.filter(cr => cr.name.startsWith(replayCheckPrefix));
+              const recordChecks = relevant.filter(cr => cr.name.startsWith(recordCheckPrefix));
 
               core.info(`Checks: ${completed.length} completed, ${pending.length} pending out of ${relevant.length} total`);
+              core.info(`Replay checks: ${replayChecks.length}; record checks: ${recordChecks.length}`);
 
               for (const cr of completed) {
                 core.info(`  ✓ ${cr.name}: ${cr.conclusion}`);
@@ -87,15 +119,26 @@ jobs:
                 continue;
               }
 
+              if (replayRequired && replayChecks.length === 0) {
+                if (recordChecks.length > 0) {
+                  core.warning('Record checks are present, but no replay matrix checks were found for this SHA.');
+                }
+                core.info('Replay checks are required for this change. Waiting 30s for the replay workflow to appear...');
+                await new Promise(r => setTimeout(r, 30000));
+                continue;
+              }
+
               // All checks completed — evaluate conclusions
               const failed = completed.filter(cr => failureConclusions.has(cr.conclusion));
 
               if (failed.length > 0) {
                 for (const cr of failed) {
-                  core.error(`${cr.name} concluded with: ${cr.conclusion}`);
+                  core.warning(`${cr.name} concluded with: ${cr.conclusion} — waiting for re-run`);
                 }
-                core.setFailed(`${failed.length} CI check(s) failed.`);
-                return;
+                core.info(`${failed.length} check(s) failed. Waiting 30s for re-runs before giving up...`);
+                core.info('Re-run the failed job(s) and ci-status will pick up the result automatically.');
+                await new Promise(r => setTimeout(r, 30000));
+                continue;
               }
 
               const succeeded = completed.filter(cr => successConclusions.has(cr.conclusion));

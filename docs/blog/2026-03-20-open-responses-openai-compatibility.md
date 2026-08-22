@@ -200,7 +200,7 @@ ollama run gpt-oss:20b
 
 # Launch OGX with the starter distribution
 
-OLLAMA_URL=http://localhost:11434/v1 uv run ogx stack run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run ogx run starter
 ```
 
 ```python
@@ -220,7 +220,7 @@ print(response.output_text)
 ```bash
 # Deploy with your preferred infrastructure
 # Docker, Kubernetes, or bare metal — your choice
-docker run -p 8321:8321 ogx/distribution-starter:latest
+docker run -p 8321:8321 ogxai/distribution-starter:latest
 ```
 
 ## Framework Ecosystem Compatibility

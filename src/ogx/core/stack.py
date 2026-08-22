@@ -11,7 +11,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, get_type_hints
+from typing import Any, get_type_hints, overload
 
 import yaml
 from pydantic import BaseModel
@@ -23,12 +23,13 @@ from ogx.core.datatypes import (
     Provider,
     QualifiedModel,
     RerankerModel,
-    SafetyConfig,
     StackConfig,
     VectorStoresConfig,
 )
 from ogx.core.distribution import get_provider_registry
 from ogx.core.inspect import DistributionInspectConfig, DistributionInspectImpl
+from ogx.core.jobs.bootstrap import initialize_job_runtime
+from ogx.core.jobs.runtime import JobRuntime, reset_job_runtime
 from ogx.core.prompts.prompts import PromptServiceConfig, PromptServiceImpl
 from ogx.core.providers import ProviderImpl, ProviderImplConfig
 from ogx.core.resolver import ProviderRegistry, resolve_impls
@@ -46,6 +47,7 @@ from ogx.core.storage.datatypes import (
 from ogx.core.store.registry import create_dist_registry
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
+from ogx.telemetry import initialize_telemetry
 from ogx_api import (
     Api,
     Batches,
@@ -59,10 +61,7 @@ from ogx_api import (
     Prompts,
     Providers,
     RegisterModelRequest,
-    RegisterShieldRequest,
     Responses,
-    Safety,
-    Shields,
     ToolGroupNotFoundError,
     VectorIO,
 )
@@ -75,10 +74,8 @@ class OGX(
     Inference,
     Responses,
     Batches,
-    Safety,
     VectorIO,
     Models,
-    Shields,
     Inspect,
     Files,
     Prompts,
@@ -94,7 +91,6 @@ class OGX(
 # If a request class is specified, the configuration object will be converted to this class before invoking the registration method.
 RESOURCES = [
     ("models", Api.models, "register_model", "list_models", RegisterModelRequest),
-    ("shields", Api.shields, "register_shield", "list_shields", RegisterShieldRequest),
     ("vector_stores", Api.vector_stores, "register_vector_store", "list_vector_stores", None),
 ]
 
@@ -108,7 +104,6 @@ TEST_RECORDING_CONTEXT = None
 RESOURCE_ID_FIELDS = [
     "vector_store_id",
     "model_id",
-    "shield_id",
 ]
 
 
@@ -376,7 +371,7 @@ async def validate_vector_stores_config(vector_stores_config: VectorStoresConfig
 
 
 async def _validate_embedding_model(embedding_model: QualifiedModel, impls: dict[Api, Any]) -> None:
-    """Validate that an embedding model exists and has required metadata."""
+    """Validate that an embedding model exists and is accessible."""
     provider_id = embedding_model.provider_id
     model_id = embedding_model.model_id
     model_identifier = f"{provider_id}/{model_id}"
@@ -386,7 +381,7 @@ async def _validate_embedding_model(embedding_model: QualifiedModel, impls: dict
 
     models_impl = impls[Api.models]
     response = await models_impl.list_models()
-    models_list = {m.identifier: m for m in response.data if m.model_type == "embedding"}
+    models_list = {m.identifier: m for m in response.data if m.model_type == ModelType.embedding}
 
     model = models_list.get(model_identifier)
     if model is None:
@@ -394,15 +389,14 @@ async def _validate_embedding_model(embedding_model: QualifiedModel, impls: dict
             f"Embedding model '{model_identifier}' not found. Available embedding models: {list(models_list.keys())}"
         )
 
-    # if not in metadata, fetch from config default
+    # embedding_dimension may be absent when the model was registered without static metadata;
+    # it will be probed lazily at vector store creation time if needed.
     embedding_dimension = model.metadata.get("embedding_dimension", embedding_model.embedding_dimensions)
-    if embedding_dimension is None:
-        raise ValueError(f"Embedding model '{model_identifier}' is missing 'embedding_dimension' in metadata")
-
-    try:
-        int(embedding_dimension)
-    except ValueError as err:
-        raise ValueError(f"Embedding dimension '{embedding_dimension}' cannot be converted to an integer") from err
+    if embedding_dimension is not None:
+        try:
+            int(embedding_dimension)
+        except ValueError as err:
+            raise ValueError(f"Embedding dimension '{embedding_dimension}' cannot be converted to an integer") from err
 
     logger.debug(
         "Validated embedding model", model_identifier=model_identifier, embedding_dimension=embedding_dimension
@@ -455,39 +449,6 @@ async def _validate_rewrite_query_model(rewrite_query_model: QualifiedModel, imp
     logger.debug("Validated rewrite query model", model_identifier=model_identifier)
 
 
-async def validate_safety_config(safety_config: SafetyConfig | None, impls: dict[Api, Any]) -> None:
-    """Validate that the configured default shield exists among registered shields.
-
-    Args:
-        safety_config: Optional safety configuration with a default_shield_id.
-        impls: Dictionary mapping APIs to their provider implementations.
-
-    Raises:
-        ValueError: If the default shield ID is not found among registered shields.
-    """
-    if safety_config is None or safety_config.default_shield_id is None:
-        return
-
-    if Api.shields not in impls:
-        raise ValueError("Safety configuration requires the shields API to be enabled")
-
-    if Api.safety not in impls:
-        raise ValueError("Safety configuration requires the safety API to be enabled")
-
-    shields_impl = impls[Api.shields]
-    response = await shields_impl.list_shields()
-    shields_by_id = {shield.identifier: shield for shield in response.data}
-
-    default_shield_id = safety_config.default_shield_id
-    # don't validate if there are no shields registered
-    if shields_by_id and default_shield_id not in shields_by_id:
-        available = sorted(shields_by_id)
-        raise ValueError(
-            f"Configured default_shield_id '{default_shield_id}' not found among registered shields."
-            f" Available shields: {available}"
-        )
-
-
 class EnvVarError(Exception):
     """Raised when a required environment variable is not set or empty."""
 
@@ -502,8 +463,49 @@ class EnvVarError(Exception):
         )
 
 
-def replace_env_vars(config: Any, path: str = "") -> Any:
-    """Recursively replace environment variable references in a configuration object."""
+_ENV_VAR_PATTERN = re.compile(r"\${env\.([A-Z0-9_]+)(?::([=+]?)?([^}]*)?)?}")
+
+
+def extract_env_var_references(config: Any) -> list[str]:
+    """Return the list of environment variable names referenced in a config object."""
+
+    def _collect(obj: Any, acc: list[str]) -> None:
+        if isinstance(obj, str):
+            for m in _ENV_VAR_PATTERN.finditer(obj):
+                acc.append(m.group(1))
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                _collect(v, acc)
+        elif isinstance(obj, list):
+            for v in obj:
+                _collect(v, acc)
+
+    result: list[str] = []
+    _collect(config, result)
+    return result
+
+
+@overload
+def replace_env_vars(config: dict, path: str = "", ignore_unresolved: bool = False) -> dict: ...
+
+
+@overload
+def replace_env_vars(config: list, path: str = "", ignore_unresolved: bool = False) -> list: ...
+
+
+@overload
+def replace_env_vars(config: str, path: str = "", ignore_unresolved: bool = False) -> str: ...
+
+
+def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = False) -> Any:
+    """Recursively replace environment variable references in a configuration object.
+
+    When *ignore_unresolved* is True, bare ``${env.VAR}`` references that cannot
+    be resolved (env var not set, no default) are replaced with an empty string
+    instead of raising :class:`EnvVarError`.  This is used by ``list-deps`` which
+    only needs the structural shape of the config (provider types), not actual
+    runtime values.
+    """
     if isinstance(config, dict):
         # Special handling for auth provider_config with conditional type field
         # This allows auth to be enabled/disabled via environment variables
@@ -513,20 +515,22 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
             if isinstance(provider_cfg, dict) and "type" in provider_cfg:
                 try:
                     # Resolve the type field first to check if auth should be enabled
-                    resolved_type = replace_env_vars(provider_cfg["type"], f"{path}.provider_config.type")
+                    resolved_type = replace_env_vars(
+                        provider_cfg["type"], f"{path}.provider_config.type", ignore_unresolved
+                    )
 
                     # If type is empty/None, disable auth by setting provider_config to None
                     # This prevents validation errors on the discriminated union
                     if resolved_type is None or resolved_type == "":
                         # Process rest of config normally but exclude provider_config from expansion
                         # to avoid EnvVarError from bare env vars (e.g., ${env.KEYCLOAK_URL})
-                        result = {
-                            k: replace_env_vars(v, f"{path}.{k}" if path else k)
+                        auth_result: dict[str, Any] = {
+                            k: replace_env_vars(v, f"{path}.{k}" if path else k, ignore_unresolved)
                             for k, v in config.items()
                             if k != "provider_config"
                         }
-                        result["provider_config"] = None
-                        return result
+                        auth_result["provider_config"] = None
+                        return auth_result
                 except EnvVarError as e:
                     # If we can't resolve type, continue with normal processing
                     # and let validation catch the error
@@ -535,25 +539,25 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                         var_name=e.var_name,
                     )
 
-        result = {}
+        result: Any = {}
         for k, v in config.items():
             try:
-                result[k] = replace_env_vars(v, f"{path}.{k}" if path else k)
+                result[k] = replace_env_vars(v, f"{path}.{k}" if path else k, ignore_unresolved)
             except EnvVarError as e:
                 raise EnvVarError(e.var_name, e.path) from None
         return result
 
     elif isinstance(config, list):
-        # result is assigned as list here but dict/str in other branches.
-        # Mypy cannot track that only one branch executes.
-        result = []  # type: ignore[assignment]
+        result = []
         for i, v in enumerate(config):
             try:
                 # Special handling for providers: first resolve the provider_id to check if provider
                 # is disabled so that we can skip config env variable expansion and avoid validation errors
                 if isinstance(v, dict) and "provider_id" in v:
                     try:
-                        resolved_provider_id = replace_env_vars(v["provider_id"], f"{path}[{i}].provider_id")
+                        resolved_provider_id = replace_env_vars(
+                            v["provider_id"], f"{path}[{i}].provider_id", ignore_unresolved
+                        )
                         if resolved_provider_id == "__disabled__":
                             logger.debug(
                                 "Skipping config env variable expansion for disabled provider",
@@ -571,7 +575,9 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                     for id_field in RESOURCE_ID_FIELDS:
                         if id_field in v:
                             try:
-                                resolved_id = replace_env_vars(v[id_field], f"{path}[{i}].{id_field}")
+                                resolved_id = replace_env_vars(
+                                    v[id_field], f"{path}[{i}].{id_field}", ignore_unresolved
+                                )
                                 if resolved_id is None or resolved_id == "":
                                     logger.debug(
                                         "Skipping [] with empty (conditional env var not set)",
@@ -594,8 +600,7 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                         continue
 
                 # Normal processing
-                # result is a list here, but mypy sees it could be dict/str
-                result.append(replace_env_vars(v, f"{path}[{i}]"))  # type: ignore[attr-defined]
+                result.append(replace_env_vars(v, f"{path}[{i}]", ignore_unresolved))
             except EnvVarError as e:
                 raise EnvVarError(e.var_name, e.path) from None
         return result
@@ -640,6 +645,8 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
                     value = ""
             else:  # No operator case: ${env.FOO}
                 if not env_value:
+                    if ignore_unresolved:
+                        return ""
                     raise EnvVarError(env_var, path)
                 value = env_value
 
@@ -647,12 +654,9 @@ def replace_env_vars(config: Any, path: str = "") -> Any:
             return os.path.expanduser(value)
 
         try:
-            # re.sub returns str, but result could be dict/list in other branches
-            result = re.sub(pattern, get_env_var, config)  # type: ignore[assignment]
-            # Only apply type conversion if substitution actually happened
+            result = re.sub(pattern, get_env_var, config)
             if result != config:
-                # result is str here but mypy sees it could be dict/list
-                return _convert_string_to_proper_type(result)  # type: ignore[arg-type]
+                return _convert_string_to_proper_type(result)
             return result
         except EnvVarError as e:
             raise EnvVarError(e.var_name, e.path) from None
@@ -697,23 +701,21 @@ def cast_distro_name_to_string(config_dict: dict[str, Any]) -> dict[str, Any]:
 
 def add_internal_implementations(impls: dict[Api, Any], config: StackConfig, policy: list) -> None:
     """Add internal implementations (inspect, providers, admin, etc.) to the implementations dictionary."""
-    # deps expects dict[str, Any] but receives dict[Api, Any].
-    # Api is an enum, runtime compatible as dict key.
     inspect_impl = DistributionInspectImpl(
         DistributionInspectConfig(config=config),
-        deps=impls,  # type: ignore[arg-type]
+        deps=impls,
     )
     impls[Api.inspect] = inspect_impl
 
     providers_impl = ProviderImpl(
         ProviderImplConfig(config=config),
-        deps=impls,  # type: ignore[arg-type]
+        deps=impls,
     )
     impls[Api.providers] = providers_impl
 
     admin_impl = AdminImpl(
         AdminImplConfig(config=config),
-        deps=impls,  # type: ignore[arg-type]
+        deps=impls,
     )
     impls[Api.admin] = admin_impl
 
@@ -748,10 +750,12 @@ def _initialize_storage(run_config: StackConfig):
             raise ValueError(f"Unknown storage backend type: {type}")
 
     from ogx.core.storage.kvstore.kvstore import register_kvstore_backends
+    from ogx.core.storage.sqlstore.authorized_sqlstore import set_default_tenancy_config
     from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
 
     register_kvstore_backends(kv_backends)
     register_sqlstore_backends(sql_backends)
+    set_default_tenancy_config(run_config.server.tenancy)
 
 
 class Stack:
@@ -761,10 +765,14 @@ class Stack:
         self.run_config = run_config
         self.provider_registry = provider_registry
         self.impls = None
+        self.job_runtime: JobRuntime | None = None
 
     # Produces a stack of providers for the given run config. Not all APIs may be
     # asked for in the run config.
     async def initialize(self):
+        # Configure metrics export on stack bring-up (server and library modes, not list-deps).
+        initialize_telemetry()
+
         if "OGX_TEST_INFERENCE_MODE" in os.environ:
             from ogx.testing.api_recorder import setup_api_recording
 
@@ -781,8 +789,19 @@ class Stack:
         dist_registry, _ = await create_dist_registry(stores.metadata, self.run_config.distro_name)
         policy = self.run_config.server.auth.access_policy if self.run_config.server.auth else []
 
+        # Build the job queue + worker pool before resolving providers so that
+        # worker-mode providers can register descriptors and receive a proxy.
+        self.job_runtime = await initialize_job_runtime(self.run_config)
+
         internal_impls = {}
         add_internal_implementations(internal_impls, self.run_config, policy)
+
+        # Register internal SQL tables before resolve_impls — provider initialize()
+        # hooks may issue queries that bind the shared engine, after which tables
+        # registered later are never created.
+        for api in (Api.prompts, Api.conversations, Api.connectors):
+            if api in internal_impls:
+                await internal_impls[api].initialize()
 
         impls = await resolve_impls(
             self.run_config,
@@ -792,19 +811,17 @@ class Stack:
             internal_impls,
         )
 
-        if Api.prompts in impls:
-            await impls[Api.prompts].initialize()
-        if Api.conversations in impls:
-            await impls[Api.conversations].initialize()
-        if Api.connectors in impls:
-            await impls[Api.connectors].initialize()
-
         await register_resources(self.run_config, impls)
         await auto_register_tool_groups(self.run_config, impls)
         await register_connectors(self.run_config, impls)
         await refresh_registry_once(impls)
         await validate_vector_stores_config(self.run_config.vector_stores, impls)
-        await validate_safety_config(self.run_config.safety, impls)
+
+        # Workers reclaim interrupted jobs so terminal resource cleanup happens
+        # inside the restored request identity and provider context.
+        if self.job_runtime is not None:
+            self.job_runtime.pool.start()
+
         self.impls = impls
 
     def create_registry_refresh_task(self):
@@ -828,6 +845,11 @@ class Stack:
         REGISTRY_REFRESH_TASK.add_done_callback(cb)
 
     async def shutdown(self):
+        if self.job_runtime is not None:
+            self.job_runtime.pool.shutdown()
+            reset_job_runtime()
+            self.job_runtime = None
+
         for impl in self.impls.values():
             impl_name = impl.__class__.__name__
             logger.debug("Shutting down", impl_name=impl_name)
@@ -906,7 +928,7 @@ def run_config_from_dynamic_config_spec(
     Create a dynamic distribution from a list of API providers.
 
     The list should be of the form "api=provider", e.g. "inference=fireworks". If you have
-    multiple pairs, separate them with commas or semicolons, e.g. "inference=fireworks,safety=llama-guard,agents=builtin"
+    multiple pairs, separate them with commas or semicolons, e.g. "inference=fireworks,vector_io=faiss"
 
     You can optionally specify config parameters using URL query parameter syntax,
     e.g. "inference=inline::sentence-transformers?trust_remote_code=true&max_seq_length=512"
@@ -992,6 +1014,7 @@ def run_config_from_dynamic_config_spec(
                 conversations=SqlStoreReference(backend="sql_default", table_name="openai_conversations"),
                 prompts=SqlStoreReference(backend="sql_default", table_name="prompts"),
                 connectors=SqlStoreReference(backend="sql_default", table_name="connectors"),
+                vector_stores=SqlStoreReference(backend="sql_default", table_name="vector_store_metadata"),
             ),
         ),
     )

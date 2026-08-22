@@ -83,7 +83,9 @@ class ChromaIndex(EmbeddingIndex):
 
         ids = [f"{c.metadata.get('document_id', '')}:{c.chunk_id}" for c in chunks]
         await maybe_await(
-            self.collection.add(documents=[chunk.model_dump_json() for chunk in chunks], embeddings=embeddings, ids=ids)
+            self.collection.upsert(
+                documents=[chunk.model_dump_json() for chunk in chunks], embeddings=embeddings, ids=ids
+            )
         )
 
     async def query_vector(
@@ -249,6 +251,7 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         inference_api: Inference,
         files_api: Files | None,
         file_processor_api: FileProcessors | None = None,
+        policy: list | None = None,
     ) -> None:
         super().__init__(
             inference_api=inference_api, files_api=files_api, kvstore=None, file_processor_api=file_processor_api
@@ -258,9 +261,15 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         self.client = None
         self.cache = {}
         self.vector_store_table = None
+        self._policy = policy or []
 
     async def initialize(self) -> None:
         self.kvstore = await kvstore_impl(self.config.persistence)
+
+        if self.config.metadata_store:
+            from ogx.core.storage.sqlstore import authorized_sqlstore
+
+            self.metadata_store = await authorized_sqlstore(self.config.metadata_store, self._policy)
 
         if isinstance(self.config, RemoteChromaVectorIOConfig):
             log.info(f"Connecting to Chroma server at: {self.config.url}")
@@ -274,13 +283,18 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         else:
             log.info(f"Connecting to Chroma local db at: {self.config.db_path}")
             self.client = chromadb.PersistentClient(path=self.config.db_path)
-        self.openai_vector_stores = await self._load_openai_vector_stores()
+        await self.initialize_openai_vector_stores()
 
     async def shutdown(self) -> None:
         # Clean up mixin resources (file batch tasks)
         await super().shutdown()
 
     async def register_vector_store(self, vector_store: VectorStore) -> None:
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before registering vector stores.")
+        key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+        await self.kvstore.set(key=key, value=vector_store.model_dump_json())
+
         collection = await maybe_await(
             self.client.get_or_create_collection(
                 name=vector_store.identifier, metadata={"vector_store": vector_store.model_dump_json()}
@@ -291,12 +305,15 @@ class ChromaVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         )
 
     async def unregister_vector_store(self, vector_store_id: str) -> None:
-        if vector_store_id not in self.cache:
-            log.warning(f"Vector DB {vector_store_id} not found")
-            return
+        if vector_store_id in self.cache:
+            await self.cache[vector_store_id].index.delete()
+            del self.cache[vector_store_id]
+        else:
+            log.warning("Vector DB not found", vector_store_id=vector_store_id)
 
-        await self.cache[vector_store_id].index.delete()
-        del self.cache[vector_store_id]
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before unregistering vector stores.")
+        await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def insert_chunks(self, request: InsertChunksRequest) -> None:
         index = await self._get_and_cache_vector_store_index(request.vector_store_id)

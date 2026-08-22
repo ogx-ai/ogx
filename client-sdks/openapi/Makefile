@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 STAINLESS_DIR := ../stainless
-PYTHON := uv run python
+PYTHON := uv run --no-project --with ruamel.yaml python
 # Auto-detect openapi-generator command (npm installs as openapi-generator-cli, brew as openapi-generator)
 OPENAPI_GENERATOR := $(shell command -v openapi-generator-cli 2>/dev/null || command -v openapi-generator 2>/dev/null || echo openapi-generator-cli)
 
@@ -33,8 +33,8 @@ PROCESSED_SPEC := openapi-hierarchical.yml
 HIERARCHY_FILE := api-hierarchy.yml
 SDK_OUTPUT_DIR := sdks/python
 
-# Extract version from root pyproject.toml
-VERSION := $(shell grep 'fallback_version' ../../pyproject.toml | cut -d'"' -f2)
+# Extract version from root pyproject.toml; override with make VERSION=X.Y.Z
+VERSION ?= $(shell grep 'fallback_version' ../../pyproject.toml | cut -d'"' -f2)
 
 .PHONY: all sdk openapi hierarchy clean help version check-generator generate-config
 
@@ -118,7 +118,7 @@ sdk: check-generator $(PROCESSED_SPEC) generate-config
 	@echo "Generating Python SDK (version: $(VERSION), package: $(PACKAGE_NAME))..."
 	@mkdir -p $(SDK_OUTPUT_DIR)
 	$(OPENAPI_GENERATOR) generate -i $(PROCESSED_SPEC) -g python -c $(OPENAPI_CONFIG) -o $(SDK_OUTPUT_DIR) \
-		--additional-properties=packageVersion=$(VERSION) -t $(TEMPLATE_DIR)
+		--additional-properties=packageVersion=$(VERSION),httpx=true -t $(TEMPLATE_DIR)
 	@cp -R $(TEMPLATE_DIR)/lib $(SDK_OUTPUT_DIR)/$(PACKAGE_NAME)
 	@echo "Patching SDK with hierarchical API structure..."
 	$(PYTHON) $(PATCH_SCRIPT) --hierarchy $(HIERARCHY_FILE) --sdk-dir $(SDK_OUTPUT_DIR) --package $(PACKAGE_NAME)

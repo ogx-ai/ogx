@@ -19,14 +19,14 @@ distributions/
 
 ## What Is a Distribution
 
-A distribution is a pre-built configuration that bundles specific providers for a target environment, similar to how Kubernetes has distributions like AKS, EKS, and GKE. The core API stays the same, but each distribution wires different backends. Concretely, it is a `config.yaml` file that defines which APIs to serve, which providers to use for each API, how storage is configured, and what models/shields/datasets to register at startup.
+A distribution is a pre-built configuration that bundles specific providers for a target environment, similar to how Kubernetes has distributions like AKS, EKS, and GKE. The core API stays the same, but each distribution wires different backends. Concretely, it is a `config.yaml` file that defines which APIs to serve, which providers to use for each API, how storage is configured, and what models/resources/datasets to register at startup.
 
 Example from `starter/config.yaml`:
 
 ```yaml
 version: 2
 distro_name: starter
-apis: [inference, agents, safety, vector_io, ...]
+apis: [inference, responses, vector_io, ...]
 providers:
   inference:
     - provider_id: ollama
@@ -48,7 +48,31 @@ Distribution configs use `${env.VAR:=default}` syntax for environment-driven con
 Run a distribution with:
 
 ```bash
-ogx stack run starter
+ogx run starter
 # or
 ogx stack run --config path/to/config.yaml
 ```
+
+## Disabling Chat Completions Persistence
+
+By default the `inference` store reference is enabled, so chat completion
+request/response payloads are persisted and the history endpoints (`list`,
+`retrieve`, `messages`) are served from it. An operator can disable that
+persistence for the inference API by setting `inference.enabled: false` in a run
+config:
+
+```yaml
+storage:
+  stores:
+    inference:
+      enabled: false
+```
+
+When the store is disabled, OGX does not construct an `InferenceStore` at all:
+no `inference_store` table is created and no background write workers run. Chat
+completions still work for both streaming and non-streaming requests; the
+history endpoints report that persistence is not configured (HTTP 501) rather
+than returning an empty list or a 404. Other stores (`responses`, `datasets`,
+`eval`, `files`, `prompts`, `vector_io`) stay enabled, so disabling inference
+persistence is independent of the rest of the storage layer. See the storage
+module README for details.

@@ -16,13 +16,13 @@ import TabItem from '@theme/TabItem';
 The fastest way to get started. No global install needed:
 
 ```bash
-uvx --from 'ogx[starter]' ogx stack run starter
+uvx --from 'ogx[starter]' ogx run starter
 ```
 
 Or if you have a project with ogx as a dependency:
 
 ```bash
-uv run ogx stack run starter
+uv run ogx run starter
 ```
 
 </TabItem>
@@ -35,7 +35,7 @@ docker run -it \
   -p 8321:8321 \
   -v ~/.ogx:/root/.ogx \
   -e OLLAMA_URL=http://host.docker.internal:11434 \
-  ogx/distribution-starter
+  ogxai/distribution-starter
 ```
 
 Other pre-built images are available on [Docker Hub](https://hub.docker.com/u/llamastack):
@@ -77,14 +77,14 @@ Control log output via environment variables:
 
 ```bash
 # Per-component levels
-OGX_LOGGING=server=debug,core=info ogx stack run starter
+OGX_LOGGING=server=debug,core=info ogx run starter
 
 # Global level
-OGX_LOGGING=all=debug ogx stack run starter
+OGX_LOGGING=all=debug ogx run starter
 
 # Log to file
-OGX_LOG_FILE=/tmp/ogx.log ogx stack run starter
+OGX_LOG_FILE=/tmp/ogx.log ogx run starter
 ```
 
-Categories: `all`, `core`, `server`, `router`, `inference`, `safety`, `tools`, `client`.
+Categories: `all`, `core`, `server`, `router`, `inference`, `tools`, `client`.
 Levels: `debug`, `info`, `warning`, `error`, `critical`.

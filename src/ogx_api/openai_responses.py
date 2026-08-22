@@ -5,18 +5,21 @@
 # the root directory of this source tree.
 
 from collections.abc import Sequence
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import TypedDict
 
 from ogx_api.inference import OpenAITokenLogProb
-from ogx_api.schema_utils import json_schema_type, register_schema, remove_null_from_anyof
+from ogx_api.schema_utils import json_schema_type, register_schema, remove_default_from_schema, remove_null_from_anyof
 from ogx_api.vector_io import SearchRankingOptions as FileSearchRankingOptions
 
-# NOTE(ashwin): this file is literally a copy of the OpenAI responses API schema. We should probably
-# take their YAML and generate this file automatically. Their YAML is available.
+# This file defines Pydantic models for the OpenAI Responses API schema. It started as a direct
+# copy of the upstream schema but now includes OGX-specific extensions (MCP tool types, compaction,
+# custom validators). Intentional divergences from the vendored spec are tracked in
+# scripts/check_openai_responses_drift.py. Run that script after updating the vendored spec
+# (docs/static/openai-spec-*.yml) to detect unintentional drift.
 
 
 @json_schema_type
@@ -222,17 +225,48 @@ class OpenAIResponseMessage(BaseModel):
 
 
 @json_schema_type
-class OpenAIResponseOutputMessageWebSearchToolCall(BaseModel):
-    """Web search tool call output message for OpenAI responses.
+class WebSearchSource(BaseModel):
+    """A source URL returned by a web search action."""
 
-    :param id: Unique identifier for this tool call
-    :param status: Current status of the web search operation
-    :param type: Tool call type identifier, always "web_search_call"
-    """
+    type: Literal["url"] = "url"
+    url: str
+
+
+@json_schema_type
+class WebSearchActionSearch(BaseModel):
+    """Web search action: performs a search query."""
+
+    type: Literal["search"] = "search"
+    query: str
+    queries: list[str] | None = None
+    sources: list[WebSearchSource] | None = None
+
+
+@json_schema_type
+class WebSearchActionOpenPage(BaseModel):
+    """Web search action: opens a specific URL from search results."""
+
+    type: Literal["open_page"] = "open_page"
+    url: str | None = None
+
+
+@json_schema_type
+class WebSearchActionFind(BaseModel):
+    """Web search action: searches for a pattern within a loaded page."""
+
+    type: Literal["find_in_page"] = "find_in_page"
+    url: str
+    pattern: str
+
+
+@json_schema_type
+class OpenAIResponseOutputMessageWebSearchToolCall(BaseModel):
+    """Web search tool call output message for OpenAI responses."""
 
     id: str
     status: str
     type: Literal["web_search_call"] = "web_search_call"
+    action: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind | None = None
 
 
 class OpenAIResponseOutputMessageFileSearchToolCallResults(BaseModel):
@@ -446,7 +480,9 @@ class OpenAIResponseText(BaseModel):
     """
 
     format: OpenAIResponseTextFormat | None = None
-    verbosity: Literal["low", "medium", "high"] | None = None
+    # Defaults to "medium" to match OpenAI: the OpenResponses schema types verbosity as an
+    # optional enum that rejects an explicit null, so the response must not serialize it as null.
+    verbosity: Literal["low", "medium", "high"] | None = "medium"
 
 
 @json_schema_type
@@ -460,6 +496,11 @@ class OpenAIResponseReasoning(BaseModel):
     """
 
     effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] | None = None
+    generate_summary: Literal["auto", "concise", "detailed"] | None = Field(
+        default=None,
+        deprecated=True,
+        description="Deprecated: use 'summary' instead.",
+    )
     summary: Literal["auto", "concise", "detailed"] | None = Field(
         default=None, description="Summary mode for reasoning output. One of 'auto', 'concise', or 'detailed'."
     )
@@ -470,12 +511,26 @@ WebSearchToolTypes = ["web_search", "web_search_preview", "web_search_preview_20
 
 
 @json_schema_type
-class OpenAIResponseInputToolWebSearch(BaseModel):
-    """Web search tool configuration for OpenAI response inputs.
+class WebSearchFilters(BaseModel):
+    """Domain filters for web search results."""
 
-    :param type: Web search tool type variant to use
-    :param search_context_size: (Optional) Size of search context, must be "low", "medium", or "high"
-    """
+    allowed_domains: list[str] | None = None
+
+
+@json_schema_type
+class WebSearchUserLocation(BaseModel):
+    """Approximate user location to refine web search results."""
+
+    type: Literal["approximate"] = "approximate"
+    city: str | None = None
+    country: str | None = None
+    region: str | None = None
+    timezone: str | None = None
+
+
+@json_schema_type
+class OpenAIResponseInputToolWebSearch(BaseModel):
+    """Web search tool configuration for OpenAI response inputs."""
 
     # Must match values of WebSearchToolTypes above
     type: (
@@ -484,9 +539,9 @@ class OpenAIResponseInputToolWebSearch(BaseModel):
         | Literal["web_search_preview_2025_03_11"]
         | Literal["web_search_2025_08_26"]
     ) = "web_search"
-    # TODO: actually use search_context_size somewhere...
-    search_context_size: str | None = Field(default="medium", pattern="^low|medium|high$")
-    # TODO: add user_location
+    search_context_size: Literal["low", "medium", "high"] | None = None
+    filters: WebSearchFilters | None = None
+    user_location: WebSearchUserLocation | None = None
 
 
 @json_schema_type
@@ -757,6 +812,13 @@ class OpenAIResponseIncompleteDetails(BaseModel):
     reason: str
 
 
+class ResponseTruncation(StrEnum):
+    """Controls how the service truncates input when it exceeds the model context window."""
+
+    auto = "auto"
+    disabled = "disabled"
+
+
 @json_schema_type
 class OpenAIResponseObject(BaseModel):
     """Complete OpenAI response object containing generation results and metadata.
@@ -788,6 +850,7 @@ class OpenAIResponseObject(BaseModel):
     :param max_output_tokens: (Optional) An upper bound for the number of tokens that can be generated for a response, including visible output tokens.
     :param service_tier: (Optional) The service tier to use for this response.
     :param metadata: (Optional) Dictionary of metadata key-value pairs
+    :param safety_identifier: (Optional) Stable identifier used to associate the request with an end user for safety monitoring
     """
 
     background: bool | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
@@ -800,30 +863,32 @@ class OpenAIResponseObject(BaseModel):
     model: str
     object: Literal["response"] = "response"
     output: Sequence[OpenAIResponseOutput]
-    parallel_tool_calls: bool | None = Field(default=True, json_schema_extra=remove_null_from_anyof)
+    parallel_tool_calls: bool = Field(default=True, json_schema_extra=remove_default_from_schema)
     previous_response_id: str | None = None
     prompt_cache_key: str | None = None
     prompt: OpenAIResponsePrompt | None = None
     status: str
     temperature: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
-    # Default to text format to avoid breaking the loading of old responses
-    # before the field was added. New responses will have this set always.
-    text: OpenAIResponseText = OpenAIResponseText(format=OpenAIResponseTextFormat(type="text"))
+    text: OpenAIResponseText = Field(
+        default=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        json_schema_extra=remove_default_from_schema,
+    )
     top_p: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     top_logprobs: int | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     tools: Sequence[OpenAIResponseTool] | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     tool_choice: OpenAIResponseInputToolChoice | None = None
-    truncation: str | None = None
+    truncation: ResponseTruncation | None = None
     usage: OpenAIResponseUsage | None = None
     instructions: str | None = None
+    skills: list[str] | None = None
     max_tool_calls: int | None = None
     reasoning: OpenAIResponseReasoning | None = None
     max_output_tokens: int | None = None
-    safety_identifier: str | None = None
     service_tier: str | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     metadata: dict[str, str] | None = None
     presence_penalty: float | None = Field(default=None, json_schema_extra=remove_null_from_anyof)
     store: bool
+    safety_identifier: str | None = None
 
 
 @json_schema_type

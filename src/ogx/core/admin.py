@@ -6,11 +6,12 @@
 
 import asyncio
 from importlib.metadata import version
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
-from ogx.core.datatypes import StackConfig
+from ogx.core.datatypes import Api, StackConfig
+from ogx.core.jobs.runtime import get_job_runtime
 from ogx.core.server.fastapi_router_registry import (
     _ROUTER_FACTORIES,
     build_fastapi_router,
@@ -20,7 +21,6 @@ from ogx.core.utils.config import redact_sensitive_fields
 from ogx.log import get_logger
 from ogx_api import (
     Admin,
-    Api,
     HealthInfo,
     HealthResponse,
     HealthStatus,
@@ -32,6 +32,18 @@ from ogx_api import (
     RouteInfo,
     VersionInfo,
 )
+from ogx_api.connectors.api import Connectors
+from ogx_api.connectors.models import (
+    Connector,
+    GetConnectorRequest,
+    GetConnectorToolRequest,
+    ListConnectorsResponse,
+    ListConnectorToolsRequest,
+    ListToolsResponse,
+)
+from ogx_api.tools import ToolDef
+from ogx_api.tools.api import ToolGroups
+from ogx_api.tools.models import ListToolDefsResponse, ListToolsRequest
 
 logger = get_logger(name=__name__, category="core")
 
@@ -42,7 +54,7 @@ class AdminImplConfig(BaseModel):
     config: StackConfig
 
 
-async def get_provider_impl(config: AdminImplConfig, deps: dict[str, Any]) -> "AdminImpl":
+async def get_provider_impl(config: AdminImplConfig, deps: dict[Api, Any]) -> "AdminImpl":
     """Create and initialize an AdminImpl instance.
 
     Args:
@@ -60,7 +72,7 @@ async def get_provider_impl(config: AdminImplConfig, deps: dict[str, Any]) -> "A
 class AdminImpl(Admin):
     """Implementation of the Admin API providing provider management, route listing, health, and version endpoints."""
 
-    def __init__(self, config: AdminImplConfig, deps: dict[str, Any]) -> None:
+    def __init__(self, config: AdminImplConfig, deps: dict[Api, Any]) -> None:
         self.config = config
         self.deps = deps
 
@@ -216,7 +228,36 @@ class AdminImpl(Admin):
         return ListRoutesResponse(data=ret)
 
     async def health(self) -> HealthInfo:
+        runtime = get_job_runtime()
+        if runtime is not None and not runtime.pool.is_healthy:
+            return HealthInfo(status=HealthStatus.ERROR)
         return HealthInfo(status=HealthStatus.OK)
 
     async def version(self) -> VersionInfo:
         return VersionInfo(version=version("ogx"))
+
+    @property
+    def _connectors(self) -> Connectors:
+        return cast(Connectors, self.deps[Api.connectors])
+
+    # Connector delegation methods
+    async def list_connectors(self) -> ListConnectorsResponse:
+        return await self._connectors.list_connectors()
+
+    async def get_connector(self, request: GetConnectorRequest, authorization: str | None = None) -> Connector:
+        return await self._connectors.get_connector(request, authorization=authorization)
+
+    async def list_connector_tools(
+        self, request: ListConnectorToolsRequest, authorization: str | None = None
+    ) -> ListToolsResponse:
+        return await self._connectors.list_connector_tools(request, authorization=authorization)
+
+    async def get_connector_tool(self, request: GetConnectorToolRequest, authorization: str | None = None) -> ToolDef:
+        return await self._connectors.get_connector_tool(request, authorization=authorization)
+
+    @property
+    def _tool_groups(self) -> ToolGroups:
+        return cast(ToolGroups, self.deps[Api.tool_groups])
+
+    async def list_tools(self, request: ListToolsRequest) -> ListToolDefsResponse:
+        return await self._tool_groups.list_tools(request)

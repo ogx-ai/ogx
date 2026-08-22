@@ -81,7 +81,7 @@ class Chunk(BaseModel):
                 raise TypeError(f"metadata['document_id'] must be a string, got {type(doc_id).__name__}: {doc_id!r}")
             return doc_id
 
-        # Fall back to chunk_metadata if available (Pydantic ensures type safety)
+        # Fall back to chunk_metadata if available (Pydantic enforces type consistency)
         if self.chunk_metadata is not None:
             return self.chunk_metadata.document_id
 
@@ -482,6 +482,9 @@ class SearchRankingOptions(BaseModel):
         - "weighted": Weighted combination of vector and keyword scores
         - "rrf": Reciprocal Rank Fusion algorithm
         - "neural": Neural reranking model (requires model parameter)
+        - "classifier": Classification model that scores chunks by quality/answerability and
+          filters below a confidence threshold (requires model parameter, optional confidence_threshold
+          via score_threshold)
         Note: For OpenAI API compatibility, any string value is accepted, but only the above values are supported.
     :param score_threshold: (Optional) Minimum relevance score threshold for results. Default: 0.0
     :param alpha: (Optional) Weight factor for weighted ranker (0-1).
@@ -498,11 +501,18 @@ class SearchRankingOptions(BaseModel):
         Keys can be "vector", "keyword", "neural". Values should sum to 1.0.
         Used when combining algorithm-based reranking with neural reranking.
         Example: {"vector": 0.3, "keyword": 0.3, "neural": 0.4}
-    :param model: (Optional) Model identifier for neural reranker (e.g., "transformers/Qwen/Qwen3-Reranker-0.6B").
-        Required when ranker="neural" or when weights contains "neural".
+    :param model: (Optional) Model identifier for neural reranker
+        (e.g., "sentence-transformers/Qwen/Qwen3-Reranker-0.6B"). Required when ranker="neural" or when
+        weights contains "neural".
     """
 
-    ranker: str | None = None
+    ranker: str | None = Field(
+        default=None,
+        description=(
+            'Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and '
+            '"classifier". Other string values are accepted for OpenAI API compatibility but are not supported.'
+        ),
+    )
     # NOTE: OpenAI File Search Tool requires threshold to be between 0 and 1, however
     # we don't guarantee that the score is between 0 and 1, so will leave this unconstrained
     # and let the provider handle it

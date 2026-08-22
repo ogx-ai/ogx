@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import graphlib
 import importlib
 import importlib.metadata
 import inspect
@@ -18,6 +19,9 @@ from ogx.core.datatypes import (
 )
 from ogx.core.distribution import builtin_automatically_routed_apis
 from ogx.core.external import load_external_apis
+from ogx.core.jobs.models import ProviderDescriptor
+from ogx.core.jobs.proxy import WORKER_PROXY_FACTORIES
+from ogx.core.jobs.runtime import get_job_runtime
 from ogx.core.store import DistributionRegistry
 from ogx.core.utils.dynamic import instantiate_class_type
 from ogx.log import get_logger
@@ -33,6 +37,7 @@ from ogx_api import (
     Files,
     Inference,
     InferenceProvider,
+    InlineProviderSpec,
     Inspect,
     Interactions,
     Messages,
@@ -42,9 +47,7 @@ from ogx_api import (
     ProviderSpec,
     RemoteProviderSpec,
     Responses,
-    Safety,
-    Shields,
-    ShieldsProtocolPrivate,
+    Skills,
     ToolGroups,
     ToolGroupsProtocolPrivate,
     ToolRuntime,
@@ -83,8 +86,6 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.vector_io: VectorIO,
         Api.vector_stores: VectorStore,
         Api.models: Models,
-        Api.safety: Safety,
-        Api.shields: Shields,
         Api.tool_groups: ToolGroups,
         Api.tool_runtime: ToolRuntime,
         Api.files: Files,
@@ -94,6 +95,7 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.connectors: Connectors,
         Api.messages: Messages,
         Api.interactions: Interactions,
+        Api.skills: Skills,
     }
 
     if external_apis:
@@ -134,11 +136,9 @@ def additional_protocols_map() -> dict[Api, Any]:
     return {
         Api.inference: (ModelsProtocolPrivate, Models, Api.models),
         Api.tool_groups: (ToolGroupsProtocolPrivate, ToolGroups, Api.tool_groups),
-        Api.safety: (ShieldsProtocolPrivate, Shields, Api.shields),
     }
 
 
-# TODO: make all this naming far less atrocious. Provider. ProviderSpec. ProviderWithSpec. WTF!
 class ProviderWithSpec(Provider):
     """A Provider paired with its resolved ProviderSpec for instantiation."""
 
@@ -298,6 +298,7 @@ async def instantiate_providers(
     """Instantiates providers asynchronously while managing dependencies."""
     impls: dict[Api, Any] = internal_impls.copy() if internal_impls else {}
     inner_impls_by_provider_id: dict[str, dict[str, Any]] = {f"inner-{x.value}": {} for x in router_apis}
+    sibling_impls_by_api: dict[str, dict[str, Any]] = {}
     for api_str, provider in sorted_providers:
         # Skip providers that are not enabled
         if provider.provider_id is None:
@@ -327,6 +328,7 @@ async def instantiate_providers(
         else:
             api = Api(api_str)
             impls[api] = impl
+            sibling_impls_by_api.setdefault(api_str, {})[provider.provider_id] = impl
 
     # Post-instantiation: Inject VectorIORouter into VectorStoresRoutingTable
     if Api.vector_io in impls and Api.vector_stores in impls:
@@ -334,6 +336,17 @@ async def instantiate_providers(
         vector_stores_routing_table = impls[Api.vector_stores]
         if hasattr(vector_stores_routing_table, "vector_io_router"):
             vector_stores_routing_table.vector_io_router = vector_io_router
+
+    # Post-instantiation: Inject complete sibling sets
+    for _api_str, siblings in sibling_impls_by_api.items():
+        for provider_id, impl in siblings.items():
+            if hasattr(impl, "set_sibling_providers"):
+                others = {k: v for k, v in siblings.items() if k != provider_id}
+                impl.set_sibling_providers(others)
+
+    runtime = get_job_runtime()
+    if runtime is not None:
+        _register_worker_sibling_descriptors(sibling_impls_by_api, runtime.pool, policy)
 
     return impls
 
@@ -348,36 +361,30 @@ def topological_sort(
 
     Returns:
         A flattened list of (api_name, provider) tuples in dependency order.
+
+    Raises:
+        RuntimeError: If there is a circular dependency between providers.
     """
-
-    def dfs(kv, visited: set[str], stack: list[str]):
-        api_str, providers = kv
-        visited.add(api_str)
-
-        deps = []
-        for provider in providers:
-            for dep in provider.spec.deps__:
-                deps.append(dep)
-
-        for dep in deps:
-            if dep not in visited and dep in providers_with_specs:
-                dfs((dep, providers_with_specs[dep]), visited, stack)
-
-        stack.append(api_str)
-
-    visited: set[str] = set()
-    stack: list[str] = []
+    ts: graphlib.TopologicalSorter[str] = graphlib.TopologicalSorter()
 
     for api_str, providers in providers_with_specs.items():
-        if api_str not in visited:
-            dfs((api_str, providers), visited, stack)
+        deps = set()
+        for provider in providers:
+            for dep in provider.spec.deps__:
+                if dep in providers_with_specs:
+                    deps.add(dep)
+        ts.add(api_str, *deps)
 
-    flattened = []
-    for api_str in stack:
-        for provider in providers_with_specs[api_str]:
-            flattened.append((api_str, provider))
+    try:
+        flattened = []
+        for api_str in ts.static_order():
+            for provider in providers_with_specs[api_str]:
+                flattened.append((api_str, provider))
 
-    return flattened
+        return flattened
+    except graphlib.CycleError as e:
+        cycle: list[str] = e.args[1] if len(e.args) > 1 else []
+        raise RuntimeError(f"Failed to sort providers: circular dependency detected involving APIs {cycle}") from e
 
 
 async def instantiate_provider(
@@ -407,10 +414,29 @@ async def instantiate_provider(
 
     logger.debug("Instantiating provider", provider_id=provider.provider_id, module=provider_spec.module)
     module = importlib.import_module(provider_spec.module)
+
+    def _inject_config_defaults(config_type: type[Any], provider_config: dict[str, Any]) -> dict[str, Any]:
+        fields = getattr(config_type, "__fields__", None)
+        if fields is None:
+            return provider_config
+
+        # Inject vector_stores_config for providers that need it (introspection-based).
+        # Only inject if vector_stores is provided, otherwise let default_factory handle it.
+        if "vector_stores_config" in fields and run_config.vector_stores is not None:
+            provider_config["vector_stores_config"] = run_config.vector_stores
+
+        # Inject metadata_store from server stores config when not explicitly configured.
+        if "metadata_store" in fields:
+            if provider_config.get("metadata_store") is None and run_config.storage.stores.vector_stores is not None:
+                provider_config["metadata_store"] = run_config.storage.stores.vector_stores.model_dump()
+
+        return provider_config
+
     args = []
     if isinstance(provider_spec, RemoteProviderSpec):
         config_type = instantiate_class_type(provider_spec.config_class)
-        config = config_type(**provider.config)
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
+        config = config_type(**provider_config)
 
         method = "get_adapter_impl"
         args = [config, deps]
@@ -430,24 +456,21 @@ async def instantiate_provider(
         args = [provider_spec.api, inner_impls, deps, dist_registry, policy]
     else:
         method = "get_provider_impl"
-        provider_config = provider.config.copy()
-
-        # Inject vector_stores_config for providers that need it (introspection-based)
         config_type = instantiate_class_type(provider_spec.config_class)
-        if hasattr(config_type, "__fields__") and "vector_stores_config" in config_type.__fields__:
-            # Only inject if vector_stores is provided, otherwise let default_factory handle it
-            if run_config.vector_stores is not None:
-                provider_config["vector_stores_config"] = run_config.vector_stores
-
+        provider_config = _inject_config_defaults(config_type, provider.config.copy())
         config = config_type(**provider_config)
         args = [config, deps]
         if "policy" in inspect.signature(getattr(module, method)).parameters:
             args.append(policy)
-    fn = getattr(module, method)
-    impl = await fn(*args)
+    if isinstance(provider_spec, InlineProviderSpec) and getattr(provider_spec, "execution_mode", "inline") == "worker":
+        impl = _instantiate_worker_proxy(provider, provider_spec, config, deps, policy)
+    else:
+        fn = getattr(module, method)
+        impl = await fn(*args)
     impl.__provider_id__ = provider.provider_id
     impl.__provider_spec__ = provider_spec
     impl.__provider_config__ = config
+    impl.__provider_deps__ = deps
 
     protocols = api_protocol_map_for_compliance_check(run_config)
     additional_protocols = additional_protocols_map()
@@ -459,6 +482,148 @@ async def instantiate_provider(
         check_protocol_compliance(impl, additional_api)
 
     return impl
+
+
+def _descriptor_for_impl(
+    api: str,
+    provider_id: str,
+    spec: ProviderSpec,
+    config: Any,
+    policy: list[AccessRule],
+) -> ProviderDescriptor:
+    """Build a worker-side descriptor from a provider spec and its resolved config."""
+    if spec.module is None or spec.config_class is None:
+        raise ValueError(
+            f"Failed to build worker descriptor for provider '{provider_id}': spec is missing module/config_class."
+        )
+    method = "get_adapter_impl" if isinstance(spec, RemoteProviderSpec) else "get_provider_impl"
+    module = importlib.import_module(spec.module)
+    pass_policy = "policy" in inspect.signature(getattr(module, method)).parameters
+    config_dict = config.model_dump(mode="python") if hasattr(config, "model_dump") else dict(config)
+    return ProviderDescriptor(
+        api=api,
+        provider_id=provider_id,
+        provider_type=spec.provider_type,
+        module=spec.module,
+        config_class=spec.config_class,
+        config=config_dict,
+        method=method,
+        pass_policy=pass_policy,
+        policy=policy,
+    )
+
+
+def _add_dependency_descriptors(
+    descriptor: ProviderDescriptor,
+    spec: ProviderSpec,
+    deps: dict[Api, Any],
+    policy: list[AccessRule],
+) -> None:
+    """Attach the dependencies that can be rebuilt in a spawned worker."""
+    optional_dependencies = set(spec.optional_api_dependencies)
+    for dep_api, dep_impl in deps.items():
+        dep_spec = getattr(dep_impl, "__provider_spec__", None)
+        dep_config = getattr(dep_impl, "__provider_config__", None)
+        dep_provider_id = getattr(dep_impl, "__provider_id__", None)
+        reconstructable = (
+            dep_spec is not None
+            and dep_provider_id is not None
+            and not isinstance(dep_spec, AutoRoutedProviderSpec | RoutingTableProviderSpec)
+            and dep_spec.module is not None
+            and dep_spec.config_class is not None
+        )
+        if not reconstructable:
+            configured_vlm_requires_inference = dep_api == Api.inference and descriptor.config.get("vlm_model")
+            if dep_api in optional_dependencies and not configured_vlm_requires_inference:
+                logger.warning(
+                    "Skipping optional dependency that cannot be reconstructed in a worker",
+                    api=spec.api.value,
+                    dependency_api=dep_api.value,
+                    provider_id=dep_provider_id,
+                )
+                continue
+            raise ValueError(
+                f"Failed to build worker descriptor for '{descriptor.provider_id}': required dependency "
+                f"'{dep_api.value}' cannot be reconstructed in a worker."
+            )
+
+        assert dep_spec is not None
+        assert dep_provider_id is not None
+        dep_descriptor = _descriptor_for_impl(dep_api.value, dep_provider_id, dep_spec, dep_config, policy)
+        _add_dependency_descriptors(
+            dep_descriptor,
+            dep_spec,
+            getattr(dep_impl, "__provider_deps__", {}),
+            policy,
+        )
+        descriptor.dependencies[dep_api.value] = dep_descriptor
+
+    if descriptor.config.get("vlm_model") and Api.inference.value not in descriptor.dependencies:
+        raise ValueError(
+            f"Failed to build worker descriptor for '{descriptor.provider_id}': configured VLM processing requires "
+            "an inference dependency that can be reconstructed in a worker."
+        )
+
+
+def _register_worker_sibling_descriptors(
+    sibling_impls_by_api: dict[str, dict[str, Any]],
+    pool: Any,
+    policy: list[AccessRule],
+) -> None:
+    """Make all siblings of worker-backed APIs available to worker-side routers."""
+    registered = pool.registered_providers
+    worker_apis = {api for api, _provider_id in registered}
+    for api, siblings in sibling_impls_by_api.items():
+        if api not in worker_apis:
+            continue
+        for provider_id, impl in siblings.items():
+            if (api, provider_id) in registered:
+                continue
+            spec = getattr(impl, "__provider_spec__", None)
+            config = getattr(impl, "__provider_config__", None)
+            if spec is None:
+                raise ValueError(
+                    f"Failed to build worker descriptor for sibling provider '{provider_id}': provider spec is missing."
+                )
+            descriptor = _descriptor_for_impl(api, provider_id, spec, config, policy)
+            _add_dependency_descriptors(descriptor, spec, getattr(impl, "__provider_deps__", {}), policy)
+            pool.register(descriptor)
+            registered.add((api, provider_id))
+
+
+def _instantiate_worker_proxy(
+    provider: ProviderWithSpec,
+    provider_spec: ProviderSpec,
+    config: Any,
+    deps: dict[Api, Any],
+    policy: list[AccessRule],
+) -> Any:
+    """Register a worker-mode provider with the pool and return its server-side proxy.
+
+    The real impl is rebuilt and run inside worker processes; the server only holds
+    a proxy (looked up by API) which enqueues work. Direct API dependencies (e.g.
+    files) are captured as descriptors so the worker can rebuild them too.
+    """
+    runtime = get_job_runtime()
+    if runtime is None:
+        raise RuntimeError(
+            f"Failed to start provider '{provider.provider_id}': execution_mode 'worker' requires the job "
+            "runtime, which is not initialized."
+        )
+    factory = WORKER_PROXY_FACTORIES.get(provider_spec.api)
+    if factory is None:
+        raise NotImplementedError(
+            f"Failed to start provider '{provider.provider_id}': execution_mode 'worker' has no proxy registered "
+            f"for the '{provider_spec.api.value}' API."
+        )
+    if provider.provider_id is None:
+        raise ValueError("Failed to start worker-mode provider: provider_id is not set.")
+
+    descriptor = _descriptor_for_impl(provider_spec.api.value, provider.provider_id, provider_spec, config, policy)
+    _add_dependency_descriptors(descriptor, provider_spec, deps, policy)
+
+    runtime.pool.register(descriptor)
+    return factory(provider.provider_id, runtime.queue, deps)
 
 
 def check_protocol_compliance(obj: Any, protocol: Any) -> None:

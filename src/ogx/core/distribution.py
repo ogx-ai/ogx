@@ -25,7 +25,19 @@ from ogx_api import (
 logger = get_logger(name=__name__, category="core")
 
 
-INTERNAL_APIS = {Api.inspect, Api.providers, Api.prompts, Api.conversations, Api.connectors, Api.admin}
+# Api.containers is served by a built-in implementation that delegates to a pluggable
+# container_runtime provider; it is not itself provider-backed. The container_runtime
+# router/resolver wiring is tracked as a follow-up (issue #5892), at which point containers
+# becomes an auto-routed API paired with container_runtime (mirroring tool_groups/tool_runtime).
+INTERNAL_APIS = {
+    Api.inspect,
+    Api.providers,
+    Api.prompts,
+    Api.conversations,
+    Api.connectors,
+    Api.admin,
+    Api.containers,
+}
 
 
 def stack_apis() -> list[Api]:
@@ -54,10 +66,6 @@ def builtin_automatically_routed_apis() -> list[AutoRoutedApiInfo]:
         AutoRoutedApiInfo(
             routing_table_api=Api.models,
             router_api=Api.inference,
-        ),
-        AutoRoutedApiInfo(
-            routing_table_api=Api.shields,
-            router_api=Api.safety,
         ),
         AutoRoutedApiInfo(
             routing_table_api=Api.tool_groups,
@@ -105,16 +113,12 @@ def get_provider_registry(
           vllm.yaml
         vector_io/
           qdrant.yaml
-        safety/
-          llama-guard.yaml
       inline/
         inference/
           custom_ollama.yaml
           vllm.yaml
         vector_io/
           qdrant.yaml
-        safety/
-          llama-guard.yaml
 
     This method is overloaded in that it can be called from a variety of places: during list-deps, during run, during stack construction.
     So when listing external providers from a module, there are scenarios where the pip package required to import the module might not be available yet.

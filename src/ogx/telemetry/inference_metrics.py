@@ -17,10 +17,11 @@ for consistent naming across the telemetry stack.
 """
 
 from opentelemetry import metrics
-from opentelemetry.metrics import Histogram
+from opentelemetry.metrics import Counter, Histogram
 
 from .constants import (
     INFERENCE_DURATION,
+    INFERENCE_MODEL_TYPE_USED_TOTAL,
     INFERENCE_TIME_TO_FIRST_TOKEN,
     INFERENCE_TOKENS_PER_SECOND,
 )
@@ -43,6 +44,12 @@ inference_time_to_first_token: Histogram = meter.create_histogram(
 inference_tokens_per_second: Histogram = meter.create_histogram(
     name=INFERENCE_TOKENS_PER_SECOND,
     description="Output token throughput (completion tokens / duration)",
+)
+
+inference_model_type_used_total: Counter = meter.create_counter(
+    name=INFERENCE_MODEL_TYPE_USED_TOTAL,
+    description="Total inference calls by model type (completion, embedding, reranker)",
+    unit="1",
 )
 
 

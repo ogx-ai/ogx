@@ -11,7 +11,7 @@ using Pydantic with Field descriptions for OpenAPI schema generation.
 """
 
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,8 +24,10 @@ from ogx_api.openai_responses import (
     OpenAIResponsePrompt,
     OpenAIResponseReasoning,
     OpenAIResponseText,
+    ResponseTruncation,
 )
-from ogx_api.schema_utils import remove_null_from_anyof
+from ogx_api.schema_utils import flatten_nullable_remove_default, remove_default_from_schema, remove_null_from_anyof
+from ogx_api.vector_io.models import SearchRankingOptions
 
 
 class ResponseItemInclude(StrEnum):
@@ -38,13 +40,6 @@ class ResponseItemInclude(StrEnum):
     message_input_image_image_url = "message.input_image.image_url"
     message_output_text_logprobs = "message.output_text.logprobs"
     reasoning_encrypted_content = "reasoning.encrypted_content"
-
-
-class ResponseTruncation(StrEnum):
-    """Controls how the service truncates input when it exceeds the model context window."""
-
-    auto = "auto"  # Let the service decide how to truncate
-    disabled = "disabled"  # Disable truncation; context over limit results in 400 error
 
 
 class ResponseGuardrailSpec(BaseModel):
@@ -62,11 +57,10 @@ ResponseGuardrail = str | ResponseGuardrailSpec
 class ResponseStreamOptions(BaseModel):
     """Options that control streamed response behavior."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    include_obfuscation: bool = Field(
-        default=True,
+    include_obfuscation: bool | None = Field(
+        default=None,
         description="Whether to obfuscate sensitive information in streamed output.",
+        json_schema_extra=remove_null_from_anyof,
     )
 
 
@@ -80,6 +74,51 @@ class ContextManagement(BaseModel):
     )
     compact_threshold: int | None = Field(
         default=None, description="Token threshold at which compaction should be triggered."
+    )
+
+
+class MemoryToolConfig(BaseModel):
+    """Configuration for Responses memory retrieval."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=True,
+        description="Whether to retrieve memory context for this response.",
+    )
+    owner_id: str | None = Field(
+        default=None,
+        description=(
+            "Fallback owner identifier used to scope memory retrieval when no authenticated "
+            "user principal is available."
+        ),
+    )
+    vector_store_id: str | None = Field(
+        default=None,
+        description="Memory vector store override. Defaults to the server memory vector store.",
+    )
+    max_num_results: int | None = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Maximum memory chunks to retrieve.",
+    )
+    max_context_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="Approximate token budget for injected memory context.",
+    )
+    filters: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Additional vector-store filters combined with the required owner filter. "
+            "Use the vector store filter shape, such as {'type': 'eq', 'key': ..., 'value': ...} "
+            "or {'type': 'and', 'filters': [...]}."
+        ),
+    )
+    ranking_options: SearchRankingOptions | None = Field(
+        default=None,
+        description="Ranking options for memory vector-store search.",
     )
 
 
@@ -100,9 +139,14 @@ class CreateResponseRequest(BaseModel):
         default=None, description="Prompt object with ID, version, and variables."
     )
     instructions: str | None = Field(default=None, description="Instructions to guide the model's behavior.")
+    skills: list[str] | None = Field(
+        default=None,
+        description="List of skill IDs whose SKILL.md instructions are injected into the model's context.",
+    )
     parallel_tool_calls: bool | None = Field(
         default=True,
         description="Whether to enable parallel tool calls.",
+        json_schema_extra=remove_default_from_schema,
     )
     previous_response_id: str | None = Field(
         default=None,
@@ -120,12 +164,12 @@ class CreateResponseRequest(BaseModel):
     store: bool | None = Field(
         default=True,
         description="Whether to store the response in the database.",
-        json_schema_extra=remove_null_from_anyof,
+        json_schema_extra=flatten_nullable_remove_default,
     )
     stream: bool | None = Field(
         default=False,
         description="Whether to stream the response.",
-        json_schema_extra=remove_null_from_anyof,
+        json_schema_extra=flatten_nullable_remove_default,
     )
     temperature: float | None = Field(
         default=None,
@@ -167,9 +211,10 @@ class CreateResponseRequest(BaseModel):
         ge=1,
         description="Maximum number of inference iterations.",
     )
-    guardrails: list[ResponseGuardrail] | None = Field(
+    guardrails: bool | None = Field(
         default=None,
-        description="List of guardrails to apply during response generation.",
+        description="Enable content moderation via the configured moderation_endpoint.",
+        json_schema_extra={"x-extra-body-field": True},
     )
     max_tool_calls: int | None = Field(
         default=None,
@@ -185,11 +230,6 @@ class CreateResponseRequest(BaseModel):
         default=None,
         description="Configuration for reasoning effort in responses.",
     )
-    safety_identifier: str | None = Field(
-        default=None,
-        max_length=64,
-        description="A stable identifier used for safety monitoring and abuse detection.",
-    )
     service_tier: ServiceTier | None = Field(
         default=None,
         description="The service tier to use for this request.",
@@ -197,6 +237,10 @@ class CreateResponseRequest(BaseModel):
     metadata: dict[str, str] | None = Field(
         default=None,
         description="Dictionary of metadata key-value pairs to attach to the response.",
+    )
+    safety_identifier: str | None = Field(
+        default=None,
+        description="A stable identifier used to associate the request with an end user, for safety monitoring. Echoed back on the response.",
     )
     truncation: ResponseTruncation | None = Field(
         default=None,
@@ -221,6 +265,10 @@ class CreateResponseRequest(BaseModel):
     context_management: list[ContextManagement] | None = Field(
         default=None,
         description="Context management configuration. When set with type 'compaction', automatically compacts conversation history when token count exceeds the compact_threshold.",
+    )
+    memory: MemoryToolConfig | None = Field(
+        default=None,
+        description="Controls owner-scoped memory retrieval for this response.",
     )
 
 
@@ -271,7 +319,7 @@ class CompactResponseRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    model: str = Field(..., description="The model to use for generating the compacted summary.")
+    model: str | None = Field(..., description="The model to use for generating the compacted summary.")
     input: str | list[OpenAIResponseInput] | None = Field(default=None, description="Input message(s) to compact.")
     instructions: str | None = Field(default=None, description="Instructions to guide the compaction.")
     previous_response_id: str | None = Field(
