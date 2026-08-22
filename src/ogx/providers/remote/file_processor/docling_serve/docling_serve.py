@@ -5,20 +5,21 @@
 # the root directory of this source tree.
 
 import os
-import tempfile
 import time
 import uuid
-from pathlib import Path
+from io import BytesIO
 from typing import Any
 
 import httpx
 from docling.datamodel.base_models import OutputFormat
 from docling.datamodel.service.options import ConvertDocumentsOptions
 from docling.service_client import AsyncDoclingServiceClient, ChunkerKind
+from docling_core.types.io import DocumentStream
 from fastapi import UploadFile
 
 from ogx.log import get_logger
 from ogx.providers.utils.files.response import response_body_bytes
+from ogx.providers.utils.files.structural_metadata import structural_metadata_as_attributes
 from ogx.providers.utils.vector_io.vector_utils import generate_chunk_id
 from ogx_api.common.errors import InvalidParameterError
 from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
@@ -222,37 +223,33 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert file using async endpoints with AsyncDoclingServiceClient."""
-        # AsyncDoclingServiceClient requires a file path via temp file
-        with tempfile.NamedTemporaryFile() as tmp:
-            tmp.write(content)
-            tmp_path = Path(tmp.name)
+        source = DocumentStream(name=filename, stream=BytesIO(content))
+        async with AsyncDoclingServiceClient(
+            url=self.config.base_url,
+            api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
+            job_timeout=300.0,
+        ) as client:
+            job = await client.submit(
+                source=source,
+                options=ConvertDocumentsOptions(to_formats=[OutputFormat.MARKDOWN]),
+            )
+            result = await job.result()
 
-            async with AsyncDoclingServiceClient(
-                url=self.config.base_url,
-                api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
-                job_timeout=300.0,
-            ) as client:
-                job = await client.submit(
-                    source=tmp_path,
-                    options=ConvertDocumentsOptions(to_formats=[OutputFormat.MARKDOWN]),
-                )
-                result = await job.result()
-
-            # Handle both local docling-serve (ConversionResult with .document)
-            # and IBM SaaS (PresignedUrlConvertResponse with .documents and presigned URLs)
-            md_content = ""
-            if hasattr(result, "documents"):
-                # IBM SaaS: PresignedUrlConvertResponse with presigned URLs
-                if result.documents and result.documents[0].artifacts:
-                    artifact = result.documents[0].artifacts[0]
-                    # Download markdown from presigned URL
-                    async with httpx.AsyncClient() as http_client:
-                        response = await http_client.get(str(artifact.uri))
-                        response.raise_for_status()
-                        md_content = response.text
-            elif hasattr(result, "document"):
-                # Local docling-serve: ConversionResult with direct document
-                md_content = result.document.export_to_markdown() if result.document else ""
+        # Handle both local docling-serve (ConversionResult with .document)
+        # and IBM SaaS (PresignedUrlConvertResponse with .documents and presigned URLs)
+        md_content = ""
+        if hasattr(result, "documents"):
+            # IBM SaaS: PresignedUrlConvertResponse with presigned URLs
+            if result.documents and result.documents[0].artifacts:
+                artifact = result.documents[0].artifacts[0]
+                # Download markdown from presigned URL
+                async with httpx.AsyncClient() as http_client:
+                    response = await http_client.get(str(artifact.uri))
+                    response.raise_for_status()
+                    md_content = response.text
+        elif hasattr(result, "document"):
+            # Local docling-serve: ConversionResult with direct document
+            md_content = result.document.export_to_markdown() if result.document else ""
 
         if not md_content or not md_content.strip():
             return []
@@ -343,9 +340,18 @@ class DoclingServeFileProcessor:
                 **document_metadata,
             }
 
-            headings = raw_chunk.get("meta", {}).get("headings", None)
-            if headings:
-                meta["headings"] = headings
+            legacy_meta = raw_chunk.get("meta") or {}
+            headings = raw_chunk.get("headings")
+            legacy_headings = legacy_meta.get("headings")
+            page_numbers = raw_chunk.get("page_numbers") or legacy_meta.get("page_numbers")
+            meta.update(
+                structural_metadata_as_attributes(
+                    headings=headings,
+                    page_numbers=page_numbers,
+                )
+            )
+            if not headings and legacy_headings:
+                meta["headings"] = legacy_headings
 
             chunks.append(
                 Chunk(
@@ -374,39 +380,35 @@ class DoclingServeFileProcessor:
         document_metadata: dict[str, Any],
     ) -> list[Chunk]:
         """Convert and chunk file using async endpoints with AsyncDoclingServiceClient."""
-        # AsyncDoclingServiceClient requires a file path via temp file
-        with tempfile.NamedTemporaryFile() as tmp:
-            tmp.write(content)
-            tmp_path = Path(tmp.name)
+        source = DocumentStream(name=filename, stream=BytesIO(content))
+        async with AsyncDoclingServiceClient(
+            url=self.config.base_url,
+            api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
+            job_timeout=300.0,
+        ) as client:
+            try:
+                job = await client.submit_chunk(
+                    source=source,
+                    chunker=ChunkerKind.HYBRID,
+                    options=ConvertDocumentsOptions(),
+                )
+                response = await job.result()
+            except httpx.HTTPStatusError as e:
+                # Chunking endpoint not supported (e.g., IBM Docling SaaS)
+                if e.response.status_code in (404, 405):
+                    raise InvalidParameterError(
+                        param_name="chunking_strategy",
+                        value=chunking_strategy.model_dump() if chunking_strategy else None,
+                        constraint=(
+                            "Chunking is not supported by this Docling instance. "
+                            "This is a known limitation of IBM Docling SaaS. "
+                            "Either remove 'chunking_strategy' from your request, "
+                            "or configure OGX to use local docling-serve for chunking support."
+                        ),
+                    ) from e
+                raise
 
-            async with AsyncDoclingServiceClient(
-                url=self.config.base_url,
-                api_key=self.config.api_key.get_secret_value() if self.config.api_key else "",
-                job_timeout=300.0,
-            ) as client:
-                try:
-                    job = await client.submit_chunk(
-                        source=tmp_path,
-                        chunker=ChunkerKind.HYBRID,
-                        options=ConvertDocumentsOptions(),
-                    )
-                    response = await job.result()
-                except httpx.HTTPStatusError as e:
-                    # Chunking endpoint not supported (e.g., IBM Docling SaaS)
-                    if e.response.status_code in (404, 405):
-                        raise InvalidParameterError(
-                            param_name="chunking_strategy",
-                            value=chunking_strategy.model_dump() if chunking_strategy else None,
-                            constraint=(
-                                "Chunking is not supported by this Docling instance. "
-                                "This is a known limitation of IBM Docling SaaS. "
-                                "Either remove 'chunking_strategy' from your request, "
-                                "or configure OGX to use local docling-serve for chunking support."
-                            ),
-                        ) from e
-                    raise
-
-            raw_chunks = response.chunks if response.chunks else []
+        raw_chunks = response.chunks if response.chunks else []
 
         if not raw_chunks:
             return []
@@ -426,13 +428,18 @@ class DoclingServeFileProcessor:
                 **document_metadata,
             }
 
-            # Extract headings from meta object
-            headings = None
-            if hasattr(raw_chunk, "meta") and hasattr(raw_chunk.meta, "headings"):
-                headings = raw_chunk.meta.headings
-
-            if headings:
-                meta["headings"] = headings
+            legacy_meta = getattr(raw_chunk, "meta", None)
+            headings = getattr(raw_chunk, "headings", None)
+            legacy_headings = getattr(legacy_meta, "headings", None)
+            page_numbers = getattr(raw_chunk, "page_numbers", None) or getattr(legacy_meta, "page_numbers", None)
+            meta.update(
+                structural_metadata_as_attributes(
+                    headings=headings,
+                    page_numbers=page_numbers,
+                )
+            )
+            if not headings and legacy_headings:
+                meta["headings"] = legacy_headings
 
             chunks.append(
                 Chunk(

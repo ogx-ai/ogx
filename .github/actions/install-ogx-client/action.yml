@@ -33,6 +33,7 @@ runs:
         # If sdk_install_url is provided, use it directly
         if [ -n "${{ inputs.sdk_install_url }}" ]; then
           echo "Using provided sdk_install_url: ${{ inputs.sdk_install_url }}"
+          echo "generate=false" >> $GITHUB_OUTPUT
           echo "install-after-sync=true" >> $GITHUB_OUTPUT
           echo "install-source=${{ inputs.sdk_install_url }}" >> $GITHUB_OUTPUT
           exit 0
@@ -51,28 +52,60 @@ runs:
 
         echo "Working with branch: $BRANCH"
 
-        # On release branches: install client from the matching release branch in the client repo
-        # On non-release branches: install based on client-version after sync
+        # The ogx-client Python SDK is generated in-repo from client-sdks/openapi.
+        # On release branches and when client-version=latest, generate the SDK from
+        # the current checkout so tests run against the client built from this source.
+        # When client-version=published, use the version resolved by uv sync from PyPI.
         if [[ "$BRANCH" =~ ^release-[0-9]+\.[0-9]+\.x$ ]]; then
-          echo "Detected release branch: $BRANCH"
-
-          # Check if matching branch exists in client repo
-          if ! git ls-remote --exit-code --heads https://github.com/ogx-ai/ogx-client-python.git "$BRANCH" > /dev/null 2>&1; then
-            echo "::error::Branch $BRANCH not found in ogx-client-python repository"
-            echo "::error::Please create the matching release branch in ogx-client-python before testing"
-            exit 1
-          fi
-
+          echo "Detected release branch: $BRANCH — generating client from checkout"
+          echo "generate=true" >> $GITHUB_OUTPUT
           echo "install-after-sync=true" >> $GITHUB_OUTPUT
-          echo "install-source=git+https://github.com/ogx-ai/ogx-client-python.git@$BRANCH" >> $GITHUB_OUTPUT
+          echo "install-source=${{ github.workspace }}/client-sdks/openapi/sdks/python" >> $GITHUB_OUTPUT
         elif [ "${{ inputs.client-version }}" = "latest" ]; then
-          # Install from main git after sync
+          echo "Generating client from checkout (client-version=latest)"
+          echo "generate=true" >> $GITHUB_OUTPUT
           echo "install-after-sync=true" >> $GITHUB_OUTPUT
-          echo "install-source=git+https://github.com/ogx-ai/ogx-client-python.git@main" >> $GITHUB_OUTPUT
+          echo "install-source=${{ github.workspace }}/client-sdks/openapi/sdks/python" >> $GITHUB_OUTPUT
         elif [ "${{ inputs.client-version }}" = "published" ]; then
           # Use published version from PyPI (installed by sync)
+          echo "generate=false" >> $GITHUB_OUTPUT
           echo "install-after-sync=false" >> $GITHUB_OUTPUT
         elif [ -n "${{ inputs.client-version }}" ]; then
           echo "::error::Invalid client-version: ${{ inputs.client-version }}"
+          exit 1
+        else
+          echo "generate=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Set up Java (SDK generation)
+      if: steps.configure.outputs.generate == 'true'
+      uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Set up Node.js (SDK generation)
+      if: steps.configure.outputs.generate == 'true'
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: '20'
+
+    - name: Install openapi-generator-cli (SDK generation)
+      if: steps.configure.outputs.generate == 'true'
+      shell: bash
+      run: npm install -g @openapitools/openapi-generator-cli
+
+    - name: Generate ogx-client SDK
+      if: steps.configure.outputs.generate == 'true'
+      shell: bash
+      working-directory: client-sdks/openapi
+      run: |
+        echo "Generating ogx-client SDK (OPEN=0) from checkout..."
+        make sdk OPEN=0
+
+        PY_FILE_COUNT=$(find sdks/python -name "*.py" | wc -l)
+        echo "Generated Python files: $PY_FILE_COUNT"
+        if [ "$PY_FILE_COUNT" -le 10 ]; then
+          echo "::error::Too few Python files generated (expected > 10, got $PY_FILE_COUNT)"
           exit 1
         fi

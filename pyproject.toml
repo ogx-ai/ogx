@@ -3,12 +3,12 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-fallback_version = "1.1.4.dev0"
+fallback_version = "1.3.1.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
 constraint-dependencies = [
-    "aiohttp>=3.14.0",                # CVE-2026-34993: CookieJar.load() RCE
+    "aiohttp>=3.14.3",                # CVE-2026-69244: parser DoS
     "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
     "cryptography>=48.0.1",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
     "fonttools>=4.60.2",
@@ -23,7 +23,7 @@ constraint-dependencies = [
     "msgpack>=1.2.1",
     "pillow>=12.3.0",                  # CVE-2026-42311: PSD RCE; CVE-2026-55379/55380/54060: font/GD DoS
     "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
-    "pyasn1>=0.6.3",                   # CVE-2026-30922: DoS via unbounded recursion
+    "pyasn1>=0.6.4",                   # CVE-2026-30922: DoS via unbounded recursion
     "pydantic-settings>=2.14.2",
     "python-engineio>=4.13.2",
     "python-multipart>=0.0.31",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
@@ -80,14 +80,14 @@ dependencies = [
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "mcp>=1.23.0,<2.0",                                # for connectors
+    "mcp>=1.28.1,<2.0",                                # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
     "models-dev>=1.0.398",
 ]
 
 [project.optional-dependencies]
 client = [
-    "ogx-client>=1.1.3", # Optional for library-only usage
+    "ogx-client>=1.3.0", # Optional for library-only usage
 ]
 openclient = [
     "ogx-open-client>=1.0.2",
@@ -112,6 +112,7 @@ starter = [
     "markitdown[all]",
     "matplotlib",
     "nltk>=3.10.0",                                      # CVE-2026-54293/CVE-2026-12243: path traversal in nltk.data.load()
+    "neo4j",
     "numpy",
     "ollama",
     "pandas",
@@ -125,14 +126,13 @@ starter = [
     "redis>=8.0.0",
     "requests",
     "safetensors",
-    "scikit-learn",
     "scipy",
-    "sentence-transformers>=5.5.1",
+    "sentence-transformers>=5.6.0",
     "sentencepiece",
     "sqlite-vec",
     "together>=2",
     "tokenizers",
-    "torch",
+    "torch>=2.13.0",
     "tqdm",
     "tree_sitter",
     "unstructured-client>=0.25.0",
@@ -158,7 +158,7 @@ dev = [
     "openapi-spec-validator>=0.9.0",
     "ogx-open-client>=1.0.2",
     "boto3>=1.43.18",
-    "torch>=2.6.0",
+    "torch>=2.13.0",
 ]
 # Type checking dependencies - includes type stubs and optional runtime dependencies
 # needed for complete mypy coverage across all optional features
@@ -190,7 +190,8 @@ type_checking = [
     "sqlite-vec",
     "faiss-cpu",
     "lm-format-enforcer",
-    "mcp>=1.23.0,<2.0",
+    "mcp>=1.28.1,<2.0",
+    "neo4j",
     "ollama",
     "langchain-openai>=1.2.2",
     "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
@@ -202,7 +203,8 @@ test-common = [
     "aiosqlite",
     "asyncpg>=0.29.0",
     "chardet",
-    "mcp>=1.23.0,<2.0",
+    "mcp>=1.28.1,<2.0",
+    "neo4j",
     "pgvector>=0.3.0",
     "psycopg2-binary>=2.9.0",
     "pypdf>=6.13.3",
@@ -242,7 +244,7 @@ test = [
     "pymilvus>=2.6.2",
     "qdrant-client",
     "requests",
-    "torch>=2.6.0",
+    "torch>=2.13.0",
     "torchvision>=0.27.0",
     "transformers",
     "weaviate-client>=4.16.4",
@@ -366,10 +368,8 @@ convention = "google"
 # Security rule suppressions for known false positives
 "src/ogx/core/datatypes.py" = ["S105"] # Enum values like OAUTH2_TOKEN are not hardcoded secrets
 "src/ogx/distributions/**/*.py" = ["S106"] # Env var template defaults (e.g. ${env.PGVECTOR_PASSWORD:=})
-"src/ogx/providers/remote/inference/databricks/config.py" = ["S107"] # Env var template defaults in sample_run_config
-"src/ogx/providers/remote/inference/gemini/config.py" = ["S107"] # Env var template defaults in sample_run_config
+"src/ogx/providers/remote/vector_io/neo4j/config.py" = ["S107"] # Env var template defaults in sample_run_config
 "src/ogx/providers/remote/vector_io/pgvector/config.py" = ["S107"] # Env var template defaults in sample_run_config
-"src/ogx/providers/remote/inference/oci/auth.py" = ["S106"] # pass_phrase="none" placeholder
 "src/ogx/cli/**/*.py" = ["S603", "S607"] # CLI tools legitimately invoke subprocesses
 "src/ogx/core/utils/exec.py" = ["S603"] # Command execution utility
 "src/ogx/core/storage/**/*.py" = ["S608"] # Table name interpolation covered by custom SQL injection hook
@@ -404,10 +404,6 @@ exclude = [
     # These files have some type hints but fail strict type checking due to
     # incomplete annotations, Any usage, or other strict mode violations.
     #
-    # Core files (3 files)
-    "^src/ogx/core/server/routes\\.py$",
-    "^src/ogx/core/server/server\\.py$",
-    "^src/ogx/core/store/registry\\.py$",
     # CLI files (7 files)
     "^src/ogx/cli/stack/_list_deps\\.py$",
     "^src/ogx/cli/stack/list_apis\\.py$",
@@ -423,12 +419,6 @@ exclude = [
     "^src/ogx/providers/inline/file_processor/pypdf/adapter\\.py$",
     "^src/ogx/providers/inline/file_processor/pypdf/pypdf\\.py$",
     "^src/ogx/providers/inline/files/localfs/__init__\\.py$",
-    "^src/ogx/providers/inline/inference/sentence_transformers/__init__\\.py$",
-    "^src/ogx/providers/inline/inference/sentence_transformers/config\\.py$",
-    "^src/ogx/providers/inline/inference/sentence_transformers/sentence_transformers\\.py$",
-    "^src/ogx/providers/inline/inference/transformers/__init__\\.py$",
-    "^src/ogx/providers/inline/inference/transformers/config\\.py$",
-    "^src/ogx/providers/inline/inference/transformers/transformers\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/__init__\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/context_retriever\\.py$",
     "^src/ogx/providers/inline/tool_runtime/file_search/file_search\\.py$",
@@ -439,58 +429,21 @@ exclude = [
     "^src/ogx/providers/inline/vector_io/qdrant/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/__init__\\.py$",
     "^src/ogx/providers/inline/vector_io/sqlite_vec/sqlite_vec\\.py$",
-    # Providers - Remote (40 files)
+    # Providers - Remote
     "^src/ogx/providers/remote/files/openai/__init__\\.py$",
     "^src/ogx/providers/remote/files/s3/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/anthropic/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/anthropic/anthropic\\.py$",
-    "^src/ogx/providers/remote/inference/anthropic/config\\.py$",
-    "^src/ogx/providers/remote/inference/azure/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/azure/config\\.py$",
-    "^src/ogx/providers/remote/inference/cerebras/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/cerebras/config\\.py$",
-    "^src/ogx/providers/remote/inference/databricks/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/fireworks/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/fireworks/config\\.py$",
-    "^src/ogx/providers/remote/inference/gemini/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/gemini/config\\.py$",
-    "^src/ogx/providers/remote/inference/gemini/gemini\\.py$",
-    "^src/ogx/providers/remote/inference/groq/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/groq/config\\.py$",
-    "^src/ogx/providers/remote/inference/llama_cpp_server/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/llama_cpp_server/config\\.py$",
-    "^src/ogx/providers/remote/inference/llama_openai_compat/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/llama_openai_compat/config\\.py$",
-    "^src/ogx/providers/remote/inference/ollama/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/ollama/config\\.py$",
     "^src/ogx/providers/remote/inference/ollama/ollama\\.py$",
-    "^src/ogx/providers/remote/inference/openai/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/openai/config\\.py$",
-    "^src/ogx/providers/remote/inference/sambanova/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/sambanova/config\\.py$",
-    "^src/ogx/providers/remote/inference/together/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/together/config\\.py$",
-    "^src/ogx/providers/remote/inference/together/together\\.py$",
-    "^src/ogx/providers/remote/inference/vertexai/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/vertexai/config\\.py$",
-    "^src/ogx/providers/remote/inference/vertexai/vertexai\\.py$",
-    "^src/ogx/providers/remote/inference/vllm/__init__\\.py$",
-    "^src/ogx/providers/remote/inference/vllm/config\\.py$",
     "^src/ogx/providers/remote/vector_io/infinispan/__init__\\.py$",
     "^src/ogx/providers/remote/vector_io/infinispan/infinispan\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/__init__\\.py$",
     "^src/ogx/providers/remote/vector_io/oci/oci26ai\\.py$",
-    # Providers - Utils (15 files)
+    # Providers - Utils
     "^src/ogx/providers/utils/bedrock/client\\.py$",
     "^src/ogx/providers/utils/bedrock/config\\.py$",
     "^src/ogx/providers/utils/bedrock/refreshable_boto_session\\.py$",
     "^src/ogx/providers/utils/common/data_url\\.py$",
-    "^src/ogx/providers/utils/inference/embedding_mixin\\.py$",
     "^src/ogx/providers/utils/inference/inference_store\\.py$",
     "^src/ogx/providers/utils/inference/model_registry\\.py$",
-    "^src/ogx/providers/utils/inference/openai_compat\\.py$",
-    "^src/ogx/providers/utils/inference/openai_mixin\\.py$",
-    "^src/ogx/providers/utils/inference/prompt_adapter\\.py$",
     "^src/ogx/providers/utils/memory/vector_store\\.py$",
     "^src/ogx/providers/utils/responses/responses_store\\.py$",
     "^src/ogx/providers/utils/tools/mcp\\.py$",
@@ -515,10 +468,7 @@ exclude = [
     "^src/ogx/core/routing_tables/",
     # Provider directories - Remote
     "^src/ogx/providers/remote/inference/bedrock/",
-    "^src/ogx/providers/remote/inference/nvidia/",
     "^src/ogx/providers/remote/inference/oci/",
-    "^src/ogx/providers/remote/inference/passthrough/",
-    "^src/ogx/providers/remote/inference/runpod/",
     "^src/ogx/providers/remote/inference/watsonx/",
     "^src/ogx/providers/remote/tool_runtime/bing_search/",
     "^src/ogx/providers/remote/tool_runtime/brave_search/",

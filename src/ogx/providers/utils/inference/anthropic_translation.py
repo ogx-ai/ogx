@@ -121,52 +121,48 @@ def convert_single_message(msg: AnthropicMessage) -> list[dict[str, Any]]:
         system_text = "\n".join(block.text for block in msg.content if isinstance(block, AnthropicTextBlock))
         return [{"role": "system", "content": system_text}]
 
-    # User message: may contain text and/or tool_result blocks
-    result: list[dict[str, Any]] = []
-    text_parts: list[dict[str, Any]] = []
+    # User message: may contain text and/or tool_result blocks. Anthropic only
+    # recommends putting tool_result blocks first, so they can appear after the
+    # user's own text. OpenAI is stricter: a tool message must follow the
+    # assistant message that requested the call, or another tool message. So the
+    # tool messages are emitted first here whatever order the blocks arrived in,
+    # and the rest of the turn follows as one user message.
+    tool_messages: list[dict[str, Any]] = []
+    content_parts: list[dict[str, Any]] = []
 
     for block in msg.content:
         if isinstance(block, AnthropicToolResultBlock):
-            # Flush accumulated text first
-            if text_parts:
-                if len(text_parts) == 1 and text_parts[0].get("type") == "text":
-                    flush_content: str | list[dict[str, Any]] = text_parts[0]["text"]
-                else:
-                    flush_content = text_parts
-                result.append({"role": "user", "content": flush_content})
-                text_parts = []
-            # Tool results become separate tool messages.
-            # OpenAI tool messages only support text content, so image blocks
-            # from tool results are promoted to a follow-up user message.
             tool_content = block.content
-            image_parts: list[dict[str, Any]] = []
             if isinstance(tool_content, list):
                 text_pieces = []
                 for b in tool_content:
                     if isinstance(b, AnthropicTextBlock):
                         text_pieces.append(b.text)
                     elif isinstance(b, AnthropicImageBlock):
-                        image_parts.append({"type": "image_url", "image_url": {"url": _image_source_to_url(b.source)}})
+                        # OpenAI tool messages only support text content, so image
+                        # blocks from tool results are promoted to the user message.
+                        content_parts.append(
+                            {"type": "image_url", "image_url": {"url": _image_source_to_url(b.source)}}
+                        )
                 tool_content = "\n".join(text_pieces)
-            result.append(
+            tool_messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": block.tool_use_id,
                     "content": tool_content,
                 }
             )
-            if image_parts:
-                result.append({"role": "user", "content": image_parts})
         elif isinstance(block, AnthropicTextBlock):
-            text_parts.append({"type": "text", "text": block.text})
+            content_parts.append({"type": "text", "text": block.text})
         elif isinstance(block, AnthropicImageBlock):
-            text_parts.append({"type": "image_url", "image_url": {"url": _image_source_to_url(block.source)}})
+            content_parts.append({"type": "image_url", "image_url": {"url": _image_source_to_url(block.source)}})
 
-    if text_parts:
-        if len(text_parts) == 1 and text_parts[0].get("type") == "text":
-            user_content: str | list[dict[str, Any]] = text_parts[0]["text"]
+    result: list[dict[str, Any]] = tool_messages
+    if content_parts:
+        if len(content_parts) == 1 and content_parts[0].get("type") == "text":
+            user_content: str | list[dict[str, Any]] = content_parts[0]["text"]
         else:
-            user_content = text_parts
+            user_content = content_parts
         result.append({"role": "user", "content": user_content})
 
     return result if result else [{"role": "user", "content": ""}]
@@ -307,8 +303,11 @@ def openai_response_to_anthropic(response: OpenAIChatCompletion, request_model: 
         if response.usage.prompt_tokens_details and hasattr(response.usage.prompt_tokens_details, "cached_tokens"):
             cache_read = response.usage.prompt_tokens_details.cached_tokens
 
+        # OpenAI's prompt_tokens includes cached tokens; Anthropic's input_tokens
+        # excludes them (total input = input_tokens + cache_read + cache_creation),
+        # so the cached portion must be subtracted or consumers count it twice.
         usage = AnthropicUsage(
-            input_tokens=response.usage.prompt_tokens or 0,
+            input_tokens=max((response.usage.prompt_tokens or 0) - (cache_read or 0), 0),
             output_tokens=response.usage.completion_tokens or 0,
             cache_read_input_tokens=cache_read,
         )
@@ -434,7 +433,9 @@ async def openai_stream_to_anthropic(
     yield MessageDeltaEvent(
         delta=_MessageDelta(stop_reason=stop_reason),
         usage=AnthropicUsage(
-            input_tokens=input_tokens,
+            # Same convention translation as the non-streaming path: Anthropic's
+            # input_tokens excludes the cached portion of OpenAI's prompt_tokens.
+            input_tokens=max(input_tokens - (cache_read_tokens or 0), 0),
             output_tokens=output_tokens,
             cache_read_input_tokens=cache_read_tokens,
         ),

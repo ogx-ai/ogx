@@ -94,6 +94,7 @@ def validate_tiktoken_encoding(name: str = "cl100k_base") -> None:
 RERANKER_TYPE_RRF = "rrf"
 RERANKER_TYPE_WEIGHTED = "weighted"
 RERANKER_TYPE_NORMALIZED = "normalized"
+RERANKER_TYPE_CLASSIFIER = "classifier"
 
 
 def parse_pdf(data: bytes) -> str:
@@ -349,6 +350,8 @@ class VectorStoreWithIndex:
         elif reranker_type == "neural":
             # Neural reranking is being applied after initial retrieval
             neural_reranking_enabled = True
+        elif reranker_type == "classifier":
+            reranker_type = RERANKER_TYPE_CLASSIFIER
         elif reranker_type == "normalized":
             reranker_type = RERANKER_TYPE_NORMALIZED
         else:
@@ -405,7 +408,26 @@ class VectorStoreWithIndex:
         if neural_reranking_enabled and response.chunks:
             response = await self.apply_neural_rerank(query_string, response, desired_max_num_results, reranker_params)
 
+        # Apply classifier reranking if enabled
+        if reranker_type == RERANKER_TYPE_CLASSIFIER and response.chunks:
+            response = await self.apply_classifier_rerank(
+                query_string, response, desired_max_num_results, reranker_params
+            )
+
         return response
+
+    @staticmethod
+    def _extract_chunk_texts(
+        chunks: list[EmbeddedChunk],
+    ) -> list[str | OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam]:
+        """Extract text content from chunks for reranking."""
+        texts: list[str | OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam] = []
+        for chunk in chunks:
+            if isinstance(chunk.content, str):
+                texts.append(chunk.content)
+            else:
+                texts.append(interleaved_content_as_str(chunk.content))
+        return texts
 
     async def apply_neural_rerank(
         self,
@@ -429,15 +451,7 @@ class VectorStoreWithIndex:
             )
             return response
 
-        # Extract text contents from chunks for reranking
-        text_from_chunks: list[
-            str | OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam
-        ] = []
-        for chunk in response.chunks:
-            if isinstance(chunk.content, str):
-                text_from_chunks.append(chunk.content)
-            else:
-                text_from_chunks.append(interleaved_content_as_str(chunk.content))
+        text_from_chunks = self._extract_chunk_texts(response.chunks)
 
         try:
             rerank_response = await self.inference_api.rerank(
@@ -475,6 +489,77 @@ class VectorStoreWithIndex:
             )
 
         return QueryChunksResponse(chunks=reranked_chunks, scores=reranked_scores)
+
+    async def apply_classifier_rerank(
+        self,
+        query_string: str,
+        response: QueryChunksResponse,
+        desired_max_num_results: int,
+        reranker_params: dict[str, Any],
+    ) -> QueryChunksResponse:
+        """Rerank and filter chunks using a classifier model via the inference API.
+
+        Like neural reranking, this uses an inference model to score chunks.
+        The difference is the objective: classifier models score for quality or
+        answerability rather than relevance. Chunks below the confidence threshold
+        are filtered out.
+        """
+        classifier_model = reranker_params.get("model")
+
+        if not classifier_model and self.vector_stores_config and self.vector_stores_config.default_reranker_model:
+            config = self.vector_stores_config.default_reranker_model
+            classifier_model = f"{config.provider_id}/{config.model_id}"
+
+        if not classifier_model:
+            log.warning(
+                "Classifier reranking requested but no model configured. Returning results without classification."
+            )
+            return response
+
+        text_from_chunks = self._extract_chunk_texts(response.chunks)
+
+        try:
+            rerank_response = await self.inference_api.rerank(
+                RerankRequest(
+                    model=classifier_model,
+                    query=query_string,
+                    items=text_from_chunks,
+                    max_num_results=desired_max_num_results,
+                )
+            )
+        except Exception as e:
+            log.error("Classifier reranking failed, returning original results", error=str(e))
+            return response
+
+        confidence_threshold = reranker_params.get("confidence_threshold", 0.0)
+
+        classified_chunks = []
+        classified_scores = []
+        for classified_chunk in rerank_response.data:
+            if (
+                classified_chunk.index < len(response.chunks)
+                and classified_chunk.relevance_score >= confidence_threshold
+            ):
+                classified_chunks.append(response.chunks[classified_chunk.index])
+                classified_scores.append(classified_chunk.relevance_score)
+
+        if not classified_chunks:
+            log.warning(
+                "Classifier rerank filtered all chunks",
+                model=classifier_model,
+                threshold=confidence_threshold,
+                original_count=len(response.chunks),
+            )
+        else:
+            log.info(
+                "Classifier rerank complete",
+                model=classifier_model,
+                threshold=confidence_threshold,
+                before=len(response.chunks),
+                after=len(classified_chunks),
+            )
+
+        return QueryChunksResponse(chunks=classified_chunks, scores=classified_scores)
 
     # Note: File processing for vector stores now happens at the
     # openai_attach_file_to_vector_store level using file_id.

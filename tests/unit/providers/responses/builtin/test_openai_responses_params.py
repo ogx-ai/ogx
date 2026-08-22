@@ -257,10 +257,6 @@ async def test_params_passed_through_full_chain_to_backend_service(
     openai_adapter = OpenAIInferenceAdapter(config=config)
     openai_adapter.provider_data_api_key_field = None
 
-    mock_model_store = AsyncMock()
-    mock_model_store.has_model = AsyncMock(return_value=False)
-    openai_adapter.model_store = mock_model_store
-
     openai_responses_impl = OpenAIResponsesImpl(
         inference_api=openai_adapter,
         tool_groups_api=AsyncMock(),
@@ -377,22 +373,68 @@ async def test_create_openai_response_with_truncation_disabled_streaming(
 
 
 async def test_create_openai_response_with_truncation_auto_streaming(
-    openai_responses_impl, mock_inference_api, mock_responses_store
+    openai_responses_impl, mock_inference_api, mock_responses_store, caplog
 ):
-    """Test that truncation='auto' raises an error since it's not yet supported."""
-    input_text = "Tell me about quantum computing."
+    """Test that truncation='auto' retries after context-length error by dropping oldest turn."""
     model = "meta-llama/Llama-3.1-8B-Instruct"
+    prev_id = "resp-prev-123"
 
-    mock_inference_api.openai_chat_completion.return_value = fake_stream()
+    # Setup previous response with an early turn (will be dropped on context error)
+    previous_response = _OpenAIResponseObjectWithInputAndMessages(
+        id=prev_id,
+        object="response",
+        created_at=1234567890,
+        model=model,
+        status="completed",
+        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        input=[OpenAIResponseMessage(id="msg-1", role="user", content="First question - old context")],
+        output=[OpenAIResponseMessage(id="msg-2", role="assistant", content="First answer")],
+        messages=[
+            OpenAIUserMessageParam(role="user", content="First question - old context A"),
+            OpenAIAssistantMessageParam(role="assistant", content="First answer A"),
+            OpenAIUserMessageParam(role="user", content="Second question - old context B"),
+            OpenAIAssistantMessageParam(role="assistant", content="First answer B"),
+        ],
+        prompt_cache_key="test-cache",
+        store=True,
+    )
+    mock_responses_store.get_response_object.return_value = previous_response
 
-    # Execute
+    error_body = {
+        "error": {
+            "code": 400,
+            "message": "This model's maximum context length is 128000 tokens. However your input contains 200000 tokens.",
+            "type": "BadRequestError",
+            "param": "input_text",
+        }
+    }
+
+    class ContextLengthError(Exception):
+        status_code = 400
+        body = error_body
+
+    call_count = 0
+
+    async def mock_chat_completion(params):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ContextLengthError("context length exceeded")
+        return fake_stream()
+
+    mock_inference_api.openai_chat_completion.side_effect = mock_chat_completion
+
     result = await openai_responses_impl.create_openai_response(
         CreateResponseRequest(
-            input=input_text, model=model, truncation=ResponseTruncation.auto, stream=True, store=True
+            input="Third question",
+            model=model,
+            previous_response_id=prev_id,
+            truncation=ResponseTruncation.auto,
+            stream=True,
+            store=True,
         )
     )
 
-    # Collect all chunks
     chunks = [chunk async for chunk in result]
 
     # Verify truncation is in the created event
@@ -400,23 +442,41 @@ async def test_create_openai_response_with_truncation_auto_streaming(
     assert created_event.type == "response.created"
     assert created_event.response.truncation == ResponseTruncation.auto
 
-    # Verify the response failed due to unsupported truncation mode
-    failed_event = chunks[-1]
-    assert failed_event.type == "response.failed"
-    assert failed_event.response.truncation == ResponseTruncation.auto
-    assert failed_event.response.error is not None
-    assert failed_event.response.error.code == "server_error"
-    assert "Truncation mode 'auto' is not supported" in failed_event.response.error.message
+    # Verify response completed (not failed) — truncation dropped old turn successfully
+    completed_event = chunks[-1]
+    assert completed_event.type == "response.completed"
+    assert completed_event.response.truncation == ResponseTruncation.auto
+    assert completed_event.response.error is None
 
-    # Inference API should not be called since error occurs before inference
-    mock_inference_api.openai_chat_completion.assert_not_called()
+    # Verify inference was called twice (first attempt fails, retry succeeds after truncation)
+    assert call_count == 2
 
-    # Verify the failed response was stored
+    # Verify the completed response was stored
     mock_responses_store.upsert_response_object.assert_called()
     store_call_args = mock_responses_store.upsert_response_object.call_args
     stored_response = store_call_args.kwargs["response_object"]
     assert stored_response.truncation == ResponseTruncation.auto
-    assert stored_response.status == "failed"
+    assert stored_response.status == "completed"
+
+    # Verify the inference call used the current model and the stored response was used
+    calls = mock_inference_api.openai_chat_completion.call_args_list
+    assert calls[0].args[0].model == model
+
+    # First call: full history (4 from previous response + 1 new user message)
+    first_call_messages = calls[0].args[0].messages
+    assert len(first_call_messages) == 5
+    assert first_call_messages[0].content == "First question - old context A"
+    assert first_call_messages[1].content == "First answer A"
+    assert first_call_messages[2].content == "Second question - old context B"
+    assert first_call_messages[3].content == "First answer B"
+    assert first_call_messages[4].content == "Third question"
+
+    # Second call: oldest turn (A + "First answer A" dropped, B + B + new input
+    retry_messages = calls[1].args[0].messages
+    assert len(retry_messages) == 3
+    assert retry_messages[0].content == "Second question - old context B"
+    assert retry_messages[1].content == "First answer B"
+    assert retry_messages[2].content == "Third question"
 
 
 async def test_create_openai_response_with_prompt_cache_key_and_previous_response(
@@ -447,7 +507,7 @@ async def test_create_openai_response_with_prompt_cache_key_and_previous_respons
     # Create a new response with the same cache key
     result = await openai_responses_impl.create_openai_response(
         CreateResponseRequest(
-            input="Second question",
+            input="Third question",
             model="meta-llama/Llama-3.1-8B-Instruct",
             previous_response_id="resp-prev-123",
             prompt_cache_key="conversation-cache-001",

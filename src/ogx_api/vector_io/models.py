@@ -482,6 +482,9 @@ class SearchRankingOptions(BaseModel):
         - "weighted": Weighted combination of vector and keyword scores
         - "rrf": Reciprocal Rank Fusion algorithm
         - "neural": Neural reranking model (requires model parameter)
+        - "classifier": Classification model that scores chunks by quality/answerability and
+          filters below a confidence threshold (requires model parameter, optional confidence_threshold
+          via score_threshold)
         Note: For OpenAI API compatibility, any string value is accepted, but only the above values are supported.
     :param score_threshold: (Optional) Minimum relevance score threshold for results. Default: 0.0
     :param alpha: (Optional) Weight factor for weighted ranker (0-1).
@@ -503,7 +506,13 @@ class SearchRankingOptions(BaseModel):
         weights contains "neural".
     """
 
-    ranker: str | None = None
+    ranker: str | None = Field(
+        default=None,
+        description=(
+            'Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and '
+            '"classifier". Other string values are accepted for OpenAI API compatibility but are not supported.'
+        ),
+    )
     # NOTE: OpenAI File Search Tool requires threshold to be between 0 and 1, however
     # we don't guarantee that the score is between 0 and 1, so will leave this unconstrained
     # and let the provider handle it

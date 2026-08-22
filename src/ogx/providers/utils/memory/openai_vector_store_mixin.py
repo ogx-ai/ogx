@@ -1201,6 +1201,9 @@ class OpenAIVectorStoreMixin(ABC):
                     reranker_params["weights"] = ranking_options.weights
             elif ranking_options.ranker == "neural":
                 reranker_params["model"] = ranking_options.model
+            elif ranking_options.ranker == "classifier":
+                reranker_params["model"] = ranking_options.model
+                reranker_params["confidence_threshold"] = ranking_options.score_threshold or 0.0
             else:
                 logger.debug("Unknown ranker value, passing through", ranker=ranking_options.ranker)
 

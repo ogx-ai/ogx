@@ -114,6 +114,7 @@ describe("ChatPlaygroundPage", () => {
       });
 
       expect(screen.getAllByRole("combobox")).toHaveLength(1);
+      expect(screen.getByRole("combobox")).toHaveTextContent("test-model-1");
     });
 
     test("shows settings panel", async () => {

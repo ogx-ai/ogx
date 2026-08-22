@@ -149,15 +149,13 @@ class TestServerProbe:
     ) -> None:
         mock_client = _make_mock_client([_make_model("openai/gpt-4o")])
         monkeypatch.setenv("OGX_API_KEY", "secret-token")
-        monkeypatch.setenv("OGX_PROVIDER_DATA", '{"passthrough_api_key":"abc"}')
+        monkeypatch.setenv("OGX_PROVIDER_DATA", '{"api_key":"abc"}')
 
         with patch("ogx.cli.connect.codex.OpenAI", return_value=mock_client) as mock_openai:
             discovery.fetch_models("https://ogx.example.com/v1")
 
         assert mock_openai.call_args.kwargs["api_key"] == "secret-token"
-        assert mock_openai.call_args.kwargs["default_headers"] == {
-            "X-OGX-Provider-Data": '{"passthrough_api_key":"abc"}'
-        }
+        assert mock_openai.call_args.kwargs["default_headers"] == {"X-OGX-Provider-Data": '{"api_key":"abc"}'}
 
     def test_exits_when_server_unreachable(self, discovery: CodexServerDiscovery) -> None:
         mock_client = MagicMock()
@@ -364,7 +362,7 @@ class TestConnect:
     ) -> None:
         args = connect_codex.parser.parse_args(["--model", "openai/gpt-4o"])
         monkeypatch.setenv("OGX_API_KEY", "secret-token")
-        monkeypatch.setenv("OGX_PROVIDER_DATA", '{"passthrough_api_key":"abc"}')
+        monkeypatch.setenv("OGX_PROVIDER_DATA", '{"api_key":"abc"}')
         mock_client = _make_mock_client([_make_model("openai/gpt-4o")])
 
         with (
@@ -383,7 +381,7 @@ class TestConnect:
         launched_env = mock_run.call_args.kwargs["env"]
         assert launched_env["CODEX_HOME"] == str(tmp_path)
         assert launched_env["OGX_API_KEY"] == "secret-token"
-        assert launched_env["OGX_PROVIDER_DATA"] == '{"passthrough_api_key":"abc"}'
+        assert launched_env["OGX_PROVIDER_DATA"] == '{"api_key":"abc"}'
 
         config = tomllib.loads((tmp_path / "ogx.config.toml").read_text())
         assert config["model_providers"]["ogx"]["env_key"] == "OGX_API_KEY"

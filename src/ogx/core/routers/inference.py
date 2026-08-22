@@ -45,7 +45,6 @@ from ogx_api import (
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
-    OpenAIChatCompletionWithReasoning,
     OpenAIChoice,
     OpenAIChoiceLogprobs,
     OpenAICompletion,
@@ -189,7 +188,7 @@ class InferenceRouter(Inference):
     async def openai_completion(
         self,
         params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
-    ) -> OpenAICompletion:
+    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
         logger.debug(
             "InferenceRouter.openai_completion: model=, stream=, prompt",
             model=params.model,
@@ -204,11 +203,28 @@ class InferenceRouter(Inference):
         params.model = provider_resource_id
 
         if params.stream:
-            return await provider.openai_completion(params)
+            response_stream = await provider.openai_completion(params)
+            # Providers respond with their internal model id, so rewrite each
+            # chunk to carry the fully qualified model id the client requested
+            # (mirrors the non-streaming path below and the chat-streaming path).
+            return self._rewrite_completion_stream_model_id(response_stream, request_model_id)
 
         response = await provider.openai_completion(params)
         response.model = request_model_id
         return response
+
+    async def _rewrite_completion_stream_model_id(
+        self,
+        response: AsyncIterator[OpenAICompletion],
+        fully_qualified_model_id: str,
+    ) -> AsyncIterator[OpenAICompletion]:
+        """Yield streamed completion chunks with the requested model id restored."""
+        async for chunk in response:
+            # Skip None chunks, mirroring stream_tokens_and_compute_metrics_openai_chat
+            if chunk is None:
+                continue
+            chunk.model = fully_qualified_model_id
+            yield chunk
 
     async def openai_chat_completion(
         self,
@@ -299,7 +315,7 @@ class InferenceRouter(Inference):
     async def openai_chat_completions_with_reasoning(
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
-    ) -> OpenAIChatCompletionWithReasoning | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
+    ) -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
         """Called by the Responses layer when a user requests reasoning.
 
         Routes to the provider's reasoning-aware CC implementation, which

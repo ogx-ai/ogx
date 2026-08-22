@@ -14,15 +14,15 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `bedrock` | `bedrock` | library client only; 3 roots |
 | `base` | `ollama-postgres` | server client only; Postgres store |
 | `vision` | `ollama-vision` | `test_vision_inference.py` only |
-| `responses` | `gpt` | `responses` only; Responses coverage: 136/136 (100%) |
-| `responses` | `azure` | `responses` only; Responses coverage: 111/136 (82%) |
-| `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 136/136 (100%) |
-| `responses` | `watsonx` | `responses` only; Responses coverage: 61/136 (45%) |
-| `responses` | `vertexai` | `responses` only; Responses coverage: 70/136 (51%) |
-| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/136 (20%) |
+| `responses` | `gpt` | `responses` only; Responses coverage: 137/137 (100%) |
+| `responses` | `azure` | `responses` only; Responses coverage: 112/137 (82%) |
+| `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 137/137 (100%) |
+| `responses` | `watsonx` | `responses` only; Responses coverage: 62/137 (45%) |
+| `responses` | `vertexai` | `responses` only; Responses coverage: 70/137 (51%) |
+| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/137 (20%) |
 | `base-vllm-subset` | `vllm` | `inference` only |
-| `vllm-reasoning` | `vllm` | `test_reasoning.py` only; Responses coverage: 3/136 (2%) |
-| `ollama-reasoning` | `ollama-reasoning` | 3 roots; Responses coverage: 2/136 (1%) |
+| `vllm-reasoning` | `vllm` | `test_reasoning.py` only; Responses coverage: 3/137 (2%) |
+| `ollama-reasoning` | `ollama-reasoning` | 5 roots; Responses coverage: 3/137 (2%) |
 | `messages` | `ollama` | `messages` only |
 | `messages-openai` | `gpt` | `messages` only |
 | `interactions` | `gemini` | `interactions` only |
@@ -59,7 +59,7 @@ Cron: `1 0 * * 0`
 | Setup | Text Model | Vision Model | Embedding Model | Safety Model | Default CI | Scheduled CI |
 |-------|------------|--------------|-----------------|--------------|------------|--------------|
 | `anthropic` | anthropic/claude-3-5-haiku-20241022 | — | — | — | — | — |
-| `cerebras` | cerebras/llama-3.3-70b | — | — | — | — | — |
+| `cerebras` | cerebras/gpt-oss-120b | — | — | — | — | — |
 | `databricks` | databricks/databricks-meta-llama-3-3-70b-instruct | — | databricks/databricks-bge-large-en | — | — | — |
 | `fireworks` | fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct | — | fireworks/accounts/fireworks/models/qwen3-embedding-8b | — | — | — |
 | `groq` | groq/llama-3.3-70b-versatile | — | — | — | — | — |
@@ -75,12 +75,12 @@ This section is derived from the same replay recordings used to generate `docs/d
 
 | Provider | Tested | Passing | Coverage |
 |----------|--------|---------|----------|
-| OpenAI | 136 | 136 | 100% |
-| Azure | 111 | 111 | 82% |
+| OpenAI | 137 | 137 | 100% |
+| Azure | 112 | 112 | 82% |
 | Vertex AI | 70 | 70 | 51% |
-| WatsonX | 61 | 61 | 45% |
+| WatsonX | 62 | 62 | 45% |
 | Bedrock | 27 | 27 | 20% |
+| Ollama | 3 | 3 | 2% |
 | vLLM | 3 | 3 | 2% |
-| Ollama | 2 | 2 | 1% |
 
-Total Responses features counted: 136.
+Total Responses features counted: 137.

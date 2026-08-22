@@ -6,7 +6,7 @@
 
 from collections.abc import Iterator
 from enum import Enum, EnumMeta, StrEnum
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
@@ -303,6 +303,14 @@ class InlineProviderSpec(ProviderSpec):
         description="""
 The container image to use for this implementation. If one is provided, pip_packages will be ignored.
 If a provider depends on other providers, the dependencies MUST NOT specify a container image.
+""",
+    )
+    execution_mode: Literal["inline", "worker"] = Field(
+        default="inline",
+        description="""
+How this provider's work is executed. 'inline' runs the implementation in the server
+process (default, unchanged behavior). 'worker' runs the implementation in a separate
+worker process via the job queue, so long or large operations do not block the server.
 """,
     )
     description: str | None = Field(

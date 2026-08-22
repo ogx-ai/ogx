@@ -19,13 +19,13 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 111 | 111 | 0 | 82% |
+| azure | 112 | 112 | 0 | 82% |
 | bedrock | 27 | 27 | 0 | 20% |
-| ollama | 2 | 2 | 0 | 2% |
-| openai | 136 | 136 | 0 | 100% |
-| vertexai | 70 | 70 | 0 | 52% |
+| ollama | 3 | 3 | 0 | 2% |
+| openai | 137 | 137 | 0 | 100% |
+| vertexai | 70 | 70 | 0 | 51% |
 | vllm | 3 | 3 | 0 | 2% |
-| watsonx | 61 | 61 | 0 | 45% |
+| watsonx | 62 | 62 | 0 | 45% |
 
 ## Provider Details
 
@@ -33,12 +33,12 @@ Models, endpoints, and versions used during test recordings.
 
 | Provider | Model(s) | Endpoint | Version Info |
 |----------|----------|----------|--------------|
-| azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.30.0 |
+| azure | gpt-4o | llama-stack-test.openai.azure.com, lls-test.openai.azure.com, ogx-test.openai.azure.com | openai sdk: 2.43.0 |
 | bedrock | openai.gpt-oss-20b-1:0 | bedrock-runtime.us-west-2.amazonaws.com | openai sdk: 2.30.0 |
-| ollama | deepseek-r1:1.5b | — | openai sdk: 2.30.0 |
-| openai | gpt-4o, o4-mini, text-embedding-3-small | api.openai.com | openai sdk: 2.5.0 |
+| ollama | deepseek-r1:1.5b | — | openai sdk: 2.43.0 |
+| openai | gpt-4o, o4-mini, text-embedding-3-small | api.openai.com | openai sdk: 2.43.0 |
 | vertexai | publishers/google/models/gemini-2.0-flash | — | openai sdk: 2.5.0, provider: vertexai |
-| vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.18.1rc1.dev197+g0e9358c11 |
+| vllm | Qwen/Qwen3-0.6B | — | openai sdk: 2.5.0, vllm server: 0.17.2rc1.dev79+g5ce2d10e4 |
 | watsonx | meta-llama/llama-3-3-70b-instruct | us-south.ml.cloud.ibm.com | openai sdk: 2.5.0 |
 
 ## Basic Responses
@@ -147,6 +147,7 @@ Models, endpoints, and versions used during test recordings.
 | with top p and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with top p streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with truncation and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with truncation auto | ✅ | — | — | ✅ | ⏭️ | — | ✅ |
 | with truncation disabled | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with truncation disabled streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
 
@@ -165,7 +166,7 @@ Models, endpoints, and versions used during test recordings.
 
 | Feature | azure | bedrock | ollama | openai | vertexai | vllm | watsonx |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| reasoning basic streaming | ✅ | ✅ | ⏭️ | ✅ | ✅ | ✅ | ✅ |
+| reasoning basic streaming | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
 | reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
 | reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
