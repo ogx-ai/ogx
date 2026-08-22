@@ -278,8 +278,8 @@ StorageBackendConfig = Annotated[
 ]
 
 
-class InferenceStoreReference(SqlStoreReference):
-    """Inference store configuration with queue tuning."""
+class _QueuedSqlStoreReference(SqlStoreReference):
+    """Base for SQL store references with background write-queue tuning."""
 
     max_write_queue_size: int = Field(
         default=10000,
@@ -291,7 +291,18 @@ class InferenceStoreReference(SqlStoreReference):
     )
 
 
-class ResponsesStoreReference(InferenceStoreReference):
+class InferenceStoreReference(_QueuedSqlStoreReference):
+    """Inference store configuration with queue tuning."""
+
+    enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether the store is enabled; when false, the store is not constructed and payloads are not persisted"
+        ),
+    )
+
+
+class ResponsesStoreReference(_QueuedSqlStoreReference):
     """Responses store configuration with queue tuning."""
 
     table_name: str = Field(

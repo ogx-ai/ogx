@@ -375,37 +375,150 @@ paths:
           description: Authorization token
           title: Authorization
         description: Authorization token
-  /v1alpha/file-processors/process:
-    post:
+  /v1alpha/file-processors/jobs:
+    get:
       responses:
         '200':
-          description: The processed file chunks.
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessFileResponse'
+                $ref: '#/components/schemas/ListProcessFileJobsResponse'
         '400':
-          description: Bad Request
           $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
         '429':
-          description: Too Many Requests
           $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
         '500':
-          description: Internal Server Error
           $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
         default:
-          description: Default Response
           $ref: '#/components/responses/DefaultError'
+          description: Default Response
       tags:
       - File Processors
-      summary: Process a file into chunks ready for vector database storage.
-      description: Process a file into chunks ready for vector database storage. Supports direct upload via multipart form or processing files already uploaded to file storage via file_id. Exactly one of file or file_id must be provided.
-      operationId: process_file_v1alpha_file_processors_process_post
+      summary: List file-processing jobs.
+      description: List file-processing jobs, most recent first.
+      operationId: list_process_file_jobs_v1alpha_file_processors_jobs_get
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Return jobs after this job ID.
+          title: After
+        description: Return jobs after this job ID.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Maximum jobs to return.
+          default: 100
+          title: Limit
+        description: Maximum jobs to return.
+    post:
+      responses:
+        '200':
+          description: The created file-processing job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFileJob'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - File Processors
+      summary: Submit a file for asynchronous processing.
+      description: Submit a file for processing and return immediately with a job handle. The work runs out-of-process so the server is not blocked. Poll GET /file-processors/jobs/{job_id} until the status is terminal. Supports direct upload via multipart form or a previously uploaded file_id.
+      operationId: create_process_file_job_v1alpha_file_processors_jobs_post
       requestBody:
         content:
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Body_process_file_v1alpha_file_processors_process_post'
+              $ref: '#/components/schemas/Body_create_process_file_job_v1alpha_file_processors_jobs_post'
+  /v1alpha/file-processors/jobs/{job_id}:
+    get:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFileJob'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - File Processors
+      summary: Retrieve a file-processing job.
+      description: Retrieve the current state of a file-processing job, including its result once completed.
+      operationId: retrieve_process_file_job_v1alpha_file_processors_jobs__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+  /v1alpha/file-processors/jobs/{job_id}/cancel:
+    post:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFileJob'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - File Processors
+      summary: Cancel a file-processing job.
+      description: Cancel a scheduled or in-progress file-processing job.
+      operationId: cancel_process_file_job_v1alpha_file_processors_jobs__job_id__cancel_post
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
   /v1alpha/interactions:
     post:
       responses:
@@ -7283,6 +7396,32 @@ components:
         Represents token usage details including input tokens, output tokens, a
         breakdown of output tokens, and the total tokens used. Only populated on
         batches created after September 7, 2025.
+    Body_create_process_file_job_v1alpha_file_processors_jobs_post:
+      properties:
+        file:
+          anyOf:
+          - type: string
+            contentMediaType: application/octet-stream
+          - type: 'null'
+          description: The File object to be uploaded and processed. Mutually exclusive with file_id.
+        file_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of file already uploaded to file storage. Mutually exclusive with file.
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional processing options. Provider-specific parameters.
+        chunking_strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional chunking strategy for splitting content into chunks. Must be valid JSON string.
+      type: object
+      title: Body_create_process_file_job_v1alpha_file_processors_jobs_post
     Body_create_skill_v1alpha_skills_post:
       properties:
         file:
@@ -7310,32 +7449,6 @@ components:
       required:
       - file
       title: Body_create_skill_version_v1alpha_skills__skill_id__versions_post
-    Body_process_file_v1alpha_file_processors_process_post:
-      properties:
-        file:
-          anyOf:
-          - type: string
-            contentMediaType: application/octet-stream
-          - type: 'null'
-          description: The File object to be uploaded and processed. Mutually exclusive with file_id.
-        file_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of file already uploaded to file storage. Mutually exclusive with file.
-        options:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Optional processing options. Provider-specific parameters (e.g., OCR settings, output format).
-        chunking_strategy:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Optional chunking strategy for splitting content into chunks. Must be valid JSON string.
-      type: object
-      title: Body_process_file_v1alpha_file_processors_process_post
     ChatCompletionMessage:
       properties:
         id:
@@ -8001,6 +8114,16 @@ components:
       - cached_tokens
       title: InputTokensDetails
       description: A detailed breakdown of the input tokens.
+    JobStatus:
+      type: string
+      enum:
+      - completed
+      - in_progress
+      - failed
+      - scheduled
+      - cancelled
+      title: JobStatus
+      description: Status of a job execution.
     ListConnectorsResponse:
       properties:
         data:
@@ -8013,6 +8136,24 @@ components:
       - data
       title: ListConnectorsResponse
       description: Response containing a list of configured connectors
+    ListProcessFileJobsResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ProcessFileJob'
+          type: array
+          title: Data
+          description: The list of file-processing jobs.
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether more jobs are available after this page.
+          default: false
+      type: object
+      required:
+      - data
+      title: ListProcessFileJobsResponse
+      description: Response model listing file-processing jobs.
     ListSkillVersionsResponse:
       properties:
         object:
@@ -8727,6 +8868,44 @@ components:
       - reasoning_tokens
       title: OutputTokensDetails
       description: A detailed breakdown of the output tokens.
+    ProcessFileJob:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+          description: Unique identifier for the job.
+        status:
+          $ref: '#/components/schemas/JobStatus'
+          description: Current execution status of the job.
+        created_at:
+          type: integer
+          title: Created At
+          description: Unix timestamp (seconds) for when the job was created.
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/ProcessFileResponse'
+            title: ProcessFileResponse
+          - type: 'null'
+          description: The processed file result. Present only once the job has completed successfully.
+          title: ProcessFileResponse
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Error message. Present only if the job failed.
+      type: object
+      required:
+      - job_id
+      - status
+      - created_at
+      title: ProcessFileJob
+      description: |-
+        An asynchronous file-processing job.
+
+        Returned when a file is submitted for processing via the job-based API. Poll
+        by job_id until ``status`` is terminal (completed/failed/cancelled). When
+        completed, ``result`` holds the processed chunks; when failed, ``error``
+        explains why.
     ProcessFileResponse:
       properties:
         chunks:
@@ -8763,6 +8942,7 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+          description: Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and "classifier". Other string values are accepted for OpenAI API compatibility but are not supported.
         score_threshold:
           anyOf:
           - type: number
@@ -10042,6 +10222,18 @@ components:
             The container image to use for this implementation. If one is provided, pip_packages will be ignored.
             If a provider depends on other providers, the dependencies MUST NOT specify a container image.
           nullable: true
+        execution_mode:
+          default: inline
+          description: |2
+
+            How this provider's work is executed. 'inline' runs the implementation in the server
+            process (default, unchanged behavior). 'worker' runs the implementation in a separate
+            worker process via the job queue, so long or large operations do not block the server.
+          enum:
+          - inline
+          - worker
+          title: Execution Mode
+          type: string
         description:
           anyOf:
           - type: string
@@ -10781,16 +10973,6 @@ components:
       - batch_id
       title: CancelBatchRequest
       type: object
-    JobStatus:
-      description: Status of a job execution.
-      enum:
-      - completed
-      - in_progress
-      - failed
-      - scheduled
-      - cancelled
-      title: JobStatus
-      type: string
     Job:
       description: A job execution instance with status tracking.
       properties:

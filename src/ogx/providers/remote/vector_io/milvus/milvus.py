@@ -524,6 +524,11 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         await super().shutdown()
 
     async def register_vector_store(self, vector_store: VectorStore) -> None:
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before registering vector stores.")
+        key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+        await self.kvstore.set(key=key, value=vector_store.model_dump_json())
+
         use_native_hybrid = isinstance(self.config, RemoteMilvusVectorIOConfig)
         if isinstance(self.config, RemoteMilvusVectorIOConfig):
             consistency_level = self.config.consistency_level
@@ -578,6 +583,10 @@ class MilvusVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
         if vector_store_id in self.cache:
             await self.cache[vector_store_id].index.delete()
             del self.cache[vector_store_id]
+
+        if self.kvstore is None:
+            raise RuntimeError("KVStore not initialized. Call initialize() before unregistering vector stores.")
+        await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def insert_chunks(self, request: InsertChunksRequest) -> None:
         index = await self._get_and_cache_vector_store_index(request.vector_store_id)

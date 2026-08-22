@@ -14,8 +14,8 @@ import httpx
 from google.genai import types as genai_types
 
 from ogx.log import get_logger
-from ogx.providers.utils.inference.http_client import _build_proxy_mounts, _build_ssl_context
-from ogx.providers.utils.inference.model_registry import NetworkConfig, TimeoutConfig, TLSConfig
+from ogx.providers.utils.inference.http_client import _build_limits, _build_proxy_mounts, _build_ssl_context
+from ogx.providers.utils.inference.network_config import NetworkConfig, TimeoutConfig, TLSConfig
 
 logger = get_logger(__name__, category="inference")
 
@@ -87,6 +87,10 @@ def build_httpx_kwargs(network_config: NetworkConfig) -> tuple[dict[str, Any], b
         if mounts:
             httpx_kwargs["mounts"] = mounts
             needs_httpx_client = True
+
+    if network_config.limits:
+        httpx_kwargs["limits"] = _build_limits(network_config.limits)
+        needs_httpx_client = True
 
     return httpx_kwargs, needs_httpx_client
 

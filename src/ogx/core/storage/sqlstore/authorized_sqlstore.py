@@ -212,6 +212,10 @@ class AuthorizedSqlStore:
         """Expose schema migration helper from the wrapped SQL store."""
         await self.sql_store.add_column_if_not_exists(table, column_name, column_type, nullable)
 
+    async def create_index(self, index_name: str, table: str, columns: Sequence[str]) -> None:
+        """Create an index through the wrapped SQL store."""
+        await self.sql_store.create_index(index_name, table, columns)
+
     async def check_access_for_rows(
         self,
         table: str,

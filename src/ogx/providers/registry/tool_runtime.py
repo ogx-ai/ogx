@@ -28,7 +28,6 @@ def available_providers() -> list[ProviderSpec]:
             + [
                 "tqdm",
                 "numpy",
-                "scikit-learn",
                 "scipy",
                 "nltk>=3.9.4",
                 "sentencepiece",

@@ -32,6 +32,11 @@ class RESTResponse(io.IOBase):
             self.data = self.response.read()
         return self.data
 
+    async def aread(self):
+        if self.data is None:
+            self.data = await self.response.aread()
+        return self.data
+
     def getheaders(self):
         """Returns a dictionary of the response headers."""
         return self.response.headers

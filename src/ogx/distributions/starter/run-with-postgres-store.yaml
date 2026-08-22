@@ -98,7 +98,7 @@ providers:
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config:
-      trust_remote_code: true
+      trust_remote_code: false
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -281,6 +281,7 @@ storage:
       backend: sql_default
       max_write_queue_size: 10000
       num_writers: 4
+      enabled: true
     conversations:
       table_name: openai_conversations
       backend: sql_default

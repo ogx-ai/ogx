@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from docling_core.types.io import DocumentStream
 from fastapi import UploadFile
 from pydantic import SecretStr
 
@@ -41,9 +42,30 @@ CONVERT_RESPONSE = {
 
 CHUNK_RESPONSE = {
     "chunks": [
-        {"text": "First chunk of text.", "meta": {"headings": ["Introduction"]}},
-        {"text": "Second chunk of text.", "meta": {}},
-        {"text": "Third chunk of text.", "meta": {"headings": ["Conclusion"]}},
+        {
+            "filename": "test.pdf",
+            "chunk_index": 0,
+            "text": "First chunk of text.",
+            "headings": ["Introduction"],
+            "doc_items": ["#/texts/0"],
+            "page_numbers": [1],
+        },
+        {
+            "filename": "test.pdf",
+            "chunk_index": 1,
+            "text": "Second chunk of text.",
+            "headings": None,
+            "doc_items": ["#/texts/1"],
+            "page_numbers": None,
+        },
+        {
+            "filename": "test.pdf",
+            "chunk_index": 2,
+            "text": "Third chunk of text.",
+            "headings": ["Safety, Security", "Conclusion"],
+            "doc_items": ["#/texts/2"],
+            "page_numbers": [2, 3],
+        },
     ],
 }
 
@@ -205,15 +227,36 @@ class TestDoclingServeFileProcessor:
         ids = [c.chunk_id for c in response.chunks]
         assert len(ids) == len(set(ids))
 
-    async def test_headings_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
+    async def test_structural_metadata_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
         with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
-        assert response.chunks[0].metadata["headings"] == ["Introduction"]
+        assert response.chunks[0].metadata["headings"] == "Introduction"
+        assert response.chunks[0].metadata["page_numbers"] == "1"
         assert "headings" not in response.chunks[1].metadata
-        assert response.chunks[2].metadata["headings"] == ["Conclusion"]
+        assert "page_numbers" not in response.chunks[1].metadata
+        assert response.chunks[2].metadata["headings"] == "Safety, Security > Conclusion"
+        assert response.chunks[2].metadata["page_numbers"] == "2, 3"
+
+    async def test_legacy_nested_headings_keep_existing_list_type(
+        self, processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
+        legacy_response = {
+            "chunks": [
+                {
+                    "text": "Legacy chunk shape.",
+                    "meta": {"headings": ["Legacy heading"]},
+                }
+            ]
+        }
+
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(legacy_response)):
+            response = await processor.process_file(request, file=upload_file)
+
+        assert response.chunks[0].metadata["headings"] == ["Legacy heading"]
 
     async def test_chunk_window_set(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
@@ -448,6 +491,10 @@ class TestIBMSaaSCompatibility:
                 assert result.chunks is not None
                 assert len(result.chunks) > 0
                 assert result.metadata["conversion_method"] == "async"
+                source = mock_instance.submit.await_args.kwargs["source"]
+                assert isinstance(source, DocumentStream)
+                assert source.name == "test.pdf"
+                assert source.stream.getvalue() == b"%PDF-fake-content"
 
     async def test_local_docker_allows_chunking(self, upload_file: UploadFile):
         """Local docling-serve should allow chunking (successful response)."""
@@ -473,7 +520,14 @@ class TestIBMSaaSCompatibility:
 
             # Mock submit_chunk() returning a successful job
             mock_job = AsyncMock()
-            mock_chunk = SimpleNamespace(text="Chunk content", meta=SimpleNamespace(headings=None))
+            mock_chunk = SimpleNamespace(
+                filename="test.pdf",
+                chunk_index=0,
+                text="Chunk content",
+                headings=["Introduction"],
+                doc_items=["#/texts/0"],
+                page_numbers=[1, 2],
+            )
             mock_response = SimpleNamespace(chunks=[mock_chunk])
             mock_job.result.return_value = mock_response
             mock_instance.submit_chunk.return_value = mock_job
@@ -481,6 +535,13 @@ class TestIBMSaaSCompatibility:
             # Should succeed without raising InvalidParameterError
             result = await processor.process_file(request, file=upload_file)
 
+            submit_kwargs = mock_instance.submit_chunk.await_args.kwargs
+            source = submit_kwargs["source"]
+            assert isinstance(source, DocumentStream)
+            assert source.name == "test.pdf"
+            assert source.stream.getvalue() == b"%PDF-fake-content"
         assert result.chunks is not None
         assert len(result.chunks) > 0
+        assert result.chunks[0].metadata["headings"] == "Introduction"
+        assert result.chunks[0].metadata["page_numbers"] == "1, 2"
         assert result.metadata["conversion_method"] == "async"
