@@ -147,7 +147,9 @@ class DoclingServeFileProcessor:
                         chunk_id=chunk_id,
                         document_id=document_id,
                         source=document_metadata.get("filename", ""),
-                        content_token_count=raw_chunk.num_tokens or len(text.split()),
+                        content_token_count=(
+                            raw_chunk.num_tokens if raw_chunk.num_tokens is not None else len(text.split())
+                        ),
                         chunk_window=chunk_window,
                     ),
                 )

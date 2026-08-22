@@ -260,6 +260,30 @@ class TestDoclingServeFileProcessor:
         assert len(response.chunks) == 1
         assert response.chunks[0].content == "real text"
 
+    @pytest.mark.parametrize(("num_tokens", "expected"), [(0, 0), (None, 3)])
+    async def test_chunk_token_count_falls_back_only_when_missing(
+        self,
+        processor: DoclingServeFileProcessor,
+        upload_file: UploadFile,
+        num_tokens: int | None,
+        expected: int,
+    ):
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
+        body = [
+            {
+                "filename": "test.pdf",
+                "chunk_index": 0,
+                "text": "three token words",
+                "num_tokens": num_tokens,
+                "doc_items": [],
+            }
+        ]
+
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(body)):
+            response = await processor.process_file(request, file=upload_file)
+
+        assert response.chunks[0].chunk_metadata.content_token_count == expected
+
     # -- chunk metadata mapping --
 
     async def test_chunk_metadata_fields(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
