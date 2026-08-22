@@ -322,6 +322,7 @@ class OpenAIResponseOutputMessageFunctionToolCall(BaseModel):
     type: Literal["function_call"] = "function_call"
     id: str | None = None
     status: str | None = None
+    thought_signature: str | None = None
 
 
 @json_schema_type

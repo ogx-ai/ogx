@@ -243,6 +243,21 @@ def _convert_user_message(msg: dict[str, Any]) -> dict[str, Any]:
     return {"role": "user", "parts": parts}
 
 
+def _normalize_thought_signature(value: Any) -> str | None:
+    """Normalize a Gemini ``thought_signature`` to a JSON-safe string.
+
+    The google-genai SDK may surface the signature as raw ``bytes`` or as an
+    already-encoded ``str``; Vertex expects base64 text in JSON payloads.
+    Returns ``None`` for empty/missing values.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (bytes, bytearray)):
+        return base64.b64encode(bytes(value)).decode("ascii")
+    value = str(value)
+    return value or None
+
+
 def _parse_tool_call_arguments(arguments: str | dict[str, Any]) -> dict[str, Any]:
     """Parse tool call arguments from string or dict form."""
     if not isinstance(arguments, str):
@@ -278,14 +293,20 @@ def _convert_assistant_message(msg: dict[str, Any]) -> dict[str, Any] | None:
     for tc in msg.get("tool_calls") or []:
         tc = _to_dict(tc)
         func = tc.get("function", {})
-        parts.append(
-            {
-                "function_call": {
-                    "name": func.get("name", ""),
-                    "args": _parse_tool_call_arguments(func.get("arguments", "{}")),
-                }
-            }
-        )
+        function_call: dict[str, Any] = {
+            "name": func.get("name", ""),
+            "args": _parse_tool_call_arguments(func.get("arguments", "{}")),
+        }
+        part: dict[str, Any] = {"function_call": function_call}
+        # Gemini 3 requires the original thought_signature on function-call
+        # parts of follow-up turns; without it Vertex rejects the request with
+        # "Function call is missing a thought_signature in functionCall parts".
+        thought_signature = None
+        if isinstance(func, dict):
+            thought_signature = _normalize_thought_signature(func.get("thought_signature"))
+        if thought_signature:
+            part["thought_signature"] = thought_signature
+        parts.append(part)
 
     return {"role": "model", "parts": parts} if parts else None
 
@@ -466,6 +487,9 @@ def _extract_candidate_parts(
                     function=OpenAIChatCompletionToolCallFunction(
                         name=getattr(fc, "name", "") or "",
                         arguments=json.dumps(getattr(fc, "args", {}) or {}),
+                        # Preserve the thought signature so it can be replayed on
+                        # follow-up turns (required by Gemini 3 on Vertex).
+                        thought_signature=_normalize_thought_signature(getattr(part, "thought_signature", None)),
                     ),
                 )
             )
