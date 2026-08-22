@@ -161,6 +161,30 @@ class TestOpenAIVectorStoreMixin:
         if result.last_error:
             assert "FileProcessor API is required" not in result.last_error.message
 
+    async def test_file_processor_options_are_forwarded(self, mock_inference_api, mock_files_api, mock_kvstore):
+        mock_file_processor_api = AsyncMock()
+        mock_file_processor_api.process_file.return_value = MagicMock(chunks=[], metadata={})
+        mixin = MockVectorStoreMixin(
+            inference_api=mock_inference_api,
+            files_api=mock_files_api,
+            kvstore=mock_kvstore,
+            file_processor_api=mock_file_processor_api,
+        )
+        vector_store_id = "test_vector_store"
+        file_id = "test_file_id"
+        options = {"use_markdown_tables": True}
+        mixin.openai_vector_stores[vector_store_id] = _make_store_info()
+
+        await mixin.openai_attach_file_to_vector_store(
+            vector_store_id=vector_store_id,
+            request=OpenAIAttachFileRequest(file_id=file_id, options=options),
+        )
+
+        process_request = mock_file_processor_api.process_file.await_args.args[0]
+        assert process_request.file_id == file_id
+        assert process_request.options == options
+        assert isinstance(process_request.chunking_strategy, VectorStoreChunkingStrategyAuto)
+
 
 class TestKVStoreToSQLMigration:
     """Tests for automatic KVStore-to-SQL migration during initialization."""
