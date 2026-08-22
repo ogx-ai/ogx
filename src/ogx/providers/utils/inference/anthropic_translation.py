@@ -497,14 +497,18 @@ async def passthrough_anthropic_stream(
     url: str,
     req_body: dict[str, Any],
     headers: dict[str, str],
-    httpx_client_kwargs: dict[str, Any] | None = None,
+    client: httpx.AsyncClient,
     timeout: float = 300.0,
 ) -> AsyncIterator[AnthropicStreamEvent]:
     """Yield SSE events from any Anthropic-compatible streaming provider.
 
-    Creates an ``httpx.AsyncClient`` internally and manages the request/response
-    lifecycle.  The caller is responsible for providing correct ``url``,
-    ``req_body``, and ``headers`` (including authentication).
+    The caller is responsible for providing correct ``url``, ``req_body``,
+    and ``headers`` (including authentication), and for supplying ``client``
+    — a shared, caller-owned ``httpx.AsyncClient`` (e.g. from
+    ``OpenAIMixin.get_passthrough_http_client()``). Reusing one client lets
+    connections pool across requests instead of opening a new one per call;
+    this function only scopes the individual streamed response, not the
+    client's own lifecycle.
 
     Parameters
     ----------
@@ -514,24 +518,21 @@ async def passthrough_anthropic_stream(
         JSON request body to send (typically ``request.model_dump(exclude_none=True)``).
     headers:
         HTTP request headers (content-type, anthropic-version, x-api-key, etc.).
-    httpx_client_kwargs:
-        Extra keyword arguments forwarded to ``httpx.AsyncClient`` constructor.
-        Used by providers like vLLM to inject TLS / proxy / network config.
+    client:
+        Shared ``httpx.AsyncClient`` to issue the request on.
     timeout:
-        Default timeout for the client (seconds).
+        Timeout for this request (seconds).
     """
-    client_kwargs = httpx_client_kwargs or {}
-    async with httpx.AsyncClient(timeout=timeout, **client_kwargs) as client:
-        async with client.stream("POST", url, json=req_body, headers=headers) as resp:
-            resp.raise_for_status()
-            event_type: str | None = None
-            async for line in resp.aiter_lines():
-                line = line.strip()
-                if line.startswith("event: "):
-                    event_type = line[7:]
-                elif line.startswith("data: ") and event_type:
-                    data = json.loads(line[6:])
-                    event = parse_anthropic_sse_event(event_type, data)
-                    if event:
-                        yield event
-                    event_type = None
+    async with client.stream("POST", url, json=req_body, headers=headers, timeout=timeout) as resp:
+        resp.raise_for_status()
+        event_type: str | None = None
+        async for line in resp.aiter_lines():
+            line = line.strip()
+            if line.startswith("event: "):
+                event_type = line[7:]
+            elif line.startswith("data: ") and event_type:
+                data = json.loads(line[6:])
+                event = parse_anthropic_sse_event(event_type, data)
+                if event:
+                    yield event
+                event_type = None

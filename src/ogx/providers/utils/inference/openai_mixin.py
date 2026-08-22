@@ -131,6 +131,8 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
     _cached_client_key: tuple[str, str] | None = PrivateAttr(default=None)
     _superseded_clients: list[AsyncOpenAI] = PrivateAttr(default_factory=list)
 
+    _cached_passthrough_http_client: httpx.AsyncClient | None = PrivateAttr(default=None)
+
     # these are injected by the distribution system at runtime to provide model registry functionality
     __provider_id__: str
     model_store: ModelsRoutingTable | None = None
@@ -237,6 +239,32 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
             await self._cached_client.close()
             self._cached_client = None
             self._cached_client_key = None
+        if self._cached_passthrough_http_client is not None:
+            await self._cached_passthrough_http_client.aclose()
+            self._cached_passthrough_http_client = None
+
+    def _get_passthrough_http_client_kwargs(self) -> dict[str, Any]:
+        """
+        Kwargs for get_passthrough_http_client()'s cached client.
+
+        Override to forward network/TLS configuration; the default has none.
+        """
+        return {}
+
+    async def get_passthrough_http_client(self) -> httpx.AsyncClient:
+        """
+        Get a cached httpx.AsyncClient for raw (non-OpenAI-SDK) passthrough
+        requests, e.g. Anthropic Messages passthrough.
+
+        Built once and reused so pooled connections survive across requests,
+        instead of opening a new connection per call. Unlike `client`, this
+        isn't keyed by per-request provider data: `_get_passthrough_http_client_kwargs()`
+        only depends on static config, so one client for the adapter's
+        lifetime is enough.
+        """
+        if self._cached_passthrough_http_client is None:
+            self._cached_passthrough_http_client = httpx.AsyncClient(**self._get_passthrough_http_client_kwargs())
+        return self._cached_passthrough_http_client
 
     @property
     def client(self) -> AsyncOpenAI:

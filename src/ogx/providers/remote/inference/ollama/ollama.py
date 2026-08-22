@@ -9,7 +9,6 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
-import httpx
 from ollama import AsyncClient as AsyncOllamaClient
 
 from ogx.log import get_logger
@@ -171,10 +170,10 @@ class OllamaInferenceAdapter(OpenAIMixin):
         if request.stream:
             return self._passthrough_anthropic_stream(url, headers, body)
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            return AnthropicMessageResponse(**resp.json())
+        client = await self.get_passthrough_http_client()
+        resp = await client.post(url, json=body, headers=headers, timeout=300)
+        resp.raise_for_status()
+        return AnthropicMessageResponse(**resp.json())
 
     async def _passthrough_anthropic_stream(
         self,
@@ -183,10 +182,12 @@ class OllamaInferenceAdapter(OpenAIMixin):
         body: dict[str, Any],
     ) -> AsyncIterator[AnthropicStreamEvent]:
         """Yield SSE events from an Anthropic-compatible provider via passthrough."""
+        client = await self.get_passthrough_http_client()
         async for event in passthrough_anthropic_stream(
             url=url,
             req_body=body,
             headers=headers,
+            client=client,
         ):
             yield event
 
@@ -213,10 +214,10 @@ class OllamaInferenceAdapter(OpenAIMixin):
         api_key = self._get_api_key_from_config_or_provider_data() or "no-key-required"
         headers["x-api-key"] = api_key
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            return AnthropicCountTokensResponse(**resp.json())
+        client = await self.get_passthrough_http_client()
+        resp = await client.post(url, json=body, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return AnthropicCountTokensResponse(**resp.json())
 
     async def initialize(self) -> None:
         logger.info("checking connectivity to Ollama", base_url=self.config.base_url)
@@ -242,6 +243,7 @@ class OllamaInferenceAdapter(OpenAIMixin):
             return HealthResponse(status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}")
 
     async def shutdown(self) -> None:
+        await super().shutdown()
         self._clients.clear()
 
     async def register_model(self, model: Model) -> Model:

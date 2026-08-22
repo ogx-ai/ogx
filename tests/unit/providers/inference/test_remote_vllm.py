@@ -482,7 +482,7 @@ class TestConstructModelFromIdentifier:
             mock_response.raise_for_status.return_value = None
             mock_client_instance = MagicMock()
             mock_client_instance.get = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             await adapter.health()
 
@@ -524,7 +524,7 @@ class TestRerankTLSAndAuth:
             }
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             from ogx_api.inference import RerankRequest
 
@@ -553,7 +553,7 @@ class TestRerankTLSAndAuth:
             }
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             from ogx_api.inference import RerankRequest
 
@@ -579,7 +579,7 @@ class TestRerankTLSAndAuth:
             }
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             from ogx_api.inference import RerankRequest
 
@@ -611,7 +611,7 @@ class TestRerankTLSAndAuth:
             }
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             from ogx_api.inference import RerankRequest
 
@@ -660,7 +660,7 @@ class TestBaseUrlVersionStripping:
             }
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             from ogx_api.messages.models import AnthropicCreateMessageRequest
 
@@ -688,7 +688,7 @@ class TestBaseUrlVersionStripping:
             mock_response.json.return_value = {"input_tokens": 10}
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             from ogx_api.messages.models import AnthropicCountTokensRequest
 

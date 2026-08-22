@@ -15,6 +15,7 @@ from ogx_api import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIUserMessageParam,
 )
+from ogx_api.messages.models import AnthropicCountTokensRequest, AnthropicCreateMessageRequest, AnthropicMessage
 
 
 async def _empty_stream():
@@ -79,3 +80,45 @@ async def test_openai_chat_completions_with_reasoning_keeps_messages_typed():
     assert processed_messages[0]["reasoning"] == "Step 1"
     assert "reasoning_content" not in processed_messages[0]
     assert processed_messages[1]["content"][1]["image_url"]["url"] == "data:image/jpeg;base64,ZmFrZV9pbWFnZV9kYXRh"
+
+
+async def test_anthropic_passthrough_reuses_one_http_client():
+    """anthropic_messages and anthropic_count_tokens should share one pooled httpx client."""
+    adapter = OllamaInferenceAdapter(config=OllamaImplConfig(base_url="http://localhost:11434/v1"))
+
+    with patch("httpx.AsyncClient") as mock_client_class:
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "id": "msg-1",
+            "content": [{"type": "text", "text": "Hi"}],
+            "role": "assistant",
+            "stop_reason": "end_turn",
+            "type": "message",
+            "model": "test-model",
+            "stop_sequences": None,
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+
+        mock_client_instance = MagicMock()
+        mock_client_instance.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client_instance
+
+        request = AnthropicCreateMessageRequest(
+            messages=[AnthropicMessage(role="user", content="Hi")],
+            model="test-model",
+            max_tokens=256,
+            stream=False,
+        )
+        await adapter.anthropic_messages(request)
+
+        count_request = AnthropicCountTokensRequest(
+            model="test-model",
+            messages=[AnthropicMessage(role="user", content="Hi")],
+        )
+        mock_response.json.return_value = {"input_tokens": 3}
+        await adapter.anthropic_count_tokens(count_request)
+
+        # One shared client for both calls, not one per request.
+        mock_client_class.assert_called_once()
+        assert mock_client_instance.post.await_count == 2

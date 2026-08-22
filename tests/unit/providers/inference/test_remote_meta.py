@@ -137,7 +137,7 @@ class TestPassthroughMessagesNetworkKwargs:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}],
@@ -175,7 +175,7 @@ class TestPassthroughMessagesNetworkKwargs:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}],
@@ -210,7 +210,7 @@ class TestPassthroughMessagesNetworkKwargs:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}],
@@ -244,7 +244,7 @@ class TestPassthroughMessagesNetworkKwargs:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}],
@@ -279,7 +279,7 @@ class TestPassthroughCountTokensNetworkKwargs:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCountTokensRequest(
                 model="test-model",
@@ -303,7 +303,7 @@ class TestPassthroughCountTokensNetworkKwargs:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCountTokensRequest(
                 model="test-model",
@@ -326,7 +326,7 @@ class TestPassthroughCountTokensNetworkKwargs:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCountTokensRequest(
                 model="test-model",
@@ -366,7 +366,7 @@ class TestApiKeyHeader:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}],
@@ -395,7 +395,7 @@ class TestApiKeyHeader:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCountTokensRequest(
                 model="test-model",
@@ -428,7 +428,7 @@ class TestApiKeyHeader:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}],
@@ -463,7 +463,7 @@ class TestApiKeyHeader:
 
             mock_client_instance = MagicMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
-            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+            mock_client_class.return_value = mock_client_instance
 
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}],
@@ -491,7 +491,7 @@ def mock_passthrough(monkeypatch):
 
 
 class TestPassthroughStreamNetworkKwargs:
-    """Tests that streaming passthrough passes httpx kwargs."""
+    """Tests that streaming passthrough passes the cached, network-configured httpx client."""
 
     async def test_stream_calls_passthrough_anthropic_stream_with_kwargs(self, mock_passthrough):
         config = MetaConfig(
@@ -524,7 +524,7 @@ class TestPassthroughStreamNetworkKwargs:
         call_kwargs = mock_passthrough.call_args.kwargs
         assert call_kwargs["url"] == "https://api.meta.ai/v1/messages"
         assert call_kwargs["req_body"]["model"] == "test-model"
-        assert call_kwargs["httpx_client_kwargs"]["verify"] is False
+        assert call_kwargs["client"] is await adapter.get_passthrough_http_client()
 
     async def test_stream_uses_shared_ssl_context_by_default(self):
         """Without network config, _build_httpx_client_kwargs should return shared_ssl_context as verify."""

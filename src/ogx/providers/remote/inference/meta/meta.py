@@ -6,8 +6,6 @@
 
 from collections.abc import AsyncIterator
 
-import httpx
-
 from ogx.log import get_logger
 from ogx.providers.remote.inference.meta.config import MetaConfig
 from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
@@ -58,6 +56,9 @@ class MetaInferenceAdapter(OpenAIMixin):
             kwargs["verify"] = self.shared_ssl_context
         return kwargs
 
+    def _get_passthrough_http_client_kwargs(self) -> dict:
+        return self._build_httpx_client_kwargs()
+
     async def _passthrough_anthropic_messages(
         self,
         request: AnthropicCreateMessageRequest,
@@ -72,18 +73,19 @@ class MetaInferenceAdapter(OpenAIMixin):
             "x-api-key": self._get_api_key_from_config_or_provider_data() or "no-key-required",
         }
 
+        client = await self.get_passthrough_http_client()
+
         if request.stream:
             return passthrough_anthropic_stream(
                 url=url,
                 req_body=body,
                 headers=headers,
-                httpx_client_kwargs=self._build_httpx_client_kwargs(),
+                client=client,
             )
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0), **self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            return AnthropicMessageResponse(**resp.json())
+        resp = await client.post(url, json=body, headers=headers, timeout=300)
+        resp.raise_for_status()
+        return AnthropicMessageResponse(**resp.json())
 
     async def anthropic_messages(
         self,
@@ -106,7 +108,7 @@ class MetaInferenceAdapter(OpenAIMixin):
             "x-api-key": self._get_api_key_from_config_or_provider_data() or "no-key-required",
         }
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0), **self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            return AnthropicCountTokensResponse(**resp.json())
+        client = await self.get_passthrough_http_client()
+        resp = await client.post(url, json=body, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return AnthropicCountTokensResponse(**resp.json())

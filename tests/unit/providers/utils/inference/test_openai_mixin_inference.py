@@ -566,3 +566,49 @@ class TestOpenAIMixinAnthropicCountTokens:
         assert call_args.system is not None
         assert call_args.tools is not None
         mixin.anthropic_messages = original_anthropic_messages
+
+
+class TestOpenAIMixinPassthroughHttpClient:
+    """Test cases for get_passthrough_http_client()'s connection reuse and cleanup."""
+
+    async def test_client_is_reused_across_calls(self, mixin):
+        """Repeated calls should return the same client instance, not a new one each time."""
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client_class.return_value = MagicMock()
+
+            first = await mixin.get_passthrough_http_client()
+            second = await mixin.get_passthrough_http_client()
+
+            assert first is second
+            mock_client_class.assert_called_once()
+
+    async def test_client_uses_subclass_kwargs(self, mixin):
+        """The cached client should be built with _get_passthrough_http_client_kwargs()'s kwargs."""
+        mixin._get_passthrough_http_client_kwargs = MagicMock(return_value={"verify": False})
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client_class.return_value = MagicMock()
+
+            await mixin.get_passthrough_http_client()
+
+            mock_client_class.assert_called_once_with(verify=False)
+
+    async def test_shutdown_closes_and_clears_the_cached_client(self, mixin):
+        """shutdown() should close the cached passthrough client and drop the reference."""
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_instance = MagicMock()
+            mock_instance.aclose = AsyncMock()
+            mock_client_class.return_value = mock_instance
+
+            client = await mixin.get_passthrough_http_client()
+            assert client is mock_instance
+
+            await mixin.shutdown()
+
+            mock_instance.aclose.assert_awaited_once()
+            assert mixin._cached_passthrough_http_client is None
+
+    async def test_shutdown_without_a_client_is_a_no_op(self, mixin):
+        """shutdown() should be safe to call when no passthrough client was ever built."""
+        await mixin.shutdown()
+        assert mixin._cached_passthrough_http_client is None

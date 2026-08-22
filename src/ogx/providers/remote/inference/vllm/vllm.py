@@ -131,6 +131,9 @@ class VLLMInferenceAdapter(OpenAIMixin):
             kwargs["verify"] = self.shared_ssl_context
         return kwargs
 
+    def _get_passthrough_http_client_kwargs(self) -> dict:
+        return self._build_httpx_client_kwargs()
+
     async def health(self) -> HealthResponse:
         """
         Performs a health check by verifying connectivity to the remote vLLM server.
@@ -260,18 +263,19 @@ class VLLMInferenceAdapter(OpenAIMixin):
         if api_key and api_key != "NO KEY REQUIRED":
             headers["Authorization"] = f"Bearer {api_key}"
 
+        client = await self.get_passthrough_http_client()
+
         if params.stream:
             return passthrough_anthropic_stream(
                 url=url,
                 req_body=body,
                 headers=headers,
-                httpx_client_kwargs=self._build_httpx_client_kwargs(),
+                client=client,
             )
 
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers, timeout=300)
-            resp.raise_for_status()
-            return AnthropicMessageResponse(**resp.json())
+        resp = await client.post(url, json=body, headers=headers, timeout=300)
+        resp.raise_for_status()
+        return AnthropicMessageResponse(**resp.json())
 
     async def anthropic_count_tokens(
         self,
@@ -290,10 +294,10 @@ class VLLMInferenceAdapter(OpenAIMixin):
         if api_key and api_key != "NO KEY REQUIRED":
             headers["Authorization"] = f"Bearer {api_key}"
 
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers, timeout=30)
-            resp.raise_for_status()
-            return AnthropicCountTokensResponse(**resp.json())
+        client = await self.get_passthrough_http_client()
+        resp = await client.post(url, json=body, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return AnthropicCountTokensResponse(**resp.json())
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # vLLM's /v1/models response does not expose a model task/type field,
@@ -371,33 +375,31 @@ class VLLMInferenceAdapter(OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         try:
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
-                response = await client.post(endpoint, headers=headers, json=payload)
-                if response.status_code != 200:
-                    raise RuntimeError(
-                        f"vLLM rerank API request failed with status {response.status_code}: {response.text}"
-                    )
+            client = await self.get_passthrough_http_client()
+            response = await client.post(endpoint, headers=headers, json=payload)
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"vLLM rerank API request failed with status {response.status_code}: {response.text}"
+                )
 
-                def convert_result_item(item: dict) -> RerankData:
-                    if "index" not in item or "relevance_score" not in item:
-                        raise RuntimeError(
-                            "vLLM rerank API response missing required fields 'index' or 'relevance_score'"
-                        )
+            def convert_result_item(item: dict) -> RerankData:
+                if "index" not in item or "relevance_score" not in item:
+                    raise RuntimeError("vLLM rerank API response missing required fields 'index' or 'relevance_score'")
 
-                    try:
-                        return RerankData(index=int(item["index"]), relevance_score=float(item["relevance_score"]))
-                    except (TypeError, ValueError) as e:
-                        raise RuntimeError(f"Invalid data types in vLLM rerank API response: {e}") from e
+                try:
+                    return RerankData(index=int(item["index"]), relevance_score=float(item["relevance_score"]))
+                except (TypeError, ValueError) as e:
+                    raise RuntimeError(f"Invalid data types in vLLM rerank API response: {e}") from e
 
-                result = response.json()
+            result = response.json()
 
-                if "results" not in result:
-                    raise RuntimeError("vLLM rerank API response missing 'results' field")
+            if "results" not in result:
+                raise RuntimeError("vLLM rerank API response missing 'results' field")
 
-                rerank_data = [convert_result_item(item) for item in result.get("results")]
-                rerank_data.sort(key=lambda entry: entry.relevance_score, reverse=True)
+            rerank_data = [convert_result_item(item) for item in result.get("results")]
+            rerank_data.sort(key=lambda entry: entry.relevance_score, reverse=True)
 
-                return RerankResponse(data=rerank_data)
+            return RerankResponse(data=rerank_data)
 
         except httpx.HTTPError as e:
             raise ConnectionError(f"Failed to connect to vLLM rerank API at {endpoint}: {e}") from e
