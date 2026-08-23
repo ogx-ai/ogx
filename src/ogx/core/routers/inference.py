@@ -108,14 +108,6 @@ class InferenceRouter(Inference):
         metadata: dict[str, Any] | None = None,
         model_type: ModelType | None = None,
     ) -> None:
-        logger.debug(
-            "InferenceRouter.register_model",
-            model_id=model_id,
-            provider_model_id=provider_model_id,
-            provider_id=provider_id,
-            metadata=metadata,
-            model_type=model_type,
-        )
         request = RegisterModelRequest(
             model_id=model_id,
             provider_model_id=provider_model_id,
@@ -164,11 +156,6 @@ class InferenceRouter(Inference):
         # Perform RBAC check
         user = get_authenticated_user()
         if not is_action_allowed(self.routing_table.policy, "read", temp_model, user):
-            logger.debug(
-                "Access denied to model via fallback path for user",
-                model_id=model_id,
-                user=user.principal if user else "anonymous",
-            )
             raise ModelNotFoundError(model_id)
 
         return self.routing_table.impls_by_provider_id[provider_id], provider_resource_id
@@ -189,12 +176,6 @@ class InferenceRouter(Inference):
         self,
         params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
     ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        logger.debug(
-            "InferenceRouter.openai_completion: model=, stream=, prompt",
-            model=params.model,
-            stream=params.stream,
-            prompt=params.prompt,
-        )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
         inference_model_type_used_total.add(
@@ -230,12 +211,6 @@ class InferenceRouter(Inference):
         self,
         params: Annotated[OpenAIChatCompletionRequestWithExtraBody, Body(...)],
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
-        logger.debug(
-            "InferenceRouter.openai_chat_completion: model=, stream=, messages",
-            model=params.model,
-            stream=params.stream,
-            messages=params.messages,
-        )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
         inference_model_type_used_total.add(
@@ -337,13 +312,6 @@ class InferenceRouter(Inference):
         self,
         params: Annotated[OpenAIEmbeddingsRequestWithExtraBody, Body(...)],
     ) -> OpenAIEmbeddingsResponse:
-        logger.debug(
-            "InferenceRouter.openai_embeddings: model=, input_type=, encoding_format=, dimensions",
-            model=params.model,
-            type_params_input=type(params.input),
-            encoding_format=params.encoding_format,
-            dimensions=params.dimensions,
-        )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.embedding)
         inference_model_type_used_total.add(
@@ -617,6 +585,5 @@ class InferenceRouter(Inference):
                     model=fully_qualified_model_id,
                     object="chat.completion",
                 )
-                logger.debug("InferenceRouter.completion_response", final_response=final_response)
                 task = asyncio.create_task(self.store.store_chat_completion(final_response, messages))
                 task.add_done_callback(_log_background_task_error)

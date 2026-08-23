@@ -455,7 +455,6 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if input_violation_message:
-                logger.debug("Input guardrail violation", input_violation_message=input_violation_message)
                 yield await self._create_refusal_response(input_violation_message)
                 return
 
@@ -598,7 +597,6 @@ class StreamingResponseOrchestrator:
                         for tool in self.ctx.chat_tools
                         if tool.get("function", {}).get("name") in allowed_tool_names
                     ]
-                logger.debug("calling openai_chat_completion with tools", effective_tools=effective_tools)
 
                 logprobs = (
                     True
@@ -887,8 +885,6 @@ class StreamingResponseOrchestrator:
                     reasoning_content=reasoning_content,
                 )
             next_turn_messages.append(message)
-            logger.debug("Choice message content", content=choice.message.content)
-            logger.debug("Choice message tool_calls", tool_calls=choice.message.tool_calls)
 
             if choice.message.tool_calls and self.ctx.response_tools:
                 executed_tool_calls: list = []
@@ -1385,7 +1381,6 @@ class StreamingResponseOrchestrator:
                     headers=self.moderation_headers,
                 )
                 if violation_message:
-                    logger.debug("Output guardrail violation", violation_message=violation_message)
                     pending_guardrail_events.clear()
                     yield await self._create_refusal_response(violation_message)
                     self.violation_detected = True
@@ -1404,7 +1399,6 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if violation_message:
-                logger.debug("Output guardrail violation", violation_message=violation_message)
                 pending_guardrail_events.clear()
                 yield await self._create_refusal_response(violation_message)
                 self.violation_detected = True
