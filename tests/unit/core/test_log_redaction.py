@@ -58,12 +58,14 @@ _SENSITIVE_TEST_KEYS = frozenset(
         "tool_call_id",
         # User data
         "url",
+        "server_url",
         "vector_store_id",
         "file_id",
         # Response / body
         "response",
         "body",
         "exc",
+        "error",
     ]
 )
 

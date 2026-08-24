@@ -40,6 +40,7 @@ SENSITIVE_LOG_KEYS: frozenset[str] = frozenset(
         "response",
         "body",
         "exc",
+        "error",
         # User choices / selections — model name reveals intent
         "model",
         "model_id",
@@ -54,6 +55,7 @@ SENSITIVE_LOG_KEYS: frozenset[str] = frozenset(
         "stream_id",
         # User-supplied URLs or identifiers in provider data
         "url",
+        "server_url",
         # Tool/connector identifiers from user requests
         "vector_store_id",
         "file_id",
