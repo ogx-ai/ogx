@@ -330,12 +330,17 @@ def _configure_structlog(json_output: bool = False) -> None:
 
     # Shared processors applied to all structlog-originated log entries
     # before they are passed to the stdlib logging infrastructure.
+    #
+    # Order matters: merge_contextvars and ExtraAdder inject additional
+    # data (context variables, stdlib extra=) into the event dict.
+    # _redact_sensitive_keys must run AFTER so that nothing sensitive
+    # injected by those steps escapes redaction.
     shared_processors: list[structlog.types.Processor] = [
-        _redact_sensitive_keys,
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.ExtraAdder(),
+        _redact_sensitive_keys,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),

@@ -14,11 +14,14 @@ the test will fail and catch the omission.  Do NOT tie this list to the
 production constant.
 """
 
+import io
 import logging  # allow-direct-logging
 
 import pytest
+import structlog.contextvars
+import structlog.stdlib
 
-from ogx.log import _reset_logging_state, get_logger
+from ogx.log import _configure_structlog, _reset_logging_state, get_logger
 
 # Keys that must always be redacted in log output.
 # Keep in sync with SENSITIVE_LOG_KEYS — adding/removing here requires
@@ -153,3 +156,97 @@ class TestSensitiveDataRedactedFromLogOutput:
         output = caplog.text
         assert "my event message" in output
         assert "'model': '<REDACTED>'" in output
+
+    def test_contextvars_sensitive_key_is_redacted(self, caplog):
+        """Sensitive values injected via structlog contextvars must be redacted.
+
+        Regression: merge_contextvars runs before _redact_sensitive_keys, so
+        context variables with sensitive keys cannot bypass redaction.
+        """
+        with caplog.at_level(logging.DEBUG):
+            structlog.contextvars.bind_contextvars(model="context-leak-test")
+            logger = get_logger("test.redaction", category="core")
+            logger.info("test contextvars")
+            output = caplog.text
+            structlog.contextvars.clear_contextvars()
+        assert "context-leak-test" not in output, (
+            "Sensitive value injected via merge_contextvars leaked. "
+            "_redact_sensitive_keys must run AFTER merge_contextvars."
+        )
+        assert "'model': '<REDACTED>'" in output
+
+    def test_contextvars_sensitive_data_redacted_end_to_end(self, caplog):
+        """End-to-end regression: sensitive data injected via merge_contextvars is redacted.
+
+        Binds a sensitive context variable, logs through the structlog BoundLogger,
+        and asserts the actual log output contains no leaked values.  Exercises
+        the processor chain from contextvar binding through final rendering.
+        """
+        with caplog.at_level(logging.DEBUG):
+            structlog.contextvars.bind_contextvars(model="contextvars-leak-test")
+            logger = get_logger("test.redaction.cvx", category="core")
+            logger.info("contextvars message", safe_key="keep_me")
+            output = caplog.text
+            structlog.contextvars.clear_contextvars()
+
+        assert "contextvars-leak-test" not in output, (
+            "Sensitive value injected via merge_contextvars leaked. "
+            "_redact_sensitive_keys must run AFTER merge_contextvars in the chain."
+        )
+        assert "'model': '<REDACTED>'" in output
+        assert "'safe_key': 'keep_me'" in output
+
+    def test_stdlib_extra_sensitive_data_redacted_end_to_end(self, monkeypatch):
+        """End-to-end regression: sensitive data injected via ExtraAdder is redacted.
+
+        Calls the stdlib logger directly with extra= kwargs, which triggers
+        ExtraAdder to copy those values into the event dict.  Uses a custom
+        handler with the ProcessorFormatter to capture the structlog-processed
+        output (caplog captures at the stdlib level, before the ProcessorFormatter
+        applies foreign_pre_chain).
+
+        Verifies that when ExtraAdder injects data into the event dict,
+        _redact_sensitive_keys (which runs after ExtraAdder in the chain)
+        catches those injected values.
+        """
+        _configure_structlog()
+        shared_processors = _configure_structlog._shared_processors  # type: ignore[attr-defined]
+
+        formatter = structlog.stdlib.ProcessorFormatter(
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.processors.JSONRenderer(),
+            ],
+            foreign_pre_chain=shared_processors,
+        )
+
+        sink = io.StringIO()
+        handler = logging.StreamHandler(sink)
+        handler.setFormatter(formatter)
+        handler.setLevel(logging.DEBUG)
+
+        logger = logging.getLogger("test.redaction.extra")
+        old_handlers = logger.handlers[:]
+        old_level = logger.level
+        logger.handlers = [handler]
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+
+        try:
+            logger.info(
+                "extra= message",
+                extra=dict(vector_store_id="extra-leak-test", safe_key="keep_me"),
+            )
+            processed = sink.getvalue()
+
+            for leaked in ("extra-leak-test",):
+                assert leaked not in processed, (
+                    "Sensitive value injected via ExtraAdder leaked. "
+                    "_redact_sensitive_keys must run AFTER ExtraAdder in the chain."
+                )
+            assert '"vector_store_id": "<REDACTED>"' in processed
+            assert '"safe_key": "keep_me"' in processed
+        finally:
+            logger.handlers = old_handlers
+            logger.level = old_level
+            logger.propagate = True
