@@ -579,3 +579,42 @@ async def test_tool_groups_routing_table_exception_handling(cached_disk_dist_reg
     tools = await table.list_tools(ListToolsRequest(toolgroup_id="test-toolgroup-exceptions"))
 
     assert len(tools.data) == 0
+
+
+async def test_disabled_provider_models_persistence(cached_disk_dist_registry):
+    """Test that models from disabled providers are excluded from listing and lookups, but restored when provider is re-enabled."""
+    # Step 1: Start with provider_a enabled
+    provider_a_impl = InferenceImpl()
+    table1 = ModelsRoutingTable({"provider_a": provider_a_impl}, cached_disk_dist_registry, {})
+    await table1.initialize()
+
+    await table1.register_model(model_id="model_a1", provider_id="provider_a")
+
+    models1 = await table1.list_models()
+    assert any(m.identifier == "provider_a/model_a1" for m in models1.data)
+    assert await table1.has_model("provider_a/model_a1") is True
+
+    # Step 2: Restart server with provider_a disabled (provider_b enabled instead)
+    provider_b_impl = InferenceImpl()
+    table2 = ModelsRoutingTable({"provider_b": provider_b_impl}, cached_disk_dist_registry, {})
+    await table2.initialize()
+
+    models2 = await table2.list_models()
+    # provider_a models persisted in registry DB must NOT be listed
+    assert not any(m.identifier.startswith("provider_a/") for m in models2.data)
+    assert await table2.has_model("provider_a/model_a1") is False
+
+    with pytest.raises(ModelNotFoundError):
+        await table2.get_model("provider_a/model_a1")
+
+    # Step 3: Restart server with provider_a re-enabled
+    table3 = ModelsRoutingTable({"provider_a": provider_a_impl}, cached_disk_dist_registry, {})
+    await table3.initialize()
+
+    models3 = await table3.list_models()
+    assert any(m.identifier == "provider_a/model_a1" for m in models3.data)
+    assert await table3.has_model("provider_a/model_a1") is True
+
+    await table1.shutdown()
+    await table2.shutdown()
+    await table3.shutdown()
