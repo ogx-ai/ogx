@@ -65,7 +65,6 @@ _SENSITIVE_TEST_KEYS = frozenset(
         "response",
         "body",
         "exc",
-        "error",
     ]
 )
 

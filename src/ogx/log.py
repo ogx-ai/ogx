@@ -40,7 +40,6 @@ SENSITIVE_LOG_KEYS: frozenset[str] = frozenset(
         "response",
         "body",
         "exc",
-        "error",
         # User choices / selections — model name reveals intent
         "model",
         "model_id",
