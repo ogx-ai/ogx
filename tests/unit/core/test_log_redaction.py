@@ -31,12 +31,14 @@ _SENSITIVE_TEST_KEYS = frozenset(
         # User input
         "prompt",
         "messages",
+        "message",
         "input_messages",
         "input_items",
         # Model output
         "content",
         "text",
         "final_response",
+        "final_chat_completion",
         "output_messages",
         "output_items",
         "reasoning_content",
@@ -44,6 +46,7 @@ _SENSITIVE_TEST_KEYS = frozenset(
         "model",
         "model_id",
         "provider_model_id",
+        "provider_resource_id",
         # Session identifiers
         "conversation",
         "conversation_id",
@@ -251,3 +254,29 @@ class TestSensitiveDataRedactedFromLogOutput:
             logger.handlers = old_handlers
             logger.level = old_level
             logger.propagate = True
+
+    def test_test_keys_match_production_keys(self):
+        """Both lists must be in sync.
+
+        If a key is added to SENSITIVE_LOG_KEYS in production, this test fails
+        until the corresponding entry is added to _SENSITIVE_TEST_KEYS.
+
+        If a key is removed from SENSITIVE_LOG_KEYS, the parametrized
+        test_sensitive_key_is_redacted for that key will fail because the
+        value appears in log output instead of '<REDACTED>'.
+        """
+        from ogx.log import SENSITIVE_LOG_KEYS
+
+        prod_only = SENSITIVE_LOG_KEYS - _SENSITIVE_TEST_KEYS
+        test_only = _SENSITIVE_TEST_KEYS - SENSITIVE_LOG_KEYS
+
+        if prod_only:
+            pytest.fail(
+                f"Production has {len(prod_only)} key(s) not in the test list: "
+                f"{sorted(prod_only)}. Add them to _SENSITIVE_TEST_KEYS."
+            )
+        if test_only:
+            pytest.fail(
+                f"Test list has {len(test_only)} key(s) not in production: "
+                f"{sorted(test_only)}. Remove them from _SENSITIVE_TEST_KEYS."
+            )
