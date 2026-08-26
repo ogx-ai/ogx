@@ -10,16 +10,14 @@ This module defines the FastAPI router for the Responses API using standard
 FastAPI route decorators.
 """
 
-import asyncio
-import contextvars
 import json
 import logging  # allow-direct-logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Path, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from ogx_api.common.responses import Order
 from ogx_api.openai_responses import (
@@ -37,6 +35,7 @@ from ogx_api.router_utils import (
     standard_responses,
     try_translate_to_http_exception,
 )
+from ogx_api.utils import _preserve_context_for_sse, create_sse_event, sse_stream
 from ogx_api.version import OGX_API_V1
 
 from .api import Responses
@@ -111,16 +110,7 @@ class FormURLEncodedRoute(ExceptionTranslatingRoute):
         return handler
 
 
-def create_sse_event(data: Any) -> str:
-    """Create a Server-Sent Event string from data."""
-    if isinstance(data, BaseModel):
-        data = data.model_dump_json()
-    else:
-        data = json.dumps(data)
-    return f"data: {data}\n\n"
-
-
-async def sse_generator(event_gen: AsyncIterator[Any]) -> AsyncIterator[str]:
+def sse_generator(event_gen: AsyncIterator[Any]) -> AsyncGenerator[str, None]:
     """Convert an async generator to SSE format.
 
     This function iterates over an async generator and formats each yielded
@@ -129,27 +119,27 @@ async def sse_generator(event_gen: AsyncIterator[Any]) -> AsyncIterator[str]:
     # Track the last sequence_number seen so that if an error occurs mid-stream,
     # the error event can continue the sequence (last seen + 1).
     sequence_number = 0
-    try:
-        async for item in event_gen:
-            if hasattr(item, "sequence_number"):
-                sequence_number = item.sequence_number
-            yield create_sse_event(item)
-    except asyncio.CancelledError:
-        if hasattr(event_gen, "aclose"):
-            await event_gen.aclose()
-        raise  # Re-raise to maintain proper cancellation semantics
-    except Exception as e:
+
+    def _format_event(item: Any) -> str:
+        nonlocal sequence_number
+        if hasattr(item, "sequence_number"):
+            sequence_number = item.sequence_number
+        return create_sse_event(item)
+
+    def _format_error_event(e: Exception) -> str:
         logger.exception("Error in SSE generator")
         http_exc = try_translate_to_http_exception(e)
         status_code = str(http_exc.status_code) if http_exc else "server_error"
         detail = http_exc.detail if http_exc else "Internal server error: An unexpected error occurred."
-        yield create_sse_event(
+        return create_sse_event(
             OpenAIResponseObjectStreamError(
                 code=status_code,
                 message=detail,
                 sequence_number=sequence_number + 1,
             )
         )
+
+    return sse_stream(event_gen, _format_event, _format_error_event)
 
 
 # Automatically generate dependency functions from Pydantic models
@@ -190,28 +180,6 @@ async def get_list_response_input_items_request(
         limit=limit,
         order=order,
     )
-
-
-def _preserve_context_for_sse(event_gen: AsyncIterator[str]) -> AsyncIterator[str]:
-    # StreamingResponse runs in a different task, losing request contextvars.
-    # create_task inside context.run captures the context at task creation.
-    context = contextvars.copy_context()
-
-    async def wrapper() -> AsyncIterator[str]:
-        try:
-            while True:
-                try:
-                    task: asyncio.Task[str] = context.run(asyncio.create_task, event_gen.__anext__())  # type: ignore[arg-type]
-                    item = await task
-                except StopAsyncIteration:
-                    break
-                yield item
-        except (asyncio.CancelledError, GeneratorExit):
-            if hasattr(event_gen, "aclose"):
-                await event_gen.aclose()
-            raise
-
-    return wrapper()
 
 
 # Fields that the WebSocket response.create event forbids (they only apply to
