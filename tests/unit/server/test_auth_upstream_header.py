@@ -4,15 +4,13 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import hashlib
-import hmac as hmac_mod
 import json
 import logging  # allow-direct-logging
 
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from pydantic import SecretStr, ValidationError
+from pydantic import ValidationError
 
 from ogx.core.datatypes import (
     AuthenticationConfig,
@@ -485,24 +483,6 @@ def test_empty_cidr_list_rejects():
         )
 
 
-def test_short_secret_rejects():
-    """Test that a secret shorter than 32 characters raises ValidationError."""
-    with pytest.raises(ValidationError, match="at least 32 characters"):
-        UpstreamHeaderAuthConfig(
-            principal_header="x-user-id",
-            trusted_proxy_secret=SecretStr("too-short"),
-        )
-
-
-def test_valid_length_secret_accepted():
-    """Test that a secret of exactly 32 characters is accepted."""
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        trusted_proxy_secret=SecretStr("a" * 32),
-    )
-    assert config.trusted_proxy_secret is not None
-
-
 # Trusted proxy verification — CIDR unit tests
 
 
@@ -580,160 +560,6 @@ async def test_cidr_ipv6_support():
     assert user.principal == "alice"
 
 
-# Trusted proxy verification — HMAC unit tests
-
-
-def _compute_hmac(secret: str, headers: dict[str, str], identity_header_names: list[str]) -> str:
-    """Helper to compute HMAC signature for tests."""
-    sorted_names = sorted(identity_header_names)
-    parts = [f"{name}={headers.get(name, '')}" for name in sorted_names]
-    canonical = "\n".join(parts)
-    return hmac_mod.new(secret.encode(), canonical.encode(), hashlib.sha256).hexdigest()
-
-
-async def test_hmac_valid_signature_passes():
-    """Test that a valid HMAC signature passes through."""
-    secret = "test-shared-secret-that-is-32-ch"
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        trusted_proxy_secret=SecretStr(secret),
-    )
-    provider = UpstreamHeaderAuthProvider(config)
-    sig = _compute_hmac(secret, {"x-user-id": "alice"}, ["x-user-id"])
-    scope = {
-        "headers": [
-            (b"x-user-id", b"alice"),
-            (b"x-ogx-proxy-signature", sig.encode()),
-        ],
-    }
-    user = await provider.validate_token("", scope)
-    assert user.principal == "alice"
-
-
-async def test_hmac_invalid_signature_rejects():
-    """Test that an invalid HMAC signature is rejected."""
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        trusted_proxy_secret=SecretStr("test-shared-secret-that-is-32-ch"),
-    )
-    provider = UpstreamHeaderAuthProvider(config)
-    scope = {
-        "headers": [
-            (b"x-user-id", b"alice"),
-            (b"x-ogx-proxy-signature", b"0000000000000000000000000000000000000000000000000000000000000000"),
-        ],
-    }
-    with pytest.raises(UntrustedProxyError, match="invalid proxy signature"):
-        await provider.validate_token("", scope)
-
-
-async def test_hmac_missing_signature_header_rejects():
-    """Test that a missing signature header is rejected."""
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        trusted_proxy_secret=SecretStr("test-shared-secret-that-is-32-ch"),
-    )
-    provider = UpstreamHeaderAuthProvider(config)
-    scope = {
-        "headers": [(b"x-user-id", b"alice")],
-    }
-    with pytest.raises(UntrustedProxyError, match="missing proxy signature header"):
-        await provider.validate_token("", scope)
-
-
-async def test_hmac_tampered_identity_header_rejects():
-    """Test that changing identity headers after signing invalidates the HMAC."""
-    secret = "test-shared-secret-that-is-32-ch"
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        trusted_proxy_secret=SecretStr(secret),
-    )
-    provider = UpstreamHeaderAuthProvider(config)
-    sig = _compute_hmac(secret, {"x-user-id": "alice"}, ["x-user-id"])
-    scope = {
-        "headers": [
-            (b"x-user-id", b"mallory"),
-            (b"x-ogx-proxy-signature", sig.encode()),
-        ],
-    }
-    with pytest.raises(UntrustedProxyError, match="invalid proxy signature"):
-        await provider.validate_token("", scope)
-
-
-async def test_hmac_with_all_identity_headers():
-    """Test HMAC covers principal, tenant, and attributes headers."""
-    secret = "test-shared-secret-that-is-32-ch"
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        tenant_header="x-tenant-id",
-        attributes_header="x-auth-attributes",
-        trusted_proxy_secret=SecretStr(secret),
-    )
-    provider = UpstreamHeaderAuthProvider(config)
-    attrs = json.dumps({"roles": ["admin"]})
-    header_values = {
-        "x-auth-attributes": attrs,
-        "x-tenant-id": "acme",
-        "x-user-id": "alice",
-    }
-    sig = _compute_hmac(secret, header_values, ["x-user-id", "x-tenant-id", "x-auth-attributes"])
-    scope = {
-        "headers": [
-            (b"x-user-id", b"alice"),
-            (b"x-tenant-id", b"acme"),
-            (b"x-auth-attributes", attrs.encode()),
-            (b"x-ogx-proxy-signature", sig.encode()),
-        ],
-    }
-    user = await provider.validate_token("", scope)
-    assert user.principal == "alice"
-    assert user.tenant_id == "acme"
-    assert user.attributes == {"roles": ["admin"]}
-
-
-# Trusted proxy verification — combined CIDR + HMAC
-
-
-async def test_both_cidr_and_hmac_pass():
-    """Test that both CIDR and HMAC must pass when both are configured."""
-    secret = "test-shared-secret-that-is-32-ch"
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        trusted_proxy_cidrs=["10.0.0.0/8"],
-        trusted_proxy_secret=SecretStr(secret),
-    )
-    provider = UpstreamHeaderAuthProvider(config)
-    sig = _compute_hmac(secret, {"x-user-id": "alice"}, ["x-user-id"])
-    scope = {
-        "client": ("10.0.0.1", 54321),
-        "headers": [
-            (b"x-user-id", b"alice"),
-            (b"x-ogx-proxy-signature", sig.encode()),
-        ],
-    }
-    user = await provider.validate_token("", scope)
-    assert user.principal == "alice"
-
-
-async def test_cidr_passes_hmac_fails():
-    """Test that CIDR passing but HMAC failing still rejects."""
-    config = UpstreamHeaderAuthConfig(
-        principal_header="x-user-id",
-        trusted_proxy_cidrs=["10.0.0.0/8"],
-        trusted_proxy_secret=SecretStr("test-shared-secret-that-is-32-ch"),
-    )
-    provider = UpstreamHeaderAuthProvider(config)
-    scope = {
-        "client": ("10.0.0.1", 54321),
-        "headers": [
-            (b"x-user-id", b"alice"),
-            (b"x-ogx-proxy-signature", b"bad-signature"),
-        ],
-    }
-    with pytest.raises(UntrustedProxyError, match="invalid proxy signature"):
-        await provider.validate_token("", scope)
-
-
 # Trusted proxy verification — backwards compatibility
 
 
@@ -753,14 +579,14 @@ async def test_no_proxy_verification_configured_passes():
 # Trusted proxy verification — middleware integration tests
 
 
-def test_middleware_hmac_rejection_returns_403(suppress_auth_errors):
-    """Test that HMAC rejection returns HTTP 403 through the middleware."""
+def test_middleware_cidr_rejection_returns_403(suppress_auth_errors):
+    """Test that CIDR rejection returns HTTP 403 through the middleware."""
     app = FastAPI()
     auth_config = AuthenticationConfig(
         provider_config=UpstreamHeaderAuthConfig(
             type=AuthProviderType.UPSTREAM_HEADER,
             principal_header="x-user-id",
-            trusted_proxy_secret=SecretStr("test-shared-secret-that-is-32-ch"),
+            trusted_proxy_cidrs=["10.0.0.0/8"],
         ),
         access_policy=[],
     )
@@ -773,40 +599,6 @@ def test_middleware_hmac_rejection_returns_403(suppress_auth_errors):
     client = TestClient(app)
     response = client.get(
         "/test",
-        headers={
-            "x-user-id": "alice",
-            "x-ogx-proxy-signature": "bad-signature",
-        },
+        headers={"x-user-id": "alice"},
     )
     assert response.status_code == 403
-    assert "invalid proxy signature" in response.json()["error"]["message"]
-
-
-def test_middleware_hmac_valid_returns_200():
-    """Test that valid HMAC passes through the middleware and returns 200."""
-    secret = "test-shared-secret-that-is-32-ch"
-    app = FastAPI()
-    auth_config = AuthenticationConfig(
-        provider_config=UpstreamHeaderAuthConfig(
-            type=AuthProviderType.UPSTREAM_HEADER,
-            principal_header="x-user-id",
-            trusted_proxy_secret=SecretStr(secret),
-        ),
-        access_policy=[],
-    )
-    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config)
-
-    @app.get("/test")
-    def test_endpoint():
-        return {"message": "ok"}
-
-    sig = _compute_hmac(secret, {"x-user-id": "alice"}, ["x-user-id"])
-    client = TestClient(app)
-    response = client.get(
-        "/test",
-        headers={
-            "x-user-id": "alice",
-            "x-ogx-proxy-signature": sig,
-        },
-    )
-    assert response.status_code == 200

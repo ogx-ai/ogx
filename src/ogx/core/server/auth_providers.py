@@ -4,8 +4,6 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import hashlib
-import hmac as hmac_mod
 import ipaddress
 import json
 import re
@@ -670,8 +668,8 @@ class UpstreamHeaderAuthProvider(AuthProvider):
     authentication and injects user identity into request headers. This provider
     trusts the headers and performs no token validation or outbound calls.
 
-    When trusted_proxy_cidrs or trusted_proxy_secret is configured, requests are
-    verified against the allowlist or HMAC signature before identity headers are read.
+    When trusted_proxy_cidrs is configured, requests are verified against the
+    CIDR allowlist before identity headers are read.
     """
 
     def __init__(self, config: UpstreamHeaderAuthConfig) -> None:
@@ -679,28 +677,10 @@ class UpstreamHeaderAuthProvider(AuthProvider):
         self._trusted_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None = None
         if config.trusted_proxy_cidrs:
             self._trusted_networks = [ipaddress.ip_network(cidr, strict=False) for cidr in config.trusted_proxy_cidrs]
-        self._identity_header_names: list[str] | None = None
-        if config.trusted_proxy_secret:
-            names = [config.principal_header.lower()]
-            if config.tenant_header:
-                names.append(config.tenant_header.lower())
-            if config.attributes_header:
-                names.append(config.attributes_header.lower())
-            if config.attribute_headers:
-                for header_name in config.attribute_headers:
-                    names.append(header_name.lower())
-            names.sort()
-            self._identity_header_names = names
 
     @property
     def requires_http_bearer(self) -> bool:
         return False
-
-    def _verify_trusted_proxy(self, scope: Scope) -> None:
-        if self._trusted_networks is not None:
-            self._verify_proxy_cidr(scope)
-        if self.config.trusted_proxy_secret is not None:
-            self._verify_proxy_hmac(scope)
 
     def _verify_proxy_cidr(self, scope: Scope) -> None:
         assert self._trusted_networks is not None
@@ -717,35 +697,12 @@ class UpstreamHeaderAuthProvider(AuthProvider):
                 return
         raise UntrustedProxyError(f"Request rejected: source IP {client_ip_str} is not in trusted proxy CIDR allowlist")
 
-    def _verify_proxy_hmac(self, scope: Scope) -> None:
-        assert self.config.trusted_proxy_secret is not None
-        headers = dict(scope.get("headers", []))
-        sig_key = self.config.trusted_proxy_signature_header.lower().encode()
-        sig_value = headers.get(sig_key)
-        if not sig_value:
-            raise UntrustedProxyError(
-                f"Request rejected: missing proxy signature header {self.config.trusted_proxy_signature_header}"
-            )
-        canonical = self._build_canonical_signing_string(headers)
-        secret = self.config.trusted_proxy_secret.get_secret_value().encode("utf-8")
-        expected = hmac_mod.new(secret, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
-        if not hmac_mod.compare_digest(expected, sig_value.decode("utf-8", errors="replace")):
-            raise UntrustedProxyError("Request rejected: invalid proxy signature")
-
-    def _build_canonical_signing_string(self, headers: dict[bytes, bytes]) -> str:
-        assert self._identity_header_names is not None
-        parts = []
-        for name in self._identity_header_names:
-            value = headers.get(name.encode(), b"").decode("utf-8", errors="replace")
-            parts.append(f"{name}={value}")
-        return "\n".join(parts)
-
     async def validate_token(self, token: str, scope: Scope | None = None) -> User:
         if scope is None:
             raise ValueError("Missing required authentication header: " + self.config.principal_header)
 
-        if self._trusted_networks is not None or self.config.trusted_proxy_secret is not None:
-            self._verify_trusted_proxy(scope)
+        if self._trusted_networks is not None:
+            self._verify_proxy_cidr(scope)
 
         headers = dict(scope.get("headers", []))
 

@@ -266,7 +266,7 @@ class AuthServiceUnavailableError(OGXError):
 
 
 class UntrustedProxyError(OGXError):
-    """raised when a request fails trusted-proxy verification (CIDR or HMAC)"""
+    """raised when a request fails trusted-proxy verification (CIDR allowlist)"""
 
     status_code: httpx.codes = httpx.codes.FORBIDDEN
 
