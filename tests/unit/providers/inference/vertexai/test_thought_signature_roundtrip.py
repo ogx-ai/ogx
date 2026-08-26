@@ -5,9 +5,12 @@
 # the thought_signature emitted on the original tool call ("Function call is
 # missing a thought_signature in functionCall parts"). These tests pin every hop
 # of the chain that carries the signature through OGX:
-#   1. Gemini candidate part -> OpenAI chat completion tool call
-#   2. Responses function_call item -> chat completion messages (input rebuild)
-#   3. OpenAI chat completion assistant message -> Gemini Content parts
+#   1. Gemini candidate part -> OpenAI tool call + adapter-local id->sig cache
+#   2. OpenAI chat completion assistant message -> Gemini Content parts
+#
+# The signature travels through an adapter-local map keyed by the synthetic
+# call id (converters._THOUGHT_SIGNATURE_CACHE); the shared OpenAI model layer
+# stays untouched.
 #
 # All google-genai types are mocked via SimpleNamespace — no SDK installation required.
 
@@ -16,11 +19,14 @@ from typing import Any
 
 import pytest
 
-from ogx.providers.inline.responses.builtin.responses.utils import (
-    convert_response_input_to_chat_messages,
-)
 from ogx.providers.remote.inference.vertexai import converters
-from ogx_api.openai_responses import OpenAIResponseOutputMessageFunctionToolCall
+
+
+@pytest.fixture(autouse=True)
+def _reset_signature_cache():
+    converters._clear_thought_signature_cache()
+    yield
+    converters._clear_thought_signature_cache()
 
 
 def _make_function_call_part(name: str, args: dict, thought_signature: Any = None) -> Any:
@@ -45,7 +51,10 @@ class TestGeminiToOpenAICarriesSignature:
         _, _, tool_calls = converters._extract_candidate_parts(candidate)
 
         assert len(tool_calls) == 1
-        assert tool_calls[0].function.thought_signature == "sig-abc"
+        assert converters._lookup_thought_signature(tool_calls[0].id) == "sig-abc"
+        assert not hasattr(tool_calls[0].function, "thought_signature") or getattr(
+            tool_calls[0].function, "thought_signature", None
+        ) is None
 
     def test_bytes_signature_base64_encoded(self):
         raw = b"\x9a\x04\x00"
@@ -53,13 +62,13 @@ class TestGeminiToOpenAICarriesSignature:
         candidate = _make_candidate([_make_function_call_part("get_weather", {"city": "Paris"}, thought_signature=raw)])
         _, _, tool_calls = converters._extract_candidate_parts(candidate)
 
-        assert tool_calls[0].function.thought_signature == encoded
+        assert converters._lookup_thought_signature(tool_calls[0].id) == encoded
 
     def test_absent_signature_is_none(self):
         candidate = _make_candidate([_make_function_call_part("get_weather", {"city": "Paris"})])
         _, _, tool_calls = converters._extract_candidate_parts(candidate)
 
-        assert tool_calls[0].function.thought_signature is None
+        assert converters._lookup_thought_signature(tool_calls[0].id) is None
 
     def test_completion_response_carries_signature_in_tool_calls(self):
         """End-to-end: Gemini response -> OpenAI chat completion response."""
@@ -72,37 +81,7 @@ class TestGeminiToOpenAICarriesSignature:
 
         tool_calls = completion.choices[0].message.tool_calls
         assert tool_calls is not None and len(tool_calls) == 1
-        assert tool_calls[0].function.thought_signature == "sig-xyz"
-
-
-class TestResponsesInputRebuildCarriesSignature:
-    async def test_function_tool_call_item_signature_preserved(self):
-        input_items = [
-            OpenAIResponseOutputMessageFunctionToolCall(
-                call_id="call_456",
-                name="get_weather",
-                arguments='{"city": "Paris"}',
-                thought_signature="sig-abc",
-            )
-        ]
-
-        result = await convert_response_input_to_chat_messages(input_items)
-
-        assert len(result) == 1
-        assert result[0].tool_calls[0].function.thought_signature == "sig-abc"
-
-    async def test_function_tool_call_item_without_signature_stays_none(self):
-        input_items = [
-            OpenAIResponseOutputMessageFunctionToolCall(
-                call_id="call_456",
-                name="get_weather",
-                arguments='{"city": "Paris"}',
-            )
-        ]
-
-        result = await convert_response_input_to_chat_messages(input_items)
-
-        assert result[0].tool_calls[0].function.thought_signature is None
+        assert converters._lookup_thought_signature(tool_calls[0].id) == "sig-xyz"
 
 
 class TestOpenAIToGeminiEmitsSignature:
@@ -112,6 +91,7 @@ class TestOpenAIToGeminiEmitsSignature:
         return contents
 
     def test_signature_emitted_on_function_call_part(self):
+        converters._cache_thought_signature("call_1", "sig-abc")
         contents = self._convert_single_assistant(
             {
                 "role": "assistant",
@@ -119,11 +99,7 @@ class TestOpenAIToGeminiEmitsSignature:
                     {
                         "id": "call_1",
                         "type": "function",
-                        "function": {
-                            "name": "get_weather",
-                            "arguments": '{"city": "Paris"}',
-                            "thought_signature": "sig-abc",
-                        },
+                        "function": {"name": "get_weather", "arguments": '{"city": "Paris"}'},
                     }
                 ],
             }
@@ -192,6 +168,22 @@ class TestFullRoundTrip:
 
         parts = contents[0]["parts"]
         assert parts[0]["thought_signature"] == "round-trip-sig"
+
+
+class TestSignatureCacheBehavior:
+    def test_unknown_call_id_yields_none(self):
+        assert converters._lookup_thought_signature("call_does_not_exist") is None
+
+    def test_cache_is_bounded(self):
+        for i in range(converters._THOUGHT_SIGNATURE_CACHE_MAX + 50):
+            converters._cache_thought_signature(f"call_{i}", f"sig-{i}")
+
+        assert len(converters._THOUGHT_SIGNATURE_CACHE) == converters._THOUGHT_SIGNATURE_CACHE_MAX
+        # oldest entries evicted first
+        assert converters._lookup_thought_signature("call_0") is None
+        last = converters._THOUGHT_SIGNATURE_CACHE_MAX + 49
+        assert converters._lookup_thought_signature(f"call_{last}") == f"sig-{last}"
+
 
 
 if __name__ == "__main__":

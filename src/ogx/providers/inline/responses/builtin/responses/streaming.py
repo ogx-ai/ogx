@@ -1330,9 +1330,6 @@ class StreamingResponseOrchestrator:
                                     name=tool_call.function.name if tool_call.function else "",
                                     id=tool_call_item_id,
                                     status="in_progress",
-                                    thought_signature=(
-                                        tool_call.function.thought_signature if tool_call.function else None
-                                    ),
                                 )
                                 yield OpenAIResponseObjectStreamResponseOutputItemAdded(
                                     response_id=self.response_id,
@@ -1698,7 +1695,6 @@ class StreamingResponseOrchestrator:
                 name=tool_call.function.name or "",
                 id=final_item_id,
                 status="completed",
-                thought_signature=tool_call.function.thought_signature,
             )
             output_messages.append(function_call_item)
 

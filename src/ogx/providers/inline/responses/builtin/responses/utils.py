@@ -323,7 +323,6 @@ async def convert_response_input_to_chat_messages(
                     function=OpenAIChatCompletionToolCallFunction(
                         name=input_item.name,
                         arguments=input_item.arguments,
-                        thought_signature=input_item.thought_signature,
                     ),
                 )
                 reasoning = _get_preceding_reasoning(input, i)

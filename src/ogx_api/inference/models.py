@@ -377,14 +377,6 @@ class OpenAIChatCompletionToolCallFunction(BaseModel):
 
     name: str = Field(..., description="Name of the function to call.")
     arguments: str = Field(..., description="Arguments to pass to the function as a JSON string.")
-    thought_signature: str | None = Field(
-        default=None,
-        description=(
-            "Gemini thought signature associated with this function call (base64-encoded when sourced "
-            "from raw bytes). Providers that require it on follow-up turns, such as Vertex Gemini 3, "
-            "reject requests whose replayed function-call parts are missing the original signature."
-        ),
-    )
 
 
 @json_schema_type

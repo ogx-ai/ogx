@@ -258,6 +258,35 @@ def _normalize_thought_signature(value: Any) -> str | None:
     return value or None
 
 
+# Adapter-local map from synthetic OpenAI tool-call ids to the Gemini
+# ``thought_signature`` emitted on the originating function-call part. Kept here
+# (not on the shared OpenAI model objects) so only this provider pays for it;
+# bounded so long sessions cannot grow it without limit.
+_THOUGHT_SIGNATURE_CACHE: dict[str, str] = {}
+_THOUGHT_SIGNATURE_CACHE_MAX = 1024
+
+
+def _cache_thought_signature(call_id: str, signature: str | None) -> None:
+    """Record the signature for a tool call id (no-op when absent)."""
+    if not signature:
+        return
+    while len(_THOUGHT_SIGNATURE_CACHE) >= _THOUGHT_SIGNATURE_CACHE_MAX:
+        _THOUGHT_SIGNATURE_CACHE.pop(next(iter(_THOUGHT_SIGNATURE_CACHE)))
+    _THOUGHT_SIGNATURE_CACHE[call_id] = signature
+
+
+def _lookup_thought_signature(call_id: str | None) -> str | None:
+    """Return the signature recorded for a tool call id, if any."""
+    if not call_id:
+        return None
+    return _THOUGHT_SIGNATURE_CACHE.get(call_id)
+
+
+def _clear_thought_signature_cache() -> None:
+    """Test hook: reset the adapter-local signature map."""
+    _THOUGHT_SIGNATURE_CACHE.clear()
+
+
 def _parse_tool_call_arguments(arguments: str | dict[str, Any]) -> dict[str, Any]:
     """Parse tool call arguments from string or dict form."""
     if not isinstance(arguments, str):
@@ -301,9 +330,9 @@ def _convert_assistant_message(msg: dict[str, Any]) -> dict[str, Any] | None:
         # Gemini 3 requires the original thought_signature on function-call
         # parts of follow-up turns; without it Vertex rejects the request with
         # "Function call is missing a thought_signature in functionCall parts".
-        thought_signature = None
-        if isinstance(func, dict):
-            thought_signature = _normalize_thought_signature(func.get("thought_signature"))
+        thought_signature = _lookup_thought_signature(
+            tc.get("id") if isinstance(tc, dict) else None
+        )
         if thought_signature:
             part["thought_signature"] = thought_signature
         parts.append(part)
@@ -479,19 +508,23 @@ def _extract_candidate_parts(
 
         fc = getattr(part, "function_call", None)
         if fc is not None:
+            call_id = f"call_{uuid.uuid4().hex[:24]}"
             tool_calls.append(
                 OpenAIChatCompletionToolCall(
                     index=len(tool_calls),
-                    id=f"call_{uuid.uuid4().hex[:24]}",
+                    id=call_id,
                     type="function",
                     function=OpenAIChatCompletionToolCallFunction(
                         name=getattr(fc, "name", "") or "",
                         arguments=json.dumps(getattr(fc, "args", {}) or {}),
-                        # Preserve the thought signature so it can be replayed on
-                        # follow-up turns (required by Gemini 3 on Vertex).
-                        thought_signature=_normalize_thought_signature(getattr(part, "thought_signature", None)),
                     ),
                 )
+            )
+            # Remember the signature so follow-up turns replay it (required by
+            # Gemini 3 on Vertex); looked up again in _convert_assistant_message.
+            _cache_thought_signature(
+                call_id,
+                _normalize_thought_signature(getattr(part, "thought_signature", None)),
             )
 
     return text_parts, thinking_parts, tool_calls
