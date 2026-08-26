@@ -1332,7 +1332,11 @@ class OpenAIVectorStoreMixin(ABC):
 
             logger.debug("Using FileProcessor API to process file", file_id=file_id)
             pf_resp = await self.file_processor_api.process_file(
-                ProcessFileRequest(file_id=file_id, chunking_strategy=chunking_strategy)
+                ProcessFileRequest(
+                    file_id=file_id,
+                    options=request.options,
+                    chunking_strategy=chunking_strategy,
+                )
             )
 
             chunks = []
