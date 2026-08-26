@@ -512,7 +512,7 @@ async def test_cidr_rejects_non_matching_ip():
         "client": ("192.168.1.1", 54321),
         "headers": [(b"x-user-id", b"alice")],
     }
-    with pytest.raises(UntrustedProxyError, match="not in trusted proxy CIDR allowlist"):
+    with pytest.raises(UntrustedProxyError, match="client IP is not in trusted proxy CIDR allowlist"):
         await provider.validate_token("", scope)
 
 

@@ -691,11 +691,13 @@ class UpstreamHeaderAuthProvider(AuthProvider):
         try:
             client_ip = ipaddress.ip_address(client_ip_str)
         except ValueError as err:
-            raise UntrustedProxyError(f"Request rejected: invalid client IP address '{client_ip_str}'") from err
+            logger.warning("Failed to parse client IP for proxy verification", client_ip=client_ip_str)
+            raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist") from err
         for network in self._trusted_networks:
             if client_ip in network:
                 return
-        raise UntrustedProxyError(f"Request rejected: source IP {client_ip_str} is not in trusted proxy CIDR allowlist")
+        logger.warning("Client IP not in trusted proxy CIDR allowlist", client_ip=client_ip_str)
+        raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist")
 
     async def validate_token(self, token: str, scope: Scope | None = None) -> User:
         if scope is None:
