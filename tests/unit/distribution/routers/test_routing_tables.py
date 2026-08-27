@@ -582,38 +582,39 @@ async def test_tool_groups_routing_table_exception_handling(cached_disk_dist_reg
 
 
 async def test_disabled_provider_models_persistence(cached_disk_dist_registry):
-    """Test that models from disabled providers are excluded from listing and lookups, but restored when provider is re-enabled."""
-    # Step 1: Start with provider_a enabled
+    """Test that provider-listed models from disabled providers are pruned during refresh, but re-discovered when provider is re-enabled."""
+    # Step 1: Start with provider_a enabled and discover provider_a models
     provider_a_impl = InferenceImpl()
     table1 = ModelsRoutingTable({"provider_a": provider_a_impl}, cached_disk_dist_registry, {})
     await table1.initialize()
-
-    await table1.register_model(model_id="model_a1", provider_id="provider_a")
+    await table1.refresh()
 
     models1 = await table1.list_models()
-    assert any(m.identifier == "provider_a/model_a1" for m in models1.data)
-    assert await table1.has_model("provider_a/model_a1") is True
+    assert any(m.identifier == "provider_a/provider-model-1" for m in models1.data)
+    assert await table1.has_model("provider_a/provider-model-1") is True
 
     # Step 2: Restart server with provider_a disabled (provider_b enabled instead)
     provider_b_impl = InferenceImpl()
     table2 = ModelsRoutingTable({"provider_b": provider_b_impl}, cached_disk_dist_registry, {})
     await table2.initialize()
+    await table2.refresh()
 
     models2 = await table2.list_models()
-    # provider_a models persisted in registry DB must NOT be listed
+    # provider_a listed models persisted in registry DB must be pruned during refresh
     assert not any(m.identifier.startswith("provider_a/") for m in models2.data)
-    assert await table2.has_model("provider_a/model_a1") is False
+    assert await table2.has_model("provider_a/provider-model-1") is False
 
     with pytest.raises(ModelNotFoundError):
-        await table2.get_model("provider_a/model_a1")
+        await table2.get_model("provider_a/provider-model-1")
 
     # Step 3: Restart server with provider_a re-enabled
     table3 = ModelsRoutingTable({"provider_a": provider_a_impl}, cached_disk_dist_registry, {})
     await table3.initialize()
+    await table3.refresh()
 
     models3 = await table3.list_models()
-    assert any(m.identifier == "provider_a/model_a1" for m in models3.data)
-    assert await table3.has_model("provider_a/model_a1") is True
+    assert any(m.identifier == "provider_a/provider-model-1" for m in models3.data)
+    assert await table3.has_model("provider_a/provider-model-1") is True
 
     await table1.shutdown()
     await table2.shutdown()

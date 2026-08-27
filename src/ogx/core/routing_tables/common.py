@@ -163,33 +163,10 @@ class CommonRoutingTableImpl(RoutingTable):
 
         raise ValueError(f"Provider not found for `{routing_key}`")
 
-    def _is_provider_active_for_type(self, obj_type: str, provider_id: str) -> bool:
-        from .models import ModelsRoutingTable
-        from .toolgroups import ToolGroupsRoutingTable
-        from .vector_stores import VectorStoresRoutingTable
-
-        if isinstance(self, ModelsRoutingTable) and obj_type == ResourceType.model.value:
-            return provider_id in self.impls_by_provider_id
-        elif isinstance(self, VectorStoresRoutingTable) and obj_type == ResourceType.vector_store.value:
-            return provider_id in self.impls_by_provider_id
-        elif isinstance(self, ToolGroupsRoutingTable) and obj_type == ResourceType.tool_group.value:
-            return provider_id in self.impls_by_provider_id
-        return True
-
     async def get_object_by_identifier(self, type: str, identifier: str) -> RoutableObjectWithProvider | None:
         # Get from disk registry
         obj = await self.dist_registry.get(type, identifier)
         if not obj:
-            return None
-
-        # Check if provider is available in this routing table (for managed types)
-        if not self._is_provider_active_for_type(obj.type, obj.provider_id):
-            logger.debug(
-                "Provider not available for object",
-                resource_type=type,
-                identifier=identifier,
-                provider_id=obj.provider_id,
-            )
             return None
 
         # Check if user has permission to access this object
@@ -262,9 +239,7 @@ class CommonRoutingTableImpl(RoutingTable):
 
     async def get_all_with_type(self, type: str) -> list[RoutableObjectWithProvider]:
         objs = await self.dist_registry.get_all()
-        filtered_objs = [
-            obj for obj in objs if obj.type == type and self._is_provider_active_for_type(obj.type, obj.provider_id)
-        ]
+        filtered_objs = [obj for obj in objs if obj.type == type]
 
         # Apply attribute-based access control filtering
         if filtered_objs:
