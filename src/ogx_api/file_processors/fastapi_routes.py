@@ -15,7 +15,7 @@ import json
 from typing import Annotated, Any, Protocol, cast
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
-from pydantic import ValidationError
+from pydantic import BeforeValidator, ValidationError
 
 from ogx_api.common.upload_limits import (
     DEFAULT_MAX_UPLOAD_SIZE_BYTES,
@@ -37,6 +37,25 @@ from .models import (
     ProcessFileRequest,
     ProcessFileResponse,
 )
+
+
+def _parse_options(options: Any) -> dict[str, Any]:
+    """Parse provider options sent as a JSON multipart form value."""
+    if isinstance(options, dict):
+        return options
+    if not isinstance(options, str):
+        raise ValueError("options must be a JSON object")
+
+    try:
+        parsed_options = json.loads(options)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in options: {e}") from e
+    if not isinstance(parsed_options, dict):
+        raise ValueError("options must be a JSON object")
+    return parsed_options
+
+
+OptionsForm = Annotated[dict[str, Any], BeforeValidator(_parse_options)]
 
 
 def _parse_chunking_strategy(chunking_strategy: str | None) -> VectorStoreChunkingStrategy | None:
@@ -154,7 +173,7 @@ def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX
             str | None, Form(description="ID of file already uploaded to file storage. Mutually exclusive with file.")
         ] = None,
         options: Annotated[
-            dict[str, Any] | None,
+            OptionsForm | None,
             Form(
                 description="Optional processing options. Provider-specific parameters (e.g., OCR settings, output format)."
             ),
@@ -193,7 +212,7 @@ def create_router(impl: FileProcessors, max_upload_size_bytes: int = DEFAULT_MAX
             str | None, Form(description="ID of file already uploaded to file storage. Mutually exclusive with file.")
         ] = None,
         options: Annotated[
-            dict[str, Any] | None,
+            OptionsForm | None,
             Form(description="Optional processing options. Provider-specific parameters."),
         ] = None,
         chunking_strategy: Annotated[

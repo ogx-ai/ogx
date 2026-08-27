@@ -835,6 +835,10 @@ class OpenAIAttachFileRequest(BaseModel):
     """Request body for attaching a file to a vector store."""
 
     file_id: str = Field(description="The ID of the file to attach.")
+    options: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional provider-specific file processing parameters.",
+    )
     attributes: VectorStoreFileAttributes | None = Field(
         default=None,
         description="Attributes to associate with the file.",

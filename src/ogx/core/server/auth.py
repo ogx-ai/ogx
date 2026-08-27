@@ -22,7 +22,12 @@ from ogx.core.server.routes import (
     find_matching_route,
 )
 from ogx.log import get_logger
-from ogx_api.common.errors import AuthServiceUnavailableError, OpenAIErrorResponse, TokenValidationError
+from ogx_api.common.errors import (
+    AuthServiceUnavailableError,
+    OpenAIErrorResponse,
+    TokenValidationError,
+    UntrustedProxyError,
+)
 
 logger = get_logger(name=__name__, category="core::auth")
 
@@ -152,6 +157,9 @@ class AuthenticationMiddleware:
             # Validate token and get access attributes
             try:
                 validation_result = await self.auth_provider.validate_token(token, scope)
+            except UntrustedProxyError as e:
+                logger.warning("Untrusted proxy rejected", error=str(e))
+                return await self._send_auth_error(send, str(e), status=403, is_websocket=is_websocket)
             except AuthServiceUnavailableError as e:
                 logger.warning("Authentication service unavailable", error=str(e))
                 return await self._send_auth_error(send, str(e), status=503, is_websocket=is_websocket)
