@@ -109,6 +109,7 @@ from .common.errors import (
     TokenValidationError,
     ToolGroupNotFoundError,
     UnsupportedModelError,
+    UntrustedProxyError,
     VectorStoreNotFoundError,
 )
 from .common.job_types import Job, JobStatus
@@ -1019,6 +1020,7 @@ __all__ = [
     "TopKSamplingStrategy",
     "TopPSamplingStrategy",
     "UnsupportedModelError",
+    "UntrustedProxyError",
     "UploadFileRequest",
     "URL",
     "_URLOrData",
