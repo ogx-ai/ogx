@@ -16,6 +16,7 @@ import json
 import re
 import time
 import uuid
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -243,6 +244,30 @@ def _convert_user_message(msg: dict[str, Any]) -> dict[str, Any]:
     return {"role": "user", "parts": parts}
 
 
+def _normalize_thought_signature(value: Any) -> str | None:
+    """Normalize a Gemini thought_signature to a JSON-safe string (bytes → base64)."""
+    if value is None:
+        return None
+    if isinstance(value, bytes | bytearray):
+        return base64.b64encode(bytes(value)).decode("ascii")
+    value = str(value)
+    return value or None
+
+
+def _thought_signature_from_part(part: Any) -> str | None:
+    """Read thought_signature from a Gemini part (snake_case or camelCase)."""
+    raw = getattr(part, "thought_signature", None)
+    if raw is None:
+        raw = getattr(part, "thoughtSignature", None)
+    if raw is None:
+        fc = getattr(part, "function_call", None)
+        if fc is not None:
+            raw = getattr(fc, "thought_signature", None)
+            if raw is None:
+                raw = getattr(fc, "thoughtSignature", None)
+    return _normalize_thought_signature(raw)
+
+
 def _parse_tool_call_arguments(arguments: str | dict[str, Any]) -> dict[str, Any]:
     """Parse tool call arguments from string or dict form."""
     if not isinstance(arguments, str):
@@ -254,7 +279,27 @@ def _parse_tool_call_arguments(arguments: str | dict[str, Any]) -> dict[str, Any
     return parsed
 
 
-def _convert_assistant_message(msg: dict[str, Any]) -> dict[str, Any] | None:
+def collect_tool_call_ids(messages: list[Any]) -> list[str]:
+    """Return unique OpenAI tool-call ids from assistant messages."""
+    seen: set[str] = set()
+    ids: list[str] = []
+    for raw_msg in messages:
+        msg = _to_dict(raw_msg)
+        if msg.get("role") != "assistant":
+            continue
+        for tc in msg.get("tool_calls") or []:
+            tc = _to_dict(tc)
+            call_id = tc.get("id")
+            if isinstance(call_id, str) and call_id and call_id not in seen:
+                seen.add(call_id)
+                ids.append(call_id)
+    return ids
+
+
+def _convert_assistant_message(
+    msg: dict[str, Any],
+    signature_by_call_id: Mapping[str, str] | None = None,
+) -> dict[str, Any] | None:
     """Convert an OpenAI assistant message to a Gemini Content dict.
 
     Returns ``None`` when the message has no text content and no tool calls.
@@ -275,17 +320,29 @@ def _convert_assistant_message(msg: dict[str, Any]) -> dict[str, Any] | None:
     if text:
         parts.append({"text": text})
 
-    for tc in msg.get("tool_calls") or []:
+    tool_calls = msg.get("tool_calls") or []
+    for index, tc in enumerate(tool_calls):
         tc = _to_dict(tc)
         func = tc.get("function", {})
-        parts.append(
-            {
-                "function_call": {
-                    "name": func.get("name", ""),
-                    "args": _parse_tool_call_arguments(func.get("arguments", "{}")),
-                }
-            }
-        )
+        function_call: dict[str, Any] = {
+            "name": func.get("name", ""),
+            "args": _parse_tool_call_arguments(func.get("arguments", "{}")),
+        }
+        part: dict[str, Any] = {"function_call": function_call}
+        call_id = tc.get("id") if isinstance(tc, dict) else None
+        # Only re-attach persisted signatures. Omit on miss (default): Gemini 2.x
+        # must not receive skip_thought_signature_validator; Gemini 3 gets real
+        # signatures from the store when the model emitted them.
+        if isinstance(call_id, str) and signature_by_call_id:
+            thought_signature = signature_by_call_id.get(call_id)
+            if thought_signature:
+                part["thought_signature"] = thought_signature
+            elif index == 0:
+                logger.debug(
+                    "Missing thought_signature for first function call; omitting",
+                    call_id=call_id,
+                )
+        parts.append(part)
 
     return {"role": "model", "parts": parts} if parts else None
 
@@ -310,6 +367,7 @@ def _convert_tool_message(msg: dict[str, Any], all_messages: list[Any]) -> dict[
 
 def convert_openai_messages_to_gemini(
     messages: list[Any],
+    signature_by_call_id: Mapping[str, str] | None = None,
 ) -> tuple[str | None, list[dict[str, Any]]]:
     """Convert OpenAI-format messages to Gemini Content dicts.
 
@@ -334,7 +392,10 @@ def convert_openai_messages_to_gemini(
         elif role == "user":
             contents.append(_convert_user_message(msg))
         elif role == "assistant":
-            converted = _convert_assistant_message(msg)
+            converted = _convert_assistant_message(
+                msg,
+                signature_by_call_id,
+            )
             if converted:
                 contents.append(converted)
         elif role == "tool":
@@ -432,6 +493,7 @@ def generate_completion_id() -> str:
 
 def _extract_candidate_parts(
     candidate: Any,
+    signatures_out: MutableMapping[str, str] | None = None,
 ) -> tuple[list[str], list[str], list[OpenAIChatCompletionToolCall | OpenAIChatCompletionCustomToolCall]]:
     """Extract text segments, thinking segments, and tool calls from a Gemini candidate's parts."""
     content_obj = getattr(candidate, "content", None)
@@ -458,10 +520,11 @@ def _extract_candidate_parts(
 
         fc = getattr(part, "function_call", None)
         if fc is not None:
+            call_id = f"call_{uuid.uuid4().hex[:24]}"
             tool_calls.append(
                 OpenAIChatCompletionToolCall(
                     index=len(tool_calls),
-                    id=f"call_{uuid.uuid4().hex[:24]}",
+                    id=call_id,
                     type="function",
                     function=OpenAIChatCompletionToolCallFunction(
                         name=getattr(fc, "name", "") or "",
@@ -469,6 +532,9 @@ def _extract_candidate_parts(
                     ),
                 )
             )
+            normalized = _thought_signature_from_part(part)
+            if normalized and signatures_out is not None:
+                signatures_out[call_id] = normalized
 
     return text_parts, thinking_parts, tool_calls
 
@@ -540,11 +606,17 @@ def _extract_logprobs(candidate: Any) -> OpenAIChoiceLogprobs | None:
     return OpenAIChoiceLogprobs(content=token_logprobs)
 
 
-def _process_candidates(response_or_chunk: Any) -> list[_CandidateData]:
+def _process_candidates(
+    response_or_chunk: Any,
+    signatures_out: MutableMapping[str, str] | None = None,
+) -> list[_CandidateData]:
     """Extract and process all candidates from a Gemini response or streaming chunk."""
     result: list[_CandidateData] = []
     for i, candidate in enumerate(getattr(response_or_chunk, "candidates", None) or []):
-        text_parts, thinking_parts, tool_calls = _extract_candidate_parts(candidate)
+        text_parts, thinking_parts, tool_calls = _extract_candidate_parts(
+            candidate,
+            signatures_out,
+        )
         result.append(
             _CandidateData(
                 index=i,
@@ -583,13 +655,14 @@ def _resolve_finish_reason(
 def convert_gemini_response_to_openai(
     response: genai_types.GenerateContentResponse,
     model: str,
+    signatures_out: MutableMapping[str, str] | None = None,
 ) -> OpenAIChatCompletion:
     """Map a google-genai ``GenerateContentResponse`` to ``OpenAIChatCompletion``."""
     completion_id = generate_completion_id()
     created = int(time.time())
 
     choices: list[OpenAIChoice] = []
-    for cd in _process_candidates(response):
+    for cd in _process_candidates(response, signatures_out):
         # NOTE: reasoning_content is only available on streaming deltas (OpenAIChoiceDelta).
         # Non-streaming responses include thinking text in content because
         # OpenAIChatCompletionResponseMessage has no reasoning_content field.
@@ -679,6 +752,7 @@ def convert_gemini_stream_chunk_to_openai(
     model: str,
     completion_id: str,
     is_first_chunk: bool,
+    signatures_out: MutableMapping[str, str] | None = None,
 ) -> OpenAIChatCompletionChunk:
     """Map a Gemini streaming chunk to ``OpenAIChatCompletionChunk``."""
     created = int(time.time())
@@ -696,7 +770,7 @@ def convert_gemini_stream_chunk_to_openai(
             index=cd.index,
             logprobs=cd.logprobs,
         )
-        for cd in _process_candidates(chunk)
+        for cd in _process_candidates(chunk, signatures_out)
     ]
 
     if not choices:
