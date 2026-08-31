@@ -10,6 +10,7 @@ import logging  # allow-direct-logging
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from ogx.core.datatypes import (
     AuthenticationConfig,
@@ -18,6 +19,7 @@ from ogx.core.datatypes import (
 )
 from ogx.core.server.auth import AuthenticationMiddleware
 from ogx.core.server.auth_providers import UpstreamHeaderAuthProvider
+from ogx_api.common.errors import UntrustedProxyError
 
 
 @pytest.fixture
@@ -449,3 +451,154 @@ def test_attribute_headers_middleware_integration(upstream_header_app):
         },
     )
     assert response.status_code == 200
+
+
+# Trusted proxy verification — config validation
+
+
+def test_valid_cidr_config():
+    """Test that valid CIDR list is accepted."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-user-id",
+        trusted_proxy_cidrs=["10.0.0.0/8", "172.16.0.0/12", "::1/128"],
+    )
+    assert config.trusted_proxy_cidrs == ["10.0.0.0/8", "172.16.0.0/12", "::1/128"]
+
+
+def test_invalid_cidr_config_rejects():
+    """Test that invalid CIDR notation raises ValidationError."""
+    with pytest.raises(ValidationError, match="Invalid CIDR notation"):
+        UpstreamHeaderAuthConfig(
+            principal_header="x-user-id",
+            trusted_proxy_cidrs=["not-a-cidr"],
+        )
+
+
+def test_empty_cidr_list_rejects():
+    """Test that empty CIDR list raises ValidationError."""
+    with pytest.raises(ValidationError, match="must contain at least one entry"):
+        UpstreamHeaderAuthConfig(
+            principal_header="x-user-id",
+            trusted_proxy_cidrs=[],
+        )
+
+
+# Trusted proxy verification — CIDR unit tests
+
+
+async def test_cidr_allows_matching_ip():
+    """Test that a request from a trusted IP passes through."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-user-id",
+        trusted_proxy_cidrs=["10.0.0.0/8"],
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "client": ("10.0.0.1", 54321),
+        "headers": [(b"x-user-id", b"alice")],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+
+
+async def test_cidr_rejects_non_matching_ip():
+    """Test that a request from an untrusted IP is rejected."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-user-id",
+        trusted_proxy_cidrs=["10.0.0.0/8"],
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "client": ("192.168.1.1", 54321),
+        "headers": [(b"x-user-id", b"alice")],
+    }
+    with pytest.raises(UntrustedProxyError, match="client IP is not in trusted proxy CIDR allowlist"):
+        await provider.validate_token("", scope)
+
+
+async def test_cidr_rejects_missing_client():
+    """Test that missing scope['client'] is rejected."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-user-id",
+        trusted_proxy_cidrs=["10.0.0.0/8"],
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "headers": [(b"x-user-id", b"alice")],
+    }
+    with pytest.raises(UntrustedProxyError, match="unable to determine client IP"):
+        await provider.validate_token("", scope)
+
+
+async def test_cidr_allows_multiple_cidrs():
+    """Test that matching any CIDR in the list passes."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-user-id",
+        trusted_proxy_cidrs=["10.0.0.0/8", "172.16.0.0/12"],
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "client": ("172.16.5.10", 54321),
+        "headers": [(b"x-user-id", b"alice")],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+
+
+async def test_cidr_ipv6_support():
+    """Test that IPv6 addresses are supported."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-user-id",
+        trusted_proxy_cidrs=["fd00::/8"],
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "client": ("fd00::1", 54321),
+        "headers": [(b"x-user-id", b"alice")],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+
+
+# Trusted proxy verification — backwards compatibility
+
+
+async def test_no_proxy_verification_configured_passes():
+    """Test that existing behavior is unchanged when no proxy fields are set."""
+    config = UpstreamHeaderAuthConfig(
+        principal_header="x-user-id",
+    )
+    provider = UpstreamHeaderAuthProvider(config)
+    scope = {
+        "headers": [(b"x-user-id", b"alice")],
+    }
+    user = await provider.validate_token("", scope)
+    assert user.principal == "alice"
+
+
+# Trusted proxy verification — middleware integration tests
+
+
+def test_middleware_cidr_rejection_returns_403(suppress_auth_errors):
+    """Test that CIDR rejection returns HTTP 403 through the middleware."""
+    app = FastAPI()
+    auth_config = AuthenticationConfig(
+        provider_config=UpstreamHeaderAuthConfig(
+            type=AuthProviderType.UPSTREAM_HEADER,
+            principal_header="x-user-id",
+            trusted_proxy_cidrs=["10.0.0.0/8"],
+        ),
+        access_policy=[],
+    )
+    app.add_middleware(AuthenticationMiddleware, auth_config=auth_config)
+
+    @app.get("/test")
+    def test_endpoint():
+        return {"message": "ok"}
+
+    client = TestClient(app)
+    response = client.get(
+        "/test",
+        headers={"x-user-id": "alice"},
+    )
+    assert response.status_code == 403

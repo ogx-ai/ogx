@@ -68,7 +68,7 @@ def _setups_from_changed_files(changed_files: list[str]) -> set[str] | None:
                 matched = True
                 break
 
-        if not matched and filepath.startswith("src/ogx/providers/remote/inference/"):
+        if not matched:
             return None
 
     return setups

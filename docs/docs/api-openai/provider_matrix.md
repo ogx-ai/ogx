@@ -19,13 +19,13 @@ inference provider, based on integration test results.
 
 | Provider | Tested | Passing | Failing | Coverage |
 |----------|--------|---------|---------|----------|
-| azure | 111 | 111 | 0 | 82% |
+| azure | 112 | 112 | 0 | 82% |
 | bedrock | 27 | 27 | 0 | 20% |
 | ollama | 3 | 3 | 0 | 2% |
-| openai | 136 | 136 | 0 | 100% |
-| vertexai | 70 | 70 | 0 | 52% |
+| openai | 137 | 137 | 0 | 100% |
+| vertexai | 70 | 70 | 0 | 51% |
 | vllm | 3 | 3 | 0 | 2% |
-| watsonx | 61 | 61 | 0 | 45% |
+| watsonx | 62 | 62 | 0 | 45% |
 
 ## Provider Details
 
@@ -147,6 +147,7 @@ Models, endpoints, and versions used during test recordings.
 | with top p and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with top p streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with truncation and previous response | ✅ | — | — | ✅ | ✅ | — | ✅ |
+| with truncation auto | ✅ | — | — | ✅ | ⏭️ | — | ✅ |
 | with truncation disabled | ✅ | — | — | ✅ | ✅ | — | ✅ |
 | with truncation disabled streaming | ✅ | — | — | ✅ | ✅ | — | ✅ |
 

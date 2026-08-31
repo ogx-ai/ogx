@@ -308,6 +308,24 @@ This allows you to:
 
 The server supports multiple authentication providers:
 
+#### Local API Key Provider
+
+Validates a shared secret API key against a list of allowed keys:
+
+```yaml
+server:
+  auth:
+    provider_config:
+      type: "local_api_key"
+      api_keys:
+      - "ogk_mykey1"
+      - "ogk_mykey2"
+```
+
+This is the simplest authentication provider — any key in the list authenticates successfully and is granted `admin` and `owner` [roles](../configuration.mdx#access-control) so the default owner-based access-controls work out of the box. Use it for development, internal services, or when you prefer to manage keys outside an identity provider.
+
+The token is validated as `Authorization: Bearer <key>` and the key string itself becomes the user principal. Because this provider does not resolve a `tenant_id`, it is only compatible with `server.tenancy.mode` `single` or `disabled` — startup will fail with `multi`.
+
 #### OAuth 2.0/OpenID Connect Provider with Kubernetes
 
 The server can be configured to use service account tokens for authorization, validating these against the Kubernetes API server, e.g.:

@@ -10,6 +10,16 @@ from ogx_api.openai_responses import OpenAIResponseInputToolFileSearch
 from ogx_api.vector_io import SearchRankingOptions, VectorStoreSearchResponsePage
 
 
+def test_ranking_options_schema_documents_supported_rankers():
+    """The API schema should explain which ranker values OGX supports."""
+    ranker_schema = SearchRankingOptions.model_json_schema()["properties"]["ranker"]
+
+    description = ranker_schema.get("description")
+    assert description
+    for ranker in ("weighted", "rrf", "neural", "classifier"):
+        assert ranker in description
+
+
 async def test_file_search_forwards_ranking_options_weights(mock_vector_io_api):
     """Test that file_search forwards ranking_options.weights to vector store search."""
     query = "What is machine learning?"

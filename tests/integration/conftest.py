@@ -318,7 +318,7 @@ def pytest_generate_tests(metafunc):
     metafunc.parametrize(params, value_combinations, scope="session", ids=test_ids if test_ids else None)
 
 
-def pytest_ignore_collect(path: str, config: pytest.Config) -> bool:
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool:
     """Skip collecting paths outside the selected suite roots for speed."""
     suite = config.getoption("--suite")
     if not suite:
@@ -329,7 +329,7 @@ def pytest_ignore_collect(path: str, config: pytest.Config) -> bool:
     if not roots:
         return False
 
-    p = Path(str(path)).resolve()
+    p = collection_path.resolve()
 
     # Only constrain within tests/integration to avoid ignoring unrelated tests
     integration_root = (Path(str(config.rootpath)) / "tests" / "integration").resolve()

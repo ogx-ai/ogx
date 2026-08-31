@@ -10,19 +10,16 @@ This module defines the FastAPI router for the /v1/interactions endpoint,
 serving the Google Interactions API format.
 """
 
-import asyncio
-import contextvars
-import json
 import logging  # allow-direct-logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
 
 from ogx_api.common.errors import ModelNotFoundError
 from ogx_api.router_utils import standard_responses
+from ogx_api.utils import _preserve_context_for_sse, create_sse_event_with_type, sse_stream
 from ogx_api.version import OGX_API_V1ALPHA
 
 from .api import Interactions
@@ -36,59 +33,19 @@ from .models import (
 logger = logging.LoggerAdapter(logging.getLogger(__name__), {"category": "interactions"})
 
 
-def _create_google_sse_event(event_type: str, data: Any) -> str:
-    """Create a Google-format SSE event with named event type.
-
-    Google SSE format: event: <type>\ndata: <json>\n\n
-    """
-    if isinstance(data, BaseModel):
-        data = data.model_dump_json()
-    else:
-        data = json.dumps(data)
-    return f"event: {event_type}\ndata: {data}\n\n"
+def _format_google_sse_event(event: Any) -> str:
+    """Format a Google stream event as a named SSE event."""
+    event_type = event.event_type if hasattr(event, "event_type") else "unknown"
+    return create_sse_event_with_type(event_type, event)
 
 
-async def _google_sse_generator(event_gen: AsyncIterator) -> AsyncIterator[str]:
-    """Convert an async generator of Google stream events to SSE format."""
-    try:
-        async for event in event_gen:
-            event_type = event.event_type if hasattr(event, "event_type") else "unknown"
-            yield _create_google_sse_event(event_type, event)
-    except asyncio.CancelledError:
-        if hasattr(event_gen, "aclose"):
-            await event_gen.aclose()
-        raise
-    except Exception as e:
-        logger.exception("Error in Google SSE generator")
-        error_resp = GoogleErrorResponse(
-            error=_GoogleErrorDetail(code=500, message=str(e)),
-        )
-        yield _create_google_sse_event("error", error_resp)
-
-
-def _preserve_context_for_sse(event_gen):
-    """Preserve request context for SSE streaming.
-
-    StreamingResponse runs in a different task, losing request contextvars.
-    This wrapper captures and restores the context.
-    """
-    context = contextvars.copy_context()
-
-    async def wrapper():
-        try:
-            while True:
-                try:
-                    task = context.run(asyncio.create_task, event_gen.__anext__())
-                    item = await task
-                except StopAsyncIteration:
-                    break
-                yield item
-        except (asyncio.CancelledError, GeneratorExit):
-            if hasattr(event_gen, "aclose"):
-                await event_gen.aclose()
-            raise
-
-    return wrapper()
+def _format_google_sse_error_event(e: Exception) -> str:
+    """Log and format an SSE stream error as a Google error event."""
+    logger.exception("Error in Google SSE generator")
+    error_resp = GoogleErrorResponse(
+        error=_GoogleErrorDetail(code=500, message=str(e)),
+    )
+    return create_sse_event_with_type("error", error_resp)
 
 
 def _google_error_response(status_code: int, message: str) -> JSONResponse:
@@ -156,7 +113,13 @@ def create_router(impl: Interactions) -> APIRouter:
             return result
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
-                _preserve_context_for_sse(_google_sse_generator(cast(AsyncIterator[Any], result))),
+                _preserve_context_for_sse(
+                    sse_stream(
+                        cast(AsyncIterator[Any], result),
+                        _format_google_sse_event,
+                        _format_google_sse_error_event,
+                    )
+                ),
                 media_type="text/event-stream",
             )
 

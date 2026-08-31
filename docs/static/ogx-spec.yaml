@@ -11738,6 +11738,12 @@ components:
           type: string
           title: File Id
           description: The ID of the file to attach.
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional provider-specific file processing parameters.
         attributes:
           anyOf:
           - additionalProperties:
@@ -12444,6 +12450,7 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+          description: Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and "classifier". Other string values are accepted for OpenAI API compatibility but are not supported.
         score_threshold:
           anyOf:
           - type: number

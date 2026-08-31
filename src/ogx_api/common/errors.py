@@ -169,6 +169,27 @@ class ConversationNotFoundError(ResourceNotFoundError):
         super().__init__(conversation_id, resource_type="Conversation")
 
 
+class PromptNotFoundError(ResourceNotFoundError):
+    """raised when OGX cannot find a referenced prompt"""
+
+    def __init__(self, prompt_id: str) -> None:
+        super().__init__(prompt_id, resource_type="Prompt", client_command="prompts.list")
+
+
+class PromptVersionNotFoundError(ResourceNotFoundError):
+    """raised when OGX cannot find a referenced version within a prompt"""
+
+    def __init__(self, version: int, prompt_id: str) -> None:
+        super().__init__(
+            str(version),
+            resource_type="Prompt version",
+            client_command="prompts.list_versions",
+            client_command_args=prompt_id,
+            resource_name_plural="prompt versions",
+            parent_resource=f"prompt '{prompt_id}'",
+        )
+
+
 class ConversationItemNotFoundError(ResourceNotFoundError):
     """raised when OGX cannot find a referenced item within a conversation"""
 
@@ -260,6 +281,15 @@ class AuthServiceUnavailableError(OGXError):
     """raised when the authentication infrastructure is unreachable"""
 
     status_code: httpx.codes = httpx.codes.SERVICE_UNAVAILABLE
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class UntrustedProxyError(OGXError):
+    """raised when a request fails trusted-proxy verification (CIDR allowlist)"""
+
+    status_code: httpx.codes = httpx.codes.FORBIDDEN
 
     def __init__(self, message: str) -> None:
         super().__init__(message)

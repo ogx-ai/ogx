@@ -99,6 +99,8 @@ from .common.errors import (
     ConversationNotFoundError,
     InternalServerError,
     InvalidParameterError,
+    PromptNotFoundError,
+    PromptVersionNotFoundError,
     ModelNotFoundError,
     ModelTypeError,
     OpenAIFileObjectNotFoundError,
@@ -109,6 +111,7 @@ from .common.errors import (
     TokenValidationError,
     ToolGroupNotFoundError,
     UnsupportedModelError,
+    UntrustedProxyError,
     VectorStoreNotFoundError,
 )
 from .common.job_types import Job, JobStatus
@@ -948,6 +951,8 @@ __all__ = [
     "ProcessFileRequest",
     "ProcessFileResponse",
     "Prompt",
+    "PromptNotFoundError",
+    "PromptVersionNotFoundError",
     "Prompts",
     "CreatePromptRequest",
     "DeletePromptRequest",
@@ -1019,6 +1024,7 @@ __all__ = [
     "TopKSamplingStrategy",
     "TopPSamplingStrategy",
     "UnsupportedModelError",
+    "UntrustedProxyError",
     "UploadFileRequest",
     "URL",
     "_URLOrData",
