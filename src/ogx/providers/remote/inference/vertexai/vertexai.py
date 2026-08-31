@@ -191,14 +191,9 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         _ensure_http_options() and create httpx.AsyncClient in the wrong event loop.
         The client will be created on first use via _get_client().
         """
-        if self.config.thought_signature_store is not None:
-            kv = await kvstore_impl(self.config.thought_signature_store)
-            self._thought_signature_store = ThoughtSignatureStore(kv)
-            logger.info(
-                "VertexAI thought_signature store configured",
-                backend=self.config.thought_signature_store.backend,
-                namespace=self.config.thought_signature_store.namespace,
-            )
+        if (ref := self.config.thought_signature_store) is not None:
+            self._thought_signature_store = ThoughtSignatureStore(await kvstore_impl(ref))
+            logger.info("VertexAI thought_signature store configured", backend=ref.backend, namespace=ref.namespace)
         try:
             # Don't create the client here - it will be created lazily on first use
             # This avoids calling _ensure_http_options() in the temporary startup event loop
@@ -789,11 +784,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         messages = list(await asyncio.gather(*[self._localize_image_url(message) for message in params.messages]))
         store = self._thought_signature_store
         call_ids = converters.collect_tool_call_ids(messages) if store else []
-        signature_by_call_id = await store.get_many(call_ids) if store and call_ids else {}
-        system_instruction, contents = converters.convert_openai_messages_to_gemini(
-            messages,
-            signature_by_call_id or None,
-        )
+        signature_by_call_id = (await store.get_many(call_ids) or None) if store and call_ids else None
+        system_instruction, contents = converters.convert_openai_messages_to_gemini(messages, signature_by_call_id)
         tools_input = converters.convert_openai_tools_to_gemini(tools)
         config = self._build_generation_config(
             params,
@@ -823,12 +815,10 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         )
         signatures: dict[str, str] = {}
         completion = converters.convert_gemini_response_to_openai(
-            response=response,
-            model=params.model,
-            signatures_out=signatures,
+            response=response, model=params.model, signatures_out=signatures
         )
-        if self._thought_signature_store is not None and signatures:
-            await self._thought_signature_store.put_many(signatures)
+        if store is not None and signatures:
+            await store.put_many(signatures)
         return completion
 
     @staticmethod
