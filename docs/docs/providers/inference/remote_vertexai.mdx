@@ -11,6 +11,7 @@ description: |
   - Set VERTEX_AI_PROJECT environment variable (required)
   - Set VERTEX_AI_LOCATION environment variable (optional, defaults to global)
   - Use Google Cloud Application Default Credentials or service account key
+  - For Gemini 3 tool loops, set thought_signature_store to a shared KV backend
 
   Authentication Setup:
   Option 1 (Recommended): gcloud auth application-default login
@@ -38,6 +39,7 @@ Configuration:
 - Set VERTEX_AI_PROJECT environment variable (required)
 - Set VERTEX_AI_LOCATION environment variable (optional, defaults to global)
 - Use Google Cloud Application Default Credentials or service account key
+- For Gemini 3 tool loops, set thought_signature_store to a shared KV backend
 
 Authentication Setup:
 Option 1 (Recommended): gcloud auth application-default login
@@ -72,10 +74,16 @@ Short names like vertexai/gemini-2.5-flash also work in API requests.
 | `network.headers` | `dict[str, str] \| None` | No |  | Additional HTTP headers to include in all requests. |
 | `project` | `str` | No |  | Google Cloud project ID for Vertex AI |
 | `location` | `str` | No | global | Google Cloud location for Vertex AI |
+| `thought_signature_store` | `KVStoreReference \| None` | No |  | KV store for Gemini thought_signature values (keyed by tool call id). Needed for multi-worker / restart-safe Gemini 3 tool loops; use a shared backend (Redis/Postgres) across replicas. |
+| `thought_signature_store.namespace` | `str` | No |  | Key prefix for KVStore backends |
+| `thought_signature_store.backend` | `str` | No |  | Name of backend from storage.backends |
 
 ## Sample Configuration
 
 ```yaml
 project: ${env.VERTEX_AI_PROJECT:=}
 location: ${env.VERTEX_AI_LOCATION:=global}
+thought_signature_store:
+  namespace: vertexai_thought_signatures
+  backend: kv_default
 ```

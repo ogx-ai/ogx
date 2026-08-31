@@ -331,7 +331,7 @@ class TestTelemetryStreamOptions:
         monkeypatch.setattr(adapter, "_build_generation_config", lambda *_args, **_kwargs: object())
         monkeypatch.setattr(
             "ogx.providers.remote.inference.vertexai.vertexai.converters.convert_openai_messages_to_gemini",
-            lambda messages: (None, [{"role": "user", "parts": [{"text": "ok"}]}]),
+            lambda messages, signature_by_call_id=None: (None, [{"role": "user", "parts": [{"text": "ok"}]}]),
         )
         monkeypatch.setattr(
             "ogx.providers.remote.inference.vertexai.vertexai.converters.convert_openai_tools_to_gemini",

@@ -198,6 +198,7 @@ Configuration:
 - Set VERTEX_AI_PROJECT environment variable (required)
 - Set VERTEX_AI_LOCATION environment variable (optional, defaults to global)
 - Use Google Cloud Application Default Credentials or service account key
+- For Gemini 3 tool loops, set thought_signature_store to a shared KV backend
 
 Authentication Setup:
 Option 1 (Recommended): gcloud auth application-default login
