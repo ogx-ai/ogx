@@ -1,5 +1,5 @@
 name: 'Setup Test Environment'
-description: 'Common setup steps for integration tests including dependencies, providers, and build'
+description: 'Common setup steps for integration tests including runner dependencies, provider setup, and caches'
 
 inputs:
   python-version:
@@ -118,14 +118,10 @@ runs:
         echo "All installed ogx packages:"
         uv pip list | grep ogx || true
 
-    - name: Build OGX
-      shell: bash
-      run: |
-        # Client is already installed by setup-runner (handles both main and release branches)
-        echo "Building OGX"
-
-        OGX_DIR=. \
-          uv run --no-sync ogx stack list-deps ci-tests | xargs -L1 uv pip install
+    # Provider dependencies for the stack config are no longer installed here.
+    # scripts/integration-tests.sh installs them via its --install-deps flag
+    # (passed by the run-and-record-tests action), so CI and local runs share
+    # the same setup path.
 
     - name: Configure git for commits
       shell: bash
