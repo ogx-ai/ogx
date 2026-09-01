@@ -367,7 +367,7 @@ class VectorStoreWithIndex:
             reranker_params["neural_weights"] = params["neural_weights"]
 
         query_string = interleaved_content_as_str(request.query)
-        log.debug("query_chunks", query=query_string, mode=mode, k=k, reranker_type=reranker_type)
+        log.debug("Querying chunks", mode=mode, k=k, reranker_type=reranker_type, has_filters=filters is not None)
 
         if mode == "keyword":
             response = await self.index.query_keyword(query_string, k, score_threshold, filters)
@@ -393,16 +393,7 @@ class VectorStoreWithIndex:
             else:
                 response = await self.index.query_vector(query_vector, k, score_threshold, filters)
 
-        log.debug("query_chunks retrieved chunks before neural reranking", chunks_count=len(response.chunks))
-        for i, (chunk, score) in enumerate(zip(response.chunks, response.scores, strict=False)):
-            preview = chunk.content[:120] if isinstance(chunk.content, str) else str(chunk.content)[:120]
-            log.debug(
-                "Retrieved chunk preview",
-                chunk_index=i,
-                score=f"{score:.4f}",
-                document_id=chunk.metadata.get("document_id", "N/A"),
-                content=preview,
-            )
+        log.debug("Retrieved chunks before neural reranking", chunk_count=len(response.chunks))
 
         # Apply neural reranking if enabled
         if neural_reranking_enabled and response.chunks:
@@ -464,10 +455,10 @@ class VectorStoreWithIndex:
             )
 
         except Exception as e:
-            log.error(f"Neural reranking failed: {e}. Returning original results.")
+            log.error("Failed to neural rerank chunks, returning original results", error=str(e))
             return response
 
-        log.debug("Rerank response", data=rerank_response.data)
+        log.debug("Received neural rerank response", result_count=len(rerank_response.data))
 
         # Reorder chunks and scores based on neural rerank results
         reranked_chunks = []
@@ -477,16 +468,7 @@ class VectorStoreWithIndex:
                 reranked_chunks.append(response.chunks[reranked_chunk.index])
                 reranked_scores.append(reranked_chunk.relevance_score)
 
-        log.info(f"Neural rerank: reranked {len(reranked_chunks)} chunks using model={reranker_model}")
-        for i, (chunk, score) in enumerate(zip(reranked_chunks, reranked_scores, strict=False)):
-            preview = chunk.content[:120] if isinstance(chunk.content, str) else str(chunk.content)[:120]
-            log.debug(
-                "Reranked chunk preview",
-                chunk_index=i,
-                relevance_score=f"{score:.4f}",
-                document_id=chunk.metadata.get("document_id", "N/A"),
-                content=preview,
-            )
+        log.debug("Neural rerank completed", chunk_count=len(reranked_chunks), model=reranker_model)
 
         return QueryChunksResponse(chunks=reranked_chunks, scores=reranked_scores)
 
