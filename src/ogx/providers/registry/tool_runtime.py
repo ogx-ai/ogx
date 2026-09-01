@@ -90,7 +90,7 @@ def available_providers() -> list[ProviderSpec]:
             provider_type="remote::model-context-protocol",
             module="ogx.providers.remote.tool_runtime.model_context_protocol",
             config_class="ogx.providers.remote.tool_runtime.model_context_protocol.config.MCPProviderConfig",
-            pip_packages=["mcp>=1.23.0"],
+            pip_packages=["mcp>=1.23.0,<2.0"],
             provider_data_validator="ogx.providers.remote.tool_runtime.model_context_protocol.config.MCPProviderDataValidator",
             description="Model Context Protocol (MCP) tool for standardized tool calling and context management.",
         ),
