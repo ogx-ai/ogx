@@ -227,7 +227,7 @@ Some tips about common tasks you work on while contributing to OGX:
 
 ### Installing dependencies of distributions
 
-When installing dependencies for a distribution, you can use `ogx list-deps` to view and install the required packages.
+When installing dependencies for a distribution, you can use `ogx stack list-deps` to view and install the required packages.
 
 Example:
 
@@ -238,10 +238,10 @@ git clone https://github.com/ogx-ai/ogx-client-python.git
 cd ogx
 
 # Show dependencies for a distribution
-ogx list-deps <distro-name>
+ogx stack list-deps <distro-name>
 
 # Install dependencies
-ogx list-deps <distro-name> | xargs -L1 uv pip install
+ogx stack list-deps <distro-name> | xargs -L1 uv pip install
 ```
 
 ### Updating distribution configurations

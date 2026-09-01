@@ -352,6 +352,26 @@ repos:
         language: system
         types: [python]
         pass_filenames: true
+      - id: no-stale-list-deps-cli
+        name: Block removed llama CLI and invalid top-level ogx list-deps
+        entry: bash
+        language: system
+        pass_filenames: true
+        files: '^(docs/|.*\.mdx?$)'
+        args:
+          - -c
+          - |
+            matches=$(grep -EnH '\bllama stack list-deps\b|\bogx list-deps\b' "$@" || true)
+            if [ -n "$matches" ]; then
+              echo
+              echo "Stale list-deps CLI usage found."
+              echo "The 'llama' CLI entry point was removed and there is no top-level 'ogx list-deps' command."
+              echo "Use 'ogx stack list-deps' instead."
+              echo
+              echo "$matches"
+              exit 1
+            fi
+            exit 0
 
 # markdownlint must run after distro-codegen and provider-codegen which generate markdown files
 -   repo: https://github.com/igorshubovych/markdownlint-cli
