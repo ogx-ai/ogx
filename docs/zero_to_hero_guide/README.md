@@ -50,7 +50,7 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
    ```
 
    **Note**:
-     - The supported models for ogx for now is listed in the [Ollama models file](https://github.com/ogx-ai/ogx/blob/main/ogx/providers/remote/inference/ollama/models.py)
+     - Browse the [Ollama model library](https://ollama.com/library) for models available to run locally.
      - `keepalive -1m` is used so that ollama continues to keep the model in memory indefinitely. Otherwise, ollama frees up memory and you would have to run `ollama run` again.
 
 ---
@@ -295,12 +295,12 @@ This command initializes the model to interact with your local OGX instance.
 **Explore Client SDKs**: Utilize our client SDKs for various languages to integrate OGX into your applications:
 
 - [Python SDK](https://github.com/ogx-ai/ogx-client-python)
-- [Node SDK](https://github.com/ogx-ai/ogx-client-node)
-- [Swift SDK](https://github.com/ogx-ai/ogx-client-swift)
-- [Kotlin SDK](https://github.com/ogx-ai/ogx-client-kotlin)
+- [Node SDK](https://github.com/ogx-ai/ogx-client-typescript)
+- [Swift SDK](https://github.com/ogx-ai/llama-stack-client-swift)
+- [Kotlin SDK](https://github.com/ogx-ai/llama-stack-client-kotlin)
 
 **Advanced Configuration**: Learn how to customize your OGX distribution by referring to the [Building a OGX Distribution](https://ogx-ai.github.io/latest/distributions/building_distro.html) guide.
 
-**Explore Example Apps**: Check out [ogx-apps](https://github.com/ogx-ai/ogx-apps/tree/main/examples) for example applications built using OGX.
+**Explore Example Apps**: Check out [Llama Stack Apps](https://github.com/ogx-ai/llama-stack-apps/tree/main/examples) for example applications built using OGX.
 
 ---
