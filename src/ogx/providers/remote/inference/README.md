@@ -19,6 +19,7 @@ inference/
   oci/                 # Oracle Cloud Infrastructure GenAI
   ollama/              # Ollama (local model serving)
   openai/              # OpenAI API
+  passthrough/         # Generic passthrough to any endpoint
   runpod/              # RunPod cloud GPU
   sambanova/           # SambaNova
   tgi/                 # HuggingFace TGI and Inference API

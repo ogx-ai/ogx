@@ -17,6 +17,7 @@ utils/
   tools/               # Tool utilities (MCP client, TTL cache)
   vector_io/           # Vector I/O utilities
   __init__.py
+  forward_headers.py   # Provider data header forwarding
 ```
 
 ## Key Components
