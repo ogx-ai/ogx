@@ -294,13 +294,13 @@ This command initializes the model to interact with your local OGX instance.
 
 **Explore Client SDKs**: Utilize our client SDKs for various languages to integrate OGX into your applications:
 
-- [Python SDK](https://github.com/ogx-ai/ogx-client-python)
-- [Node SDK](https://github.com/ogx-ai/ogx-client-node)
-- [Swift SDK](https://github.com/ogx-ai/ogx-client-swift)
-- [Kotlin SDK](https://github.com/ogx-ai/ogx-client-kotlin)
+- [Python SDK](https://github.com/ogx-ai/ogx-client-python) *(archived)*
+- [Node SDK](https://github.com/ogx-ai/ogx-client-node) *(archived)*
+- [Swift SDK](https://github.com/ogx-ai/ogx-client-swift) *(archived)*
+- [Kotlin SDK](https://github.com/ogx-ai/ogx-client-kotlin) *(archived)*
 
 **Advanced Configuration**: Learn how to customize your OGX distribution by referring to the [Building a OGX Distribution](https://ogx-ai.github.io/latest/distributions/building_distro.html) guide.
 
-**Explore Example Apps**: Check out [ogx-apps](https://github.com/ogx-ai/ogx-apps/tree/main/examples) for example applications built using OGX.
+**Explore Example Apps**: Check out [ogx-apps](https://github.com/ogx-ai/ogx-apps/tree/main/examples) *(archived)* for example applications built using OGX.
 
 ---
