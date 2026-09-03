@@ -146,12 +146,14 @@ class CommonRoutingTableImpl(RoutingTable):
 
         # Get objects from disk registry
         obj = self.dist_registry.get_cached(objtype, routing_key)
-        if not obj:
+        if not obj or obj.provider_id not in self.impls_by_provider_id:
             provider_ids = list(self.impls_by_provider_id.keys())
             if len(provider_ids) > 1:
                 provider_ids_str = f"any of the providers: {', '.join(provider_ids)}"
-            else:
+            elif len(provider_ids) == 1:
                 provider_ids_str = f"provider: `{provider_ids[0]}`"
+            else:
+                provider_ids_str = "any active provider"
             raise ValueError(
                 f"{objtype.capitalize()} `{routing_key}` not served by {provider_ids_str}. Make sure there is an {apiname} provider serving this {objtype}."
             )
@@ -179,7 +181,8 @@ class CommonRoutingTableImpl(RoutingTable):
         if not is_action_allowed(self.policy, "delete", obj, user):
             raise AccessDeniedError("delete", obj, user)
         await self.dist_registry.delete(obj.type, obj.identifier)
-        await unregister_object_from_provider(obj, self.impls_by_provider_id[obj.provider_id])
+        if obj.provider_id in self.impls_by_provider_id:
+            await unregister_object_from_provider(obj, self.impls_by_provider_id[obj.provider_id])
 
     async def register_object(self, obj: RoutableObjectWithProvider) -> RoutableObjectWithProvider:
         # if provider_id is not specified, pick an arbitrary one from existing entries

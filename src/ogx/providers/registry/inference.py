@@ -218,6 +218,7 @@ Configuration:
 - Set VERTEX_AI_PROJECT environment variable (required)
 - Set VERTEX_AI_LOCATION environment variable (optional, defaults to global)
 - Use Google Cloud Application Default Credentials or service account key
+- For Gemini 3 tool loops, set thought_signature_store to a shared KV backend
 
 Authentication Setup:
 Option 1 (Recommended): gcloud auth application-default login
@@ -266,6 +267,16 @@ Short names like vertexai/gemini-2.5-flash also work in API requests.""",
             config_class="ogx.providers.remote.inference.sambanova.SambaNovaImplConfig",
             provider_data_validator="ogx.providers.remote.inference.sambanova.config.SambaNovaProviderDataValidator",
             description="SambaNova inference provider for running models on SambaNova's dataflow architecture.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
+            adapter_type="passthrough",
+            provider_type="remote::passthrough",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.passthrough",
+            config_class="ogx.providers.remote.inference.passthrough.PassthroughImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.passthrough.PassthroughProviderDataValidator",
+            description="Passthrough inference provider for connecting to any external inference service not directly supported.",
         ),
         RemoteProviderSpec(
             api=Api.inference,

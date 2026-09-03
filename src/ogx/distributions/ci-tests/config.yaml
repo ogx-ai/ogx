@@ -73,6 +73,9 @@ providers:
     config:
       project: ${env.VERTEX_AI_PROJECT:=}
       location: ${env.VERTEX_AI_LOCATION:=global}
+      thought_signature_store:
+        namespace: vertexai_thought_signatures
+        backend: kv_default
   - provider_id: groq
     provider_type: remote::groq
     config:

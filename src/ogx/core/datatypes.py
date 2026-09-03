@@ -400,6 +400,30 @@ class UpstreamHeaderAuthConfig(BaseModel):
             "Example: {'X-MaaS-Group': 'teams', 'X-MaaS-Subscription': 'namespaces'}"
         ),
     )
+    trusted_proxy_cidrs: list[str] | None = Field(
+        default=None,
+        description=(
+            "CIDR allowlist for trusted proxy source IPs. "
+            "When set, requests from IPs outside these ranges are rejected with 403. "
+            "Example: ['10.96.0.0/12', '10.244.0.0/16']"
+        ),
+    )
+
+    @field_validator("trusted_proxy_cidrs")
+    @classmethod
+    def validate_cidrs(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        import ipaddress
+
+        if not v:
+            raise ValueError("trusted_proxy_cidrs must contain at least one entry when set")
+        for cidr in v:
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as e:
+                raise ValueError(f"Invalid CIDR notation '{cidr}': {e}") from e
+        return v
 
 
 AuthProviderConfig = Annotated[

@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import ipaddress
 import json
 import re
 import ssl
@@ -29,7 +30,7 @@ from ogx.core.datatypes import (
     _validate_tenant_id,
 )
 from ogx.log import get_logger
-from ogx_api import AuthServiceUnavailableError, TokenValidationError
+from ogx_api import AuthServiceUnavailableError, TokenValidationError, UntrustedProxyError
 
 logger = get_logger(name=__name__, category="core::auth")
 
@@ -666,18 +667,44 @@ class UpstreamHeaderAuthProvider(AuthProvider):
     Used when an upstream gateway (Authorino, Istio, or any reverse proxy) handles
     authentication and injects user identity into request headers. This provider
     trusts the headers and performs no token validation or outbound calls.
+
+    When trusted_proxy_cidrs is configured, requests are verified against the
+    CIDR allowlist before identity headers are read.
     """
 
     def __init__(self, config: UpstreamHeaderAuthConfig) -> None:
         self.config = config
+        self._trusted_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None = None
+        if config.trusted_proxy_cidrs:
+            self._trusted_networks = [ipaddress.ip_network(cidr, strict=False) for cidr in config.trusted_proxy_cidrs]
 
     @property
     def requires_http_bearer(self) -> bool:
         return False
 
+    def _verify_proxy_cidr(self, scope: Scope) -> None:
+        assert self._trusted_networks is not None
+        client = scope.get("client")
+        if not client:
+            raise UntrustedProxyError("Request rejected: unable to determine client IP for proxy verification")
+        client_ip_str = client[0]
+        try:
+            client_ip = ipaddress.ip_address(client_ip_str)
+        except ValueError as err:
+            logger.warning("Failed to parse client IP for proxy verification", client_ip=client_ip_str)
+            raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist") from err
+        for network in self._trusted_networks:
+            if client_ip in network:
+                return
+        logger.warning("Client IP not in trusted proxy CIDR allowlist", client_ip=client_ip_str)
+        raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist")
+
     async def validate_token(self, token: str, scope: Scope | None = None) -> User:
         if scope is None:
             raise ValueError("Missing required authentication header: " + self.config.principal_header)
+
+        if self._trusted_networks is not None:
+            self._verify_proxy_cidr(scope)
 
         headers = dict(scope.get("headers", []))
 

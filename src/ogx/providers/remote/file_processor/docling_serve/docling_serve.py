@@ -9,11 +9,15 @@ import time
 import uuid
 from io import BytesIO
 from typing import Any
+from zipfile import ZipFile
 
 import httpx
 from docling.datamodel.base_models import OutputFormat
+from docling.datamodel.service.chunking import HybridChunkerOptions
 from docling.datamodel.service.options import ConvertDocumentsOptions
-from docling.service_client import AsyncDoclingServiceClient, ChunkerKind
+from docling.datamodel.service.responses import ChunkedDocumentResultItem
+from docling.datamodel.service.targets import ZipTarget
+from docling.service_client import AsyncDoclingServiceClient, RawServiceResult
 from docling_core.types.io import DocumentStream
 from fastapi import UploadFile
 
@@ -74,6 +78,85 @@ class DoclingServeFileProcessor:
             headers["X-Api-Key"] = self.config.api_key.get_secret_value()
         return headers
 
+    def _get_max_tokens(self, chunking_strategy: VectorStoreChunkingStrategy) -> int:
+        if chunking_strategy.type == "static":
+            return chunking_strategy.static.max_chunk_size_tokens
+        return self.config.default_chunk_size_tokens
+
+    def _get_chunking_options(
+        self,
+        chunking_strategy: VectorStoreChunkingStrategy,
+        request_options: dict[str, Any] | None,
+    ) -> HybridChunkerOptions:
+        use_markdown_tables = (request_options or {}).get("use_markdown_tables", False)
+        if not isinstance(use_markdown_tables, bool):
+            raise InvalidParameterError(
+                param_name="options.use_markdown_tables",
+                value=use_markdown_tables,
+                constraint="Must be a boolean.",
+            )
+
+        return HybridChunkerOptions(
+            max_tokens=self._get_max_tokens(chunking_strategy),
+            use_markdown_tables=use_markdown_tables,
+        )
+
+    def _chunks_from_archive(
+        self,
+        content: bytes,
+        document_id: str,
+        document_metadata: dict[str, Any],
+    ) -> list[Chunk]:
+        with ZipFile(BytesIO(content)) as archive:
+            chunk_files = [name for name in archive.namelist() if name.endswith(".chunks.jsonl")]
+            if not chunk_files:
+                raise ValueError("Failed to read Docling chunks: the response archive contains no chunks.jsonl file")
+
+            raw_chunks = [
+                ChunkedDocumentResultItem.model_validate_json(line)
+                for chunk_file in chunk_files
+                for line in archive.read(chunk_file).decode("utf-8").splitlines()
+                if line.strip()
+            ]
+
+        chunks: list[Chunk] = []
+        for raw_chunk in raw_chunks:
+            text = raw_chunk.text
+            if not text.strip():
+                continue
+
+            chunk_window = str(raw_chunk.chunk_index)
+            chunk_id = generate_chunk_id(document_id, text, chunk_window)
+            metadata: dict[str, Any] = {
+                "document_id": document_id,
+                **document_metadata,
+            }
+            metadata.update(
+                structural_metadata_as_attributes(
+                    headings=raw_chunk.headings,
+                    page_numbers=raw_chunk.page_numbers,
+                )
+            )
+
+            chunks.append(
+                Chunk(
+                    content=text,
+                    chunk_id=chunk_id,
+                    metadata=metadata,
+                    chunk_metadata=ChunkMetadata(
+                        chunk_id=chunk_id,
+                        document_id=document_id,
+                        source=document_metadata.get("filename", ""),
+                        content_token_count=(
+                            raw_chunk.num_tokens if raw_chunk.num_tokens is not None else len(text.split())
+                        ),
+                        chunk_window=chunk_window,
+                    ),
+                )
+            )
+
+        return chunks
+
     async def process_file(
         self,
         request: ProcessFileRequest,
@@ -119,11 +202,17 @@ class DoclingServeFileProcessor:
                 log.info(
                     "Converting with async endpoints using AsyncDoclingServiceClient from docling-slim",
                     mode=self.config.mode,
-                    sdk_version="docling-slim>=2.95.0",
+                    sdk_version="docling-slim>=2.117.0",
                 )
                 if chunking_strategy:
                     chunks = await self._convert_and_chunk_async(
-                        content, filename, mime_type, document_id, chunking_strategy, document_metadata
+                        content,
+                        filename,
+                        mime_type,
+                        document_id,
+                        chunking_strategy,
+                        document_metadata,
+                        request.options,
                     )
                 else:
                     chunks = await self._convert_no_chunk_async(
@@ -147,7 +236,13 @@ class DoclingServeFileProcessor:
             log.info("Using sync endpoints", mode=self.config.mode)
             if chunking_strategy:
                 chunks = await self._convert_and_chunk(
-                    content, filename, mime_type, document_id, chunking_strategy, document_metadata
+                    content,
+                    filename,
+                    mime_type,
+                    document_id,
+                    chunking_strategy,
+                    document_metadata,
+                    request.options,
                 )
             else:
                 chunks = await self._convert_no_chunk(content, filename, mime_type, document_id, document_metadata)
@@ -280,20 +375,16 @@ class DoclingServeFileProcessor:
         document_id: str,
         chunking_strategy: VectorStoreChunkingStrategy,
         document_metadata: dict[str, Any],
+        request_options: dict[str, Any] | None,
     ) -> list[Chunk]:
-        """Convert and chunk a file via Docling Serve's hybrid chunker endpoint."""
-        url = f"{self.config.base_url}/v1/chunk/hybrid/file"
+        """Convert and chunk a file via Docling Serve's synchronous convert endpoint."""
+        url = f"{self.config.base_url}/v1/convert/file"
         headers = self._get_headers()
-
-        if chunking_strategy.type == "auto":
-            max_tokens = self.config.default_chunk_size_tokens
-        elif chunking_strategy.type == "static":
-            max_tokens = chunking_strategy.static.max_chunk_size_tokens
-        else:
-            max_tokens = self.config.default_chunk_size_tokens
-
-        options: dict[str, str] = {
-            "chunking_max_tokens": str(max_tokens),
+        chunking_options = self._get_chunking_options(chunking_strategy, request_options)
+        options = {
+            "to_formats": [OutputFormat.CHUNKS.value],
+            "chunking_options": chunking_options.model_dump_json(exclude_none=True),
+            "target_type": "zip",
         }
 
         async with httpx.AsyncClient(timeout=300.0) as client:
@@ -306,69 +397,19 @@ class DoclingServeFileProcessor:
                 )
                 response.raise_for_status()
             except httpx.HTTPStatusError as e:
-                # Chunking endpoint not supported (e.g., IBM Docling SaaS)
+                # Chunk output is unavailable on older Docling Serve releases.
                 if e.response.status_code in (404, 405):
                     raise InvalidParameterError(
                         param_name="chunking_strategy",
                         value=chunking_strategy.model_dump() if chunking_strategy else None,
                         constraint=(
-                            "Chunking is not supported by this Docling instance. "
-                            "This is a known limitation of IBM Docling SaaS. "
-                            "Either remove 'chunking_strategy' from your request, "
-                            "or configure OGX to use local docling-serve for chunking support."
+                            "Chunk output through the convert endpoint is not supported by this Docling instance. "
+                            "Either remove 'chunking_strategy' from your request or upgrade Docling Serve."
                         ),
                     ) from e
                 raise
 
-        result = response.json()
-        raw_chunks = result.get("chunks", [])
-
-        if not raw_chunks:
-            return []
-
-        chunks: list[Chunk] = []
-        for i, raw_chunk in enumerate(raw_chunks):
-            text = raw_chunk.get("text", "")
-            if not text or not text.strip():
-                continue
-
-            chunk_window = str(i)
-            chunk_id = generate_chunk_id(document_id, text, chunk_window)
-
-            meta: dict[str, Any] = {
-                "document_id": document_id,
-                **document_metadata,
-            }
-
-            legacy_meta = raw_chunk.get("meta") or {}
-            headings = raw_chunk.get("headings")
-            legacy_headings = legacy_meta.get("headings")
-            page_numbers = raw_chunk.get("page_numbers") or legacy_meta.get("page_numbers")
-            meta.update(
-                structural_metadata_as_attributes(
-                    headings=headings,
-                    page_numbers=page_numbers,
-                )
-            )
-            if not headings and legacy_headings:
-                meta["headings"] = legacy_headings
-
-            chunks.append(
-                Chunk(
-                    content=text,
-                    chunk_id=chunk_id,
-                    metadata=meta,
-                    chunk_metadata=ChunkMetadata(
-                        chunk_id=chunk_id,
-                        document_id=document_id,
-                        source=document_metadata.get("filename", ""),
-                        content_token_count=len(text.split()),
-                        chunk_window=chunk_window,
-                    ),
-                )
-            )
-
-        return chunks
+        return self._chunks_from_archive(response.content, document_id, document_metadata)
 
     async def _convert_and_chunk_async(
         self,
@@ -378,8 +419,9 @@ class DoclingServeFileProcessor:
         document_id: str,
         chunking_strategy: VectorStoreChunkingStrategy,
         document_metadata: dict[str, Any],
+        request_options: dict[str, Any] | None,
     ) -> list[Chunk]:
-        """Convert and chunk file using async endpoints with AsyncDoclingServiceClient."""
+        """Convert and chunk a file via Docling Serve's asynchronous convert endpoint."""
         source = DocumentStream(name=filename, stream=BytesIO(content))
         async with AsyncDoclingServiceClient(
             url=self.config.base_url,
@@ -387,76 +429,31 @@ class DoclingServeFileProcessor:
             job_timeout=300.0,
         ) as client:
             try:
-                job = await client.submit_chunk(
+                job = await client.submit(
                     source=source,
-                    chunker=ChunkerKind.HYBRID,
-                    options=ConvertDocumentsOptions(),
+                    options=ConvertDocumentsOptions(
+                        to_formats=[OutputFormat.CHUNKS],
+                        chunking_options=self._get_chunking_options(chunking_strategy, request_options),
+                    ),
+                    target=ZipTarget(),
                 )
                 response = await job.result()
             except httpx.HTTPStatusError as e:
-                # Chunking endpoint not supported (e.g., IBM Docling SaaS)
+                # Chunk output is unavailable on older Docling Serve releases.
                 if e.response.status_code in (404, 405):
                     raise InvalidParameterError(
                         param_name="chunking_strategy",
                         value=chunking_strategy.model_dump() if chunking_strategy else None,
                         constraint=(
-                            "Chunking is not supported by this Docling instance. "
-                            "This is a known limitation of IBM Docling SaaS. "
-                            "Either remove 'chunking_strategy' from your request, "
-                            "or configure OGX to use local docling-serve for chunking support."
+                            "Chunk output through the convert endpoint is not supported by this Docling instance. "
+                            "Either remove 'chunking_strategy' from your request or upgrade Docling Serve."
                         ),
                     ) from e
                 raise
 
-        raw_chunks = response.chunks if response.chunks else []
-
-        if not raw_chunks:
-            return []
-
-        chunks: list[Chunk] = []
-        for i, raw_chunk in enumerate(raw_chunks):
-            # AsyncDoclingServiceClient returns ChunkedDocumentResultItem objects
-            text = raw_chunk.text if hasattr(raw_chunk, "text") else ""
-            if not text or not text.strip():
-                continue
-
-            chunk_window = str(i)
-            chunk_id = generate_chunk_id(document_id, text, chunk_window)
-
-            meta: dict[str, Any] = {
-                "document_id": document_id,
-                **document_metadata,
-            }
-
-            legacy_meta = getattr(raw_chunk, "meta", None)
-            headings = getattr(raw_chunk, "headings", None)
-            legacy_headings = getattr(legacy_meta, "headings", None)
-            page_numbers = getattr(raw_chunk, "page_numbers", None) or getattr(legacy_meta, "page_numbers", None)
-            meta.update(
-                structural_metadata_as_attributes(
-                    headings=headings,
-                    page_numbers=page_numbers,
-                )
-            )
-            if not headings and legacy_headings:
-                meta["headings"] = legacy_headings
-
-            chunks.append(
-                Chunk(
-                    content=text,
-                    chunk_id=chunk_id,
-                    metadata=meta,
-                    chunk_metadata=ChunkMetadata(
-                        chunk_id=chunk_id,
-                        document_id=document_id,
-                        source=document_metadata.get("filename", ""),
-                        content_token_count=len(text.split()),
-                        chunk_window=chunk_window,
-                    ),
-                )
-            )
-
-        return chunks
+        if not isinstance(response, RawServiceResult):
+            raise ValueError("Failed to read Docling chunks: the convert endpoint did not return a ZIP archive")
+        return self._chunks_from_archive(response.content, document_id, document_metadata)
 
     async def shutdown(self) -> None:
         pass

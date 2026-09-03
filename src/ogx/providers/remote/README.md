@@ -21,6 +21,7 @@ remote/
     oci/               # Oracle Cloud Infrastructure
     ollama/            # Ollama
     openai/            # OpenAI
+    passthrough/       # Generic passthrough to any endpoint
     runpod/            # RunPod
     sambanova/         # SambaNova
     together/          # Together AI

@@ -31,6 +31,8 @@ The test_batch_e2e_chat_completions test does clean up its output and error file
 
 import json
 
+import pytest
+
 
 class TestBatchesIntegration:
     """Integration tests for the batches API."""
@@ -269,8 +271,10 @@ class TestBatchesIntegration:
         deleted_error_file = openai_client.files.delete(final_batch.error_file_id)
         assert deleted_error_file.deleted, f"Error file {final_batch.error_file_id} was not deleted successfully"
 
-    def test_batch_e2e_completions(self, openai_client, batch_helper, text_model_id):
+    def test_batch_e2e_completions(self, openai_client, batch_helper, text_model_id, inference_provider_type):
         """Run an end-to-end batch with a single successful text completion request."""
+        if inference_provider_type == "remote::anthropic":
+            pytest.skip("Anthropic does not support /v1/completions endpoint")
         request_body = {"model": text_model_id, "prompt": "Say completions", "max_tokens": 20}
 
         batch_requests = [

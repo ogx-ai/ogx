@@ -11,12 +11,9 @@ FastAPI route decorators. The router is defined in the API package to keep
 all API-related code together.
 """
 
-import asyncio
-import contextvars
-import json
 import logging  # allow-direct-logging
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path
 from fastapi.responses import StreamingResponse
@@ -25,6 +22,7 @@ from pydantic import BaseModel, Field
 from ogx_api.common.errors import OpenAIErrorResponse
 from ogx_api.common.responses import Order
 from ogx_api.router_utils import create_path_dependency, create_query_dependency, standard_responses
+from ogx_api.utils import _preserve_context_for_sse, create_sse_event, sse_stream
 from ogx_api.version import OGX_API_V1, OGX_API_V1ALPHA
 
 from .api import Inference
@@ -48,28 +46,11 @@ from .models import (
 logger = logging.LoggerAdapter(logging.getLogger(__name__), {"category": "inference"})
 
 
-def _create_sse_event(data: Any) -> str:
-    """Create a Server-Sent Event string from data."""
-    if isinstance(data, BaseModel):
-        data = data.model_dump_json()
-    else:
-        data = json.dumps(data)
-    return f"data: {data}\n\n"
-
-
-async def _sse_generator(event_gen: AsyncIterator[Any], context: str = "inference") -> AsyncIterator[str]:
-    """Convert an async generator to SSE format."""
-    try:
-        async for item in event_gen:
-            yield _create_sse_event(item)
-    except asyncio.CancelledError:
-        if hasattr(event_gen, "aclose"):
-            await event_gen.aclose()
-        raise
-    except Exception as e:
-        logger.exception(f"Error in SSE generator ({context})")
-        exc = _http_exception_from_sse_error(e)
-        yield _create_sse_event(OpenAIErrorResponse.from_message(exc.detail, code=str(exc.status_code)).to_dict())
+def _format_inference_sse_error_event(e: Exception) -> str:
+    """Log and format an SSE stream error as an OpenAI error event."""
+    logger.exception("Error in inference SSE generator")
+    exc = _http_exception_from_sse_error(e)
+    return create_sse_event(OpenAIErrorResponse.from_message(exc.detail, code=str(exc.status_code)).to_dict())
 
 
 def _http_exception_from_value_error(exc: ValueError) -> HTTPException:
@@ -88,31 +69,6 @@ def _http_exception_from_sse_error(exc: Exception) -> HTTPException:
     if isinstance(status_code, int):
         return HTTPException(status_code=status_code, detail=str(exc))
     return HTTPException(status_code=500, detail="Internal server error: An unexpected error occurred.")
-
-
-def _preserve_context_for_sse(event_gen: AsyncIterator[str]) -> AsyncIterator[str]:
-    """Preserve request context for SSE streaming.
-
-    StreamingResponse runs in a different task, losing request contextvars.
-    This wrapper captures and restores the context.
-    """
-    context = contextvars.copy_context()
-
-    async def wrapper() -> AsyncIterator[str]:
-        try:
-            while True:
-                try:
-                    task: asyncio.Task[str] = context.run(asyncio.create_task, event_gen.__anext__())  # type: ignore[arg-type]
-                    item = await task
-                except StopAsyncIteration:
-                    break
-                yield item
-        except (asyncio.CancelledError, GeneratorExit):
-            if hasattr(event_gen, "aclose"):
-                await event_gen.aclose()
-            raise
-
-    return wrapper()
 
 
 # Automatically generate dependency functions from Pydantic models
@@ -174,7 +130,7 @@ def create_router(impl: Inference) -> APIRouter:
         result = await impl.openai_chat_completion(params)
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
-                _preserve_context_for_sse(_sse_generator(result, context="chat_completion")),
+                _preserve_context_for_sse(sse_stream(result, create_sse_event, _format_inference_sse_error_event)),
                 media_type="text/event-stream",
             )
         return result
@@ -252,7 +208,7 @@ def create_router(impl: Inference) -> APIRouter:
         result = await impl.openai_completion(params)
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
-                _preserve_context_for_sse(_sse_generator(result, context="completion")),
+                _preserve_context_for_sse(sse_stream(result, create_sse_event, _format_inference_sse_error_event)),
                 media_type="text/event-stream",
             )
         return result
