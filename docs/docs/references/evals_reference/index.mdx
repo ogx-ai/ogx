@@ -350,10 +350,10 @@ You need to write a script [example convert script](https://gist.github.com/yanx
 ### Find scoring function for your new benchmark
 The purpose of scoring function is to calculate the score for each example based on candidate model generation result and expected_answer. It also aggregates the scores from all the examples and generate the final evaluate results.
 
-Firstly, you can see if the existing [ogx scoring functions](https://github.com/ogx-ai/ogx/tree/main/ogx/providers/inline/scoring) can fulfill your need. If not, you need to write a new scoring function based on what benchmark author / other open source repo describe.
+Firstly, you can see if the existing OGX scoring functions can fulfill your need. If not, you need to write a new scoring function based on what benchmark author / other open source repo describe.
 
 ### Add new benchmark into template
-Firstly, you need to add the evaluation dataset associated with your benchmark under `datasets` resource in the [open-benchmark](https://github.com/ogx-ai/ogx/blob/main/ogx/distributions/open-benchmark/config.yaml)
+Firstly, you need to add the evaluation dataset associated with your benchmark under `datasets` resource in the [open-benchmark](https://github.com/ogx-ai/ogx/blob/main/src/ogx/distributions/open-benchmark/config.yaml)
 
 Secondly, you need to add the new benchmark you just created under the `benchmarks` resource in the same template. To add the new benchmark, you need to have
 - `benchmark_id`: identifier of the benchmark
