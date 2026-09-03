@@ -140,115 +140,84 @@ starter = [
 ]
 
 [dependency-groups]
+# The dev group contains everything needed for development: unit and integration test
+# dependencies, type stubs for complete mypy coverage, and developer tooling.
+# If a provider requires additional dependencies for testing, add them here too.
 dev = [
-    {include-group = "unit"},
+    # Test dependencies (unit + integration)
+    "aiohttp",
+    "aiosqlite",
+    "anthropic>=0.105.2",
+    "asyncpg>=0.29.0",
+    "autoevals",
+    "blobfile",
+    "chardet",
+    "chromadb>=1.0.15",
+    "coverage",
+    "databricks-sdk>=0.114.0",
+    "datasets>=4.0.0",
+    "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
+    "elasticsearch>=8.16.0, <9.0.0",
+    "faiss-cpu",
+    "fairscale",
+    "google-genai>=1.69.0,<2",
+    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
+    "langchain-openai>=1.2.2",
+    "langgraph",
+    "lm-format-enforcer",
+    "markitdown[all]",
+    "mcp>=1.28.1,<2.0",
+    "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
+    "moto[s3]>=5.1.10",
+    "nest-asyncio",
+    "neo4j",
+    "ollama",
+    "peft",
+    "pgvector>=0.3.0",
+    "psycopg2-binary>=2.9.0",
+    "pymilvus>=2.6.2",
+    "pymongo",
+    "pypdf>=6.13.3",
+    "qdrant-client",
+    "requests",
+    "sqlalchemy[asyncio]>=2.0.41",
+    "sqlite-vec",
+    "together>=2",
+    "torch>=2.13.0",
+    "torchtune",
+    "torchvision>=0.27.0",
+    "transformers",
+    "trl>=1.5.0",
+    "unstructured-client>=0.25.0",
+    "weaviate-client>=4.16.4",
+    # Type stubs and optional runtime dependencies for complete mypy coverage
+    "boto3-stubs[s3]",
+    "pandas",
+    "pandas-stubs",
+    "streamlit>=1.58.0",
+    "streamlit-option-menu",
+    "types-jsonschema",
+    "types-psutil>=7.2.2.20260518",
+    "types-requests",
+    "types-setuptools",
+    "types-tqdm",
+    # Developer tooling
+    "black>=26.5.1",
+    "boto3>=1.43.18",
+    "mypy",
+    "nbval",                         # For notebook testing
+    "ogx-open-client>=1.0.2",
+    "openapi-spec-validator>=0.9.0",
+    "pre-commit>=4.4.0",
     "pytest>=8.4",
-    "pytest-timeout",
     "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",
     "pytest-json-report",
     "pytest-socket>=0.8.0",                 # For blocking network access in unit tests
-    "nbval",                         # For notebook testing
-    "black>=26.5.1",
+    "pytest-timeout",
     "ruff>=0.15.14",
-    "mypy",
-    "pre-commit>=4.4.0",
     "ruamel.yaml",                   # needed for openapi generator
-    "openapi-spec-validator>=0.9.0",
-    "ogx-open-client>=1.0.2",
-    "boto3>=1.43.18",
-    "torch>=2.13.0",
-]
-# Type checking dependencies - includes type stubs and optional runtime dependencies
-# needed for complete mypy coverage across all optional features
-type_checking = [
-    "types-requests",
-    "types-setuptools",
-    "types-jsonschema",
-    "markitdown[all]",
-    "pypdf>=6.13.3",
-    "pandas-stubs",
-    "types-psutil>=7.2.2.20260518",
-    "types-tqdm",
-    "boto3-stubs[s3]",
-    "chardet",
-    "streamlit>=1.58.0",
-    "streamlit-option-menu",
-    "pandas",
-    "anthropic>=0.105.2",
-    "databricks-sdk>=0.114.0",
-    "fairscale",
-    "torchtune",
-    "trl>=1.5.0",
-    "peft",
-    "datasets",
-    "together",
-    "nest-asyncio",
-    "pymongo",
-    "torchvision",
-    "sqlite-vec",
-    "faiss-cpu",
-    "lm-format-enforcer",
-    "mcp>=1.28.1,<2.0",
-    "neo4j",
-    "ollama",
-    "langchain-openai>=1.2.2",
-    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
-    "langgraph",
-    "ogx-open-client>=1.0.2",
-]
-test-common = [
-    "aiohttp",
-    "aiosqlite",
-    "asyncpg>=0.29.0",
-    "chardet",
-    "mcp>=1.28.1,<2.0",
-    "neo4j",
-    "pgvector>=0.3.0",
-    "psycopg2-binary>=2.9.0",
-    "pypdf>=6.13.3",
-    "sqlalchemy[asyncio]>=2.0.41",
-]
-# These are the dependencies required for running unit tests.
-unit = [
-    {include-group = "test-common"},
-    "anthropic>=0.105.2",
-    "blobfile",
-    "coverage",
-    "databricks-sdk>=0.114.0",
-    "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
-    "faiss-cpu",
-    "markitdown[all]",
-    "moto[s3]>=5.1.10",
-    "ollama",
-    "qdrant-client",
-    "sqlite-vec",
-    "together",
-    "unstructured-client>=0.25.0",
-]
-# These are the core dependencies required for running integration tests. They are shared across all
-# providers. If a provider requires additional dependencies, please add them to your environment
-# separately. If you are using "uv" to execute your tests, you can use the "--group" flag to specify extra
-# dependencies.
-test = [
-    {include-group = "test-common"},
-    "autoevals",
-    "chromadb>=1.0.15",
-    "datasets>=4.0.0",
-    "elasticsearch>=8.16.0, <9.0.0",
-    "google-genai>=1.69.0,<2",
-    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
-    "langchain-openai>=1.2.2",
-    "langgraph",
-    "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
-    "pymilvus>=2.6.2",
-    "qdrant-client",
-    "requests",
-    "torch>=2.13.0",
-    "torchvision>=0.27.0",
-    "transformers",
-    "weaviate-client>=4.16.4",
 ]
 docs = [
     "setuptools",

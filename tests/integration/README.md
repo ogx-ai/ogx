@@ -8,7 +8,7 @@ For the list of target models per provider and their CI lanes, see [TARGET_MODEL
 
 ```bash
 # Run all integration tests with existing recordings
-uv run --group test \
+uv run --group dev \
   pytest -sv tests/integration/ --stack-config=starter
 ```
 

@@ -156,9 +156,9 @@ jobs:
         id: client-config
         uses: ./.github/actions/install-ogx-client
 
-      - name: Sync dev + type_checking dependencies
+      - name: Sync dev dependencies
         run: |
-          uv sync --group dev --group type_checking
+          uv sync --group dev
 
           # Install specific client version after sync if needed
           if [ "${{ steps.client-config.outputs.install-after-sync }}" = "true" ]; then
@@ -169,7 +169,7 @@ jobs:
       - name: Run mypy (full type_checking)
         run: |
           set +e
-          uv run --group dev --group type_checking mypy
+          uv run --group dev mypy
           status=$?
           if [ $status -ne 0 ]; then
             echo "::error::Full mypy failed. Reproduce locally with 'uv run pre-commit run mypy-full --hook-stage manual --all-files'."
@@ -179,7 +179,7 @@ jobs:
       - name: Check if any unused recordings
         run: |
           set -e
-          PYTHONPATH=$PWD uv run --group test ./scripts/cleanup_recordings.py --delete
+          PYTHONPATH=$PWD uv run --group dev ./scripts/cleanup_recordings.py --delete
           changes=$(git status --short tests/integration | grep 'recordings' || true)
           if [ -n "$changes" ]; then
             echo "::error::Unused integration recordings detected. Run 'PYTHONPATH=$(pwd) uv run ./scripts/cleanup_recordings.py --delete' locally and commit the deletions."

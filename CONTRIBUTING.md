@@ -72,7 +72,7 @@ uv run pre-commit run mypy-full --hook-stage manual --all-files
 or invoke mypy directly with all optional dependencies:
 
 ```bash
-uv run --group dev --group type_checking mypy
+uv run --group dev mypy
 ```
 
 ```text
