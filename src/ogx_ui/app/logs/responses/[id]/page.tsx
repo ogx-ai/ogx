@@ -31,16 +31,16 @@ export default function ResponseDetailPage() {
       id: responseData.id,
       created_at: responseData.created_at,
       model: responseData.model,
-      object: responseData.object,
+      object: responseData.object ?? "response",
       status: responseData.status,
       output: responseData.output as OpenAIResponse["output"],
       input: [], // ResponseObject doesn't include input; component uses inputItems prop instead
-      error: responseData.error,
+      error: responseData.error ?? undefined,
       parallel_tool_calls: responseData.parallel_tool_calls,
-      previous_response_id: responseData.previous_response_id,
+      previous_response_id: responseData.previous_response_id ?? undefined,
       temperature: responseData.temperature,
       top_p: responseData.top_p,
-      truncation: responseData.truncation,
+      truncation: responseData.truncation ?? undefined,
     };
   };
 

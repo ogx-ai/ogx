@@ -1,7 +1,7 @@
 import type { FileContentResponse } from "ogx-client/resources/vector-stores/files";
 import type { OgxClient } from "ogx-client";
 
-export type VectorStoreContent = FileContentResponse.Content;
+export type VectorStoreContent = FileContentResponse.Data;
 export type VectorStoreContentsResponse = FileContentResponse;
 
 export interface VectorStoreContentItem {
@@ -80,11 +80,20 @@ export class ContentsAPI {
     return targetContent;
   }
 
-  async updateContent(): Promise<VectorStoreContentItem> {
+  async updateContent(
+    vectorStoreId: string,
+    fileId: string,
+    contentId: string,
+    updates: { content?: string; metadata?: Record<string, unknown> }
+  ): Promise<VectorStoreContentItem> {
     throw new Error("Individual content updates not yet implemented in API");
   }
 
-  async deleteContent(): Promise<VectorStoreContentDeleteResponse> {
+  async deleteContent(
+    vectorStoreId: string,
+    fileId: string,
+    contentId: string
+  ): Promise<VectorStoreContentDeleteResponse> {
     throw new Error("Individual content deletion not yet implemented in API");
   }
 
@@ -109,7 +118,7 @@ export class ContentsAPI {
     const contentItems: VectorStoreContentItem[] = [];
 
     (fileContents.data ?? []).forEach((item, contentIndex) => {
-      const raw = item as Record<string, unknown>;
+      const raw = item as unknown as Record<string, unknown>;
       const chunkMeta = (raw.chunk_metadata ?? {}) as Record<string, unknown>;
       const contentId =
         chunkMeta.chunk_id || raw.id || `content_${fileId}_${contentIndex}`;

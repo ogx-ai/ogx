@@ -196,7 +196,7 @@ export function FileDetail() {
         blob = new Blob([arrayBuffer], { type: mimeType });
       } else {
         // Use llama stack client for text content
-        const response = await client.files.content(fileId);
+        const response: unknown = await client.files.content(fileId);
 
         if (typeof response === "string") {
           blob = new Blob([response], { type: mimeType });
@@ -307,7 +307,7 @@ export function FileDetail() {
         downloadUrl = URL.createObjectURL(blob);
       } else {
         // Use llama stack client for text content
-        const response = await client.files.content(fileId);
+        const response: unknown = await client.files.content(fileId);
 
         if (typeof response === "string") {
           const blob = new Blob([response], { type: mimeType });
