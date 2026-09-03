@@ -30,8 +30,8 @@ You have two ways to install OGX:
 
 ## `ogx` subcommands
 
-1. `stack`: Allows you to build a stack using the `ogx` distribution and run a OGX server. You can read more about how to build a OGX distribution in the [Build your own Distribution](../../distributions/building_distro) documentation.
-2. `connect`: Connect third-party tools to the running OGX server. Supports [`claude`](../../building_applications/claude_code_integration), [`opencode`](../../building_applications/opencode_integration), and [`codex`](../../building_applications/codex_cli_integration).
+1. `stack`: Allows you to build a stack using the `ogx` distribution and run a OGX server. You can read more about how to build a OGX distribution in the [Build your own Distribution](/docs/distributions/building_distro) documentation.
+2. `connect`: Connect third-party tools to the running OGX server. Supports [`claude`](/docs/building_applications/claude_code_integration), [`opencode`](/docs/building_applications/opencode_integration), and [`codex`](/docs/building_applications/codex_cli_integration).
 
 For downloading models, we recommend using the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli). See [Downloading models](#downloading-models) for more information.
 
