@@ -19,7 +19,7 @@ if "pymilvus" not in sys.modules:
     )
     pymilvus.Function = object
     pymilvus.FunctionType = SimpleNamespace(BM25="BM25")
-    pymilvus.MilvusClient = object
+    pymilvus.AsyncMilvusClient = object
     pymilvus.RRFRanker = object
     pymilvus.WeightedRanker = object
     sys.modules["pymilvus"] = pymilvus
@@ -37,7 +37,7 @@ class _FakeClient:
     def __init__(self) -> None:
         self.hybrid_search_kwargs: dict[str, Any] | None = None
 
-    def hybrid_search(self, **kwargs: Any) -> list[list[Any]]:
+    async def hybrid_search(self, **kwargs: Any) -> list[list[Any]]:
         self.hybrid_search_kwargs = kwargs
         return [[]]
 
