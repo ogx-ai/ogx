@@ -597,6 +597,59 @@ See the [Qdrant documentation](https://qdrant.tech/documentation/) for more deta
         ),
         RemoteProviderSpec(
             api=Api.vector_io,
+            adapter_type="opensearch",
+            provider_type="remote::opensearch",
+            pip_packages=["opensearch-py"] + DEFAULT_VECTOR_IO_DEPS,
+            module="ogx.providers.remote.vector_io.opensearch",
+            config_class="ogx.providers.remote.vector_io.opensearch.OpenSearchVectorIOConfig",
+            api_dependencies=[Api.inference],
+            optional_api_dependencies=[Api.files, Api.models, Api.file_processors],
+            description="""
+[OpenSearch](https://opensearch.org/) is a distributed, community-driven, open-source search and analytics suite.
+It allows you to store and query vectors directly within an OpenSearch cluster.
+
+## Features
+OpenSearch supports:
+- Store embeddings and their metadata
+- k-NN Vector search (using HNSW)
+- Full-text search (BM25)
+- Hybrid search
+- Metadata filtering
+
+## Usage
+
+To use OpenSearch in your OGX project, follow these steps:
+
+1. Install the necessary dependencies.
+2. Configure your OGX project to use opensearch (e.g. inline::opensearch or remote::opensearch).
+3. Start storing and querying vectors.
+
+## Configuration
+
+```yaml
+vector_io:
+  - provider_id: opensearch
+    provider_type: remote::opensearch
+    config:
+      host: localhost
+      port: 9200
+```
+""",
+        ),
+        InlineProviderSpec(
+            api=Api.vector_io,
+            provider_type="inline::opensearch",
+            pip_packages=["opensearch-py"] + DEFAULT_VECTOR_IO_DEPS,
+            module="ogx.providers.inline.vector_io.opensearch",
+            config_class="ogx.providers.inline.vector_io.opensearch.OpenSearchVectorIOConfig",
+            api_dependencies=[Api.inference],
+            optional_api_dependencies=[Api.files, Api.models, Api.file_processors],
+            description="""
+Please refer to the remote::opensearch provider documentation.
+""",
+        ),
+        RemoteProviderSpec(
+            api=Api.vector_io,
             adapter_type="qdrant",
             provider_type="remote::qdrant",
             pip_packages=["qdrant-client"] + DEFAULT_VECTOR_IO_DEPS,

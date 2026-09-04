@@ -1,0 +1,101 @@
+---
+description: |
+  [OpenSearch](https://opensearch.org/) is a distributed, community-driven, open-source search and analytics suite.
+  It allows you to store and query vectors directly within an OpenSearch cluster.
+
+  ## Features
+  OpenSearch supports:
+  - Store embeddings and their metadata
+  - k-NN Vector search (using HNSW)
+  - Full-text search (BM25)
+  - Hybrid search
+  - Metadata filtering
+
+  ## Usage
+
+  To use OpenSearch in your OGX project, follow these steps:
+
+  1. Install the necessary dependencies.
+  2. Configure your OGX project to use opensearch (e.g. inline::opensearch or remote::opensearch).
+  3. Start storing and querying vectors.
+
+  ## Configuration
+
+  ```yaml
+  vector_io:
+    - provider_id: opensearch
+      provider_type: remote::opensearch
+      config:
+        host: localhost
+        port: 9200
+  ```
+sidebar_label: Remote - Opensearch
+title: remote::opensearch
+---
+
+# remote::opensearch
+
+## Description
+
+
+[OpenSearch](https://opensearch.org/) is a distributed, community-driven, open-source search and analytics suite.
+It allows you to store and query vectors directly within an OpenSearch cluster.
+
+## Features
+OpenSearch supports:
+- Store embeddings and their metadata
+- k-NN Vector search (using HNSW)
+- Full-text search (BM25)
+- Hybrid search
+- Metadata filtering
+
+## Usage
+
+To use OpenSearch in your OGX project, follow these steps:
+
+1. Install the necessary dependencies.
+2. Configure your OGX project to use opensearch (e.g. inline::opensearch or remote::opensearch).
+3. Start storing and querying vectors.
+
+## Configuration
+
+```yaml
+vector_io:
+  - provider_id: opensearch
+    provider_type: remote::opensearch
+    config:
+      host: localhost
+      port: 9200
+```
+
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `host` | `str` | No | localhost | The host of the OpenSearch server |
+| `port` | `int` | No | 9200 | The port of the OpenSearch server |
+| `use_ssl` | `bool` | No | False | Whether to use SSL for the connection |
+| `verify_certs` | `bool` | No | False | Whether to verify SSL certificates |
+| `username` | `str \| None` | No |  | The username for authentication |
+| `password` | `str \| None` | No |  | The password for authentication |
+| `persistence` | `KVStoreReference \| None` | No |  | Config for KV store backend (SQLite only for now) |
+| `persistence.namespace` | `str` | No |  | Key prefix for KVStore backends |
+| `persistence.backend` | `str` | No |  | Name of backend from storage.backends |
+| `metadata_store` | `SqlStoreReference \| None` | No |  | SQL store reference for tenant-isolated vector store metadata |
+| `metadata_store.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `metadata_store.backend` | `str` | No |  | Name of backend from storage.backends |
+
+## Sample Configuration
+
+```yaml
+host: ${env.OPENSEARCH_HOST:=localhost}
+port: 9200
+use_ssl: false
+verify_certs: false
+username: ${env.OPENSEARCH_USERNAME:=}
+password: ${env.OPENSEARCH_PASSWORD:=}
+persistence:
+  namespace: vector_io::opensearch
+  backend: kv_default
+```
