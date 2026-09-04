@@ -373,7 +373,7 @@ class ReferenceBatchesImpl(Batches):
         Read & validate input, return errors and valid input.
 
         Validation of
-        - input_file_id existance
+        - input_file_id existence
         - valid json
         - custom_id, method, url, body presence and valid
         - no streaming
