@@ -24,6 +24,7 @@ VISION_MODEL=""
 EXTRA_PARAMS=""
 COLLECT_ONLY=false
 TYPESCRIPT_ONLY=false
+INSTALL_DEPS=false
 
 # Function to display usage
 usage() {
@@ -42,6 +43,8 @@ Options:
     --pattern STRING         Regex pattern to pass to pytest -k
     --collect-only           Collect tests only without running them (skips server startup)
     --typescript-only        Skip Python tests and run only TypeScript client tests
+    --install-deps           Install missing provider dependencies before running tests
+                             (mirrors the CI setup step: ogx stack list-deps <config> | xargs -L1 uv pip install)
     --help                   Show this help message
 
 Suites are defined in tests/integration/suites.py and define which tests to run.
@@ -118,6 +121,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --typescript-only)
         TYPESCRIPT_ONLY=true
+        shift
+        ;;
+    --install-deps)
+        INSTALL_DEPS=true
         shift
         ;;
     --help)
@@ -251,6 +258,87 @@ fi
 if ! command -v pytest &>/dev/null; then
     echo "pytest could not be found, ensure pytest is installed"
     exit 1
+fi
+
+# Function to check that the provider dependencies for a stack config are
+# installed, mirroring the CI setup step in .github/actions/setup-test-environment
+#   ogx stack list-deps <config> | xargs -L1 uv pip install
+# which is not visible to local runs. With INSTALL_DEPS=true, missing
+# dependencies are installed automatically; otherwise the function fails with
+# the exact command to run.
+check_provider_dependencies() {
+    local config_name="$1"
+
+    local deps_output
+    if ! deps_output=$(ogx stack list-deps "$config_name" 2>/dev/null); then
+        echo "Warning: Could not determine dependencies for '$config_name', skipping dependency check"
+        return 0
+    fi
+
+    local installed
+    installed=" $(uv pip list --format=freeze 2>/dev/null | cut -d= -f1 | tr '[:upper:]' '[:lower:]' | sed 's/[_.]/-/g' | tr '\n' ' ')"
+
+    local missing=()
+    local token name skip_next=false
+    for token in $deps_output; do
+        if $skip_next; then
+            skip_next=false
+            continue
+        fi
+        case "$token" in
+        --*)
+            # Skip pip flags and their values (e.g. --extra-index-url <url>)
+            skip_next=true
+            continue
+            ;;
+        -*)
+            continue
+            ;;
+        esac
+        # Strip extras, version specifiers, and environment markers to get the package name
+        name=$(echo "$token" | sed -E 's/\[.*\]//; s/[<>=!~;].*//' | tr '[:upper:]' '[:lower:]' | sed 's/[_.]/-/g')
+        if [[ -n "$name" && ! "$installed" == *" $name "* ]]; then
+            missing+=("$token")
+        fi
+    done
+
+    if [[ ${#missing[@]} -eq 0 ]]; then
+        echo "✅ All provider dependencies for '$config_name' are installed"
+        return 0
+    fi
+
+    if [[ "$INSTALL_DEPS" == true ]]; then
+        echo "Installing missing provider dependencies: ${missing[*]}"
+        ogx stack list-deps "$config_name" | xargs -L1 uv pip install
+        return 0
+    fi
+
+    echo "❌ Missing required provider dependencies for '$config_name':"
+    for token in "${missing[@]}"; do
+        echo "   - $token"
+    done
+    echo ""
+    echo "Install them with (the same step CI runs):"
+    echo "    ogx stack list-deps $config_name | xargs -L1 uv pip install"
+    echo ""
+    echo "Or re-run this script with --install-deps to install them automatically."
+    return 1
+}
+
+# Preflight: ensure provider dependencies are installed for the stack config.
+# Skipped for docker configs (dependencies are baked into the image), remote
+# http configs, and collect-only runs.
+if [[ "$COLLECT_ONLY" == false && -n "$STACK_CONFIG" ]]; then
+    case "$STACK_CONFIG" in
+    docker:* | http://*)
+        ;;
+    server:*)
+        check_provider_dependencies "${STACK_CONFIG#server:}" || exit 1
+        ;;
+    *)
+        check_provider_dependencies "$STACK_CONFIG" || exit 1
+        ;;
+    esac
 fi
 
 # Helper function to find next available port
