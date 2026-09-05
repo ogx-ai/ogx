@@ -150,7 +150,7 @@ export INFINISPAN_URL=http://localhost:11222   # enables the Infinispan vector p
 
 ## Running
 
-See [Starting a OGX Server](../starting_ogx_server) for all the ways to run (uv, container, library, Kubernetes).
+See [Starting an OGX Server](../starting_ogx_server) for all the ways to run (uv, container, library, Kubernetes).
 
 Quick start:
 
