@@ -53,7 +53,7 @@ See the [provider documentation](https://ogx-ai.github.io/docs/providers) for th
 
 ## Get started
 
-Install and run a OGX server:
+Install and run an OGX server:
 
 ```bash
 # One-line install
