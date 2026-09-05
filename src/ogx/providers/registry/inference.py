@@ -83,6 +83,16 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.inference,
+            adapter_type="thegrid",
+            provider_type="remote::thegrid",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.thegrid",
+            config_class="ogx.providers.remote.inference.thegrid.TheGridImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.thegrid.config.TheGridProviderDataValidator",
+            description="The Grid inference provider for accessing market-priced inference instruments via The Grid API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
             adapter_type="ollama",
             provider_type="remote::ollama",
             pip_packages=["ollama", "aiohttp", "h11>=0.16.0"],

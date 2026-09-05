@@ -57,6 +57,7 @@ def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id)
         "remote::llama-openai-compat",
         "remote::watsonx",  # WatsonX only has /v1/chat/completions, no /v1/completions
         "remote::deepseek",  # DeepSeek does not support /v1/completions
+        "remote::thegrid",  # The Grid does not serve /v1/completions
     ):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support OpenAI completions.")
 
@@ -109,6 +110,7 @@ def skip_if_doesnt_support_n(client_with_models, model_id):
         "remote::databricks",  # Bad request: parameter "n" must be equal to 1 for streaming mode
         "remote::watsonx",
         "remote::deepseek",  # n > 1 is not supported
+        "remote::thegrid",  # n > 1 is accepted but only one choice is returned
     ):
         pytest.skip(f"Model {model_id} hosted by {provider.provider_type} doesn't support n param.")
 
