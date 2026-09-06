@@ -38,6 +38,13 @@ The tests are categorized and outlined below, keep this updated:
 - Batch processing concurrency control:
   * test_max_concurrent_batches (positive)
 
+- Authorization: per-user scoping of batches and credential propagation into
+  background processing:
+  * test_list_batches_scoped_to_creating_user (positive)
+  * test_retrieve_batch_denied_for_other_user (negative)
+  * test_cancel_batch_denied_for_other_user (negative)
+  * test_batch_processing_preserves_creating_users_context (positive)
+
 - Input validation testing (direct _validate_input method tests):
   * test_validate_input_file_not_found (negative)
   * test_validate_input_file_exists_empty_content (positive)
@@ -54,13 +61,16 @@ The tests use temporary SQLite databases for isolation and mock external
 dependencies like inference, files, and models APIs.
 """
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
 
-from ogx_api import BatchObject, ConflictError, ResourceNotFoundError
+from ogx.core.datatypes import User
+from ogx.core.request_headers import RequestProviderDataContext, get_authenticated_user
+from ogx_api import BatchNotFoundError, BatchObject, ConflictError, ResourceNotFoundError
 from ogx_api.batches.models import (
     CancelBatchRequest,
     CreateBatchRequest,
@@ -774,6 +784,95 @@ class TestReferenceBatchesImpl:
         await asyncio.sleep(0.042)  # let tasks start
 
         assert active_batches == 2, f"Expected 2 active batches, got {active_batches}"
+
+    async def test_list_batches_scoped_to_creating_user(self, provider):
+        """list_batches should only return batches owned by the authenticated caller,
+        not every batch in the store (see AuthorizedSqlStore.fetch_all)."""
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        bob = User(principal="bob", attributes={"roles": ["bob-role"]})
+
+        with RequestProviderDataContext(user=alice):
+            alice_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_alice", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=bob):
+            bob_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_bob", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=alice):
+            alice_list = await provider.list_batches(ListBatchesRequest())
+        alice_ids = {b.id for b in alice_list.data}
+        assert alice_batch.id in alice_ids
+        assert bob_batch.id not in alice_ids
+
+        with RequestProviderDataContext(user=bob):
+            bob_list = await provider.list_batches(ListBatchesRequest())
+        bob_ids = {b.id for b in bob_list.data}
+        assert bob_batch.id in bob_ids
+        assert alice_batch.id not in bob_ids
+
+    async def test_retrieve_batch_denied_for_other_user(self, provider):
+        """A user cannot retrieve a batch created by a different user."""
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        bob = User(principal="bob", attributes={"roles": ["bob-role"]})
+
+        with RequestProviderDataContext(user=alice):
+            alice_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_alice", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=bob):
+            with pytest.raises(BatchNotFoundError):
+                await provider.retrieve_batch(RetrieveBatchRequest(batch_id=alice_batch.id))
+
+        with RequestProviderDataContext(user=alice):
+            retrieved = await provider.retrieve_batch(RetrieveBatchRequest(batch_id=alice_batch.id))
+        assert retrieved.id == alice_batch.id
+
+    async def test_cancel_batch_denied_for_other_user(self, provider):
+        """A user cannot cancel a batch created by a different user."""
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        bob = User(principal="bob", attributes={"roles": ["bob-role"]})
+
+        with RequestProviderDataContext(user=alice):
+            alice_batch = await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_alice", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        with RequestProviderDataContext(user=bob):
+            with pytest.raises(BatchNotFoundError):
+                await provider.cancel_batch(CancelBatchRequest(batch_id=alice_batch.id))
+
+    async def test_batch_processing_preserves_creating_users_context(self, provider):
+        """The background task spawned by create_batch retains the creating user's
+        authenticated identity and provider data for its entire lifetime, since
+        asyncio.create_task() snapshots contextvars at spawn time. This is what lets
+        per-request inference credentials (x-ogx-provider-data) and policy checks apply to
+        batch-processed requests the same way they do for a live request."""
+        provider.process_batches = True
+
+        captured_user = None
+        captured_event = asyncio.Event()
+
+        async def fake_process_batch_impl(batch_id):
+            nonlocal captured_user
+            captured_user = get_authenticated_user()
+            captured_event.set()
+
+        provider._process_batch_impl = fake_process_batch_impl
+
+        alice = User(principal="alice", attributes={"roles": ["alice-role"]})
+        with RequestProviderDataContext(user=alice):
+            await provider.create_batch(
+                CreateBatchRequest(input_file_id="file_id", endpoint="/v1/chat/completions", completion_window="24h")
+            )
+
+        await asyncio.wait_for(captured_event.wait(), timeout=1)
+
+        assert captured_user is not None
+        assert captured_user.principal == "alice"
 
     async def test_create_batch_embeddings_endpoint(self, provider):
         """Test that batch creation succeeds with embeddings endpoint."""
