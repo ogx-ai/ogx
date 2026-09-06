@@ -322,7 +322,7 @@ server:
       - "ogk_mykey2"
 ```
 
-This is the simplest authentication provider — any key in the list authenticates successfully and is granted `admin` and `owner` [roles](../configuration.mdx#access-control) so the default owner-based access-controls work out of the box. Use it for development, internal services, or when you prefer to manage keys outside an identity provider.
+This is the simplest authentication provider — any key in the list authenticates successfully and is granted `admin` and `owner` [roles](#access-control) so the default owner-based access-controls work out of the box. Use it for development, internal services, or when you prefer to manage keys outside an identity provider.
 
 The token is validated as `Authorization: Bearer <key>` and the key string itself becomes the user principal. Because this provider does not resolve a `tenant_id`, it is only compatible with `server.tenancy.mode` `single` or `disabled` — startup will fail with `multi`.
 
@@ -534,7 +534,7 @@ scoring_function, benchmark, tool, tool_group and session. In
 addition, stored data such as conversations, conversation items,
 responses, and files use the `sql_record::<table_name>` resource
 type (e.g. `sql_record::openai_conversations`,
-`sql_record::responses`). See [Multi-Tenant Isolation for Conversations and Responses](#multi-tenant-isolation-for-conversations-and-responses) for details.
+`sql_record::responses`). See [Combining Tenant Isolation with Access Control](#combining-tenant-isolation-with-access-control) for details.
 
 A rule may also specify a condition, either a 'when' or an 'unless',
 with additional constraints as to where the rule applies. The
