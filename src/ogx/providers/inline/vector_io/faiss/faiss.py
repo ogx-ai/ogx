@@ -191,6 +191,15 @@ class FaissIndex(EmbeddingIndex):
         if not embedded_chunks:
             return
 
+        # Upsert semantics: when the same chunk_id appears more than once (within this
+        # batch or already in the index) keep only the last occurrence, so re-ingesting a
+        # chunk replaces its vector instead of silently duplicating it. IndexFlatL2 has no
+        # native upsert, so existing entries are removed before the new ones are appended.
+        deduped: dict[str, EmbeddedChunk] = {}
+        for embedded_chunk in embedded_chunks:
+            deduped[embedded_chunk.chunk_id] = embedded_chunk
+        embedded_chunks = list(deduped.values())
+
         # Extract embeddings and validate dimensions
         np = _get_numpy()
         embeddings = np.array([ec.embedding for ec in embedded_chunks], dtype=np.float32)
@@ -198,55 +207,58 @@ class FaissIndex(EmbeddingIndex):
         if embedding_dim != self.index.d:
             raise ValueError(f"Embedding dimension mismatch. Expected {self.index.d}, got {embedding_dim}")
 
-        # Store chunks by index and update inverted metadata index
-        indexlen = len(self.chunk_by_index)
-        for i, embedded_chunk in enumerate(embedded_chunks):
-            faiss_pos = indexlen + i
-            self.chunk_by_index[faiss_pos] = embedded_chunk
-            for key, val in embedded_chunk.metadata.items():
-                self._meta_index.setdefault(key, {}).setdefault(val, set()).add(faiss_pos)
-
         async with self.chunk_id_lock:
+            for chunk_id in [ec.chunk_id for ec in embedded_chunks if ec.chunk_id in self.chunk_ids]:
+                self._remove_chunk(chunk_id)
+
+            # Store chunks by index and update inverted metadata index
+            indexlen = len(self.chunk_by_index)
+            for i, embedded_chunk in enumerate(embedded_chunks):
+                faiss_pos = indexlen + i
+                self.chunk_by_index[faiss_pos] = embedded_chunk
+                for key, val in embedded_chunk.metadata.items():
+                    self._meta_index.setdefault(key, {}).setdefault(val, set()).add(faiss_pos)
+
             self.index.add(embeddings)
             self.chunk_ids.extend([ec.chunk_id for ec in embedded_chunks])  # EmbeddedChunk inherits from Chunk
 
         # Save updated index
         await self._save_index()
 
+    def _remove_chunk(self, chunk_id: str) -> None:
+        removed_pos = self.chunk_ids.index(chunk_id)
+        self.index.remove_ids(_get_numpy().array([removed_pos]))
+
+        # Remove deleted position from _meta_index
+        for val_map in self._meta_index.values():
+            for positions in val_map.values():
+                positions.discard(removed_pos)
+
+        new_chunk_by_index = {}
+        for idx, chunk in self.chunk_by_index.items():
+            # Shift all chunks after the removed chunk to the left
+            if idx > removed_pos:
+                new_chunk_by_index[idx - 1] = chunk
+            else:
+                new_chunk_by_index[idx] = chunk
+        self.chunk_by_index = new_chunk_by_index
+        self.chunk_ids.pop(removed_pos)
+
+        # Shift all _meta_index positions > removed_pos down by 1
+        for val_map in self._meta_index.values():
+            for val in list(val_map):
+                val_map[val] = {p - 1 if p > removed_pos else p for p in val_map[val]}
+                if not val_map[val]:
+                    del val_map[val]
+
     async def delete_chunks(self, chunks_for_deletion: list[ChunkForDeletion]) -> None:
         chunk_ids = [c.chunk_id for c in chunks_for_deletion]
         if not set(chunk_ids).issubset(self.chunk_ids):
             return
 
-        def remove_chunk(chunk_id: str):
-            removed_pos = self.chunk_ids.index(chunk_id)
-            self.index.remove_ids(_get_numpy().array([removed_pos]))
-
-            # Remove deleted position from _meta_index
-            for val_map in self._meta_index.values():
-                for positions in val_map.values():
-                    positions.discard(removed_pos)
-
-            new_chunk_by_index = {}
-            for idx, chunk in self.chunk_by_index.items():
-                # Shift all chunks after the removed chunk to the left
-                if idx > removed_pos:
-                    new_chunk_by_index[idx - 1] = chunk
-                else:
-                    new_chunk_by_index[idx] = chunk
-            self.chunk_by_index = new_chunk_by_index
-            self.chunk_ids.pop(removed_pos)
-
-            # Shift all _meta_index positions > removed_pos down by 1
-            for val_map in self._meta_index.values():
-                for val in list(val_map):
-                    val_map[val] = {p - 1 if p > removed_pos else p for p in val_map[val]}
-                    if not val_map[val]:
-                        del val_map[val]
-
         async with self.chunk_id_lock:
             for chunk_id in chunk_ids:
-                remove_chunk(chunk_id)
+                self._remove_chunk(chunk_id)
 
         await self._save_index()
 
