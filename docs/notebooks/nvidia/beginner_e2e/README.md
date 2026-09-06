@@ -56,4 +56,3 @@ Ensure you have access to:
 
 ## Get Started
 
-Navigate to the [beginner E2E tutorial](./Llama_Stack_NVIDIA_E2E_Flow.ipynb) tutorial to get started.
