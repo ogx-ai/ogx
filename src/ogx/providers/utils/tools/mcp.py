@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
+from urllib.parse import urlparse
 
 import httpx
 from mcp import ClientSession, McpError
@@ -20,6 +21,7 @@ from mcp.client.streamable_http import streamablehttp_client
 
 from ogx.core.datatypes import AuthenticationRequiredError
 from ogx.log import get_logger
+from ogx.providers.utils.common.url_validation import validate_url_not_private
 from ogx.providers.utils.tools.ttl_dict import TTLDict
 from ogx_api import (
     ImageContentItem,
@@ -32,6 +34,21 @@ from ogx_api import (
 )
 
 logger = get_logger(__name__, category="tools")
+
+
+def validate_mcp_endpoint(endpoint: str) -> None:
+    """Reject MCP endpoints that are not http(s) or resolve to private IPs.
+
+    Applies the same private-IP guard used for inference content and file-search
+    URLs so caller-controlled MCP ``server_url`` values cannot be used for SSRF.
+
+    Raises:
+        ValueError: If the scheme is not http/https or the host is non-public.
+    """
+    parsed = urlparse(endpoint)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Failed to connect to MCP endpoint: only http and https URLs are allowed ({endpoint})")
+    validate_url_not_private(endpoint)
 
 
 def prepare_mcp_headers(base_headers: dict[str, str] | None, authorization: str | None) -> dict[str, str]:

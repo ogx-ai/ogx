@@ -16,7 +16,7 @@ from opentelemetry import trace
 from ogx.log import get_logger
 from ogx.providers.utils.inference.openai_compat import convert_tooldef_to_openai_tool
 from ogx.providers.utils.inference.prompt_adapter import interleaved_content_as_str
-from ogx.providers.utils.tools.mcp import list_mcp_tools
+from ogx.providers.utils.tools.mcp import list_mcp_tools, validate_mcp_endpoint
 from ogx_api import (
     AllowedToolsFilter,
     ApprovalFilter,
@@ -330,6 +330,9 @@ class StreamingResponseOrchestrator:
             if mcp_server.server_label not in self.server_label_to_tools:
                 self.server_label_to_tools[mcp_server.server_label] = []
             self.server_label_to_tools[mcp_server.server_label].append(tool_name)
+            # Connector-resolved endpoints are admin-configured; allow private URLs.
+            if mcp_server.connector_id and mcp_server.server_url:
+                self.tool_executor.trusted_mcp_endpoints.add(mcp_server.server_url)
         # Track final messages after all tool executions
         self.final_messages: list[OpenAIMessageParam] = []
         # mapping for annotations
@@ -1756,6 +1759,8 @@ class StreamingResponseOrchestrator:
         self, mcp_tool: OpenAIResponseInputToolMCP, output_messages: list[OpenAIResponseOutput]
     ) -> AsyncIterator[OpenAIResponseObjectStream]:
         """Process an MCP tool configuration and emit appropriate streaming events."""
+        # Caller-supplied server_url is untrusted (SSRF). Connector-resolved URLs are admin-configured.
+        caller_supplied_url = bool(mcp_tool.server_url)
         # Resolve connector_id to server_url if provided
         if self.connectors_api is not None:
             mcp_tool = await resolve_mcp_connector_id(mcp_tool, self.connectors_api)
@@ -1787,6 +1792,11 @@ class StreamingResponseOrchestrator:
                 raise ValueError(
                     f"Failed to list MCP tools for server '{mcp_tool.server_label}': server_url is not set"
                 )
+
+            if caller_supplied_url:
+                validate_mcp_endpoint(mcp_tool.server_url)
+            else:
+                self.tool_executor.trusted_mcp_endpoints.add(mcp_tool.server_url)
 
             attributes = {
                 "server_label": mcp_tool.server_label,

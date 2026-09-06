@@ -11,10 +11,11 @@ import pytest
 
 from tests.common.mcp import make_mcp_server
 
-from .helpers import setup_mcp_tools, skip_if_provider_is_vertexai
+from .helpers import skip_if_provider_is_vertexai
 
 # MCP authentication tests with recordings
 # Tests for bearer token authorization support in MCP tool configurations
+CONNECTOR_MCP_PORT = 5199
 
 
 def test_mcp_authorization_bearer(responses_client, client_with_models, text_model_id):
@@ -25,18 +26,15 @@ def test_mcp_authorization_bearer(responses_client, client_with_models, text_mod
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
     test_token = "test-bearer-token-789"
-    with make_mcp_server(required_auth_token=test_token) as mcp_server_info:
-        tools = setup_mcp_tools(
-            [
-                {
-                    "type": "mcp",
-                    "server_label": "auth-mcp",
-                    "server_url": "<FILLED_BY_TEST_RUNNER>",
-                    "authorization": test_token,  # Just the token, not "Bearer <token>"
-                }
-            ],
-            mcp_server_info,
-        )
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, required_auth_token=test_token):
+        tools = [
+            {
+                "type": "mcp",
+                "server_label": "auth-mcp",
+                "connector_id": "test-mcp-connector",
+                "authorization": test_token,  # Just the token, not "Bearer <token>"
+            }
+        ]
 
         # Create response - authorization should be applied
         response = responses_client.responses.create(
@@ -62,18 +60,15 @@ def test_mcp_authorization_error_when_header_provided(responses_client, client_w
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
     test_token = "test-token-123"
-    with make_mcp_server(required_auth_token=test_token) as mcp_server_info:
-        tools = setup_mcp_tools(
-            [
-                {
-                    "type": "mcp",
-                    "server_label": "header-auth-mcp",
-                    "server_url": "<FILLED_BY_TEST_RUNNER>",
-                    "headers": {"Authorization": f"Bearer {test_token}"},  # Security risk - should be rejected
-                }
-            ],
-            mcp_server_info,
-        )
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, required_auth_token=test_token):
+        tools = [
+            {
+                "type": "mcp",
+                "server_label": "header-auth-mcp",
+                "connector_id": "test-mcp-connector",
+                "headers": {"Authorization": f"Bearer {test_token}"},  # Security risk - should be rejected
+            }
+        ]
 
         # Create response - should raise BadRequestError for security reasons
         with pytest.raises(
@@ -95,17 +90,14 @@ def test_mcp_authorization_backward_compatibility(responses_client, client_with_
         client_with_models, text_model_id, "MCP tool calling behavior differs from expected output structure"
     )
     # No authorization required
-    with make_mcp_server(required_auth_token=None) as mcp_server_info:
-        tools = setup_mcp_tools(
-            [
-                {
-                    "type": "mcp",
-                    "server_label": "noauth-mcp",
-                    "server_url": "<FILLED_BY_TEST_RUNNER>",
-                }
-            ],
-            mcp_server_info,
-        )
+    with make_mcp_server(port=CONNECTOR_MCP_PORT, required_auth_token=None):
+        tools = [
+            {
+                "type": "mcp",
+                "server_label": "noauth-mcp",
+                "connector_id": "test-mcp-connector",
+            }
+        ]
 
         # Create response without authorization
         response = responses_client.responses.create(
