@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { ListFilesResponse, FileResource } from "@/lib/types";
+import type { FileResource } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { usePagination } from "@/hooks/use-pagination";
 import { Button } from "@/components/ui/button";
@@ -51,8 +51,12 @@ export function FilesManagement() {
         after: params.after,
         limit: params.limit,
         order: params.order,
-      });
-      return response as ListFilesResponse;
+      } as Parameters<typeof client.files.list>[0]);
+      return {
+        data: response.data as unknown as FileResource[],
+        has_more: response.has_more,
+        last_id: response.last_id,
+      };
     },
     errorMessagePrefix: "files",
   });
@@ -109,7 +113,7 @@ export function FilesManagement() {
       // Show loading state (could be expanded with UI feedback)
       console.log(`Starting download for file: ${filename}`);
 
-      const response = await client.files.content(fileId);
+      const response: unknown = await client.files.content(fileId);
 
       // Create download link
       let downloadUrl: string;

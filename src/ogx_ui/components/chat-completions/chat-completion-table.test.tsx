@@ -39,6 +39,7 @@ jest.mock("@/hooks/use-auth-client", () => ({
 
 // Mock the usePagination hook
 const mockLoadMore = jest.fn();
+const mockRefetch = jest.fn();
 jest.mock("@/hooks/use-pagination", () => ({
   usePagination: jest.fn(() => ({
     data: [],
@@ -46,6 +47,7 @@ jest.mock("@/hooks/use-pagination", () => ({
     hasMore: false,
     error: null,
     loadMore: mockLoadMore,
+    refetch: mockRefetch,
   })),
 }));
 
@@ -97,6 +99,7 @@ describe("ChatCompletionsTable", () => {
       hasMore: false,
       error: null,
       loadMore: mockLoadMore,
+      refetch: mockRefetch,
     });
   });
 
@@ -130,6 +133,7 @@ describe("ChatCompletionsTable", () => {
       hasMore: false,
       error: null,
       loadMore: mockLoadMore,
+      refetch: mockRefetch,
     });
 
     render(<ChatCompletionsTable {...defaultProps} />);
@@ -153,6 +157,7 @@ describe("ChatCompletionsTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       const { container } = render(<ChatCompletionsTable {...defaultProps} />);
@@ -188,6 +193,7 @@ describe("ChatCompletionsTable", () => {
         hasMore: false,
         error: { name: "Error", message: errorMessage } as Error,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ChatCompletionsTable {...defaultProps} />);
@@ -206,6 +212,7 @@ describe("ChatCompletionsTable", () => {
           hasMore: false,
           error: errorObject as Error,
           loadMore: mockLoadMore,
+          refetch: mockRefetch,
         });
 
         render(<ChatCompletionsTable {...defaultProps} />);
@@ -286,6 +293,7 @@ describe("ChatCompletionsTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ChatCompletionsTable {...defaultProps} />);
@@ -362,6 +370,7 @@ describe("ChatCompletionsTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ChatCompletionsTable {...defaultProps} />);
@@ -409,6 +418,7 @@ describe("ChatCompletionsTable", () => {
         hasMore: false,
         error: null,
         loadMore: mockLoadMore,
+        refetch: mockRefetch,
       });
 
       render(<ChatCompletionsTable {...defaultProps} />);

@@ -142,8 +142,10 @@ export function VectorStoreEditor({
             {formData.embedding_model && (
               <p className="text-xs text-muted-foreground mt-1">
                 Dimension:{" "}
-                {embeddingModels.find(m => m.id === formData.embedding_model)
-                  ?.custom_metadata?.embedding_dimension || "Unknown"}
+                {String(
+                  embeddingModels.find(m => m.id === formData.embedding_model)
+                    ?.custom_metadata?.embedding_dimension ?? "Unknown"
+                )}
               </p>
             )}
           </div>
