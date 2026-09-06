@@ -944,7 +944,12 @@ jobs:
   #
   # Images are pushed to: ogxai/distribution-<distro>:<tag>
   #   - Production (release or dry_run=off): tagged with VERSION and "latest"
-  #   - Test (test-pypi or schedule): tagged with "test-VERSION"
+  #   - Test (dry_run=test-pypi via workflow_dispatch): tagged with "test-VERSION"
+  #
+  # Nightly (schedule) image builds are intentionally NOT handled here. They are
+  # built from source by nightly-distro.yml, which avoids waiting on test.pypi
+  # propagation and publishes the ":nightly" tag. This job only builds versioned
+  # release images (and on-demand test images via workflow_dispatch).
   publish-docker-images:
     name: Publish Docker ${{ matrix.distro }}
     if: |
@@ -955,8 +960,7 @@ jobs:
       (inputs.dry_run || 'test-pypi') != 'build-only' &&
       (inputs.packages || 'all') != 'clients-only' && (
         github.event_name == 'workflow_dispatch' ||
-        github.event.action == 'published' ||
-        github.event_name == 'schedule'
+        github.event.action == 'published'
       )
     permissions:
       contents: read
