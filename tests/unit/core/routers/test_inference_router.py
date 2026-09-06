@@ -21,7 +21,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from ogx.core.routers.inference import InferenceRouter
+from ogx.core.request_headers import PROVIDER_DATA_VAR
+from ogx.core.routers.inference import InferenceRouter, _normalize_provider_data_key
+from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
 from ogx_api import (
     GetChatCompletionRequest,
     ListChatCompletionMessagesRequest,
@@ -44,6 +46,7 @@ from ogx_api.inference.models import (
     OpenAIChunkChoice,
     OpenAICompletionChoice,
 )
+from tests.unit.providers.utils.inference.openai_mixin_helpers import OpenAIMixinWithProviderData
 
 
 @pytest.fixture
@@ -426,3 +429,197 @@ async def test_list_chat_completion_messages_without_store_raises_not_implemente
 
     with pytest.raises(NotImplementedError):
         await router.list_chat_completion_messages(ListChatCompletionMessagesRequest(completion_id="chatcmpl-test"))
+
+
+# ---------------------------------------------------------------------------
+# Provider-data key normalization: {provider_id}_api_key -> impl key
+# ---------------------------------------------------------------------------
+
+
+def _fake_provider(provider_id: str | None, impl_key: str | None) -> MagicMock:
+    provider = MagicMock()
+    provider.__provider_id__ = provider_id
+    provider.provider_data_api_key_field = impl_key
+    return provider
+
+
+@pytest.mark.parametrize(
+    ("provider_id", "impl_key", "initial", "expected"),
+    [
+        # Client key is mapped to the impl key; the client key is retained.
+        (
+            "providerA",
+            "vllm_api_token",
+            {"providerA_api_key": "tok"},
+            {"providerA_api_key": "tok", "vllm_api_token": "tok"},
+        ),
+        # No provider data on the request -> contextvar left untouched.
+        ("providerA", "vllm_api_token", None, None),
+        # Client key absent -> nothing to map.
+        ("providerA", "vllm_api_token", {"other": 1}, {"other": 1}),
+        # No provider id -> cannot derive the client key.
+        (None, "vllm_api_token", {"providerA_api_key": "tok"}, {"providerA_api_key": "tok"}),
+        # Provider has no impl key (not a provider-data provider) -> no-op.
+        ("providerA", None, {"providerA_api_key": "tok"}, {"providerA_api_key": "tok"}),
+        # Client key takes precedence over a pre-existing legacy key.
+        (
+            "providerA",
+            "vllm_api_token",
+            {"providerA_api_key": "new", "vllm_api_token": "old"},
+            {"providerA_api_key": "new", "vllm_api_token": "new"},
+        ),
+    ],
+)
+def test_normalize_provider_data_key(provider_id, impl_key, initial, expected):
+    provider = _fake_provider(provider_id, impl_key)
+    token = PROVIDER_DATA_VAR.set(dict(initial) if initial is not None else None)
+    try:
+        _normalize_provider_data_key(provider)
+        assert PROVIDER_DATA_VAR.get() == expected
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+
+def test_normalize_provider_data_key_preserves_unrelated_keys():
+    provider = _fake_provider("providerA", "vllm_api_token")
+    initial = {"providerA_api_key": "tok", "__authenticated_user": {"id": "u1"}, "unrelated": "x"}
+    token = PROVIDER_DATA_VAR.set(dict(initial))
+    try:
+        _normalize_provider_data_key(provider)
+        result = PROVIDER_DATA_VAR.get()
+        assert result["vllm_api_token"] == "tok"
+        assert result["__authenticated_user"] == {"id": "u1"}
+        assert result["unrelated"] == "x"
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+
+@pytest.mark.parametrize(
+    "client_key", ["providerA_api_key", "PROVIDERA_API_KEY", "Providera_Api_Key", "providera_api_key"]
+)
+def test_normalize_provider_data_key_is_case_insensitive(client_key):
+    provider = _fake_provider("providerA", "vllm_api_token")
+    token = PROVIDER_DATA_VAR.set({client_key: "tok"})
+    try:
+        _normalize_provider_data_key(provider)
+        result = PROVIDER_DATA_VAR.get()
+        assert result[client_key] == "tok"
+        assert result["vllm_api_token"] == "tok"
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+
+def test_normalize_provider_data_key_ignores_legacy_key_casing():
+    """A differently-cased legacy impl key is not treated as the client key."""
+    provider = _fake_provider("providerA", "vllm_api_token")
+    token = PROVIDER_DATA_VAR.set({"VLLM_API_TOKEN": "legacy"})
+    try:
+        _normalize_provider_data_key(provider)
+        assert PROVIDER_DATA_VAR.get() == {"VLLM_API_TOKEN": "legacy"}
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+
+@pytest.mark.parametrize(
+    "provider_data_key",
+    [
+        "providerA_api_key",  # client key, exact case
+        "PROVIDERA_API_KEY",  # client key, upper case
+        "Providera_Api_Key",  # client key, mixed case
+        "test_api_key",  # fallback: provider_data_api_key_field, passes through unmapped
+    ],
+)
+def test_client_api_key_reaches_openai_client_after_normalization(provider_data_key):
+    """A per-request credential reaches the provider's OpenAI client api_key.
+
+    The client key {provider_id}_api_key is matched case-insensitively and mapped to
+    the impl key by the router; the legacy provider_data_api_key_field is a fallback
+    that passes through unmapped. Uses a real (mock) OpenAI mixin so the client is
+    built from the (normalized) provider-data key. No network is touched.
+    """
+    provider = OpenAIMixinWithProviderData(config=RemoteInferenceProviderConfig())
+    provider.__provider_id__ = "providerA"
+    provider.__provider_spec__ = MagicMock(
+        provider_type="test",
+        provider_data_validator="tests.unit.providers.utils.inference.openai_mixin_helpers.ProviderDataValidator",
+    )
+
+    token = PROVIDER_DATA_VAR.set({provider_data_key: "tok"})
+    try:
+        _normalize_provider_data_key(provider)
+        assert provider.client.api_key == "tok"
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+
+def test_client_key_overrides_provider_data_field():
+    """When both the client key and the impl key are present, the client key wins.
+
+    A client that sends {provider_id}_api_key takes precedence over a legacy
+    provider_data_api_key_field value, so the client key's credential is the one
+    that reaches the OpenAI client.
+    """
+    provider = OpenAIMixinWithProviderData(config=RemoteInferenceProviderConfig())
+    provider.__provider_id__ = "providerA"
+    provider.__provider_spec__ = MagicMock(
+        provider_type="test",
+        provider_data_validator="tests.unit.providers.utils.inference.openai_mixin_helpers.ProviderDataValidator",
+    )
+
+    token = PROVIDER_DATA_VAR.set({"providerA_api_key": "client_tok", "test_api_key": "impl_tok"})
+    try:
+        _normalize_provider_data_key(provider)
+        assert provider.client.api_key == "client_tok"
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+
+async def test_get_model_provider_normalizes_provider_data_key(mock_llm_routing_table):
+    """The router normalizes {provider_id}_api_key before the provider is invoked."""
+    routing_table, mock_provider = mock_llm_routing_table
+    mock_provider.__provider_id__ = "test_provider"
+    mock_provider.provider_data_api_key_field = "vllm_api_token"
+    router = InferenceRouter(routing_table=routing_table)
+
+    captured = {}
+
+    async def fake_completion(params):
+        captured["provider_data"] = dict(PROVIDER_DATA_VAR.get() or {})
+        return _make_completion_chunk("hi", model="test-llm-model")
+
+    mock_provider.openai_completion = AsyncMock(side_effect=fake_completion)
+
+    token = PROVIDER_DATA_VAR.set({"test_provider_api_key": "tok"})
+    try:
+        params = OpenAICompletionRequestWithExtraBody(model="test_provider/test-llm-model", prompt="hi")
+        await router.openai_completion(params)
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+    assert captured["provider_data"].get("vllm_api_token") == "tok"
+    assert captured["provider_data"].get("test_provider_api_key") == "tok"
+
+
+async def test_get_model_provider_without_provider_data_is_unchanged(mock_llm_routing_table):
+    """No provider data on the request leaves the provider data context empty."""
+    routing_table, mock_provider = mock_llm_routing_table
+    mock_provider.__provider_id__ = "test_provider"
+    mock_provider.provider_data_api_key_field = "vllm_api_token"
+    router = InferenceRouter(routing_table=routing_table)
+
+    captured = {}
+
+    async def fake_completion(params):
+        captured["provider_data"] = dict(PROVIDER_DATA_VAR.get() or {})
+        return _make_completion_chunk("hi", model="test-llm-model")
+
+    mock_provider.openai_completion = AsyncMock(side_effect=fake_completion)
+
+    token = PROVIDER_DATA_VAR.set(None)
+    try:
+        params = OpenAICompletionRequestWithExtraBody(model="test_provider/test-llm-model", prompt="hi")
+        await router.openai_completion(params)
+    finally:
+        PROVIDER_DATA_VAR.reset(token)
+
+    assert captured["provider_data"] == {}

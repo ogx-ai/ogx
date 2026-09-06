@@ -25,6 +25,8 @@ client = OGXAsLibraryClient(
 )
 ```
 
+For inference providers, pass per-request credentials keyed by the provider id, e.g. `{"<provider_id>_api_key": "..."}`. Keying by the provider id (rather than the backend type) lets you configure multiple providers of the same type and target each by id without the client needing to know the underlying backend. The server maps this key to the provider's internal credential field on each request.
+
 This will parse your config and set up any inline implementations and remote clients needed for your implementation.
 
 Then, you can access the APIs like `models` and `inference` on the client and call their methods directly:
