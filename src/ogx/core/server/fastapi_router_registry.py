@@ -86,12 +86,15 @@ def register_external_api_routers(external_apis: dict[Api, ExternalApiSpec]) -> 
             logger.warning("Failed to import external API router", api=api.value, module=api_spec.module, exc_info=True)
 
 
-def build_fastapi_router(api: "Api", impl: Any) -> APIRouter | None:
+def build_fastapi_router(api: "Api", impl: Any, max_file_upload_size: int | None = None) -> APIRouter | None:
     """Build a router for an API using its auto-discovered router factory."""
     router_factory = _ROUTER_FACTORIES.get(api.value)
     if router_factory is None:
         return None
 
+    if max_file_upload_size is not None and api.value in {"files", "file_processors", "containers", "skills"}:
+        upload_router_factory = cast(Callable[..., APIRouter], router_factory)
+        return upload_router_factory(impl, max_upload_size_bytes=max_file_upload_size)
     return cast(APIRouter, router_factory(impl))
 
 

@@ -239,3 +239,33 @@ class TestDryRun:
 
         mock_validate.assert_called_once()
         mock_uvicorn.assert_not_called()
+
+
+def test_uvicorn_run_passes_configured_resource_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("version: 2\n")
+    config = MagicMock()
+    config.model_dump.return_value = {}
+    config.server.port = 8321
+    config.server.host = None
+    config.server.workers = 1
+    config.server.limit_concurrency = 8
+    config.server.limit_max_requests = 1000
+    config.server.timeout_keep_alive = 9
+    config.server.tls_keyfile = None
+    config.server.tls_certfile = None
+    config.server.insecure = True
+    monkeypatch.setenv("OGX_CONFIG", "original")
+
+    with (
+        patch("ogx.core.configure.parse_and_maybe_upgrade_config", return_value=config),
+        patch("ogx.cli.stack.run.resolve_config_or_distro", return_value=config_file),
+        patch("ogx.cli.stack.run.uvicorn.run") as run,
+    ):
+        from ogx.cli.stack.run import _uvicorn_run
+
+        _uvicorn_run(config_file, argparse.Namespace(insecure=False, port=None), argparse.ArgumentParser())
+
+    assert run.call_args.kwargs["limit_concurrency"] == 8
+    assert run.call_args.kwargs["limit_max_requests"] == 1000
+    assert run.call_args.kwargs["timeout_keep_alive"] == 9

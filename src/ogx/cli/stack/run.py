@@ -170,7 +170,7 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
     resolved_config = reveal_secret_fields(config.model_dump())
     fd, resolved_path = tempfile.mkstemp(suffix=".yaml", prefix="ogx-run-")
     resolved_file = Path(resolved_path)
-    atexit.register(lambda p=resolved_file: p.unlink(missing_ok=True))
+    atexit.register(resolved_file.unlink, missing_ok=True)
     with os.fdopen(fd, "w") as f:
         yaml.dump(resolved_config, f, default_flow_style=False, sort_keys=False)
 
@@ -194,6 +194,9 @@ def _uvicorn_run(config_file: Path | None, args: argparse.Namespace, parser: arg
         "lifespan": "on",
         "log_level": logger.getEffectiveLevel(),
         "workers": workers,
+        "limit_concurrency": config.server.limit_concurrency,
+        "limit_max_requests": config.server.limit_max_requests,
+        "timeout_keep_alive": config.server.timeout_keep_alive,
     }
 
     keyfile = config.server.tls_keyfile
