@@ -708,7 +708,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             else:
                 prefix = "!" if in_notebook() else ""  # type: ignore[no-untyped-call]
                 cprint(
-                    f"Please run:\n\n{prefix}ogx list-deps {self.config_path_or_distro_name} | xargs -L1 uv pip install\n\n",
+                    f"Please run:\n\n{prefix}ogx stack list-deps {self.config_path_or_distro_name} | xargs -L1 uv pip install\n\n",
                     "yellow",
                     file=sys.stderr,
                 )
