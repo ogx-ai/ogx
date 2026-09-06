@@ -132,6 +132,74 @@ class TestOpenAIVectorStoreMixin:
         assert result.last_error is not None
         assert "FileProcessor API is required" in result.last_error.message
 
+    async def _attach_and_capture_embeddings_request(
+        self, mock_inference_api, mock_files_api, mock_kvstore, input_type=None
+    ):
+        """Run ingestion with one chunk and return the embeddings request that was built.
+
+        input_type, when given, is stored in the vector store metadata as it would be
+        after creation from the request extra body.
+        """
+        from ogx.core.datatypes import VectorStoresConfig
+        from ogx_api import Chunk, ChunkMetadata
+
+        chunk = Chunk(
+            content="hello world",
+            chunk_id="c1",
+            metadata={},
+            chunk_metadata=ChunkMetadata(
+                document_id="f1",
+                chunk_id="c1",
+                created_timestamp=1234567890,
+                updated_timestamp=1234567890,
+                content_token_count=2,
+            ),
+        )
+        mock_file_processor_api = AsyncMock()
+        mock_file_processor_api.process_file = AsyncMock()
+        mock_file_processor_api.process_file.return_value = MagicMock(
+            chunks=[chunk],
+            metadata={"processor": "pypdf"},
+        )
+        mock_inference_api.openai_embeddings.return_value = MagicMock(data=[MagicMock(embedding=[0.1, 0.2, 0.3])])
+
+        mixin = MockVectorStoreMixin(
+            inference_api=mock_inference_api,
+            files_api=mock_files_api,
+            kvstore=mock_kvstore,
+            file_processor_api=mock_file_processor_api,
+        )
+        mixin.vector_stores_config = VectorStoresConfig()
+
+        store_info = _make_store_info()
+        store_info["metadata"] = {"embedding_model": "nvidia/llama-3.2-nv-embedqa-1b-v2", "embedding_dimension": 3}
+        if input_type is not None:
+            store_info["metadata"]["input_type"] = input_type
+        mixin.openai_vector_stores["vs"] = store_info
+
+        await mixin.openai_attach_file_to_vector_store(
+            vector_store_id="vs",
+            request=OpenAIAttachFileRequest(file_id="f1", chunking_strategy=VectorStoreChunkingStrategyAuto()),
+        )
+        mock_inference_api.openai_embeddings.assert_called_once()
+        return mock_inference_api.openai_embeddings.call_args.args[0]
+
+    async def test_input_type_forwarded_when_store_configured(
+        self, mock_inference_api, mock_files_api, mock_kvstore
+    ):
+        """Ingestion forwards the store's input_type via the embeddings extra body (issue #5755)."""
+        request = await self._attach_and_capture_embeddings_request(
+            mock_inference_api, mock_files_api, mock_kvstore, input_type="passage"
+        )
+        assert request.model_extra == {"input_type": "passage"}
+
+    async def test_no_input_type_by_default(self, mock_inference_api, mock_files_api, mock_kvstore):
+        """Ingestion sends no input_type by default, preserving behavior for symmetric models."""
+        request = await self._attach_and_capture_embeddings_request(
+            mock_inference_api, mock_files_api, mock_kvstore, input_type=None
+        )
+        assert "input_type" not in (request.model_extra or {})
+
     async def test_file_processor_api_configured_succeeds(self, mock_inference_api, mock_files_api, mock_kvstore):
         """Test that with file_processor_api configured, processing proceeds past the check."""
         mock_file_processor_api = AsyncMock()

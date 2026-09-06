@@ -544,3 +544,44 @@ class TestNeuralRerank:
         # Verify max_num_results was passed to rerank
         rerank_request = store.inference_api.rerank.call_args.args[0]
         assert rerank_request.max_num_results == 2
+
+
+class TestQueryEmbeddingInputType:
+    """Query-side embedding requests forward input_type only when it is in the query params (issue #5755)."""
+
+    def _make_store(self):
+        mock_vector_store = MagicMock()
+        mock_vector_store.embedding_model = "nvidia/llama-3.2-nv-embedqa-1b-v2"
+        mock_vector_store.embedding_dimension = 3
+        mock_index = AsyncMock()
+        mock_index.query_vector.return_value = QueryChunksResponse(chunks=[], scores=[])
+        mock_inference_api = AsyncMock()
+        mock_embedding_response = MagicMock()
+        mock_embedding_data = MagicMock()
+        mock_embedding_data.embedding = [0.1, 0.2, 0.3]
+        mock_embedding_response.data = [mock_embedding_data]
+        mock_inference_api.openai_embeddings.return_value = mock_embedding_response
+        return VectorStoreWithIndex(
+            vector_store=mock_vector_store,
+            index=mock_index,
+            inference_api=mock_inference_api,
+            vector_stores_config=None,
+        )
+
+    async def test_query_input_type_forwarded_from_params(self):
+        store = self._make_store()
+
+        await store.query_chunks(
+            QueryChunksRequest(vector_store_id="test-store", query="hello", params={"input_type": "query"})
+        )
+
+        embeddings_request = store.inference_api.openai_embeddings.call_args.args[0]
+        assert embeddings_request.model_extra == {"input_type": "query"}
+
+    async def test_no_input_type_by_default(self):
+        store = self._make_store()
+
+        await store.query_chunks(QueryChunksRequest(vector_store_id="test-store", query="hello"))
+
+        embeddings_request = store.inference_api.openai_embeddings.call_args.args[0]
+        assert "input_type" not in (embeddings_request.model_extra or {})

@@ -935,6 +935,13 @@ class OpenAIVectorStoreMixin(ABC):
         # Add embedding configuration to metadata for file processing
         metadata["embedding_model"] = embedding_model
         metadata["embedding_dimension"] = str(embedding_dimension)
+        # Asymmetric embedding models (e.g. NVIDIA nv-embedqa) need an input_type on
+        # the embeddings request. Persist a caller-supplied value so both ingestion
+        # and search forward it; absent, no input_type is sent (symmetric models and
+        # providers such as OpenAI reject it).
+        input_type = extra_body.get("input_type") or metadata.get("input_type")
+        if input_type is not None:
+            metadata["input_type"] = input_type
 
         store_info["metadata"] = metadata
 
@@ -1095,7 +1102,7 @@ class OpenAIVectorStoreMixin(ABC):
         if request.search_mode not in valid_modes:
             raise ValueError(f"search_mode must be one of {valid_modes}, got {request.search_mode}")
 
-        await self._get_authorized_openai_vector_store(vector_store_id)
+        store_info = await self._get_authorized_openai_vector_store(vector_store_id)
 
         if isinstance(request.query, list):
             search_query = " ".join(request.query)
@@ -1131,6 +1138,13 @@ class OpenAIVectorStoreMixin(ABC):
             # Parse filters into typed objects and pass through to the query
             if request.filters:
                 params["filters"] = parse_filter(request.filters)
+
+            # Forward the vector store's configured input_type so an asymmetric
+            # embedding model (e.g. NVIDIA nv-embedqa) embeds the query with the
+            # same input_type the store was created with.
+            input_type = store_info["metadata"].get("input_type")
+            if input_type is not None:
+                params["input_type"] = input_type
 
             # Use VectorStoresConfig defaults when ranking_options values are not provided
             config = self.vector_stores_config or VectorStoresConfig()
@@ -1382,11 +1396,20 @@ class OpenAIVectorStoreMixin(ABC):
 
                 # Generate embeddings for all chunks before insertion
 
-                # Prepare embedding request for all chunks
+                # Prepare embedding request for all chunks. Asymmetric embedding models
+                # (e.g. NVIDIA nv-embedqa) require an input_type to distinguish documents
+                # from queries. When the vector store was created with an input_type (via
+                # the create request extra body), forward it on the ingestion embeddings so
+                # chunks are embedded as documents.
+                embedding_extra: dict[str, Any] = {}
+                input_type = store_info["metadata"].get("input_type")
+                if input_type is not None:
+                    embedding_extra["input_type"] = input_type
                 params = OpenAIEmbeddingsRequestWithExtraBody(
                     model=embedding_model,
                     input=[interleaved_content_as_str(c.content) for c in chunks],
                     dimensions=embedding_dimension,
+                    **embedding_extra,
                 )
                 resp = await self.inference_api.openai_embeddings(params)
 

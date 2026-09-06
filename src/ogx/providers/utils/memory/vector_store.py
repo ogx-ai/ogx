@@ -373,15 +373,24 @@ class VectorStoreWithIndex:
             response = await self.index.query_keyword(query_string, k, score_threshold, filters)
 
         else:
+            # Asymmetric embedding models (e.g. NVIDIA nv-embedqa) require an input_type to
+            # distinguish queries from documents. The mixin forwards the vector store's
+            # configured input_type in params (and a caller may override it per query); when
+            # present, send it on the query embeddings via the request extra body.
+            embedding_extra: dict[str, Any] = {}
+            query_input_type = params.get("input_type")
+            if query_input_type is not None:
+                embedding_extra["input_type"] = query_input_type
             if "embedding_dimensions" in params:
                 embeddings_request = OpenAIEmbeddingsRequestWithExtraBody(
                     model=self.vector_store.embedding_model,
                     input=[query_string],
                     dimensions=params.get("embedding_dimensions"),
+                    **embedding_extra,
                 )
             else:
                 embeddings_request = OpenAIEmbeddingsRequestWithExtraBody(
-                    model=self.vector_store.embedding_model, input=[query_string]
+                    model=self.vector_store.embedding_model, input=[query_string], **embedding_extra
                 )
             embeddings_response = await self.inference_api.openai_embeddings(embeddings_request)
             np = _get_numpy()
