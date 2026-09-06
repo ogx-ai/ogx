@@ -100,7 +100,6 @@ The official `ogx_client` SDK is recommended for most use cases. The `ogx_open_c
 
 We hold regular community calls every Thursday at 09:00 AM PST — see the [Community Event on Discord](https://discord.gg/bUYRqEvK6) for details.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ogx-ai/ogx&type=Date)](https://www.star-history.com/#ogx-ai/ogx&Date)
 
 Thanks to all our amazing contributors!
 
