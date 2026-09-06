@@ -83,6 +83,16 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.inference,
+            adapter_type="xai",
+            provider_type="remote::xai",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.xai",
+            config_class="ogx.providers.remote.inference.xai.XAIImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.xai.config.XAIProviderDataValidator",
+            description="xAI inference provider for accessing Grok models via the xAI API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
             adapter_type="ollama",
             provider_type="remote::ollama",
             pip_packages=["ollama", "aiohttp", "h11>=0.16.0"],
