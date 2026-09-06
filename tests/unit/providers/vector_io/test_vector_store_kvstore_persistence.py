@@ -23,7 +23,7 @@ if "pymilvus" not in sys.modules:
     )
     pymilvus.Function = object
     pymilvus.FunctionType = SimpleNamespace(BM25="BM25")
-    pymilvus.MilvusClient = object
+    pymilvus.AsyncMilvusClient = object
     pymilvus.RRFRanker = object
     pymilvus.WeightedRanker = object
     sys.modules["pymilvus"] = pymilvus
@@ -63,8 +63,20 @@ def _vector_store(store_id: str) -> VectorStore:
 
 async def _make_milvus_adapter(kvstore_config, tmp_path, monkeypatch):
     fake_client = MagicMock()
+    for method in (
+        "has_collection",
+        "create_collection",
+        "drop_collection",
+        "upsert",
+        "search",
+        "hybrid_search",
+        "query",
+        "delete",
+        "close",
+    ):
+        setattr(fake_client, method, AsyncMock())
     fake_client.has_collection.return_value = True
-    monkeypatch.setattr(milvus_module, "MilvusClient", lambda **kwargs: fake_client)
+    monkeypatch.setattr(milvus_module, "AsyncMilvusClient", lambda **kwargs: fake_client)
     config = InlineMilvusVectorIOConfig(
         db_path=str(tmp_path / "milvus.db"),
         persistence=kvstore_config,
