@@ -53,13 +53,9 @@ The deployed platform includes the NIM Proxy microservice, which is the service 
 
 The NeMo Data Store microservice serves as the default file storage solution for the NeMo microservices platform. It exposts APIs compatible with the Hugging Face Hub client (`HfApi`), so you can use the client to interact with Data Store. The `NVIDIA_DATASETS_URL` environment variable should point to your NeMo Data Store endpoint.
 
-See the [NVIDIA Datasetio docs](https://github.com/ogx-ai/ogx/blob/main/ogx/providers/remote/datasetio/nvidia/README.md) for supported features and example usage.
-
 ### Eval API: NeMo Evaluator
 
 The NeMo Evaluator microservice supports evaluation of LLMs. Launching an Evaluation job with NeMo Evaluator requires an Evaluation Config (an object that contains metadata needed by the job). A OGX Benchmark maps to an Evaluation Config, so registering a Benchmark creates an Evaluation Config in NeMo Evaluator. The `NVIDIA_EVALUATOR_URL` environment variable should point to your NeMo Microservices endpoint.
-
-See the [NVIDIA Eval docs](https://github.com/ogx-ai/ogx/blob/main/ogx/providers/remote/eval/nvidia/README.md) for supported features and example usage.
 
 ## Deploying models
 

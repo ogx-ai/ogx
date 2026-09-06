@@ -41,10 +41,10 @@ from ogx_client.types import (
 
 Methods:
 
-- <code title="get /v1/toolgroups">client.toolgroups.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/toolgroups.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/toolgroup_list_response.py">ToolgroupListResponse</a></code>
-- <code title="get /v1/toolgroups/{toolgroup_id}">client.toolgroups.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/toolgroups.py">get</a>(toolgroup_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_group.py">ToolGroup</a></code>
-- <code title="post /v1/toolgroups">client.toolgroups.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/toolgroups.py">register</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/toolgroup_register_params.py">params</a>) -> None</code>
-- <code title="delete /v1/toolgroups/{toolgroup_id}">client.toolgroups.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/toolgroups.py">unregister</a>(toolgroup_id) -> None</code>
+- <code title="get /v1/toolgroups">client.toolgroups.list() -> ToolgroupListResponse</code>
+- <code title="get /v1/toolgroups/{toolgroup_id}">client.toolgroups.get(toolgroup_id) -> ToolGroup</code>
+- <code title="post /v1/toolgroups">client.toolgroups.register(\*\*params) -> None</code>
+- <code title="delete /v1/toolgroups/{toolgroup_id}">client.toolgroups.unregister(toolgroup_id) -> None</code>
 
 ## Tools
 
@@ -56,8 +56,8 @@ from ogx_client.types import ListToolsResponse, Tool, ToolListResponse
 
 Methods:
 
-- <code title="get /v1/tools">client.tools.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/tools.py">list</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_list_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_list_response.py">ToolListResponse</a></code>
-- <code title="get /v1/tools/{tool_name}">client.tools.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/tools.py">get</a>(tool_name) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool.py">Tool</a></code>
+- <code title="get /v1/tools">client.tools.list(\*\*params) -> ToolListResponse</code>
+- <code title="get /v1/tools/{tool_name}">client.tools.get(tool_name) -> Tool</code>
 
 ## ToolRuntime
 
@@ -69,15 +69,15 @@ from ogx_client.types import ToolDef, ToolInvocationResult
 
 Methods:
 
-- <code title="post /v1/tool-runtime/invoke">client.tool_runtime.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/tool_runtime/tool_runtime.py">invoke_tool</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_runtime_invoke_tool_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_invocation_result.py">ToolInvocationResult</a></code>
-- <code title="get /v1/tool-runtime/list-tools">client.tool_runtime.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/tool_runtime/tool_runtime.py">list_tools</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_runtime_list_tools_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_def.py">JSONLDecoder[ToolDef]</a></code>
+- <code title="post /v1/tool-runtime/invoke">client.tool_runtime.invoke_tool(\*\*params) -> ToolInvocationResult</code>
+- <code title="get /v1/tool-runtime/list-tools">client.tool_runtime.list_tools(\*\*params) -> JSONLDecoder[ToolDef]</code>
 
 ### RagTool
 
 Methods:
 
-- <code title="post /v1/tool-runtime/rag-tool/insert">client.tool_runtime.rag_tool.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/tool_runtime/rag_tool.py">insert</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_runtime/rag_tool_insert_params.py">params</a>) -> None</code>
-- <code title="post /v1/tool-runtime/rag-tool/query">client.tool_runtime.rag_tool.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/tool_runtime/rag_tool.py">query</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/tool_runtime/rag_tool_query_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/shared/query_result.py">QueryResult</a></code>
+- <code title="post /v1/tool-runtime/rag-tool/insert">client.tool_runtime.rag_tool.insert(\*\*params) -> None</code>
+- <code title="post /v1/tool-runtime/rag-tool/query">client.tool_runtime.rag_tool.query(\*\*params) -> QueryResult</code>
 
 ## Agents
 
@@ -103,8 +103,8 @@ from ogx_client.types import (
 
 Methods:
 
-- <code title="post /v1/agents">client.agents.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/agents.py">create</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agent_create_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agent_create_response.py">AgentCreateResponse</a></code>
-- <code title="delete /v1/agents/{agent_id}">client.agents.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/agents.py">delete</a>(agent_id) -> None</code>
+- <code title="post /v1/agents">client.agents.create(\*\*params) -> AgentCreateResponse</code>
+- <code title="delete /v1/agents/{agent_id}">client.agents.delete(agent_id) -> None</code>
 
 ### Session
 
@@ -116,9 +116,9 @@ from ogx_client.types.agents import Session, SessionCreateResponse
 
 Methods:
 
-- <code title="post /v1/agents/{agent_id}/session">client.agents.session.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/session.py">create</a>(agent_id, \*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/session_create_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/session_create_response.py">SessionCreateResponse</a></code>
-- <code title="get /v1/agents/{agent_id}/session/{session_id}">client.agents.session.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/session.py">retrieve</a>(session_id, \*, agent_id, \*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/session_retrieve_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/session.py">Session</a></code>
-- <code title="delete /v1/agents/{agent_id}/session/{session_id}">client.agents.session.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/session.py">delete</a>(session_id, \*, agent_id) -> None</code>
+- <code title="post /v1/agents/{agent_id}/session">client.agents.session.create(agent_id, \*\*params) -> SessionCreateResponse</code>
+- <code title="get /v1/agents/{agent_id}/session/{session_id}">client.agents.session.retrieve(session_id, \*, agent_id, \*\*params) -> Session</code>
+- <code title="delete /v1/agents/{agent_id}/session/{session_id}">client.agents.session.delete(session_id, \*, agent_id) -> None</code>
 
 ### Steps
 
@@ -130,7 +130,7 @@ from ogx_client.types.agents import StepRetrieveResponse
 
 Methods:
 
-- <code title="get /v1/agents/{agent_id}/session/{session_id}/turn/{turn_id}/step/{step_id}">client.agents.steps.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/steps.py">retrieve</a>(step_id, \*, agent_id, session_id, turn_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/step_retrieve_response.py">StepRetrieveResponse</a></code>
+- <code title="get /v1/agents/{agent_id}/session/{session_id}/turn/{turn_id}/step/{step_id}">client.agents.steps.retrieve(step_id, \*, agent_id, session_id, turn_id) -> StepRetrieveResponse</code>
 
 ### Turn
 
@@ -142,8 +142,8 @@ from ogx_client.types.agents import Turn, TurnCreateResponse
 
 Methods:
 
-- <code title="post /v1/agents/{agent_id}/session/{session_id}/turn">client.agents.turn.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/turn.py">create</a>(session_id, \*, agent_id, \*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/turn_create_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/turn_create_response.py">TurnCreateResponse</a></code>
-- <code title="get /v1/agents/{agent_id}/session/{session_id}/turn/{turn_id}">client.agents.turn.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/agents/turn.py">retrieve</a>(turn_id, \*, agent_id, session_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/agents/turn.py">Turn</a></code>
+- <code title="post /v1/agents/{agent_id}/session/{session_id}/turn">client.agents.turn.create(session_id, \*, agent_id, \*\*params) -> TurnCreateResponse</code>
+- <code title="get /v1/agents/{agent_id}/session/{session_id}/turn/{turn_id}">client.agents.turn.retrieve(turn_id, \*, agent_id, session_id) -> Turn</code>
 
 ## Datasets
 
@@ -159,10 +159,10 @@ from ogx_client.types import (
 
 Methods:
 
-- <code title="get /v1/datasets/{dataset_id}">client.datasets.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/datasets.py">retrieve</a>(dataset_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/dataset_retrieve_response.py">Optional[DatasetRetrieveResponse]</a></code>
-- <code title="get /v1/datasets">client.datasets.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/datasets.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/dataset_list_response.py">DatasetListResponse</a></code>
-- <code title="post /v1/datasets">client.datasets.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/datasets.py">register</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/dataset_register_params.py">params</a>) -> None</code>
-- <code title="delete /v1/datasets/{dataset_id}">client.datasets.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/datasets.py">unregister</a>(dataset_id) -> None</code>
+- <code title="get /v1/datasets/{dataset_id}">client.datasets.retrieve(dataset_id) -> Optional[DatasetRetrieveResponse]</code>
+- <code title="get /v1/datasets">client.datasets.list() -> DatasetListResponse</code>
+- <code title="post /v1/datasets">client.datasets.register(\*\*params) -> None</code>
+- <code title="delete /v1/datasets/{dataset_id}">client.datasets.unregister(dataset_id) -> None</code>
 
 ## Eval
 
@@ -174,8 +174,8 @@ from ogx_client.types import EvaluateResponse, Job
 
 Methods:
 
-- <code title="post /v1/eval/tasks/{benchmark_id}/evaluations">client.eval.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/eval/eval.py">evaluate_rows</a>(benchmark_id, \*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/eval_evaluate_rows_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/evaluate_response.py">EvaluateResponse</a></code>
-- <code title="post /v1/eval/tasks/{benchmark_id}/jobs">client.eval.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/eval/eval.py">run_eval</a>(benchmark_id, \*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/eval_run_eval_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/job.py">Job</a></code>
+- <code title="post /v1/eval/tasks/{benchmark_id}/evaluations">client.eval.evaluate_rows(benchmark_id, \*\*params) -> EvaluateResponse</code>
+- <code title="post /v1/eval/tasks/{benchmark_id}/jobs">client.eval.run_eval(benchmark_id, \*\*params) -> Job</code>
 
 ### Jobs
 
@@ -187,9 +187,9 @@ from ogx_client.types.eval import JobStatusResponse
 
 Methods:
 
-- <code title="get /v1/eval/tasks/{benchmark_id}/jobs/{job_id}/result">client.eval.jobs.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/eval/jobs.py">retrieve</a>(job_id, \*, benchmark_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/evaluate_response.py">EvaluateResponse</a></code>
-- <code title="delete /v1/eval/tasks/{benchmark_id}/jobs/{job_id}">client.eval.jobs.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/eval/jobs.py">cancel</a>(job_id, \*, benchmark_id) -> None</code>
-- <code title="get /v1/eval/tasks/{benchmark_id}/jobs/{job_id}">client.eval.jobs.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/eval/jobs.py">status</a>(job_id, \*, benchmark_id) -> Optional[JobStatusResponse]</code>
+- <code title="get /v1/eval/tasks/{benchmark_id}/jobs/{job_id}/result">client.eval.jobs.retrieve(job_id, \*, benchmark_id) -> EvaluateResponse</code>
+- <code title="delete /v1/eval/tasks/{benchmark_id}/jobs/{job_id}">client.eval.jobs.cancel(job_id, \*, benchmark_id) -> None</code>
+- <code title="get /v1/eval/tasks/{benchmark_id}/jobs/{job_id}">client.eval.jobs.status(job_id, \*, benchmark_id) -> Optional[JobStatusResponse]</code>
 
 ## Inspect
 
@@ -201,8 +201,8 @@ from ogx_client.types import HealthInfo, ProviderInfo, RouteInfo, VersionInfo
 
 Methods:
 
-- <code title="get /v1/health">client.inspect.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/inspect.py">health</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/health_info.py">HealthInfo</a></code>
-- <code title="get /v1/version">client.inspect.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/inspect.py">version</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/version_info.py">VersionInfo</a></code>
+- <code title="get /v1/health">client.inspect.health() -> HealthInfo</code>
+- <code title="get /v1/version">client.inspect.version() -> VersionInfo</code>
 
 ## Inference
 
@@ -220,7 +220,7 @@ from ogx_client.types import (
 
 Methods:
 
-- <code title="post /v1/inference/embeddings">client.inference.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/inference.py">embeddings</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/inference_embeddings_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/embeddings_response.py">EmbeddingsResponse</a></code>
+- <code title="post /v1/inference/embeddings">client.inference.embeddings(\*\*params) -> EmbeddingsResponse</code>
 
 ## VectorIo
 
@@ -247,8 +247,8 @@ from ogx_client.types import QueryChunksResponse
 
 Methods:
 
-- <code title="post /v1/vector-io/insert">client.vector_io.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/vector_io.py">insert</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/vector_io_insert_params.py">params</a>) -> None</code>
-- <code title="post /v1/vector-io/query">client.vector_io.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/vector_io.py">query</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/vector_io_query_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/query_chunks_response.py">QueryChunksResponse</a></code>
+- <code title="post /v1/vector-io/insert">client.vector_io.insert(\*\*params) -> None</code>
+- <code title="post /v1/vector-io/query">client.vector_io.query(\*\*params) -> QueryChunksResponse</code>
 
 ## VectorDBs
 
@@ -282,10 +282,10 @@ from ogx_client.types import (
 
 Methods:
 
-- <code title="get /v1/vector-dbs/{vector_db_id}">client.vector_dbs.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/vector_dbs.py">retrieve</a>(vector_db_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/vector_db_retrieve_response.py">Optional[VectorDBRetrieveResponse]</a></code>
-- <code title="get /v1/vector-dbs">client.vector_dbs.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/vector_dbs.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/vector_db_list_response.py">VectorDBListResponse</a></code>
-- <code title="post /v1/vector-dbs">client.vector_dbs.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/vector_dbs.py">register</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/vector_db_register_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/vector_db_register_response.py">VectorDBRegisterResponse</a></code>
-- <code title="delete /v1/vector-dbs/{vector_db_id}">client.vector_dbs.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/vector_dbs.py">unregister</a>(vector_db_id) -> None</code>
+- <code title="get /v1/vector-dbs/{vector_db_id}">client.vector_dbs.retrieve(vector_db_id) -> Optional[VectorDBRetrieveResponse]</code>
+- <code title="get /v1/vector-dbs">client.vector_dbs.list() -> VectorDBListResponse</code>
+- <code title="post /v1/vector-dbs">client.vector_dbs.register(\*\*params) -> VectorDBRegisterResponse</code>
+- <code title="delete /v1/vector-dbs/{vector_db_id}">client.vector_dbs.unregister(vector_db_id) -> None</code>
 
 ## Models
 
@@ -297,10 +297,10 @@ from ogx_client.types import ListModelsResponse, Model, ModelListResponse
 
 Methods:
 
-- <code title="get /v1/models/{model_id}">client.models.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/models.py">retrieve</a>(model_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/model.py">Optional[Model]</a></code>
-- <code title="get /v1/models">client.models.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/models.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/model_list_response.py">ModelListResponse</a></code>
-- <code title="post /v1/models">client.models.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/models.py">register</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/model_register_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/model.py">Model</a></code>
-- <code title="delete /v1/models/{model_id}">client.models.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/models.py">unregister</a>(model_id) -> None</code>
+- <code title="get /v1/models/{model_id}">client.models.retrieve(model_id) -> Optional[Model]</code>
+- <code title="get /v1/models">client.models.list() -> ModelListResponse</code>
+- <code title="post /v1/models">client.models.register(\*\*params) -> Model</code>
+- <code title="delete /v1/models/{model_id}">client.models.unregister(model_id) -> None</code>
 
 ## PostTraining
 
@@ -318,8 +318,8 @@ from ogx_client.types import ListPostTrainingJobsResponse, PostTrainingJob
 
 Methods:
 
-- <code title="post /v1/post-training/preference-optimize">client.post_training.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/post_training/post_training.py">preference_optimize</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training_preference_optimize_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training_job.py">PostTrainingJob</a></code>
-- <code title="post /v1/post-training/supervised-fine-tune">client.post_training.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/post_training/post_training.py">supervised_fine_tune</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training_supervised_fine_tune_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training_job.py">PostTrainingJob</a></code>
+- <code title="post /v1/post-training/preference-optimize">client.post_training.preference_optimize(\*\*params) -> PostTrainingJob</code>
+- <code title="post /v1/post-training/supervised-fine-tune">client.post_training.supervised_fine_tune(\*\*params) -> PostTrainingJob</code>
 
 ### Job
 
@@ -335,10 +335,10 @@ from ogx_client.types.post_training import (
 
 Methods:
 
-- <code title="get /v1/post-training/jobs">client.post_training.job.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/post_training/job.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training/job_list_response.py">JobListResponse</a></code>
-- <code title="get /v1/post-training/job/artifacts">client.post_training.job.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/post_training/job.py">artifacts</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training/job_artifacts_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training/job_artifacts_response.py">Optional[JobArtifactsResponse]</a></code>
-- <code title="post /v1/post-training/job/cancel">client.post_training.job.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/post_training/job.py">cancel</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training/job_cancel_params.py">params</a>) -> None</code>
-- <code title="get /v1/post-training/job/status">client.post_training.job.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/post_training/job.py">status</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training/job_status_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/post_training/job_status_response.py">Optional[JobStatusResponse]</a></code>
+- <code title="get /v1/post-training/jobs">client.post_training.job.list() -> JobListResponse</code>
+- <code title="get /v1/post-training/job/artifacts">client.post_training.job.artifacts(\*\*params) -> Optional[JobArtifactsResponse]</code>
+- <code title="post /v1/post-training/job/cancel">client.post_training.job.cancel(\*\*params) -> None</code>
+- <code title="get /v1/post-training/job/status">client.post_training.job.status(\*\*params) -> Optional[JobStatusResponse]</code>
 
 ## Providers
 
@@ -350,7 +350,7 @@ from ogx_client.types import ListProvidersResponse, ProviderListResponse
 
 Methods:
 
-- <code title="get /v1/inspect/providers">client.providers.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/providers.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/provider_list_response.py">ProviderListResponse</a></code>
+- <code title="get /v1/inspect/providers">client.providers.list() -> ProviderListResponse</code>
 
 ## Routes
 
@@ -362,7 +362,7 @@ from ogx_client.types import ListRoutesResponse, RouteListResponse
 
 Methods:
 
-- <code title="get /v1/inspect/routes">client.routes.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/routes.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/route_list_response.py">RouteListResponse</a></code>
+- <code title="get /v1/inspect/routes">client.routes.list() -> RouteListResponse</code>
 
 ## SyntheticDataGeneration
 
@@ -380,7 +380,7 @@ from ogx_client.types import SyntheticDataGenerationResponse
 
 Methods:
 
-- <code title="post /v1/synthetic-data-generation/generate">client.synthetic_data_generation.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/synthetic_data_generation.py">generate</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/synthetic_data_generation_generate_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/synthetic_data_generation_response.py">SyntheticDataGenerationResponse</a></code>
+- <code title="post /v1/synthetic-data-generation/generate">client.synthetic_data_generation.generate(\*\*params) -> SyntheticDataGenerationResponse</code>
 
 ## Datasetio
 
@@ -392,8 +392,8 @@ from ogx_client.types import PaginatedRowsResult
 
 Methods:
 
-- <code title="post /v1/datasetio/rows">client.datasetio.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/datasetio.py">append_rows</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/datasetio_append_rows_params.py">params</a>) -> None</code>
-- <code title="get /v1/datasetio/rows">client.datasetio.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/datasetio.py">get_rows_paginated</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/datasetio_get_rows_paginated_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/paginated_rows_result.py">PaginatedRowsResult</a></code>
+- <code title="post /v1/datasetio/rows">client.datasetio.append_rows(\*\*params) -> None</code>
+- <code title="get /v1/datasetio/rows">client.datasetio.get_rows_paginated(\*\*params) -> PaginatedRowsResult</code>
 
 ## Scoring
 
@@ -405,8 +405,8 @@ from ogx_client.types import ScoringScoreResponse, ScoringScoreBatchResponse
 
 Methods:
 
-- <code title="post /v1/scoring/score">client.scoring.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/scoring.py">score</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/scoring_score_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/scoring_score_response.py">ScoringScoreResponse</a></code>
-- <code title="post /v1/scoring/score-batch">client.scoring.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/scoring.py">score_batch</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/scoring_score_batch_params.py">params</a>) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/scoring_score_batch_response.py">ScoringScoreBatchResponse</a></code>
+- <code title="post /v1/scoring/score">client.scoring.score(\*\*params) -> ScoringScoreResponse</code>
+- <code title="post /v1/scoring/score-batch">client.scoring.score_batch(\*\*params) -> ScoringScoreBatchResponse</code>
 
 ## ScoringFunctions
 
@@ -422,9 +422,9 @@ from ogx_client.types import (
 
 Methods:
 
-- <code title="get /v1/scoring-functions/{scoring_fn_id}">client.scoring_functions.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/scoring_functions.py">retrieve</a>(scoring_fn_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/scoring_fn.py">Optional[ScoringFn]</a></code>
-- <code title="get /v1/scoring-functions">client.scoring_functions.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/scoring_functions.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/scoring_function_list_response.py">ScoringFunctionListResponse</a></code>
-- <code title="post /v1/scoring-functions">client.scoring_functions.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/scoring_functions.py">register</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/scoring_function_register_params.py">params</a>) -> None</code>
+- <code title="get /v1/scoring-functions/{scoring_fn_id}">client.scoring_functions.retrieve(scoring_fn_id) -> Optional[ScoringFn]</code>
+- <code title="get /v1/scoring-functions">client.scoring_functions.list() -> ScoringFunctionListResponse</code>
+- <code title="post /v1/scoring-functions">client.scoring_functions.register(\*\*params) -> None</code>
 
 ## Benchmarks
 
@@ -440,6 +440,6 @@ from ogx_client.types import (
 
 Methods:
 
-- <code title="get /v1/eval-tasks/{benchmark_id}">client.benchmarks.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/benchmarks.py">retrieve</a>(benchmark_id) -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/benchmark.py">Optional[Benchmark]</a></code>
-- <code title="get /v1/eval-tasks">client.benchmarks.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/benchmarks.py">list</a>() -> <a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/benchmark_list_response.py">BenchmarkListResponse</a></code>
-- <code title="post /v1/eval-tasks">client.benchmarks.<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/resources/benchmarks.py">register</a>(\*\*<a href="https://github.com/ogx-ai/ogx-client-python/tree/main/src/ogx_client/types/benchmark_register_params.py">params</a>) -> None</code>
+- <code title="get /v1/eval-tasks/{benchmark_id}">client.benchmarks.retrieve(benchmark_id) -> Optional[Benchmark]</code>
+- <code title="get /v1/eval-tasks">client.benchmarks.list() -> BenchmarkListResponse</code>
+- <code title="post /v1/eval-tasks">client.benchmarks.register(\*\*params) -> None</code>

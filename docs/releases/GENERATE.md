@@ -68,7 +68,7 @@ Write the detailed release notes to `docs/releases/RELEASE_NOTES_{NEW_VERSION}.m
 
 Formatting rules for the detailed notes:
 
-- All PR references link to GitHub: `[#NNNN](https://github.com/ogx-ai/ogx/pull/NNNN)`
+- All PR references use a linked `#NNNN` pull request number.
 - For each change, fetch the PR author's full name from GitHub. Include company affiliation in parentheses.
 - Do NOT put author names in the summary overview tables, only in the detailed sections.
 - Use code blocks with language hints for before/after examples.
