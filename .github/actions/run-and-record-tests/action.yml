@@ -40,6 +40,10 @@ inputs:
     description: 'Skip committing recordings (upload as artifacts instead)'
     required: false
     default: 'false'
+  install-deps:
+    description: 'Pass --install-deps to integration-tests.sh so missing provider dependencies are installed automatically'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -61,6 +65,7 @@ runs:
         INPUT_SUBDIRS: ${{ inputs.subdirs }}
         INPUT_PATTERN: ${{ inputs.pattern }}
         INPUT_TEXT_MODEL: ${{ inputs.text-model }}
+        INPUT_INSTALL_DEPS: ${{ inputs.install-deps }}
       run: |
         SCRIPT_ARGS=(
           --stack-config "${INPUT_STACK_CONFIG}"
@@ -82,6 +87,9 @@ runs:
         fi
         if [ -n "${INPUT_TEXT_MODEL}" ]; then
           SCRIPT_ARGS+=(--text-model "${INPUT_TEXT_MODEL}")
+        fi
+        if [ "${INPUT_INSTALL_DEPS}" != "false" ]; then
+          SCRIPT_ARGS+=(--install-deps)
         fi
 
         echo "=== Running command ==="

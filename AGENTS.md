@@ -96,7 +96,13 @@ uv run --no-sync ./scripts/integration-tests.sh \
 
 Key flags: `--stack-config` (required), `--setup` (`gpt`, `ollama`, `vllm`),
 `--inference-mode` (`replay`, `record`, `record-if-missing`), `--file` (single file),
-`--pattern` (pytest `-k` filter), `--suite` (`base`, `responses`, `vision`).
+`--pattern` (pytest `-k` filter), `--suite` (`base`, `responses`, `vision`),
+`--install-deps` (install missing provider dependencies before running tests).
+
+The runner preflights the provider dependencies for the stack config — the
+same `ogx stack list-deps <config> | xargs -L1 uv pip install` step CI runs —
+and fails early with the exact install command when any are missing. Pass
+`--install-deps` to install them automatically (this is what CI does).
 
 If a test fails in replay mode with "Recording not found", re-run with
 `--inference-mode record-if-missing` and commit the new recording files.

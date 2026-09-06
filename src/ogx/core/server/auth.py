@@ -345,7 +345,7 @@ class RouteAuthorizationMiddleware:
                         return True
                 except re.error as e:
                     logger.warning(
-                        "Invalid regex pattern in route_policy: . Error: . Skipping this pattern.",
+                        "Invalid regex pattern in route_policy, skipping this pattern.",
                         regex_pattern=regex_pattern,
                         error=str(e),
                     )
