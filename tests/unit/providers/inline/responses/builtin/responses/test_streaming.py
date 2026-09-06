@@ -11,6 +11,7 @@ import pytest
 
 from ogx.providers.inline.responses.builtin.responses.streaming import (
     StreamingResponseOrchestrator,
+    convert_input_tool_to_chat_tool,
     convert_tooldef_to_chat_tool,
 )
 from ogx.providers.inline.responses.builtin.responses.types import ChatCompletionContext, ToolContext
@@ -30,6 +31,7 @@ from ogx_api.inference.models import (
     OpenAIChoice,
 )
 from ogx_api.openai_responses import (
+    OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
     OpenAIResponseReasoning,
 )
@@ -84,6 +86,38 @@ def test_convert_tooldef_to_chat_tool_preserves_items_field():
     assert tags_param["type"] == "array"
     assert "items" in tags_param, "items field should be preserved for array parameters"
     assert tags_param["items"] == {"type": "string"}
+
+
+def test_function_tool_conversion_excludes_type_field():
+    """Regression test for https://github.com/ogx-ai/ogx/issues/5678.
+
+    input_tool.model_dump() leaks OpenAIResponseInputToolFunction.type ("function")
+    into the inner function dict of ChatCompletionToolParam, which is invalid per
+    the Chat Completions spec and causes Gemini to reject the request with 400.
+    """
+    input_tool = OpenAIResponseInputToolFunction(
+        name="search",
+        description="Search the web",
+        parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+        strict=None,
+    )
+
+    # Demonstrate the bug: model_dump leaks 'type' into the function dict
+    assert "type" in input_tool.model_dump(exclude_none=True)
+
+    # The fix: convert_input_tool_to_chat_tool must not include 'type' in function
+    result = convert_input_tool_to_chat_tool(input_tool)
+
+    assert result["type"] == "function"
+    assert "type" not in result["function"]
+    assert result["function"]["name"] == "search"
+    assert result["function"]["description"] == "Search the web"
+    assert result["function"]["parameters"] == {
+        "type": "object",
+        "properties": {"query": {"type": "string"}},
+        "required": ["query"],
+    }
+    assert "strict" not in result["function"]
 
 
 # ---------------------------------------------------------------------------

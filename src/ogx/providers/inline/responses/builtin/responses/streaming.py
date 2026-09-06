@@ -11,6 +11,7 @@ from typing import Any
 
 from openai import APIStatusError
 from openai.types.chat import ChatCompletionToolParam
+from openai.types.shared_params import FunctionDefinition
 from opentelemetry import trace
 
 from ogx.log import get_logger
@@ -57,6 +58,7 @@ from ogx_api import (
     OpenAIResponseInputToolChoiceMCPTool,
     OpenAIResponseInputToolChoiceMode,
     OpenAIResponseInputToolChoiceWebSearch,
+    OpenAIResponseInputToolFunction,
     OpenAIResponseInputToolMCP,
     OpenAIResponseMCPApprovalRequest,
     OpenAIResponseMessage,
@@ -228,6 +230,22 @@ def extract_openai_error(exc: Exception) -> tuple[str, str]:
     message: str = raw_message if isinstance(raw_message, str) else fallback_message
 
     return final_code, message
+
+
+def convert_input_tool_to_chat_tool(input_tool: OpenAIResponseInputToolFunction) -> ChatCompletionToolParam:
+    """Convert an OpenAIResponseInputToolFunction to a ChatCompletionToolParam.
+
+    Explicitly maps only the fields that belong inside FunctionDefinition, avoiding
+    leaking OpenAIResponseInputToolFunction.type into the inner function dict.
+    """
+    function_def: FunctionDefinition = {"name": input_tool.name}
+    if input_tool.description is not None:
+        function_def["description"] = input_tool.description
+    if input_tool.parameters is not None:
+        function_def["parameters"] = input_tool.parameters
+    if input_tool.strict is not None:
+        function_def["strict"] = input_tool.strict
+    return ChatCompletionToolParam(type="function", function=function_def)
 
 
 def convert_tooldef_to_chat_tool(tool_def):
@@ -1719,9 +1737,7 @@ class StreamingResponseOrchestrator:
 
         for input_tool in tools:
             if input_tool.type == "function":
-                self.ctx.chat_tools.append(
-                    ChatCompletionToolParam(type="function", function=input_tool.model_dump(exclude_none=True))  # type: ignore[typeddict-item,arg-type]  # Dict compatible with FunctionDefinition
-                )
+                self.ctx.chat_tools.append(convert_input_tool_to_chat_tool(input_tool))
             elif input_tool.type in WebSearchToolTypes:
                 tool_name = "web_search"
                 # Need to access tool_groups_api from tool_executor
