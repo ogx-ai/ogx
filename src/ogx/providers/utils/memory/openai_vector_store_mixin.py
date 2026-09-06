@@ -162,6 +162,7 @@ class OpenAIVectorStoreMixin(ABC):
         self.file_processor_api = file_processor_api
         self._last_file_batch_cleanup_time = 0
         self._file_batch_tasks: dict[str, asyncio.Task[None]] = {}
+        self._background_tasks: set[asyncio.Task[None]] = set()
         self._vector_store_locks: dict[str, asyncio.Lock] = {}
 
     def _get_vector_store_lock(self, vector_store_id: str) -> asyncio.Lock:
@@ -801,9 +802,9 @@ class OpenAIVectorStoreMixin(ABC):
 
     async def shutdown(self) -> None:
         """Clean up mixin resources including background tasks."""
-        # Cancel any running file batch tasks gracefully
-        tasks_to_cancel = list(self._file_batch_tasks.items())
-        for _, task in tasks_to_cancel:
+        # Cancel any running file batch and background tasks gracefully
+        tasks_to_cancel = list(self._file_batch_tasks.values()) + list(self._background_tasks)
+        for task in tasks_to_cancel:
             if not task.done():
                 task.cancel()
                 try:
@@ -1678,7 +1679,9 @@ class OpenAIVectorStoreMixin(ABC):
             >= self.vector_stores_config.file_batch_params.cleanup_interval_seconds
         ):
             logger.info("Running throttled cleanup of expired file batches")
-            asyncio.create_task(self._cleanup_expired_file_batches())
+            cleanup_task = asyncio.create_task(self._cleanup_expired_file_batches())
+            self._background_tasks.add(cleanup_task)
+            cleanup_task.add_done_callback(self._background_tasks.discard)
             self._last_file_batch_cleanup_time = current_time
 
         return batch_object
