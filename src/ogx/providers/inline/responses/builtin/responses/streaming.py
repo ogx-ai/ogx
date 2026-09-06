@@ -14,6 +14,7 @@ from openai.types.chat import ChatCompletionToolParam
 from opentelemetry import trace
 
 from ogx.log import get_logger
+from ogx.providers.utils.common.url_validation import validate_url_not_private
 from ogx.providers.utils.inference.openai_compat import convert_tooldef_to_openai_tool
 from ogx.providers.utils.inference.prompt_adapter import interleaved_content_as_str
 from ogx.providers.utils.tools.mcp import list_mcp_tools
@@ -1787,6 +1788,11 @@ class StreamingResponseOrchestrator:
                 raise ValueError(
                     f"Failed to list MCP tools for server '{mcp_tool.server_label}': server_url is not set"
                 )
+
+            # Security: reject MCP server URLs that resolve to private/loopback addresses to
+            # prevent the server from being used as an SSRF proxy against internal services
+            # or cloud metadata endpoints (see #6287).
+            validate_url_not_private(mcp_tool.server_url)
 
             attributes = {
                 "server_label": mcp_tool.server_label,
