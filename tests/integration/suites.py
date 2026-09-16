@@ -140,6 +140,13 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "embedding_dimension": 1536,
         },
     ),
+    "thegrid": Setup(
+        name="thegrid",
+        description="The Grid market instruments over its OpenAI-compatible API",
+        defaults={
+            "text_model": "thegrid/text-standard",
+        },
+    ),
     "gpt-reasoning": Setup(
         name="gpt-reasoning",
         description="OpenAI reasoning models (o4-mini) for reasoning effort tests",
@@ -341,6 +348,14 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         default_setup="gemini",
     ),
     # Bedrock-specific tests with pre-recorded responses (no live API calls in CI)
+    # The Grid serves chat completions only: /v1/completions and /v1/embeddings
+    # both 404 upstream, so the suite is the OpenAI-compatible chat file. Runs
+    # from recordings in CI, like the bedrock suite below.
+    "thegrid": Suite(
+        name="thegrid",
+        roots=["tests/integration/inference/test_openai_completion.py"],
+        default_setup="thegrid",
+    ),
     "bedrock": Suite(
         name="bedrock",
         roots=[

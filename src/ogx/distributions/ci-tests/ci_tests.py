@@ -7,6 +7,7 @@
 
 from ogx.core.datatypes import Provider
 from ogx.distributions.template import DistributionTemplate
+from ogx.providers.remote.inference.thegrid.config import TheGridImplConfig
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
 from ogx_api import ConnectorInput, ModelInput, ModelType
 
@@ -44,6 +45,16 @@ def get_distribution_template() -> DistributionTemplate:
         model_id="watsonx/meta-llama/llama-3-3-70b-instruct",
         provider_id="${env.WATSONX_API_KEY:+watsonx}",
         provider_model_id="meta-llama/llama-3-3-70b-instruct",
+        model_type=ModelType.llm,
+    )
+
+    # The Grid model must be pre-registered. Its ids name market instruments
+    # rather than fixed models, and the catalog is discovered from /v1/models,
+    # so pinning one keeps the recorded suite deterministic.
+    thegrid_model = ModelInput(
+        model_id="thegrid/text-standard",
+        provider_id="${env.THEGRID_API_KEY:+thegrid}",
+        provider_model_id="text-standard",
         model_type=ModelType.llm,
     )
 
@@ -102,6 +113,12 @@ def get_distribution_template() -> DistributionTemplate:
         config=WatsonXConfig.sample_run_config(),
     )
 
+    thegrid_provider = Provider(
+        provider_id="${env.THEGRID_API_KEY:+thegrid}",
+        provider_type="remote::thegrid",
+        config=TheGridImplConfig.sample_run_config(),
+    )
+
     for run_config in template.run_configs.values():
         if run_config.default_connectors is None:
             run_config.default_connectors = []
@@ -113,9 +130,11 @@ def get_distribution_template() -> DistributionTemplate:
         run_config.default_models.append(watsonx_model)
         run_config.default_models.append(vertexai_model)
         run_config.default_models.append(bedrock_model)
+        run_config.default_models.append(thegrid_model)
 
         # Add WatsonX inference provider (vertexai is already in starter distribution)
         run_config.provider_overrides["inference"].append(watsonx_provider)
+        run_config.provider_overrides["inference"].append(thegrid_provider)
 
         for provider in run_config.provider_overrides["inference"]:
             if provider.provider_type == "inline::sentence-transformers":

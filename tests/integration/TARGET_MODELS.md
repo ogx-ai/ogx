@@ -18,6 +18,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `responses` | `azure` | `responses` only; Responses coverage: 112/137 (82%) |
 | `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 137/137 (100%) |
 | `responses` | `watsonx` | `responses` only; Responses coverage: 62/137 (45%) |
+| `thegrid` | `thegrid` | `test_openai_completion.py` only |
 | `responses` | `vertexai` | `responses` only; Responses coverage: 70/137 (51%) |
 | `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/137 (20%) |
 | `base-vllm-subset` | `vllm` | `inference` only |
@@ -49,6 +50,7 @@ Cron: `1 0 * * 0`
 | `ollama-postgres` | ollama/llama3.2:3b-instruct-fp16 | — | sentence-transformers/nomic-embed-text-v1.5 | — | `base` | — |
 | `ollama-reasoning` | ollama/deepseek-r1:1.5b | — | — | — | `ollama-reasoning` | — |
 | `ollama-vision` | — | ollama/llama3.2-vision:11b | ollama/nomic-embed-text:v1.5 | — | `vision` | — |
+| `thegrid` | thegrid/text-standard | — | — | — | `thegrid` | — |
 | `vertexai` | vertexai/publishers/google/models/gemini-2.0-flash | vertexai/publishers/google/models/gemini-2.0-flash | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
 | `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-embed-text-v1.5 | — | `base-vllm-subset`, `vllm-reasoning` | `base` |
 | `vllm-qwen3next` | Qwen3-Next-80B-A3B-Instruct-FP8 | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | `base` |
