@@ -138,6 +138,10 @@ class OpenAIVectorStoreMixin(ABC):
     an openai_vector_stores in-memory cache.
     """
 
+    # Set to False for providers whose index cannot run hybrid search (e.g., FAISS), so searches with
+    # ranking_options.hybrid_search keep the requested search mode instead of failing.
+    supports_hybrid_search: bool = True
+
     # Implementing classes should call super().__init__() in their __init__ method
     # to properly initialize the mixin attributes.
     def __init__(
@@ -1097,6 +1101,17 @@ class OpenAIVectorStoreMixin(ABC):
 
         await self._get_authorized_openai_vector_store(vector_store_id)
 
+        search_mode = request.search_mode
+        if request.ranking_options is not None and request.ranking_options.hybrid_search is not None:
+            if self.supports_hybrid_search:
+                search_mode = "hybrid"
+            else:
+                logger.warning(
+                    "Ignoring hybrid_search because the vector store provider does not support hybrid search",
+                    vector_store_id=vector_store_id,
+                    search_mode=search_mode,
+                )
+
         if isinstance(request.query, list):
             search_query = " ".join(request.query)
         else:
@@ -1125,7 +1140,7 @@ class OpenAIVectorStoreMixin(ABC):
                 "max_num_results": max_num_results,
                 "max_chunks": max_num_results * self.vector_stores_config.chunk_retrieval_params.chunk_multiplier,
                 "score_threshold": score_threshold,
-                "mode": request.search_mode,
+                "mode": search_mode,
             }
 
             # Parse filters into typed objects and pass through to the query
@@ -1180,7 +1195,22 @@ class OpenAIVectorStoreMixin(ABC):
         reranker_params: dict[str, Any] = {}
         params: dict[str, Any] = {}
 
-        if ranking_options and ranking_options.ranker:
+        if ranking_options and ranking_options.hybrid_search:
+            # OpenAI hybrid_search weights are relative; normalize them to sum to 1 like the weights option.
+            hybrid_search = ranking_options.hybrid_search
+            total_weight = hybrid_search.embedding_weight + hybrid_search.text_weight
+            impact_factor = ranking_options.impact_factor
+            if impact_factor is None:
+                impact_factor = config.chunk_retrieval_params.rrf_impact_factor
+            params["reranker_type"] = "rrf"
+            params["reranker_params"] = {
+                "impact_factor": impact_factor,
+                "weights": {
+                    "vector": hybrid_search.embedding_weight / total_weight,
+                    "keyword": hybrid_search.text_weight / total_weight,
+                },
+            }
+        elif ranking_options and ranking_options.ranker:
             reranker_type = ranking_options.ranker
 
             if ranking_options.ranker == "weighted":

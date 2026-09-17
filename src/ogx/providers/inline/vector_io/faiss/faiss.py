@@ -354,6 +354,8 @@ class FaissIndex(EmbeddingIndex):
 class FaissVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """VectorIO adapter that uses FAISS for similarity search and vector storage."""
 
+    supports_hybrid_search = False
+
     def __init__(
         self,
         config: FaissVectorIOConfig,

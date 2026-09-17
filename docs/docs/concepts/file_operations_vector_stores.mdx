@@ -82,6 +82,44 @@ results = await client.vector_stores.search(
 )
 ```
 
+#### OpenAI-Compatible Hybrid Search Weights
+
+`ranking_options.hybrid_search` follows OpenAI's `file_search` tool. `embedding_weight` and `text_weight` are
+relative: OGX normalizes them to sum to 1 and applies them as weighted RRF, with `impact_factor` or the configured
+`rrf_impact_factor`. A zero weight leaves out results that only the zero-weighted search found, so
+`{"embedding_weight": 1, "text_weight": 0}` ranks by vector search alone.
+
+Setting `hybrid_search` runs the search in hybrid mode, whatever `search_mode` or the configured `default_search_mode`
+says. This applies to the Responses `file_search` tool and to `vector_stores.search`.
+
+```python
+response = client.responses.create(
+    model="gpt-4o",
+    input="What is the travel reimbursement limit?",
+    tools=[
+        {
+            "type": "file_search",
+            "vector_store_ids": [vector_store.id],
+            "ranking_options": {
+                "hybrid_search": {"embedding_weight": 0.3, "text_weight": 0.7},
+            },
+        }
+    ],
+)
+```
+
+Limitations:
+
+- On providers that apply the weights, `score_threshold` applies to the fused RRF scores, which are at most
+  `1 / (impact_factor + 1)`: about 0.016 with the default impact factor of 60. A threshold such as 0.3 therefore
+  filters out every result.
+- `hybrid_search` cannot be combined with `weights` or with the `weighted`, `neural`, `classifier`, or `normalized`
+  rankers.
+- FAISS cannot run hybrid search. FAISS vector stores ignore `hybrid_search`, log a warning and keep the requested
+  search mode, which for the Responses `file_search` tool is `default_search_mode`.
+- Qdrant, Weaviate, and Elasticsearch use their own hybrid search and do not apply the weights. Qdrant's hybrid search
+  is a vector search limited to chunks that contain at least one query word.
+
 #### Using VectorStoresConfig Defaults
 
 You can set default reranker parameters in your stack configuration:

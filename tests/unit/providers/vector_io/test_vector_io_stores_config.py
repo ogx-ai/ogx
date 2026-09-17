@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import asyncio
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import asyncpg
@@ -12,8 +13,15 @@ import numpy as np
 import pytest
 
 from ogx_api import (
+    ChunkMetadata,
     EmbeddedChunk,
+    InsertChunksRequest,
     OpenAICreateVectorStoreRequestWithExtraBody,
+    OpenAIEmbeddingData,
+    OpenAIEmbeddingsRequestWithExtraBody,
+    OpenAIEmbeddingsResponse,
+    OpenAIEmbeddingUsage,
+    OpenAISearchVectorStoreRequest,
     QueryChunksResponse,
     VectorStore,
 )
@@ -236,6 +244,122 @@ async def test_search_vector_store_propagates_backend_errors(vector_io_adapter):
         await vector_io_adapter.openai_search_vector_store(
             vector_store_id=vector_store_id,
             request=request,
+        )
+
+
+class _FixedQueryEmbeddingInference:
+    """Embeds every search query as the same vector, so each chunk's stored embedding sets its vector rank."""
+
+    async def openai_embeddings(self, request: OpenAIEmbeddingsRequestWithExtraBody) -> OpenAIEmbeddingsResponse:
+        return OpenAIEmbeddingsResponse(
+            data=[OpenAIEmbeddingData(embedding=[1.0, 0.0, 0.0], index=0)],
+            model=request.model,
+            usage=OpenAIEmbeddingUsage(prompt_tokens=1, total_tokens=1),
+        )
+
+
+# For the query "receipts": vector search ranks expense-report, parking, receipt-policy first,
+# while keyword search only finds receipt-policy and then expense-report.
+_HYBRID_SEARCH_CHUNKS = {
+    "expense-report": ("Scan hotel and flight receipts and attach them to the expense report.", [0.9, 0.1, 0.0]),
+    "parking": ("Parking permits for the north garage are renewed every January.", [0.7, 0.3, 0.0]),
+    "receipt-policy": ("Keep receipts. Lost receipts delay receipts processing.", [0.5, 0.5, 0.0]),
+    "cafeteria": ("The cafeteria serves vegetarian lunch on Mondays.", [0.3, 0.7, 0.0]),
+    "holidays": ("Public holidays are listed on the intranet calendar.", [0.0, 1.0, 0.0]),
+}
+
+
+async def _create_hybrid_search_store(adapter) -> str:
+    adapter.inference_api = _FixedQueryEmbeddingInference()
+    vector_store_id = f"hybrid_search_{uuid.uuid4().hex}"
+    await adapter.register_vector_store(
+        VectorStore(
+            identifier=vector_store_id,
+            provider_id="test_provider",
+            embedding_model="test_model",
+            embedding_dimension=3,
+        )
+    )
+    adapter.openai_vector_stores[vector_store_id] = {"id": vector_store_id, "name": "Hybrid Search Store"}
+    chunks = [
+        EmbeddedChunk(
+            content=text,
+            chunk_id=document_id,
+            metadata={"document_id": document_id},
+            chunk_metadata=ChunkMetadata(document_id=document_id, chunk_id=document_id),
+            embedding=embedding,
+            embedding_model="test_model",
+            embedding_dimension=3,
+        )
+        for document_id, (text, embedding) in _HYBRID_SEARCH_CHUNKS.items()
+    ]
+    await adapter.insert_chunks(InsertChunksRequest(vector_store_id=vector_store_id, chunks=chunks))
+    return vector_store_id
+
+
+async def _search_document_ids(adapter, vector_store_id: str, **request_fields) -> list[str]:
+    page = await adapter.openai_search_vector_store(
+        vector_store_id=vector_store_id,
+        request=OpenAISearchVectorStoreRequest(query="receipts", max_num_results=3, **request_fields),
+    )
+    return [item.file_id for item in page.data]
+
+
+async def test_search_vector_store_hybrid_search_selects_hybrid_mode(sqlite_vec_adapter):
+    """Test that hybrid_search switches a vector search to hybrid search and its weights decide the ranking."""
+    vector_store_id = await _create_hybrid_search_store(sqlite_vec_adapter)
+
+    async def search(**ranking_options) -> list[str]:
+        return await _search_document_ids(sqlite_vec_adapter, vector_store_id, ranking_options=ranking_options)
+
+    assert await search(ranker="auto") == ["expense-report", "parking", "receipt-policy"]
+    assert await search(hybrid_search={"embedding_weight": 0.8, "text_weight": 0.2}) == [
+        "expense-report",
+        "receipt-policy",
+        "parking",
+    ]
+    assert await search(hybrid_search={"embedding_weight": 0.2, "text_weight": 0.8}) == [
+        "receipt-policy",
+        "expense-report",
+        "parking",
+    ]
+    assert await search(hybrid_search={"embedding_weight": 1, "text_weight": 0}) == [
+        "expense-report",
+        "parking",
+        "receipt-policy",
+    ]
+    assert await search(hybrid_search={"embedding_weight": 0, "text_weight": 1}) == ["receipt-policy", "expense-report"]
+
+
+async def test_search_vector_store_hybrid_search_score_threshold_uses_rrf_scores(sqlite_vec_adapter):
+    """Test that score_threshold filters hybrid_search results by their fused RRF scores."""
+    vector_store_id = await _create_hybrid_search_store(sqlite_vec_adapter)
+    hybrid_search = {"embedding_weight": 0.5, "text_weight": 0.5}
+
+    async def search(score_threshold: float) -> list[str]:
+        return await _search_document_ids(
+            sqlite_vec_adapter,
+            vector_store_id,
+            ranking_options={"hybrid_search": hybrid_search, "score_threshold": score_threshold},
+        )
+
+    assert await search(0.01) == ["expense-report", "receipt-policy"]
+    assert await search(0.3) == []
+
+
+async def test_search_vector_store_hybrid_search_without_hybrid_support(faiss_vec_adapter):
+    """Test that a store without hybrid search ignores hybrid_search but still rejects an explicit hybrid mode."""
+    vector_store_id = await _create_hybrid_search_store(faiss_vec_adapter)
+    ranking_options = {"hybrid_search": {"embedding_weight": 0.2, "text_weight": 0.8}}
+
+    assert await _search_document_ids(faiss_vec_adapter, vector_store_id, ranking_options=ranking_options) == [
+        "expense-report",
+        "parking",
+        "receipt-policy",
+    ]
+    with pytest.raises(NotImplementedError, match="Hybrid search is not supported"):
+        await _search_document_ids(
+            faiss_vec_adapter, vector_store_id, ranking_options=ranking_options, search_mode="hybrid"
         )
 
 
