@@ -327,7 +327,7 @@ class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoc
 
     # QdrantIndex.query_hybrid ignores reranker_type and reranker_params: it runs a vector search
     # restricted to chunks matching a query word, so there are no keyword ranks to weight.
-    supports_hybrid_search = False
+    supports_weighted_hybrid_search = False
 
     def __init__(
         self,

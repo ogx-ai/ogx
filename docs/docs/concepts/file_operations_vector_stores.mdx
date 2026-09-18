@@ -90,8 +90,12 @@ relative: OGX normalizes them to sum to 1 and applies them as weighted RRF, with
 `{"embedding_weight": 1, "text_weight": 0}` ranks by vector search alone.
 
 Setting `hybrid_search` runs the search in hybrid mode, whatever `search_mode` or the configured `default_search_mode`
-says. This applies to the Responses `file_search` tool and to `vector_stores.search`. Vector stores whose provider
-cannot apply the weights reject the search with a `400` error rather than ranking the results some other way.
+says. This applies to `vector_stores.search`, to the Responses `file_search` tool and to `memory.ranking_options`.
+Vector stores whose provider cannot apply the weights reject the search with a `400` error rather than ranking the
+results some other way. On `vector_stores.search` that `400` is the response. Inside `responses.create` the whole
+request fails rather than the answer being written without the retrieval it asked for: a non-streaming call returns
+the same `400`, a `stream=True` call ends in an `error` event carrying it (the status line is already `200` by then),
+and a `background=True` response is stored with `status="failed"` carrying the same message.
 
 ```python
 response = client.responses.create(
@@ -115,9 +119,9 @@ Provider support:
 | --- | --- | --- |
 | `sqlite-vec`, `pgvector`, `chroma`, `milvus`, `neo4j`, `oci`, `infinispan` | Supported | Fuse vector and keyword ranks in process with the requested weights |
 | `faiss` | `400` error | No keyword search to fuse with, so no hybrid search at all |
-| `qdrant` | `400` error | Its hybrid search is a vector search limited to chunks that contain at least one query word, with no keyword ranks to weight |
-| `weaviate` | `400` error | Its hybrid search hardcodes an equal (`alpha=0.5`) vector/keyword balance |
-| `elasticsearch` | `400` error | Its RRF retriever drops the weights as unsupported |
+| `qdrant` | `400` error | Has hybrid search, but it is a vector search limited to chunks that contain at least one query word, with no keyword ranks to weight |
+| `weaviate` | `400` error | Has hybrid search, but it hardcodes an equal (`alpha=0.5`) vector/keyword balance |
+| `elasticsearch` | `400` error | Has hybrid search, but its RRF retriever drops the weights as unsupported |
 
 Limitations:
 

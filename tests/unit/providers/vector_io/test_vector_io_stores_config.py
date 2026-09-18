@@ -4,8 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import ast
 import asyncio
 import uuid
+from functools import cache
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,6 +17,7 @@ import numpy as np
 import pytest
 
 import ogx.providers
+from ogx.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
 from ogx_api import (
     ChunkMetadata,
     EmbeddedChunk,
@@ -390,7 +393,7 @@ async def test_search_vector_store_without_hybrid_search_option_is_unaffected(fa
 
 # Every vector_io adapter, with whether its query_hybrid honours the weights hybrid_search sends
 # (reranker_type="rrf" plus reranker_params["weights"]).
-_ADAPTER_HYBRID_SEARCH_SUPPORT = [
+_ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT = [
     ("ogx.providers.inline.vector_io.faiss.faiss", "FaissVectorIOAdapter", False),
     ("ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec", "SQLiteVecVectorIOAdapter", True),
     ("ogx.providers.remote.vector_io.chroma.chroma", "ChromaVectorIOAdapter", True),
@@ -405,28 +408,73 @@ _ADAPTER_HYBRID_SEARCH_SUPPORT = [
 ]
 
 
-@pytest.mark.parametrize(
-    "module_name, class_name, supports_hybrid_search",
-    _ADAPTER_HYBRID_SEARCH_SUPPORT,
-    ids=[class_name for _, class_name, _ in _ADAPTER_HYBRID_SEARCH_SUPPORT],
-)
-def test_adapter_supports_hybrid_search_flag(module_name, class_name, supports_hybrid_search):
-    """Test that each adapter advertises whether its hybrid search honours the hybrid_search weights."""
-    module = pytest.importorskip(module_name)
-
-    assert getattr(module, class_name).supports_hybrid_search is supports_hybrid_search
-
-
-def test_adapter_hybrid_search_support_list_covers_every_adapter():
-    """Test that the list above names every adapter, so a new provider has to decide instead of defaulting to True."""
-    package_root = Path(ogx.providers.__file__).parent
-    adapter_modules = {
-        ".".join(["ogx", "providers", *path.relative_to(package_root).with_suffix("").parts])
-        for path in package_root.rglob("*.py")
-        if "vector_io" in path.parts and "(OpenAIVectorStoreMixin" in path.read_text()
+def _class_def_base_names(class_def: ast.ClassDef) -> set[str]:
+    """Names of a class's bases as written, covering both `Mixin` and `module.Mixin` spellings."""
+    return {
+        base.id if isinstance(base, ast.Name) else base.attr
+        for base in class_def.bases
+        if isinstance(base, ast.Name | ast.Attribute)
     }
 
-    assert adapter_modules == {module_name for module_name, _, _ in _ADAPTER_HYBRID_SEARCH_SUPPORT}
+
+@cache
+def _openai_vector_store_adapters() -> dict[tuple[str, str], ast.ClassDef]:
+    """Every OpenAIVectorStoreMixin subclass under ogx.providers, keyed by (module name, class name).
+
+    The sources are parsed rather than imported so that every adapter is checked even where its
+    optional client library is not installed, and so that the declaration is found however the
+    formatter happens to wrap it.
+    """
+    package_root = Path(ogx.providers.__file__).parent
+    adapters: dict[tuple[str, str], ast.ClassDef] = {}
+    for path in sorted(package_root.rglob("*.py")):
+        module_name = ".".join(["ogx", "providers", *path.relative_to(package_root).with_suffix("").parts])
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+            if isinstance(node, ast.ClassDef) and "OpenAIVectorStoreMixin" in _class_def_base_names(node):
+                adapters[(module_name, node.name)] = node
+    return adapters
+
+
+def _class_attribute_literal(class_def: ast.ClassDef, attribute: str) -> object:
+    """Value of a literal class-body assignment, or None when the class does not set the attribute."""
+    for statement in class_def.body:
+        if isinstance(statement, ast.Assign):
+            targets = statement.targets
+        elif isinstance(statement, ast.AnnAssign):
+            targets = [statement.target]
+        else:
+            continue
+        if statement.value is not None and any(
+            isinstance(target, ast.Name) and target.id == attribute for target in targets
+        ):
+            return ast.literal_eval(statement.value)
+    return None
+
+
+@pytest.mark.parametrize(
+    "module_name, class_name, expected",
+    _ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT,
+    ids=[class_name for _, class_name, _ in _ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT],
+)
+def test_adapter_supports_weighted_hybrid_search_flag(module_name, class_name, expected):
+    """Test that each adapter advertises whether its hybrid search honours the hybrid_search weights."""
+    class_def = _openai_vector_store_adapters()[(module_name, class_name)]
+
+    # An adapter that does not set the flag inherits the mixin default, which is True.
+    declared = _class_attribute_literal(class_def, "supports_weighted_hybrid_search")
+    assert (True if declared is None else declared) is expected
+
+
+def test_adapter_weighted_hybrid_search_support_list_covers_every_adapter():
+    """Test that the list above names every adapter, so a new provider has to decide instead of defaulting to True."""
+    assert set(_openai_vector_store_adapters()) == {
+        (module_name, class_name) for module_name, class_name, _ in _ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT
+    }
+
+
+def test_mixin_default_allows_weighted_hybrid_search():
+    """Test that the flag the adapters override defaults to True on the mixin itself."""
+    assert OpenAIVectorStoreMixin.supports_weighted_hybrid_search is True
 
 
 async def test_create_gin_index_executes_correct_sql():

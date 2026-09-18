@@ -143,7 +143,7 @@ class OpenAIVectorStoreMixin(ABC):
     # either because they have no hybrid search at all or because their hybrid search ignores the weights.
     # Searches that pass ranking_options.hybrid_search to such a provider are rejected with a 400 instead of
     # silently returning differently ranked results.
-    supports_hybrid_search: bool = True
+    supports_weighted_hybrid_search: bool = True
 
     # Implementing classes should call super().__init__() in their __init__ method
     # to properly initialize the mixin attributes.
@@ -1106,7 +1106,7 @@ class OpenAIVectorStoreMixin(ABC):
 
         search_mode = request.search_mode
         if request.ranking_options is not None and request.ranking_options.hybrid_search is not None:
-            if not self.supports_hybrid_search:
+            if not self.supports_weighted_hybrid_search:
                 raise InvalidParameterError(
                     "ranking_options.hybrid_search",
                     request.ranking_options.hybrid_search.model_dump(),

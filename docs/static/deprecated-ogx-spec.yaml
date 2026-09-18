@@ -7640,7 +7640,7 @@ components:
           - $ref: '#/components/schemas/HybridSearchOptions'
             title: HybridSearchOptions
           - type: 'null'
-          description: Weights that control how reciprocal rank fusion balances semantic embedding matches versus sparse keyword matches. Setting it selects hybrid search, and score_threshold then applies to the fused reciprocal rank fusion scores. Vector stores whose provider cannot apply the weights reject the search with a 400 error.
+          description: Weights that control how reciprocal rank fusion balances semantic embedding matches versus sparse keyword matches. Setting it selects hybrid search, and score_threshold then applies to the fused reciprocal rank fusion scores. Vector stores whose provider cannot apply the weights reject the search with a 400 error, which fails the whole request when the search is a Responses file_search or memory retrieval.
           title: HybridSearchOptions
       type: object
       title: SearchRankingOptions

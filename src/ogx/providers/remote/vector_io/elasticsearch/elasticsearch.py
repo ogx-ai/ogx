@@ -381,7 +381,7 @@ class ElasticsearchVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStore
 
     # ElasticsearchIndex.query_hybrid drops "weights" from the RRF retriever's parameters as unsupported.
     # Its "linear" retriever does apply weights, but hybrid_search maps to reranker_type="rrf".
-    supports_hybrid_search = False
+    supports_weighted_hybrid_search = False
 
     def __init__(
         self,

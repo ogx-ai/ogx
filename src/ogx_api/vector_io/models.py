@@ -540,7 +540,8 @@ class SearchRankingOptions(BaseModel):
     :param hybrid_search: (Optional) OpenAI-compatible weights for embedding versus keyword matches.
         Applied as weighted RRF after normalizing the weights to sum to 1. Setting it runs the search in
         hybrid mode, whatever search_mode says. Vector stores whose provider cannot apply the weights
-        reject the search with a 400 instead of ranking the results some other way. score_threshold then
+        reject the search with a 400 instead of ranking the results some other way, which fails the whole
+        request when the search is a Responses file_search or memory retrieval. score_threshold then
         filters the fused RRF scores, which are at most 1 / (impact_factor + 1). Cannot be combined with
         weights or with the "weighted", "neural", "classifier", or "normalized" rankers.
     """
@@ -569,7 +570,8 @@ class SearchRankingOptions(BaseModel):
             "Weights that control how reciprocal rank fusion balances semantic embedding matches versus "
             "sparse keyword matches. Setting it selects hybrid search, and score_threshold then applies to the "
             "fused reciprocal rank fusion scores. Vector stores whose provider cannot apply the weights reject "
-            "the search with a 400 error."
+            "the search with a 400 error, which fails the whole request when the search is a Responses "
+            "file_search or memory retrieval."
         ),
     )
 

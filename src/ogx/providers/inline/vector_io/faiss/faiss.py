@@ -355,7 +355,7 @@ class FaissVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtoco
     """VectorIO adapter that uses FAISS for similarity search and vector storage."""
 
     # FaissIndex.query_hybrid raises NotImplementedError: FAISS has no keyword search to fuse with.
-    supports_hybrid_search = False
+    supports_weighted_hybrid_search = False
 
     def __init__(
         self,
