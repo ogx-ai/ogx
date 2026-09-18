@@ -325,6 +325,10 @@ class QdrantIndex(EmbeddingIndex):
 class QdrantVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """Vector I/O adapter for remote Qdrant instances."""
 
+    # QdrantIndex.query_hybrid ignores reranker_type and reranker_params: it runs a vector search
+    # restricted to chunks matching a query word, so there are no keyword ranks to weight.
+    supports_hybrid_search = False
+
     def __init__(
         self,
         config: RemoteQdrantVectorIOConfig | InlineQdrantVectorIOConfig,

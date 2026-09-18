@@ -463,7 +463,8 @@ class HybridSearchOptions(BaseModel):
     """Weights that balance embedding and keyword matches in hybrid search.
 
     Matches OpenAI's file_search `ranking_options.hybrid_search`. The weights are relative:
-    they are normalized to sum to 1 and applied as weighted Reciprocal Rank Fusion.
+    they are normalized to sum to 1 and applied as weighted Reciprocal Rank Fusion. Vector stores
+    whose provider cannot apply the weights reject the search with a 400 error.
 
     :param embedding_weight: Weight of the embedding (vector) ranking in the reciprocal rank fusion.
     :param text_weight: Weight of the text (keyword) ranking in the reciprocal rank fusion.
@@ -538,10 +539,10 @@ class SearchRankingOptions(BaseModel):
         weights contains "neural".
     :param hybrid_search: (Optional) OpenAI-compatible weights for embedding versus keyword matches.
         Applied as weighted RRF after normalizing the weights to sum to 1. Setting it runs the search in
-        hybrid mode, whatever search_mode says, on vector stores that support hybrid search; other stores
-        ignore it. Where the weights apply, score_threshold filters the fused RRF scores, which are at most
-        1 / (impact_factor + 1). Cannot be combined with weights or with the "weighted", "neural",
-        "classifier", or "normalized" rankers.
+        hybrid mode, whatever search_mode says. Vector stores whose provider cannot apply the weights
+        reject the search with a 400 instead of ranking the results some other way. score_threshold then
+        filters the fused RRF scores, which are at most 1 / (impact_factor + 1). Cannot be combined with
+        weights or with the "weighted", "neural", "classifier", or "normalized" rankers.
     """
 
     ranker: str | None = Field(
@@ -566,8 +567,9 @@ class SearchRankingOptions(BaseModel):
         default=None,
         description=(
             "Weights that control how reciprocal rank fusion balances semantic embedding matches versus "
-            "sparse keyword matches when hybrid search is enabled. Setting it selects hybrid search on vector "
-            "stores that support it, and score_threshold then applies to the fused reciprocal rank fusion scores."
+            "sparse keyword matches. Setting it selects hybrid search, and score_threshold then applies to the "
+            "fused reciprocal rank fusion scores. Vector stores whose provider cannot apply the weights reject "
+            "the search with a 400 error."
         ),
     )
 

@@ -11428,7 +11428,8 @@ components:
         Weights that balance embedding and keyword matches in hybrid search.
 
         Matches OpenAI's file_search `ranking_options.hybrid_search`. The weights are relative:
-        they are normalized to sum to 1 and applied as weighted Reciprocal Rank Fusion.
+        they are normalized to sum to 1 and applied as weighted Reciprocal Rank Fusion. Vector stores
+        whose provider cannot apply the weights reject the search with a 400 error.
     InputTokensDetails:
       properties:
         cached_tokens:
@@ -12511,7 +12512,7 @@ components:
           - $ref: '#/components/schemas/HybridSearchOptions'
             title: HybridSearchOptions
           - type: 'null'
-          description: Weights that control how reciprocal rank fusion balances semantic embedding matches versus sparse keyword matches when hybrid search is enabled. Setting it selects hybrid search on vector stores that support it, and score_threshold then applies to the fused reciprocal rank fusion scores.
+          description: Weights that control how reciprocal rank fusion balances semantic embedding matches versus sparse keyword matches. Setting it selects hybrid search, and score_threshold then applies to the fused reciprocal rank fusion scores. Vector stores whose provider cannot apply the weights reject the search with a 400 error.
           title: HybridSearchOptions
       type: object
       title: SearchRankingOptions

@@ -6,16 +6,20 @@
 
 import asyncio
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import asyncpg
+import httpx
 import numpy as np
 import pytest
 
+import ogx.providers
 from ogx_api import (
     ChunkMetadata,
     EmbeddedChunk,
     InsertChunksRequest,
+    InvalidParameterError,
     OpenAICreateVectorStoreRequestWithExtraBody,
     OpenAIEmbeddingData,
     OpenAIEmbeddingsRequestWithExtraBody,
@@ -348,19 +352,81 @@ async def test_search_vector_store_hybrid_search_score_threshold_uses_rrf_scores
 
 
 async def test_search_vector_store_hybrid_search_without_hybrid_support(faiss_vec_adapter):
-    """Test that a store without hybrid search ignores hybrid_search but still rejects an explicit hybrid mode."""
+    """Test that a store whose provider cannot apply the weights rejects hybrid_search with a 400."""
     vector_store_id = await _create_hybrid_search_store(faiss_vec_adapter)
     ranking_options = {"hybrid_search": {"embedding_weight": 0.2, "text_weight": 0.8}}
 
-    assert await _search_document_ids(faiss_vec_adapter, vector_store_id, ranking_options=ranking_options) == [
+    with pytest.raises(InvalidParameterError) as excinfo:
+        await _search_document_ids(faiss_vec_adapter, vector_store_id, ranking_options=ranking_options)
+
+    assert excinfo.value.status_code == httpx.codes.BAD_REQUEST
+    message = str(excinfo.value)
+    assert "ranking_options.hybrid_search" in message
+    assert vector_store_id in message
+    assert "does not support weighted hybrid search" in message
+
+    # An explicit hybrid search_mode still reaches the index and fails there, unchanged by this feature.
+    with pytest.raises(NotImplementedError, match="Hybrid search is not supported"):
+        await _search_document_ids(faiss_vec_adapter, vector_store_id, search_mode="hybrid")
+
+
+async def test_search_vector_store_without_hybrid_search_option_is_unaffected(faiss_vec_adapter):
+    """Test that a provider without hybrid support still serves searches that omit hybrid_search."""
+    vector_store_id = await _create_hybrid_search_store(faiss_vec_adapter)
+
+    assert await _search_document_ids(faiss_vec_adapter, vector_store_id) == [
         "expense-report",
         "parking",
         "receipt-policy",
     ]
-    with pytest.raises(NotImplementedError, match="Hybrid search is not supported"):
-        await _search_document_ids(
-            faiss_vec_adapter, vector_store_id, ranking_options=ranking_options, search_mode="hybrid"
-        )
+    assert await _search_document_ids(
+        faiss_vec_adapter, vector_store_id, ranking_options={"ranker": "auto", "score_threshold": 0.0}
+    ) == [
+        "expense-report",
+        "parking",
+        "receipt-policy",
+    ]
+
+
+# Every vector_io adapter, with whether its query_hybrid honours the weights hybrid_search sends
+# (reranker_type="rrf" plus reranker_params["weights"]).
+_ADAPTER_HYBRID_SEARCH_SUPPORT = [
+    ("ogx.providers.inline.vector_io.faiss.faiss", "FaissVectorIOAdapter", False),
+    ("ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec", "SQLiteVecVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.chroma.chroma", "ChromaVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.elasticsearch.elasticsearch", "ElasticsearchVectorIOAdapter", False),
+    ("ogx.providers.remote.vector_io.infinispan.infinispan", "InfinispanVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.milvus.milvus", "MilvusVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.neo4j.neo4j", "Neo4jVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.oci.oci26ai", "OCI26aiVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.pgvector.pgvector", "PGVectorVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.qdrant.qdrant", "QdrantVectorIOAdapter", False),
+    ("ogx.providers.remote.vector_io.weaviate.weaviate", "WeaviateVectorIOAdapter", False),
+]
+
+
+@pytest.mark.parametrize(
+    "module_name, class_name, supports_hybrid_search",
+    _ADAPTER_HYBRID_SEARCH_SUPPORT,
+    ids=[class_name for _, class_name, _ in _ADAPTER_HYBRID_SEARCH_SUPPORT],
+)
+def test_adapter_supports_hybrid_search_flag(module_name, class_name, supports_hybrid_search):
+    """Test that each adapter advertises whether its hybrid search honours the hybrid_search weights."""
+    module = pytest.importorskip(module_name)
+
+    assert getattr(module, class_name).supports_hybrid_search is supports_hybrid_search
+
+
+def test_adapter_hybrid_search_support_list_covers_every_adapter():
+    """Test that the list above names every adapter, so a new provider has to decide instead of defaulting to True."""
+    package_root = Path(ogx.providers.__file__).parent
+    adapter_modules = {
+        ".".join(["ogx", "providers", *path.relative_to(package_root).with_suffix("").parts])
+        for path in package_root.rglob("*.py")
+        if "vector_io" in path.parts and "(OpenAIVectorStoreMixin" in path.read_text()
+    }
+
+    assert adapter_modules == {module_name for module_name, _, _ in _ADAPTER_HYBRID_SEARCH_SUPPORT}
 
 
 async def test_create_gin_index_executes_correct_sql():

@@ -43,6 +43,7 @@ from ogx_api import (
     Files,
     Inference,
     InsertChunksRequest,
+    InvalidParameterError,
     OpenAIAttachFileRequest,
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionRequestWithExtraBody,
@@ -138,8 +139,10 @@ class OpenAIVectorStoreMixin(ABC):
     an openai_vector_stores in-memory cache.
     """
 
-    # Set to False for providers whose index cannot run hybrid search (e.g., FAISS), so searches with
-    # ranking_options.hybrid_search keep the requested search mode instead of failing.
+    # Set to False for providers that cannot run hybrid search with the caller's embedding/keyword weights,
+    # either because they have no hybrid search at all or because their hybrid search ignores the weights.
+    # Searches that pass ranking_options.hybrid_search to such a provider are rejected with a 400 instead of
+    # silently returning differently ranked results.
     supports_hybrid_search: bool = True
 
     # Implementing classes should call super().__init__() in their __init__ method
@@ -1103,14 +1106,13 @@ class OpenAIVectorStoreMixin(ABC):
 
         search_mode = request.search_mode
         if request.ranking_options is not None and request.ranking_options.hybrid_search is not None:
-            if self.supports_hybrid_search:
-                search_mode = "hybrid"
-            else:
-                logger.warning(
-                    "Ignoring hybrid_search because the vector store provider does not support hybrid search",
-                    vector_store_id=vector_store_id,
-                    search_mode=search_mode,
+            if not self.supports_hybrid_search:
+                raise InvalidParameterError(
+                    "ranking_options.hybrid_search",
+                    request.ranking_options.hybrid_search.model_dump(),
+                    f"The provider of vector store '{vector_store_id}' does not support weighted hybrid search.",
                 )
+            search_mode = "hybrid"
 
         if isinstance(request.query, list):
             search_query = " ".join(request.query)
