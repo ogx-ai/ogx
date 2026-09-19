@@ -8,6 +8,7 @@
 
 import argparse
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -134,6 +135,40 @@ class TestModelSelection:
         result = connect_opencode._select_default_model(None, ["gpt-4o", "llama-3.1-8b"])
         assert result == "gpt-4o"
 
+    def test_recalls_last_model(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "opencode.json"
+        state_file.write_text(json.dumps({"last_model": "llama-3.1-8b"}))
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            result = connect_opencode._select_default_model(None, ["gpt-4o", "llama-3.1-8b"])
+        assert result == "llama-3.1-8b"
+
+    def test_recall_ignores_unavailable_model(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "opencode.json"
+        state_file.write_text(json.dumps({"last_model": "removed-model"}))
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            result = connect_opencode._select_default_model(None, ["gpt-4o", "llama-3.1-8b"])
+        assert result == "gpt-4o"
+
+    def test_recall_handles_missing_state_file(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "nonexistent" / "opencode.json"
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            result = connect_opencode._select_default_model(None, ["gpt-4o", "llama-3.1-8b"])
+        assert result == "gpt-4o"
+
+    def test_recall_handles_corrupt_state_file(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "opencode.json"
+        state_file.write_text("not json")
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            result = connect_opencode._select_default_model(None, ["gpt-4o", "llama-3.1-8b"])
+        assert result == "gpt-4o"
+
+    def test_explicit_model_overrides_recall(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "opencode.json"
+        state_file.write_text(json.dumps({"last_model": "llama-3.1-8b"}))
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            result = connect_opencode._select_default_model("gpt-4o", ["gpt-4o", "llama-3.1-8b"])
+        assert result == "gpt-4o"
+
     def test_filters_out_embedding_models(self, connect_opencode: ConnectOpenCode) -> None:
         mock_client = _make_mock_client(
             [
@@ -194,6 +229,37 @@ class TestConfigGeneration:
         serialized = json.dumps(config)
         parsed = json.loads(serialized)
         assert parsed == config
+
+
+class TestModelRecallPersistence:
+    def test_saves_selected_model(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "connect" / "opencode.json"
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            connect_opencode._save_last_model("gpt-4o")
+        assert state_file.exists()
+        data = json.loads(state_file.read_text())
+        assert data["last_model"] == "gpt-4o"
+
+    def test_save_creates_parent_dirs(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "nested" / "dir" / "opencode.json"
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            connect_opencode._save_last_model("llama-3.1-8b")
+        assert state_file.exists()
+
+    def test_save_overwrites_previous(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "opencode.json"
+        state_file.write_text(json.dumps({"last_model": "old-model"}))
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            connect_opencode._save_last_model("new-model")
+        data = json.loads(state_file.read_text())
+        assert data["last_model"] == "new-model"
+
+    def test_roundtrip(self, connect_opencode: ConnectOpenCode, tmp_path: Path) -> None:
+        state_file = tmp_path / "opencode.json"
+        with patch("ogx.cli.connect.opencode._STATE_FILE", state_file):
+            connect_opencode._save_last_model("llama-3.1-8b")
+            result = connect_opencode._load_last_model()
+        assert result == "llama-3.1-8b"
 
 
 class TestConnect:

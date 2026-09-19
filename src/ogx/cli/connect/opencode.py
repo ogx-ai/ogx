@@ -15,9 +15,12 @@ from openai import APIConnectionError, APIStatusError, OpenAI
 from termcolor import cprint
 
 from ogx.cli.subcommand import Subcommand
+from ogx.core.utils.config_dirs import OGX_CONFIG_DIR
 from ogx.log import get_logger
 
 logger = get_logger(name=__name__, category="cli")
+
+_STATE_FILE = OGX_CONFIG_DIR / "connect" / "opencode.json"
 
 
 class ConnectOpenCode(Subcommand):
@@ -71,6 +74,7 @@ class ConnectOpenCode(Subcommand):
             sys.exit(1)
 
         default_model = self._select_default_model(args.model, models)
+        self._save_last_model(default_model)
 
         config = self._build_opencode_config(base_url, models, default_model)
         config_json = json.dumps(config)
@@ -119,7 +123,30 @@ class ConnectOpenCode(Subcommand):
                 sys.exit(1)
             return requested_model
 
+        last_model = self._load_last_model()
+        if last_model and last_model in available_models:
+            return last_model
+
         return available_models[0]
+
+    @staticmethod
+    def _load_last_model() -> str | None:
+        try:
+            data = json.loads(_STATE_FILE.read_text())
+            model = data.get("last_model")
+            if isinstance(model, str):
+                return model
+            return None
+        except (OSError, json.JSONDecodeError, ValueError):
+            return None
+
+    @staticmethod
+    def _save_last_model(model: str) -> None:
+        try:
+            _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _STATE_FILE.write_text(json.dumps({"last_model": model}))
+        except OSError:
+            logger.debug("Failed to save last model selection", model=model)
 
     def _build_opencode_config(self, base_url: str, all_models: list[str], default_model: str) -> dict:
         models_config = {
