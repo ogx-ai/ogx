@@ -29,17 +29,6 @@ from ogx_api.internal.kvstore import KVStore
 from .config import KVStoreConfig
 
 
-def kvstore_dependencies() -> list[str]:
-    """
-    Returns all possible kvstore dependencies for registry/provider specifications.
-
-    NOTE: For specific kvstore implementations, use config.pip_packages instead.
-    This function returns the union of all dependencies for cases where the specific
-    kvstore type is not known at declaration time (e.g., provider registries).
-    """
-    return ["aiosqlite", "asyncpg", "redis", "pymongo"]
-
-
 class InmemoryKVStoreImpl(KVStore):
     """In-memory key-value store implementation for testing and ephemeral usage."""
 
