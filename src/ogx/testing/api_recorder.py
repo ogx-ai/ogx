@@ -67,7 +67,7 @@ _ID_KIND_PREFIXES: dict[str, str] = {
     "tool_call": "call_",
 }
 
-_SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags", "/v1/models", "/v1/openai/v1/models"}
+_SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags", "/v1/models"}
 _LOCAL_MODEL_LIST_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost"}  # noqa: S104
 _DEFAULT_TEST_SERVER_PORT = 8321
 
@@ -670,7 +670,6 @@ def _model_identifiers_digest(endpoint: str, response: dict[str, Any]) -> str:
         Supported endpoints:
         - '/api/tags' (Ollama): response body has 'models': [ { name/model/digest/id/... }, ... ]
         - '/v1/models' (OpenAI): response body is: [ { id: ... }, ... ]
-        - '/v1/openai/v1/models' (OpenAI): response body is: [ { id: ... }, ... ]
         Returns a list of unique identifiers or None if structure doesn't match.
         """
         if "models" in response["body"]:
@@ -1242,13 +1241,13 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
         }
 
         try:
-            if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+            if endpoint == "/v1/models":
                 response = original_method(self, *args, **kwargs)
             else:
                 response = await original_method(self, *args, **kwargs)
 
             # we want to store the result of the iterator, not the iterator itself
-            if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+            if endpoint == "/v1/models":
                 response = [m async for m in response]
 
         except Exception as exc:
