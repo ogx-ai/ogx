@@ -82,6 +82,54 @@ results = await client.vector_stores.search(
 )
 ```
 
+#### OpenAI-Compatible Hybrid Search Weights
+
+`ranking_options.hybrid_search` follows OpenAI's `file_search` tool. `embedding_weight` and `text_weight` are
+relative: OGX normalizes them to sum to 1 and applies them as weighted RRF, with `impact_factor` or the configured
+`rrf_impact_factor`. A zero weight leaves out results that only the zero-weighted search found, so
+`{"embedding_weight": 1, "text_weight": 0}` ranks by vector search alone.
+
+Setting `hybrid_search` runs the search in hybrid mode, whatever `search_mode` or the configured `default_search_mode`
+says. This applies to `vector_stores.search`, to the Responses `file_search` tool and to `memory.ranking_options`.
+Vector stores whose provider cannot apply the weights reject the search with a `400` error rather than ranking the
+results some other way. On `vector_stores.search` that `400` is the response. Inside `responses.create` the whole
+request fails rather than the answer being written without the retrieval it asked for: a non-streaming call returns
+the same `400`, a `stream=True` call ends in an `error` event carrying it (the status line is already `200` by then),
+and a `background=True` response is stored with `status="failed"` carrying the same message.
+
+```python
+response = client.responses.create(
+    model="gpt-4o",
+    input="What is the travel reimbursement limit?",
+    tools=[
+        {
+            "type": "file_search",
+            "vector_store_ids": [vector_store.id],
+            "ranking_options": {
+                "hybrid_search": {"embedding_weight": 0.3, "text_weight": 0.7},
+            },
+        }
+    ],
+)
+```
+
+Provider support:
+
+| Provider | `ranking_options.hybrid_search` | Why |
+| --- | --- | --- |
+| `sqlite-vec`, `pgvector`, `chroma`, `milvus`, `neo4j`, `oci`, `infinispan` | Supported | Fuse vector and keyword ranks in process with the requested weights |
+| `faiss` | `400` error | No keyword search to fuse with, so no hybrid search at all |
+| `qdrant` | `400` error | Has hybrid search, but it is a vector search limited to chunks that contain at least one query word, with no keyword ranks to weight |
+| `weaviate` | `400` error | Has hybrid search, but it hardcodes an equal (`alpha=0.5`) vector/keyword balance |
+| `elasticsearch` | `400` error | Has hybrid search, but its RRF retriever drops the weights as unsupported |
+
+Limitations:
+
+- `score_threshold` applies to the fused RRF scores, which are at most `1 / (impact_factor + 1)`: about 0.016 with the
+  default impact factor of 60. A threshold such as 0.3 therefore filters out every result.
+- `hybrid_search` cannot be combined with `weights` or with the `weighted`, `neural`, `classifier`, or `normalized`
+  rankers.
+
 #### Using VectorStoresConfig Defaults
 
 You can set default reranker parameters in your stack configuration:

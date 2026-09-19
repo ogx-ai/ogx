@@ -292,6 +292,9 @@ class WeaviateIndex(EmbeddingIndex):
 class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """VectorIO adapter that uses Weaviate for similarity search and vector storage."""
 
+    # WeaviateIndex.query_hybrid hardcodes alpha=0.5, so Weaviate always weights vector and keyword equally.
+    supports_weighted_hybrid_search = False
+
     def __init__(
         self,
         config: WeaviateVectorIOConfig,
