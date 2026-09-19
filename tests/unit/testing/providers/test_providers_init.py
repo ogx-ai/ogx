@@ -6,6 +6,7 @@
 
 """Tests for provider registry and exception reconstruction dispatch."""
 
+import importlib.util
 import types
 from unittest.mock import patch
 
@@ -18,8 +19,11 @@ from ogx.testing.exception_utils import GenericProviderError
 from ogx.testing.providers import (
     PROVIDERS,
     ProviderConfig,
+    _load_optional_providers,
+    build_providers,
     create_provider_error,
     detect_provider,
+    openai,
 )
 from ogx.testing.providers._config import _validate_provider
 
@@ -158,3 +162,24 @@ class TestProviderValidation:
         config = ProviderConfig(name="x", sdk_module=self._fake_sdk_module(), create_error="not a function")
         with pytest.raises(ValueError, match="create_error must be callable"):
             _validate_provider(config)
+
+
+class TestOptionalProviderLoading:
+    """Providers whose SDK is optional are skipped when the SDK is not installed."""
+
+    def test_missing_optional_sdk_is_skipped(self):
+        """find_spec returning None for an optional SDK skips its provider, not the whole registry."""
+        with patch.object(importlib.util, "find_spec", return_value=None):
+            configs = _load_optional_providers()
+        assert configs == []
+
+    def test_installed_optional_sdk_is_loaded(self):
+        """An optional provider whose SDK is installed is loaded (ollama is present in the test env)."""
+        names = {config.name for config in _load_optional_providers()}
+        assert "ollama" in names
+
+    def test_registry_registers_core_provider_without_optional_sdks(self):
+        """The openai (core) provider is registered even when no optional providers load."""
+        providers = build_providers(openai.PROVIDER)
+        assert providers["openai"] is openai.PROVIDER
+        assert "ollama" not in providers
