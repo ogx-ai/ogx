@@ -211,6 +211,9 @@ Key features:
 - **Environment variable substitution**: `${env.VAR_NAME:=default}` syntax for config values.
 - **Conditional providers**: `${env.API_KEY:+provider_id}` syntax enables a provider only when a variable is set.
 - **Multiple providers per API**: e.g., both `ollama` and `openai` can serve inference, each handling different models.
+- **Explicit HTTP surface**: `apis:` lists the APIs served over HTTP. An explicit list is
+  authoritative, including when it is empty; omitting the key serves everything the
+  providers supply.
 
 ### Distributions
 
