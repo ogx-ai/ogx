@@ -356,6 +356,12 @@ class VectorStoreChunkingStrategyStaticConfig(BaseModel):
     chunk_overlap_tokens: int = DEFAULT_CHUNK_OVERLAP_TOKENS
     max_chunk_size_tokens: int = Field(DEFAULT_CHUNK_SIZE_TOKENS, ge=100, le=4096)
 
+    @model_validator(mode="after")
+    def validate_config(self) -> "VectorStoreChunkingStrategyStaticConfig":
+        if self.chunk_overlap_tokens >= self.max_chunk_size_tokens:
+            raise ValueError("chunk_overlap_tokens must be less than max_chunk_size_tokens")
+        return self
+
 
 @json_schema_type
 class VectorStoreChunkingStrategyStatic(BaseModel):
