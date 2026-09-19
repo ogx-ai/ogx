@@ -844,6 +844,31 @@ class ServerConfig(BaseModel):
     tenancy: TenancyConfig = Field(default_factory=TenancyConfig, description="Multi-tenancy isolation configuration")
     host: str | None = Field(default=None, description="The host the server should listen on")
     workers: int = Field(default=1, description="Number of workers to use for the server")
+    max_request_body_size: int = Field(
+        default=100 * 1024 * 1024,
+        description="Maximum request body size in bytes for non-upload endpoints.",
+        gt=0,
+    )
+    max_file_upload_size: int = Field(
+        default=100 * 1024 * 1024,
+        description="Maximum individual file upload size in bytes.",
+        gt=0,
+    )
+    limit_concurrency: int | None = Field(
+        default=None,
+        description="Maximum concurrent connections accepted by each Uvicorn worker. Omit to use Uvicorn's default.",
+        gt=1,
+    )
+    limit_max_requests: int | None = Field(
+        default=None,
+        description="Maximum requests served by a Uvicorn process before it exits. Omit to disable.",
+        gt=0,
+    )
+    timeout_keep_alive: int = Field(
+        default=5,
+        description="Seconds to keep an idle HTTP connection open.",
+        ge=0,
+    )
     registry_refresh_interval_seconds: int = Field(
         default=300, description="Interval in seconds between registry refreshes for syncing model information", gt=0
     )

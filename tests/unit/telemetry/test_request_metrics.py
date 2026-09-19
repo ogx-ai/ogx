@@ -15,6 +15,7 @@ from ogx.core.server.metrics import (
     _compile_route_patterns,
     build_route_to_api_map,
 )
+from ogx.core.server.server import RequestSizeLimitMiddleware
 
 
 @pytest.fixture
@@ -202,6 +203,32 @@ class TestRequestMetricsMiddleware:
 
         with pytest.raises(ValueError, match="test error"):
             await middleware(scope, receive, send)
+
+    async def test_tracks_request_size_rejection(self, sample_route_to_api):
+        inner_app = AsyncMock()
+        size_limiter = RequestSizeLimitMiddleware(
+            inner_app,
+            max_request_body_size=10,
+            max_file_upload_size=20,
+        )
+        middleware = RequestMetricsMiddleware(size_limiter)
+        middleware._patterns = _compile_route_patterns(sample_route_to_api)
+        scope = {
+            "type": "http",
+            "path": "/v1/chat/completions",
+            "method": "POST",
+            "headers": [(b"content-length", b"11")],
+        }
+
+        with (
+            patch("ogx.core.server.metrics.requests_total") as requests_total,
+            patch("ogx.core.server.metrics.request_duration_seconds"),
+            patch("ogx.core.server.metrics.concurrent_requests"),
+        ):
+            await middleware(scope, AsyncMock(), AsyncMock())
+
+        inner_app.assert_not_awaited()
+        assert requests_total.add.call_args.args[1]["status_code"] == "413"
 
     async def test_concurrent_requests(self):
         event = asyncio.Event()

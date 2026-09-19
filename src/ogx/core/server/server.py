@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import asyncio
+import json
 import os
 import sys
 import traceback
@@ -52,6 +53,7 @@ from ogx.core.utils.config_resolution import resolve_config_or_distro
 from ogx.log import LoggingConfig, get_logger, parse_yaml_config, setup_logging
 from ogx_api import Api, ConflictError, ResourceNotFoundError
 from ogx_api.common.errors import OpenAIErrorResponse
+from ogx_api.skills.models import MAX_ZIP_SIZE_BYTES
 
 from .auth import AuthenticationMiddleware, RouteAuthorizationMiddleware, TenancyMiddleware
 from .metrics import RequestMetricsMiddleware
@@ -183,7 +185,7 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
     for api_str in apis_to_serve:
         api = Api(api_str)
         impl = impls[api]
-        router = build_fastapi_router(api, impl)
+        router = build_fastapi_router(api, impl, max_file_upload_size=app.stack.run_config.server.max_file_upload_size)
         if router:
             app.include_router(router)
             logger.debug("Registered FastAPI router", api=str(api))
@@ -198,8 +200,8 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
     await app.stack.shutdown()
 
 
-async def _send_error_response(send: Send, status: int, message: str) -> None:
-    """Send an ASGI error response with an OpenAI-compatible error body."""
+async def _send_error_response(send: Send, status: int, message: str, scope: Scope | None = None) -> None:
+    """Send an API-compatible ASGI error response."""
     await send(
         {
             "type": "http.response.start",
@@ -207,7 +209,10 @@ async def _send_error_response(send: Send, status: int, message: str) -> None:
             "headers": [[b"content-type", b"application/json"]],
         }
     )
-    error_msg = OpenAIErrorResponse.from_message(message).to_bytes()
+    if scope is not None and scope.get("path", "").startswith("/v1alpha/interactions"):
+        error_msg = json.dumps({"error": {"code": status, "message": message}}).encode()
+    else:
+        error_msg = OpenAIErrorResponse.from_message(message).to_bytes()
     await send({"type": "http.response.body", "body": error_msg})
 
 
@@ -250,12 +255,105 @@ class ClientVersionMiddleware:
                             send,
                             status=httpx.codes.UPGRADE_REQUIRED,
                             message=f"Client version {client_version} is not compatible with server version {self.server_version}. Please update your client.",
+                            scope=scope,
                         )
                 except InvalidVersion:
                     # If version parsing fails, let the request through
                     pass
 
         return await self.app(scope, receive, send)
+
+
+class RequestBodyTooLargeError(Exception):
+    """Raised when an HTTP request body exceeds its configured limit."""
+
+
+class RequestSizeLimitMiddleware:
+    """Reject HTTP bodies over the configured limit before or during parsing."""
+
+    _MULTIPART_ENVELOPE_ALLOWANCE = 1024 * 1024
+    _UPLOAD_PATHS = {
+        "/v1/files",
+        "/v1alpha/file-processors/jobs",
+        "/v1alpha/file-processors/process",
+        "/v1alpha/skills",
+    }
+
+    def __init__(self, app: ASGIApp, max_request_body_size: int, max_file_upload_size: int) -> None:
+        self.app = app
+        self.max_request_body_size = max_request_body_size
+        self.max_file_upload_size = max_file_upload_size
+
+    def _limit_for_scope(self, scope: Scope) -> int:
+        if not self._is_upload_request(scope):
+            return self.max_request_body_size
+        return self._upload_limit_for_scope(scope) + self._MULTIPART_ENVELOPE_ALLOWANCE
+
+    def _upload_limit_for_scope(self, scope: Scope) -> int:
+        if self._is_skills_upload(scope):
+            return min(self.max_file_upload_size, MAX_ZIP_SIZE_BYTES)
+        return self.max_file_upload_size
+
+    @classmethod
+    def _is_upload_request(cls, scope: Scope) -> bool:
+        if scope.get("method") != "POST":
+            return False
+        path = scope.get("path", "")
+        return (
+            path in cls._UPLOAD_PATHS
+            or (path.startswith("/v1alpha/containers/") and path.endswith("/files"))
+            or (path.startswith("/v1alpha/skills/") and path.endswith("/versions"))
+        )
+
+    @classmethod
+    def _is_skills_upload(cls, scope: Scope) -> bool:
+        path = str(scope.get("path", ""))
+        return path == "/v1alpha/skills" or (path.startswith("/v1alpha/skills/") and path.endswith("/versions"))
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        limit = self._limit_for_scope(scope)
+        headers = dict(scope.get("headers", []))
+        content_length = headers.get(b"content-length")
+        if content_length is not None:
+            try:
+                declared_size = int(content_length)
+            except ValueError:
+                declared_size = None
+            if declared_size is not None and declared_size > limit:
+                self._log_rejection(scope, declared_size, limit)
+                return await _send_error_response(
+                    send, status=413, message="Request body exceeds the allowed size", scope=scope
+                )
+
+        consumed = 0
+
+        async def receive_with_limit() -> MutableMapping[str, Any]:
+            nonlocal consumed
+            message = await receive()
+            if message["type"] == "http.request":
+                consumed += len(message.get("body", b""))
+                if consumed > limit:
+                    self._log_rejection(scope, consumed, limit)
+                    raise RequestBodyTooLargeError
+            return cast(MutableMapping[str, Any], message)
+
+        try:
+            return await self.app(scope, receive_with_limit, send)
+        except RequestBodyTooLargeError:
+            return await _send_error_response(
+                send, status=413, message="Request body exceeds the allowed size", scope=scope
+            )
+
+    @staticmethod
+    def _log_rejection(scope: Scope, request_size: int, limit: int) -> None:
+        client = scope.get("client")
+        client_ip = client[0] if client else None
+        logger.warning(
+            "Rejected request body exceeding size limit", client_ip=client_ip, request_size=request_size, limit=limit
+        )
 
 
 def _client_version_is_compatible(client_version: str, server_version: str) -> bool:
@@ -343,13 +441,23 @@ class ZstdDecompressionMiddleware:
 
     If the request body is not zstd-encoded, it passes through unchanged.
     If decompression fails, it logs a warning and passes the original compressed body to the app.
-    If the decompressed body exceeds 100 MB, it returns a 413 Payload Too Large response.
+    If the decompressed body exceeds the configured route limit, it returns a 413 Payload Too Large response.
 
     This is useful for Codex CLI requests that send zstd-compressed payloads to reduce bandwidth usage.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, max_request_body_size: int, max_file_upload_size: int) -> None:
         self.app = app
+        self.max_request_body_size = max_request_body_size
+        self.max_file_upload_size = max_file_upload_size
+
+    def _limit_for_scope(self, scope: Scope) -> int:
+        if RequestSizeLimitMiddleware._is_upload_request(scope):
+            upload_limit = self.max_file_upload_size
+            if RequestSizeLimitMiddleware._is_skills_upload(scope):
+                upload_limit = min(upload_limit, MAX_ZIP_SIZE_BYTES)
+            return upload_limit + RequestSizeLimitMiddleware._MULTIPART_ENVELOPE_ALLOWANCE
+        return self.max_request_body_size
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         if scope["type"] != "http":
@@ -372,7 +480,7 @@ class ZstdDecompressionMiddleware:
         compressed_body = b"".join(body_parts)
 
         try:
-            max_decompressed_size = 100 * 1024 * 1024  # 100 MB
+            max_decompressed_size = self._limit_for_scope(scope)
 
             def _decompress_zstd(compressed: bytes, max_size: int) -> tuple[bytes | None, bool]:
                 decompressor = zstandard.ZstdDecompressor()
@@ -393,6 +501,7 @@ class ZstdDecompressionMiddleware:
                     send,
                     status=413,
                     message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
+                    scope=scope,
                 )
 
             if decompressed_body is None:
@@ -400,6 +509,7 @@ class ZstdDecompressionMiddleware:
                     send,
                     status=500,
                     message="Failed to decompress request body",
+                    scope=scope,
                 )
 
             # Strip content-encoding header and update content-length
@@ -532,12 +642,20 @@ def create_app() -> StackApp:
         logger.info("Enabling tenancy enforcement (no auth)", mode=config.server.tenancy.mode.value)
         app.add_middleware(TenancyMiddleware, tenancy_config=config.server.tenancy)
 
-    # Add request metrics middleware.
-    # Added last so it runs first (outermost), wrapping auth.
+    app.add_middleware(
+        ZstdDecompressionMiddleware,
+        max_request_body_size=config.server.max_request_body_size,
+        max_file_upload_size=config.server.max_file_upload_size,
+    )
+    app.add_middleware(
+        RequestSizeLimitMiddleware,
+        max_request_body_size=config.server.max_request_body_size,
+        max_file_upload_size=config.server.max_file_upload_size,
+    )
+
+    # Added last so it runs first (outermost), including size-limit rejections.
     # Route mapping is built lazily on the first request from scope["app"].
     app.add_middleware(RequestMetricsMiddleware)
-
-    app.add_middleware(ZstdDecompressionMiddleware)
 
     # Register specific exception handlers before the generic Exception handler
     # This prevents the re-raising behavior that causes connection resets
