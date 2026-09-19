@@ -95,6 +95,28 @@ apis:
 - vector_io
 ```
 
+The list is authoritative: only the APIs it names are served over HTTP. Omitting an API
+from the list stops the server from routing it, even when a provider for it is
+configured. Leaving the key out entirely serves everything the providers supply.
+
+Three tiers decide what ends up served:
+
+1. **Always served** — `admin`, `inspect`, and `providers`. They describe and administer
+   the stack itself, and an operator needs them reachable to diagnose a deployment, so
+   `apis:` cannot turn them off.
+2. **Implied by `responses`** — `conversations` and `prompts`. Both are served whenever
+   `responses` is, listed or not: the builtin responses provider depends on them, and
+   OpenAI clients on a responses deployment call `/v1/conversations` to manage the
+   conversations their responses use. Listing either one on its own also works, for a
+   deployment that wants it without `responses`.
+3. **Everything else** — served only when listed.
+
+This is what lets a gateway deployment split the OpenAI-compatible surface. If a gateway
+in front of OGX serves `/v1/responses` and `/v1/conversations` itself, drop `responses`
+from `apis:`; `conversations` and `prompts` go with it, and OGX stops answering all
+three. Gating applies to route registration only — the implementations stay wired up
+in-process for providers that depend on them.
+
 ## Providers
 Next up is the most critical part: the set of providers that the stack will use to serve the above APIs. Consider the `inference` API:
 ```yaml
