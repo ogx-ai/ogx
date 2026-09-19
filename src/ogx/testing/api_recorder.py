@@ -1501,7 +1501,6 @@ def patch_inference_clients():
         "ollama_generate": OllamaAsyncClient.generate,
         "ollama_chat": OllamaAsyncClient.chat,
         "ollama_embed": OllamaAsyncClient.embed,
-        "ollama_ps": OllamaAsyncClient.ps,
         "ollama_pull": OllamaAsyncClient.pull,
         "ollama_list": OllamaAsyncClient.list,
         "tavily_invoke_tool": TavilySearchToolRuntimeImpl.invoke_tool,
@@ -1574,11 +1573,6 @@ def patch_inference_clients():
             _original_methods["ollama_embed"], self, "ollama", "/api/embeddings", *args, **kwargs
         )
 
-    async def patched_ollama_ps(self, *args, **kwargs):
-        return await _patched_inference_method(
-            _original_methods["ollama_ps"], self, "ollama", "/api/ps", *args, **kwargs
-        )
-
     async def patched_ollama_pull(self, *args, **kwargs):
         return await _patched_inference_method(
             _original_methods["ollama_pull"], self, "ollama", "/api/pull", *args, **kwargs
@@ -1593,7 +1587,6 @@ def patch_inference_clients():
     OllamaAsyncClient.generate = patched_ollama_generate
     OllamaAsyncClient.chat = patched_ollama_chat
     OllamaAsyncClient.embed = patched_ollama_embed
-    OllamaAsyncClient.ps = patched_ollama_ps
     OllamaAsyncClient.pull = patched_ollama_pull
     OllamaAsyncClient.list = patched_ollama_list
 
@@ -1692,7 +1685,6 @@ def unpatch_inference_clients():
     OllamaAsyncClient.generate = _original_methods["ollama_generate"]
     OllamaAsyncClient.chat = _original_methods["ollama_chat"]
     OllamaAsyncClient.embed = _original_methods["ollama_embed"]
-    OllamaAsyncClient.ps = _original_methods["ollama_ps"]
     OllamaAsyncClient.pull = _original_methods["ollama_pull"]
     OllamaAsyncClient.list = _original_methods["ollama_list"]
 
