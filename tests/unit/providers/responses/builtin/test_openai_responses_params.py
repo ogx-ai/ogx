@@ -180,7 +180,7 @@ async def test_create_openai_response_with_max_output_tokens_and_tools(openai_re
                 OpenAIResponseInputToolFunction(
                     name="get_weather",
                     description="Get weather information",
-                    parameters={"location": "string"},
+                    parameters={"type": "object", "properties": {"location": {"type": "string"}}},
                 )
             ],
         )
