@@ -280,6 +280,7 @@ def test_openai_create_vector_store(
         metadata={"purpose": "testing", "environment": "integration"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -297,10 +298,15 @@ def test_openai_create_vector_store(
 @vector_provider_wrapper
 def test_openai_create_vector_store_default(compat_client_with_empty_stores, client_with_models, vector_io_provider_id):
     skip_if_provider_doesnt_support_openai_vector_stores(client_with_models)
+    # Creating without an embedding model falls back to vector_stores.default_embedding_model
+    # from the stack config (see src/ogx/distributions/ci-tests/config.yaml).
     vector_store = compat_client_with_empty_stores.vector_stores.create(
         extra_body={"provider_id": vector_io_provider_id}
     )
     assert vector_store.id
+    retrieved = compat_client_with_empty_stores.vector_stores.retrieve(vector_store_id=vector_store.id)
+    assert retrieved.metadata.get("embedding_model") == "sentence-transformers/nomic-ai/nomic-embed-text-v1.5"
+    assert retrieved.metadata.get("embedding_dimension") == "768"
 
 
 @vector_provider_wrapper
@@ -318,6 +324,7 @@ def test_openai_list_vector_stores(
         metadata={"type": "test"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -326,6 +333,7 @@ def test_openai_list_vector_stores(
         metadata={"type": "test"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -362,6 +370,7 @@ def test_openai_retrieve_vector_store(
         metadata={"purpose": "retrieval_test"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -391,6 +400,7 @@ def test_openai_update_vector_store(
         metadata={"version": "1.0"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -424,6 +434,7 @@ def test_openai_delete_vector_store(
         metadata={"purpose": "deletion_test"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -456,6 +467,7 @@ def test_openai_vector_store_search_empty(
         metadata={"purpose": "search_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -494,6 +506,7 @@ def test_openai_vector_store_with_chunks(
         metadata={"purpose": "chunks_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -564,6 +577,7 @@ def test_openai_vector_store_search_relevance(
         metadata={"purpose": "relevance_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -614,6 +628,7 @@ def test_openai_vector_store_search_with_ranking_options(
         metadata={"purpose": "ranking_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -674,6 +689,7 @@ def test_openai_vector_store_search_with_high_score_filter(
         metadata={"purpose": "high_score_filtering"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -742,6 +758,7 @@ def test_openai_vector_store_search_with_weighted_ranker(
         metadata={"purpose": "weighted_ranker_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -840,6 +857,7 @@ def test_openai_vector_store_search_with_rrf_ranker(
         metadata={"purpose": "rrf_ranker_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -893,6 +911,7 @@ def test_openai_vector_store_search_with_ranker_defaults(
         metadata={"purpose": "ranker_defaults_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -959,6 +978,7 @@ def test_openai_vector_store_search_neural_ranker_validation(
         metadata={"purpose": "neural_ranker_validation"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1020,6 +1040,7 @@ def test_openai_vector_store_search_with_ranking_options_combined(
         metadata={"purpose": "combined_ranking_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1085,6 +1106,7 @@ def test_openai_vector_store_search_with_max_num_results(
         metadata={"purpose": "max_num_results_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1120,6 +1142,7 @@ def test_openai_vector_store_attach_file(
         name="test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1193,6 +1216,7 @@ def test_openai_vector_store_search_with_typed_filters(
         name="typed_filter_test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1318,6 +1342,7 @@ def test_openai_vector_store_attach_files_on_creation(
         file_ids=file_ids,
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1365,6 +1390,7 @@ def test_openai_vector_store_list_files(
         name="test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1456,6 +1482,7 @@ def test_openai_vector_store_retrieve_file_contents(
         name="test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1516,6 +1543,7 @@ def test_openai_vector_store_delete_file(
         name="test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1581,6 +1609,7 @@ def test_openai_vector_store_delete_file_removes_from_vector_store(
         name="test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1632,6 +1661,7 @@ def test_openai_vector_store_update_file(
         name="test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1701,6 +1731,7 @@ def test_create_vector_store_files_duplicate_vector_store_name(
         name="test_store_with_files",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1714,6 +1745,7 @@ def test_create_vector_store_files_duplicate_vector_store_name(
         name="test_store_with_files",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1765,6 +1797,7 @@ def test_openai_vector_store_search_modes(
         metadata={"purpose": "search_mode_testing"},
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1798,6 +1831,7 @@ def test_openai_vector_store_file_batch_create_and_retrieve(
         name="batch_test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1863,6 +1897,7 @@ def test_openai_vector_store_file_batch_list_files(
         name="batch_list_test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -1958,6 +1993,7 @@ def test_openai_vector_store_file_batch_cancel(
         name="batch_cancel_test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -2015,6 +2051,7 @@ def test_openai_vector_store_file_batch_retrieve_contents(
         name="batch_contents_test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -2088,6 +2125,7 @@ def test_openai_vector_store_file_batch_error_handling(
         name="batch_error_test_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -2200,6 +2238,7 @@ def test_openai_vector_store_file_contents_with_extra_query(
         name="test_extra_query_store",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -2304,7 +2343,11 @@ def test_openai_vector_store_search_with_rewrite_query(
     # Create vector store and insert chunks
     vector_store = compat_client.vector_stores.create(
         name="rewrite_test",
-        extra_body={"embedding_model": embedding_model_id, "provider_id": vector_io_provider_id},
+        extra_body={
+            "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
+            "provider_id": vector_io_provider_id,
+        },
     )
     llama_client.vector_io.insert(
         vector_store_id=vector_store.id,
@@ -2364,6 +2407,7 @@ def test_openai_vector_store_contextual_chunking(
         name="contextual_chunking_test",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -2450,6 +2494,7 @@ def test_openai_vector_store_contextual_chunking_error_without_model(
         name="contextual_no_model_test",
         extra_body={
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
             "provider_id": vector_io_provider_id,
         },
     )
@@ -2533,7 +2578,11 @@ Data augmentation can increase the effective training set size.
     # --- Static chunking ---
     static_store = compat_client.vector_stores.create(
         name="static_chunking_comparison",
-        extra_body={"embedding_model": embedding_model_id, "provider_id": vector_io_provider_id},
+        extra_body={
+            "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
+            "provider_id": vector_io_provider_id,
+        },
     )
     with BytesIO(document_content.encode()) as buf:
         buf.name = "ml_overview_static.txt"
@@ -2552,7 +2601,11 @@ Data augmentation can increase the effective training set size.
     # --- Contextual chunking (same document, same chunk sizes) ---
     ctx_store = compat_client.vector_stores.create(
         name="contextual_chunking_comparison",
-        extra_body={"embedding_model": embedding_model_id, "provider_id": vector_io_provider_id},
+        extra_body={
+            "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
+            "provider_id": vector_io_provider_id,
+        },
     )
     with BytesIO(document_content.encode()) as buf:
         buf.name = "ml_overview_contextual.txt"

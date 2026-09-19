@@ -173,6 +173,7 @@ def test_filter_eq_string(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -215,6 +216,7 @@ def test_filter_ne_string(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -257,6 +259,7 @@ def test_filter_gt_numeric(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -299,6 +302,7 @@ def test_filter_gte_numeric(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -341,6 +345,7 @@ def test_filter_lt_numeric(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -383,6 +388,7 @@ def test_filter_lte_numeric(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -425,6 +431,7 @@ def test_filter_in_list(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -467,6 +474,7 @@ def test_filter_nin_list(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -509,6 +517,7 @@ def test_filter_eq_boolean(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -556,6 +565,7 @@ def test_filter_and_compound(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -605,6 +615,7 @@ def test_filter_or_compound(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -655,6 +666,7 @@ def test_filter_nested_compound(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -716,6 +728,7 @@ def test_filter_no_matches(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -754,6 +767,7 @@ def test_filter_null_returns_all(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -790,6 +804,7 @@ def test_filter_multiple_and_conditions(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -846,6 +861,7 @@ def test_openai_search_with_comparison_filter(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
@@ -887,6 +903,7 @@ def test_openai_search_with_compound_filter(
         extra_body={
             "provider_id": vector_io_provider_id,
             "embedding_model": embedding_model_id,
+            "embedding_dimension": int(embedding_dimension),
         },
     )
 
