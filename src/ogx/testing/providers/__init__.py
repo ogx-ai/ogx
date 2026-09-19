@@ -19,7 +19,7 @@ To add a provider:
 3. Import the module below and add its PROVIDER to the build_providers call
 """
 
-from . import ollama, openai
+from . import openai
 from ._config import ProviderConfig, _validate_provider
 
 
@@ -45,7 +45,6 @@ class GenericProviderError(Exception):
 
 PROVIDERS: dict[str, ProviderConfig] = build_providers(
     openai.PROVIDER,
-    ollama.PROVIDER,
 )
 
 

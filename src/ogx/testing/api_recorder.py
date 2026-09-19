@@ -67,7 +67,7 @@ _ID_KIND_PREFIXES: dict[str, str] = {
     "tool_call": "call_",
 }
 
-_SHARED_MODEL_LIST_ENDPOINTS = {"/api/tags", "/v1/models", "/v1/openai/v1/models"}
+_SHARED_MODEL_LIST_ENDPOINTS = {"/v1/models", "/v1/openai/v1/models"}
 _LOCAL_MODEL_LIST_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost"}  # noqa: S104
 _DEFAULT_TEST_SERVER_PORT = 8321
 
@@ -213,7 +213,7 @@ def normalize_inference_request(method: str, url: str, headers: dict[str, Any], 
     Includes test_id from context to ensure test isolation - identical requests
     from different tests will have different hashes.
 
-    Exception: Model list endpoints (/v1/models, /api/tags) exclude test_id since
+    Exception: Model list endpoints (/v1/models) exclude test_id since
     they are infrastructure/shared and need to work across session setup and tests.
     """
 
@@ -546,7 +546,7 @@ class ResponseStorage:
         # For model-list endpoints, include digest in filename to distinguish different model sets
         endpoint = str(request.get("endpoint") or "")
         if _is_model_list_endpoint(endpoint):
-            digest = _model_identifiers_digest(endpoint, response)
+            digest = _model_identifiers_digest(response)
             response_file = f"models-{request_hash}-{digest}.json"
 
         response_path = responses_dir / response_file
@@ -661,25 +661,19 @@ def _recording_from_file(response_path) -> dict[str, Any]:
     return cast(dict[str, Any], data)
 
 
-def _model_identifiers_digest(endpoint: str, response: dict[str, Any]) -> str:
+def _model_identifiers_digest(response: dict[str, Any]) -> str:
     """Generate a digest from model identifiers for distinguishing different model sets."""
 
     def _extract_model_identifiers():
         """Extract a stable set of identifiers for model-list endpoints.
 
         Supported endpoints:
-        - '/api/tags' (Ollama): response body has 'models': [ { name/model/digest/id/... }, ... ]
         - '/v1/models' (OpenAI): response body is: [ { id: ... }, ... ]
         - '/v1/openai/v1/models' (OpenAI): response body is: [ { id: ... }, ... ]
         Returns a list of unique identifiers or None if structure doesn't match.
         """
-        if "models" in response["body"]:
-            # ollama
-            items = response["body"]["models"]
-        else:
-            # openai or openai-style endpoints
-            items = response["body"]
-        idents = [m.model if endpoint == "/api/tags" else m.id for m in items]
+        items = response["body"]
+        idents = [m.id for m in items]
         return sorted(set(idents))
 
     identifiers = _extract_model_identifiers()
@@ -702,26 +696,13 @@ def _combine_model_list_responses(endpoint: str, records: list[dict[str, Any]]) 
             for m in body:
                 key = m.id
                 seen[key] = m
-        elif endpoint == "/api/tags":
-            for m in body.models:
-                key = m.model
-                seen[key] = m
 
     ordered = [seen[k] for k in sorted(seen.keys())]
     canonical = records[0]
     canonical_req = canonical.get("request", {})
     if isinstance(canonical_req, dict):
         canonical_req["endpoint"] = endpoint
-    body = ordered
-    if endpoint == "/api/tags":
-        from ollama import ListResponse
-
-        # Both cast(Any, ...) and type: ignore are needed here:
-        # - cast(Any, ...) attempts to bypass type checking on the argument
-        # - type: ignore is still needed because mypy checks the call site independently
-        #   and reports arg-type mismatch even after casting
-        body = ListResponse(models=cast(Any, ordered))  # type: ignore[arg-type]
-    return {"request": canonical_req, "response": {"body": body, "is_streaming": False}}
+    return {"request": canonical_req, "response": {"body": ordered, "is_streaming": False}}
 
 
 async def _patched_tool_invoke_method(
@@ -1498,12 +1479,7 @@ def patch_inference_clients():
         "embeddings_create": AsyncEmbeddings.create,
         "models_list": AsyncModels.list,
         "responses_create": AsyncResponses.create,
-        "ollama_generate": OllamaAsyncClient.generate,
-        "ollama_chat": OllamaAsyncClient.chat,
-        "ollama_embed": OllamaAsyncClient.embed,
         "ollama_ps": OllamaAsyncClient.ps,
-        "ollama_pull": OllamaAsyncClient.pull,
-        "ollama_list": OllamaAsyncClient.list,
         "tavily_invoke_tool": TavilySearchToolRuntimeImpl.invoke_tool,
         "pypdf_process_file": PyPDFFileProcessorAdapter.process_file,
         "aiohttp_post": aiohttp.ClientSession.post,
@@ -1559,43 +1535,15 @@ def patch_inference_clients():
     AsyncResponses.create = patched_responses_create
 
     # Create patched methods for Ollama client
-    async def patched_ollama_generate(self, *args, **kwargs):
-        return await _patched_inference_method(
-            _original_methods["ollama_generate"], self, "ollama", "/api/generate", *args, **kwargs
-        )
-
-    async def patched_ollama_chat(self, *args, **kwargs):
-        return await _patched_inference_method(
-            _original_methods["ollama_chat"], self, "ollama", "/api/chat", *args, **kwargs
-        )
-
-    async def patched_ollama_embed(self, *args, **kwargs):
-        return await _patched_inference_method(
-            _original_methods["ollama_embed"], self, "ollama", "/api/embeddings", *args, **kwargs
-        )
-
+    # Only `ps` remains: the provider speaks the OpenAI-compatible /v1/* surface for
+    # inference and model listing, and uses the native API solely for the health check.
     async def patched_ollama_ps(self, *args, **kwargs):
         return await _patched_inference_method(
             _original_methods["ollama_ps"], self, "ollama", "/api/ps", *args, **kwargs
         )
 
-    async def patched_ollama_pull(self, *args, **kwargs):
-        return await _patched_inference_method(
-            _original_methods["ollama_pull"], self, "ollama", "/api/pull", *args, **kwargs
-        )
-
-    async def patched_ollama_list(self, *args, **kwargs):
-        return await _patched_inference_method(
-            _original_methods["ollama_list"], self, "ollama", "/api/tags", *args, **kwargs
-        )
-
     # Apply Ollama patches
-    OllamaAsyncClient.generate = patched_ollama_generate
-    OllamaAsyncClient.chat = patched_ollama_chat
-    OllamaAsyncClient.embed = patched_ollama_embed
     OllamaAsyncClient.ps = patched_ollama_ps
-    OllamaAsyncClient.pull = patched_ollama_pull
-    OllamaAsyncClient.list = patched_ollama_list
 
     # Create patched methods for tool runtimes
     async def patched_tavily_invoke_tool(
@@ -1689,12 +1637,7 @@ def unpatch_inference_clients():
     AsyncResponses.create = _original_methods["responses_create"]
 
     # Restore Ollama client methods if they were patched
-    OllamaAsyncClient.generate = _original_methods["ollama_generate"]
-    OllamaAsyncClient.chat = _original_methods["ollama_chat"]
-    OllamaAsyncClient.embed = _original_methods["ollama_embed"]
     OllamaAsyncClient.ps = _original_methods["ollama_ps"]
-    OllamaAsyncClient.pull = _original_methods["ollama_pull"]
-    OllamaAsyncClient.list = _original_methods["ollama_list"]
 
     # Restore tool runtime methods
     TavilySearchToolRuntimeImpl.invoke_tool = _original_methods["tavily_invoke_tool"]
