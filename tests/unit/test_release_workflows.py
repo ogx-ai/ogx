@@ -184,3 +184,100 @@ def test_old_release_does_not_change_main_version(tmp_path: Path, version: str, 
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert outputs["update_main"] == update
+
+
+def _package_readiness_step() -> dict[str, Any]:
+    document = yaml.safe_load((WORKFLOWS / "pypi.yml").read_text())
+    return next(
+        step
+        for step in document["jobs"]["publish-docker-images"]["steps"]
+        if step["name"].startswith("Wait for package")
+    )
+
+
+@pytest.mark.parametrize("mode,host", [("pypi", "pypi.org"), ("test-pypi", "test.pypi.org")])
+def test_docker_waits_for_both_packages_on_the_selected_index(tmp_path: Path, mode: str, host: str) -> None:
+    step = _package_readiness_step()
+    assert not step.get("if"), "The readiness check must run for production as well as TestPyPI"
+    result, _ = _run(
+        step,
+        tmp_path,
+        {
+            "needs.compute-version.outputs.version": "1.0.3",
+            "steps.meta.outputs.install_mode": mode,
+            "steps.meta.outputs.package_name || 'ogx'": "ogx",
+        },
+        r"""
+        curl() {
+          local argument url
+          for argument in "$@"; do
+            case "$argument" in https://*) url="$argument" ;; esac
+          done
+          printf '%s\n' "$url" >> requests
+          case "$url" in
+            */ogx-api/)
+              if [ ! -f api-requested ]; then touch api-requested; return 22; fi
+              printf '%s\n' '{"meta":{"api-version":"1.0"},"files":[{"filename":"ogx_api-1.0.3-py3-none-any.whl","yanked":false}]}' ;;
+            */ogx/)
+              printf '%s\n' '{"meta":{"api-version":"1.0"},"files":[{"filename":"ogx-1.0.3-py3-none-any.whl","yanked":false}]}' ;;
+            *) return 22 ;;
+          esac
+        }
+        sleep() { printf '%s\n' "$1" >> sleeps; }
+        """,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    requests = (tmp_path / "requests").read_text().splitlines()
+    assert requests.count(f"https://{host}/simple/ogx-api/") == 2
+    assert requests.count(f"https://{host}/simple/ogx/") == 2
+    assert (tmp_path / "sleeps").read_text().splitlines() == ["30"]
+
+
+@pytest.mark.parametrize(
+    "unavailable_file",
+    [
+        '{"filename":"ogx-1.0.2-py3-none-any.whl","yanked":false}',
+        '{"filename":"ogx-1.0.3.tar.gz","yanked":false}',
+        '{"filename":"ogx-1.0.3-py3-none-any.whl","yanked":"withdrawn"}',
+        '{"filename":"ogx-1.0.3-py3-none-any.whl","yanked":""}',
+        '{"filename":"ogx-1.0.3-py3-none-any.whl","yanked":true}',
+    ],
+)
+def test_docker_stops_after_bounded_wait_for_missing_or_yanked_release(tmp_path: Path, unavailable_file: str) -> None:
+    (tmp_path / "index.json").write_text('{"meta":{"api-version":"1.0"},"files":[' + unavailable_file + "]}")
+    result, _ = _run(
+        _package_readiness_step(),
+        tmp_path,
+        {
+            "needs.compute-version.outputs.version": "1.0.3",
+            "steps.meta.outputs.install_mode": "pypi",
+            "steps.meta.outputs.package_name || 'ogx'": "ogx",
+        },
+        'curl() { echo request >> requests; cat index.json; }\nsleep() { echo "$1" >> sleeps; }',
+    )
+    assert result.returncode != 0
+    assert len((tmp_path / "requests").read_text().splitlines()) == 40
+    assert (tmp_path / "sleeps").read_text().splitlines() == ["30"] * 19
+
+
+def test_docker_wait_preserves_legacy_releases_with_bundled_api(tmp_path: Path) -> None:
+    result, _ = _run(
+        _package_readiness_step(),
+        tmp_path,
+        {
+            "needs.compute-version.outputs.version": "0.5.0",
+            "steps.meta.outputs.install_mode": "pypi",
+            "steps.meta.outputs.package_name || 'ogx'": "llama-stack",
+        },
+        r"""
+        curl() {
+          printf '%s\n' "$@" >> requests
+          printf '%s\n' '{"meta":{"api-version":"1.0"},"files":[{"filename":"llama_stack-0.5.0-py3-none-any.whl","yanked":false}]}'
+        }
+        sleep() { return 1; }
+        """,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    requests = (tmp_path / "requests").read_text()
+    assert "https://pypi.org/simple/llama-stack/" in requests
+    assert "llama-stack-api" not in requests
