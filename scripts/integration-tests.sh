@@ -830,7 +830,9 @@ if [[ -n "$STACK_CONFIG" ]]; then
     STACK_CONFIG_ARG="--stack-config=$STACK_CONFIG"
 fi
 
-# Run Python tests unless typescript-only mode
+# Run Python tests unless typescript-only mode.
+# The embedding model comes from the setup defaults (tests/integration/suites.py)
+# so setups with a remote provider can record/replay embedding calls.
 if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
     pytest -s -v $PYTEST_TARGET \
         $STACK_CONFIG_ARG \
@@ -838,7 +840,6 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         -k "$PYTEST_PATTERN" \
         $EXTRA_PARAMS \
         --color=yes \
-        --embedding-model=sentence-transformers/nomic-ai/nomic-embed-text-v1.5 \
         --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?

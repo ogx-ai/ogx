@@ -82,7 +82,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         },
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
-            "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "vllm": Setup(
@@ -93,7 +93,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         },
         defaults={
             "text_model": "vllm/Qwen/Qwen3-0.6B",
-            "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
@@ -115,6 +115,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         },
         defaults={
             "text_model": "ollama/deepseek-r1:1.5b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "bedrock": Setup(
@@ -136,7 +137,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         defaults={
             "text_model": "openai/gpt-4o",
             "vision_model": "openai/gpt-4o",
-            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 1536,
         },
     ),
@@ -145,6 +146,8 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="OpenAI reasoning models (o4-mini) for reasoning effort tests",
         defaults={
             "text_model": "openai/o4-mini",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
         },
     ),
     "azure": Setup(
@@ -162,6 +165,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="IBM WatsonX AI models",
         defaults={
             "text_model": "watsonx/meta-llama/llama-3-3-70b-instruct",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
         },
     ),
     "vertexai": Setup(
@@ -213,7 +217,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         # Least expensive text model at https://docs.fireworks.ai/serverless/pricing
         defaults={
             "text_model": "fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
-            "embedding_model": "fireworks/accounts/fireworks/models/qwen3-embedding-8b",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
         },
     ),
     "anthropic": Setup(
@@ -254,7 +258,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         },
         defaults={
             "text_model": "llama-cpp-server/qwen2.5",
-            "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
         },
     ),
     "vllm-qwen3next": Setup(
