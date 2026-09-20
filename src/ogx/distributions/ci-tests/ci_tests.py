@@ -117,10 +117,6 @@ def get_distribution_template() -> DistributionTemplate:
         # Add WatsonX inference provider (vertexai is already in starter distribution)
         run_config.provider_overrides["inference"].append(watsonx_provider)
 
-        for provider in run_config.provider_overrides["inference"]:
-            if provider.provider_type == "inline::sentence-transformers":
-                provider.config["trust_remote_code"] = True
-
         # Add conditional auth config
         run_config.auth_config = auth_config
 
