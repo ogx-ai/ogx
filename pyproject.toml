@@ -34,7 +34,7 @@ constraint-dependencies = [
     "starlette>=1.3.1",                # CVE-2026-48710
     "tornado>=6.5.8",
     "urllib3>=2.7.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
-    "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
+    "transformers>=5.0.0",              # CVE-2026-1839 fix in 5.x; ogx doesn't use Trainer
     "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
 
@@ -108,6 +108,7 @@ starter = [
     "langdetect",
     "markitdown[all]",
     "matplotlib>=3.11.2",
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts
     "nltk>=3.10.3",                                      # Multiple CVEs
     "neo4j>=6.3.1",
     "numpy>=2.5.3",
@@ -124,7 +125,7 @@ starter = [
     "requests",
     "safetensors>=0.8.0",
     "scipy>=1.18.1",
-    "sentence-transformers>=5.6.0",
+    "sentence-transformers>=6.0.0",
     "sentencepiece>=0.2.2",
     "sqlite-vec",
     "together>=2.34.0",
@@ -164,7 +165,7 @@ dev = [
     "lm-format-enforcer",
     "markitdown[all]",
     "mcp>=1.28.1,<2.0",
-    "milvus-lite>=3.2.1; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts
     "moto[s3]>=5.1.10",
     "nest-asyncio",
     "neo4j>=6.3.1",
