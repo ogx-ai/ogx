@@ -130,7 +130,21 @@ jobs:
 
       - name: Install openapi-generator-cli (Linux)
         if: runner.os == 'Linux'
+        # Wrapper version intentionally not pinned: the generator JAR version that
+        # determines SDK output is pinned in client-sdks/openapi/openapitools.json.
         run: npm install -g @openapitools/openapi-generator-cli
+
+      # Cache the generator JAR (downloaded from Maven Central on first use) to
+      # avoid repeated large downloads and rate-limit (HTTP 429) failures in CI.
+      # The key tracks openapitools.json so the cache invalidates when the pinned
+      # generator version changes. Only applies to the npm-based Linux path;
+      # the macOS Homebrew formula bundles its own JAR.
+      - name: Cache openapi-generator JAR (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.openapi-generator
+          key: openapi-generator-${{ runner.os }}-${{ hashFiles('client-sdks/openapi/openapitools.json') }}
 
       - name: Install openapi-generator-cli (macOS)
         if: runner.os == 'macOS'

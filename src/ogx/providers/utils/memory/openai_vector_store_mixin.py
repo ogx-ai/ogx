@@ -1384,7 +1384,6 @@ class OpenAIVectorStoreMixin(ABC):
 
                 # Prepare embedding request for all chunks
                 chunk_texts = [interleaved_content_as_str(c.content) for c in chunks]
-                vector_store_file_object.usage_bytes = sum(len(text.encode("utf-8")) for text in chunk_texts)
                 params = OpenAIEmbeddingsRequestWithExtraBody(
                     model=embedding_model,
                     input=chunk_texts,
@@ -1416,6 +1415,9 @@ class OpenAIVectorStoreMixin(ABC):
                         chunks=embedded_chunks,
                     )
                 )
+                # Only counted once chunks are actually inserted, so a failed
+                # embed/insert never contributes to the store's usage total.
+                vector_store_file_object.usage_bytes = sum(len(text.encode("utf-8")) for text in chunk_texts)
                 vector_store_file_object.status = "completed"
         except HTTPException as e:
             logger.warning(
@@ -1614,14 +1616,22 @@ class OpenAIVectorStoreMixin(ABC):
 
         await self._delete_openai_vector_store_file_from_storage(vector_store_id, file_id)
 
-        # Update in-memory cache
-        store_info["file_ids"].remove(file_id)
-        store_info["file_counts"][file.status] -= 1
-        store_info["file_counts"]["total"] -= 1
-        self.openai_vector_stores[vector_store_id] = store_info
+        # Update file_ids, file_counts, and usage_bytes in vector store metadata.
+        # Use lock to prevent a lost update racing with a concurrent attach/delete
+        # (mirrors the locking in openai_attach_file_to_vector_store).
+        async with self._get_vector_store_lock(vector_store_id):
+            store_info = self.openai_vector_stores[vector_store_id].copy()
+            # Deep copy file_counts and file_ids to avoid mutating shared collections
+            store_info["file_counts"] = store_info["file_counts"].copy()
+            store_info["file_ids"] = store_info["file_ids"].copy()
+            store_info["file_ids"].remove(file_id)
+            store_info["file_counts"][file.status] -= 1
+            store_info["file_counts"]["total"] -= 1
+            store_info["usage_bytes"] = max(0, store_info.get("usage_bytes", 0) - file.usage_bytes)
+            self.openai_vector_stores[vector_store_id] = store_info
 
-        # Save updated vector store to persistent storage
-        await self._save_openai_vector_store(vector_store_id, store_info)
+            # Save updated vector store to persistent storage
+            await self._save_openai_vector_store(vector_store_id, store_info)
 
         return VectorStoreFileDeleteResponse(
             id=file_id,

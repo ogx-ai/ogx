@@ -218,6 +218,53 @@ class TestOpenAIVectorStoreMixin:
         assert result.usage_bytes == expected_bytes
         assert mixin.openai_vector_stores[vector_store_id]["usage_bytes"] == expected_bytes
 
+    @pytest.mark.parametrize(
+        "failing_step",
+        [
+            pytest.param("openai_embeddings", id="embeddings_request_fails"),
+            pytest.param("insert_chunks", id="insert_chunks_fails"),
+        ],
+    )
+    async def test_failed_attach_does_not_add_to_usage_bytes(
+        self, mock_inference_api, mock_files_api, mock_kvstore, failing_step
+    ):
+        """A failed embed or insert must leave usage_bytes at 0 on the file and not inflate
+        the store's usage total -- per OpenAI semantics, usage_bytes counts content that was
+        actually indexed, not attempted input (#6542, #6551)."""
+        mock_file_processor_api = AsyncMock()
+        mock_file_processor_api.process_file.return_value = MagicMock(
+            chunks=[Chunk(content="hello world", chunk_id="c1", chunk_metadata=ChunkMetadata())],
+            metadata={},
+        )
+        mock_inference_api.openai_embeddings.return_value = MagicMock(data=[MagicMock(embedding=[0.1, 0.2])])
+
+        mixin = MockVectorStoreMixin(
+            inference_api=mock_inference_api,
+            files_api=mock_files_api,
+            kvstore=mock_kvstore,
+            file_processor_api=mock_file_processor_api,
+        )
+        if failing_step == "openai_embeddings":
+            mock_inference_api.openai_embeddings.side_effect = RuntimeError("embeddings failed")
+        else:
+            mixin.insert_chunks = AsyncMock(side_effect=RuntimeError("insert failed"))
+
+        vector_store_id = "test_vector_store"
+        store_info = _make_store_info()
+        store_info["metadata"] = {"embedding_model": "ollama/nomic-embed-text", "embedding_dimension": "2"}
+        mixin.openai_vector_stores[vector_store_id] = store_info
+
+        result = await mixin.openai_attach_file_to_vector_store(
+            vector_store_id=vector_store_id,
+            request=OpenAIAttachFileRequest(
+                file_id="test_file_id", chunking_strategy=VectorStoreChunkingStrategyAuto()
+            ),
+        )
+
+        assert result.status == "failed"
+        assert result.usage_bytes == 0
+        assert mixin.openai_vector_stores[vector_store_id]["usage_bytes"] == 0
+
 
 class TestKVStoreToSQLMigration:
     """Tests for automatic KVStore-to-SQL migration during initialization."""
@@ -605,6 +652,71 @@ class TestMetadataStoreEnforcement:
         assert mixin.openai_vector_stores["vs_allowed"]["file_ids"] == []
         metadata_store.delete.assert_awaited()
         metadata_store.upsert.assert_awaited()
+
+    @pytest.mark.parametrize(
+        ("store_usage_bytes", "file_usage_bytes", "expected_usage_bytes"),
+        [
+            pytest.param(150, 100, 50, id="decrements_by_files_usage_bytes"),
+            pytest.param(20, 100, 0, id="clamps_at_zero_when_store_total_is_stale"),
+        ],
+    )
+    async def test_delete_vector_store_file_decrements_usage_bytes(
+        self, store_usage_bytes, file_usage_bytes, expected_usage_bytes
+    ):
+        """Deleting a file must give back its share of the store's usage_bytes, without going
+        negative if the store's total was ever undercounted (#6542, #6550)."""
+        store_info = _make_full_store_info("vs_allowed", "allowed")
+        store_info["file_ids"] = ["file_1"]
+        store_info["usage_bytes"] = store_usage_bytes
+        store_info["file_counts"] = {
+            "total": 1,
+            "completed": 1,
+            "cancelled": 0,
+            "failed": 0,
+            "in_progress": 0,
+        }
+        file_info = {
+            "id": "file_1",
+            "object": "vector_store.file",
+            "usage_bytes": file_usage_bytes,
+            "created_at": 1,
+            "vector_store_id": "vs_allowed",
+            "status": "completed",
+            "chunking_strategy": {"type": "auto"},
+        }
+
+        async def _fetch_one(table, where, action=Action.READ):
+            if action == Action.DELETE:
+                return {"store_data": store_info}
+            return None
+
+        async def _raw_fetch_all(table, **kwargs):
+            if table == TABLE_VECTOR_STORE_FILES:
+                return MagicMock(data=[{"file_data": file_info}])
+            if table == TABLE_VECTOR_STORE_FILE_CONTENTS:
+                return MagicMock(data=[])
+            return MagicMock(data=[])
+
+        metadata_store = MagicMock()
+        metadata_store.fetch_one = AsyncMock(side_effect=_fetch_one)
+        metadata_store.sql_store = MagicMock()
+        metadata_store.sql_store.fetch_all = AsyncMock(side_effect=_raw_fetch_all)
+        metadata_store.delete = AsyncMock()
+        metadata_store.upsert = AsyncMock()
+
+        mixin = MockVectorStoreMixin(
+            inference_api=AsyncMock(),
+            files_api=AsyncMock(),
+            metadata_store=metadata_store,
+        )
+
+        await mixin.openai_delete_vector_store_file("vs_allowed", "file_1")
+
+        # In-memory cache reflects the new total...
+        assert mixin.openai_vector_stores["vs_allowed"]["usage_bytes"] == expected_usage_bytes
+        # ...and so does what was actually persisted, not just the in-memory copy.
+        persisted = metadata_store.upsert.await_args.kwargs["data"]["store_data"]
+        assert persisted["usage_bytes"] == expected_usage_bytes
 
     async def test_initialize_succeeds_when_policy_and_metadata_store_set(self):
         metadata_store = MagicMock()

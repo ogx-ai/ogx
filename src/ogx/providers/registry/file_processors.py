@@ -335,7 +335,7 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
             provider_type="remote::unstructured-api",
             adapter_type="unstructured-api",
             pip_packages=[
-                "unstructured-client>=0.25.0",  # >=0.25.0: supports full feature set (chunking + split_pdf_page_range)
+                "unstructured-client>=0.46.2",  # >=0.25.0: supports full feature set (chunking + split_pdf_page_range)
             ],
             module="ogx.providers.remote.file_processor.unstructured_api",
             config_class="ogx.providers.remote.file_processor.unstructured_api.UnstructuredApiFileProcessorConfig",

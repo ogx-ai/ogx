@@ -10,7 +10,7 @@ required-version = ">=0.7.0"
 constraint-dependencies = [
     "aiohttp>=3.14.3",                # CVE-2026-69244: parser DoS
     "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
-    "cryptography>=48.0.1",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
+    "cryptography>=50.0.0",            # CVE-2026-69249: self-signed DoS; CVE-2026-69247: PKCS#7 oracle; CVE-2026-69248: wildcard DNS
     "fonttools>=4.60.2",
     "gitpython>=3.1.47",               # Command injection via Git options bypass
     "h11>=0.16.0",
@@ -19,6 +19,7 @@ constraint-dependencies = [
     "langgraph-checkpoint>=4.1.1",
     "langgraph-sdk>=0.3.15",
     "langsmith>=0.8.18",
+    "locust>=2.46.5",
     "lxml>=6.1.1",                     # Multiple CVEs
     "msgpack>=1.2.1",
     "pillow>=12.3.0",                  # CVE-2026-42311: PSD RCE; CVE-2026-55379/55380/54060: font/GD DoS
@@ -31,7 +32,7 @@ constraint-dependencies = [
     "requests>=2.34.2",
     "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
     "starlette>=1.3.1",                # CVE-2026-48710
-    "tornado>=6.5.6",
+    "tornado>=6.5.8",
     "urllib3>=2.7.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
     "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
     "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
@@ -57,20 +58,20 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",
-    "fastapi>=0.115.0,<1.0",                          # server
+    "fastapi>=0.115.0,<0.137",                # server; CI: 0.137.x+ include_router wraps sub-routers in _IncludedRouter (verified broken through 0.140.13), breaking test_connectors_router.py + responses PDF file-search (500)
     "httpx",
     "jinja2>=3.1.6",
     "jsonschema",
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
-    "openai>=2.41.0",
-    "python-dotenv>=1.2.2",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
+    "openai>=2.41.0,<2.44",                   # CI/recording: 2.44.0's _prepare_request uses _provider_runtime, which the generated OgxClient lacks (src/ogx/testing/api_recorder.py)
+    "python-dotenv>=1.2.3",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
     "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. CVE-2026-48526: auth bypass via forged JWTs.
     "pydantic>=2.11.9",
     "rich",
-    "structlog>=24.1.0",
+    "structlog>=26.1.0",
     "termcolor",
-    "tiktoken",
-    "uvicorn>=0.34.0",                                # server
+    "tiktoken>=0.14.0",
+    "uvicorn>=0.53.0",                                # server
     "websockets>=14.0",                               # server - WebSocket transport for the Responses API
     "opentelemetry-sdk>=1.42.1",                      # server
     "opentelemetry-exporter-otlp-proto-http>=1.30.0", # server
@@ -87,52 +88,52 @@ dependencies = [
 
 [project.optional-dependencies]
 client = [
-    "ogx-client>=1.3.0", # Optional for library-only usage
+    "ogx-client>=1.4.0", # Optional for library-only usage
 ]
 starter = [
     "aiohttp",
-    "anthropic>=0.105.2",
-    "autoevals",
-    "boto3>=1.43.18",
-    "chardet",
+    "anthropic>=1.6.0",
+    "autoevals>=0.3.0",
+    "boto3>=1.43.95",
+    "chardet>=7.6.0",
     "chromadb-client",
-    "datasets>=4.0.0",
+    "datasets>=5.0.1",
     "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
     "einops",
-    "elasticsearch>=8.16.0,<9.0.0",
+    "elasticsearch>=9.5.1,<10.0.0",
     "emoji",
-    "faiss-cpu",
+    "faiss-cpu>=1.15.0",
     "fire",
-    "google-genai>=1.69.0,<2",
+    "google-genai>=2.23.0,<3",
     "langdetect",
     "markitdown[all]",
-    "matplotlib",
+    "matplotlib>=3.11.2",
     "nltk>=3.10.3",                                      # Multiple CVEs
-    "neo4j",
-    "numpy",
+    "neo4j>=6.3.1",
+    "numpy>=2.5.3",
     "ollama",
-    "pandas",
+    "pandas>=3.0.5",
     "pillow",
-    "pgvector>=0.3.0",
-    "pymilvus[milvus-lite]>=2.4.10",
-    "pymongo",
-    "pypdf>=6.13.3",
-    "pythainlp",
-    "qdrant-client",
-    "redis>=8.0.0",
+    "pgvector>=0.5.0",
+    "pymilvus[milvus-lite]>=3.0.1",
+    "pymongo>=4.18.1",
+    "pypdf>=6.13.3,<6.14",
+    "pythainlp>=5.3.7",
+    "qdrant-client>=1.19.0",
+    "redis>=8.1.0",
     "requests",
-    "safetensors",
-    "scipy",
+    "safetensors>=0.8.0",
+    "scipy>=1.18.1",
     "sentence-transformers>=5.6.0",
-    "sentencepiece",
+    "sentencepiece>=0.2.2",
     "sqlite-vec",
-    "together>=2",
+    "together>=2.34.0",
     "tokenizers",
-    "torch>=2.13.0",
-    "tqdm",
-    "tree_sitter",
-    "unstructured-client>=0.25.0",
-    "weaviate-client>=4.16.5",
+    "torch>=2.14.0",
+    "tqdm>=4.70.1",
+    "tree_sitter>=0.26.0",
+    "unstructured-client>=0.46.2",
+    "weaviate-client>=4.23.1",
 ]
 
 [dependency-groups]
@@ -143,76 +144,76 @@ dev = [
     # Test dependencies (unit + integration)
     "aiohttp",
     "aiosqlite",
-    "anthropic>=0.105.2",
+    "anthropic>=1.6.0",
     "asyncpg>=0.29.0",
-    "autoevals",
-    "blobfile",
-    "chardet",
+    "autoevals>=0.3.0",
+    "blobfile>=3.3.0",
+    "chardet>=7.6.0",
     "chromadb>=1.0.15",
-    "coverage",
-    "databricks-sdk>=0.114.0",
-    "datasets>=4.0.0",
+    "coverage>=7.16.1",
+    "databricks-sdk>=0.139.0",
+    "datasets>=5.0.1",
     "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
-    "elasticsearch>=8.16.0, <9.0.0",
-    "faiss-cpu",
+    "elasticsearch>=9.5.1,<10.0.0",
+    "faiss-cpu>=1.15.0",
     "fairscale",
-    "google-genai>=1.69.0,<2",
-    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
-    "langchain-openai>=1.2.2",
+    "google-genai>=2.23.0,<3",
+    "langchain-core>=1.6.3",                            # CVE-2026-44843: insecure deserialization
+    "langchain-openai>=1.2.2,<1.3",
     "langgraph",
     "lm-format-enforcer",
     "markitdown[all]",
     "mcp>=1.28.1,<2.0",
-    "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
+    "milvus-lite>=3.2.1; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
     "moto[s3]>=5.1.10",
     "nest-asyncio",
-    "neo4j",
+    "neo4j>=6.3.1",
     "ollama",
-    "peft",
-    "pgvector>=0.3.0",
-    "psycopg2-binary>=2.9.0",
-    "pymilvus>=2.6.2",
-    "pymongo",
-    "pypdf>=6.13.3",
-    "qdrant-client",
+    "peft>=0.21.0",
+    "pgvector>=0.5.0",
+    "psycopg2-binary>=2.9.13",
+    "pymilvus>=3.0.1",
+    "pymongo>=4.18.1",
+    "pypdf>=6.13.3,<6.14",
+    "qdrant-client>=1.19.0",
     "requests",
     "sqlalchemy[asyncio]>=2.0.41",
     "sqlite-vec",
-    "together>=2",
-    "torch>=2.13.0",
+    "together>=2.34.0",
+    "torch>=2.14.0",
     "torchtune",
-    "torchvision>=0.27.0",
+    "torchvision>=0.29.0",
     "transformers",
-    "trl>=1.5.0",
-    "unstructured-client>=0.25.0",
-    "weaviate-client>=4.16.4",
+    "trl>=1.13.0",
+    "unstructured-client>=0.46.2",
+    "weaviate-client>=4.23.1",
     # Type stubs and optional runtime dependencies for complete mypy coverage
     "boto3-stubs[s3]",
-    "pandas",
-    "pandas-stubs",
-    "streamlit>=1.58.0",
+    "pandas>=3.0.5",
+    "pandas-stubs>=3.0.5.260914",
+    "streamlit>=1.64.0",
     "streamlit-option-menu",
-    "types-jsonschema",
-    "types-psutil>=7.2.2.20260518",
-    "types-requests",
-    "types-setuptools",
-    "types-tqdm",
+    "types-jsonschema>=4.26.0.20260518",
+    "types-psutil>=7.2.2.20260906",
+    "types-requests>=2.33.0.20260906",
+    "types-setuptools>=84.0.0.20260812",
+    "types-tqdm>=4.70.0.20260906",
     # Developer tooling
     "black>=26.5.1",
-    "boto3>=1.43.18",
-    "mypy",
+    "boto3>=1.43.95",
+    "mypy>=2.3.1",
     "nbval",                         # For notebook testing
-    "ogx-client>=1.3.0",
+    "ogx-client>=1.4.0",
     "openapi-spec-validator>=0.9.0",
-    "pre-commit>=4.4.0",
-    "pytest>=8.4",
+    "pre-commit>=4.6.2",
+    "pytest>=8.4,<9.1",                        # CI/unit: 9.1.x monkeypatch.resolve() calls importlib.import_module, breaking tests that mock ogx.core.resolver.importlib.import_module (global)
     "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",
     "pytest-json-report",
-    "pytest-socket>=0.8.0",                 # For blocking network access in unit tests
+    "pytest-socket>=0.8.1",                 # For blocking network access in unit tests
     "pytest-timeout",
-    "ruff>=0.15.14",
+    "ruff>=0.16.7",
     "ruamel.yaml",                   # needed for openapi generator
 ]
 docs = [
@@ -227,7 +228,7 @@ docs = [
     "sphinx-design",
     "sphinxcontrib.redoc",
     "sphinxcontrib.video",
-    "sphinxcontrib.mermaid",
+    "sphinxcontrib.mermaid>=2.1.1",
     "sphinx-reredirects",
     "tomli",
     "linkify",
@@ -458,7 +459,7 @@ module = [
     "torchtune.*",
     "fairscale.*",
     "torchvision.*",
-    "datasets",
+    "datasets>=5.0.1",
     "nest_asyncio",
     "streamlit_option_menu",
     "lmformatenforcer.*",

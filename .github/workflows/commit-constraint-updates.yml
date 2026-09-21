@@ -101,14 +101,31 @@ jobs:
           fi
 
           CHANGED=$(jq -r '.changed' constraint-update/change-info.json)
-          DEP_NAME=$(jq -r '.dep_name' constraint-update/change-info.json)
-          DEP_VERSION=$(jq -r '.dep_version' constraint-update/change-info.json)
+          DEP_PAIRS=$(jq -r '.dep_pairs // .dep_name // ""' constraint-update/change-info.json)
           REGISTRY_CHANGED=$(jq -r '.registry_changed // "false"' constraint-update/change-info.json)
+
+          # Defense in depth: these values end up in a shell-interpolated
+          # commit message, so re-validate every entry against the same
+          # strict allowlists used when the artifact was produced.
+          dep_names=""
+          sanitized_pairs=""
+          IFS=',' read -ra PAIR_LIST <<< "$DEP_PAIRS"
+          for pair in "${PAIR_LIST[@]}"; do
+            # Trim whitespace with sed (xargs would execute the input)
+            pair=$(printf '%s' "$pair" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if printf '%s' "$pair" | grep -Eq '^[A-Za-z0-9._-]+ [0-9][A-Za-z0-9.+-]*$'; then
+              name=${pair% *}
+              dep_names="${dep_names}${dep_names:+,}${name}"
+              sanitized_pairs="${sanitized_pairs}${sanitized_pairs:+,}${pair}"
+            else
+              echo "::warning::Dropping non-conforming dependency entry from commit: '$pair'"
+            fi
+          done
 
           {
             echo "changed=$CHANGED"
-            echo "dep_name=$DEP_NAME"
-            echo "dep_version=$DEP_VERSION"
+            echo "dep_names=$dep_names"
+            echo "dep_pairs=$sanitized_pairs"
             echo "registry_changed=$REGISTRY_CHANGED"
           } >> "$GITHUB_OUTPUT"
 
@@ -248,7 +265,9 @@ jobs:
           HEAD_REF: ${{ steps.pr-info.outputs.head_ref }}
           IS_FORK_PR: ${{ steps.pr-info.outputs.is_fork_pr }}
           BASE_REPO: ${{ github.repository }}
-          DEP_NAME: ${{ steps.changes.outputs.dep_name }}
+          # DEP_NAMES is allowlist-sanitized (alphanumerics, '.', '_', '-',
+          # ',' only), so it is safe to interpolate into the commit message.
+          DEP_NAMES: ${{ steps.changes.outputs.dep_names }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -263,7 +282,12 @@ jobs:
           fi
 
           git add "${TRACKED_FILES[@]}" "${REGISTRY_FILES[@]}"
-          git commit -s -m "fix(deps): update constraint-dependencies for ${DEP_NAME}"
+          if [ -n "$DEP_NAMES" ]; then
+            dep_names_pretty=${DEP_NAMES//,/, }
+            git commit -s -m "fix(deps): update constraint-dependencies for ${dep_names_pretty}"
+          else
+            git commit -s -m "fix(deps): update constraint-dependencies"
+          fi
 
           if [ "$IS_FORK_PR" = "true" ]; then
             echo "This is a fork PR, checking maintainer permissions..."
@@ -294,20 +318,29 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
-          DEP_NAME: ${{ steps.changes.outputs.dep_name }}
-          DEP_VERSION: ${{ steps.changes.outputs.dep_version }}
+          DEP_PAIRS: ${{ steps.changes.outputs.dep_pairs }}
           REGISTRY_CHANGED: ${{ steps.changes.outputs.registry_changed }}
         with:
           script: |
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
-            const depName = process.env.DEP_NAME;
-            const depVersion = process.env.DEP_VERSION;
+            const pairs = (process.env.DEP_PAIRS || '').split(',').map(p => p.trim()).filter(Boolean);
             const registryChanged = process.env.REGISTRY_CHANGED === 'true';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const COMMENT_MARKER = '<!-- commit-constraint-updates-bot -->';
 
-            let body = `Updated \`pyproject.toml\` constraint for \`${depName}\` to \`>=${depVersion}\` ` +
-              `and regenerated \`uv.lock\`.`;
+            let body;
+            if (pairs.length > 0) {
+              const floors = pairs
+                .map(p => {
+                  const [name, version] = p.split(' ');
+                  return `\`${name}\` to \`>=${version}\``;
+                })
+                .join(', ');
+              body = `Updated \`pyproject.toml\` constraint${pairs.length === 1 ? '' : 's'} ` +
+                `for ${floors} and regenerated \`uv.lock\`.`;
+            } else {
+              body = `Updated \`pyproject.toml\` constraints and regenerated \`uv.lock\`.`;
+            }
             if (registryChanged) {
               body += `\nAlso updated \`pip_packages\` version floor in provider registry files.`;
             }

@@ -1,0 +1,67 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[openai_client-txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-9e1743ea56dd",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Saturn",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Here's a thinking process:\n\n1.  Analyze User Input:\n   - Question: \"Which planet has rings around it with a name starting with letter S?\"\n   - Key elements: Planet with rings, name starts with 'S'\n\n2.  Identify Planets with Rings:\n   - In our solar system, the gas giants have rings: Jupiter, Saturn, Uranus, Neptune\n   - Saturn is the most famous for its prominent rings\n   - None of the other planets (Mercury, Venus, Earth, Mars) have ring systems\n\n3.  Check Names Starting with 'S':\n   - Saturn - starts with S\n   - Jupiter - J\n   - Uranus - U\n   - Neptune - N\n   - So Saturn is the answer\n\n4.  Verify:\n   - Saturn is a planet with prominent rings\n   - Its name starts with the letter S\n   - No other planet in the solar system has a name starting with S and rings\n\n5.  Formulate Response:\n   - Direct answer: Saturn\n   - Optional brief context: It's the sixth planet from the Sun and has the most visible ring system\n   - Keep it simple and accurate\n\n   Output: Saturn\n   Check constraints: planet with rings, name starts with S -> Saturn. All good.\u2705",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 277,
+          "prompt_tokens": 30,
+          "total_tokens": 307,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

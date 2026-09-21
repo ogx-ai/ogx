@@ -1,0 +1,115 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestMCPToolsInChatCompletion::test_mcp_tools_in_inference[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Calculate 5 + 3"
+        }
+      ],
+      "max_tokens": 256,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "calculate",
+            "description": "Perform a calculation on two numbers.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "description": "First operand"
+                },
+                "y": {
+                  "type": "number",
+                  "description": "Second operand"
+                },
+                "operation": {
+                  "type": "string",
+                  "description": "The operation to perform",
+                  "enum": [
+                    "add",
+                    "sub",
+                    "mul",
+                    "div"
+                  ]
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "operation"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-f3228c7aa9bf",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "chatcmpl-tool-923233dbceb4dd4b",
+                  "function": {
+                    "arguments": "{\"x\": 5, \"y\": 3, \"operation\": \"add\"}",
+                    "name": "calculate"
+                  },
+                  "type": "function",
+                  "index": 0,
+                  "name": null
+                }
+              ],
+              "reasoning_content": "Here's a thinking process:\n\n1.  **Analyze User Input:** The user wants to calculate \"5 + 3\".\n2.  **Identify Required Function:** The `calculate` function is available.\n3.  **Map Parameters:**\n   - `x`: 5\n   - `y`: 3\n   - `operation`: \"add\" (since the user wants addition)\n4.  **Check Function Schema:** \n   - `calculate` takes `x` (number), `y` (number), `operation` (string: \"add\" | \"sub\" | \"mul\" | \"div\")\n   - All required parameters are provided.\n5.  **Execute Function Call:** Call `calculate` with x=5, y=3, operation=\"add\".\n6.  **Formulate Response:** Based on the function output, provide the result.\n\nLet's call the function.\u2705",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 234,
+          "prompt_tokens": 362,
+          "total_tokens": 596,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

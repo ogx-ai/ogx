@@ -1,0 +1,71 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-38c2c1e3c82a",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "As your weather assistant, I don't have access to live, real-time data, but I can share that San Francisco typically enjoys mild, temperate weather year-round. \n\n**Typical conditions:**\n- **Temperature:** Average highs around 65\u201370\u00b0F (18\u201321\u00b0C), cooler near the ocean, warmer inland\n- **Fog:** iconic summer morning fog (especially June \"Fogust\") that often burns off by afternoon\n- **Rain:** Mostly dry from May through September; wetter in winter, with January being the wettest month\n- **Wind:** Often breezy, especially along the coast and across the Golden Gate\n\nFor the most accurate, up-to-the-minute forecast (temperature, precipitation chance, wind, UV index, etc.), I'd recommend checking a trusted source like Weather.com, AccuWeather, the National Weather Service, or your phone's built-in weather app. \n\nLet me know if you'd like a deeper dive into SF's seasonal patterns, microclimate tips, or help planning activities around the city's typical weather!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Here's a thinking process:\n\n1.  **Analyze User Input:**\n   - User asks: \"What's the weather like in San Francisco, CA?\"\n   - I need to provide current weather information for San Francisco, CA.\n\n2.  **Identify Key Constraints & Capabilities:**\n   - I am an AI without real-time internet access by default (unless I use a tool, but I'm instructed to \"Pretend you are a weather assistant\" - this might mean I should simulate or provide general info, but typically I should state I don't have live data unless I have a tool).\n   - However, the prompt says \"Pretend you are a weather assistant.\" This could mean I should give a typical/general description or use my knowledge cutoff, but weather changes rapidly. I should be honest about my limitations or provide a simulated/example response if that's the intent.\n   - Actually, I can check if I have a browsing tool or weather plugin. Since I'm a standard LLM without automatic real-time tools unless specified, I should either say I don't have live data, or I can provide typical/climate info, or I can simulate being a weather assistant by giving a plausible current-like description but noting it's illustrative.\n   - Wait, the instruction: \"Pretend you are a weather assistant.\" Usually in these tasks, I should either ask for location or give a general answer, but I need to handle the San Francisco request.\n   - I'll respond by stating I don't have real-time data, but I can give typical weather or suggest checking a weather service. Or, I can use my training data up to 2024, but that's outdated for \"current\" weather.\n   - Better: I'll act as a weather assistant would: \"I don't have live data access, but typically San Francisco has mild temperatures around X, Y conditions. For current conditions, check Weather.com or your phone's weather app.\" But I should be helpful.\n   - Actually, many users expect me to just say I can't fetch live weather. I'll be direct: I don't have real-time capabilities, but I can describe the climate or help them find it.\n   - Let me re-read: \"Pretend you are a weather assistant.\" This might be a role-play prompt. I'll engage in the role: I'll give a friendly, typical San Francisco weather description, and note that for real-time info they should check a source. Or I could just say \"As a weather assistant, I'd recommend checking...\" but I'll provide some value.\n\n   Actually, I recall I can sometimes access tools if enabled, but I don't see any here. I'll assume no tools. I'll respond as a weather assistant would, acknowledging the limitation but providing helpful info.\n\n   Structure:\n   - Acknowledge role\n   - State limitation (no real-time data)\n   - Give typical/climate info for SF\n   - Suggest how to get current weather\n   - Keep it concise.\n\n   Let's draft: \"As your weather assistant, I don\u2019t have access to live, real-time data, but I can tell you that San Francisco typically enjoys mild, temperate weather year-round. Currently, you\u2019re looking at average highs around 65\u201370\u00b0F (18\u201321\u00b0C) with a chance of fog, especially near the coast, and mild evenings. For the most accurate and up-to-the-minute forecast, I\u2019d recommend checking a trusted weather app like Weather.com, AccuWeather, or your phone\u2019s built-in weather service. Let me know if you\u2019d like a general climate breakdown or help planning around typical SF weather patterns!\"\n\n   This covers it well. I'll output this.\u2705",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 1000,
+          "prompt_tokens": 36,
+          "total_tokens": 1036,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

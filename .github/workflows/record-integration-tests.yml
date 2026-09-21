@@ -35,7 +35,7 @@ on:
         description: 'Comma-separated list of providers to record'
         type: string
         required: false
-        default: 'gpt,azure,watsonx,vertexai'
+        default: 'gpt,azure,watsonx,vertexai,fireworks'
       suite:
         description: 'Test suite override (default: per-provider from matrix)'
         type: string
@@ -239,6 +239,8 @@ jobs:
             suite: responses
           - setup: gemini
             suite: interactions
+          - setup: fireworks
+            suite: base
     steps:
       - name: Check if provider should run
         id: should_run
@@ -329,6 +331,7 @@ jobs:
           VERTEX_AI_LOCATION: ${{ matrix.provider.setup == 'vertexai' && 'global' || '' }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ matrix.provider.setup == 'vertexai' && steps.vertex_auth.outputs.credentials_file_path || '' }}
           GEMINI_API_KEY: ${{ matrix.provider.setup == 'gemini' && secrets.GEMINI_API_KEY || '' }}
+          FIREWORKS_API_KEY: ${{ matrix.provider.setup == 'fireworks' && secrets.FIREWORKS_API_KEY || '' }}
           TAVILY_SEARCH_API_KEY: ${{ contains(fromJSON('["gpt","azure","vertexai"]'), matrix.provider.setup) && secrets.TAVILY_SEARCH_API_KEY || '' }}
           AWS_BEDROCK_BEARER_TOKEN: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_BEARER_TOKEN_BEDROCK: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
