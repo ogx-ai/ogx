@@ -233,7 +233,7 @@ jobs:
         run: |
           uv run --no-sync python - <<'PY'
           from sentence_transformers import SentenceTransformer
-          SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
+          SentenceTransformer("nomic-ai/nomic-embed-text-v1.5")
           PY
 
       - name: Check Storage and Memory Available Before Tests
@@ -269,7 +269,7 @@ jobs:
           NEO4J_DATABASE: ${{ matrix.vector-io-provider == 'remote::neo4j' && 'neo4j' || '' }}
         run: |
           uv run --no-sync \
-            pytest -sv --stack-config="files=inline::localfs,inference=inline::sentence-transformers?trust_remote_code=true,vector_io=${{ matrix.vector-io-provider }},file_processors=inline::pypdf" \
+            pytest -sv --stack-config="files=inline::localfs,inference=inline::sentence-transformers,vector_io=${{ matrix.vector-io-provider }},file_processors=inline::pypdf" \
             tests/integration/vector_io
 
       - name: Check Storage and Memory Available After Tests

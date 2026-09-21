@@ -5,12 +5,10 @@
 # the root directory of this source tree.
 
 
-import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
-from ollama import AsyncClient as AsyncOllamaClient
 
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
@@ -68,21 +66,6 @@ class OllamaInferenceAdapter(OpenAIMixin):
     }
 
     download_images: bool = True
-    _clients: dict[asyncio.AbstractEventLoop, AsyncOllamaClient] = {}
-
-    @property
-    def ollama_client(self) -> AsyncOllamaClient:
-        # ollama client attaches itself to the current event loop (sadly?)
-        loop = asyncio.get_running_loop()
-        if loop not in self._clients:
-            # Ollama client expects base URL without /v1 suffix
-            base_url_str = str(self.config.base_url)
-            if base_url_str.endswith("/v1"):
-                host = base_url_str[:-3]
-            else:
-                host = base_url_str
-            self._clients[loop] = AsyncOllamaClient(host=host)
-        return self._clients[loop]
 
     def get_api_key(self):
         return "NO KEY REQUIRED"
@@ -224,17 +207,18 @@ class OllamaInferenceAdapter(OpenAIMixin):
         Performs a health check by verifying connectivity to the Ollama server.
         This method is used by initialize() and the Provider API to verify that the service is running
         correctly.
+        Uses the unauthenticated GET /api/version endpoint.
         Returns:
             HealthResponse: A dictionary containing the health status.
         """
         try:
-            await self.ollama_client.ps()
+            url = f"{self._get_ollama_base_url()}/api/version"
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
             return HealthResponse(status=HealthStatus.OK)
         except Exception as e:
             return HealthResponse(status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}")
-
-    async def shutdown(self) -> None:
-        self._clients.clear()
 
     async def register_model(self, model: Model) -> Model:
         if await self.check_model_availability(model.provider_model_id):

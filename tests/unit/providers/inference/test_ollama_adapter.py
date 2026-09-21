@@ -11,6 +11,7 @@ from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
 from ogx.providers.remote.inference.ollama.ollama import OllamaInferenceAdapter
 from ogx.providers.utils.inference.openai_compat import prepare_openai_completion_params
 from ogx_api import (
+    HealthStatus,
     OpenAIAssistantMessageParam,
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAIUserMessageParam,
@@ -79,3 +80,39 @@ async def test_openai_chat_completions_with_reasoning_keeps_messages_typed():
     assert processed_messages[0]["reasoning"] == "Step 1"
     assert "reasoning_content" not in processed_messages[0]
     assert processed_messages[1]["content"][1]["image_url"]["url"] == "data:image/jpeg;base64,ZmFrZV9pbWFnZV9kYXRh"
+
+
+async def test_health_ok():
+    """health() probes the unauthenticated GET /api/version endpoint and reports OK on success."""
+    adapter = OllamaInferenceAdapter(config=OllamaImplConfig(base_url="http://localhost:11434/v1"))
+    adapter.__provider_id__ = "ollama"
+
+    with patch("httpx.AsyncClient") as mock_client_class:
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_client_instance = MagicMock()
+        mock_client_instance.get = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+        health_response = await adapter.health()
+
+    assert health_response["status"] == HealthStatus.OK
+    mock_client_instance.get.assert_called_once()
+    # The /v1 suffix must be stripped so we hit the Ollama root /api/version endpoint.
+    assert mock_client_instance.get.call_args[0][0] == "http://localhost:11434/api/version"
+
+
+async def test_health_error():
+    """health() reports ERROR with a message when the version probe fails."""
+    adapter = OllamaInferenceAdapter(config=OllamaImplConfig(base_url="http://localhost:11434/v1"))
+    adapter.__provider_id__ = "ollama"
+
+    with patch("httpx.AsyncClient") as mock_client_class:
+        mock_client_instance = MagicMock()
+        mock_client_instance.get = AsyncMock(side_effect=Exception("Connection failed"))
+        mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+        health_response = await adapter.health()
+
+    assert health_response["status"] == HealthStatus.ERROR
+    assert "Connection failed" in health_response["message"]

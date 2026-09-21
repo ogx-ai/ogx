@@ -67,7 +67,7 @@ _ID_KIND_PREFIXES: dict[str, str] = {
     "tool_call": "call_",
 }
 
-_SHARED_MODEL_LIST_ENDPOINTS = {"/v1/models", "/v1/openai/v1/models"}
+_SHARED_MODEL_LIST_ENDPOINTS = {"/v1/models"}
 _LOCAL_MODEL_LIST_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost"}  # noqa: S104
 _DEFAULT_TEST_SERVER_PORT = 8321
 
@@ -375,7 +375,7 @@ def setup_api_recording():
     This is to be used in tests to increase their reliability and reduce reliance on expensive, external services.
 
     Currently supports:
-    - Inference: OpenAI and Ollama clients
+    - Inference: OpenAI client (the Ollama provider also goes through its OpenAI-compatible surface)
     - Tools: Search providers (Tavily)
 
     Two environment variables are supported:
@@ -407,8 +407,9 @@ def _normalize_response(data: dict[str, Any], request_hash: str) -> dict[str, An
         data["id"] = f"rec-{request_hash[:12]}"
 
     # Normalize timestamp to epoch (0) (for OpenAI-style responses)
-    # But not for model objects where created timestamp might be meaningful
-    if "created" in data and data.get("object") != "model":
+    # Model objects included: for providers like Ollama, "created" is the model
+    # file's mtime in an ephemeral container, so it changes on every record run.
+    if "created" in data:
         data["created"] = 0
 
     # Normalize Ollama-specific timestamp fields
@@ -669,7 +670,6 @@ def _model_identifiers_digest(response: dict[str, Any]) -> str:
 
         Supported endpoints:
         - '/v1/models' (OpenAI): response body is: [ { id: ... }, ... ]
-        - '/v1/openai/v1/models' (OpenAI): response body is: [ { id: ... }, ... ]
         Returns a list of unique identifiers or None if structure doesn't match.
         """
         items = response["body"]
@@ -1162,11 +1162,14 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     # Try to find existing recording for REPLAY or RECORD_IF_MISSING modes
     recording = None
     if mode == APIRecordingMode.REPLAY or mode == APIRecordingMode.RECORD_IF_MISSING:
-        # Special handling for model-list endpoints: merge all recordings with this hash
-        if _is_model_list_endpoint(endpoint):
+        # Model-list responses reflect which models are available in the current
+        # environment (e.g. which models were pulled), so only REPLAY may use the
+        # recorded union. In RECORD_IF_MISSING we must fetch live and re-record,
+        # otherwise a stale union would hide newly pulled models.
+        if _is_model_list_endpoint(endpoint) and mode == APIRecordingMode.REPLAY:
             records = storage._model_list_responses(request_hash)
             recording = _combine_model_list_responses(endpoint, records)
-        else:
+        elif not _is_model_list_endpoint(endpoint):
             recording = storage.find_recording(request_hash)
 
         if recording:
@@ -1223,13 +1226,13 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
         }
 
         try:
-            if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+            if endpoint == "/v1/models":
                 response = original_method(self, *args, **kwargs)
             else:
                 response = await original_method(self, *args, **kwargs)
 
             # we want to store the result of the iterator, not the iterator itself
-            if endpoint in ("/v1/models", "/v1/openai/v1/models"):
+            if endpoint == "/v1/models":
                 response = [m async for m in response]
 
         except Exception as exc:
@@ -1457,12 +1460,11 @@ async def _genai_record_replay(original_method, self, endpoint, mode, storage, *
 
 
 def patch_inference_clients():
-    """Install monkey patches for OpenAI client methods, Ollama AsyncClient methods, google-genai methods, tool runtime methods, and aiohttp for rerank."""
+    """Install monkey patches for OpenAI client methods, google-genai methods, tool runtime methods, and aiohttp for rerank."""
     global _original_methods
 
     import aiohttp
     import httpx
-    from ollama import AsyncClient as OllamaAsyncClient
     from openai.resources.chat.completions import AsyncCompletions as AsyncChatCompletions
     from openai.resources.completions import AsyncCompletions
     from openai.resources.embeddings import AsyncEmbeddings
@@ -1472,14 +1474,13 @@ def patch_inference_clients():
     from ogx.providers.inline.file_processor.pypdf.adapter import PyPDFFileProcessorAdapter
     from ogx.providers.remote.tool_runtime.tavily_search.tavily_search import TavilySearchToolRuntimeImpl
 
-    # Store original methods for OpenAI, Ollama clients, tool runtimes, file processors, aiohttp, and httpx
+    # Store original methods for OpenAI clients, tool runtimes, file processors, aiohttp, and httpx
     _original_methods = {
         "chat_completions_create": AsyncChatCompletions.create,
         "completions_create": AsyncCompletions.create,
         "embeddings_create": AsyncEmbeddings.create,
         "models_list": AsyncModels.list,
         "responses_create": AsyncResponses.create,
-        "ollama_ps": OllamaAsyncClient.ps,
         "tavily_invoke_tool": TavilySearchToolRuntimeImpl.invoke_tool,
         "pypdf_process_file": PyPDFFileProcessorAdapter.process_file,
         "aiohttp_post": aiohttp.ClientSession.post,
@@ -1533,17 +1534,6 @@ def patch_inference_clients():
     AsyncEmbeddings.create = patched_embeddings_create
     AsyncModels.list = patched_models_list
     AsyncResponses.create = patched_responses_create
-
-    # Create patched methods for Ollama client
-    # Only `ps` remains: the provider speaks the OpenAI-compatible /v1/* surface for
-    # inference and model listing, and uses the native API solely for the health check.
-    async def patched_ollama_ps(self, *args, **kwargs):
-        return await _patched_inference_method(
-            _original_methods["ollama_ps"], self, "ollama", "/api/ps", *args, **kwargs
-        )
-
-    # Apply Ollama patches
-    OllamaAsyncClient.ps = patched_ollama_ps
 
     # Create patched methods for tool runtimes
     async def patched_tavily_invoke_tool(
@@ -1610,7 +1600,7 @@ def patch_inference_clients():
 
 
 def unpatch_inference_clients():
-    """Remove monkey patches and restore original OpenAI, Ollama client, tool runtime, and aiohttp methods."""
+    """Remove monkey patches and restore original OpenAI client, tool runtime, and aiohttp methods."""
     global _original_methods
 
     if not _original_methods:
@@ -1619,7 +1609,6 @@ def unpatch_inference_clients():
     # Import here to avoid circular imports
     import aiohttp
     import httpx
-    from ollama import AsyncClient as OllamaAsyncClient
     from openai.resources.chat.completions import AsyncCompletions as AsyncChatCompletions
     from openai.resources.completions import AsyncCompletions
     from openai.resources.embeddings import AsyncEmbeddings
@@ -1635,9 +1624,6 @@ def unpatch_inference_clients():
     AsyncEmbeddings.create = _original_methods["embeddings_create"]
     AsyncModels.list = _original_methods["models_list"]
     AsyncResponses.create = _original_methods["responses_create"]
-
-    # Restore Ollama client methods if they were patched
-    OllamaAsyncClient.ps = _original_methods["ollama_ps"]
 
     # Restore tool runtime methods
     TavilySearchToolRuntimeImpl.invoke_tool = _original_methods["tavily_invoke_tool"]
