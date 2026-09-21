@@ -65,7 +65,7 @@ Cron: `1 0 * * 0`
 | `databricks` | databricks/databricks-meta-llama-3-3-70b-instruct | — | databricks/databricks-bge-large-en | — | — | — |
 | `groq` | groq/llama-3.3-70b-versatile | — | — | — | — | — |
 | `llama-api` | llama_openai_compat/Llama-3.3-8B-Instruct | — | — | — | — | — |
-| `llama-cpp-server` | llama-cpp-server/qwen2.5 | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | — |
+| `llama-cpp-server` | llama-cpp-server/qwen3-0.6b | — | llama-cpp-server/nomic-embed-text-v1.5 | — | — | — |
 | `tgi` | tgi/Qwen/Qwen3-0.6B | — | — | — | — | — |
 | `together` | together/meta-llama/Llama-3.3-70B-Instruct-Turbo-Free | — | together/togethercomputer/m2-bert-80M-32k-retrieval | — | — | — |
 | `vllm-gpu-gpt-oss` | vllm/gpt-oss:20b | — | — | — | — | — |

@@ -108,6 +108,10 @@ providers:
       base_url: ${env.WATSONX_BASE_URL:=https://us-south.ml.cloud.ibm.com}
       api_key: ${env.WATSONX_API_KEY:=}
       project_id: ${env.WATSONX_PROJECT_ID:=}
+  - provider_id: ${env.LLAMA_CPP_SERVER_URL:+llama-cpp-server}
+    provider_type: remote::llama-cpp-server
+    config:
+      base_url: ${env.LLAMA_CPP_SERVER_URL:=http://localhost:8080/v1}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss

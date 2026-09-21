@@ -14,6 +14,7 @@ inference/
   fireworks/           # Fireworks AI
   gemini/              # Google Gemini API
   groq/                # Groq LPU inference
+  llama_cpp_server/    # llama.cpp server/router (serves llm and embedding models)
   llama_openai_compat/ # Generic OpenAI-compatible endpoints
   nvidia/              # NVIDIA NIM
   oci/                 # Oracle Cloud Infrastructure GenAI

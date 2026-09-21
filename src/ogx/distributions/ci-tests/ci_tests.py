@@ -7,6 +7,7 @@
 
 from ogx.core.datatypes import Provider
 from ogx.distributions.template import DistributionTemplate
+from ogx.providers.remote.inference.llama_cpp_server.config import LlamaCppServerConfig
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
 from ogx_api import ConnectorInput, ModelInput, ModelType
 
@@ -102,6 +103,15 @@ def get_distribution_template() -> DistributionTemplate:
         config=WatsonXConfig.sample_run_config(),
     )
 
+    # llama-cpp-server is a CI-only inference backend (see the llama-cpp-server test
+    # suite). It is env-gated so it only activates when LLAMA_CPP_SERVER_URL is set,
+    # which the setup-llamacpp action does by pointing at the local router.
+    llama_cpp_server_provider = Provider(
+        provider_id="${env.LLAMA_CPP_SERVER_URL:+llama-cpp-server}",
+        provider_type="remote::llama-cpp-server",
+        config=LlamaCppServerConfig.sample_run_config(),
+    )
+
     for run_config in template.run_configs.values():
         if run_config.default_connectors is None:
             run_config.default_connectors = []
@@ -116,6 +126,9 @@ def get_distribution_template() -> DistributionTemplate:
 
         # Add WatsonX inference provider (vertexai is already in starter distribution)
         run_config.provider_overrides["inference"].append(watsonx_provider)
+
+        # Add the CI-only llama-cpp-server inference provider
+        run_config.provider_overrides["inference"].append(llama_cpp_server_provider)
 
         for provider in run_config.provider_overrides["inference"]:
             if provider.provider_type == "inline::sentence-transformers":

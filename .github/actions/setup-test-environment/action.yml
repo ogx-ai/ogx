@@ -88,6 +88,10 @@ runs:
       if: ${{ startsWith(inputs.setup, 'vllm') && !startsWith(inputs.setup, 'vllm-gpu-') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-vllm
 
+    - name: Setup llama-cpp-server router
+      if: ${{ startsWith(inputs.setup, 'llama-cpp-server') && inputs.inference-mode != 'replay' }}
+      uses: ./.github/actions/setup-llamacpp
+
     - name: Start Postgres service
       if: ${{ contains(inputs.setup, 'postgres') }}
       shell: bash
