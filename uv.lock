@@ -3607,17 +3607,16 @@ wheels = [
 
 [[package]]
 name = "milvus-lite"
-version = "3.2.1"
+version = "2.5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "faiss-cpu" },
-    { name = "grpcio" },
-    { name = "numpy" },
-    { name = "pyarrow" },
+    { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/16/48/3826b9b18621aa38548ed59749a3a2df0578a1262f8aeeed5cdeb7a9fb94/milvus_lite-3.2.1.tar.gz", hash = "sha256:4d988fe0a6bbdfc708046014ad69f4b140c43567ecafd8b6df300ad7d37210f3", size = 722376, upload-time = "2026-08-25T03:14:40.772Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/ac/7534ce7526191f776e0d8f28c32ea69f0ae9516b1510a5653eeb5038e1b9/milvus_lite-3.2.1-py3-none-any.whl", hash = "sha256:0742fb4c54858bcc6fc3c2142ec651e2b0f4ae30f19e21d4fbc6db65b9e16c7b", size = 269551, upload-time = "2026-08-25T03:14:37.101Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/b2/acc5024c8e8b6a0b034670b8e8af306ebd633ede777dcbf557eac4785937/milvus_lite-2.5.1-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:6b014453200ba977be37ba660cb2d021030375fa6a35bc53c2e1d92980a0c512", size = 27934713, upload-time = "2025-06-30T04:23:37.028Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/2e/746f5bb1d6facd1e73eb4af6dd5efda11125b0f29d7908a097485ca6cad9/milvus_lite-2.5.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:a2e031088bf308afe5f8567850412d618cfb05a65238ed1a6117f60decccc95a", size = 24421451, upload-time = "2025-06-30T04:23:51.747Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/cf/3d1fee5c16c7661cf53977067a34820f7269ed8ba99fe9cf35efc1700866/milvus_lite-2.5.1-py3-none-manylinux2014_aarch64.whl", hash = "sha256:a13277e9bacc6933dea172e42231f7e6135bd3bdb073dd2688ee180418abd8d9", size = 45337093, upload-time = "2025-06-30T04:24:06.706Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/82/41d9b80f09b82e066894d9b508af07b7b0fa325ce0322980674de49106a0/milvus_lite-2.5.1-py3-none-manylinux2014_x86_64.whl", hash = "sha256:25ce13f4b8d46876dd2b7ac8563d7d8306da7ff3999bb0d14b116b30f71d706c", size = 55263911, upload-time = "2025-06-30T04:24:19.434Z" },
 ]
 
 [[package]]
@@ -4268,6 +4267,7 @@ starter = [
     { name = "langdetect" },
     { name = "markitdown", extra = ["all"] },
     { name = "matplotlib" },
+    { name = "milvus-lite", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64' or platform_machine == 'x86_64'" },
     { name = "neo4j" },
     { name = "nltk" },
     { name = "numpy" },
@@ -4427,6 +4427,7 @@ requires-dist = [
     { name = "markitdown", extras = ["all"], marker = "extra == 'starter'" },
     { name = "matplotlib", marker = "extra == 'starter'", specifier = ">=3.11.2" },
     { name = "mcp", specifier = ">=1.28.1,<2.0" },
+    { name = "milvus-lite", marker = "(platform_machine == 'aarch64' and extra == 'starter') or (platform_machine == 'arm64' and extra == 'starter') or (platform_machine == 'x86_64' and extra == 'starter')", specifier = ">=2.5.1,<3.0" },
     { name = "models-dev", specifier = ">=1.0.398" },
     { name = "neo4j", marker = "extra == 'starter'", specifier = ">=6.3.1" },
     { name = "nltk", marker = "extra == 'starter'", specifier = ">=3.10.3" },
@@ -4510,7 +4511,7 @@ dev = [
     { name = "lm-format-enforcer" },
     { name = "markitdown", extras = ["all"] },
     { name = "mcp", specifier = ">=1.28.1,<2.0" },
-    { name = "milvus-lite", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64' or platform_machine == 'x86_64'", specifier = ">=3.2.1" },
+    { name = "milvus-lite", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64' or platform_machine == 'x86_64'", specifier = ">=2.5.1,<3.0" },
     { name = "moto", extras = ["s3"], specifier = ">=5.1.10" },
     { name = "mypy", specifier = ">=2.3.1" },
     { name = "nbval" },
