@@ -1,0 +1,96 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store_tool_calls[openai_client-txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b-False]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What's the weather in Tokyo? Use the get_weather function to get the weather."
+        }
+      ],
+      "stream": false,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Get the weather in a given city",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string",
+                  "description": "The city to get the weather for"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-d9ae65d67e3a",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "chatcmpl-tool-96f54eb6b8ed3b58",
+                  "function": {
+                    "arguments": "{\"city\": \"Tokyo\"}",
+                    "name": "get_weather"
+                  },
+                  "type": "function",
+                  "index": 0,
+                  "name": null
+                }
+              ],
+              "reasoning_content": "Here's a thinking process:\n\n1.  **Analyze User Input:** The user is asking \"What's the weather in Tokyo? Use the get_weather function to get the weather.\"\n2.  **Identify Required Tool:** The user explicitly wants me to use the `get_weather` function.\n3.  **Check Tool Parameters:** The `get_weather` function takes one parameter: `city` (string).\n4.  **Extract Parameter:** The city is \"Tokyo\".\n5.  **Call Function:** I need to call `get_weather` with `city=\"Tokyo\"`.\n6.  **Formulate Response:** After getting the result, I'll present the weather information to the user.\n\nLet's call the function.\u27e9",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 182,
+          "prompt_tokens": 290,
+          "total_tokens": 472,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 289
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

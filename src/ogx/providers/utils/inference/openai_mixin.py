@@ -30,6 +30,7 @@ from ogx.providers.utils.inference.openai_compat import (
     prepare_openai_completion_params,
 )
 from ogx.providers.utils.inference.prompt_adapter import localize_image_content
+from ogx.providers.utils.inference.stream_utils import close_async_stream
 from ogx_api import (
     Model,
     ModelType,
@@ -251,7 +252,10 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         api_key = self._get_api_key_from_config_or_provider_data()
         if not api_key:
             message = "API key not provided."
-            if self.provider_data_api_key_field:
+            provider_id = getattr(self, "__provider_id__", None)
+            if provider_id:
+                message += f' Please provide a valid API key in the provider data header, e.g. x-ogx-provider-data: {{"{provider_id}_api_key": "<API_KEY>"}}.'
+            elif self.provider_data_api_key_field:
                 message += f' Please provide a valid API key in the provider data header, e.g. x-ogx-provider-data: {{"{self.provider_data_api_key_field}": "<API_KEY>"}}.'
             raise ValueError(message)
 
@@ -321,25 +325,28 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                 last_id = None
                 last_created = None
                 last_model = None
-                async for chunk in resp:
-                    if new_id:
-                        chunk.id = new_id
-                    if fix_usage and chunk.usage is not None:
-                        last_usage = chunk.usage
-                        last_id = chunk.id
-                        last_created = chunk.created
-                        last_model = chunk.model
-                        chunk.usage = None
-                    yield chunk
-                if fix_usage and last_usage is not None:
-                    yield ChatCompletionChunk(
-                        id=last_id,
-                        choices=[],
-                        created=last_created,
-                        model=last_model,
-                        object="chat.completion.chunk",
-                        usage=last_usage,
-                    )
+                try:
+                    async for chunk in resp:
+                        if new_id:
+                            chunk.id = new_id
+                        if fix_usage and chunk.usage is not None:
+                            last_usage = chunk.usage
+                            last_id = chunk.id
+                            last_created = chunk.created
+                            last_model = chunk.model
+                            chunk.usage = None
+                        yield chunk
+                    if fix_usage and last_usage is not None:
+                        yield ChatCompletionChunk(
+                            id=last_id,
+                            choices=[],
+                            created=last_created,
+                            model=last_model,
+                            object="chat.completion.chunk",
+                            usage=last_usage,
+                        )
+                finally:
+                    await close_async_stream(resp)
 
             return _gen()
         else:

@@ -1007,3 +1007,64 @@ class TestErrorStreamEvent:
         assert events[1].type == "ping"
         assert events[2].type == "error"
         assert len(events) == 3
+
+
+# -- Upstream stream closure --
+
+
+class TestUpstreamStreamClosure:
+    @staticmethod
+    def _make_chunk(text):
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = text
+        chunk.choices[0].delta.tool_calls = None
+        chunk.choices[0].finish_reason = None
+        chunk.usage = None
+        return chunk
+
+    async def test_upstream_closed_on_completion(self):
+        closed = []
+
+        async def mock_stream():
+            try:
+                yield self._make_chunk("hi")
+            finally:
+                closed.append(True)
+
+        events = [event async for event in openai_stream_to_anthropic(mock_stream(), "m")]
+        assert events[-1].type == "message_stop"
+        assert closed == [True]
+
+    async def test_upstream_closed_when_consumer_abandons_mid_stream(self):
+        closed = []
+
+        async def mock_stream():
+            try:
+                yield self._make_chunk("hi")
+                yield self._make_chunk("ho")
+            finally:
+                closed.append(True)
+
+        translation = openai_stream_to_anthropic(mock_stream(), "m")
+        assert (await translation.__anext__()).type == "message_start"
+        assert (await translation.__anext__()).type == "ping"
+        # Pull the first content event so the upstream stream has started.
+        assert (await translation.__anext__()).type == "content_block_start"
+        await translation.aclose()
+        assert closed == [True]
+
+    async def test_upstream_closed_on_upstream_error(self):
+        closed = []
+
+        async def failing_stream():
+            try:
+                yield self._make_chunk("partial")
+                raise RuntimeError("connection lost")
+            finally:
+                closed.append(True)
+
+        events = [event async for event in openai_stream_to_anthropic(failing_stream(), "m")]
+        assert events[-1].type == "error"
+        assert closed == [True]

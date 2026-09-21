@@ -19,6 +19,7 @@ from ogx.providers.inline.responses.builtin.responses.types import (
 from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
 from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx_api import (
     HealthResponse,
     HealthStatus,
@@ -130,20 +131,11 @@ class OllamaInferenceAdapter(OpenAIMixin):
         params.messages = mapped_messages
 
         result = await self.openai_chat_completion(params)
+        # narrow the result type to AsyncIterator for the reasoning wrapper below
+        if not isinstance(result, AsyncIterator):
+            raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
-        async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:
-                reasoning = None
-                for choice in chunk.choices or []:
-                    reasoning = getattr(choice.delta, "reasoning", None) or getattr(
-                        choice.delta, "reasoning_content", None
-                    )
-                yield OpenAIChatCompletionChunkWithReasoning(
-                    chunk=chunk,
-                    reasoning_content=reasoning,
-                )
-
-        return _wrap_chunks()
+        return wrap_reasoning_chunks(result)
 
     def _get_ollama_base_url(self) -> str:
         """Get the Ollama base URL without trailing /v1 suffix."""

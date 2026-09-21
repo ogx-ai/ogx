@@ -429,6 +429,91 @@ class TestInferenceRecording:
                 # Verify the original method was NOT called
                 mock_create_patch.assert_not_called()
 
+    async def test_record_if_missing_model_list_goes_live(self, temp_storage_dir):
+        """Model lists are re-fetched live in record modes so newly pulled models are recorded."""
+        from openai.types.model import Model
+
+        def mock_list(model_ids):
+            def _make(*args, **kwargs):
+                async def _gen():
+                    for model_id in model_ids:
+                        yield Model(id=model_id, object="model", created=1, owned_by="test")
+
+                return _gen()
+
+            return _make
+
+        temp_storage_dir = temp_storage_dir / "test_record_if_missing_model_list"
+
+        # Record an initial model set
+        with patch(
+            "openai.resources.models.AsyncModels.list",
+            side_effect=mock_list(["model-a"]),
+        ):
+            with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(temp_storage_dir)):
+                client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="test")
+                recorded = [m.id async for m in client.models.list()]
+        assert recorded == ["model-a"]
+
+        # A new model is now available: record-if-missing must not replay the stale
+        # recorded union, it must go live and record the updated set
+        with patch(
+            "openai.resources.models.AsyncModels.list",
+            side_effect=mock_list(["model-a", "model-b"]),
+        ) as mock:
+            with api_recording(mode=APIRecordingMode.RECORD_IF_MISSING, storage_dir=str(temp_storage_dir)):
+                client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="test")
+                recorded = [m.id async for m in client.models.list()]
+        assert recorded == ["model-a", "model-b"]
+        assert mock.call_count == 1
+
+        # Replay still serves the union of all recorded model sets without going live
+        with patch("openai.resources.models.AsyncModels.list") as mock:
+            with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(temp_storage_dir)):
+                client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="test")
+                replayed = sorted([m.id async for m in client.models.list()])
+        assert replayed == ["model-a", "model-b"]
+        mock.assert_not_called()
+
+    async def test_model_list_created_timestamp_normalized(self, temp_storage_dir):
+        """Model-list recordings are stable across re-records with different live timestamps.
+
+        Providers like Ollama derive "created" from the model file's mtime in an
+        ephemeral container, so a fresh record run must not produce a new diff
+        for an unchanged model set (which would re-trigger CI recording runs).
+        """
+        from openai.types.model import Model
+
+        def mock_list(created):
+            def _make(*args, **kwargs):
+                async def _gen():
+                    yield Model(id="model-a", object="model", created=created, owned_by="test")
+
+                return _gen()
+
+            return _make
+
+        temp_storage_dir = temp_storage_dir / "test_model_list_created_normalized"
+
+        async def record_with(created):
+            with patch("openai.resources.models.AsyncModels.list", side_effect=mock_list(created)):
+                with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(temp_storage_dir)):
+                    client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="test")
+                    return [m.id async for m in client.models.list()]
+
+        assert await record_with(1789759342) == ["model-a"]
+        first = sorted(temp_storage_dir.glob("**/models-*.json"))
+        assert len(first) == 1
+        body = json.loads(first[0].read_text())["response"]["body"]
+        created_values = [m["__data__"]["created"] for m in body]
+        assert created_values == [0]
+
+        # A fresh "container" reports a different mtime; the stored file must be unchanged
+        assert await record_with(1789760000) == ["model-a"]
+        second = sorted(temp_storage_dir.glob("**/models-*.json"))
+        assert len(second) == 1
+        assert second[0].read_text() == first[0].read_text()
+
     async def test_replay_missing_recording(self, temp_storage_dir):
         """Test that replay mode fails when no recording is found."""
         temp_storage_dir = temp_storage_dir / "test_replay_missing_recording"

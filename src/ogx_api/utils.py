@@ -7,36 +7,21 @@
 """Shared utility functions for the OGX API."""
 
 import asyncio
-import contextvars
 import json
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from typing import Any
 
 from pydantic import BaseModel
 
+from ogx_api.router_utils import try_translate_to_http_exception
 
-def _preserve_context_for_sse(event_gen: AsyncGenerator[str, None]) -> AsyncGenerator[str, None]:
-    """Preserve request context for SSE streaming.
 
-    StreamingResponse runs in a different task, losing request contextvars.
-    This wrapper captures and restores the context.
-    """
-    context = contextvars.copy_context()
-
-    async def wrapper() -> AsyncGenerator[str, None]:
-        try:
-            while True:
-                try:
-                    task: asyncio.Task[str] = context.run(asyncio.create_task, event_gen.__anext__())
-                    item = await task
-                except StopAsyncIteration:
-                    break
-                yield item
-        except (asyncio.CancelledError, GeneratorExit):
-            await event_gen.aclose()
-            raise
-
-    return wrapper()
+def get_sse_error_message(exc: Exception) -> str:
+    """Preserve client error details while hiding server exception messages."""
+    http_exc = try_translate_to_http_exception(exc)
+    if http_exc is not None and 400 <= http_exc.status_code < 500:
+        return str(http_exc.detail)
+    return "Internal server error: An unexpected error occurred."
 
 
 def _serialize_sse_data(data: Any) -> str:
@@ -62,14 +47,15 @@ async def sse_stream(
 ) -> AsyncGenerator[str, None]:
     """Yield SSE events from an async generator.
 
-    Each item is serialized with ``format_event``. Cancellation closes the
-    underlying generator. Any other exception is reported as the final event
-    via ``format_error_event``, which should also log the exception.
+    Each item is serialized with ``format_event``. Cancellation or
+    abandonment closes the underlying generator. Any other exception is
+    reported as the final event via ``format_error_event``, which should
+    also log the exception.
     """
     try:
         async for item in event_gen:
             yield format_event(item)
-    except asyncio.CancelledError:
+    except (asyncio.CancelledError, GeneratorExit):
         if hasattr(event_gen, "aclose"):
             await event_gen.aclose()
         raise

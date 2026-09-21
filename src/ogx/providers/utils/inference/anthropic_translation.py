@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from ogx.log import get_logger
+from ogx.providers.utils.inference.stream_utils import close_async_stream
 from ogx_api import (
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
@@ -321,7 +322,7 @@ def openai_response_to_anthropic(response: OpenAIChatCompletion, request_model: 
     )
 
 
-async def openai_stream_to_anthropic(
+async def _translate_openai_stream_events(
     openai_stream: AsyncIterator[OpenAIChatCompletionChunk],
     request_model: str,
 ) -> AsyncIterator[AnthropicStreamEvent]:
@@ -441,6 +442,22 @@ async def openai_stream_to_anthropic(
         ),
     )
     yield MessageStopEvent()
+
+
+async def openai_stream_to_anthropic(
+    openai_stream: AsyncIterator[OpenAIChatCompletionChunk],
+    request_model: str,
+) -> AsyncIterator[AnthropicStreamEvent]:
+    """Translate OpenAI streaming chunks to Anthropic streaming events.
+
+    Always closes the upstream stream, including when the consumer abandons
+    the translation mid-stream.
+    """
+    try:
+        async for event in _translate_openai_stream_events(openai_stream, request_model):
+            yield event
+    finally:
+        await close_async_stream(openai_stream)
 
 
 def parse_anthropic_sse_event(event_type: str, data: dict[str, Any]) -> AnthropicStreamEvent | None:

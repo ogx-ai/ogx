@@ -310,18 +310,13 @@ def patch_httpx_for_test_id():
     client to server via HTTP headers. In library_client mode, this patch is a no-op
     since everything runs in the same process.
 
-    We use the _prepare_request hook that Stainless clients provide for mutating
+    We use the _prepare_request hook the client provides for mutating
     requests after construction but before sending.
     """
     try:
-        from ogx_open_client import OgxClient
-    except ImportError:
-        try:
-            from ogx_client import OgxClient
-        except ImportError as e:
-            raise ImportError(
-                "OgxClient was not found, install with `uv pip install ogx[openclient]` or `uv pip install ogx[client]`"
-            ) from e
+        from ogx_client import OgxClient
+    except ImportError as e:
+        raise ImportError("OgxClient was not found, install with `uv pip install ogx[client]`") from e
 
     if "ogx_client_prepare_request" in _original_methods:
         return
@@ -332,7 +327,6 @@ def patch_httpx_for_test_id():
     def patched_prepare_request(self, request):
         # Call original first (it's a sync method that returns None)
         # Use .get() to handle cases where the originals weren't stored yet
-        # (e.g. class identity mismatch between ogx_open_client and ogx_client)
         ogx_orig = _original_methods.get("ogx_client_prepare_request")
         if ogx_orig is not None:
             ogx_orig(self, request)
@@ -413,8 +407,9 @@ def _normalize_response(data: dict[str, Any], request_hash: str) -> dict[str, An
         data["id"] = f"rec-{request_hash[:12]}"
 
     # Normalize timestamp to epoch (0) (for OpenAI-style responses)
-    # But not for model objects where created timestamp might be meaningful
-    if "created" in data and data.get("object") != "model":
+    # Model objects included: for providers like Ollama, "created" is the model
+    # file's mtime in an ephemeral container, so it changes on every record run.
+    if "created" in data:
         data["created"] = 0
 
     # Normalize Ollama-specific timestamp fields
@@ -1187,11 +1182,14 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     # Try to find existing recording for REPLAY or RECORD_IF_MISSING modes
     recording = None
     if mode == APIRecordingMode.REPLAY or mode == APIRecordingMode.RECORD_IF_MISSING:
-        # Special handling for model-list endpoints: merge all recordings with this hash
-        if _is_model_list_endpoint(endpoint):
+        # Model-list responses reflect which models are available in the current
+        # environment (e.g. which models were pulled), so only REPLAY may use the
+        # recorded union. In RECORD_IF_MISSING we must fetch live and re-record,
+        # otherwise a stale union would hide newly pulled models.
+        if _is_model_list_endpoint(endpoint) and mode == APIRecordingMode.REPLAY:
             records = storage._model_list_responses(request_hash)
             recording = _combine_model_list_responses(endpoint, records)
-        else:
+        elif not _is_model_list_endpoint(endpoint):
             recording = storage.find_recording(request_hash)
 
         if recording:

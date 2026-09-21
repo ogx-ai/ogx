@@ -22,6 +22,7 @@ from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs as _build_network_client_kwargs,
 )
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx_api import (
     HealthResponse,
     HealthStatus,
@@ -222,19 +223,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
         if not isinstance(result, AsyncIterator):
             raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
-        async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:
-                reasoning = None
-                for choice in chunk.choices or []:
-                    reasoning = getattr(choice.delta, "reasoning", None) or getattr(
-                        choice.delta, "reasoning_content", None
-                    )
-                yield OpenAIChatCompletionChunkWithReasoning(
-                    chunk=chunk,
-                    reasoning_content=reasoning,
-                )
-
-        return _wrap_chunks()
+        return wrap_reasoning_chunks(result)
 
     def _get_base_url_without_version(self) -> str:
         """Get the base URL with any trailing /v1 suffix removed."""

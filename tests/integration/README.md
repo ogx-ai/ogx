@@ -312,8 +312,8 @@ def test_asymmetric_embeddings(ogx_client, embedding_model_id):
 TypeScript SDK tests can run alongside Python tests when testing against `server:<config>` stacks. Set `TS_CLIENT_PATH` to the path or version of `ogx-client-typescript` to enable:
 
 ```bash
-# Use published npm package (responses suite)
-TS_CLIENT_PATH=^0.3.2 scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
+# Use the latest published npm package (responses suite)
+TS_CLIENT_PATH=latest scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
 
 # Use local checkout from ~/.cache (recommended for development)
 git clone https://github.com/ogx-ai/ogx-client-typescript.git ~/.cache/ogx-client-typescript

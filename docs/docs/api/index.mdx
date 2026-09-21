@@ -71,14 +71,15 @@ Integrate file operations with vector stores for automatic document processing a
 - Weaviate (Hosted)
 - Postgres (PGVector) (Hosted and Single Node)
 
-### Safety API
-Apply safety policies to outputs at a systems level, not just model level.
+### Responses Guardrails
+Optionally moderate input and generated text within the Responses API. Configure an
+external OpenAI-compatible `moderation_endpoint` on the builtin responses provider,
+then enable it per request with `guardrails: true`. Authentication headers, when
+needed, are configured on the server through `moderation_headers`.
 
-**Supported Providers:**
-- Llama Guard (Depends on Inference Provider)
-- Prompt Guard (Single Node)
-- Code Scanner (Single Node)
-- AWS Bedrock (Hosted)
+Safety and Shields are no longer separate APIs or registered provider categories.
+See [Configuring Responses Guardrails](/docs/distributions/configuration#configuring-responses-guardrails)
+for configuration details.
 
 ### Post Training API
 Fine-tune models for specific use cases and domains.

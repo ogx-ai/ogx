@@ -7,7 +7,6 @@
 import asyncio
 import heapq
 import json
-import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -63,9 +62,6 @@ _PG_SQL_OPS: dict[str, str] = {
     "lt": "<",
     "lte": "<=",
 }
-
-# Regex for validating metadata key names to prevent SQL injection in JSONB paths
-_VALID_KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
 def _quote_ident(name: str) -> str:
@@ -490,10 +486,6 @@ class PGVectorIndex(EmbeddingIndex):
     def _translate_comparison_filter(self, filter_obj: ComparisonFilter, param_idx: int) -> tuple[str, list[Any], int]:
         """Translate a comparison filter to PostgreSQL WHERE clause using JSONB operators."""
         key, value, op_type = filter_obj.key, filter_obj.value, filter_obj.type
-
-        # Validate key to prevent SQL injection in JSONB path
-        if not _VALID_KEY_PATTERN.match(key):
-            raise ValueError(f"Invalid metadata key name: {key!r}")
 
         # Use ->> to extract metadata value as text from the JSONB document column
         expr = f"document->'metadata'->>'{key}'"

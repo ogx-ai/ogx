@@ -25,6 +25,7 @@ from ogx.providers.utils.inference.http_client import (
     set_client_network_fingerprint,
 )
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx_api import (
     InternalServerError,
     OpenAIChatCompletion,
@@ -274,20 +275,11 @@ class BedrockInferenceAdapter(OpenAIMixin):
         params.messages = mapped_messages
 
         result = await self.openai_chat_completion(params)
+        # narrow the result type to AsyncIterator for the reasoning wrapper below
+        if not isinstance(result, AsyncIterator):
+            raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
-        async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:
-                reasoning = None
-                for choice in chunk.choices or []:
-                    reasoning = getattr(choice.delta, "reasoning", None) or getattr(
-                        choice.delta, "reasoning_content", None
-                    )
-                yield OpenAIChatCompletionChunkWithReasoning(
-                    chunk=chunk,
-                    reasoning_content=reasoning,
-                )
-
-        return _wrap_chunks()
+        return wrap_reasoning_chunks(result)
 
     async def openai_chat_completion(
         self,

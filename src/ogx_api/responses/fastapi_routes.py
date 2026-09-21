@@ -35,7 +35,7 @@ from ogx_api.router_utils import (
     standard_responses,
     try_translate_to_http_exception,
 )
-from ogx_api.utils import _preserve_context_for_sse, create_sse_event, sse_stream
+from ogx_api.utils import create_sse_event, get_sse_error_message, sse_stream
 from ogx_api.version import OGX_API_V1
 
 from .api import Responses
@@ -130,7 +130,7 @@ def sse_generator(event_gen: AsyncIterator[Any]) -> AsyncGenerator[str, None]:
         logger.exception("Error in SSE generator")
         http_exc = try_translate_to_http_exception(e)
         status_code = str(http_exc.status_code) if http_exc else "server_error"
-        detail = http_exc.detail if http_exc else "Internal server error: An unexpected error occurred."
+        detail = get_sse_error_message(e)
         return create_sse_event(
             OpenAIResponseObjectStreamError(
                 code=status_code,
@@ -418,7 +418,7 @@ def create_router(impl: Responses) -> APIRouter:
         # The implementation is typed to return an `AsyncIterator` for streaming.
         if isinstance(result, AsyncIterator):
             return StreamingResponse(
-                _preserve_context_for_sse(sse_generator(result)),
+                sse_generator(result),
                 media_type="text/event-stream",
             )
 

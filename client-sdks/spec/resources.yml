@@ -1,0 +1,229 @@
+resources:
+  $shared:
+    models:
+      interleaved_content_item: InterleavedContentItem
+      interleaved_content: InterleavedContent
+      param_type: ParamType
+      sampling_params: SamplingParams
+      system_message: SystemMessage
+      health_info: HealthInfo
+      provider_info: ProviderInfo
+      list_providers_response: ListProvidersResponse
+      route_info: RouteInfo
+      list_routes_response: ListRoutesResponse
+      version_info: VersionInfo
+  responses:
+    models:
+      response_object_stream: OpenAIResponseObjectStream
+      response_object: OpenAIResponseObject
+      compacted_response: OpenAICompactedResponse
+      response_input: OpenAIResponseInput
+      response_message: OpenAIResponseMessage
+      response_output: OpenAIResponseOutput
+    methods:
+      create:
+        type: http
+        streaming:
+          stream_event_model: responses.response_object_stream
+          param_discriminator: stream
+        endpoint: post /v1/responses
+      retrieve: get /v1/responses/{response_id}
+      list:
+        type: http
+        endpoint: get /v1/responses
+      delete:
+        type: http
+        endpoint: delete /v1/responses/{response_id}
+      compact:
+        type: http
+        endpoint: post /v1/responses/compact
+    subresources:
+      input_items:
+        methods:
+          list:
+            type: http
+            paginated: false
+            endpoint: get /v1/responses/{response_id}/input_items
+  prompts:
+    models:
+      prompt: Prompt
+      list_prompts_response: ListPromptsResponse
+    methods:
+      create: post /v1/prompts
+      list:
+        paginated: false
+        endpoint: get /v1/prompts
+      retrieve: get /v1/prompts/{prompt_id}
+      update: put /v1/prompts/{prompt_id}
+      delete: delete /v1/prompts/{prompt_id}
+      set_default_version: put /v1/prompts/{prompt_id}/set-default-version
+    subresources:
+      versions:
+        methods:
+          list:
+            paginated: false
+            endpoint: get /v1/prompts/{prompt_id}/versions
+  conversations:
+    models:
+      conversation_object: Conversation
+    methods:
+      create:
+        type: http
+        endpoint: post /v1/conversations
+      retrieve: get /v1/conversations/{conversation_id}
+      update:
+        type: http
+        endpoint: post /v1/conversations/{conversation_id}
+      delete:
+        type: http
+        endpoint: delete /v1/conversations/{conversation_id}
+    subresources:
+      items:
+        methods:
+          get:
+            type: http
+            endpoint: get /v1/conversations/{conversation_id}/items/{item_id}
+          list:
+            type: http
+            endpoint: get /v1/conversations/{conversation_id}/items
+          create:
+            type: http
+            endpoint: post /v1/conversations/{conversation_id}/items
+          delete:
+            type: http
+            endpoint: delete /v1/conversations/{conversation_id}/items/{item_id}
+  inspect:
+    methods:
+      health: get /v1/health
+      version: get /v1/version
+  embeddings:
+    models:
+      create_embeddings_response: OpenAIEmbeddingsResponse
+    methods:
+      create: post /v1/embeddings
+  chat:
+    models:
+      chat_completion_chunk: OpenAIChatCompletionChunk
+    subresources:
+      completions:
+        methods:
+          create:
+            type: http
+            streaming:
+              stream_event_model: chat.chat_completion_chunk
+              param_discriminator: stream
+            endpoint: post /v1/chat/completions
+          list:
+            type: http
+            paginated: false
+            endpoint: get /v1/chat/completions
+          retrieve:
+            type: http
+            endpoint: get /v1/chat/completions/{completion_id}
+        subresources:
+          messages:
+            methods:
+              list:
+                type: http
+                endpoint: get /v1/chat/completions/{completion_id}/messages
+  completions:
+    methods:
+      create:
+        type: http
+        streaming:
+          param_discriminator: stream
+        endpoint: post /v1/completions
+  vector_io:
+    models:
+      queryChunksResponse: QueryChunksResponse
+    methods:
+      insert: post /v1/vector-io/insert
+      query: post /v1/vector-io/query
+  vector_stores:
+    models:
+      vector_store: VectorStoreObject
+      list_vector_stores_response: VectorStoreListResponse
+      vector_store_delete_response: VectorStoreDeleteResponse
+      vector_store_search_response: VectorStoreSearchResponsePage
+    methods:
+      create: post /v1/vector_stores
+      list: get /v1/vector_stores
+      retrieve: get /v1/vector_stores/{vector_store_id}
+      update: post /v1/vector_stores/{vector_store_id}
+      delete: delete /v1/vector_stores/{vector_store_id}
+      search: post /v1/vector_stores/{vector_store_id}/search
+    subresources:
+      files:
+        models:
+          vector_store_file: VectorStoreFileObject
+        methods:
+          list: get /v1/vector_stores/{vector_store_id}/files
+          retrieve: get /v1/vector_stores/{vector_store_id}/files/{file_id}
+          update: post /v1/vector_stores/{vector_store_id}/files/{file_id}
+          delete: delete /v1/vector_stores/{vector_store_id}/files/{file_id}
+          create: post /v1/vector_stores/{vector_store_id}/files
+          content: get /v1/vector_stores/{vector_store_id}/files/{file_id}/content
+      file_batches:
+        models:
+          vector_store_file_batches: VectorStoreFileBatchObject
+          list_vector_store_files_in_batch_response: VectorStoreFilesListInBatchResponse
+        methods:
+          create: post /v1/vector_stores/{vector_store_id}/file_batches
+          retrieve: get /v1/vector_stores/{vector_store_id}/file_batches/{batch_id}
+          list_files: get /v1/vector_stores/{vector_store_id}/file_batches/{batch_id}/files
+          cancel: post /v1/vector_stores/{vector_store_id}/file_batches/{batch_id}/cancel
+  models:
+    models:
+      model: OpenAIModel
+      list_models_response: OpenAIListModelsResponse
+    methods:
+      list:
+        paginated: false
+        endpoint: get /v1/models
+      retrieve: get /v1/models/{model_id}
+    subresources:
+      openai:
+        methods:
+          list:
+            paginated: false
+            endpoint: get /v1/models
+  providers:
+    methods:
+      list:
+        paginated: false
+        endpoint: get /v1/providers
+      retrieve: get /v1/providers/{provider_id}
+  routes:
+    methods:
+      list:
+        paginated: false
+        endpoint: get /v1/inspect/routes
+  files:
+    models:
+      file: OpenAIFileObject
+      list_files_response: ListOpenAIFileResponse
+      delete_file_response: OpenAIFileDeleteResponse
+    methods:
+      create: post /v1/files
+      list: get /v1/files
+      retrieve: get /v1/files/{file_id}
+      delete: delete /v1/files/{file_id}
+      content: get /v1/files/{file_id}/content
+  batches:
+    methods:
+      create: post /v1/batches
+      list: get /v1/batches
+      retrieve: get /v1/batches/{batch_id}
+      cancel: post /v1/batches/{batch_id}/cancel
+  alpha:
+    subresources:
+      admin:
+        methods:
+          list_providers: get /v1alpha/admin/providers
+          inspect_provider: get /v1alpha/admin/providers/{provider_id}
+          list_routes: get /v1alpha/admin/inspect/routes
+          health: get /v1alpha/admin/health
+          version: get /v1alpha/admin/version
+      inference:
+        methods:
+          rerank: post /v1alpha/inference/rerank

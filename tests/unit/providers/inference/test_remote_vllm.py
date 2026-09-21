@@ -811,3 +811,35 @@ class TestFairnessHeaderPropagation:
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
             assert call_kwargs["extra_headers"] == {"x-gateway-inference-fairness-id": "tenant-1"}
+
+
+async def test_reasoning_wrapper_closes_inner_stream_when_abandoned(vllm_inference_adapter):
+    closed = []
+
+    async def inner_stream():
+        try:
+            for _ in range(2):
+                chunk = MagicMock()
+                chunk.choices = [MagicMock()]
+                chunk.choices[0].delta = MagicMock()
+                chunk.choices[0].delta.reasoning = None
+                chunk.choices[0].delta.reasoning_content = None
+                yield chunk
+        finally:
+            closed.append(True)
+
+    with patch.object(
+        vllm_inference_adapter,
+        "openai_chat_completion",
+        new=AsyncMock(return_value=inner_stream()),
+    ):
+        params = OpenAIChatCompletionRequestWithExtraBody(
+            model="mock-model",
+            messages=[{"role": "user", "content": "test"}],
+            stream=True,
+        )
+        result = await vllm_inference_adapter.openai_chat_completions_with_reasoning(params)
+        assert await result.__anext__() is not None
+        await result.aclose()
+
+    assert closed == [True]

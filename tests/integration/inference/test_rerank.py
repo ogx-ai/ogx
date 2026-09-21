@@ -6,8 +6,8 @@
 import concurrent.futures
 
 import pytest
-from ogx_open_client import BadRequestError as OGXBadRequestError
-from ogx_open_client.models import (
+from ogx_client import BadRequestError as OGXBadRequestError
+from ogx_client.models import (
     URL,
     ImageContentItem,
     RerankResponse,

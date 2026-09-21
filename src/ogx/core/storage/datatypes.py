@@ -49,10 +49,6 @@ class RedisKVStoreConfig(CommonConfig):
         return f"redis://{self.host}:{self.port}"
 
     @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["redis"]
-
-    @classmethod
     def sample_run_config(cls) -> dict[str, str]:
         return {
             "type": StorageBackendType.KV_REDIS.value,
@@ -68,10 +64,6 @@ class SqliteKVStoreConfig(CommonConfig):
     db_path: str = Field(
         description="File path for the sqlite database",
     )
-
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["aiosqlite"]
 
     @classmethod
     def sample_run_config(cls, __distro_dir__: str, db_name: str = "kvstore.db") -> dict[str, str]:
@@ -125,10 +117,6 @@ class PostgresKVStoreConfig(CommonConfig):
             raise ValueError("Table name must be less than 63 characters")
         return v
 
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["asyncpg"]
-
 
 class MongoDBKVStoreConfig(CommonConfig):
     """Configuration for the MongoDB key-value store backend."""
@@ -140,10 +128,6 @@ class MongoDBKVStoreConfig(CommonConfig):
     user: str | None = None
     password: str | None = None
     collection_name: str = "ogx_kvstore"
-
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["pymongo"]
 
     @classmethod
     def sample_run_config(cls, collection_name: str = "ogx_kvstore") -> dict[str, str]:
@@ -167,11 +151,6 @@ class SqlAlchemySqlStoreConfig(BaseModel):
     @abstractmethod
     def engine_str(self) -> str | URL: ...
 
-    # TODO: move this when we have a better way to specify dependencies with internal APIs
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["sqlalchemy[asyncio]"]
-
 
 class SqliteSqlStoreConfig(SqlAlchemySqlStoreConfig):
     """Configuration for the SQLite SQL store backend."""
@@ -191,10 +170,6 @@ class SqliteSqlStoreConfig(SqlAlchemySqlStoreConfig):
             "type": StorageBackendType.SQL_SQLITE.value,
             "db_path": "${env.SQLITE_STORE_DIR:=" + __distro_dir__ + "}/" + db_name,
         }
-
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return super().pip_packages() + ["aiosqlite"]
 
 
 class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
@@ -224,10 +199,6 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
             port=int(self.port),
             database=self.db,
         )
-
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return super().pip_packages() + ["asyncpg"]
 
     @classmethod
     def sample_run_config(cls, **kwargs: object) -> dict[str, str]:

@@ -1,28 +1,22 @@
 SHELL := /bin/bash
-STAINLESS_DIR := ../stainless
+SPEC_DIR := ../spec
 PYTHON := uv run --no-project --with ruamel.yaml python
 # Auto-detect openapi-generator command (npm installs as openapi-generator-cli, brew as openapi-generator)
 OPENAPI_GENERATOR := $(shell command -v openapi-generator-cli 2>/dev/null || command -v openapi-generator 2>/dev/null || echo openapi-generator-cli)
 
-# Package naming: set OPEN=0 to generate as "ogx_client" (without "open")
-OPEN ?= 1
-ifeq ($(OPEN),0)
-  PACKAGE_NAME := ogx_client
-  PROJECT_NAME := ogx-client
-else
-  PACKAGE_NAME := ogx_open_client
-  PROJECT_NAME := ogx-open-client
-endif
+# Package naming (OpenAPI-generated Python client)
+PACKAGE_NAME := ogx_client
+PROJECT_NAME := ogx-client
 
 # Scripts
-MERGE_SCRIPT := ./merge_stainless_config.py
+MERGE_SCRIPT := ./merge_resources.py
 HIERARCHY_SCRIPT := ./build_hierarchy.py
 PATCH_SCRIPT := ./patch_hierarchy.py
 
 # Inputs
 PATCHES_FILE := ./patches.yml
-STAINLESS_CONFIG := $(STAINLESS_DIR)/config.yml
-STAINLESS_OPENAPI := $(STAINLESS_DIR)/openapi.yml
+SPEC_RESOURCES := $(SPEC_DIR)/resources.yml
+SPEC_OPENAPI := $(SPEC_DIR)/openapi.yml
 OPENAPI_CONFIG_TEMPLATE := openapi-config.json.template
 OPENAPI_CONFIG := openapi-config.json
 TEMPLATE_DIR := ./templates/python
@@ -43,7 +37,7 @@ all: sdk
 help:
 	@echo "Available targets:"
 	@echo "  all        - Generate SDK (default)"
-	@echo "  openapi    - Generate enriched OpenAPI spec from Stainless config"
+	@echo "  openapi    - Generate enriched OpenAPI spec from the base spec + resource config"
 	@echo "  hierarchy  - Process spec for hierarchical SDK (leaf tags, dummy endpoints)"
 	@echo "  sdk        - Generate Python SDK with hierarchical API structure"
 	@echo "  version    - Show version that will be used for SDK"
@@ -51,10 +45,6 @@ help:
 	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "Pipeline: openapi -> hierarchy -> sdk (each target triggers its dependencies)"
-	@echo ""
-	@echo "Options:"
-	@echo "  OPEN=1     - (default) Generate as ogx_open_client"
-	@echo "  OPEN=0     - Generate as ogx_client (without 'open')"
 
 version:
 	@echo "SDK version: $(VERSION)"
@@ -90,12 +80,12 @@ check-generator:
 		  echo ""; \
 		  exit 1; }
 
-# Step 1: Merge Stainless config into OpenAPI spec and apply patches
+# Step 1: Merge the resource-hierarchy config into the OpenAPI spec and apply patches
 openapi: $(OPENAPI_OUTPUT)
 
-$(OPENAPI_OUTPUT): $(MERGE_SCRIPT) $(PATCHES_FILE) $(STAINLESS_CONFIG) $(STAINLESS_OPENAPI)
+$(OPENAPI_OUTPUT): $(MERGE_SCRIPT) $(PATCHES_FILE) $(SPEC_RESOURCES) $(SPEC_OPENAPI)
 	@echo "Generating OpenAPI spec..."
-	$(PYTHON) $(MERGE_SCRIPT) --patch $(PATCHES_FILE) --stainless $(STAINLESS_CONFIG) --openapi $(STAINLESS_OPENAPI) --output $(OPENAPI_OUTPUT)
+	$(PYTHON) $(MERGE_SCRIPT) --patch $(PATCHES_FILE) --resources $(SPEC_RESOURCES) --openapi $(SPEC_OPENAPI) --output $(OPENAPI_OUTPUT)
 
 # Step 2: Extract tag hierarchy, reduce to leaf tags, create dummy endpoints, fix schemas
 hierarchy: $(PROCESSED_SPEC)
@@ -104,14 +94,10 @@ $(PROCESSED_SPEC): $(HIERARCHY_SCRIPT) $(OPENAPI_OUTPUT)
 	@echo "Processing hierarchy..."
 	$(PYTHON) $(HIERARCHY_SCRIPT) --source $(OPENAPI_OUTPUT) --output $(PROCESSED_SPEC) --hierarchy $(HIERARCHY_FILE)
 
-# Generate openapi-config.json from template based on OPEN flag
+# Generate openapi-config.json from template
 generate-config: $(OPENAPI_CONFIG_TEMPLATE)
-	@echo "Generating $(OPENAPI_CONFIG) (OPEN=$(OPEN), package=$(PACKAGE_NAME))..."
-ifeq ($(OPEN),0)
-	@sed 's/{{open.}}//g' $(OPENAPI_CONFIG_TEMPLATE) > $(OPENAPI_CONFIG)
-else
-	@sed 's/{{\(open.\)}}/\1/g' $(OPENAPI_CONFIG_TEMPLATE) > $(OPENAPI_CONFIG)
-endif
+	@echo "Generating $(OPENAPI_CONFIG) (package=$(PACKAGE_NAME))..."
+	@cp $(OPENAPI_CONFIG_TEMPLATE) $(OPENAPI_CONFIG)
 
 # Step 3: Generate Python SDK from processed spec, then patch in hierarchy
 sdk: check-generator $(PROCESSED_SPEC) generate-config

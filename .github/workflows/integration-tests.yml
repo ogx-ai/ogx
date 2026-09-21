@@ -43,10 +43,6 @@ on:
         default: 'ollama'
   workflow_call:
     inputs:
-      sdk_install_url:
-        required: false
-        type: string
-        description: 'URL to install Python SDK from (for testing preview builds)'
       matrix_key:
         required: false
         type: string
@@ -168,11 +164,10 @@ jobs:
       # called from pull_request_target workflows.
       - name: Setup test environment
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/setup-test-environment@68c0994a790e4f029007f3cce12a744d69a7d435
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@a6641e863ebc27120c4d87862fcb11bbfe935a1a
         with:
           python-version: ${{ matrix.python-version }}
           client-version: ${{ matrix.client-version }}
-          sdk_install_url: ${{ inputs.sdk_install_url || '' }}
           setup: ${{ matrix.config.setup }}
           suite: ${{ matrix.config.suite }}
           inference-mode: ${{ matrix.config.inference_mode || 'replay' }}
@@ -195,7 +190,7 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@fb32709e3b29816b52085c92820531e4e6d94be8
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@a6641e863ebc27120c4d87862fcb11bbfe935a1a
         env:
           OPENAI_API_KEY: dummy
           AZURE_API_KEY: replay-mode-dummy-key
@@ -209,6 +204,7 @@ jobs:
           AWS_BEARER_TOKEN_BEDROCK: replay-mode-dummy-key
           AWS_DEFAULT_REGION: us-west-2
           GEMINI_API_KEY: replay-mode-dummy-key
+          FIREWORKS_API_KEY: replay-mode-dummy-key
           THEGRID_API_KEY: replay-mode-dummy-key
           TAVILY_SEARCH_API_KEY: ${{ secrets.TAVILY_SEARCH_API_KEY || 'replay-mode-dummy-key' }}
           TS_CLIENT_PATH: ${{ steps.setup-ts-client.outputs.ts-client-path || '' }}

@@ -27,6 +27,7 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `messages` | `ollama` | `messages` only |
 | `messages-openai` | `gpt` | `messages` only |
 | `interactions` | `gemini` | `interactions` only |
+| `base` | `fireworks` |  |
 
 ## CI Lanes (Scheduled)
 
@@ -43,18 +44,19 @@ Cron: `1 0 * * 0`
 |-------|------------|--------------|-----------------|--------------|------------|--------------|
 | `azure` | azure/gpt-4o | azure/gpt-4o | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
 | `bedrock` | bedrock/openai.gpt-oss-20b-1:0 | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `bedrock`, `bedrock-responses` | — |
+| `fireworks` | fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `base` | — |
 | `gemini` | gemini/gemini-2.5-flash-lite | — | gemini/text-embedding-004 | — | `interactions` | — |
-| `gpt` | openai/gpt-4o | openai/gpt-4o | openai/text-embedding-3-small | — | `responses`, `messages-openai` | — |
-| `gpt-reasoning` | openai/o4-mini | — | — | — | `gpt-reasoning` | — |
+| `gpt` | openai/gpt-4o | openai/gpt-4o | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses`, `messages-openai` | — |
+| `gpt-reasoning` | openai/o4-mini | — | openai/text-embedding-3-small | — | `gpt-reasoning` | — |
 | `ollama` | ollama/llama3.2:3b-instruct-fp16 | — | ollama/nomic-embed-text:v1.5 | — | `base`, `messages` | — |
-| `ollama-postgres` | ollama/llama3.2:3b-instruct-fp16 | — | sentence-transformers/nomic-embed-text-v1.5 | — | `base` | — |
-| `ollama-reasoning` | ollama/deepseek-r1:1.5b | — | — | — | `ollama-reasoning` | — |
+| `ollama-postgres` | ollama/llama3.2:3b-instruct-fp16 | — | ollama/nomic-embed-text:v1.5 | — | `base` | — |
+| `ollama-reasoning` | ollama/deepseek-r1:1.5b | — | ollama/nomic-embed-text:v1.5 | — | `ollama-reasoning` | — |
 | `ollama-vision` | — | ollama/llama3.2-vision:11b | ollama/nomic-embed-text:v1.5 | — | `vision` | — |
 | `thegrid` | thegrid/text-standard | — | — | — | `thegrid` | — |
 | `vertexai` | vertexai/publishers/google/models/gemini-2.0-flash | vertexai/publishers/google/models/gemini-2.0-flash | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
-| `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-embed-text-v1.5 | — | `base-vllm-subset`, `vllm-reasoning` | `base` |
+| `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `base-vllm-subset`, `vllm-reasoning` | `base` |
 | `vllm-qwen3next` | Qwen3-Next-80B-A3B-Instruct-FP8 | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | `base` |
-| `watsonx` | watsonx/meta-llama/llama-3-3-70b-instruct | — | — | — | `responses` | — |
+| `watsonx` | watsonx/meta-llama/llama-3-3-70b-instruct | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
 
 ## Additional Named Setups
 
@@ -63,10 +65,9 @@ Cron: `1 0 * * 0`
 | `anthropic` | anthropic/claude-3-5-haiku-20241022 | — | — | — | — | — |
 | `cerebras` | cerebras/gpt-oss-120b | — | — | — | — | — |
 | `databricks` | databricks/databricks-meta-llama-3-3-70b-instruct | — | databricks/databricks-bge-large-en | — | — | — |
-| `fireworks` | fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct | — | fireworks/accounts/fireworks/models/qwen3-embedding-8b | — | — | — |
 | `groq` | groq/llama-3.3-70b-versatile | — | — | — | — | — |
 | `llama-api` | llama_openai_compat/Llama-3.3-8B-Instruct | — | — | — | — | — |
-| `llama-cpp-server` | llama-cpp-server/qwen2.5 | — | sentence-transformers/nomic-embed-text-v1.5 | — | — | — |
+| `llama-cpp-server` | llama-cpp-server/qwen2.5 | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | — |
 | `tgi` | tgi/Qwen/Qwen3-0.6B | — | — | — | — | — |
 | `together` | together/meta-llama/Llama-3.3-70B-Instruct-Turbo-Free | — | together/togethercomputer/m2-bert-80M-32k-retrieval | — | — | — |
 | `vllm-gpu-gpt-oss` | vllm/gpt-oss:20b | — | — | — | — | — |

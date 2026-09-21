@@ -79,8 +79,6 @@ def _quote_identifier(value: str) -> str:
 
 
 def _metadata_property(key: str) -> str:
-    if not _VALID_METADATA_KEY.match(key):
-        raise ValueError(f"Failed to translate Neo4j metadata filter: invalid metadata key {key!r}")
     return f"metadata_{key}"
 
 

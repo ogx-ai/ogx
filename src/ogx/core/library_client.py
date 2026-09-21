@@ -28,7 +28,7 @@ from fastapi import Response as FastAPIResponse
 from ogx.core.utils.type_inspection import is_body_param, is_unwrapped_body_param
 
 try:
-    from ogx_open_client import (
+    from ogx_client import (
         NOT_GIVEN,
         APIResponse,
         AsyncAPIResponse,
@@ -36,20 +36,8 @@ try:
         AsyncStream,
         OgxClient,
     )
-except ImportError:
-    try:
-        from ogx_client import (  # type: ignore[import-not-found,assignment,no-redef]
-            NOT_GIVEN,
-            APIResponse,
-            AsyncAPIResponse,
-            AsyncOgxClient,
-            AsyncStream,
-            OgxClient,
-        )
-    except ImportError as e:
-        raise ImportError(
-            "ogx-open-client is not installed. Please install it with `uv pip install ogx[openclient]` or `uv pip install ogx[client]`."
-        ) from e
+except ImportError as e:
+    raise ImportError("ogx-client is not installed. Please install it with `uv pip install ogx[client]`.") from e
 
 from pydantic import BaseModel, TypeAdapter
 from rich.console import Console
@@ -135,6 +123,19 @@ def convert_to_pydantic(annotation: Any, value: Any) -> Any:
         return TypeAdapter(annotation).validate_python(value)
 
     except Exception as e:
+        # Multipart form fields arrive as JSON strings over HTTP (e.g. expires_after);
+        # the in-process client must parse them into the model the way the server's form
+        # dependencies do.
+        if isinstance(value, str):
+            try:
+                return TypeAdapter(annotation).validate_python(json.loads(value))
+            except Exception as json_error:
+                logger.debug(
+                    "JSON string form field did not validate against annotation",
+                    value=value,
+                    annotation=annotation,
+                    error=str(json_error),
+                )
         # TODO: this is workardound for having Union[str, AgentToolGroup] in API schema.
         # We should get rid of any non-discriminated unions in the API schema.
         if origin is Union:
@@ -233,11 +234,7 @@ async def _route_call_in_process(
     from urllib.parse import parse_qs, urlparse
 
     from fastapi.responses import StreamingResponse
-
-    try:
-        from ogx_open_client.rest import RESTResponse
-    except ImportError:
-        from ogx_client.rest import RESTResponse  # type: ignore[import-not-found,assignment,no-redef]
+    from ogx_client.rest import RESTResponse
 
     # Extract path from full URL (strip http://localhost:port prefix)
     parsed = urlparse(url)
@@ -324,10 +321,14 @@ async def _route_call_in_process(
 
             if async_streaming:
                 # Wrap the body_iterator as an AsyncByteStream for lazy async
-                # iteration, preserving time-to-first-token benefits.
+                # iteration, preserving time-to-first-token benefits. The stream
+                # is consumed after the request_provider_data_context above
+                # exits, so preserve the captured context across iterations.
                 mock_response = httpx.Response(
                     status_code=result.status_code,
-                    stream=_SSEAsyncByteStream(result.body_iterator),
+                    stream=_SSEAsyncByteStream(
+                        preserve_contexts_async_generator(aiter(result.body_iterator), [PROVIDER_DATA_VAR])
+                    ),
                     headers={"Content-Type": content_type},
                     request=httpx.Request(method=method, url=url),
                 )
@@ -336,7 +337,7 @@ async def _route_call_in_process(
                 # client cannot lazily consume an async iterator from its
                 # synchronous call_api path (Stream.iter_bytes() requires a
                 # SyncByteStream). The sync client already has a separate lazy
-                # streaming path via _stream_request() for the stainless SDK.
+                # streaming path via _stream_request().
                 chunks: list[bytes] = []
                 async for chunk in result.body_iterator:
                     if isinstance(chunk, str):
@@ -425,7 +426,7 @@ class OGXAsLibraryClient(OgxClient):
         # Patch api_client.call_api to route requests in-process instead of over HTTP.
         # The generated SDK's call chain is: API method → api_client.call_api() → rest.request() → httpx.
         # We intercept at call_api so the request never reaches httpx/network.
-        # Only applies to ogx_open_client; the stainless SDK uses a request() override instead.
+        # Applies to the OpenAPI-generated ogx_client, which exposes api_client.call_api.
         if hasattr(self, "api_client") and hasattr(self.api_client, "call_api"):
             self._original_call_api = self.api_client.call_api
             self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
@@ -708,7 +709,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             else:
                 prefix = "!" if in_notebook() else ""  # type: ignore[no-untyped-call]
                 cprint(
-                    f"Please run:\n\n{prefix}ogx list-deps {self.config_path_or_distro_name} | xargs -L1 uv pip install\n\n",
+                    f"Please run:\n\n{prefix}ogx stack list-deps {self.config_path_or_distro_name} | xargs -L1 uv pip install\n\n",
                     "yellow",
                     file=sys.stderr,
                 )
@@ -733,7 +734,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
         # The generated async SDK's call chain is:
         #   Async*Api method → await api_client.call_api() → httpx.AsyncClient → network
         # We intercept at call_api so the request never reaches the network.
-        # Only applies to ogx_open_client; the stainless SDK uses a request() override instead.
+        # Applies to the OpenAPI-generated ogx_client, which exposes api_client.call_api.
         if hasattr(self, "api_client") and hasattr(self.api_client, "call_api"):
             self.api_client.call_api = self._in_process_call_api  # type: ignore[method-assign]
 

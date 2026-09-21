@@ -5,9 +5,12 @@
 # the root directory of this source tree.
 
 
+from unittest.mock import Mock
+
 import pytest
 
 from ogx.core.datatypes import User, VectorStoreWithOwner
+from ogx.core.routers.vector_io import VectorIORouter
 from ogx.core.storage.datatypes import SqliteKVStoreConfig
 from ogx.core.storage.kvstore.sqlite.sqlite import SqliteKVStoreImpl
 from ogx.core.store.registry import (
@@ -96,9 +99,8 @@ async def test_cached_registry_updates(cached_disk_dist_registry):
     )
     await cached_disk_dist_registry.register(new_vector_store)
 
-    # Verify in cache — covers the else-obj branch: on first registration
-    # (no existing DB object) the incoming obj itself must be cached.
-    cached_vector_store = cached_disk_dist_registry.get_cached("vector_store", "test_vector_store_2")
+    # Verify in cache
+    cached_vector_store = cached_disk_dist_registry.cache.get(("vector_store", "test_vector_store_2"))
     assert cached_vector_store is not None
     assert cached_vector_store.identifier == new_vector_store.identifier
     assert cached_vector_store.provider_id == new_vector_store.provider_id
@@ -368,7 +370,7 @@ async def test_double_registration_with_cache_conflict(cached_disk_dist_registry
     assert result1 is True
 
     # Verify in cache
-    cached_model = cached_disk_dist_registry.get_cached("model", "test_model")
+    cached_model = cached_disk_dist_registry.cache.get(("model", "test_model"))
     assert cached_model is not None
     assert cached_model.model_type == ModelType.llm
 
@@ -377,7 +379,7 @@ async def test_double_registration_with_cache_conflict(cached_disk_dist_registry
         await cached_disk_dist_registry.register(model2)
 
     # Cache should still contain original model
-    cached_model_after = cached_disk_dist_registry.get_cached("model", "test_model")
+    cached_model_after = cached_disk_dist_registry.cache.get(("model", "test_model"))
     assert cached_model_after is not None
     assert cached_model_after.model_type == ModelType.llm
 
@@ -416,7 +418,7 @@ async def test_multi_worker_cache_synchronization(sqlite_kvstore, sample_vector_
     assert result_b.embedding_model == sample_vector_store.embedding_model
 
     # After the first get, Worker B should have it in cache
-    cached_b = worker_b_registry.get_cached("vector_store", "test_vector_store")
+    cached_b = worker_b_registry.cache.get(("vector_store", "test_vector_store"))
     assert cached_b is not None
     assert cached_b.identifier == sample_vector_store.identifier
 
@@ -457,7 +459,7 @@ async def test_cached_registry_preserves_owner_on_subset_reregistration(cached_d
     assert await cached_disk_dist_registry.register(subset_vs)
 
     # Cache must hold the full DB object — owner must not be dropped
-    cached = cached_disk_dist_registry.get_cached("vector_store", "owned_vs")
+    cached = cached_disk_dist_registry.cache.get(("vector_store", "owned_vs"))
     assert cached is not None
     assert cached.owner is not None
     assert cached.owner.principal == "admin"
@@ -495,3 +497,44 @@ async def test_multi_worker_get_all_synchronization(sqlite_kvstore, sample_vecto
     identifiers_b = {obj.identifier for obj in all_b}
     assert "test_vector_store" in identifiers_b
     assert "test_model" in identifiers_b
+
+
+async def test_get_provider_id_cross_worker_visibility(sqlite_kvstore, sample_vector_store):
+    """Test that two routers sharing a database can resolve provider IDs across workers.
+
+    This exercises the cross-worker path through VectorIORouter._get_provider_id():
+    1. Worker A registers a vector store
+    2. Worker B's router resolves the same vector store's provider ID
+       via dist_registry.get() cache-then-DB fallback
+
+    Before the fix (when callers used get_cached()), Worker B would return
+    None or "unknown" because its in-memory cache had no record. After the
+    fix, get() falls back to the shared database.
+    """
+    # Two separate registries simulating two uvicorn workers with separate
+    # in-memory caches but sharing the same SQLite backend
+    worker_a_registry = CachedDiskDistributionRegistry(sqlite_kvstore, cache_ttl_seconds=0)
+    await worker_a_registry.initialize()
+
+    worker_b_registry = CachedDiskDistributionRegistry(sqlite_kvstore, cache_ttl_seconds=0)
+    await worker_b_registry.initialize()
+
+    # Workers get their own routing tables, each pointing to its own registry
+    a_rt = Mock(dist_registry=worker_a_registry)
+    b_rt = Mock(dist_registry=worker_b_registry)
+    a_router = VectorIORouter(a_rt)
+    b_router = VectorIORouter(b_rt)
+
+    # Worker A registers the vector store
+    await worker_a_registry.register(sample_vector_store)
+
+    # Worker A can see its provider immediately
+    provider_a = await a_router._get_provider_id("test_vector_store")
+    assert provider_a == sample_vector_store.provider_id
+
+    # Worker B's cache is empty but can still resolve via DB fallback
+    provider_b = await b_router._get_provider_id("test_vector_store")
+    assert provider_b == sample_vector_store.provider_id
+
+    # Both must agree on the provider
+    assert provider_a == provider_b

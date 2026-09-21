@@ -89,7 +89,7 @@ If you're looking for more specific topics, we have a [Zero to Hero Guide](#next
 1. **Install dependencies**:
 
    ```bash
-   ogx list-deps starter | xargs -L1 uv pip install
+   ogx stack list-deps starter | xargs -L1 uv pip install
    ```
 
 2. **Start the distribution**:

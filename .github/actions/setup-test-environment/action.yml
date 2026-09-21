@@ -8,10 +8,6 @@ inputs:
   client-version:
     description: 'Client version (latest or published)'
     required: true
-  sdk_install_url:
-    description: 'URL to install Python SDK from (for testing preview builds). If provided, overrides client-version.'
-    required: false
-    default: ''
   setup:
     description: 'Setup to configure (ollama, vllm, gpt, etc.)'
     required: false
@@ -35,13 +31,15 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install dependencies
-      uses: ./.github/actions/setup-runner
+    # The HuggingFace pre-download must run before "Install dependencies":
+    # `uv run` implicitly re-syncs the environment to uv.lock, which would
+    # revert the client installed by setup-runner (e.g. the in-repo SDK for
+    # client-version 'latest') back to the lockfile's PyPI pin.
+    - name: Install uv
+      uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244 # v7.1.4
       with:
         python-version: ${{ inputs.python-version }}
-        client-version: ${{ inputs.client-version }}
-        sdk_install_url: ${{ inputs.sdk_install_url }}
-        branch: ${{ inputs.branch }}
+        enable-cache: ${{ env.UV_NO_CACHE != 'true' }}
 
     - name: Cache HuggingFace models and datasets
       if: ${{ inputs.enable-hf-cache == 'true' }}
@@ -59,18 +57,25 @@ runs:
         HF_HUB_ENABLE_HF_TRANSFER: "1"
       run: |
         # Download the embedding model used by inline::sentence-transformers
-        uv run python -c "
+        uv run --all-groups python -c "
         from sentence_transformers import SentenceTransformer
         SentenceTransformer('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True)
         print('Embedding model cached')
         " 2>/dev/null || echo "Embedding model download failed (may already be cached)"
 
         # Download the test dataset
-        uv run python -c "
+        uv run --all-groups python -c "
         from datasets import load_dataset
         load_dataset('ogx/simpleqa', split='train')
         print('Dataset cached')
         " 2>/dev/null || echo "Dataset download failed (may already be cached)"
+
+    - name: Install dependencies
+      uses: ./.github/actions/setup-runner
+      with:
+        python-version: ${{ inputs.python-version }}
+        client-version: ${{ inputs.client-version }}
+        branch: ${{ inputs.branch }}
 
     - name: Setup ollama
       if: ${{ startsWith(inputs.setup, 'ollama') && inputs.inference-mode != 'replay' }}

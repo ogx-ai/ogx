@@ -25,6 +25,7 @@ EXTRA_PARAMS=""
 COLLECT_ONLY=false
 TYPESCRIPT_ONLY=false
 INSTALL_DEPS=false
+CLIENT_VERSION=""
 
 # Function to display usage
 usage() {
@@ -45,6 +46,10 @@ Options:
     --typescript-only        Skip Python tests and run only TypeScript client tests
     --install-deps           Install missing provider dependencies before running tests
                              (mirrors the CI setup step: ogx stack list-deps <config> | xargs -L1 uv pip install)
+    --client-version STRING  Client version to test against (mirrors CI client-version):
+                             'latest' generates ogx-client from client-sdks/openapi and installs
+                             it over the PyPI pin; 'published' verifies the uv.lock-resolved
+                             PyPI version is installed (default: no client management)
     --help                   Show this help message
 
 Suites are defined in tests/integration/suites.py and define which tests to run.
@@ -73,6 +78,9 @@ Examples:
 
     # Override model (setup still provides env, e.g. OLLAMA_URL)
     $0 --stack-config server:ci-tests --suite base --setup ollama --text-model ollama/llama3.2:1b
+
+    # Test against the in-repo generated ogx-client (CI client-version=latest equivalent)
+    $0 --stack-config server:ci-tests --suite base --setup gpt --client-version latest
 EOF
 }
 
@@ -127,6 +135,10 @@ while [[ $# -gt 0 ]]; do
         INSTALL_DEPS=true
         shift
         ;;
+    --client-version)
+        CLIENT_VERSION="$2"
+        shift 2
+        ;;
     --help)
         usage
         exit 0
@@ -169,6 +181,7 @@ echo "Setup: $TEST_SETUP"
 echo "Text model: ${TEXT_MODEL:- (from setup)}"
 echo "Vision model: ${VISION_MODEL:- (from setup)}"
 echo "Inference Mode: $INFERENCE_MODE"
+echo "Client Version: ${CLIENT_VERSION:- (none)}"
 echo "Test Suite: $TEST_SUITE"
 echo "Test Subdirs: $TEST_SUBDIRS"
 echo "Test Pattern: $TEST_PATTERN"
@@ -260,6 +273,98 @@ if ! command -v pytest &>/dev/null; then
     exit 1
 fi
 
+# Manage the ogx-client package to mirror CI's client-version input
+# (.github/actions/install-ogx-client). 'latest' generates the SDK from this
+# checkout and installs it over the PyPI pin; 'published' verifies the
+# uv.lock-resolved PyPI version is installed. This never runs `uv sync` or
+# `uv run`: a re-sync would revert a locally installed client back to the
+# lockfile's PyPI pin.
+ensure_client_version() {
+    local sdk_dir="$ROOT_DIR/client-sdks/openapi/sdks/python"
+
+    case "$CLIENT_VERSION" in
+    latest)
+        if ! command -v java &>/dev/null || ! command -v node &>/dev/null; then
+            echo "Failed to run --client-version latest: java and node are required" >&2
+            return 1
+        fi
+        if ! command -v openapi-generator-cli &>/dev/null && ! command -v openapi-generator &>/dev/null; then
+            echo "Failed to run --client-version latest: openapi-generator-cli is required (npm install -g @openapitools/openapi-generator-cli)" >&2
+            return 1
+        fi
+        echo "=== Generating ogx-client SDK from checkout ==="
+        if ! make -C "$ROOT_DIR/client-sdks/openapi" sdk OPEN=0; then
+            echo "Failed to generate ogx-client SDK" >&2
+            return 1
+        fi
+        echo "Installing ogx-client from: $sdk_dir"
+        if ! uv pip install --upgrade "$sdk_dir"; then
+            echo "Failed to install ogx-client from $sdk_dir" >&2
+            return 1
+        fi
+        local expected
+        expected=$(grep -m1 '^version = ' "$sdk_dir/pyproject.toml" | cut -d'"' -f2)
+        if ! verify_client_version "$expected"; then
+            return 1
+        fi
+        ;;
+    published)
+        if ! verify_client_version "" --lock; then
+            return 1
+        fi
+        ;;
+    *)
+        echo "Unknown client-version: $CLIENT_VERSION (expected 'latest' or 'published')" >&2
+        return 1
+        ;;
+    esac
+
+    # Soft check: flag if the dev packages are not editable installs
+    local pkg
+    for pkg in ogx ogx-api; do
+        if uv pip show "$pkg" >/dev/null 2>&1; then
+            if ! uv pip show "$pkg" | grep -qi "editable"; then
+                echo "Warning: $pkg is not an editable install (run 'uv sync' to install from this checkout)"
+            fi
+        fi
+    done
+    echo "Installed ogx packages:"
+    uv pip list | grep ogx
+    return 0
+}
+
+# Verify the installed ogx-client version. With $2 == "--lock", verify
+# against the version pinned in uv.lock; otherwise verify against $1.
+verify_client_version() {
+    local expected="$1"
+    local installed
+    installed=$(uv pip show ogx-client 2>/dev/null | awk '/^Version:/ {print $2}')
+    if [[ -z "$installed" ]]; then
+        echo "ogx-client is not installed. Run 'uv sync --all-groups' first." >&2
+        return 1
+    fi
+    if [[ "${2:-}" == "--lock" ]]; then
+        expected=$(awk '/^name = "ogx-client"$/{getline; if ($0 ~ /^version = /) {print; exit}}' "$ROOT_DIR/uv.lock" | cut -d'"' -f2)
+        if [[ -z "$expected" ]]; then
+            echo "Failed to determine the ogx-client version pinned in uv.lock" >&2
+            return 1
+        fi
+    fi
+    if [[ "$installed" != "$expected" ]]; then
+        echo "ogx-client version mismatch: installed=$installed expected=$expected" >&2
+        echo "Run 'uv sync --all-groups' to install the expected version." >&2
+        return 1
+    fi
+    echo "✅ ogx-client $installed matches expected version"
+    return 0
+}
+
+# Preflight: ensure the client version matches the requested mode.
+# Skipped for typescript-only runs (the TS client is managed separately via TS_CLIENT_PATH).
+if [[ -n "$CLIENT_VERSION" && "$TYPESCRIPT_ONLY" == false ]]; then
+    ensure_client_version || exit 1
+fi
+
 # Function to check that the provider dependencies for a stack config are
 # installed, mirroring the CI setup step in .github/actions/setup-test-environment
 #   ogx stack list-deps <config> | xargs -L1 uv pip install
@@ -309,7 +414,10 @@ check_provider_dependencies() {
 
     if [[ "$INSTALL_DEPS" == true ]]; then
         echo "Installing missing provider dependencies: ${missing[*]}"
-        ogx stack list-deps "$config_name" | xargs -L1 uv pip install
+        if ! ogx stack list-deps "$config_name" | xargs -L1 uv pip install; then
+            echo "Failed to install provider dependencies for '$config_name'" >&2
+            return 1
+        fi
         return 0
     fi
 
@@ -393,12 +501,13 @@ run_client_ts_tests() {
         npm install "$TS_CLIENT_PATH" --silent
     else
         # It's an npm version specifier - install from npm
+        # (no --silent: it suppresses even npm errors, which hid this install's ETARGET failure from CI logs)
         echo "Installing ogx-client@${TS_CLIENT_PATH} from npm"
         if [[ "${CI:-}" == "true" || "${CI:-}" == "1" ]]; then
             npm ci --silent
-            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}"
         else
-            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}"
         fi
     fi
 
@@ -722,7 +831,9 @@ if [[ -n "$STACK_CONFIG" ]]; then
     STACK_CONFIG_ARG="--stack-config=$STACK_CONFIG"
 fi
 
-# Run Python tests unless typescript-only mode
+# Run Python tests unless typescript-only mode.
+# The embedding model comes from the setup defaults (tests/integration/suites.py)
+# so setups with a remote provider can record/replay embedding calls.
 if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
     pytest -s -v $PYTEST_TARGET \
         $STACK_CONFIG_ARG \
@@ -730,7 +841,6 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         -k "$PYTEST_PATTERN" \
         $EXTRA_PARAMS \
         --color=yes \
-        --embedding-model=sentence-transformers/nomic-ai/nomic-embed-text-v1.5 \
         --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?

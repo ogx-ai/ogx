@@ -6,10 +6,6 @@ inputs:
     description: 'Client version to install on non-release branches (latest or published). Ignored on release branches.'
     required: false
     default: ""
-  sdk_install_url:
-    description: 'URL to install Python SDK from (for testing preview builds). If provided, overrides client-version.'
-    required: false
-    default: ""
   branch:
     description: 'Explicit branch override (used by scheduled CI to pass the matrix branch)'
     required: false
@@ -30,15 +26,6 @@ runs:
       id: configure
       shell: bash
       run: |
-        # If sdk_install_url is provided, use it directly
-        if [ -n "${{ inputs.sdk_install_url }}" ]; then
-          echo "Using provided sdk_install_url: ${{ inputs.sdk_install_url }}"
-          echo "generate=false" >> $GITHUB_OUTPUT
-          echo "install-after-sync=true" >> $GITHUB_OUTPUT
-          echo "install-source=${{ inputs.sdk_install_url }}" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-
         # Determine the branch we're working with
         # Use explicit branch input if provided (for scheduled CI), otherwise detect from GitHub context
         if [ -n "${{ inputs.branch }}" ]; then
@@ -93,15 +80,28 @@ runs:
     - name: Install openapi-generator-cli (SDK generation)
       if: steps.configure.outputs.generate == 'true'
       shell: bash
+      # Wrapper version intentionally not pinned: the generator JAR version that
+      # determines SDK output is pinned in client-sdks/openapi/openapitools.json.
       run: npm install -g @openapitools/openapi-generator-cli
+
+    # Cache the generator JAR (downloaded from Maven Central on first use) to
+    # avoid repeated large downloads and rate-limit (HTTP 429) failures in CI.
+    # The key tracks openapitools.json so the cache invalidates when the pinned
+    # generator version changes.
+    - name: Cache openapi-generator JAR (SDK generation)
+      if: steps.configure.outputs.generate == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+      with:
+        path: ~/.openapi-generator
+        key: openapi-generator-${{ runner.os }}-${{ hashFiles('client-sdks/openapi/openapitools.json') }}
 
     - name: Generate ogx-client SDK
       if: steps.configure.outputs.generate == 'true'
       shell: bash
       working-directory: client-sdks/openapi
       run: |
-        echo "Generating ogx-client SDK (OPEN=0) from checkout..."
-        make sdk OPEN=0
+        echo "Generating ogx-client SDK from checkout..."
+        make sdk
 
         PY_FILE_COUNT=$(find sdks/python -name "*.py" | wc -l)
         echo "Generated Python files: $PY_FILE_COUNT"

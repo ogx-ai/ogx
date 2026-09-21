@@ -793,10 +793,17 @@ class OpenAICompletion(BaseModel):
     """Response from an OpenAI-compatible completion request."""
 
     id: str = Field(..., description="The ID of the completion.")
-    choices: list[OpenAICompletionChoice] = Field(..., min_length=1, description="List of choices.")
+    # The final usage-only chunk (stream_options.include_usage) carries an empty
+    # choices list, so choices must not require at least one item.
+    choices: list[OpenAICompletionChoice] = Field(..., description="List of choices.")
     created: int = Field(..., ge=0, description="The Unix timestamp in seconds when the completion was created.")
     model: str = Field(..., description="The model that was used to generate the completion.")
     object: Literal["text_completion"] = Field(default="text_completion", description="The object type.")
+    usage: OpenAIChatCompletionUsage | None = Field(
+        default=None,
+        json_schema_extra=remove_null_from_anyof,
+        description="Token usage information (typically included in the final chunk with stream_options).",
+    )
 
 
 @json_schema_type

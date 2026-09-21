@@ -4984,7 +4984,6 @@ components:
           description: List of choices.
           items:
             $ref: '#/components/schemas/OpenAICompletionChoice'
-          minItems: 1
           title: Choices
           type: array
         created:
@@ -5002,6 +5001,10 @@ components:
           type: string
           enum:
           - text_completion
+        usage:
+          $ref: '#/components/schemas/OpenAIChatCompletionUsage'
+          description: Token usage information (typically included in the final chunk with stream_options).
+          nullable: true
       required:
       - id
       - choices

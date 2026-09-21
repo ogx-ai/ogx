@@ -11,6 +11,7 @@ import pytest
 
 from ogx.providers.inline.responses.builtin.responses.streaming import (
     StreamingResponseOrchestrator,
+    _ContextLengthRetryError,
     convert_tooldef_to_chat_tool,
 )
 from ogx.providers.inline.responses.builtin.responses.types import ChatCompletionContext, ToolContext
@@ -28,10 +29,14 @@ from ogx_api.inference.models import (
     OpenAIChatCompletionToolCallFunction,
     OpenAIChatCompletionUsage,
     OpenAIChoice,
+    OpenAIResponseFormatText,
+    OpenAISystemMessageParam,
+    OpenAIUserMessageParam,
 )
 from ogx_api.openai_responses import (
     OpenAIResponseInputToolMCP,
     OpenAIResponseReasoning,
+    OpenAIResponseText,
 )
 
 
@@ -570,3 +575,122 @@ class TestSummarizeReasoning:
         call_args = mock_inference.openai_chat_completion.call_args[0][0]
         user_msg = call_args.messages[1].content
         assert "Preserve the key logical steps" in user_msg
+
+
+# ---------------------------------------------------------------------------
+# create_response context-length-retry-exhaustion regression tests
+# See: https://github.com/ogx-ai/ogx/issues/6501
+# ---------------------------------------------------------------------------
+
+
+def _make_ctx(messages: list) -> ChatCompletionContext:
+    return ChatCompletionContext(
+        model="test-model",
+        messages=messages,
+        response_tools=None,
+        temperature=None,
+        top_p=None,
+        response_format=OpenAIResponseFormatText(),
+        tool_context=None,
+        inputs="test input",
+        tool_choice=None,
+    )
+
+
+def _make_response_orchestrator(ctx: ChatCompletionContext, max_infer_iters: int) -> StreamingResponseOrchestrator:
+    return StreamingResponseOrchestrator(
+        inference_api=AsyncMock(),
+        ctx=ctx,
+        response_id="resp_test",
+        created_at=0,
+        text=OpenAIResponseText(),
+        max_infer_iters=max_infer_iters,
+        tool_executor=MagicMock(),
+        instructions=None,
+    )
+
+
+def _raising_inference_loop(exc: Exception):
+    """Build a fake _run_inference_loop that always raises `exc` immediately."""
+
+    async def fake_loop(messages, output_messages, chat_tool_choice, allowed_tool_names, ic):
+        if False:  # pragma: no cover - makes this an async generator
+            yield
+        raise exc
+
+    return fake_loop
+
+
+class TestContextLengthRetryExhaustion:
+    """When truncation="auto" exhausts every retry without succeeding, create_response
+    must report status "failed", never the default "completed" (issue #6501)."""
+
+    async def test_no_turns_left_to_drop_reports_failed_not_completed(self):
+        # A single system message has no droppable turns (system/developer messages
+        # are protected), so the very first context-length error should immediately
+        # exhaust truncation.
+        ctx = _make_ctx([OpenAISystemMessageParam(content="you are a helpful assistant")])
+        orch = _make_response_orchestrator(ctx, max_infer_iters=3)
+        orch._run_inference_loop = _raising_inference_loop(_ContextLengthRetryError())
+
+        events = [event async for event in orch.create_response()]
+
+        assert events[-1].type == "response.failed"
+        assert events[-1].response.status == "failed"
+        assert events[-1].response.error is not None
+        assert events[-1].response.error.code == "context_length_exceeded"
+
+    async def test_max_infer_iters_exhausted_reports_failed_not_completed(self):
+        # Three droppable turns but only two retry attempts: every attempt still
+        # finds a turn to drop, so the outer for-loop runs out of iterations
+        # (falls into its `else` clause) without ever breaking out successfully.
+        messages = [
+            OpenAIUserMessageParam(content="turn one"),
+            OpenAIUserMessageParam(content="turn two"),
+            OpenAIUserMessageParam(content="turn three"),
+        ]
+        ctx = _make_ctx(messages)
+        orch = _make_response_orchestrator(ctx, max_infer_iters=2)
+        orch._run_inference_loop = _raising_inference_loop(_ContextLengthRetryError())
+
+        events = [event async for event in orch.create_response()]
+
+        assert events[-1].type == "response.failed"
+        assert events[-1].response.status == "failed"
+
+    async def test_retry_truncates_from_grown_messages_not_stale_outer_copy(self):
+        # _run_inference_loop can grow the conversation internally (e.g. across a
+        # tool-calling round) via a local reassignment that never propagates back to
+        # create_response's own `messages` variable. The retry must truncate from
+        # what _run_inference_loop actually sent (ic.messages), not create_response's
+        # stale, smaller copy -- otherwise it either truncates the wrong turn or (as
+        # in this case) drops everything when only the stale copy has droppable turns.
+        stale_outer_messages = [OpenAIUserMessageParam(content="second turn")]
+        grown_messages = [
+            OpenAIUserMessageParam(content="first turn"),
+            OpenAIUserMessageParam(content="second turn"),
+        ]
+        ctx = _make_ctx(stale_outer_messages)
+        orch = _make_response_orchestrator(ctx, max_infer_iters=3)
+
+        calls: list[list] = []
+
+        async def fake_loop(messages, output_messages, chat_tool_choice, allowed_tool_names, ic):
+            calls.append(list(messages))
+            if len(calls) == 1:
+                ic.messages = grown_messages
+                raise _ContextLengthRetryError()
+            ic.final_status = "completed"
+            if False:  # pragma: no cover - makes this an async generator
+                yield
+
+        orch._run_inference_loop = fake_loop
+
+        events = [event async for event in orch.create_response()]
+
+        assert len(calls) == 2
+        # Retry drops only the oldest of the two turns _run_inference_loop actually
+        # saw, leaving "second turn" -- not the stale outer list truncated to nothing.
+        assert len(calls[1]) == 1
+        assert calls[1][0].content == "second turn"
+        assert events[-1].type == "response.completed"

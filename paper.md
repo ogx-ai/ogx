@@ -49,21 +49,19 @@ bibliography: paper.bib
 
 # Summary
 
-OGX (Open GenAI Stack), formerly Llama Stack [@llamastack], is an open-source AI application server and Python library that implements the APIs of major frontier labs (OpenAI, Anthropic, Google) with pluggable backend providers [@ogx]. Teams building agentic AI applications---such as retrieval-augmented generation (RAG) pipelines, multi-turn conversational agents, and tool-calling workflows---can develop against a single, stable API surface and deploy with any combination of inference engine, vector database, and safety backend, without changing application code.
+OGX (Open GenAI Stack), formerly Llama Stack [@llamastack], is an open-source AI application server and Python library with interchangeable backend providers [@ogx]. Teams building retrieval-augmented generation (RAG) pipelines, conversational agents, and tool-calling workflows can change their inference engine and vector database through server configuration without rewriting application code.
 
-OGX's primary API focus is the Responses API for server-side agentic orchestration, conforming to the Open Responses specification [@openresponses]. The server also exposes Chat Completions, Embeddings, Vector Stores, Files, and Batches endpoints. Beyond OpenAI compatibility, OGX natively supports the Anthropic Messages API (`/v1/messages`) and Google GenAI Interactions API (`/v1alpha/interactions`), allowing teams using any of the three major client SDKs to connect to the same server. OGX supports over 20 inference providers (including vLLM, Ollama, OpenAI, Anthropic, Bedrock, and Gemini), 13 vector store backends, and 7 safety providers. It can run as an HTTP server for production deployments or be imported directly as a Python library for scripting and notebooks. A companion Kubernetes Operator [@ogxk8soperator] automates deployment lifecycle management through custom resources, supporting multi-architecture builds, hot-swappable distribution images, and both shared and per-tenant isolation topologies. Together, OGX and its operator serve as the self-hosted, model-agnostic backend for AI-powered developer tools such as Claude Code, Codex CLI, OpenCode, and OpenHands.
+OGX implements OpenAI, Anthropic, and Google APIs, with the Responses API for server-side orchestration as its primary focus [@openresponses]. The cited v1.0.3 release registers 23 inference provider types and 13 vector I/O provider types spanning 10 distinct storage backends; inline and remote variants count separately as provider types. A companion Kubernetes Operator [@ogxk8soperator] manages deployments, including shared and per-tenant instances. Together, OGX and its operator provide a self-hosted backend for AI-powered developer tools such as Claude Code, Codex CLI, OpenCode, and OpenHands.
 
 # Statement of Need
 
 AI application development today is tightly coupled to proprietary API providers. While inference-only workloads can increasingly be swapped across providers---vLLM, for example, supports the Responses API for basic inference---applications that rely on the full stack (retrieval, tool calling, conversation state, safety guardrails) remain difficult to migrate without rewriting significant application logic. This coupling limits reproducibility, makes comparisons across model providers difficult, and prevents teams from running AI workloads on controlled infrastructure---a requirement in regulated, privacy-sensitive, and air-gapped environments.
 
-Existing open-source tools address parts of this problem but not the whole. Inference engines like vLLM [@kwon2023vllm] and SGLang [@sglang] serve models efficiently but do not provide retrieval, tool calling, or conversation management. Gateway proxies like LiteLLM route requests across providers but do not execute the agentic loop or manage vector stores. Client-side frameworks like LangChain [@langchain] and LangGraph [@langgraph] provide developer abstractions but push orchestration, state management, and security enforcement to the application layer.
-
-OGX fills this gap by providing a complete, self-hosted AI application server that implements the OpenAI API surface---with the Responses API as its primary focus---alongside Anthropic Messages and Google GenAI Interactions compatibility layers. Developers write code against standard endpoints (`/v1/responses`, `/v1/chat/completions`, `/v1/vector_stores`) and swap the underlying infrastructure through configuration, not code changes. This decouples three decisions that are currently entangled: which SDK to use, which model to run, and where to deploy.
+OGX addresses this need through standard APIs and configurable infrastructure. Researchers can compare backends while keeping retrieval, tool authorization, and conversation handling in one server. This separates the choice of client SDK, model, and deployment environment, supporting reproducible configurations on controlled infrastructure.
 
 # State of the Field
 
-The AI application ecosystem has stratified into layers that each solve a subset of the deployment problem. OGX continues the Llama Stack project under a renamed, model-agnostic mission; the relevant comparison is therefore the server-side API layer that OGX provides versus adjacent inference engines, gateways, and client-side frameworks.
+OGX continues Llama Stack under a renamed, model-agnostic mission. Its server-side API layer complements inference engines, gateways, and client-side frameworks, which address different parts of the deployment problem.
 
 **Inference engines** (vLLM [@kwon2023vllm], SGLang [@sglang], Ollama) focus on efficient model serving. They optimize throughput and latency but do not provide retrieval, conversation state, tool execution, or safety guardrails. An application using vLLM for inference must separately integrate a vector database, implement its own agentic loop, and manage multi-turn state.
 
@@ -73,15 +71,17 @@ The AI application ecosystem has stratified into layers that each solve a subset
 
 **Proprietary platforms** (OpenAI's Responses API [@openaiResponsesAPI], Databricks Mosaic AI [@databricksAgentFramework]) offer integrated experiences but couple applications to a specific vendor's infrastructure and pricing.
 
-OGX occupies a distinct position: a self-hosted, vendor-neutral server that implements the full API surface---inference, retrieval, tool execution, conversation management, and safety---with pluggable providers at every layer. Its conformance to the Open Responses specification [@openresponses] ensures interoperability with any client that speaks the same protocol. It does not compete with client-side frameworks; it is the infrastructure they deploy against when reproducibility, provider portability, and centralized policy enforcement matter.
+OGX integrates inference, retrieval, tool execution, conversation management, and safety behind Open Responses-compatible APIs [@openresponses]. Combining these responsibilities in a server addresses a different trust boundary from extending a client-side framework: applications share centralized policy enforcement and provider configuration while retaining their own agent logic.
 
 # Software Design
 
 ## Provider Architecture
 
-OGX's core abstraction is the pluggable provider. Each API capability (inference, vector storage, safety, tool runtime, file processing) is defined by a Protocol interface in the lightweight `ogx-api` package, allowing third-party providers to implement the contract without depending on the full server. Concrete providers implement these interfaces for specific backends: `remote::openai` and `remote::anthropic` for hosted APIs, `remote::vllm` for self-hosted GPU inference, `inline::faiss` and `remote::pgvector` for vector search, and so on. A routing layer dispatches requests to provider instances based on logical resource identifiers, enabling multiple providers to serve the same API simultaneously---for example, Ollama handling local models while OpenAI handles hosted models, both behind `/v1/chat/completions`.
+OGX's core abstraction is the pluggable provider. Provider-backed capabilities (inference, vector storage, tool runtime, file processing) are defined by Protocol interfaces in the lightweight `ogx-api` package, allowing third-party providers to implement the contract without depending on the full server. Concrete providers implement these interfaces for specific backends: `remote::openai` and `remote::anthropic` for hosted APIs, `remote::vllm` for self-hosted GPU inference, `inline::faiss` and `remote::pgvector` for vector search, and so on. A routing layer dispatches requests to provider instances based on logical resource identifiers, enabling multiple providers to serve the same API simultaneously---for example, Ollama handling local models while OpenAI handles hosted models, both behind `/v1/chat/completions`.
 
-A *distribution* packages a specific set of providers and configuration into a deployable unit, decoupling application logic from infrastructure selection. This design favors reproducible configuration over ad hoc application code: teams can prototype with lightweight inline providers (Ollama, sqlite-vec [@sqlitevec]) and deploy to production backends (vLLM, pgvector) by changing the distribution, not the application.
+A *distribution* packages a specific set of providers and configuration into a deployable unit, decoupling application logic from infrastructure selection. This design favors reproducible configuration over ad hoc application code: teams can prototype with lightweight local backends (Ollama, sqlite-vec [@sqlitevec]) and deploy to production backends (vLLM, pgvector) by changing the distribution, not the application.
+
+Content moderation uses a separate integration path. Optional Responses guardrails send input and generated text to a server-configured, OpenAI-compatible `moderation_endpoint`. A request enables these checks with `guardrails=true`; there is no Safety provider protocol. Changing the moderation service requires a compatible endpoint and updated server configuration.
 
 ## Dual Deployment Model
 
@@ -89,13 +89,11 @@ OGX runs in two modes. **Server mode** exposes HTTP endpoints accessible from an
 
 ## Multi-SDK Compatibility
 
-OGX serves three client SDK protocols from a single server. The **OpenAI-compatible endpoints** (`/v1/chat/completions`, `/v1/responses`, `/v1/vector_stores`) are the primary interface and the Responses API implementation conforms to the Open Responses specification [@openresponses]. The **Anthropic Messages endpoint** (`/v1/messages`) and **Google GenAI Interactions endpoint** (`/v1alpha/interactions`) provide native compatibility for teams using those SDKs. This portability comes with a trade-off: OGX must normalize provider-specific behavior into stable API contracts while still exposing enough backend-specific configuration for real deployments.
+OGX serves three client SDK protocols from a single server. The stable **OpenAI-compatible endpoints** (`/v1/chat/completions`, `/v1/responses`, `/v1/vector_stores`) are the primary interface and the Responses API implementation conforms to the Open Responses specification [@openresponses]. The **Anthropic Messages endpoint** (`/v1/messages`) is also stable. The **Google GenAI Interactions endpoint** (`/v1alpha/interactions`) is experimental and may change incompatibly between releases. This portability comes with a trade-off: OGX must normalize provider-specific behavior into API contracts while still exposing enough backend-specific configuration for real deployments.
 
 ## Server-Side Agentic Orchestration
 
 The Responses API implements server-side agentic orchestration: the inference-tool-inference loop executes within the server process, not the client [@openaiResponsesAPI]. This centralizes security enforcement, tool authorization, and conversation state management, at the cost of moving some flexibility from application code into server configuration. Built-in tools include file search (RAG over vector stores), web search, code interpretation, and Model Context Protocol (MCP) [@mcp] integration for external tool servers.
-
-OGX is extending server-side execution with a Containers API and a Skills API. The Containers API (`/v1/containers`) manages sandboxed execution environments---matching the OpenAI Containers API---enabling models to execute shell commands in isolated Docker, Podman, or Kubernetes containers via a `shell` tool in the Responses API. The Skills API (`/v1alpha/skills`) manages versioned skill bundles that package tools, prompts, and configuration into reusable, composable units. Together, these APIs move code execution and task composition onto the server, extending the same trust-boundary principle that governs retrieval and tool authorization.
 
 Unlike inference engines and API gateways that treat requests as stateless, OGX manages state natively: the Conversations API persists multi-turn history with tenant-scoped isolation, the Prompts API provides versioned prompt templates, and a resource registry tracks models, vector stores, and files as first-class server objects. A Compaction API summarizes long histories to manage context window limits. Telemetry is built on OpenTelemetry (OTEL) with MLflow [@mlflow] tracing integration for logging spans, tool calls, and retrieval steps to existing ML experiment tracking infrastructure. This state and observability layer is what makes OGX a complete application server rather than a stateless proxy.
 
@@ -107,7 +105,7 @@ The OGX Kubernetes Operator [@ogxk8soperator] provides declarative deployment th
 
 # Example Usage
 
-The following example demonstrates building a RAG agent using the standard OpenAI SDK against an OGX server. The same code works regardless of which inference provider or vector store backend is configured:
+This RAG example uses the standard OpenAI SDK against OGX, with inference and vector storage selected through server configuration:
 
 ```python
 from openai import OpenAI
@@ -128,7 +126,7 @@ response = client.responses.create(
 print(response.output_text)
 ```
 
-Switching from a local Ollama backend to a production vLLM cluster requires changing only the server's distribution configuration---the client code above remains identical. Published tutorials demonstrate this portability across diverse enterprise backends, including IBM watsonx.ai with Milvus vector storage [@ibm_rag_milvus] and Oracle Cloud Infrastructure with OCI AI Blueprints [@oracle_oci_ogx].
+Switching from Ollama to vLLM changes the server configuration while preserving this client code. Published tutorials cover IBM watsonx.ai with Milvus [@ibm_rag_milvus] and Oracle Cloud Infrastructure with OCI AI Blueprints [@oracle_oci_ogx].
 
 # Research Impact Statement
 
@@ -140,7 +138,7 @@ As of June 2026, the project has over 8,400 GitHub stars, 242 contributors, 4,00
 
 # AI Usage Disclosure
 
-Generative AI tools, including GitHub Copilot and Anthropic Claude models available during development, were used for code completion, documentation drafting, and paper drafting. Assistance was limited to generating candidate text or code that human contributors reviewed, edited, tested, and validated. Core architectural decisions, API design, the security model, and final paper content were made by human authors.
+Generative AI tools, including GitHub Copilot, Anthropic Claude, and OpenAI Codex (GPT-6), were used for code completion, documentation drafting, and paper drafting. Assistance was limited to generating candidate text or code that human contributors reviewed, edited, tested, and validated. Core architectural decisions, API design, the security model, and final paper content were made by human authors.
 
 # Acknowledgements
 

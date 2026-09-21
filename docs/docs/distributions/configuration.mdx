@@ -1260,4 +1260,8 @@ providers:
       moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
 ```
 
-With this configured, guardrail IDs passed in Responses requests are forwarded as the `model` in moderation requests to that endpoint.
+With this configured, enable moderation per Responses request with `guardrails: true`.
+When using the OpenAI Python SDK, pass `extra_body={"guardrails": True}`. OGX sends
+the text as `input` to the moderation endpoint; requests do not select shield IDs or
+moderation models. For services that require authentication, configure
+`moderation_headers` on the server's builtin responses provider.

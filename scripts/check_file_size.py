@@ -18,7 +18,7 @@ MAX_LINES = 1000
 
 EXCLUDE_PATTERNS = [
     "docs/static/",
-    "client-sdks/stainless/",
+    "client-sdks/spec/",
     "tests/integration/recordings/",
 ]
 

@@ -97,7 +97,9 @@ uv run --no-sync ./scripts/integration-tests.sh \
 Key flags: `--stack-config` (required), `--setup` (`gpt`, `ollama`, `vllm`),
 `--inference-mode` (`replay`, `record`, `record-if-missing`), `--file` (single file),
 `--pattern` (pytest `-k` filter), `--suite` (`base`, `responses`, `vision`),
-`--install-deps` (install missing provider dependencies before running tests).
+`--install-deps` (install missing provider dependencies before running tests),
+`--client-version` (`latest` generates and installs the in-repo ogx-client from
+`client-sdks/openapi`, `published` verifies the uv.lock-resolved PyPI version).
 
 The runner preflights the provider dependencies for the stack config — the
 same `ogx stack list-deps <config> | xargs -L1 uv pip install` step CI runs —

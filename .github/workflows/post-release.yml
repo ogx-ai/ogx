@@ -100,10 +100,35 @@ jobs:
           echo "Next fallback: ${NEXT_FALLBACK}"
           echo "Release branch: ${RELEASE_BRANCH}"
 
+      - name: Check whether this release advances main
+        id: main-version
+        env:
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          MAIN_FALLBACK=$(git show origin/main:pyproject.toml | sed -n 's/^fallback_version = "\(.*\)"/\1/p')
+          MAIN_VERSION="${MAIN_FALLBACK%%.dev*}"
+          if [[ ! "$MAIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Failed to parse main fallback ${MAIN_FALLBACK}"
+            exit 1
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "update_main=false" >> "$GITHUB_OUTPUT"
+            echo "Release ${VERSION} is not stable; leaving main's version and dev tags unchanged"
+            exit 0
+          fi
+          NEWEST_VERSION=$(printf '%s\n' "$VERSION" "$MAIN_VERSION" | sort -V | tail -1)
+          if [ "$NEWEST_VERSION" == "$VERSION" ]; then
+            echo "update_main=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "update_main=false" >> "$GITHUB_OUTPUT"
+            echo "Release ${VERSION} is older than main ${MAIN_VERSION}; leaving main's version and dev tags unchanged"
+          fi
+
       # -----------------------------------------------------------------------
       # Step A: Tag main with the next dev tag
       # -----------------------------------------------------------------------
       - name: Push dev tag to main
+        if: steps.main-version.outputs.update_main == 'true'
         run: |
           DEV_TAG="${{ steps.parse.outputs.next_dev_tag }}"
 
@@ -126,6 +151,7 @@ jobs:
       # Step B: Bump fallback_version on main and open PR
       # -----------------------------------------------------------------------
       - name: Create fallback_version bump PR
+        if: steps.main-version.outputs.update_main == 'true'
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
