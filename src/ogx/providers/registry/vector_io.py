@@ -674,7 +674,7 @@ To use Milvus in your OGX project, follow these steps:
 If you want to use inline Milvus, you can install:
 
 ```bash
-pip install pymilvus[milvus-lite]
+pip install "pymilvus[milvus-lite]" "milvus-lite<3.0"
 ```
 
 If you want to use remote Milvus, you can install:
@@ -851,7 +851,12 @@ For more details on TLS configuration, refer to the [TLS setup guide](https://mi
         InlineProviderSpec(
             api=Api.vector_io,
             provider_type="inline::milvus",
-            pip_packages=["pymilvus[milvus-lite]>=3.0.1"] + DEFAULT_VECTOR_IO_DEPS,
+            pip_packages=[
+                "pymilvus[milvus-lite]>=3.0.1",
+                # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts
+                "milvus-lite>=2.5.1,<3.0",
+            ]
+            + DEFAULT_VECTOR_IO_DEPS,
             module="ogx.providers.inline.vector_io.milvus",
             config_class="ogx.providers.inline.vector_io.milvus.MilvusVectorIOConfig",
             api_dependencies=[Api.inference],
