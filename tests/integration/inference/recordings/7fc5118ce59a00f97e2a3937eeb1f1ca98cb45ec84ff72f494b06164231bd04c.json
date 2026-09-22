@@ -83,18 +83,27 @@
         "id": "rec-7fc5118ce59a",
         "choices": [
           {
-            "finish_reason": "stop",
+            "finish_reason": "tool_calls",
             "index": 0,
             "logprobs": null,
             "message": {
-              "content": "To assist you, could you please provide more details about what you need? For example, is there a specific task, query, or action you'd like to perform?",
+              "content": "",
               "refusal": null,
               "role": "assistant",
               "annotations": null,
               "audio": null,
               "function_call": null,
-              "tool_calls": null,
-              "reasoning_content": "Okay, let's see. The user wants me to use one of the available tools. The tools provided are simple, complex, and with_output. The simple function takes an argument x of type string. The complex function requires data which is an object with a nested array of numbers. The with_output function takes an input string.\n\nHmm, the user's query is about using a tool, but they didn't specify what exact task they need. The initial message is just a greeting. Wait, maybe they want to test the tools or demonstrate something. Since there's no specific question, maybe I need to ask for more details. But the instructions say to use one of the tools. Since the user hasn't provided a clear query, perhaps I should check if there's a missing context. Wait, maybe I should respond by asking for more information to determine which tool to use. For example, they might need help with a specific task like processing data, performing a calculation, or generating a result. But without that, I can't proceed. So the best approach is to prompt them to clarify their request so I can select the appropriate tool.\n"
+              "tool_calls": [
+                {
+                  "id": "B0TCF4MbeFhcZDcFDqmIbNttSuhdVy1A",
+                  "function": {
+                    "arguments": "{\"x\": \"example_value\"}",
+                    "name": "simple"
+                  },
+                  "type": "function"
+                }
+              ],
+              "reasoning_content": "Okay, the user wants me to use one of the available tools. Let me check the functions provided. There's the simple function with a parameter x, the complex function which requires a data object with nested numbers, and the with_output function which takes an input string.\n\nThe user's query is a bit vague, but since they mentioned using one of the tools, I need to determine which one applies. The simplest approach is to check if there's a clear parameter needed. The complex function requires a data object with nested numbers, which might be relevant if the user is expecting a nested array. However, the simple function's parameter is just x, which is a string. Since the user hasn't provided specific data or parameters, maybe the simplest answer is to use the simple function. Alternatively, if there's no data to process, the complex function might not be necessary. But since the user is asking to use a tool, I should pick one based on the information given. The with_output function takes an input string, so perhaps the user wants to pass some data into it. But without specific details, I might not know. However, the tools don't have any parameters beyond what's listed, so maybe the correct answer is to use the complex function. Wait, the complex function's data is an object with nested numbers. But the user hasn't provided that. Hmm. Maybe the user expects me to use the simple function. Alternatively, maybe the answer is to call the complex function with an empty data. But since the tools don't specify that, perhaps the correct action is to use the simple function. Let me go with the simple function as the tool to use.\n"
             }
           }
         ],
@@ -105,9 +114,9 @@
         "service_tier": null,
         "system_fingerprint": "b10964-b29c606e2",
         "usage": {
-          "completion_tokens": 268,
+          "completion_tokens": 361,
           "prompt_tokens": 262,
-          "total_tokens": 530,
+          "total_tokens": 623,
           "completion_tokens_details": null,
           "prompt_tokens_details": {
             "audio_tokens": null,
@@ -117,13 +126,13 @@
         "timings": {
           "cache_n": 51,
           "prompt_n": 211,
-          "prompt_ms": 688.244,
-          "prompt_per_token_ms": 3.26181990521327,
-          "prompt_per_second": 306.57731850913336,
-          "predicted_n": 268,
-          "predicted_ms": 8501.41,
-          "predicted_per_token_ms": 31.840486891385765,
-          "predicted_per_second": 31.406554912655665
+          "prompt_ms": 988.675,
+          "prompt_per_token_ms": 4.6856635071090045,
+          "prompt_per_second": 213.41694692391334,
+          "predicted_n": 361,
+          "predicted_ms": 11696.98,
+          "predicted_per_token_ms": 32.49161111111111,
+          "predicted_per_second": 30.777174963110138
         }
       }
     },
