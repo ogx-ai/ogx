@@ -4,11 +4,13 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from fastapi import APIRouter
+from fastapi import APIRouter, FastAPI
+from fastapi.openapi.utils import get_openapi
 
-from ogx.core.server.fastapi_router_registry import build_fastapi_router, get_router_routes
+from ogx.core.server.fastapi_router_registry import build_fastapi_router, collect_api_routes, get_router_routes
 from ogx.core.server.routes import find_matching_route, initialize_route_impls
 from ogx_api.datatypes import Api
 
@@ -30,6 +32,37 @@ def test_get_router_routes_collects_included_router_routes() -> None:
     router.include_router(nested_router)
 
     assert sorted(route.path for route in get_router_routes(router)) == ["/v1/nested", "/v1/top"]
+
+
+def test_collect_api_routes_applies_include_wrapper_prefix() -> None:
+    """Stands in for the fastapi >= 0.137 wrapper, so the recursion is covered below that version too."""
+    nested_router = APIRouter()
+
+    @nested_router.get("/items/{item_id}")
+    async def nested_endpoint(item_id: str) -> None:
+        return None
+
+    wrapper = SimpleNamespace(original_router=nested_router, include_context=SimpleNamespace(prefix="/v1/nested"))
+
+    assert [route.path for route in collect_api_routes([wrapper])] == ["/v1/nested/items/{item_id}"]
+
+
+def test_get_router_routes_matches_served_paths_of_prefixed_include() -> None:
+    """A prefix passed to include_router() is part of the served path, as fastapi's own schema shows."""
+    nested_router = APIRouter()
+
+    @nested_router.get("/items/{item_id}")
+    async def nested_endpoint(item_id: str) -> None:
+        return None
+
+    router = APIRouter()
+    router.include_router(nested_router, prefix="/v1/nested")
+
+    app = FastAPI()
+    app.include_router(router)
+    schema = get_openapi(title="test", version="1.0.0", routes=app.routes)
+
+    assert sorted(route.path for route in get_router_routes(router)) == sorted(schema["paths"])
 
 
 def test_get_router_routes_collects_admin_router_routes() -> None:

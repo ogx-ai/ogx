@@ -14,6 +14,7 @@ External APIs can also provide a `create_router` function in their module
 (the same module that provides `available_providers`).
 """
 
+import copy
 import importlib
 import importlib.util
 from collections.abc import Callable
@@ -21,6 +22,7 @@ from typing import Any, cast
 
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
+from starlette.routing import compile_path
 
 from ogx.log import get_logger
 from ogx_api.datatypes import Api, ExternalApiSpec
@@ -95,17 +97,36 @@ def build_fastapi_router(api: "Api", impl: Any) -> APIRouter | None:
     return cast(APIRouter, router_factory(impl))
 
 
-def collect_api_routes(routes: list[Any]) -> list[APIRoute]:
-    """Collect all APIRoute objects, recursing into included routers."""
+def _with_path_prefix(route: APIRoute, prefix: str) -> APIRoute:
+    """Copy a route with `prefix` prepended to its path, the way include_router() serves it."""
+    prefixed = copy.copy(route)
+    prefixed.path = prefix + route.path
+    prefixed.path_regex, prefixed.path_format, prefixed.param_convertors = compile_path(prefixed.path)
+    return prefixed
+
+
+def collect_api_routes(routes: list[Any], prefix: str = "") -> list[APIRoute]:
+    """Collect all APIRoute objects, recursing into included routers.
+
+    `prefix` accumulates the prefixes passed to `include_router()`. FastAPI < 0.137 baked them
+    into the included routes while flattening them into the parent; from 0.137 on they live on
+    the wrapper, so they are reapplied here to keep the collected path the served one. The other
+    include-time options (tags, deprecated, include_in_schema) are not merged — no OGX router
+    passes them, and every consumer of this helper keys off the path.
+    """
     api_routes: list[APIRoute] = []
     for route in routes:
         if isinstance(route, APIRoute):
-            api_routes.append(route)
+            api_routes.append(_with_path_prefix(route, prefix) if prefix else route)
         elif hasattr(route, "original_router"):
-            # FastAPI >= 0.137 wraps include_router() results in _IncludedRouter
-            api_routes.extend(collect_api_routes(route.original_router.routes))
+            # FastAPI >= 0.137 wraps include_router() results in _IncludedRouter, whose
+            # include_context.prefix already covers the prefix of the router it was included into.
+            include_context = getattr(route, "include_context", None)
+            api_routes.extend(
+                collect_api_routes(route.original_router.routes, prefix + getattr(include_context, "prefix", ""))
+            )
         elif hasattr(route, "routes"):
-            api_routes.extend(collect_api_routes(route.routes))
+            api_routes.extend(collect_api_routes(route.routes, prefix))
     return api_routes
 
 
