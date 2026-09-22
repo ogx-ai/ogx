@@ -251,9 +251,22 @@ server:
   tls_certfile: "/path/to/cert.pem"  # Optional: Path to TLS certificate for HTTPS
   tls_keyfile: "/path/to/key.pem"    # Optional: Path to TLS key for HTTPS
   registry_refresh_interval_seconds: 300  # Optional: Interval between registry refreshes (default: 300)
+  max_request_body_size: 104857600  # Optional: Non-upload request limit in bytes (default: 100 MiB)
+  max_file_upload_size: 104857600   # Optional: Individual file limit in bytes (default: 100 MiB)
+  limit_concurrency: 32             # Optional: Per-worker Uvicorn connection limit
+  limit_max_requests: 10000         # Optional: Exit each worker process after this many requests
+  timeout_keep_alive: 5             # Optional: Idle HTTP keep-alive timeout in seconds (default: 5)
   tenancy:                           # Optional: Multi-tenancy isolation (default: disabled)
     mode: "disabled"                 # "disabled", "single", or "multi"
 ```
+
+### Request Size and Connection Limits
+
+OGX rejects request bodies that exceed `max_request_body_size` with HTTP 413 before route parsing. Multipart upload routes use `max_file_upload_size` for individual-file validation in the Files, File Processors, Containers, and Skills routers. Skills retain their stricter built-in 50 MiB ceiling. The request-body guard allows the configured file limit plus a fixed 1 MiB multipart-envelope allowance, so a file exactly at the configured limit is not rejected merely for its multipart headers. Both server-level defaults are 100 MiB, preserving the current upload behavior.
+
+Set `limit_concurrency` to at least 2 and choose a value that fits the memory envelope of one worker. It limits connections per worker, so the process-wide bound is approximately `workers * limit_concurrency`. `limit_max_requests` is optional and terminates a process after a bounded number of requests; with multiple workers Uvicorn's parent process replaces it, while single-worker deployments require an external supervisor or orchestrator to restart it. It is not a substitute for a body-size or concurrency limit. Keep `timeout_keep_alive` short in production to avoid idle connections consuming the connection budget.
+
+For example, a two-worker deployment with a 32-connection limit accepts up to roughly 64 concurrent connections. Choose the file limit and concurrency value from measured pod memory, including the application's provider-specific upload processing; do not infer safety from a per-file limit alone.
 
 ### Registry Refresh Interval
 

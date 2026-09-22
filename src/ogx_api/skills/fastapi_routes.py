@@ -36,7 +36,8 @@ get_list_skills_request = create_query_dependency(ListSkillsRequest)
 get_list_skill_versions_request = create_query_dependency(ListSkillVersionsRequest)
 
 
-def create_router(impl: Skills) -> APIRouter:
+def create_router(impl: Skills, max_upload_size_bytes: int = MAX_ZIP_SIZE_BYTES) -> APIRouter:
+    effective_max_upload_size_bytes = min(max_upload_size_bytes, MAX_ZIP_SIZE_BYTES)
     router = APIRouter(
         prefix=f"/{OGX_API_V1ALPHA}",
         tags=["Skills"],
@@ -52,7 +53,7 @@ def create_router(impl: Skills) -> APIRouter:
     async def create_skill(
         file: Annotated[UploadFile, File(description="Zip archive containing the skill bundle.")],
     ) -> Skill:
-        content = await read_upload_with_size_limit(file, MAX_ZIP_SIZE_BYTES)
+        content = await read_upload_with_size_limit(file, effective_max_upload_size_bytes)
         safe_file = PreReadUploadFile(content, filename=file.filename, content_type=file.content_type)
         return await impl.create_skill(safe_file)
 
@@ -119,7 +120,7 @@ def create_router(impl: Skills) -> APIRouter:
         file: Annotated[UploadFile, File(description="Zip archive containing the skill bundle.")],
         default: Annotated[bool, Form(description="Whether to set this version as the default.")] = False,
     ) -> SkillVersion:
-        content = await read_upload_with_size_limit(file, MAX_ZIP_SIZE_BYTES)
+        content = await read_upload_with_size_limit(file, effective_max_upload_size_bytes)
         safe_file = PreReadUploadFile(content, filename=file.filename, content_type=file.content_type)
         request = SkillVersionCreateRequest(default=default)
         return await impl.create_skill_version(skill_id, request, safe_file)
