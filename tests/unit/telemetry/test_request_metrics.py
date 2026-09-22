@@ -5,9 +5,11 @@
 # the root directory of this source tree.
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import APIRouter
 
 from ogx.core.server.fastapi_router_registry import _ROUTER_FACTORIES
 from ogx.core.server.metrics import (
@@ -278,4 +280,19 @@ class TestBuildRouteToApiMap:
         result = build_route_to_api_map(_ROUTER_FACTORIES, {Api.admin: AsyncMock()})
 
         assert "GET:/v1alpha/admin/connectors" in result
+        assert result["GET:/v1alpha/admin/connectors"].api == "admin"
+
+    def test_maps_routes_behind_include_wrapper(self):
+        """Stands in for the fastapi >= 0.137 wrapper, so the labels stay covered below that version too."""
+        nested_router = APIRouter()
+
+        @nested_router.get("/v1alpha/admin/connectors")
+        async def list_connectors() -> None:
+            return None
+
+        stub_router = SimpleNamespace(routes=[SimpleNamespace(original_router=nested_router)])
+
+        with patch("ogx.core.server.fastapi_router_registry.build_fastapi_router", return_value=stub_router):
+            result = build_route_to_api_map(_ROUTER_FACTORIES, {Api.admin: AsyncMock()})
+
         assert result["GET:/v1alpha/admin/connectors"].api == "admin"
