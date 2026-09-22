@@ -16,7 +16,7 @@ from ogx_api import OpenAICompletionRequestWithExtraBody
 
 
 class TestTheGridConfig:
-    """Tests for The Grid inference provider config and adapter wiring."""
+    """Tests for The Grid AI inference provider config and adapter wiring."""
 
     def test_default_base_url(self):
         config = TheGridImplConfig(api_key="test-key")
@@ -58,7 +58,7 @@ class TestTheGridConfig:
             await adapter.openai_embeddings(None)  # type: ignore[arg-type]
 
     async def test_legacy_completions_endpoint_not_supported(self):
-        """The Grid serves only /v1/chat/completions; the legacy route returns 404."""
+        """The Grid AI serves only /v1/chat/completions; the legacy route returns 404."""
         config = TheGridImplConfig(api_key="test-key")
         adapter = TheGridInferenceAdapter(config=config)
 

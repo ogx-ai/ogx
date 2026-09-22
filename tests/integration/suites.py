@@ -143,7 +143,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     ),
     "thegrid": Setup(
         name="thegrid",
-        description="The Grid market instruments over its OpenAI-compatible API",
+        description="The Grid AI market instruments over its OpenAI-compatible API",
         defaults={
             "text_model": "thegrid/text-standard",
         },
@@ -352,7 +352,7 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         default_setup="gemini",
     ),
     # Bedrock-specific tests with pre-recorded responses (no live API calls in CI)
-    # The Grid serves chat completions only: /v1/completions and /v1/embeddings
+    # The Grid AI serves chat completions only: /v1/completions and /v1/embeddings
     # both 404 upstream, so the suite is the OpenAI-compatible chat file. Runs
     # from recordings in CI, like the bedrock suite below.
     "thegrid": Suite(

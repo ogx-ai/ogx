@@ -16,21 +16,21 @@ DEFAULT_BASE_URL = "https://api.thegrid.ai/v1"
 
 
 class TheGridProviderDataValidator(BaseModel):
-    """Validates provider-specific request data for The Grid inference."""
+    """Validates provider-specific request data for The Grid AI inference."""
 
     thegrid_api_key: SecretStr | None = Field(
         default=None,
-        description="API key for The Grid instruments",
+        description="API key for The Grid AI instruments",
     )
 
 
 @json_schema_type
 class TheGridImplConfig(RemoteInferenceProviderConfig):
-    """Configuration for The Grid inference provider."""
+    """Configuration for The Grid AI inference provider."""
 
     base_url: HttpUrl | None = Field(
         default=HttpUrl(os.environ.get("THEGRID_BASE_URL", DEFAULT_BASE_URL)),
-        description="Base URL for The Grid API",
+        description="Base URL for The Grid AI API",
     )
 
     @classmethod

@@ -89,7 +89,7 @@ def available_providers() -> list[ProviderSpec]:
             module="ogx.providers.remote.inference.thegrid",
             config_class="ogx.providers.remote.inference.thegrid.TheGridImplConfig",
             provider_data_validator="ogx.providers.remote.inference.thegrid.config.TheGridProviderDataValidator",
-            description="The Grid inference provider for accessing market-priced inference instruments via The Grid API.",
+            description="The Grid AI inference provider for accessing market-priced inference instruments via The Grid AI API.",
         ),
         RemoteProviderSpec(
             api=Api.inference,

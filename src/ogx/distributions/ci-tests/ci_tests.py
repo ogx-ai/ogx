@@ -48,7 +48,7 @@ def get_distribution_template() -> DistributionTemplate:
         model_type=ModelType.llm,
     )
 
-    # The Grid model must be pre-registered. Its ids name market instruments
+    # The Grid AI model must be pre-registered. Its ids name market instruments
     # rather than fixed models, and the catalog is discovered from /v1/models,
     # so pinning one keeps the recorded suite deterministic.
     thegrid_model = ModelInput(

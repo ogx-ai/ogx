@@ -20,7 +20,7 @@ from .config import TheGridImplConfig
 class TheGridInferenceAdapter(OpenAIMixin):
     """Inference adapter for The Grid.
 
-    The Grid is a spot market for inference: model ids are market instruments
+    The Grid AI is a spot market for inference: model ids are market instruments
     such as `text-standard`, `code-prime` or `agent-max` rather than fixed
     models, and a request is filled by whichever supplier is competitive at the
     time. Because of this, the `model` field of a response names the model that
@@ -28,7 +28,7 @@ class TheGridInferenceAdapter(OpenAIMixin):
     requested.
 
     The chat completions API is OpenAI-compatible, so the shared `OpenAIMixin`
-    handles requests once pointed at The Grid's base URL, and the instrument
+    handles requests once pointed at The Grid AI's base URL, and the instrument
     list is discovered from `/v1/models`. See https://thegrid.ai/docs.
     """
 
@@ -43,16 +43,16 @@ class TheGridInferenceAdapter(OpenAIMixin):
         self,
         params: OpenAIEmbeddingsRequestWithExtraBody,
     ) -> OpenAIEmbeddingsResponse:
-        raise NotImplementedError("The Grid does not expose an embeddings endpoint.")
+        raise NotImplementedError("The Grid AI does not expose an embeddings endpoint.")
 
     async def openai_completion(
         self,
         params: OpenAICompletionRequestWithExtraBody,
     ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
-        """The Grid does not serve the legacy /v1/completions endpoint.
+        """The Grid AI does not serve the legacy /v1/completions endpoint.
 
         Only /v1/chat/completions is available; the legacy route returns 404.
         """
         raise NotImplementedError(
-            "The Grid does not support /v1/completions endpoint. Only /v1/chat/completions is supported."
+            "The Grid AI does not support /v1/completions endpoint. Only /v1/chat/completions is supported."
         )
