@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[openai_client-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-12dc9618c321",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Humans live on **Earth**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user is asking which planet humans live on. Let me start by recalling my knowledge. I know that Earth is our home, and we're on the planet we call Earth. But I should make sure to mention that there are other planets in our solar system. Maybe I can explain that there are six planets: Mercury, Venus, Earth, Mars, Jupiter, and Saturn. But wait, I remember that some people might confuse Earth with the planet that has a ring. Let me confirm if that's accurate. Oh right, Venus has a ring, so that's another planet. But the answer should be Earth. The user might be looking for a simple answer, so I should state that humans live on Earth. Also, I should check if there's any other planet that's commonly mentioned, but the answer is definitely Earth. Let me structure the response to be clear and concise.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 192,
+          "prompt_tokens": 15,
+          "total_tokens": 207,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 15,
+          "prompt_ms": 97.343,
+          "prompt_per_token_ms": 6.489533333333333,
+          "prompt_per_second": 154.09428515661116,
+          "predicted_n": 192,
+          "predicted_ms": 4655.651,
+          "predicted_per_token_ms": 24.37513612565445,
+          "predicted_per_second": 41.02541191339299
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
