@@ -33,6 +33,11 @@ _current_mode: str | None = None
 _current_storage: ResponseStorage | None = None
 _original_methods: dict[str, Any] = {}
 
+# Deliberately not in _original_methods: patch_inference_clients() reassigns that dict and
+# unpatch_inference_clients() clears it, while the _prepare_request patches are installed
+# once per process and never removed.
+_prepare_request_originals: dict[type, Callable[..., None]] = {}
+
 # Per-test deterministic ID counters (test_id -> id_kind -> counter)
 _id_counters: dict[str, dict[str, int]] = {}
 
@@ -318,22 +323,10 @@ def patch_httpx_for_test_id():
     except ImportError as e:
         raise ImportError("OgxClient was not found, install with `uv pip install ogx[client]`") from e
 
-    if "ogx_client_prepare_request" in _original_methods:
+    if _prepare_request_originals:
         return
 
-    _original_methods["ogx_client_prepare_request"] = OgxClient._prepare_request
-    _original_methods["openai_prepare_request"] = OpenAI._prepare_request
-
-    def patched_prepare_request(self, request):
-        # Call original first (it's a sync method that returns None)
-        # Use .get() to handle cases where the originals weren't stored yet
-        ogx_orig = _original_methods.get("ogx_client_prepare_request")
-        if ogx_orig is not None:
-            ogx_orig(self, request)
-        openai_orig = _original_methods.get("openai_prepare_request")
-        if openai_orig is not None:
-            openai_orig(self, request)
-
+    def inject_test_id(request):
         # Only inject test ID in server mode
         stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
         test_id = get_test_context()
@@ -354,10 +347,21 @@ def patch_httpx_for_test_id():
                 logger.info(f"  Test ID: {test_id}")
                 logger.info(f"  URL: {request.url}")
 
-        return None
+    def make_patched_prepare_request(original):
+        def patched_prepare_request(self, request):
+            # Call only the original of the class being patched (it's a sync method that
+            # returns None). The two originals are not interchangeable: since openai
+            # 2.44.0, OpenAI._prepare_request dereferences self._provider_runtime, an
+            # attribute only openai's own __init__ sets.
+            original(self, request)
+            inject_test_id(request)
+            return None
 
-    OgxClient._prepare_request = patched_prepare_request
-    OpenAI._prepare_request = patched_prepare_request
+        return patched_prepare_request
+
+    for client_class in (OgxClient, OpenAI):
+        _prepare_request_originals[client_class] = client_class._prepare_request
+        client_class._prepare_request = make_patched_prepare_request(client_class._prepare_request)
 
 
 def get_api_recording_mode() -> APIRecordingMode:

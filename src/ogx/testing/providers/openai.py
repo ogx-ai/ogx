@@ -39,7 +39,10 @@ def create_error(status_code: int, body: dict | None, message: str) -> APIStatus
     error_class = _ERROR_BY_STATUS.get(status_code, APIStatusError)
     request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
     response = httpx.Response(status_code, json=body or {}, request=request)
-    return error_class(message=message, response=response, body=body)
+    # openai >= 3 annotates APIStatusError.response as httpx2.Response, but only reads
+    # status_code, headers and request off it, all of which httpx.Response provides. httpx2 is
+    # not a dependency of this project, so keep building the response with httpx.
+    return error_class(message=message, response=response, body=body)  # type: ignore[arg-type]
 
 
 PROVIDER = ProviderConfig(
