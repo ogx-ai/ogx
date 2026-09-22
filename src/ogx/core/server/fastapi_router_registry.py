@@ -20,12 +20,17 @@ import importlib.util
 from collections.abc import Callable
 from typing import Any, cast
 
+import fastapi.routing
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
 from starlette.routing import compile_path
 
 from ogx.log import get_logger
 from ogx_api.datatypes import Api, ExternalApiSpec
+
+# fastapi resolves included routers itself from 0.138 on. Read through `getattr` rather
+# than a guarded import so this type-checks against either version.
+iter_route_contexts = getattr(fastapi.routing, "iter_route_contexts", None)
 
 logger = get_logger(__name__, category="core")
 
@@ -97,36 +102,60 @@ def build_fastapi_router(api: "Api", impl: Any) -> APIRouter | None:
     return cast(APIRouter, router_factory(impl))
 
 
+def _with_path(route: APIRoute, path: str) -> APIRoute:
+    """Copy a route carrying `path`, the way include_router() serves it."""
+    served = copy.copy(route)
+    served.path = path
+    served.path_regex, served.path_format, served.param_convertors = compile_path(path)
+    return served
+
+
 def _with_path_prefix(route: APIRoute, prefix: str) -> APIRoute:
     """Copy a route with `prefix` prepended to its path, the way include_router() serves it."""
-    prefixed = copy.copy(route)
-    prefixed.path = prefix + route.path
-    prefixed.path_regex, prefixed.path_format, prefixed.param_convertors = compile_path(prefixed.path)
-    return prefixed
+    return _with_path(route, prefix + route.path)
 
 
 def collect_api_routes(routes: list[Any], prefix: str = "") -> list[APIRoute]:
     """Collect all APIRoute objects, recursing into included routers.
 
-    `prefix` accumulates the prefixes passed to `include_router()`. FastAPI < 0.137 baked them
-    into the included routes while flattening them into the parent; from 0.137 on they live on
-    the wrapper, so they are reapplied here to keep the collected path the served one. The other
-    include-time options (tags, deprecated, include_in_schema) are not merged — no OGX router
-    passes them, and every consumer of this helper keys off the path.
+    On fastapi >= 0.138 this defers to `fastapi.routing.iter_route_contexts`, which resolves
+    included routers and their prefixes itself. Below that the traversal is ours, because the
+    two shapes fastapi has had need different handling: < 0.137 `include_router()` flattened
+    the sub-router's routes into the parent with the prefix already baked into each path,
+    while 0.137 wraps them and keeps the prefix on the wrapper, so it has to be reapplied.
+
+    The other include-time options (tags, deprecated, include_in_schema) are not merged —
+    no OGX router passes them, and every consumer of this helper keys off the path.
     """
+    if iter_route_contexts is not None and not prefix:
+        collected: list[APIRoute] = []
+        for context in iter_route_contexts(routes):
+            route = context.original_route
+            if not isinstance(route, APIRoute):
+                continue
+            path = context.path
+            collected.append(_with_path(route, path) if path != route.path else route)
+        return collected
+    return _collect_api_routes_legacy(routes, prefix)
+
+
+def _collect_api_routes_legacy(routes: list[Any], prefix: str = "") -> list[APIRoute]:
+    """Traverse included routers by hand, for fastapi < 0.138."""
     api_routes: list[APIRoute] = []
     for route in routes:
         if isinstance(route, APIRoute):
             api_routes.append(_with_path_prefix(route, prefix) if prefix else route)
         elif hasattr(route, "original_router"):
-            # FastAPI >= 0.137 wraps include_router() results in _IncludedRouter, whose
+            # FastAPI 0.137 wraps include_router() results in _IncludedRouter, whose
             # include_context.prefix already covers the prefix of the router it was included into.
             include_context = getattr(route, "include_context", None)
             api_routes.extend(
-                collect_api_routes(route.original_router.routes, prefix + getattr(include_context, "prefix", ""))
+                _collect_api_routes_legacy(
+                    route.original_router.routes, prefix + getattr(include_context, "prefix", "")
+                )
             )
         elif hasattr(route, "routes"):
-            api_routes.extend(collect_api_routes(route.routes, prefix))
+            api_routes.extend(_collect_api_routes_legacy(route.routes, prefix))
     return api_routes
 
 
