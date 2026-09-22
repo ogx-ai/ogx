@@ -1,0 +1,106 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestOpenAICompatibility::test_openai_format_preserves_complex_schemas[openai_client-txt=llama-cpp-server/qwen3-0.6b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Process this data"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "process_data",
+            "description": "Process structured data",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/DataObject"
+                }
+              },
+              "$defs": {
+                "DataObject": {
+                  "type": "object",
+                  "properties": {
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-4f4a683cfb5e",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Please provide the data you would like to process. If you have an array of numbers or a structured dataset, I can help you apply the processing function.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user wants me to process the data. Let me check the tools available. There's a function called process_data that takes an object with a 'data' parameter, which is an array of numbers. The user hasn't provided the actual data yet. I need to ask them to include the data they want processed. Maybe they have a dataset or a list of numbers that needs transformation. I should prompt for that so I can call the function properly.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 129,
+          "prompt_tokens": 180,
+          "total_tokens": 309,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 51
+          }
+        },
+        "timings": {
+          "cache_n": 51,
+          "prompt_n": 129,
+          "prompt_ms": 470.457,
+          "prompt_per_token_ms": 3.646953488372093,
+          "prompt_per_second": 274.2014679343702,
+          "predicted_n": 129,
+          "predicted_ms": 3621.496,
+          "predicted_per_token_ms": 28.2929375,
+          "predicted_per_second": 35.344509561794354
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

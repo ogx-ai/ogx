@@ -1,0 +1,128 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestChatCompletionWithTools::test_tool_with_complex_schema[txt=llama-cpp-server/qwen3-0.6b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Book a flight from SFO to JFK for John Doe"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "book_flight",
+            "description": "Book a flight",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "flight": {
+                  "$ref": "#/$defs/FlightInfo"
+                },
+                "passenger": {
+                  "$ref": "#/$defs/Passenger"
+                }
+              },
+              "required": [
+                "flight",
+                "passenger"
+              ],
+              "$defs": {
+                "FlightInfo": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  }
+                },
+                "Passenger": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "age": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-55a79012dfd6",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The flight date is required to book a flight. Please provide the date of your trip.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user wants to book a flight from SFO to JFK for John Doe. Let me check the tools provided. There's a function called book_flight that requires flight and passenger details. The parameters are flight (with from, to, date) and passenger (name and age). The user mentioned SFO to JFK, but didn't specify the date. I need to make sure to include all required fields. Since the date is missing, maybe the user expects a general date, but the function needs it. Wait, maybe the date is assumed as a default? Or perhaps the user will provide it. But as per the given info, I can't fill in the date. So, I should ask the user to specify the date. But the original message only mentions the departure and destination. Hmm, the function requires flight and passenger. Since the user hasn't provided the flight details (like date), maybe I can't proceed. Wait, the user wrote \"Book a flight from SFO to JFK for John Doe\". Maybe they expect the date to be the current date? But the function's parameters need the date in the flight object. So I need to ask the user to provide the flight date. Otherwise, the tool call can't be made. Let me check again. The user's query is only about the departure and destination, not the date. Therefore, I should prompt them to include the flight date. But according to the instructions, if I can't call the function, I should respond. However, since the user hasn't provided the date, maybe I can't make the tool call. But the example in the tools shows that if the date is missing, maybe it's assumed. Wait, the function's parameters require the date. So without it, the tool can't be called. Therefore, I need to inform the user that the date is missing. But the user's message doesn't have that. So perhaps I should respond that I can't proceed without the flight date. But the user might expect the date to be assumed. Alternatively, maybe the date is part of the input. Let me check the original user query again. The user wrote \"Book a flight from SFO to JFK for John Doe\". There's no mention of the date. Therefore, the tool can't be called without the flight date. So the correct response is to inform the user that the flight date is required. But the assistant's instructions say to call the function if possible. Since it's not possible, respond normally. But the example might show that if missing parameters, the tool can't be called. Therefore, the answer is to state that the date is missing.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 563,
+          "prompt_tokens": 261,
+          "total_tokens": 824,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 51
+          }
+        },
+        "timings": {
+          "cache_n": 51,
+          "prompt_n": 210,
+          "prompt_ms": 693.586,
+          "prompt_per_token_ms": 3.3027904761904763,
+          "prompt_per_second": 302.7742774508136,
+          "predicted_n": 563,
+          "predicted_ms": 19865.901,
+          "predicted_per_token_ms": 35.34857829181495,
+          "predicted_per_second": 28.289680895923116
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

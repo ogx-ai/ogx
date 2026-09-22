@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store[client_with_models-txt=llama-cpp-server/qwen3-0.6b-False]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello, world!"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-161b9e02b6e1",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Hello, world! \ud83d\ude0a",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user said \"Hello, world!\" So I need to respond to that. Let me start by acknowledging their input. Maybe say \"Hello, world!\" and then add a friendly message. Since it's a simple command, keeping it straightforward is best. No need for extra details. Just a greeting and a confirmation. Let me check if there's any cultural nuance I should consider, but since it's a common phrase, it's probably okay. Alright, time to put it all together.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 113,
+          "prompt_tokens": 12,
+          "total_tokens": 125,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3
+          }
+        },
+        "timings": {
+          "cache_n": 3,
+          "prompt_n": 9,
+          "prompt_ms": 39.316,
+          "prompt_per_token_ms": 4.368444444444445,
+          "prompt_per_second": 228.9144368704853,
+          "predicted_n": 113,
+          "predicted_ms": 2631.445,
+          "predicted_per_token_ms": 23.495044642857145,
+          "predicted_per_second": 42.562166414270486
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

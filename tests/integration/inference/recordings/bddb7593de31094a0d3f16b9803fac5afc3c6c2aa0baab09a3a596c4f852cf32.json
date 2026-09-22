@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-bddb7593de31",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Humans live on **Earth**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, so the user is asking which planet humans live on. Hmm, I know that humans live on Earth, but I need to make sure. Let me think. I remember that Earth is the only planet with liquid water, which is necessary for life as we know it. But wait, are there other planets that have conditions suitable for life? I think there are other planets in our solar system, like Mars and Venus. But wait, Mars is a red planet, and Venus is a gas giant. So, Earth is the only one that's habitable. But maybe the user is confused. Let me check if there's any other planet that's considered habitable. Oh right, there's Titan, which is a moon of Saturn. I think Titan has a thick atmosphere and liquid methane, which might support life in some way. But I'm not sure if that's considered habitable. The key point is that Earth is the planet where humans live. So the answer should be Earth.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 213,
+          "prompt_tokens": 15,
+          "total_tokens": 228,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 15,
+          "prompt_ms": 66.738,
+          "prompt_per_token_ms": 4.4492,
+          "prompt_per_second": 224.75950732715992,
+          "predicted_n": 213,
+          "predicted_ms": 5150.705,
+          "predicted_per_token_ms": 24.29577830188679,
+          "predicted_per_second": 41.159414099623255
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

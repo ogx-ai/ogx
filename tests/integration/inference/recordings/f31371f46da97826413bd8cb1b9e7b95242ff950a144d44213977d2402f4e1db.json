@@ -1,0 +1,81 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-f31371f46da9",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The weather in San Francisco, CA is generally warm and humid, with temperatures ranging from 68\u00b0F to 85\u00b0F (20\u00b0C to 30\u00b0C) during the day and cooler (around 20-25\u00b0C) during the night. The city experiences a Mediterranean climate, with long, warm days and mild nights. You might feel a coastal breeze, especially during the summer. For the latest updates, check the current weather forecast or local meteorological services. Let me know if you need more details! \ud83c\udf1e",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user is asking about the weather in San Francisco, CA. I need to provide accurate information. Let me start by recalling the current weather conditions. The user might be planning a trip or just curious about the weather.\n\nI should mention the average temperature, maybe the day and night temps. Also, check for any recent updates. San Francisco is known for its hot summers and mild winters. The humidity could be high, so I should include that. \n\nI should also consider the possible factors like the time of year. If it's summer, the temperatures might be around 70-85\u00b0F, while winter could be lower. Maybe mention the sea breeze or coastal effects. \n\nI need to make sure the information is clear and helpful. Avoid any specific details that might be too technical. Keep the response friendly and informative. Let the user know they can ask more if needed. Alright, time to put it all together.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 305,
+          "prompt_tokens": 33,
+          "total_tokens": 338,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 11
+          }
+        },
+        "timings": {
+          "cache_n": 11,
+          "prompt_n": 22,
+          "prompt_ms": 85.581,
+          "prompt_per_token_ms": 3.890045454545455,
+          "prompt_per_second": 257.0664049263271,
+          "predicted_n": 305,
+          "predicted_ms": 8096.38,
+          "predicted_per_token_ms": 26.63282894736842,
+          "predicted_per_second": 37.54764474987587
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}
