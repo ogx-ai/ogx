@@ -95,6 +95,20 @@ def build_fastapi_router(api: "Api", impl: Any) -> APIRouter | None:
     return cast(APIRouter, router_factory(impl))
 
 
+def collect_api_routes(routes: list[Any]) -> list[APIRoute]:
+    """Collect all APIRoute objects, recursing into included routers."""
+    api_routes: list[APIRoute] = []
+    for route in routes:
+        if isinstance(route, APIRoute):
+            api_routes.append(route)
+        elif hasattr(route, "original_router"):
+            # FastAPI >= 0.137 wraps include_router() results in _IncludedRouter
+            api_routes.extend(collect_api_routes(route.original_router.routes))
+        elif hasattr(route, "routes"):
+            api_routes.extend(collect_api_routes(route.routes))
+    return api_routes
+
+
 def get_router_routes(router: APIRouter) -> list[APIRoute]:
-    """Extract APIRoute objects from a FastAPI router."""
-    return [route for route in router.routes if isinstance(route, APIRoute)]
+    """Extract APIRoute objects from a FastAPI router, including those of included routers."""
+    return collect_api_routes(router.routes)

@@ -1,0 +1,54 @@
+# Copyright (c) The OGX Contributors.
+# All rights reserved.
+#
+# This source code is licensed under the terms described in the LICENSE file in
+# the root directory of this source tree.
+
+from unittest.mock import AsyncMock
+
+from fastapi import APIRouter
+
+from ogx.core.server.fastapi_router_registry import build_fastapi_router, get_router_routes
+from ogx.core.server.routes import find_matching_route, initialize_route_impls
+from ogx_api.datatypes import Api
+
+
+def test_get_router_routes_collects_included_router_routes() -> None:
+    """FastAPI >= 0.137 keeps included routes behind a wrapper instead of flattening them."""
+    nested_router = APIRouter()
+
+    @nested_router.get("/v1/nested")
+    async def nested_endpoint() -> None:
+        return None
+
+    router = APIRouter()
+
+    @router.get("/v1/top")
+    async def top_endpoint() -> None:
+        return None
+
+    router.include_router(nested_router)
+
+    assert sorted(route.path for route in get_router_routes(router)) == ["/v1/nested", "/v1/top"]
+
+
+def test_get_router_routes_collects_admin_router_routes() -> None:
+    """The admin router nests its versioned sub-routers, so route listings must recurse."""
+    router = build_fastapi_router(Api.admin, None)
+    assert router is not None
+
+    paths = {route.path for route in get_router_routes(router)}
+    assert "/v1/admin/tools" in paths
+    assert "/v1alpha/admin/connectors" in paths
+
+
+def test_initialize_route_impls_dispatches_nested_routes() -> None:
+    """The library client dispatches in-process against this table, nested routes included."""
+    route_impls = initialize_route_impls({Api.admin: AsyncMock()})
+
+    _func, path_params, route_path, _auth_info = find_matching_route(
+        "GET", "/v1alpha/admin/connectors/my-connector", route_impls
+    )
+
+    assert route_path == "/v1alpha/admin/connectors/{connector_id}"
+    assert path_params == {"connector_id": "my-connector"}
