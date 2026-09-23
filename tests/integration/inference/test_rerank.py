@@ -244,9 +244,7 @@ def test_rerank_max_results_larger_than_items(client_with_models, rerank_model_i
         ),
     ],
 )
-def test_rerank_semantic_correctness(
-    client_with_models, rerank_model_id, query, items, expected_first_item
-):
+def test_rerank_semantic_correctness(client_with_models, rerank_model_id, query, items, expected_first_item):
     skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id)
 
     response = client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
