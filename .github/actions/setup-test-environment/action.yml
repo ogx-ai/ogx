@@ -59,7 +59,7 @@ runs:
         # Download the embedding model used by inline::sentence-transformers
         uv run --all-groups python -c "
         from sentence_transformers import SentenceTransformer
-        SentenceTransformer('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True)
+        SentenceTransformer('nomic-ai/nomic-embed-text-v1.5')
         print('Embedding model cached')
         " 2>/dev/null || echo "Embedding model download failed (may already be cached)"
 
@@ -87,6 +87,10 @@ runs:
     - name: Setup vllm
       if: ${{ startsWith(inputs.setup, 'vllm') && !startsWith(inputs.setup, 'vllm-gpu-') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-vllm
+
+    - name: Setup llama-cpp-server router
+      if: ${{ startsWith(inputs.setup, 'llama-cpp-server') && inputs.inference-mode != 'replay' }}
+      uses: ./.github/actions/setup-llamacpp
 
     - name: Start Postgres service
       if: ${{ contains(inputs.setup, 'postgres') }}

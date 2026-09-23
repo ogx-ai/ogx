@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-d2e72ebc6ac0",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The planet with rings around it and a name starting with the letter **S** is **Saturn**.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, so the user is asking which planet has rings around it and the name starts with 'S'. Let me think. I know that there are many planets with rings, but I need to recall which one starts with an 'S'.\n\nFirst, I remember that Saturn is a famous planet with rings. The name starts with 'S'. But wait, the question says the name starts with letter S. So Saturn is the correct answer. But let me double-check to make sure there aren't any other planets with similar names. For example, sometimes there are other planets called Saturn, like Saturn V or something, but those are rockets. The planet itself is Saturn. So yes, Saturn has rings and the name starts with 'S'. I think that's the answer.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 182,
+          "prompt_tokens": 22,
+          "total_tokens": 204,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 22,
+          "prompt_ms": 132.871,
+          "prompt_per_token_ms": 6.03959090909091,
+          "prompt_per_second": 165.57412828984502,
+          "predicted_n": 182,
+          "predicted_ms": 4652.726,
+          "predicted_per_token_ms": 25.705668508287292,
+          "predicted_per_second": 38.90192545187488
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

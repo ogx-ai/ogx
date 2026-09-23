@@ -1,0 +1,99 @@
+name: Setup LlamaCpp
+description: Download and start a llama.cpp multi-model router (llama-server --models-preset) for chat + embedding
+inputs:
+  port:
+    description: 'Port for the router'
+    required: false
+    default: '8080'
+  workdir:
+    description: 'Directory to download the llama.cpp binary and model weights into'
+    required: false
+    default: '${{ runner.temp }}/llama-rel'
+runs:
+  using: "composite"
+  steps:
+    - name: Download llama.cpp b10964 (CPU x64) and models
+      shell: bash
+      run: |
+        set -euo pipefail
+        WORKDIR="${{ inputs.workdir }}"
+        mkdir -p "$WORKDIR/models"
+
+        # Fail loudly if an artifact on disk doesn't match its pinned sha256. TLS
+        # protects the download in transit; pinning the content also catches a
+        # swapped or re-uploaded asset (including HF `main` moving).
+        verify() {
+          echo "$2  $1" | sha256sum -c - \
+            || { echo "Failed to verify sha256 for $1 (expected $2)" >&2; exit 1; }
+        }
+
+        # verify reads the artifact back from disk, a separate pass over it. We
+        # could instead compute the hash inline while downloading (e.g. `curl ... |
+        # tee "$dest" | sha256sum`) to fold that read into the write; a possible
+        # future optimization, skipped for now since the read is a page-cache hit.
+
+        # Pinned sha256: GitHub release asset digest (b10964) and HuggingFace LFS oid
+        # (= content sha256) for the two models.
+        LLAMA_TARBALL_SHA=9abf88aea48a55d0f80edb1ee20220b186848cca0b4e919d71518cfd7ca67443
+        QWEN_SHA=361cc68159042c36ebff7715dc5a2e4612153e88f3e9c9c234820849d6dc9e1d
+        NOMIC_SHA=3e24342164b3d94991ba9692fdc0dd08e3fd7362e0aacc396a9a5c54a544c3b7
+
+        # 1. llama.cpp CPU binary, pinned to build b10964. bXXXX builds are published
+        #    as GitHub prereleases; pinning to one build keeps CI reproducible. Verify
+        #    the tarball hash BEFORE extracting so we never unpack unauthenticated bytes.
+        TARBALL="$WORKDIR/llama.tar.gz"
+        [ -f "$TARBALL" ] || curl -fsSL --retry 3 -o "$TARBALL" \
+          "https://github.com/ggml-org/llama.cpp/releases/download/b10964/llama-b10964-bin-ubuntu-x64.tar.gz"
+        verify "$TARBALL" "$LLAMA_TARBALL_SHA"
+        [ -x "$WORKDIR/llama-b10964/llama-server" ] || tar xzf "$TARBALL" -C "$WORKDIR"
+        "$WORKDIR/llama-b10964/llama-server" --version
+
+        # 2. Q8_0 weights for the text and embedding models. Download if missing, but
+        #    always re-verify the on-disk file (catches a corrupt cached copy).
+        get_model() {
+          dest="$WORKDIR/models/$2"
+          [ -f "$dest" ] || curl -fsSL --retry 3 --max-time 900 -o "$dest" "https://huggingface.co/$1/resolve/main/$2"
+          verify "$dest" "$3"
+        }
+        get_model ggml-org/Qwen3-0.6B-GGUF Qwen3-0.6B-Q8_0.gguf "$QWEN_SHA"
+        get_model nomic-ai/nomic-embed-text-v1.5-GGUF nomic-embed-text-v1.5.Q8_0.gguf "$NOMIC_SHA"
+
+        # 3. Router preset. Section names are the model IDs (routed by exact match);
+        #    keys are CLI arg names with the leading dashes stripped. ctx-size is pinned
+        #    to 4096: the default (0 = load from the model file) expands n_ctx_seq to
+        #    ~160k and stalls the server on a ~9GB KV-cache allocation.
+        cat > "$WORKDIR/preset.ini" <<EOF
+        [qwen3-0.6b]
+        model = $WORKDIR/models/Qwen3-0.6B-Q8_0.gguf
+        ctx-size = 4096
+
+        [nomic-embed-text-v1.5]
+        model = $WORKDIR/models/nomic-embed-text-v1.5.Q8_0.gguf
+        embedding = 1
+        ctx-size = 4096
+        EOF
+        echo "Wrote router preset:"
+        cat "$WORKDIR/preset.ini"
+
+    - name: Start llama.cpp router
+      shell: bash
+      run: |
+        set -euo pipefail
+        WORKDIR="${{ inputs.workdir }}"
+        PORT="${{ inputs.port }}"
+
+        # setsid + nohup fully detach the router from this step's process group so it
+        # keeps running after the step's shell exits (unlike a plain `&`).
+        setsid nohup "$WORKDIR/llama-b10964/llama-server" \
+          --models-preset "$WORKDIR/preset.ini" \
+          --host 127.0.0.1 \
+          --port "$PORT" \
+          --models-max 2 \
+          < /dev/null > "$WORKDIR/router.log" 2>&1 &
+        echo "router launched (detached)"
+
+        # Wait for the router to accept connections, then confirm both models load.
+        timeout 120 bash -c "until curl -fsS http://localhost:$PORT/health >/dev/null; do sleep 2; done"
+        curl -fsS "http://localhost:$PORT/v1/models" | grep -q "qwen3-0.6b"
+        curl -fsS "http://localhost:$PORT/v1/models" | grep -q "nomic-embed-text-v1.5"
+        echo "router ready on :$PORT"

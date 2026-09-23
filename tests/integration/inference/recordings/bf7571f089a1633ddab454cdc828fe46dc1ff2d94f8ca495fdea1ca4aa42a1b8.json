@@ -1,0 +1,62 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_completion_stop_sequence[txt=llama-cpp-server/qwen3-0.6b-inference:completion:stop_sequence]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "prompt": "Return the exact same sentence and don't add additional words): Michael Jordan was born in the year of 1963",
+      "stop": "1963",
+      "stream": false
+    },
+    "endpoint": "/v1/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.completion.Completion",
+      "__data__": {
+        "id": "rec-bf7571f089a1",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "text": ", 1973, and 1983. 2003, 2011, and 2023. 2025, 2033, and 2041.\nAnswer:\n\nMichael Jordan was born in the year of "
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "text_completion",
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 67,
+          "prompt_tokens": 25,
+          "total_tokens": 92,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        },
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 25,
+          "prompt_ms": 192.1,
+          "prompt_per_token_ms": 7.684,
+          "prompt_per_second": 130.14055179593961,
+          "predicted_n": 67,
+          "predicted_ms": 1696.942,
+          "predicted_per_token_ms": 25.711242424242425,
+          "predicted_per_second": 38.89349194020774
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

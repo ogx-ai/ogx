@@ -259,13 +259,20 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     ),
     "llama-cpp-server": Setup(
         name="llama-cpp-server",
-        description="llama.cpp server provider with OpenAI-compatible API",
+        description=(
+            "llama.cpp multi-model router (llama-server --models-preset) serving a text "
+            "model and an embedding model over one OpenAI-compatible endpoint. The URL must "
+            "include the /v1 prefix because the OpenAI SDK appends endpoint paths to it."
+        ),
         env={
-            "LLAMA_CPP_SERVER_URL": "http://localhost:8080",
+            "LLAMA_CPP_SERVER_URL": "http://localhost:8080/v1",
         },
         defaults={
-            "text_model": "llama-cpp-server/qwen2.5",
-            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            # Model IDs are the router's INI section names; the provider strips the
+            # "llama-cpp-server/" prefix and sends the section name as the model.
+            "text_model": "llama-cpp-server/qwen3-0.6b",
+            "embedding_model": "llama-cpp-server/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
         },
     ),
     "vllm-qwen3next": Setup(
@@ -296,6 +303,14 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="base-vllm-subset",
         roots=["tests/integration/inference"],
         default_setup="vllm",
+    ),
+    # llama.cpp multi-model router backend (llama-server --models-preset), scoped like
+    # base-vllm-subset (the full inference directory). The router serves only a text and an
+    # embedding model, so the rerank and vision tests skip (no such model configured).
+    "llama-cpp-server": Suite(
+        name="llama-cpp-server",
+        roots=["tests/integration/inference"],
+        default_setup="llama-cpp-server",
     ),
     "responses": Suite(
         name="responses",
