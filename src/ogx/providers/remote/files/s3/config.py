@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from ogx.core.storage.datatypes import SqlStoreReference
 
@@ -26,7 +26,19 @@ class S3FilesImplConfig(BaseModel):
     auto_create_bucket: bool = Field(
         default=False, description="Automatically create the S3 bucket if it doesn't exist"
     )
+    key_prefix: str = Field(
+        default="",
+        description="Folder within the bucket to store files under, e.g. 'ogx/files'. Empty stores files at the bucket root",
+    )
     metadata_store: SqlStoreReference = Field(description="SQL store configuration for file metadata")
+
+    @field_validator("key_prefix")
+    @classmethod
+    def normalize_key_prefix(cls, v: str) -> str:
+        # S3 has no directories; a "folder" is just a key prefix ending in "/". Accepting
+        # "a/b", "/a/b" and "a/b/" as the same folder keeps the env var forgiving.
+        segments = [segment for segment in v.split("/") if segment]
+        return f"{'/'.join(segments)}/" if segments else ""
 
     @classmethod
     def sample_run_config(cls, __distro_dir__: str) -> dict[str, Any]:
@@ -37,6 +49,7 @@ class S3FilesImplConfig(BaseModel):
             "aws_secret_access_key": "${env.AWS_SECRET_ACCESS_KEY:=}",
             "endpoint_url": "${env.S3_ENDPOINT_URL:=}",
             "auto_create_bucket": "${env.S3_AUTO_CREATE_BUCKET:=false}",
+            "key_prefix": "${env.S3_KEY_PREFIX:=}",
             "metadata_store": SqlStoreReference(
                 backend="sql_default",
                 table_name="s3_files_metadata",
