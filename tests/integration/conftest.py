@@ -153,6 +153,15 @@ def pytest_configure(config):
             if any("sentence-transformers" in p.provider_type for p in inference_providers):
                 config.option.embedding_model = "sentence-transformers/nomic-ai/nomic-embed-text-v1.5"
 
+    # Apply global fallback for rerank_model when using stack configs with rerank models
+    if getattr(config.option, "rerank_model", None) is None:
+        stack_config = config.getoption("--stack-config", default=None)
+        if stack_config and "=" in stack_config:
+            run_config = run_config_from_dynamic_config_spec(stack_config)
+            inference_providers = run_config.providers.get("inference", [])
+            if any("sentence-transformers" in p.provider_type for p in inference_providers):
+                config.option.rerank_model = "sentence-transformers/Qwen/Qwen3-Reranker-0.6B"
+
 
 def pytest_addoption(parser):
     parser.addoption(
