@@ -32,12 +32,21 @@ class S3FilesImplConfig(BaseModel):
     )
     metadata_store: SqlStoreReference = Field(description="SQL store configuration for file metadata")
 
-    @field_validator("key_prefix")
+    @field_validator("key_prefix", mode="before")
     @classmethod
-    def normalize_key_prefix(cls, v: str) -> str:
+    def normalize_key_prefix(cls, v: Any) -> str:
+        # Runs before type validation because that is where the value arrives from:
+        # an unset ${env.S3_KEY_PREFIX:=} resolves to "", which the stack's own
+        # _convert_string_to_proper_type turns into None. A `str` field would reject
+        # it and the stack would fail to start on the default path.
+        if v is None:
+            return ""
         # S3 has no directories; a "folder" is just a key prefix ending in "/". Accepting
-        # "a/b", "/a/b" and "a/b/" as the same folder keeps the env var forgiving.
-        segments = [segment for segment in v.split("/") if segment]
+        # "a/b", "/a/b" and "a/b/" as the same folder keeps the env var forgiving, and
+        # stripping whitespace keeps a stray space in the env var from creating a folder
+        # literally named " ".
+        segments = [segment.strip() for segment in str(v).split("/")]
+        segments = [segment for segment in segments if segment]
         return f"{'/'.join(segments)}/" if segments else ""
 
     @classmethod
