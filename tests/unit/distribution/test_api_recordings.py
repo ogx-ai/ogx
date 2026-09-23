@@ -18,6 +18,7 @@ from ogx.testing.api_recorder import (
     APIRecordingMode,
     ResponseStorage,
     _is_ogx_test_server_model_list_url,
+    _should_intercept_httpx,
     api_recording,
     normalize_inference_request,
 )
@@ -679,3 +680,147 @@ class TestExceptionRecordingReplay:
                     )
 
                 assert str(exc_info.value) == "Legacy formatted error"
+
+
+class TestHttpxInterception:
+    """The vLLM adapter's ``rerank()`` posts to a Jina-compatible ``{base_url}/rerank`` with a
+    raw ``httpx.AsyncClient`` (``src/ogx/providers/remote/inference/vllm/vllm.py``) -- not
+    through the OpenAI SDK, and not through aiohttp. The recorder's ``/rerank`` match used to
+    live only on the aiohttp patch, so these calls were neither recorded nor replayable (#6626).
+    """
+
+    RERANK_URL = "http://vllm.test:8000/rerank"
+    RERANK_PAYLOAD = {"model": "rerank-model", "query": "why", "documents": ["doc-a", "doc-b"]}
+    RERANK_BODY = {
+        "id": "rerank-test",
+        "results": [
+            {"index": 0, "relevance_score": 0.25},
+            {"index": 1, "relevance_score": 0.75},
+        ],
+    }
+
+    @staticmethod
+    def _backend(body: dict, calls: list | None = None) -> httpx.MockTransport:
+        """A stand-in backend that answers every request with ``body``."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if calls is not None:
+                calls.append(request)
+            return httpx.Response(200, json=body)
+
+        return httpx.MockTransport(handler)
+
+    @staticmethod
+    def _no_backend() -> httpx.MockTransport:
+        """A stand-in for replay CI, where no live backend is listening."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("no backend is listening", request=request)
+
+        return httpx.MockTransport(handler)
+
+    @staticmethod
+    def _recordings(storage: Path) -> list[Path]:
+        return sorted(storage.rglob("*.json"))
+
+    @pytest.mark.parametrize(
+        "url,intercepted",
+        [
+            ("http://vllm.test:8000/rerank", True),
+            ("http://vllm.test:8000/v1/rerank", True),
+            ("http://ollama.test:11434/v1/messages", True),
+            ("http://gemini.test/v1beta/interactions", True),
+            ("http://vllm.test:8000/v1/chat/completions", False),
+            ("http://vllm.test:8000/v1/embeddings", False),
+        ],
+    )
+    def test_intercepted_paths(self, url, intercepted):
+        """The raw-httpx call sites the recorder owns. Everything else -- chat/completions,
+        embeddings -- is intercepted at the provider-SDK layer instead."""
+        assert _should_intercept_httpx(url) is intercepted
+
+    async def test_stream_uses_the_same_predicate_as_post(self, temp_storage_dir):
+        """``post`` and ``stream`` used to carry duplicate literal path lists -- the drift that
+        left ``/rerank`` on aiohttp only. Reaching ``stream`` proves both read one predicate."""
+        storage = temp_storage_dir / "rerank_stream"
+
+        with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
+            async with httpx.AsyncClient(transport=self._no_backend()) as client:
+                with pytest.raises(RuntimeError, match="Recording not found for httpx stream POST"):
+                    async with client.stream("POST", self.RERANK_URL, json=self.RERANK_PAYLOAD):
+                        pass
+
+    async def test_rerank_post_is_recorded(self, temp_storage_dir):
+        """Record mode must capture a raw-httpx ``/rerank`` response to disk."""
+        storage = temp_storage_dir / "rerank_record"
+
+        with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
+            async with httpx.AsyncClient(transport=self._backend(self.RERANK_BODY)) as client:
+                response = await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
+
+        assert response.json() == self.RERANK_BODY
+
+        recordings = self._recordings(storage)
+        assert len(recordings) == 1
+        recorded = json.loads(recordings[0].read_text())
+        assert recorded["request"]["url"] == self.RERANK_URL
+        assert recorded["request"]["payload"] == self.RERANK_PAYLOAD
+        assert recorded["response"]["body"] == self.RERANK_BODY
+
+    async def test_rerank_post_replays_with_no_backend_running(self, temp_storage_dir):
+        """Replay mode must serve the recording without reaching the network -- this is the
+        whole point: replay CI has no vLLM server."""
+        storage = temp_storage_dir / "rerank_replay"
+        calls: list[httpx.Request] = []
+
+        with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
+            async with httpx.AsyncClient(transport=self._backend(self.RERANK_BODY, calls)) as client:
+                await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
+        assert len(calls) == 1
+
+        with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
+            async with httpx.AsyncClient(transport=self._no_backend()) as client:
+                replayed = await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
+
+        # Still one call: replay answered from disk, the dead transport was never touched.
+        assert len(calls) == 1
+        # vllm.py:311-327 reads exactly these three off the response.
+        assert isinstance(replayed, httpx.Response)
+        assert replayed.status_code == 200
+        assert replayed.json() == self.RERANK_BODY
+        assert json.loads(replayed.text) == self.RERANK_BODY
+
+    async def test_missing_rerank_recording_reports_how_to_record(self, temp_storage_dir):
+        """A missing recording must fail with the recorder's own instructions, not a
+        ``ConnectError`` from falling through to the network."""
+        storage = temp_storage_dir / "rerank_missing"
+
+        with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
+            async with httpx.AsyncClient(transport=self._no_backend()) as client:
+                with pytest.raises(RuntimeError, match="Recording not found for httpx POST"):
+                    await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
+
+    async def test_messages_passthrough_is_still_intercepted(self, temp_storage_dir):
+        """Regression guard: widening the predicate must not drop the Messages passthrough."""
+        storage = temp_storage_dir / "messages_record"
+        body = {"id": "msg-1", "content": [{"type": "text", "text": "hi"}]}
+        url = "http://ollama.test:11434/v1/messages"
+
+        with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
+            async with httpx.AsyncClient(transport=self._backend(body)) as client:
+                await client.post(url, json={"model": "m", "messages": []})
+
+        assert len(self._recordings(storage)) == 1
+
+    async def test_unrelated_httpx_post_is_not_intercepted(self, temp_storage_dir):
+        """The predicate stays narrow: chat/completions is the OpenAI SDK's job, and raw httpx
+        posts elsewhere must pass straight through to the transport."""
+        storage = temp_storage_dir / "unrelated"
+        calls: list[httpx.Request] = []
+
+        with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
+            async with httpx.AsyncClient(transport=self._backend({"ok": True}, calls)) as client:
+                await client.post("http://vllm.test:8000/v1/chat/completions", json={"model": "m"})
+
+        assert len(calls) == 1
+        assert self._recordings(storage) == []

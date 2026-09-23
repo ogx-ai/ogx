@@ -907,18 +907,32 @@ def _patched_aiohttp_post(original_post, session_self, url: str, **kwargs):
         raise AssertionError(f"Invalid mode: {_current_mode}")
 
 
-async def _patched_httpx_async_post(original_post, self, url, **kwargs):
-    """Patched version of httpx.AsyncClient.post for recording/replay of Messages API passthrough.
+# URL fragments the httpx interceptors record and replay. Surfaces reached through a
+# provider SDK are patched at the SDK level instead, so only raw-httpx call sites belong
+# here: the Anthropic Messages and Google Interactions passthroughs, and the
+# Jina-compatible /rerank endpoint the vLLM adapter posts to directly (vllm.py rerank()).
+_INTERCEPTED_HTTPX_PATHS = ("/v1/messages", "/interactions", "/rerank")
 
-    Intercepts requests to /v1/messages endpoints so the native Ollama passthrough
-    path can be recorded and replayed without a live backend.
+
+def _should_intercept_httpx(url: str) -> bool:
+    """Whether an httpx request to this URL is one the recorder records and replays.
+
+    Shared by the post and stream patches so the two cannot drift apart.
+    """
+    return any(path in url for path in _INTERCEPTED_HTTPX_PATHS)
+
+
+async def _patched_httpx_async_post(original_post, self, url, **kwargs):
+    """Patched version of httpx.AsyncClient.post for recording/replay of raw-httpx endpoints.
+
+    Intercepts the endpoints listed in _INTERCEPTED_HTTPX_PATHS -- the native Messages and
+    Interactions passthroughs, and the vLLM rerank endpoint -- so those paths can be
+    recorded and replayed without a live backend.
     """
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
-
-    if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    if not _should_intercept_httpx(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return await original_post(self, url, **kwargs)
 
     json_payload = kwargs.get("json", {})
@@ -967,17 +981,15 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
 
 
 def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
-    """Patched version of httpx.AsyncClient.stream for recording/replay of streaming Messages API passthrough.
+    """Patched version of httpx.AsyncClient.stream for recording/replay of streaming raw-httpx endpoints.
 
-    Intercepts streaming requests to /v1/messages endpoints. Returns an async context manager
-    that either replays recorded SSE events or records live ones.
+    Intercepts streaming requests to the endpoints listed in _INTERCEPTED_HTTPX_PATHS. Returns
+    an async context manager that either replays recorded SSE events or records live ones.
     """
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
-
-    if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    if not _should_intercept_httpx(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return original_stream(self, method, url, **kwargs)
 
     json_payload = kwargs.get("json", {})
