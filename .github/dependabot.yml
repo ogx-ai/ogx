@@ -21,6 +21,25 @@ updates:
       python-deps:
         patterns:
           - "*"
+    # Mirror '<' caps in pyproject.toml so dependabot does not silently widen them.
+    # When lifting a cap in pyproject.toml, update or remove the matching ignore rule here.
+    ignore:
+      - dependency-name: "elasticsearch"
+        versions: [">=10.0.0"]
+      - dependency-name: "fastapi"
+        versions: [">=1.0.0"]
+      - dependency-name: "google-genai"
+        versions: [">=3.0.0"]
+      - dependency-name: "mcp"
+        versions: [">=2.0.0"]
+      - dependency-name: "milvus-lite"
+        versions: [">=3.0.0"]
+      - dependency-name: "pypdf"
+        versions: [">=6.14.0"]
+      - dependency-name: "pytest"
+        versions: [">=9.1.0"]
+      - dependency-name: "setuptools"
+        versions: [">=81"]
     labels:
       - type/dependencies
       - python
@@ -36,6 +55,10 @@ updates:
       api-deps:
         patterns:
           - "*"
+    # Mirror '<' caps in src/ogx_api/pyproject.toml so dependabot does not silently widen them.
+    ignore:
+      - dependency-name: "fastapi"
+        versions: [">=1.0.0"]
     labels:
       - type/dependencies
       - python
