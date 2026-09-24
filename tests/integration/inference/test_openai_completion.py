@@ -11,22 +11,8 @@ import pytest
 from openai import OpenAI
 from pydantic import BaseModel
 
-from ..helpers import assert_text_contains
+from ..helpers import assert_text_contains, provider_from_model
 from ..test_cases.test_case import TestCase
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id):
