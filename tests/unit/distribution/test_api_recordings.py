@@ -475,6 +475,95 @@ class TestInferenceRecording:
         assert replayed == ["model-a", "model-b"]
         mock.assert_not_called()
 
+    async def test_record_if_missing_model_list_skips_write_for_unchanged_set(self, temp_storage_dir):
+        """Record-if-missing must not rewrite a model-list recording when the model set is unchanged.
+
+        vLLM embeds per-server-startup values in model objects (nested permission[].id /
+        permission[].created, vLLM-specific fields such as root) that normalization does not
+        cover, so unconditionally re-recording on every run produced a git diff each time and
+        the commit-recordings workflow looped "Recordings update from CI" (#6635).
+        """
+        from openai.types.model import Model
+
+        def mock_list(startup_marker):
+            def _make(*args, **kwargs):
+                async def _gen():
+                    yield Model(
+                        id="model-a",
+                        object="model",
+                        created=1700000000 + startup_marker,
+                        owned_by="vllm",
+                        permission=[
+                            {
+                                "id": f"modelperm-{startup_marker:016x}",
+                                "object": "model_permission",
+                                "created": 1700000000 + startup_marker,
+                                "allow_create_engine": False,
+                                "allow_sampling": True,
+                                "allow_logprobs": True,
+                                "allow_search_indices": False,
+                                "allow_view_config": True,
+                                "organization": "*",
+                                "group": None,
+                                "is_blocking": False,
+                            }
+                        ],
+                        root=f"/models/startup-{startup_marker}",
+                    )
+
+                return _gen()
+
+            return _make
+
+        temp_storage_dir = temp_storage_dir / "test_rim_model_list_skip_write"
+
+        # Record an initial model set
+        with patch("openai.resources.models.AsyncModels.list", side_effect=mock_list(1)):
+            with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(temp_storage_dir)):
+                client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="test")
+                recorded = [m.id async for m in client.models.list()]
+        assert recorded == ["model-a"]
+
+        first_files = sorted(temp_storage_dir.glob("**/models-*.json"))
+        assert len(first_files) == 1
+
+        # Mutate the stored file so a rewrite by the next run would be detectable
+        first_files[0].write_text(first_files[0].read_text() + "// sentinel\n")
+
+        # A fresh server start (new permission id/created, new root) serves the same
+        # model set: record-if-missing must still go live, but must not rewrite the file
+        with patch(
+            "openai.resources.models.AsyncModels.list",
+            side_effect=mock_list(2),
+        ) as mock:
+            with api_recording(mode=APIRecordingMode.RECORD_IF_MISSING, storage_dir=str(temp_storage_dir)):
+                client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="test")
+                recorded = [m.id async for m in client.models.list()]
+        assert recorded == ["model-a"]
+        assert mock.call_count == 1
+        assert len(list(temp_storage_dir.glob("**/models-*.json"))) == 1
+        assert first_files[0].read_text().endswith("// sentinel\n")
+
+        # A changed model set must still record a new file, leaving the old one untouched
+        sentinel_content = first_files[0].read_text()
+
+        def mock_list_changed(*args, **kwargs):
+            async def _gen():
+                yield Model(id="model-a", object="model", created=1, owned_by="vllm")
+                yield Model(id="model-b", object="model", created=1, owned_by="vllm")
+
+            return _gen()
+
+        with patch("openai.resources.models.AsyncModels.list", side_effect=mock_list_changed) as mock:
+            with api_recording(mode=APIRecordingMode.RECORD_IF_MISSING, storage_dir=str(temp_storage_dir)):
+                client = AsyncOpenAI(base_url="http://localhost:11434/v1", api_key="test")
+                recorded = sorted([m.id async for m in client.models.list()])
+        assert recorded == ["model-a", "model-b"]
+        assert mock.call_count == 1
+        all_files = sorted(temp_storage_dir.glob("**/models-*.json"))
+        assert len(all_files) == 2
+        assert first_files[0].read_text() == sentinel_content
+
     async def test_model_list_created_timestamp_normalized(self, temp_storage_dir):
         """Model-list recordings are stable across re-records with different live timestamps.
 

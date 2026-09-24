@@ -681,6 +681,19 @@ class ResponseStorage:
 
         return results
 
+    def _has_model_list_recording(self, request_hash: str, response: dict[str, Any]) -> bool:
+        """Return True if a model-list recording for this exact model set already exists.
+
+        The model-list filename digest (see _model_identifiers_digest) covers only the
+        model identifiers, so an existing file with the same digest means the live
+        server serves the same model set as a previous record run.
+        """
+        digest = _model_identifiers_digest(response)
+        response_file = f"models-{request_hash}-{digest}.json"
+        if (self._get_test_dir() / response_file).exists():
+            return True
+        return (self.base_dir / "recordings" / response_file).exists()
+
 
 def _recording_from_file(response_path) -> dict[str, Any]:
     with open(response_path) as f:
@@ -1208,8 +1221,9 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     if mode == APIRecordingMode.REPLAY or mode == APIRecordingMode.RECORD_IF_MISSING:
         # Model-list responses reflect which models are available in the current
         # environment (e.g. which models were pulled), so only REPLAY may use the
-        # recorded union. In RECORD_IF_MISSING we must fetch live and re-record,
-        # otherwise a stale union would hide newly pulled models.
+        # recorded union. In RECORD_IF_MISSING we must fetch live (and re-record
+        # when the model set changed -- see the write-skip below), otherwise a
+        # stale union would hide newly pulled models.
         if _is_model_list_endpoint(endpoint) and mode == APIRecordingMode.REPLAY:
             records = storage._model_list_responses(request_hash)
             recording = _combine_model_list_responses(endpoint, records)
@@ -1325,6 +1339,25 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
             return replay_recorded_stream()
         else:
             response_data = {"body": response, "is_streaming": False}
+            if (
+                mode == APIRecordingMode.RECORD_IF_MISSING
+                and endpoint == "/v1/models"
+                and storage._has_model_list_recording(request_hash, response_data)
+            ):
+                # Model-list endpoints are always fetched live in record-if-missing mode
+                # (see the lookup block above) so newly pulled models are picked up.
+                # But providers like vLLM embed per-server-startup values in model
+                # objects that _normalize_response does not cover -- vLLM adds a nested
+                # permission[] array with a fresh random id and created timestamp on
+                # every start, plus vLLM-specific fields such as root. Unconditionally
+                # re-writing the recording then produces a git diff on every record run
+                # even for an unchanged model set, and the commit-recordings workflow
+                # commits that diff every time, looping "Recordings update from CI"
+                # (observed in #6635). The filename digest covers exactly the model
+                # set, so when a recording for this set already exists we serve the
+                # live response and skip the write; a changed model set still records
+                # a new file.
+                return response
             storage.store_recording(request_hash, request_data, response_data)
             return response
 
