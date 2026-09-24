@@ -74,6 +74,17 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.tool_runtime,
+            adapter_type="exa-search",
+            provider_type="remote::exa-search",
+            module="ogx.providers.remote.tool_runtime.exa_search",
+            config_class="ogx.providers.remote.tool_runtime.exa_search.config.ExaSearchToolConfig",
+            pip_packages=[],
+            provider_data_validator="ogx.providers.remote.tool_runtime.exa_search.ExaSearchToolProviderDataValidator",
+            toolgroup_id="builtin::websearch",
+            description="Exa Search tool for web search optimized for agents, with highlights-based content extraction.",
+        ),
+        RemoteProviderSpec(
+            api=Api.tool_runtime,
             adapter_type="nimble-search",
             provider_type="remote::nimble-search",
             module="ogx.providers.remote.tool_runtime.nimble_search",
