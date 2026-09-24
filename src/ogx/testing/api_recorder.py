@@ -908,17 +908,17 @@ def _patched_aiohttp_post(original_post, session_self, url: str, **kwargs):
 
 
 async def _patched_httpx_async_post(original_post, self, url, **kwargs):
-    """Patched version of httpx.AsyncClient.post for recording/replay of Messages API passthrough.
+    """Patched version of httpx.AsyncClient.post for recording/replay of Messages API passthrough and rerank requests.
 
-    Intercepts requests to /v1/messages endpoints so the native Ollama passthrough
-    path can be recorded and replayed without a live backend.
+    Intercepts requests to /v1/messages, /interactions (e.g. Ollama passthrough) and /rerank endpoints
+    (e.g. vLLM Jina-compatible rerank) so they can be recorded and replayed without a live backend.
     """
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
+    is_intercepted = "/v1/messages" in url_str or "/interactions" in url_str or "/rerank" in url_str
 
-    if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    if not is_intercepted or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return await original_post(self, url, **kwargs)
 
     json_payload = kwargs.get("json", {})

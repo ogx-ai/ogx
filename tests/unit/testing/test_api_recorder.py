@@ -224,3 +224,67 @@ class TestBuildTestIdHttpClient:
         client.chat.completions.create(model="test", messages=[{"role": "user", "content": "hi"}])
 
         assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
+
+
+class TestHttpxRerankInterception:
+    """Verify that raw httpx POST to /rerank endpoints is intercepted by api_recorder (#6626)."""
+
+    @pytest.mark.anyio
+    async def test_rerank_url_is_intercepted_in_replay_mode(self, monkeypatch):
+        from ogx.testing.api_recorder import (
+            APIRecordingMode,
+            _patched_httpx_async_post,
+            normalize_http_request,
+        )
+
+        url = "http://localhost:8000/v1/rerank"
+        payload = {"model": "bge-reranker-large", "query": "test query", "documents": ["doc1", "doc2"]}
+        req_hash = normalize_http_request(url, "POST", payload)
+
+        mock_storage = type(
+            "MockStorage",
+            (),
+            {
+                "find_recording": lambda self, h: {
+                    "response": {
+                        "status": 200,
+                        "body": {"results": [{"index": 0, "relevance_score": 0.95}]},
+                    }
+                }
+                if h == req_hash
+                else None
+            },
+        )()
+
+        monkeypatch.setattr(api_recorder, "_current_mode", APIRecordingMode.REPLAY)
+        monkeypatch.setattr(api_recorder, "_current_storage", mock_storage)
+
+        async def fake_original_post(self, url, **kwargs):
+            raise AssertionError("Original post should not be called in REPLAY mode when recording exists")
+
+        dummy_client = None
+        response = await _patched_httpx_async_post(fake_original_post, dummy_client, url, json=payload)
+        assert response.status_code == 200
+        assert response.json() == {"results": [{"index": 0, "relevance_score": 0.95}]}
+
+    @pytest.mark.anyio
+    async def test_non_matching_url_passes_through_to_original(self, monkeypatch):
+        from ogx.testing.api_recorder import APIRecordingMode, _patched_httpx_async_post
+
+        url = "http://localhost:8000/v1/other_endpoint"
+        payload = {"data": "test"}
+
+        monkeypatch.setattr(api_recorder, "_current_mode", APIRecordingMode.REPLAY)
+        monkeypatch.setattr(api_recorder, "_current_storage", object())
+
+        called = False
+
+        async def fake_original_post(self, url, **kwargs):
+            nonlocal called
+            called = True
+            return "passthrough_result"
+
+        res = await _patched_httpx_async_post(fake_original_post, None, url, json=payload)
+        assert called is True
+        assert res == "passthrough_result"
+
