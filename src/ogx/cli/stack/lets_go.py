@@ -263,8 +263,9 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     if "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: brave -> tavily -> bing
+    # Add web search providers in priority order: exa -> brave -> tavily -> bing
     _web_search_order = [
+        ("remote::exa-search", "exa-search"),
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),

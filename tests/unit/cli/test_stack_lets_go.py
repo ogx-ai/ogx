@@ -516,7 +516,7 @@ class TestAddFileSearchAndResponses:
         from ogx.core.datatypes import StackConfig
 
         # Clear env vars to ensure no keys are set
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
@@ -538,7 +538,7 @@ class TestAddFileSearchAndResponses:
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import Provider, StackConfig
 
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
         initial_providers = [
