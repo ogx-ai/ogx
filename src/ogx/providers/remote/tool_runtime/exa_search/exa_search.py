@@ -103,6 +103,10 @@ class ExaSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequ
         if search_context_size and search_context_size in self._CONTEXT_SIZE_TO_COUNT:
             request_body["numResults"] = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
 
+        user_location = kwargs.get("user_location")
+        if user_location and user_location.get("country"):
+            request_body["userLocation"] = user_location["country"]
+
         if self._client is None:
             raise RuntimeError("Failed to invoke tool: provider not initialized")
         response = await self._client.post(

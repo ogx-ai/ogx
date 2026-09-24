@@ -95,7 +95,7 @@ async def test_invoke_without_extra_params(exa_search_client, mock_exa_response)
     assert headers["x-api-key"] == "test-key"
 
 
-async def test_invoke_with_user_location_ignored(exa_search_client, mock_exa_response):
+async def test_invoke_with_user_location_country(exa_search_client, mock_exa_response):
     with patch.object(exa_search_client, "get_request_provider_data", return_value=None):
         exa_search_client._client.post = AsyncMock(return_value=mock_exa_response)
         await exa_search_client.invoke_tool(
@@ -106,11 +106,7 @@ async def test_invoke_with_user_location_ignored(exa_search_client, mock_exa_res
             },
         )
     call_kwargs = exa_search_client._client.post.call_args
-    request_body = call_kwargs.kwargs["json"]
-    assert "user_location" not in request_body
-    assert "userLocation" not in request_body
-    assert "country" not in request_body
-    assert "location" not in request_body
+    assert call_kwargs.kwargs["json"]["userLocation"] == "US"
 
 
 async def test_invoke_with_empty_allowed_domains(exa_search_client, mock_exa_response):
