@@ -44,7 +44,11 @@ def provider_from_model(client_with_models, model_id):
 
 def skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id):
     provider = provider_from_model(client_with_models, rerank_model_id)
-    supported_providers = {"remote::nvidia", "remote::vllm"}
+    supported_providers = {
+        "inline::sentence-transformers",
+        "remote::nvidia",
+        "remote::vllm",
+    }
     if provider.provider_type not in supported_providers:
         pytest.skip(f"{provider.provider_type} doesn't support rerank models")
 
@@ -251,3 +255,34 @@ def test_rerank_semantic_correctness(client_with_models, rerank_model_id, query,
 
     _validate_rerank_response(response, items)
     _validate_semantic_ranking(response, items, expected_first_item)
+
+
+def test_skip_if_provider_doesnt_support_rerank():
+    from unittest.mock import MagicMock
+
+    mock_model = MagicMock()
+    mock_model.id = "test-rerank-model"
+    mock_model.custom_metadata = {"provider_id": "test-provider-id"}
+
+    mock_client = MagicMock()
+    mock_client.models.list.return_value.data = [mock_model]
+
+    # Verify canonical sentence-transformers, remote::nvidia, and remote::vllm are supported
+    for supported_provider in ("inline::sentence-transformers", "remote::nvidia", "remote::vllm"):
+        mock_provider = MagicMock()
+        mock_provider.provider_id = "test-provider-id"
+        mock_provider.provider_type = supported_provider
+        mock_client.providers.list.return_value = [mock_provider]
+
+        # Should not raise pytest.skip
+        skip_if_provider_doesnt_support_rerank(mock_client, "test-rerank-model")
+
+    # Verify unsupported providers are skipped
+    for unsupported_provider in ("remote::together", "remote::fireworks", "remote::openai"):
+        mock_provider = MagicMock()
+        mock_provider.provider_id = "test-provider-id"
+        mock_provider.provider_type = unsupported_provider
+        mock_client.providers.list.return_value = [mock_provider]
+
+        with pytest.raises(pytest.skip.Exception):
+            skip_if_provider_doesnt_support_rerank(mock_client, "test-rerank-model")
