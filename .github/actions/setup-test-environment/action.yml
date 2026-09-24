@@ -92,6 +92,10 @@ runs:
       if: ${{ startsWith(inputs.setup, 'llama-cpp-server') && inputs.inference-mode != 'replay' }}
       uses: ./.github/actions/setup-llamacpp
 
+    - name: Setup text-embeddings-inference
+      if: ${{ startsWith(inputs.setup, 'text-embeddings-inference') && inputs.inference-mode != 'replay' }}
+      uses: ./.github/actions/setup-tei
+
     - name: Start Postgres service
       if: ${{ contains(inputs.setup, 'postgres') }}
       shell: bash

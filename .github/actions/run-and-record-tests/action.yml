@@ -159,6 +159,8 @@ runs:
         sudo docker logs ollama > "ollama-${INPUT_INFERENCE_MODE}.log" 2>&1 || true
         # vllm logs (native server started by setup-vllm, if it ran)
         cp "${RUNNER_TEMP}/vllm/vllm.log" "vllm-${INPUT_INFERENCE_MODE}.log" 2>/dev/null || true
+        # text-embeddings-inference logs (if tei container exists)
+        sudo docker logs tei > "tei-${INPUT_INFERENCE_MODE}.log" 2>&1 || true
         # Note: distro container logs are now dumped in integration-tests.sh before container is removed
 
     - name: Upload logs
