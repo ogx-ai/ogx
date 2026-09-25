@@ -120,6 +120,10 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "embedding_dimension": 768,
         },
     ),
+    # The gpt/azure/watsonx/vertexai setups default rerank_model to the ST reranker
+    # because the recorded node IDs of rerank-parameterized tests (langchain/langgraph
+    # in the responses suite) include the param value, and recording hashes are keyed
+    # by test_id. Setups without ST-rerank recordings (e.g. vllm) intentionally omit it.
     "gpt": Setup(
         name="gpt",
         description="OpenAI GPT models for high-quality responses and tool calling",
@@ -128,6 +132,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "openai/gpt-4o",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 1536,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "gpt-reasoning": Setup(
@@ -147,6 +152,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "azure/gpt-4o",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "watsonx": Setup(
@@ -155,6 +161,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         defaults={
             "text_model": "watsonx/meta-llama/llama-3-3-70b-instruct",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "vertexai": Setup(
@@ -165,6 +172,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "vertexai/publishers/google/models/gemini-2.0-flash",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "tgi": Setup(
