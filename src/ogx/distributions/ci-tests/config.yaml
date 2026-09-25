@@ -112,6 +112,11 @@ providers:
     provider_type: remote::llama-cpp-server
     config:
       base_url: ${env.LLAMA_CPP_SERVER_URL:=http://localhost:8080/v1}
+  - provider_id: ${env.THEGRID_API_KEY:+thegrid}
+    provider_type: remote::thegrid
+    config:
+      base_url: https://api.thegrid.ai/v1
+      api_key: ${env.THEGRID_API_KEY:=}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -332,6 +337,11 @@ registered_resources:
     model_id: bedrock/openai.gpt-oss-20b-1:0
     provider_id: ${env.AWS_DEFAULT_REGION:+bedrock}
     provider_model_id: openai.gpt-oss-20b-1:0
+    model_type: llm
+  - metadata: {}
+    model_id: thegrid/text-standard
+    provider_id: ${env.THEGRID_API_KEY:+thegrid}
+    provider_model_id: text-standard
     model_type: llm
   vector_stores: []
 server:
