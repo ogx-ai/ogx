@@ -1,29 +1,119 @@
-name: Setup VLLM
-description: Start VLLM
+name: Setup vLLM
+description: Install a pinned vLLM CPU wheel and Qwen3-0.6B weights natively on the runner and start the server (no container)
+inputs:
+  port:
+    description: 'Port for the vLLM server'
+    required: false
+    default: '8000'
+  workdir:
+    description: 'Directory for the vLLM virtualenv, wheel, model weights and server log'
+    required: false
+    default: '${{ runner.temp }}/vllm'
 runs:
   using: "composite"
   steps:
-    - name: Start VLLM
+    - name: Install vLLM 0.22.1 (CPU x86_64) and download Qwen3-0.6B
       shell: bash
       run: |
-        # Start vllm container
-        docker run -d \
-          --name vllm \
-          -p 8000:8000 \
-          --privileged=true \
-          quay.io/opendatahub/vllm-cpu:Qwen3-0.6B-granite-embedding-125m-english \
-          --host 0.0.0.0 \
-          --port 8000 \
+        set -euo pipefail
+        WORKDIR="${{ inputs.workdir }}"
+        mkdir -p "$WORKDIR"
+
+        # Fail loudly if an artifact on disk doesn't match its pinned sha256. TLS
+        # protects the download in transit; pinning the content also catches a
+        # swapped or re-uploaded asset.
+        verify() {
+          echo "$2  $1" | sha256sum -c - \
+            || { echo "Failed to verify sha256 for $1 (expected $2)" >&2; exit 1; }
+        }
+
+        # 1. vLLM CPU wheel, pinned to the official 0.22.1 GitHub release asset.
+        #    Verify the hash BEFORE installing so we never install unauthenticated bytes.
+        #    Transitive dependencies are resolved by uv; only vLLM itself is hash-pinned.
+        WHEEL_NAME="vllm-0.22.1+cpu-cp38-abi3-manylinux_2_34_x86_64.whl"
+        WHEEL="$WORKDIR/$WHEEL_NAME"
+        WHEEL_SHA=c8661ca28e8e0a65fdf7f5462877150c9157be85507aa4b2aacfe6a8d25b1827
+        [ -f "$WHEEL" ] || curl -fsSL --retry 3 -o "$WHEEL" \
+          "https://github.com/vllm-project/vllm/releases/download/v0.22.1/$WHEEL_NAME"
+        verify "$WHEEL" "$WHEEL_SHA"
+
+        # Isolated venv: vLLM pins its own torch, which must not leak into the project env.
+        [ -d "$WORKDIR/venv" ] || uv venv --python 3.12 "$WORKDIR/venv"
+        uv pip install --python "$WORKDIR/venv/bin/python" --torch-backend cpu "$WHEEL"
+        "$WORKDIR/venv/bin/vllm" --version
+
+        # 2. Qwen/Qwen3-0.6B, pinned to an immutable HuggingFace commit. Download if
+        #    missing, but always re-verify the on-disk file (catches a corrupt cached copy).
+        REV=c1899de289a04d12100db370d81485cdf75e47ca
+        MODEL_DIR="$WORKDIR/models/Qwen3-0.6B"
+        mkdir -p "$MODEL_DIR"
+        get_file() {
+          dest="$MODEL_DIR/$1"
+          [ -f "$dest" ] || curl -fsSL --retry 3 --max-time 900 -o "$dest" \
+            "https://huggingface.co/Qwen/Qwen3-0.6B/resolve/$REV/$1"
+          verify "$dest" "$2"
+        }
+        get_file config.json 660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd
+        get_file generation_config.json 2325da0f15bb848e018c5ae071b7943332e9f871d6b60e2ed22ca97d4cb993d2
+        get_file merges.txt 8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+        get_file model.safetensors f47f71177f32bcd101b7573ec9171e6a57f4f4d31148d38e382306f42996874b
+        get_file tokenizer.json aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+        get_file tokenizer_config.json d5d09f07b48c3086c508b30d1c9114bd1189145b74e982a265350c923acd8101
+        get_file vocab.json ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+
+    - name: Start vLLM server
+      shell: bash
+      run: |
+        set -euo pipefail
+        WORKDIR="${{ inputs.workdir }}"
+        PORT="${{ inputs.port }}"
+
+        # On the CPU backend --gpu-memory-utilization is the fraction of host RAM vLLM
+        # reserves. The 0.92 default exceeds what a 16GB runner has free at startup.
+        #
+        # setsid + nohup fully detach the server from this step's process group so it
+        # keeps running after the step's shell exits (unlike a plain `&`). The weights
+        # are served from the hash-verified local directory, so HF is never contacted.
+        HF_HUB_OFFLINE=1 setsid nohup "$WORKDIR/venv/bin/vllm" serve "$WORKDIR/models/Qwen3-0.6B" \
+          --host 127.0.0.1 \
+          --port "$PORT" \
+          --served-model-name Qwen/Qwen3-0.6B \
           --enable-auto-tool-choice \
           --tool-call-parser hermes \
           --reasoning-parser deepseek_r1 \
-          --model /root/.cache/Qwen/Qwen3-0.6B \
-          --served-model-name Qwen/Qwen3-0.6B \
-          --max-model-len 8192
+          --max-model-len 8192 \
+          --gpu-memory-utilization 0.5 \
+          < /dev/null > "$WORKDIR/vllm.log" 2>&1 &
+        VLLM_PID=$!
+        echo "vLLM launched (detached, pid $VLLM_PID)"
 
-          # Wait for vllm to be ready
-          echo "Waiting for vllm to be ready..."
-          timeout 900 bash -c 'until curl -f http://localhost:8000/health; do
-            echo "Waiting for vllm..."
-            sleep 5
-          done'
+        # The root cause of a startup failure (e.g. a worker crash) sits well above the
+        # final stack trace, so dump the whole log rather than just its tail.
+        dump_log() {
+          echo "::group::vLLM server log"
+          cat "$WORKDIR/vllm.log" >&2
+          echo "::endgroup::"
+        }
+
+        echo "Waiting for vLLM to be ready..."
+        ready=false
+        for _ in $(seq 1 180); do
+          if curl -fsS "http://localhost:$PORT/health" >/dev/null 2>&1; then
+            ready=true
+            break
+          fi
+          if ! kill -0 "$VLLM_PID" 2>/dev/null; then
+            echo "Failed to start vLLM: process exited." >&2
+            dump_log
+            exit 1
+          fi
+          sleep 5
+        done
+        if [ "$ready" != "true" ]; then
+          echo "Failed to start vLLM within 15 minutes." >&2
+          dump_log
+          exit 1
+        fi
+
+        curl -fsS "http://localhost:$PORT/v1/models" | grep -q "Qwen/Qwen3-0.6B"
+        echo "vLLM ready on :$PORT"

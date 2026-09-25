@@ -4,7 +4,8 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Tests for the _prepare_request patches that carry the test ID in server mode."""
+"""Tests for test-ID injection: the OgxClient._prepare_request patch, and the
+httpx event-hook clients used for openai.OpenAI/AsyncOpenAI and langchain (#6627)."""
 
 import json
 
@@ -15,21 +16,23 @@ from openai import OpenAI
 
 from ogx.core.testing_context import reset_test_context, set_test_context
 from ogx.testing import api_recorder
-from ogx.testing.api_recorder import patch_httpx_for_test_id
+from ogx.testing.api_recorder import (
+    build_test_id_async_http_client,
+    build_test_id_http_client,
+    patch_httpx_for_test_id,
+)
 
 PROVIDER_DATA_HEADER = "X-OGX-Provider-Data"
 TEST_ID = "tests/unit/testing/test_api_recorder.py::test"
 
 
 @pytest.fixture
-def unpatched_clients():
-    """Undo the process-wide _prepare_request patches that a test installs."""
+def unpatched_ogx_client():
+    """Undo the process-wide OgxClient._prepare_request patch that a test installs."""
     ogx_prepare_request = OgxClient._prepare_request
-    openai_prepare_request = OpenAI._prepare_request
     api_recorder._prepare_request_originals.clear()
     yield
     OgxClient._prepare_request = ogx_prepare_request
-    OpenAI._prepare_request = openai_prepare_request
     api_recorder._prepare_request_originals.clear()
 
 
@@ -48,103 +51,176 @@ def _ogx_client() -> OgxClient:
     return OgxClient(base_url="http://localhost:8321")
 
 
-def _openai_client() -> OpenAI:
-    return OpenAI(api_key="not-a-real-key", base_url="http://localhost:8321/v1")
+class TestPatchOgxClient:
+    """OgxClient._prepare_request is our own generated client's documented request hook,
+    not a private third-party SDK internal -- patching it is unaffected by #6627."""
+
+    def test_original_still_runs(self, unpatched_ogx_client):
+        """Patching must not swallow whatever OgxClient's own _prepare_request does."""
+        prepared = []
+        OgxClient._prepare_request = lambda self, request: prepared.append(request)
+
+        patch_httpx_for_test_id()
+
+        request = _request()
+        _ogx_client()._prepare_request(request)
+
+        assert prepared == [request]
+
+    def test_test_id_injected_in_server_mode(self, unpatched_ogx_client, test_context, monkeypatch):
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
+        patch_httpx_for_test_id()
+
+        request = _request()
+        _ogx_client()._prepare_request(request)
+
+        assert json.loads(request.headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
+
+    def test_existing_provider_data_is_preserved(self, unpatched_ogx_client, test_context, monkeypatch):
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
+        patch_httpx_for_test_id()
+
+        request = _request()
+        request.headers[PROVIDER_DATA_HEADER] = json.dumps({"api_key": "abc"})
+        _ogx_client()._prepare_request(request)
+
+        assert json.loads(request.headers[PROVIDER_DATA_HEADER]) == {"api_key": "abc", "__test_id": TEST_ID}
+
+    def test_no_injection_in_library_client_mode(self, unpatched_ogx_client, test_context, monkeypatch):
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
+        patch_httpx_for_test_id()
+
+        request = _request()
+        _ogx_client()._prepare_request(request)
+
+        assert PROVIDER_DATA_HEADER not in request.headers
+
+    def test_originals_survive_api_recording_clearing_original_methods(self, unpatched_ogx_client):
+        """api_recording() reassigns and clears _original_methods, so the patch must not read it."""
+        calls = []
+        OgxClient._prepare_request = lambda self, request: calls.append(request)
+
+        patch_httpx_for_test_id()
+        api_recorder._original_methods.clear()
+
+        request = _request()
+        _ogx_client()._prepare_request(request)
+
+        assert calls == [request]
+
+    def test_patching_twice_does_not_stack_wrappers(self, unpatched_ogx_client):
+        patch_httpx_for_test_id()
+        patched = OgxClient._prepare_request
+
+        patch_httpx_for_test_id()
+
+        assert OgxClient._prepare_request is patched
 
 
-def test_each_client_calls_only_its_own_original(unpatched_clients):
-    """The patch must not pass an OgxClient to OpenAI._prepare_request, or vice versa."""
-    calls = []
+class TestBuildTestIdHttpClient:
+    """build_test_id_http_client()/build_test_id_async_http_client() use httpx's own public,
+    documented event_hooks mechanism -- no openai/langchain internals involved -- so the same
+    two functions cover openai.OpenAI, openai.AsyncOpenAI, and langchain's ChatOpenAI uniformly."""
 
-    def ogx_original(self, request):
-        calls.append(("ogx", self))
+    def test_returns_configured_httpx_client(self):
+        client = build_test_id_http_client()
+        assert isinstance(client, httpx.Client)
+        client.close()
 
-    def openai_original(self, request):
-        calls.append(("openai", self))
+    async def test_returns_configured_httpx_async_client(self):
+        client = build_test_id_async_http_client()
+        assert isinstance(client, httpx.AsyncClient)
+        await client.aclose()
 
-    OgxClient._prepare_request = ogx_original
-    OpenAI._prepare_request = openai_original
+    def test_sync_client_injects_test_id_in_server_mode(self, test_context, monkeypatch):
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
+        captured: list[httpx.Request] = []
 
-    patch_httpx_for_test_id()
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json={})
 
-    ogx_client = _ogx_client()
-    openai_client = _openai_client()
-    ogx_client._prepare_request(_request())
-    openai_client._prepare_request(_request())
+        with build_test_id_http_client(transport=httpx.MockTransport(handler)) as client:
+            client.post("http://localhost:8321/v1/responses", json={})
 
-    assert calls == [("ogx", ogx_client), ("openai", openai_client)]
+        assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
 
+    async def test_async_client_injects_test_id_in_server_mode(self, test_context, monkeypatch):
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
+        captured: list[httpx.Request] = []
 
-def test_ogx_client_does_not_touch_openai_instance_state(unpatched_clients):
-    """openai >= 2.44.0 dereferences self._provider_runtime, which OgxClient does not have."""
-    patch_httpx_for_test_id()
+        async def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json={})
 
-    assert _ogx_client()._prepare_request(_request()) is None
+        async with build_test_id_async_http_client(transport=httpx.MockTransport(handler)) as client:
+            await client.post("http://localhost:8321/v1/responses", json={})
 
+        assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
 
-def test_openai_original_still_runs(unpatched_clients):
-    """Patching must not swallow whatever openai's own _prepare_request does."""
-    prepared = []
-    OpenAI._prepare_request = lambda self, request: prepared.append(request)
+    def test_no_injection_outside_server_mode(self, test_context, monkeypatch):
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
+        captured: list[httpx.Request] = []
 
-    patch_httpx_for_test_id()
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json={})
 
-    request = _request()
-    _openai_client()._prepare_request(request)
+        with build_test_id_http_client(transport=httpx.MockTransport(handler)) as client:
+            client.post("http://localhost:8321/v1/responses", json={})
 
-    assert prepared == [request]
+        assert PROVIDER_DATA_HEADER not in captured[0].headers
 
+    def test_preserves_callers_own_event_hooks(self, test_context, monkeypatch):
+        """Passing event_hooks= must add our hook alongside the caller's, not replace it."""
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
+        own_hook_calls: list[httpx.Request] = []
 
-@pytest.mark.parametrize("client_factory", [_ogx_client, _openai_client], ids=["ogx", "openai"])
-def test_test_id_injected_in_server_mode(unpatched_clients, test_context, monkeypatch, client_factory):
-    monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
-    patch_httpx_for_test_id()
+        def own_hook(request: httpx.Request) -> None:
+            own_hook_calls.append(request)
 
-    request = _request()
-    client_factory()._prepare_request(request)
+        captured: list[httpx.Request] = []
 
-    assert json.loads(request.headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json={})
 
+        with build_test_id_http_client(
+            event_hooks={"request": [own_hook]}, transport=httpx.MockTransport(handler)
+        ) as client:
+            client.post("http://localhost:8321/v1/responses", json={})
 
-def test_existing_provider_data_is_preserved(unpatched_clients, test_context, monkeypatch):
-    monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
-    patch_httpx_for_test_id()
+        assert len(own_hook_calls) == 1
+        assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
 
-    request = _request()
-    request.headers[PROVIDER_DATA_HEADER] = json.dumps({"api_key": "abc"})
-    _ogx_client()._prepare_request(request)
+    def test_openai_client_with_http_client_gets_test_id(self, test_context, monkeypatch):
+        """End-to-end: a real openai.OpenAI() constructed with http_client=build_test_id_http_client()
+        stamps __test_id, without touching OpenAI._prepare_request at all."""
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
+        captured: list[httpx.Request] = []
 
-    assert json.loads(request.headers[PROVIDER_DATA_HEADER]) == {"api_key": "abc", "__test_id": TEST_ID}
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "chatcmpl-1",
+                    "object": "chat.completion",
+                    "created": 0,
+                    "model": "test",
+                    "choices": [
+                        {"index": 0, "message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}
+                    ],
+                },
+            )
 
+        client = OpenAI(
+            api_key="fake",
+            base_url="http://localhost:8321/v1",
+            http_client=build_test_id_http_client(transport=httpx.MockTransport(handler)),
+            max_retries=0,
+        )
 
-def test_no_injection_in_library_client_mode(unpatched_clients, test_context, monkeypatch):
-    monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
-    patch_httpx_for_test_id()
+        client.chat.completions.create(model="test", messages=[{"role": "user", "content": "hi"}])
 
-    request = _request()
-    _ogx_client()._prepare_request(request)
-
-    assert PROVIDER_DATA_HEADER not in request.headers
-
-
-def test_originals_survive_api_recording_clearing_original_methods(unpatched_clients):
-    """api_recording() reassigns and clears _original_methods, so the patch must not read it."""
-    calls = []
-    OgxClient._prepare_request = lambda self, request: calls.append(request)
-
-    patch_httpx_for_test_id()
-    api_recorder._original_methods.clear()
-
-    request = _request()
-    _ogx_client()._prepare_request(request)
-
-    assert calls == [request]
-
-
-def test_patching_twice_does_not_stack_wrappers(unpatched_clients):
-    patch_httpx_for_test_id()
-    patched = OgxClient._prepare_request
-
-    patch_httpx_for_test_id()
-
-    assert OgxClient._prepare_request is patched
+        assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}

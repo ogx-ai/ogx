@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
-from openai import NOT_GIVEN, OpenAI
+import httpx
+from openai import NOT_GIVEN
 
 from ogx.core.id_generation import reset_id_override, set_id_override
 from ogx.log import get_logger
@@ -34,8 +35,13 @@ _current_storage: ResponseStorage | None = None
 _original_methods: dict[str, Any] = {}
 
 # Deliberately not in _original_methods: patch_inference_clients() reassigns that dict and
-# unpatch_inference_clients() clears it, while the _prepare_request patches are installed
-# once per process and never removed.
+# unpatch_inference_clients() clears it, while the _prepare_request patch is installed
+# once per process and never removed. Only OgxClient is patched here -- it is our own
+# generated client, which calls self._prepare_request(request) as a documented extension
+# point (see client-sdks/openapi/templates/python/ogx_client.mustache). openai.OpenAI /
+# AsyncOpenAI clients get test-ID injection through build_test_id_http_client() /
+# build_test_id_async_http_client() instead, since their own _prepare_request is a private,
+# semver-exempt implementation detail (see #6627).
 _prepare_request_originals: dict[type, Callable[..., None]] = {}
 
 # Per-test deterministic ID counters (test_id -> id_kind -> counter)
@@ -308,15 +314,76 @@ def normalize_http_request(url: str, method: str, payload: dict[str, Any]) -> st
     return request_hash
 
 
+def _inject_test_id(request: httpx.Request) -> None:
+    """Stamp the current test's ID into the request's provider-data header, in server mode.
+
+    This is needed for server mode where the test ID must be transported from client to
+    server via HTTP headers, so the server can key recordings/replay and per-test state
+    (see ogx.core.testing_context.sync_test_context_from_provider_data). In library_client
+    mode this is a no-op since everything runs in the same process. No-op outside an active
+    test context too (test_id is None), so this is safe to install unconditionally.
+    """
+    stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
+    test_id = get_test_context()
+
+    if stack_config_type != "server" or not test_id:
+        return
+
+    provider_data_header = request.headers.get("X-OGX-Provider-Data")
+    provider_data = json.loads(provider_data_header) if provider_data_header else {}
+    provider_data["__test_id"] = test_id
+    request.headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
+
+    if is_debug_mode():
+        logger.info("[RECORDING DEBUG] Injected test ID into request header:")
+        logger.info(f"  Test ID: {test_id}")
+        logger.info(f"  URL: {request.url}")
+
+
+async def _inject_test_id_async(request: httpx.Request) -> None:
+    # httpx.AsyncClient requires its event hooks to be coroutine functions, but the
+    # injection logic itself is plain sync header mutation -- no I/O to await.
+    _inject_test_id(request)
+
+
+def build_test_id_http_client(**kwargs: Any) -> httpx.Client:
+    """Build an httpx.Client that stamps the current test's ID onto every outgoing request.
+
+    Pass as ``http_client=`` to any client that accepts a custom httpx.Client (openai.OpenAI,
+    langchain's ChatOpenAI's `http_client`, etc.) instead of relying on that SDK's own request
+    hook, which may be a private implementation detail. Uses httpx's own public, documented
+    event_hooks mechanism (https://www.python-httpx.org/advanced/event-hooks/), so it covers
+    any client built on httpx -- including ones openai.OpenAI wraps under a differently-named
+    but structurally-compatible httpx fork (see src/ogx/testing/providers/openai.py).
+
+    Any keyword arguments accepted by httpx.Client() may be passed through, e.g. to combine
+    with a caller's own event_hooks.
+    """
+    event_hooks = dict(kwargs.pop("event_hooks", None) or {})
+    event_hooks["request"] = [*event_hooks.get("request", []), _inject_test_id]
+    return httpx.Client(event_hooks=event_hooks, **kwargs)
+
+
+def build_test_id_async_http_client(**kwargs: Any) -> httpx.AsyncClient:
+    """Async counterpart of build_test_id_http_client(); pass as ``http_client=`` to
+    openai.AsyncOpenAI, or as ``http_async_client=`` to langchain's ChatOpenAI."""
+    event_hooks = dict(kwargs.pop("event_hooks", None) or {})
+    event_hooks["request"] = [*event_hooks.get("request", []), _inject_test_id_async]
+    return httpx.AsyncClient(event_hooks=event_hooks, **kwargs)
+
+
 def patch_httpx_for_test_id():
-    """Patch client _prepare_request methods to inject test ID into provider data header.
+    """Patch OgxClient._prepare_request to inject the current test's ID into requests.
 
     This is needed for server mode where the test ID must be transported from
-    client to server via HTTP headers. In library_client mode, this patch is a no-op
+    client to server via HTTP headers. In library_client mode this patch is a no-op
     since everything runs in the same process.
 
-    We use the _prepare_request hook the client provides for mutating
-    requests after construction but before sending.
+    OgxClient._prepare_request is our own generated client's documented hook for mutating
+    requests after construction but before sending (not a private SDK internal). openai.OpenAI
+    / AsyncOpenAI clients are not patched here -- construct them with
+    http_client=build_test_id_http_client() (or build_test_id_async_http_client() for the
+    async client / langchain's ChatOpenAI) instead.
     """
     try:
         from ogx_client import OgxClient
@@ -326,42 +393,15 @@ def patch_httpx_for_test_id():
     if _prepare_request_originals:
         return
 
-    def inject_test_id(request):
-        # Only inject test ID in server mode
-        stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
-        test_id = get_test_context()
+    original = OgxClient._prepare_request
 
-        if stack_config_type == "server" and test_id:
-            provider_data_header = request.headers.get("X-OGX-Provider-Data")
+    def patched_prepare_request(self, request):
+        original(self, request)
+        _inject_test_id(request)
+        return None
 
-            if provider_data_header:
-                provider_data = json.loads(provider_data_header)
-            else:
-                provider_data = {}
-
-            provider_data["__test_id"] = test_id
-            request.headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
-
-            if is_debug_mode():
-                logger.info("[RECORDING DEBUG] Injected test ID into request header:")
-                logger.info(f"  Test ID: {test_id}")
-                logger.info(f"  URL: {request.url}")
-
-    def make_patched_prepare_request(original):
-        def patched_prepare_request(self, request):
-            # Call only the original of the class being patched (it's a sync method that
-            # returns None). The two originals are not interchangeable: since openai
-            # 2.44.0, OpenAI._prepare_request dereferences self._provider_runtime, an
-            # attribute only openai's own __init__ sets.
-            original(self, request)
-            inject_test_id(request)
-            return None
-
-        return patched_prepare_request
-
-    for client_class in (OgxClient, OpenAI):
-        _prepare_request_originals[client_class] = client_class._prepare_request
-        client_class._prepare_request = make_patched_prepare_request(client_class._prepare_request)
+    _prepare_request_originals[OgxClient] = original
+    OgxClient._prepare_request = patched_prepare_request
 
 
 def get_api_recording_mode() -> APIRecordingMode:
@@ -641,6 +681,19 @@ class ResponseStorage:
 
         return results
 
+    def _has_model_list_recording(self, request_hash: str, response: dict[str, Any]) -> bool:
+        """Return True if a model-list recording for this exact model set already exists.
+
+        The model-list filename digest (see _model_identifiers_digest) covers only the
+        model identifiers, so an existing file with the same digest means the live
+        server serves the same model set as a previous record run.
+        """
+        digest = _model_identifiers_digest(response)
+        response_file = f"models-{request_hash}-{digest}.json"
+        if (self._get_test_dir() / response_file).exists():
+            return True
+        return (self.base_dir / "recordings" / response_file).exists()
+
 
 def _recording_from_file(response_path) -> dict[str, Any]:
     with open(response_path) as f:
@@ -867,18 +920,32 @@ def _patched_aiohttp_post(original_post, session_self, url: str, **kwargs):
         raise AssertionError(f"Invalid mode: {_current_mode}")
 
 
-async def _patched_httpx_async_post(original_post, self, url, **kwargs):
-    """Patched version of httpx.AsyncClient.post for recording/replay of Messages API passthrough.
+# URL fragments the httpx interceptors record and replay. Surfaces reached through a
+# provider SDK are patched at the SDK level instead, so only raw-httpx call sites belong
+# here: the Anthropic Messages and Google Interactions passthroughs, and the
+# Jina-compatible /rerank endpoint the vLLM adapter posts to directly (vllm.py rerank()).
+_INTERCEPTED_HTTPX_PATHS = ("/v1/messages", "/interactions", "/rerank")
 
-    Intercepts requests to /v1/messages endpoints so the native Ollama passthrough
-    path can be recorded and replayed without a live backend.
+
+def _should_intercept_httpx(url: str) -> bool:
+    """Whether an httpx request to this URL is one the recorder records and replays.
+
+    Shared by the post and stream patches so the two cannot drift apart.
+    """
+    return any(path in url for path in _INTERCEPTED_HTTPX_PATHS)
+
+
+async def _patched_httpx_async_post(original_post, self, url, **kwargs):
+    """Patched version of httpx.AsyncClient.post for recording/replay of raw-httpx endpoints.
+
+    Intercepts the endpoints listed in _INTERCEPTED_HTTPX_PATHS -- the native Messages and
+    Interactions passthroughs, and the vLLM rerank endpoint -- so those paths can be
+    recorded and replayed without a live backend.
     """
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
-
-    if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    if not _should_intercept_httpx(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return await original_post(self, url, **kwargs)
 
     json_payload = kwargs.get("json", {})
@@ -927,17 +994,15 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
 
 
 def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
-    """Patched version of httpx.AsyncClient.stream for recording/replay of streaming Messages API passthrough.
+    """Patched version of httpx.AsyncClient.stream for recording/replay of streaming raw-httpx endpoints.
 
-    Intercepts streaming requests to /v1/messages endpoints. Returns an async context manager
-    that either replays recorded SSE events or records live ones.
+    Intercepts streaming requests to the endpoints listed in _INTERCEPTED_HTTPX_PATHS. Returns
+    an async context manager that either replays recorded SSE events or records live ones.
     """
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
-
-    if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    if not _should_intercept_httpx(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return original_stream(self, method, url, **kwargs)
 
     json_payload = kwargs.get("json", {})
@@ -1168,8 +1233,9 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     if mode == APIRecordingMode.REPLAY or mode == APIRecordingMode.RECORD_IF_MISSING:
         # Model-list responses reflect which models are available in the current
         # environment (e.g. which models were pulled), so only REPLAY may use the
-        # recorded union. In RECORD_IF_MISSING we must fetch live and re-record,
-        # otherwise a stale union would hide newly pulled models.
+        # recorded union. In RECORD_IF_MISSING we must fetch live (and re-record
+        # when the model set changed -- see the write-skip below), otherwise a
+        # stale union would hide newly pulled models.
         if _is_model_list_endpoint(endpoint) and mode == APIRecordingMode.REPLAY:
             records = storage._model_list_responses(request_hash)
             recording = _combine_model_list_responses(endpoint, records)
@@ -1285,6 +1351,25 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
             return replay_recorded_stream()
         else:
             response_data = {"body": response, "is_streaming": False}
+            if (
+                mode == APIRecordingMode.RECORD_IF_MISSING
+                and endpoint == "/v1/models"
+                and storage._has_model_list_recording(request_hash, response_data)
+            ):
+                # Model-list endpoints are always fetched live in record-if-missing mode
+                # (see the lookup block above) so newly pulled models are picked up.
+                # But providers like vLLM embed per-server-startup values in model
+                # objects that _normalize_response does not cover -- vLLM adds a nested
+                # permission[] array with a fresh random id and created timestamp on
+                # every start, plus vLLM-specific fields such as root. Unconditionally
+                # re-writing the recording then produces a git diff on every record run
+                # even for an unchanged model set, and the commit-recordings workflow
+                # commits that diff every time, looping "Recordings update from CI"
+                # (observed in #6635). The filename digest covers exactly the model
+                # set, so when a recording for this set already exists we serve the
+                # live response and skip the write; a changed model set still records
+                # a new file.
+                return response
             storage.store_recording(request_hash, request_data, response_data)
             return response
 

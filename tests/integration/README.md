@@ -63,7 +63,7 @@ if no model is specified.
 - `--setup`: global configuration that can be used with any suite. Setups prefill model/env defaults; explicit CLI flags always win.
   - Available setups:
     - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses llama3.2:3b-instruct-fp16)
-    - `vllm`: VLLM provider for efficient local inference (sets VLLM_URL, uses Llama-3.2-1B-Instruct)
+    - `vllm`: vLLM provider running natively on the host (sets VLLM_URL, uses Qwen/Qwen3-0.6B)
     - `gpt`: OpenAI GPT models for high-quality responses (uses gpt-4o)
     - `claude`: Anthropic Claude models for high-quality responses (uses claude-3-5-sonnet)
 
@@ -242,12 +242,12 @@ gh workflow run record-integration-tests.yml \
 **Available providers:**
 
 - `ollama` - No API keys (auto-runs on PRs)
+- `llama-cpp-server` - No API keys (auto-runs on PRs)
+- `vllm` - No API keys (auto-runs on PRs; installed natively from a pinned CPU wheel)
 - `gpt` - OpenAI (requires `OPENAI_API_KEY` secret)
 - `azure` - Azure OpenAI (requires `AZURE_API_KEY`, `AZURE_API_BASE` secrets)
 - `bedrock` - AWS Bedrock (requires `AWS_BEARER_TOKEN_BEDROCK` secret)
 - `watsonx` - IBM watsonx (requires `WATSONX_API_KEY`, `WATSONX_BASE_URL`, `WATSONX_PROJECT_ID` secrets)
-
-Note: `vllm` is not yet supported in this recording workflow (not in the provider matrix).
 
 **Adding new providers:**
 

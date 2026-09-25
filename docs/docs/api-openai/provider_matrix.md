@@ -24,7 +24,7 @@ inference provider, based on integration test results.
 | ollama | 3 | 3 | 0 | 2% |
 | openai | 137 | 137 | 0 | 100% |
 | vertexai | 70 | 70 | 0 | 51% |
-| vllm | 3 | 3 | 0 | 2% |
+| vllm | 8 | 8 | 0 | 6% |
 | watsonx | 62 | 62 | 0 | 45% |
 
 ## Provider Details
@@ -168,12 +168,12 @@ Models, endpoints, and versions used during test recordings.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | reasoning basic streaming | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | reasoning multi turn passthrough | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
-| reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
+| reasoning no summary without request | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ✅ | ✅ |
 | reasoning non streaming | ⏭️ | ✅ | ✅ | ✅ | ⏭️ | ✅ | ✅ |
-| reasoning summary event ordering | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
-| reasoning summary non streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
-| reasoning summary streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
-| reasoning summary usage included | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ⏭️ | ✅ |
+| reasoning summary event ordering | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ✅ | ✅ |
+| reasoning summary non streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ✅ | ✅ |
+| reasoning summary streaming | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ✅ | ✅ |
+| reasoning summary usage included | ⏭️ | ⏭️ | ⏭️ | ✅ | ⏭️ | ✅ | ✅ |
 
 ## Responses Access Control
 

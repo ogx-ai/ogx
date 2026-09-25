@@ -28,10 +28,29 @@ DUMMY_IMAGE_BASE64 = ImageContentItem(image=URLOrData(data="base64string"), type
 PROVIDERS_SUPPORTING_MEDIA = {}  # Providers that support media input for rerank models
 
 
-def skip_if_provider_doesnt_support_rerank(inference_provider_type):
-    supported_providers = {"remote::nvidia", "remote::vllm"}
-    if inference_provider_type not in supported_providers:
-        pytest.skip(f"{inference_provider_type} doesn't support rerank models")
+def provider_from_model(client_with_models, model_id):
+    models = {m.id: m for m in client_with_models.models.list().data}
+    models.update(
+        {
+            m.custom_metadata["provider_resource_id"]: m
+            for m in client_with_models.models.list().data
+            if m.custom_metadata and "provider_resource_id" in m.custom_metadata
+        }
+    )
+    provider_id = models[model_id].custom_metadata["provider_id"]
+    providers = {p.provider_id: p for p in client_with_models.providers.list()}
+    return providers[provider_id]
+
+
+def skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id):
+    provider = provider_from_model(client_with_models, rerank_model_id)
+    supported_providers = {
+        "inline::sentence-transformers",
+        "remote::nvidia",
+        "remote::vllm",
+    }
+    if provider.provider_type not in supported_providers:
+        pytest.skip(f"{provider.provider_type} doesn't support rerank models")
 
 
 def _validate_rerank_response(response: RerankResponse, items: list) -> None:
@@ -93,8 +112,8 @@ def _validate_semantic_ranking(response: RerankResponse, items: list, expected_f
         "mixed-content-2",
     ],
 )
-def test_rerank_text(client_with_models, rerank_model_id, query, items, inference_provider_type):
-    skip_if_provider_doesnt_support_rerank(inference_provider_type)
+def test_rerank_text(client_with_models, rerank_model_id, query, items):
+    skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id)
 
     response = client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
     assert hasattr(response, "__len__") and callable(response.__len__), (
@@ -104,8 +123,8 @@ def test_rerank_text(client_with_models, rerank_model_id, query, items, inferenc
     _validate_rerank_response(response, items)
 
 
-def test_rerank_text_parallel(client_with_models, rerank_model_id, inference_provider_type):
-    skip_if_provider_doesnt_support_rerank(inference_provider_type)
+def test_rerank_text_parallel(client_with_models, rerank_model_id):
+    skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id)
     query_items = [
         (DUMMY_STRING, [DUMMY_STRING, DUMMY_STRING2]),
         (DUMMY_TEXT, [DUMMY_TEXT, DUMMY_TEXT2]),
@@ -149,8 +168,8 @@ def test_rerank_text_parallel(client_with_models, rerank_model_id, inference_pro
         "mixed-content-2",
     ],
 )
-def test_rerank_image(client_with_models, rerank_model_id, query, items, inference_provider_type):
-    skip_if_provider_doesnt_support_rerank(inference_provider_type)
+def test_rerank_image(client_with_models, rerank_model_id, query, items):
+    skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id)
 
     if rerank_model_id not in PROVIDERS_SUPPORTING_MEDIA:
         error_type = ValueError if isinstance(client_with_models, OGXAsLibraryClient) else OGXBadRequestError
@@ -164,8 +183,8 @@ def test_rerank_image(client_with_models, rerank_model_id, query, items, inferen
         _validate_rerank_response(response, items)
 
 
-def test_rerank_max_results(client_with_models, rerank_model_id, inference_provider_type):
-    skip_if_provider_doesnt_support_rerank(inference_provider_type)
+def test_rerank_max_results(client_with_models, rerank_model_id):
+    skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id)
 
     items = [DUMMY_STRING, DUMMY_STRING2, DUMMY_TEXT, DUMMY_TEXT2]
     max_num_results = 2
@@ -182,8 +201,8 @@ def test_rerank_max_results(client_with_models, rerank_model_id, inference_provi
     _validate_rerank_response(response, items)
 
 
-def test_rerank_max_results_larger_than_items(client_with_models, rerank_model_id, inference_provider_type):
-    skip_if_provider_doesnt_support_rerank(inference_provider_type)
+def test_rerank_max_results_larger_than_items(client_with_models, rerank_model_id):
+    skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id)
 
     items = [DUMMY_STRING, DUMMY_STRING2]
     response = client_with_models.alpha.inference.rerank(
@@ -229,12 +248,41 @@ def test_rerank_max_results_larger_than_items(client_with_models, rerank_model_i
         ),
     ],
 )
-def test_rerank_semantic_correctness(
-    client_with_models, rerank_model_id, query, items, expected_first_item, inference_provider_type
-):
-    skip_if_provider_doesnt_support_rerank(inference_provider_type)
+def test_rerank_semantic_correctness(client_with_models, rerank_model_id, query, items, expected_first_item):
+    skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id)
 
     response = client_with_models.alpha.inference.rerank(model=rerank_model_id, query=query, items=items)
 
     _validate_rerank_response(response, items)
     _validate_semantic_ranking(response, items, expected_first_item)
+
+
+def test_skip_if_provider_doesnt_support_rerank():
+    from unittest.mock import MagicMock
+
+    mock_model = MagicMock()
+    mock_model.id = "test-rerank-model"
+    mock_model.custom_metadata = {"provider_id": "test-provider-id"}
+
+    mock_client = MagicMock()
+    mock_client.models.list.return_value.data = [mock_model]
+
+    # Verify canonical sentence-transformers, remote::nvidia, and remote::vllm are supported
+    for supported_provider in ("inline::sentence-transformers", "remote::nvidia", "remote::vllm"):
+        mock_provider = MagicMock()
+        mock_provider.provider_id = "test-provider-id"
+        mock_provider.provider_type = supported_provider
+        mock_client.providers.list.return_value = [mock_provider]
+
+        # Should not raise pytest.skip
+        skip_if_provider_doesnt_support_rerank(mock_client, "test-rerank-model")
+
+    # Verify unsupported providers are skipped
+    for unsupported_provider in ("remote::together", "remote::fireworks", "remote::openai"):
+        mock_provider = MagicMock()
+        mock_provider.provider_id = "test-provider-id"
+        mock_provider.provider_type = unsupported_provider
+        mock_client.providers.list.return_value = [mock_provider]
+
+        with pytest.raises(pytest.skip.Exception):
+            skip_if_provider_doesnt_support_rerank(mock_client, "test-rerank-model")

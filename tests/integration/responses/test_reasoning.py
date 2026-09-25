@@ -6,6 +6,7 @@
 
 import pytest
 
+from ..helpers import provider_from_model
 from .streaming_assertions import StreamingValidator
 
 
@@ -16,20 +17,6 @@ def _get_attr(item, key, default=None):
     if isinstance(item, dict):
         return item.get(key, default)
     return getattr(item, key, default)
-
-
-def provider_from_model(client_with_models, text_model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[text_model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_reasoning_content_not_provided(client_with_models, text_model_id):

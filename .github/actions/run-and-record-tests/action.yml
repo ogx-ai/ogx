@@ -157,8 +157,8 @@ runs:
       run: |
         # Ollama logs (if ollama container exists)
         sudo docker logs ollama > "ollama-${INPUT_INFERENCE_MODE}.log" 2>&1 || true
-        # vllm logs (if vllm container exists)
-        sudo docker logs vllm > "vllm-${INPUT_INFERENCE_MODE}.log" 2>&1 || true
+        # vllm logs (native server started by setup-vllm, if it ran)
+        cp "${RUNNER_TEMP}/vllm/vllm.log" "vllm-${INPUT_INFERENCE_MODE}.log" 2>/dev/null || true
         # Note: distro container logs are now dumped in integration-tests.sh before container is removed
 
     - name: Upload logs

@@ -9,7 +9,7 @@ import time
 import pytest
 from langchain_openai import ChatOpenAI
 
-from ..helpers import assert_text_contains, normalize_text
+from ..helpers import assert_text_contains, normalize_text, provider_from_model
 
 __all__ = [
     "assert_text_contains",
@@ -23,20 +23,6 @@ __all__ = [
     "extract_text_content",
     "langchain_chat",
 ]
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_provider_is_vertexai(client_with_models, model_id, reason=""):
@@ -132,6 +118,8 @@ def extract_text_content(content: str | list[str] | list[dict]):
 
 def langchain_chat(responses_client, text_model_id, use_previous_response_id: bool | None = False):
     """Return a langchain chat instance"""
+    from ogx.testing.api_recorder import build_test_id_async_http_client, build_test_id_http_client
+
     base_url = str(responses_client.base_url)
     url = base_url if base_url.endswith("/v1/") else base_url + "/v1/"
 
@@ -143,4 +131,10 @@ def langchain_chat(responses_client, text_model_id, use_previous_response_id: bo
         model=text_model_id,
         use_responses_api=True,
         use_previous_response_id=use_previous_response_id,
+        # ChatOpenAI constructs its own OpenAI/AsyncOpenAI clients internally (.invoke() uses
+        # the sync one; LangGraph and .ainvoke()/.astream() callers use the async one), so
+        # __test_id needs to reach both. This was previously the one gap the old
+        # _prepare_request patch never covered, since it only ever patched openai.OpenAI (#6627).
+        http_client=build_test_id_http_client(),
+        http_async_client=build_test_id_async_http_client(),
     )

@@ -390,8 +390,12 @@ def require_server(ogx_client):
 
 @pytest.fixture(scope="session")
 def openai_client(ogx_client, require_server):
+    from ogx.testing.api_recorder import build_test_id_http_client
+
     base_url = f"{ogx_client.base_url}/v1"
-    client = OpenAI(base_url=base_url, api_key="fake", max_retries=0, timeout=30.0)
+    client = OpenAI(
+        base_url=base_url, api_key="fake", max_retries=0, timeout=30.0, http_client=build_test_id_http_client()
+    )
     yield client
     # Cleanup: close HTTP connections
     try:

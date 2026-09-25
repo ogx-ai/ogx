@@ -263,12 +263,13 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     if "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: brave -> tavily -> bing
+    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply
     _web_search_order = [
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),
         ("remote::nimble-search", "nimble-search"),
+        ("remote::serply-search", "serply-search"),
     ]
     tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
     existing_web_search: set[str] = {

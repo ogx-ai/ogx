@@ -184,23 +184,29 @@ class TestConversationAccessControl:
     @pytest.fixture
     def alice_client(self, openai_client):
         """Create an OpenAI client for Alice."""
+        from ogx.testing.api_recorder import build_test_id_http_client
+
         token = get_auth_token("ALICE_TOKEN", "token-alice")
         return OpenAI(
             base_url=str(openai_client.base_url),
             api_key=token,
             max_retries=0,
             timeout=30.0,
+            http_client=build_test_id_http_client(),
         )
 
     @pytest.fixture
     def bob_client(self, openai_client):
         """Create an OpenAI client for Bob."""
+        from ogx.testing.api_recorder import build_test_id_http_client
+
         token = get_auth_token("BOB_TOKEN", "token-bob")
         return OpenAI(
             base_url=str(openai_client.base_url),
             api_key=token,
             max_retries=0,
             timeout=30.0,
+            http_client=build_test_id_http_client(),
         )
 
     def test_user_cannot_retrieve_other_users_conversation(self, alice_client, bob_client, require_server):

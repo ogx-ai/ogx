@@ -143,14 +143,14 @@ jobs:
           fi
 
           # Determine which providers to run
-          # Security: For pull_request, only run secret-free providers (ollama variants +
-          # llama-cpp-server, which records against a locally-started router)
+          # Security: For pull_request, only run secret-free providers (ollama variants,
+          # llama-cpp-server and vllm, which record against locally-started servers)
           # Manual workflow_dispatch uses input providers (defaults to API providers)
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             PROVIDERS="$INPUT_PROVIDERS"
           else
             # Auto-trigger on PR: only secret-free providers (no secrets exposed to any PR)
-            PROVIDERS="ollama,ollama-reasoning,llama-cpp-server"
+            PROVIDERS="ollama,ollama-reasoning,llama-cpp-server,vllm"
           fi
 
           {
@@ -226,6 +226,10 @@ jobs:
             suite: messages
           - setup: llama-cpp-server
             suite: llama-cpp-server
+          - setup: vllm
+            suite: base-vllm-subset
+          - setup: vllm
+            suite: vllm-reasoning
           - setup: gpt
             suite: responses
           - setup: gpt
