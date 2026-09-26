@@ -1,0 +1,44 @@
+name: Check Provider Versions
+
+run-name: Open issues when the vLLM, Ollama or llama.cpp servers we record against have newer releases
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Report what would be filed without creating issues'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: check-provider-versions
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Check pinned provider server versions
+    # Scheduled runs only make sense (and only have issues enabled) on the upstream repository.
+    if: github.event_name != 'schedule' || github.repository == 'ogx-ai/ogx'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Compare pins with upstream releases and file issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          python3 .github/scripts/check_provider_versions.py "${args[@]}"

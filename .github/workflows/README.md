@@ -6,6 +6,7 @@ OGX uses GitHub Actions for Continuous Integration (CI). Below is a table detail
 | ---- | ---- | ------- |
 | Backward Compatibility Check | [backward-compat.yml](backward-compat.yml) | Check backward compatibility for config.yaml files |
 | Build Distribution Images | [build-distributions.yml](build-distributions.yml) | Build Distribution Images |
+| Check Provider Versions | [check-provider-versions.yml](check-provider-versions.yml) | Open issues when the vLLM, Ollama or llama.cpp servers we record against have newer releases |
 | CI Status | [ci-status.yml](ci-status.yml) | Aggregate CI check status |
 | CodeQL Workflow Security Scan | [codeql.yml](codeql.yml) | CodeQL Workflow Security Scan |
 | Commit Constraint Updates | [commit-constraint-updates.yml](commit-constraint-updates.yml) | Commit Constraint Updates |
