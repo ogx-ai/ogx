@@ -112,6 +112,10 @@ providers:
     provider_type: remote::llama-cpp-server
     config:
       base_url: ${env.LLAMA_CPP_SERVER_URL:=http://localhost:8080/v1}
+  - provider_id: ${env.TEI_URL:+text-embeddings-inference}
+    provider_type: remote::text-embeddings-inference
+    config:
+      base_url: ${env.TEI_URL:=http://localhost:8080/v1}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss

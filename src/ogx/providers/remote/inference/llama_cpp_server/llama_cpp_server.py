@@ -7,10 +7,17 @@
 
 import httpx
 
+from ogx.log import get_logger
 from ogx.providers.remote.inference.llama_cpp_server.config import LlamaCppServerConfig
 from ogx.providers.utils.inference.models_dev_registry import classify_model
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.server_signature import (
+    ServerUnreachableError,
+    check_llama_cpp_server,
+    verify_llama_cpp_server,
+)
 from ogx_api import (
+    HealthResponse,
     Model,
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
@@ -18,6 +25,8 @@ from ogx_api import (
     RerankResponse,
 )
 from ogx_api.inference import RerankRequest
+
+logger = get_logger(name=__name__, category="inference::llama_cpp_server")
 
 
 class LlamaCppServerInferenceAdapter(OpenAIMixin):
@@ -32,6 +41,34 @@ class LlamaCppServerInferenceAdapter(OpenAIMixin):
 
     def get_base_url(self) -> str:
         return str(self.config.base_url)
+
+    def _signature_api_key(self) -> str | None:
+        return self.config.auth_credential.get_secret_value() if self.config.auth_credential else None
+
+    async def initialize(self) -> None:
+        # Fail fast at construction time if the server is running but is not a
+        # llama.cpp server. A server that is simply not up yet only warns,
+        # matching the Ollama adapter's behaviour.
+        try:
+            await verify_llama_cpp_server(self.get_base_url(), api_key=self._signature_api_key())
+        except ServerUnreachableError as e:
+            logger.warning(
+                "llama.cpp server is not running; it must be reachable before models can be listed",
+                base_url=self.get_base_url(),
+                error=str(e),
+            )
+
+    async def health(self) -> HealthResponse:
+        """
+        Performs a health check by verifying the server identifies as llama.cpp
+        via its native GET /props endpoint.
+        This method is used by the Provider API to verify that the service is
+        running correctly.
+        Returns:
+
+            HealthResponse: A dictionary containing the health status.
+        """
+        return await check_llama_cpp_server(self.get_base_url(), api_key=self._signature_api_key())
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # llama.cpp's /v1/models response does not expose a model task/type field

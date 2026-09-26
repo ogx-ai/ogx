@@ -24,6 +24,7 @@ remote/
     passthrough/       # Generic passthrough to any endpoint
     runpod/            # RunPod
     sambanova/         # SambaNova
+    text_embeddings_inference/ # HuggingFace Text-Embeddings-Inference
     together/          # Together AI
     vertexai/          # Google Vertex AI
     vllm/              # vLLM

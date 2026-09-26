@@ -316,6 +316,15 @@ https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm
         ),
         RemoteProviderSpec(
             api=Api.inference,
+            adapter_type="text-embeddings-inference",
+            provider_type="remote::text-embeddings-inference",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.text_embeddings_inference",
+            config_class="ogx.providers.remote.inference.text_embeddings_inference.config.TextEmbeddingsInferenceConfig",
+            description="HuggingFace Text-Embeddings-Inference provider for embedding models served by a TEI server via its OpenAI-compatible /v1 endpoint.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
             adapter_type="llama-cpp-server",
             provider_type="remote::llama-cpp-server",
             pip_packages=[],

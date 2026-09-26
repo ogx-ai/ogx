@@ -267,6 +267,22 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "rerank_model": "llama-cpp-server/bge-reranker-v2-m3",
         },
     ),
+    "text-embeddings-inference": Setup(
+        name="text-embeddings-inference",
+        description=(
+            "HuggingFace Text-Embeddings-Inference server (CPU) serving an embedding model "
+            "over its OpenAI-compatible endpoint. Embedding-only: suites that need a text "
+            "model must not use this setup. The URL must include the /v1 prefix because the "
+            "OpenAI SDK appends endpoint paths to it."
+        ),
+        env={
+            "TEI_URL": "http://localhost:8080/v1",
+        },
+        defaults={
+            "embedding_model": "text-embeddings-inference/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
+        },
+    ),
     "vllm-qwen3next": Setup(
         name="vllm-qwen3next",
         description="Qwen3-Next model for contextual retrieval validation",
@@ -303,6 +319,13 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="llama-cpp-server",
         roots=["tests/integration/inference"],
         default_setup="llama-cpp-server",
+    ),
+    # Text-Embeddings-Inference backend. TEI only serves embeddings (no chat or
+    # completion endpoint), so this suite is scoped to the embeddings tests only.
+    "text-embeddings-inference": Suite(
+        name="text-embeddings-inference",
+        roots=["tests/integration/inference/test_openai_embeddings.py"],
+        default_setup="text-embeddings-inference",
     ),
     "responses": Suite(
         name="responses",

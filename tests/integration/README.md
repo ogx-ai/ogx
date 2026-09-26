@@ -244,6 +244,7 @@ gh workflow run record-integration-tests.yml \
 - `ollama` - No API keys (auto-runs on PRs)
 - `llama-cpp-server` - No API keys (auto-runs on PRs)
 - `vllm` - No API keys (auto-runs on PRs; installed natively from a pinned CPU wheel)
+- `text-embeddings-inference` - No API keys (auto-runs on PRs)
 - `gpt` - OpenAI (requires `OPENAI_API_KEY` secret)
 - `azure` - Azure OpenAI (requires `AZURE_API_KEY`, `AZURE_API_BASE` secrets)
 - `bedrock` - AWS Bedrock (requires `AWS_BEARER_TOKEN_BEDROCK` secret)

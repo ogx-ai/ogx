@@ -6,28 +6,29 @@ Remote inference provider adapters that connect to external AI services.
 
 ```text
 inference/
-  anthropic/           # Anthropic Claude models
-  azure/               # Azure OpenAI Service
-  bedrock/             # AWS Bedrock
-  cerebras/            # Cerebras Cloud
-  databricks/          # Databricks Model Serving
-  fireworks/           # Fireworks AI
-  gemini/              # Google Gemini API
-  groq/                # Groq LPU inference
-  llama_cpp_server/    # llama.cpp server/router (serves llm and embedding models)
-  llama_openai_compat/ # Generic OpenAI-compatible endpoints
-  nvidia/              # NVIDIA NIM
-  oci/                 # Oracle Cloud Infrastructure GenAI
-  ollama/              # Ollama (local model serving)
-  openai/              # OpenAI API
-  passthrough/         # Generic passthrough to any endpoint
-  runpod/              # RunPod cloud GPU
-  sambanova/           # SambaNova
-  tgi/                 # HuggingFace TGI and Inference API
-  together/            # Together AI
-  vertexai/            # Google Vertex AI
-  vllm/                # vLLM inference server
-  watsonx/             # IBM WatsonX
+  anthropic/                # Anthropic Claude models
+  azure/                    # Azure OpenAI Service
+  bedrock/                  # AWS Bedrock
+  cerebras/                 # Cerebras Cloud
+  databricks/               # Databricks Model Serving
+  fireworks/                # Fireworks AI
+  gemini/                   # Google Gemini API
+  groq/                     # Groq LPU inference
+  llama_cpp_server/         # llama.cpp server/router (serves llm and embedding models)
+  llama_openai_compat/      # Generic OpenAI-compatible endpoints
+  nvidia/                   # NVIDIA NIM
+  oci/                      # Oracle Cloud Infrastructure GenAI
+  ollama/                   # Ollama (local model serving)
+  openai/                   # OpenAI API
+  passthrough/              # Generic passthrough to any endpoint
+  runpod/                   # RunPod cloud GPU
+  sambanova/                # SambaNova
+  text_embeddings_inference/ # HuggingFace Text-Embeddings-Inference (embedding models)
+  tgi/                      # HuggingFace TGI and Inference API
+  together/                 # Together AI
+  vertexai/                 # Google Vertex AI
+  vllm/                     # vLLM inference server
+  watsonx/                  # IBM WatsonX
   __init__.py
 ```
 
