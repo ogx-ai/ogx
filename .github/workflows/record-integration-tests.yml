@@ -143,14 +143,15 @@ jobs:
           fi
 
           # Determine which providers to run
-           # Security: For pull_request, only run secret-free providers (ollama variants,
-           # llama-cpp-server and vllm, which record against locally-started servers)
+          # Security: For pull_request, only run secret-free providers (ollama variants,
+          # llama-cpp-server, vllm and text-embeddings-inference, which record against
+          # locally-started servers)
           # Manual workflow_dispatch uses input providers (defaults to API providers)
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             PROVIDERS="$INPUT_PROVIDERS"
           else
             # Auto-trigger on PR: only secret-free providers (no secrets exposed to any PR)
-            PROVIDERS="ollama,ollama-reasoning,llama-cpp-server,vllm"
+            PROVIDERS="ollama,ollama-reasoning,llama-cpp-server,vllm,text-embeddings-inference"
           fi
 
           {
@@ -230,6 +231,8 @@ jobs:
             suite: base-vllm-subset
           - setup: vllm
             suite: vllm-reasoning
+          - setup: text-embeddings-inference
+            suite: text-embeddings-inference
           - setup: gpt
             suite: responses
           - setup: gpt
@@ -292,7 +295,7 @@ jobs:
 
       - name: Setup test environment
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/ogx/.github/actions/setup-test-environment@f8ca3d3840ac4046e9b066854e4d6719337a9672
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@0807a93e8508bb22dcd633de0a993343a6b1b346
         with:
           python-version: "3.12"
           client-version: "latest"
@@ -326,7 +329,7 @@ jobs:
 
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@f8ca3d3840ac4046e9b066854e4d6719337a9672
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@0807a93e8508bb22dcd633de0a993343a6b1b346
         env:
           OPENAI_API_KEY: ${{ matrix.provider.setup == 'gpt' && secrets.OPENAI_API_KEY || '' }}
           AZURE_API_KEY: ${{ matrix.provider.setup == 'azure' && secrets.AZURE_API_KEY || '' }}
