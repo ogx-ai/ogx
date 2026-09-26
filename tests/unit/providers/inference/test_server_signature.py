@@ -238,3 +238,67 @@ class TestRootUrl:
 
     def test_keeps_subpath_prefix(self):
         assert server_signature._root_url("http://proxy.example/tei/v1") == "http://proxy.example/tei"
+
+
+def _capture_client_kwargs(monkeypatch, handler=None):
+    """Record the kwargs every httpx.AsyncClient is built with, serving requests from a mock transport."""
+    handler = handler or (lambda request: httpx.Response(200, json={"model_id": "m", "total_slots": 1}))
+    real_client = httpx.AsyncClient
+    captured: list[dict] = []
+
+    def factory(*args, **kwargs):
+        captured.append(kwargs)
+        return real_client(transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(server_signature.httpx, "AsyncClient", factory)
+    return captured
+
+
+class TestProbeClientKwargs:
+    """The probes run against the server the adapter is configured for, so they must apply its network config."""
+
+    async def test_verify_uses_the_given_client_kwargs(self, monkeypatch):
+        captured = _capture_client_kwargs(monkeypatch)
+
+        await server_signature.verify_llama_cpp_server(
+            "http://localhost:8080/v1", client_kwargs={"verify": False, "headers": {"X-Route": "team-a"}}
+        )
+
+        assert captured[0]["verify"] is False
+        assert captured[0]["headers"] == {"X-Route": "team-a"}
+
+    async def test_check_uses_the_given_client_kwargs(self, monkeypatch):
+        captured = _capture_client_kwargs(monkeypatch)
+
+        result = await server_signature.check_text_embeddings_inference_server(
+            "http://localhost:8080/v1", client_kwargs={"verify": False}
+        )
+
+        assert result["status"] == server_signature.HealthStatus.OK
+        assert captured[0]["verify"] is False
+
+    async def test_model_id_lookup_uses_the_given_client_kwargs(self, monkeypatch):
+        captured = _capture_client_kwargs(monkeypatch)
+
+        await server_signature.get_text_embeddings_inference_model_id(
+            "http://localhost:8080/v1", client_kwargs={"verify": False}
+        )
+
+        assert captured[0]["verify"] is False
+
+    async def test_probe_timeout_wins_over_a_configured_network_timeout(self, monkeypatch):
+        """A long network.timeout must not stretch the deliberately short probe past the factory-probe budget."""
+        captured = _capture_client_kwargs(monkeypatch)
+
+        await server_signature.verify_llama_cpp_server(
+            "http://localhost:8080/v1", client_kwargs={"timeout": httpx.Timeout(120.0)}
+        )
+
+        assert captured[0]["timeout"] == server_signature.SIGNATURE_TIMEOUT
+
+    async def test_behaves_as_before_without_client_kwargs(self, monkeypatch):
+        captured = _capture_client_kwargs(monkeypatch)
+
+        await server_signature.verify_llama_cpp_server("http://localhost:8080/v1")
+
+        assert captured == [{"timeout": server_signature.SIGNATURE_TIMEOUT}]

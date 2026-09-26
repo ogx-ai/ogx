@@ -188,3 +188,52 @@ class TestUnsupportedOperations:
 
         with pytest.raises(NotImplementedError, match="does not support completions"):
             await adapter.openai_completion(params)
+
+
+NETWORK_CONFIG = {
+    "tls": {"verify": False},
+    "proxy": {"url": "http://proxy.example.com:3128"},
+    "headers": {"X-Route": "team-a"},
+    "timeout": 120.0,
+    "limits": {"max_connections": 7},
+}
+
+
+class TestSignatureProbesUseNetworkConfig:
+    """initialize(), health() and model discovery call TEI's native /info, so they must honour config.network."""
+
+    @staticmethod
+    def _capture(monkeypatch):
+        real_client = httpx.AsyncClient
+        captured: list[dict] = []
+
+        def factory(*args, **kwargs):
+            captured.append(kwargs)
+            return real_client(
+                transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"model_id": "BAAI/bge-small"}))
+            )
+
+        monkeypatch.setattr(server_signature.httpx, "AsyncClient", factory)
+        return captured
+
+    @pytest.mark.parametrize("probe", ["initialize", "health", "list_provider_model_ids"])
+    async def test_probe_applies_network_config(self, monkeypatch, probe):
+        captured = self._capture(monkeypatch)
+
+        await getattr(_make_adapter(network=NETWORK_CONFIG), probe)()
+
+        kwargs = captured[0]
+        assert kwargs["verify"] is False
+        assert set(kwargs["mounts"]) == {"http://", "https://"}
+        assert kwargs["headers"] == {"X-Route": "team-a"}
+        assert kwargs["limits"].max_connections == 7
+        assert kwargs["timeout"] == server_signature.SIGNATURE_TIMEOUT
+
+    @pytest.mark.parametrize("probe", ["initialize", "health", "list_provider_model_ids"])
+    async def test_probe_uses_shared_ssl_context_without_network_config(self, monkeypatch, probe):
+        captured = self._capture(monkeypatch)
+        adapter = _make_adapter()
+
+        await getattr(adapter, probe)()
+
+        assert captured[0]["verify"] is adapter.shared_ssl_context
