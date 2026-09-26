@@ -1,6 +1,6 @@
 name: Messages API - Claude Code Client Smoke Tests
 
-run-name: Drive the Claude Code CLI and Agent SDK against /v1/messages (live, Ollama)
+run-name: Drive the latest Claude Code CLI and Agent SDK against /v1/messages (live, Ollama)
 
 on:
   push:
@@ -26,7 +26,25 @@ on:
     branches:
       - main
       - 'release-[0-9]+.[0-9]+.x'
+  schedule:
+    # Daily, so a new upstream client release that breaks /v1/messages is caught within a
+    # release cycle even when nobody has pushed. Off the top of the hour to avoid the queue.
+    - cron: '43 5 * * *'
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Which release channel to test: stable (merge CI) or latest (nightly)'
+        type: choice
+        options: [stable, latest]
+        default: 'stable'
+      claude-code-version:
+        description: 'Exact Claude Code CLI version, such as 2.1.274, overriding the channel. Use it to bisect a failure.'
+        type: string
+        default: ''
+      agent-sdk-version:
+        description: 'Exact claude-agent-sdk version, such as 0.2.157, overriding the channel. Use it to bisect a failure.'
+        type: string
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
@@ -36,19 +54,22 @@ permissions:
   contents: read
 
 env:
-  # Pinned for reproducibility. Both clients ultimately drive the Claude Code
-  # CLI, which bakes the cwd, date, and platform into every request body, so
-  # their traffic cannot be recorded/replayed; these tests run live against
-  # Ollama instead. Bumping only changes the client behavior under test.
-  CLAUDE_CODE_CLI_VERSION: '2.1.159'
-  # The Agent SDK is installed at workflow time rather than as a project
-  # dependency, since only this one live smoke test uses it; it spawns the same
-  # CLI. The SDK test self-skips if the package is unavailable.
-  CLAUDE_AGENT_SDK_VERSION: '0.2.87'
+  # Deliberately not pinned to a version. These smoke tests run live against Ollama (both clients
+  # drive the Claude Code CLI, which bakes the cwd, date and platform into every request body, so
+  # their traffic cannot be recorded or replayed) and only assert that a session completes without
+  # an API error, so nothing about their signal needs a fixed client. Tracking upstream releases is
+  # the point: a client change that breaks /v1/messages should fail here, not in a user report.
+  #
+  # Merge CI tests the `stable` channel and the nightly schedule tests `latest`, so a bad release is
+  # caught nightly without blocking unrelated PRs on release day. The exact versions are resolved by
+  # .github/scripts/resolve_claude_client_versions.py and recorded by the "Record client versions" step.
+  CLIENT_CHANNEL: ${{ inputs.channel || (github.event_name == 'schedule' && 'latest' || 'stable') }}
 
 jobs:
   claude-code-client-smoke:
     name: Claude Code CLI + Agent SDK smoke (ollama, live)
+    # Scheduled runs only make sense on the upstream repository.
+    if: github.event_name != 'schedule' || github.repository == 'ogx-ai/ogx'
     runs-on: ubuntu-latest
     # CPU-only runners generate slowly; the live sessions can take several
     # minutes against the Ollama model. Keep ample headroom over the tests' own
@@ -58,6 +79,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Resolve the channel to exact versions: the CLI from Anthropic's release endpoints, the SDK
+      # from PyPI (which has no channels; stable there is the newest release at least a week old).
+      - name: Resolve client versions
+        id: versions
+        env:
+          CLI_VERSION_OVERRIDE: ${{ inputs.claude-code-version }}
+          SDK_VERSION_OVERRIDE: ${{ inputs.agent-sdk-version }}
+        run: |
+          python3 .github/scripts/resolve_claude_client_versions.py \
+            --channel "${CLIENT_CHANNEL}" \
+            --cli-version "${CLI_VERSION_OVERRIDE}" \
+            --sdk-version "${SDK_VERSION_OVERRIDE}"
 
       # Live mode (not replay) so the Ollama backend is provisioned and the real
       # client traffic reaches a real model.
@@ -70,16 +104,46 @@ jobs:
           suite: 'messages'
           inference-mode: 'live'
 
-      # Both clients need the Claude Code CLI at runtime: the CLI test invokes it
-      # directly, and the SDK spawns it as a subprocess.
+      # Both clients need the Claude Code CLI at runtime: the CLI test invokes it directly, and the SDK
+      # test points the SDK at it (the SDK would otherwise prefer the CLI bundled in its own package).
       - name: Install Claude Code CLI
+        env:
+          CLI_VERSION: ${{ steps.versions.outputs.cli_version }}
         run: |
-          curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLAUDE_CODE_CLI_VERSION}"
+          curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLI_VERSION}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/claude" --version
+          installed=$("$HOME/.local/bin/claude" --version | awk '{print $1}')
+          if [ "$installed" != "$CLI_VERSION" ]; then
+            echo "::error::Failed to install Claude Code CLI ${CLI_VERSION}: found ${installed}"
+            exit 1
+          fi
 
       - name: Install Claude Agent SDK
-        run: uv pip install "claude-agent-sdk==${CLAUDE_AGENT_SDK_VERSION}"
+        env:
+          SDK_VERSION: ${{ steps.versions.outputs.sdk_version }}
+        run: uv pip install "claude-agent-sdk==${SDK_VERSION}"
+
+      # The versions are resolved at run time, so record them where a failed run shows them:
+      # the log, an annotation on the run page, and the job summary.
+      - name: Record client versions
+        env:
+          CLI_VERSION: ${{ steps.versions.outputs.cli_version }}
+          SDK_VERSION: ${{ steps.versions.outputs.sdk_version }}
+        run: |
+          installed_sdk=$(uv run --no-sync python -c "import claude_agent_sdk; print(claude_agent_sdk.__version__)")
+          if [ "$installed_sdk" != "$SDK_VERSION" ]; then
+            echo "::error::Failed to install claude-agent-sdk ${SDK_VERSION}: found ${installed_sdk}"
+            exit 1
+          fi
+          echo "::notice title=Client versions under test::${CLIENT_CHANNEL} channel: Claude Code CLI ${CLI_VERSION}, Agent SDK ${SDK_VERSION}"
+          {
+            echo "### Client versions under test (${CLIENT_CHANNEL} channel)"
+            echo ""
+            echo "| Client | Version |"
+            echo "| --- | --- |"
+            echo "| Claude Code CLI (used by both smoke tests) | ${CLI_VERSION} |"
+            echo "| Claude Agent SDK | ${SDK_VERSION} |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Run Claude Code client smoke tests
         uses: ./.github/actions/run-and-record-tests
