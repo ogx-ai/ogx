@@ -46,6 +46,7 @@ def skip_if_provider_doesnt_support_rerank(client_with_models, rerank_model_id):
     provider = provider_from_model(client_with_models, rerank_model_id)
     supported_providers = {
         "inline::sentence-transformers",
+        "remote::llama-cpp-server",
         "remote::nvidia",
         "remote::vllm",
     }
@@ -267,8 +268,13 @@ def test_skip_if_provider_doesnt_support_rerank():
     mock_client = MagicMock()
     mock_client.models.list.return_value.data = [mock_model]
 
-    # Verify canonical sentence-transformers, remote::nvidia, and remote::vllm are supported
-    for supported_provider in ("inline::sentence-transformers", "remote::nvidia", "remote::vllm"):
+    # Verify canonical sentence-transformers, remote::llama-cpp-server, remote::nvidia, and remote::vllm are supported
+    for supported_provider in (
+        "inline::sentence-transformers",
+        "remote::llama-cpp-server",
+        "remote::nvidia",
+        "remote::vllm",
+    ):
         mock_provider = MagicMock()
         mock_provider.provider_id = "test-provider-id"
         mock_provider.provider_type = supported_provider

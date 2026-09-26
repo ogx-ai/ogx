@@ -411,7 +411,10 @@ class InferenceRouter(Inference):
         return response
 
     async def health(self) -> dict[str, HealthResponse]:
-        timeout = 1
+        # Cap for the whole fan-out; must exceed each adapter's internal
+        # health-check timeout (3.0s signature check, 5.0s default httpx) so a
+        # slow-but-healthy server is not misreported as a router-level timeout.
+        timeout = 10.0
         impls_snapshot = dict(self.routing_table.impls_by_provider_id)
 
         async def _check_one(provider_id: str, impl: object) -> tuple[str, HealthResponse]:

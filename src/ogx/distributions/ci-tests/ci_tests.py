@@ -8,6 +8,7 @@
 from ogx.core.datatypes import Provider
 from ogx.distributions.template import DistributionTemplate
 from ogx.providers.remote.inference.llama_cpp_server.config import LlamaCppServerConfig
+from ogx.providers.remote.inference.text_embeddings_inference.config import TextEmbeddingsInferenceConfig
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
 from ogx_api import ConnectorInput, ModelInput, ModelType
 
@@ -112,6 +113,15 @@ def get_distribution_template() -> DistributionTemplate:
         config=LlamaCppServerConfig.sample_run_config(),
     )
 
+    # text-embeddings-inference is a CI-only inference backend (see the
+    # text-embeddings-inference test suite). It is env-gated so it only activates
+    # when TEI_URL is set, which the setup-tei action does by pointing at the local server.
+    text_embeddings_inference_provider = Provider(
+        provider_id="${env.TEI_URL:+text-embeddings-inference}",
+        provider_type="remote::text-embeddings-inference",
+        config=TextEmbeddingsInferenceConfig.sample_run_config(),
+    )
+
     for run_config in template.run_configs.values():
         if run_config.default_connectors is None:
             run_config.default_connectors = []
@@ -129,6 +139,9 @@ def get_distribution_template() -> DistributionTemplate:
 
         # Add the CI-only llama-cpp-server inference provider
         run_config.provider_overrides["inference"].append(llama_cpp_server_provider)
+
+        # Add the CI-only text-embeddings-inference inference provider
+        run_config.provider_overrides["inference"].append(text_embeddings_inference_provider)
 
         # Add conditional auth config
         run_config.auth_config = auth_config

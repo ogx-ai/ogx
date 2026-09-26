@@ -47,6 +47,7 @@ Model parameters can be influenced by the following options:
 - `--vision-model`: comma-separated list of vision models.
 - `--embedding-model`: comma-separated list of embedding models.
 - `--judge-model`: comma-separated list of judge models.
+- `--rerank-model`: comma-separated list of rerank models.
 - `--embedding-dimension`: output dimensionality of the embedding model to use for testing. Default: 768
 
 Each of these are comma-separated lists and can be used to generate multiple parameter combinations. Note that tests will be skipped
@@ -243,6 +244,7 @@ gh workflow run record-integration-tests.yml \
 - `ollama` - No API keys (auto-runs on PRs)
 - `llama-cpp-server` - No API keys (auto-runs on PRs)
 - `vllm` - No API keys (auto-runs on PRs; installed natively from a pinned CPU wheel)
+- `text-embeddings-inference` - No API keys (auto-runs on PRs)
 - `gpt` - OpenAI (requires `OPENAI_API_KEY` secret)
 - `azure` - Azure OpenAI (requires `AZURE_API_KEY`, `AZURE_API_BASE` secrets)
 - `bedrock` - AWS Bedrock (requires `AWS_BEARER_TOKEN_BEDROCK` secret)

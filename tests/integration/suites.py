@@ -94,7 +94,6 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         defaults={
             "text_model": "vllm/Qwen/Qwen3-0.6B",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
-            "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "ollama-reasoning": Setup(
@@ -121,6 +120,10 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "embedding_dimension": 768,
         },
     ),
+    # The gpt/azure/watsonx/vertexai setups default rerank_model to the ST reranker
+    # because the recorded node IDs of rerank-parameterized tests (langchain/langgraph
+    # in the responses suite) include the param value, and recording hashes are keyed
+    # by test_id. Setups without ST-rerank recordings (e.g. vllm) intentionally omit it.
     "gpt": Setup(
         name="gpt",
         description="OpenAI GPT models for high-quality responses and tool calling",
@@ -129,6 +132,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "openai/gpt-4o",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 1536,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "gpt-reasoning": Setup(
@@ -148,6 +152,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "azure/gpt-4o",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "watsonx": Setup(
@@ -156,6 +161,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         defaults={
             "text_model": "watsonx/meta-llama/llama-3-3-70b-instruct",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "vertexai": Setup(
@@ -166,6 +172,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "vertexai/publishers/google/models/gemini-2.0-flash",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "tgi": Setup(
@@ -244,8 +251,9 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         name="llama-cpp-server",
         description=(
             "llama.cpp multi-model router (llama-server --models-preset) serving a text "
-            "model and an embedding model over one OpenAI-compatible endpoint. The URL must "
-            "include the /v1 prefix because the OpenAI SDK appends endpoint paths to it."
+            "model, an embedding model, and a rerank model over one OpenAI-compatible "
+            "endpoint. The URL must include the /v1 prefix because the OpenAI SDK appends "
+            "endpoint paths to it."
         ),
         env={
             "LLAMA_CPP_SERVER_URL": "http://localhost:8080/v1",
@@ -255,6 +263,23 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             # "llama-cpp-server/" prefix and sends the section name as the model.
             "text_model": "llama-cpp-server/qwen3-0.6b",
             "embedding_model": "llama-cpp-server/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
+            "rerank_model": "llama-cpp-server/bge-reranker-v2-m3",
+        },
+    ),
+    "text-embeddings-inference": Setup(
+        name="text-embeddings-inference",
+        description=(
+            "HuggingFace Text-Embeddings-Inference server (CPU) serving an embedding model "
+            "over its OpenAI-compatible endpoint. Embedding-only: suites that need a text "
+            "model must not use this setup. The URL must include the /v1 prefix because the "
+            "OpenAI SDK appends endpoint paths to it."
+        ),
+        env={
+            "TEI_URL": "http://localhost:8080/v1",
+        },
+        defaults={
+            "embedding_model": "text-embeddings-inference/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
         },
     ),
@@ -288,12 +313,19 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         default_setup="vllm",
     ),
     # llama.cpp multi-model router backend (llama-server --models-preset), scoped like
-    # base-vllm-subset (the full inference directory). The router serves only a text and an
-    # embedding model, so the rerank and vision tests skip (no such model configured).
+    # base-vllm-subset (the full inference directory). The router serves a text, an
+    # embedding, and a rerank model, but no vision model, so vision tests skip.
     "llama-cpp-server": Suite(
         name="llama-cpp-server",
         roots=["tests/integration/inference"],
         default_setup="llama-cpp-server",
+    ),
+    # Text-Embeddings-Inference backend. TEI only serves embeddings (no chat or
+    # completion endpoint), so this suite is scoped to the embeddings tests only.
+    "text-embeddings-inference": Suite(
+        name="text-embeddings-inference",
+        roots=["tests/integration/inference/test_openai_embeddings.py"],
+        default_setup="text-embeddings-inference",
     ),
     "responses": Suite(
         name="responses",
