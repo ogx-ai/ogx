@@ -80,6 +80,7 @@ class PostgresKVStoreImpl(KVStore):
                     )
                     """
                 )
+                await self._migrate_expiration_type(conn)
                 await conn.execute(
                     f"""
                     CREATE INDEX IF NOT EXISTS idx_{self.config.table_name}_expiration
@@ -90,6 +91,26 @@ class PostgresKVStoreImpl(KVStore):
                 self._table_created = True
 
         return self._pool
+
+    async def _migrate_expiration_type(self, conn: asyncpg.Connection) -> None:
+        column_type = await conn.fetchval(
+            """
+            SELECT atttypid::regtype::text
+            FROM pg_attribute
+            WHERE attrelid = $1::regclass
+            AND attname = 'expiration'
+            AND NOT attisdropped
+            """,
+            self.config.table_name,
+        )
+        if column_type == "timestamp without time zone":
+            await conn.execute(
+                f"""
+                ALTER TABLE {self.config.table_name}
+                ALTER COLUMN expiration TYPE TIMESTAMPTZ
+                USING expiration AT TIME ZONE 'UTC'
+                """
+            )
 
     async def _execute_with_retry(self, fn: Callable[[asyncpg.Connection], Coroutine[None, None, T]]) -> T:
         """Execute fn with a pooled connection, retrying once on connection error."""
