@@ -493,9 +493,11 @@ CITATION_MARKER_REGEX = re.compile(
 # trailing space on its own, since it might turn out to precede a marker in the next
 # chunk. Used to withhold text from streamed deltas until either a marker completes (and
 # gets cleaned) or a later chunk proves it wasn't a marker after all (and gets flushed
-# through as literal text).
+# through as literal text). Every prefix of a marker counts, e.g. "<|fi" or "<|file-abc|",
+# because providers stream the marker as several tokens ("<", "|", "file", "-", ...).
+_PARTIAL_FILE_ID = r"(?:f(?:i(?:l(?:e(?:-[A-Za-z0-9_-]*)?)?)?)?)?"
 _PENDING_CITATION_MARKER_TAIL_REGEX = re.compile(
-    r"(?: ?<(?:\|(?:file-[A-Za-z0-9_-]*)?)?| ?\[(?:file-[A-Za-z0-9_-]*)?| ?\((?:file-[A-Za-z0-9_-]*)?| )$"
+    rf"(?: ?<(?:\|(?:{_PARTIAL_FILE_ID}|file-[A-Za-z0-9_-]+\|))?| ?\[{_PARTIAL_FILE_ID}| ?\({_PARTIAL_FILE_ID}| )$"
 )
 
 
