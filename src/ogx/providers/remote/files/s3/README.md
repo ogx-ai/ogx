@@ -9,6 +9,7 @@ A remote S3-based implementation of the OGX Files API that provides scalable clo
 - **OpenAI API Compatibility**: Full compatibility with OpenAI Files API endpoints
 - **Flexible Authentication**: Support for IAM roles and access keys
 - **Custom S3 Endpoints**: Support for MinIO and other S3-compatible services
+- **Bucket Organization**: Optional key prefix to store files under a folder within the bucket
 
 ## Configuration
 
@@ -52,6 +53,7 @@ config:
   aws_access_key_id: "${env.AWS_ACCESS_KEY_ID:=}"
   aws_secret_access_key: "${env.AWS_SECRET_ACCESS_KEY:=}"
   endpoint_url: "${env.S3_ENDPOINT_URL:=}"
+  key_prefix: "${env.S3_KEY_PREFIX:=}"
 ```
 
 Note: `S3_BUCKET_NAME` has no default value since S3 bucket names must be globally unique.
@@ -142,6 +144,30 @@ config:
   ]
 }
 ```
+
+### Storing Files in a Folder
+
+By default files are stored at the root of the bucket. Set `key_prefix` to keep them under a folder
+instead, which helps when one bucket is shared across projects:
+
+```yaml
+config:
+  bucket_name: my-bucket
+  key_prefix: ogx/files  # objects are stored as ogx/files/file-abc123...
+  region: us-east-1
+```
+
+Leading, trailing and repeated slashes are normalized, so `ogx/files`, `/ogx/files/` and `ogx//files`
+all name the same folder.
+
+Unlike buckets, folders need no creation step. S3 stores objects under flat keys and the folders shown
+by the AWS console are synthesized from those keys, so the provider writes no placeholder objects and
+`key_prefix` needs no permissions beyond the ones listed above.
+
+**Note**: the prefix is applied at request time and is not recorded per file. Changing it on a deployment
+that already holds files makes those files unreachable, and because a missing S3 object is treated as a
+deleted file, the first read of one also drops its metadata row. Pick a prefix before the first upload, or
+copy the existing objects to the new prefix yourself.
 
 ### Bucket Policy (Optional)
 
@@ -265,5 +291,4 @@ The provider handles various error scenarios:
 - Fixed long TTL (100 years) instead of configurable expiration
 - No server-side encryption enabled by default
 - No support for AWS session tokens
-- No S3 key prefix organization support
 - No multipart upload support (all files uploaded as single objects)

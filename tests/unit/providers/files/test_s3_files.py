@@ -9,6 +9,9 @@ from unittest.mock import patch
 import pytest
 from botocore.exceptions import ClientError
 
+from ogx.core.stack import replace_env_vars
+from ogx.core.storage.datatypes import SqlStoreReference
+from ogx.providers.remote.files.s3 import S3FilesImplConfig, get_adapter_impl
 from ogx_api import (
     DeleteFileRequest,
     ListFilesRequest,
@@ -318,3 +321,90 @@ class TestS3FilesImpl:
                 purpose=OpenAIFilePurpose.ASSISTANTS,
                 expires_after=ExpiresAfter(anchor="created_at", seconds=2592001),
             )
+
+
+async def _provider_with_key_prefix(s3_config, key_prefix: str):
+    """Build a provider that differs from the shared fixture only in key_prefix."""
+    config = S3FilesImplConfig.model_validate({**s3_config.model_dump(), "key_prefix": key_prefix})
+    return config, await get_adapter_impl(config, {})
+
+
+class TestS3FilesKeyPrefix:
+    """Test suite for storing files under a key prefix ("folder") within the bucket."""
+
+    @pytest.mark.parametrize(
+        "configured,expected",
+        [
+            ("", ""),
+            ("my-folder", "my-folder/"),
+            ("my-folder/", "my-folder/"),
+            ("/team-a/projects/", "team-a/projects/"),
+            ("a//b", "a/b/"),
+            (" /team-a/ ", "team-a/"),
+        ],
+    )
+    def test_key_prefix_is_normalized(self, configured, expected):
+        """A configured prefix is normalized to a single trailing-slash folder path."""
+        config = S3FilesImplConfig(
+            bucket_name="test-bucket",
+            key_prefix=configured,
+            metadata_store=SqlStoreReference(backend="sql_default", table_name="s3_files_metadata"),
+        )
+
+        assert config.key_prefix == expected
+
+    def test_sample_run_config_validates_with_the_env_var_unset(self, monkeypatch):
+        """The default path: `ogx build` writes the sample config, and the stack resolves it.
+
+        Every other test here builds the config object in Python, which skips the step where
+        an unset `${env.S3_KEY_PREFIX:=}` becomes None — the value a `str` field rejects.
+        """
+        monkeypatch.delenv("S3_KEY_PREFIX", raising=False)
+        monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
+
+        resolved = replace_env_vars(S3FilesImplConfig.sample_run_config("/tmp/distro"))
+        assert resolved["key_prefix"] is None
+
+        config = S3FilesImplConfig.model_validate(resolved)
+        assert config.key_prefix == ""
+
+    def test_sample_run_config_validates_with_the_env_var_set(self, monkeypatch):
+        monkeypatch.setenv("S3_KEY_PREFIX", "/team-a/projects/")
+        monkeypatch.setenv("S3_BUCKET_NAME", "test-bucket")
+
+        config = S3FilesImplConfig.model_validate(replace_env_vars(S3FilesImplConfig.sample_run_config("/tmp/distro")))
+
+        assert config.key_prefix == "team-a/projects/"
+
+    @pytest.mark.parametrize(
+        "key_prefix,expected_key_prefix",
+        [
+            ("", ""),
+            ("my-folder", "my-folder/"),
+            ("/team-a/projects/", "team-a/projects/"),
+        ],
+    )
+    async def test_files_are_stored_under_key_prefix(
+        self, s3_config, s3_client, sample_text_file, key_prefix, expected_key_prefix
+    ):
+        """Upload, download and delete all address the same prefixed object key."""
+        config, provider = await _provider_with_key_prefix(s3_config, key_prefix)
+
+        sample_text_file.filename = "test_key_prefix"
+        uploaded = await provider.openai_upload_file(
+            request=UploadFileRequest(purpose=OpenAIFilePurpose.ASSISTANTS),
+            file=sample_text_file,
+        )
+
+        # exactly one object, at the prefixed key - no zero-byte "folder" markers
+        listed = s3_client.list_objects_v2(Bucket=config.bucket_name)
+        assert [obj["Key"] for obj in listed.get("Contents", [])] == [f"{expected_key_prefix}{uploaded.id}"]
+
+        response = await provider.openai_retrieve_file_content(request=RetrieveFileContentRequest(file_id=uploaded.id))
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+        assert body == sample_text_file.content
+
+        await provider.openai_delete_file(request=DeleteFileRequest(file_id=uploaded.id))
+        assert s3_client.list_objects_v2(Bucket=config.bucket_name).get("Contents", []) == []
