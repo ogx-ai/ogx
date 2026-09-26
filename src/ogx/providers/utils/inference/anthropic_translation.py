@@ -231,7 +231,7 @@ def convert_tool_choice_to_openai(tool_choice: Any) -> Any:
 
 def anthropic_request_to_openai(request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
     """Convert an Anthropic CreateMessage request to OpenAI chat completion params."""
-    if request.thinking and request.thinking.type == "enabled":
+    if request.thinking and request.thinking.type in ("enabled", "adaptive"):
         raise ValueError(
             "Failed to process thinking request: extended thinking requires a native "
             "Anthropic-compatible provider; translation mode does not support it"

@@ -879,6 +879,16 @@ class TestThinkingConfig:
         with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
             anthropic_request_to_openai(request)
 
+    def test_thinking_adaptive_raises_in_translation_mode(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Think about this")],
+            max_tokens=8192,
+            thinking=AnthropicThinkingConfig(type="adaptive"),
+        )
+        with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
+            anthropic_request_to_openai(request)
+
     def test_thinking_disabled_allowed_in_translation_mode(self):
         request = AnthropicCreateMessageRequest(
             model="m",
