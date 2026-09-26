@@ -23,6 +23,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from openai import BadRequestError
 from packaging.version import InvalidVersion, Version
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ogx.core.access_control.access_control import AccessDeniedError
@@ -120,8 +121,50 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         http_exc = HTTPException(status_code=httpx.codes.BAD_REQUEST, detail=str(exc))
 
     return JSONResponse(
-        status_code=http_exc.status_code, content=OpenAIErrorResponse.from_message(http_exc.detail).to_dict()
+        status_code=http_exc.status_code,
+        content=OpenAIErrorResponse.for_status(http_exc.status_code, http_exc.detail).to_dict(),
     )
+
+
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle HTTPExceptions raised by Starlette's routing and by route handlers.
+
+    Without this, requests to a path or method that no registered route matches fall
+    through to Starlette's default handler, which emits ``{"detail": ...}`` instead of
+    the OpenAI-shaped error body every other OGX response uses.
+    """
+    assert isinstance(exc, StarletteHTTPException)
+
+    if _is_interactions_path(request):
+        return _format_google_error_response(exc.status_code, str(exc.detail))
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=OpenAIErrorResponse.for_status(exc.status_code, exc.detail).to_dict(),
+        headers=exc.headers,
+    )
+
+
+def register_exception_handlers(app: FastAPI) -> None:
+    """Install the exception handlers that give every OGX error response its shape.
+
+    Tests that exercise error paths against a bare ``FastAPI()`` should call this rather
+    than registering handlers piecemeal, so that what they assert stays the shape the
+    real server emits.
+    """
+    # Register specific exception handlers before the generic Exception handler
+    # This prevents the re-raising behavior that causes connection resets
+    app.exception_handler(RequestValidationError)(global_exception_handler)
+    app.exception_handler(ConflictError)(global_exception_handler)
+    app.exception_handler(ResourceNotFoundError)(global_exception_handler)
+    app.exception_handler(AuthenticationRequiredError)(global_exception_handler)
+    app.exception_handler(AccessDeniedError)(global_exception_handler)
+    app.exception_handler(BadRequestError)(global_exception_handler)
+    # Covers FastAPI's HTTPException too, plus the 404s and 405s Starlette's router
+    # raises for unregistered paths and methods
+    app.exception_handler(StarletteHTTPException)(http_exception_handler)
+    # Generic Exception handler should be last
+    app.exception_handler(Exception)(global_exception_handler)
 
 
 class StackApp(FastAPI):
@@ -207,7 +250,7 @@ async def _send_error_response(send: Send, status: int, message: str) -> None:
             "headers": [[b"content-type", b"application/json"]],
         }
     )
-    error_msg = OpenAIErrorResponse.from_message(message).to_bytes()
+    error_msg = OpenAIErrorResponse.for_status(status, message).to_bytes()
     await send({"type": "http.response.body", "body": error_msg})
 
 
@@ -539,16 +582,7 @@ def create_app() -> StackApp:
 
     app.add_middleware(ZstdDecompressionMiddleware)
 
-    # Register specific exception handlers before the generic Exception handler
-    # This prevents the re-raising behavior that causes connection resets
-    app.exception_handler(RequestValidationError)(global_exception_handler)
-    app.exception_handler(ConflictError)(global_exception_handler)
-    app.exception_handler(ResourceNotFoundError)(global_exception_handler)
-    app.exception_handler(AuthenticationRequiredError)(global_exception_handler)
-    app.exception_handler(AccessDeniedError)(global_exception_handler)
-    app.exception_handler(BadRequestError)(global_exception_handler)
-    # Generic Exception handler should be last
-    app.exception_handler(Exception)(global_exception_handler)
+    register_exception_handlers(app)
 
     return app
 
