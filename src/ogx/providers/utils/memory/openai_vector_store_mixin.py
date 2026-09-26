@@ -43,6 +43,7 @@ from ogx_api import (
     Files,
     Inference,
     InsertChunksRequest,
+    InvalidParameterError,
     OpenAIAttachFileRequest,
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionRequestWithExtraBody,
@@ -137,6 +138,12 @@ class OpenAIVectorStoreMixin(ABC):
     Providers need to implement the abstract storage methods and maintain
     an openai_vector_stores in-memory cache.
     """
+
+    # Set to False for providers that cannot run hybrid search with the caller's embedding/keyword weights,
+    # either because they have no hybrid search at all or because their hybrid search ignores the weights.
+    # Searches that pass ranking_options.hybrid_search to such a provider are rejected with a 400 instead of
+    # silently returning differently ranked results.
+    supports_weighted_hybrid_search: bool = True
 
     # Implementing classes should call super().__init__() in their __init__ method
     # to properly initialize the mixin attributes.
@@ -1097,6 +1104,16 @@ class OpenAIVectorStoreMixin(ABC):
 
         await self._get_authorized_openai_vector_store(vector_store_id)
 
+        search_mode = request.search_mode
+        if request.ranking_options is not None and request.ranking_options.hybrid_search is not None:
+            if not self.supports_weighted_hybrid_search:
+                raise InvalidParameterError(
+                    "ranking_options.hybrid_search",
+                    request.ranking_options.hybrid_search.model_dump(),
+                    f"The provider of vector store '{vector_store_id}' does not support weighted hybrid search.",
+                )
+            search_mode = "hybrid"
+
         if isinstance(request.query, list):
             search_query = " ".join(request.query)
         else:
@@ -1125,7 +1142,7 @@ class OpenAIVectorStoreMixin(ABC):
                 "max_num_results": max_num_results,
                 "max_chunks": max_num_results * self.vector_stores_config.chunk_retrieval_params.chunk_multiplier,
                 "score_threshold": score_threshold,
-                "mode": request.search_mode,
+                "mode": search_mode,
             }
 
             # Parse filters into typed objects and pass through to the query
@@ -1180,7 +1197,22 @@ class OpenAIVectorStoreMixin(ABC):
         reranker_params: dict[str, Any] = {}
         params: dict[str, Any] = {}
 
-        if ranking_options and ranking_options.ranker:
+        if ranking_options and ranking_options.hybrid_search:
+            # OpenAI hybrid_search weights are relative; normalize them to sum to 1 like the weights option.
+            hybrid_search = ranking_options.hybrid_search
+            total_weight = hybrid_search.embedding_weight + hybrid_search.text_weight
+            impact_factor = ranking_options.impact_factor
+            if impact_factor is None:
+                impact_factor = config.chunk_retrieval_params.rrf_impact_factor
+            params["reranker_type"] = "rrf"
+            params["reranker_params"] = {
+                "impact_factor": impact_factor,
+                "weights": {
+                    "vector": hybrid_search.embedding_weight / total_weight,
+                    "keyword": hybrid_search.text_weight / total_weight,
+                },
+            }
+        elif ranking_options and ranking_options.ranker:
             reranker_type = ranking_options.ranker
 
             if ranking_options.ranker == "weighted":

@@ -23,6 +23,7 @@ from ogx_api import (
     Connectors,
     GetConnectorRequest,
     Inference,
+    InvalidParameterError,
     MCPListToolsTool,
     ModelNotFoundError,
     OpenAIAssistantMessageParam,
@@ -596,7 +597,7 @@ class StreamingResponseOrchestrator:
         """Run the streaming inference while-True loop, yielding events as we go.
 
         Populates ``ic`` with the final result for inspection by the caller.
-        May raise ``ModelNotFoundError`` to propagate to the caller.
+        May raise ``ModelNotFoundError`` or ``InvalidParameterError`` to propagate to the caller.
         """
 
         n_iter = 0
@@ -867,6 +868,11 @@ class StreamingResponseOrchestrator:
             self.final_messages = messages.copy()
 
         except ModelNotFoundError:
+            raise
+        except InvalidParameterError:
+            # A rejected client parameter (e.g. ranking_options.hybrid_search on a vector store whose
+            # provider cannot apply the weights) is a 400, not a generated response that failed. Let it
+            # propagate so responses.create raises it instead of reporting a "server_error" failure.
             raise
         except Exception as exc:  # noqa: BLE001
             if _is_context_length_error(exc):

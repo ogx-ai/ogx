@@ -4,16 +4,31 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import ast
 import asyncio
+import uuid
+from functools import cache
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import asyncpg
+import httpx
 import numpy as np
 import pytest
 
+import ogx.providers
+from ogx.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
 from ogx_api import (
+    ChunkMetadata,
     EmbeddedChunk,
+    InsertChunksRequest,
+    InvalidParameterError,
     OpenAICreateVectorStoreRequestWithExtraBody,
+    OpenAIEmbeddingData,
+    OpenAIEmbeddingsRequestWithExtraBody,
+    OpenAIEmbeddingsResponse,
+    OpenAIEmbeddingUsage,
+    OpenAISearchVectorStoreRequest,
     QueryChunksResponse,
     VectorStore,
 )
@@ -237,6 +252,229 @@ async def test_search_vector_store_propagates_backend_errors(vector_io_adapter):
             vector_store_id=vector_store_id,
             request=request,
         )
+
+
+class _FixedQueryEmbeddingInference:
+    """Embeds every search query as the same vector, so each chunk's stored embedding sets its vector rank."""
+
+    async def openai_embeddings(self, request: OpenAIEmbeddingsRequestWithExtraBody) -> OpenAIEmbeddingsResponse:
+        return OpenAIEmbeddingsResponse(
+            data=[OpenAIEmbeddingData(embedding=[1.0, 0.0, 0.0], index=0)],
+            model=request.model,
+            usage=OpenAIEmbeddingUsage(prompt_tokens=1, total_tokens=1),
+        )
+
+
+# For the query "receipts": vector search ranks expense-report, parking, receipt-policy first,
+# while keyword search only finds receipt-policy and then expense-report.
+_HYBRID_SEARCH_CHUNKS = {
+    "expense-report": ("Scan hotel and flight receipts and attach them to the expense report.", [0.9, 0.1, 0.0]),
+    "parking": ("Parking permits for the north garage are renewed every January.", [0.7, 0.3, 0.0]),
+    "receipt-policy": ("Keep receipts. Lost receipts delay receipts processing.", [0.5, 0.5, 0.0]),
+    "cafeteria": ("The cafeteria serves vegetarian lunch on Mondays.", [0.3, 0.7, 0.0]),
+    "holidays": ("Public holidays are listed on the intranet calendar.", [0.0, 1.0, 0.0]),
+}
+
+
+async def _create_hybrid_search_store(adapter) -> str:
+    adapter.inference_api = _FixedQueryEmbeddingInference()
+    vector_store_id = f"hybrid_search_{uuid.uuid4().hex}"
+    await adapter.register_vector_store(
+        VectorStore(
+            identifier=vector_store_id,
+            provider_id="test_provider",
+            embedding_model="test_model",
+            embedding_dimension=3,
+        )
+    )
+    adapter.openai_vector_stores[vector_store_id] = {"id": vector_store_id, "name": "Hybrid Search Store"}
+    chunks = [
+        EmbeddedChunk(
+            content=text,
+            chunk_id=document_id,
+            metadata={"document_id": document_id},
+            chunk_metadata=ChunkMetadata(document_id=document_id, chunk_id=document_id),
+            embedding=embedding,
+            embedding_model="test_model",
+            embedding_dimension=3,
+        )
+        for document_id, (text, embedding) in _HYBRID_SEARCH_CHUNKS.items()
+    ]
+    await adapter.insert_chunks(InsertChunksRequest(vector_store_id=vector_store_id, chunks=chunks))
+    return vector_store_id
+
+
+async def _search_document_ids(adapter, vector_store_id: str, **request_fields) -> list[str]:
+    page = await adapter.openai_search_vector_store(
+        vector_store_id=vector_store_id,
+        request=OpenAISearchVectorStoreRequest(query="receipts", max_num_results=3, **request_fields),
+    )
+    return [item.file_id for item in page.data]
+
+
+async def test_search_vector_store_hybrid_search_selects_hybrid_mode(sqlite_vec_adapter):
+    """Test that hybrid_search switches a vector search to hybrid search and its weights decide the ranking."""
+    vector_store_id = await _create_hybrid_search_store(sqlite_vec_adapter)
+
+    async def search(**ranking_options) -> list[str]:
+        return await _search_document_ids(sqlite_vec_adapter, vector_store_id, ranking_options=ranking_options)
+
+    assert await search(ranker="auto") == ["expense-report", "parking", "receipt-policy"]
+    assert await search(hybrid_search={"embedding_weight": 0.8, "text_weight": 0.2}) == [
+        "expense-report",
+        "receipt-policy",
+        "parking",
+    ]
+    assert await search(hybrid_search={"embedding_weight": 0.2, "text_weight": 0.8}) == [
+        "receipt-policy",
+        "expense-report",
+        "parking",
+    ]
+    assert await search(hybrid_search={"embedding_weight": 1, "text_weight": 0}) == [
+        "expense-report",
+        "parking",
+        "receipt-policy",
+    ]
+    assert await search(hybrid_search={"embedding_weight": 0, "text_weight": 1}) == ["receipt-policy", "expense-report"]
+
+
+async def test_search_vector_store_hybrid_search_score_threshold_uses_rrf_scores(sqlite_vec_adapter):
+    """Test that score_threshold filters hybrid_search results by their fused RRF scores."""
+    vector_store_id = await _create_hybrid_search_store(sqlite_vec_adapter)
+    hybrid_search = {"embedding_weight": 0.5, "text_weight": 0.5}
+
+    async def search(score_threshold: float) -> list[str]:
+        return await _search_document_ids(
+            sqlite_vec_adapter,
+            vector_store_id,
+            ranking_options={"hybrid_search": hybrid_search, "score_threshold": score_threshold},
+        )
+
+    assert await search(0.01) == ["expense-report", "receipt-policy"]
+    assert await search(0.3) == []
+
+
+async def test_search_vector_store_hybrid_search_without_hybrid_support(faiss_vec_adapter):
+    """Test that a store whose provider cannot apply the weights rejects hybrid_search with a 400."""
+    vector_store_id = await _create_hybrid_search_store(faiss_vec_adapter)
+    ranking_options = {"hybrid_search": {"embedding_weight": 0.2, "text_weight": 0.8}}
+
+    with pytest.raises(InvalidParameterError) as excinfo:
+        await _search_document_ids(faiss_vec_adapter, vector_store_id, ranking_options=ranking_options)
+
+    assert excinfo.value.status_code == httpx.codes.BAD_REQUEST
+    message = str(excinfo.value)
+    assert "ranking_options.hybrid_search" in message
+    assert vector_store_id in message
+    assert "does not support weighted hybrid search" in message
+
+    # An explicit hybrid search_mode still reaches the index and fails there, unchanged by this feature.
+    with pytest.raises(NotImplementedError, match="Hybrid search is not supported"):
+        await _search_document_ids(faiss_vec_adapter, vector_store_id, search_mode="hybrid")
+
+
+async def test_search_vector_store_without_hybrid_search_option_is_unaffected(faiss_vec_adapter):
+    """Test that a provider without hybrid support still serves searches that omit hybrid_search."""
+    vector_store_id = await _create_hybrid_search_store(faiss_vec_adapter)
+
+    assert await _search_document_ids(faiss_vec_adapter, vector_store_id) == [
+        "expense-report",
+        "parking",
+        "receipt-policy",
+    ]
+    assert await _search_document_ids(
+        faiss_vec_adapter, vector_store_id, ranking_options={"ranker": "auto", "score_threshold": 0.0}
+    ) == [
+        "expense-report",
+        "parking",
+        "receipt-policy",
+    ]
+
+
+# Every vector_io adapter, with whether its query_hybrid honours the weights hybrid_search sends
+# (reranker_type="rrf" plus reranker_params["weights"]).
+_ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT = [
+    ("ogx.providers.inline.vector_io.faiss.faiss", "FaissVectorIOAdapter", False),
+    ("ogx.providers.inline.vector_io.sqlite_vec.sqlite_vec", "SQLiteVecVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.chroma.chroma", "ChromaVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.elasticsearch.elasticsearch", "ElasticsearchVectorIOAdapter", False),
+    ("ogx.providers.remote.vector_io.infinispan.infinispan", "InfinispanVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.milvus.milvus", "MilvusVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.neo4j.neo4j", "Neo4jVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.oci.oci26ai", "OCI26aiVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.pgvector.pgvector", "PGVectorVectorIOAdapter", True),
+    ("ogx.providers.remote.vector_io.qdrant.qdrant", "QdrantVectorIOAdapter", False),
+    ("ogx.providers.remote.vector_io.weaviate.weaviate", "WeaviateVectorIOAdapter", False),
+]
+
+
+def _class_def_base_names(class_def: ast.ClassDef) -> set[str]:
+    """Names of a class's bases as written, covering both `Mixin` and `module.Mixin` spellings."""
+    return {
+        base.id if isinstance(base, ast.Name) else base.attr
+        for base in class_def.bases
+        if isinstance(base, ast.Name | ast.Attribute)
+    }
+
+
+@cache
+def _openai_vector_store_adapters() -> dict[tuple[str, str], ast.ClassDef]:
+    """Every OpenAIVectorStoreMixin subclass under ogx.providers, keyed by (module name, class name).
+
+    The sources are parsed rather than imported so that every adapter is checked even where its
+    optional client library is not installed, and so that the declaration is found however the
+    formatter happens to wrap it.
+    """
+    package_root = Path(ogx.providers.__file__).parent
+    adapters: dict[tuple[str, str], ast.ClassDef] = {}
+    for path in sorted(package_root.rglob("*.py")):
+        module_name = ".".join(["ogx", "providers", *path.relative_to(package_root).with_suffix("").parts])
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+            if isinstance(node, ast.ClassDef) and "OpenAIVectorStoreMixin" in _class_def_base_names(node):
+                adapters[(module_name, node.name)] = node
+    return adapters
+
+
+def _class_attribute_literal(class_def: ast.ClassDef, attribute: str) -> object:
+    """Value of a literal class-body assignment, or None when the class does not set the attribute."""
+    for statement in class_def.body:
+        if isinstance(statement, ast.Assign):
+            targets = statement.targets
+        elif isinstance(statement, ast.AnnAssign):
+            targets = [statement.target]
+        else:
+            continue
+        if statement.value is not None and any(
+            isinstance(target, ast.Name) and target.id == attribute for target in targets
+        ):
+            return ast.literal_eval(statement.value)
+    return None
+
+
+@pytest.mark.parametrize(
+    "module_name, class_name, expected",
+    _ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT,
+    ids=[class_name for _, class_name, _ in _ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT],
+)
+def test_adapter_supports_weighted_hybrid_search_flag(module_name, class_name, expected):
+    """Test that each adapter advertises whether its hybrid search honours the hybrid_search weights."""
+    class_def = _openai_vector_store_adapters()[(module_name, class_name)]
+
+    # An adapter that does not set the flag inherits the mixin default, which is True.
+    declared = _class_attribute_literal(class_def, "supports_weighted_hybrid_search")
+    assert (True if declared is None else declared) is expected
+
+
+def test_adapter_weighted_hybrid_search_support_list_covers_every_adapter():
+    """Test that the list above names every adapter, so a new provider has to decide instead of defaulting to True."""
+    assert set(_openai_vector_store_adapters()) == {
+        (module_name, class_name) for module_name, class_name, _ in _ADAPTER_WEIGHTED_HYBRID_SEARCH_SUPPORT
+    }
+
+
+def test_mixin_default_allows_weighted_hybrid_search():
+    """Test that the flag the adapters override defaults to True on the mixin itself."""
+    assert OpenAIVectorStoreMixin.supports_weighted_hybrid_search is True
 
 
 async def test_create_gin_index_executes_correct_sql():

@@ -379,6 +379,10 @@ class ElasticsearchIndex(EmbeddingIndex):
 class ElasticsearchVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """Vector I/O adapter for remote Elasticsearch instances."""
 
+    # ElasticsearchIndex.query_hybrid drops "weights" from the RRF retriever's parameters as unsupported.
+    # Its "linear" retriever does apply weights, but hybrid_search maps to reranker_type="rrf".
+    supports_weighted_hybrid_search = False
+
     def __init__(
         self,
         config: ElasticsearchVectorIOConfig,
