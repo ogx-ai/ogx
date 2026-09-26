@@ -399,7 +399,10 @@ class TestClaudeCodeAliases:
         for expected in _CLAUDE_CODE_ALIASES:
             assert expected in alias_model_ids
 
-    @pytest.mark.parametrize("model_id", ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"])
+    @pytest.mark.parametrize(
+        "model_id",
+        ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5", "claude-fable-5", "claude-mythos-5"],
+    )
     def test_current_generation_models_are_registered_for_anthropic(self, model_id):
         """The claude CLI requests these unprefixed IDs, and an unregistered one fails to resolve."""
         aliases = _build_claude_code_aliases("inference=remote::anthropic")

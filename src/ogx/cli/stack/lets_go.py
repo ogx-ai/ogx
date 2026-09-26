@@ -111,6 +111,8 @@ _CLAUDE_CODE_ALIASES: list[str] = [
     "claude-sonnet-4-6",
     "claude-opus-5",
     "claude-opus-4-7",
+    "claude-fable-5",
+    "claude-mythos-5",
 ]
 
 # Inference provider IDs checked in priority order when building Claude Code aliases.
