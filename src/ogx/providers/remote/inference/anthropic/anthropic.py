@@ -5,9 +5,13 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncIterator, Iterable
+from typing import Any
 
+import httpx
 from anthropic import AsyncAnthropic
 
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
+from ogx.providers.utils.inference.http_client import build_network_client_kwargs
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api.inference.models import (
     OpenAIChatCompletion,
@@ -15,6 +19,14 @@ from ogx_api.inference.models import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAICompletion,
     OpenAICompletionRequestWithExtraBody,
+)
+from ogx_api.messages.models import (
+    ANTHROPIC_VERSION,
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
 )
 
 from .config import AnthropicConfig
@@ -29,8 +41,34 @@ def _make_schema_strict(schema: dict) -> None:
             _make_schema_strict(prop)
 
 
+class AnthropicAPIError(Exception):
+    """An error response from the Anthropic API, carrying its HTTP status so the server keeps it."""
+
+    def __init__(self, status_code: int, message: str):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _error_message(response: httpx.Response) -> str:
+    """The message from an Anthropic error body ({"type": "error", "error": {"message": ...}})."""
+    try:
+        body = response.json()
+        message = body["error"]["message"]
+        if isinstance(message, str):
+            return message
+    except (ValueError, KeyError, TypeError):
+        pass
+    return f"Anthropic API request failed with status {response.status_code}"
+
+
 class AnthropicInferenceAdapter(OpenAIMixin):
-    """Inference adapter for Anthropic Claude models."""
+    """Inference adapter for Anthropic Claude models.
+
+    Chat Completions go through the OpenAI-compatible mixin. The Messages API is Anthropic's
+    own wire format, so ``anthropic_messages``/``anthropic_count_tokens`` forward directly to
+    ``/v1/messages`` instead of using the mixin's translation fallback, which cannot represent
+    extended thinking.
+    """
 
     config: AnthropicConfig
 
@@ -49,6 +87,82 @@ class AnthropicInferenceAdapter(OpenAIMixin):
 
     def get_base_url(self):
         return "https://api.anthropic.com/v1"
+
+    def _build_httpx_client_kwargs(self, default_timeout: float) -> dict[str, Any]:
+        """httpx client kwargs that honour config.network, else the shared SSL context.
+
+        ``default_timeout`` applies only when ``network.timeout`` is unset.
+        """
+        kwargs = build_network_client_kwargs(self.config.network)
+        if not kwargs:
+            kwargs["verify"] = self.shared_ssl_context
+        kwargs.setdefault("timeout", httpx.Timeout(default_timeout))
+        return kwargs
+
+    def _messages_headers(self) -> dict[str, str]:
+        api_key = self._get_api_key_from_config_or_provider_data()
+        if not api_key:
+            raise ValueError(
+                "API key not provided. Please provide a valid API key in the provider data header, "
+                f'e.g. x-ogx-provider-data: {{"{self.provider_data_api_key_field}": "<API_KEY>"}}.'
+            )
+        return {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+            "x-api-key": api_key,
+        }
+
+    async def _post(self, path: str, body: dict[str, Any], default_timeout: float) -> dict[str, Any]:
+        url = f"{self.get_base_url().rstrip('/')}/{path}"
+        headers = self._messages_headers()
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs(default_timeout)) as client:
+            resp = await client.post(url, json=body, headers=headers)
+            if resp.is_error:
+                raise AnthropicAPIError(resp.status_code, _error_message(resp))
+            result: dict[str, Any] = resp.json()
+            return result
+
+    async def _stream_messages(
+        self, url: str, headers: dict[str, str], body: dict[str, Any]
+    ) -> AsyncIterator[AnthropicStreamEvent]:
+        try:
+            async for event in passthrough_anthropic_stream(
+                url=url,
+                req_body=body,
+                headers=headers,
+                httpx_client_kwargs=build_network_client_kwargs(self.config.network)
+                or {"verify": self.shared_ssl_context},
+            ):
+                yield event
+        except httpx.HTTPStatusError as e:
+            # The response body is already closed here, so only the status is available.
+            raise AnthropicAPIError(
+                e.response.status_code,
+                f"Anthropic API request failed with status {e.response.status_code}",
+            ) from e
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Forward the request to Anthropic's native /v1/messages endpoint."""
+        self._validate_model_allowed(params.model)
+        body = params.model_dump(exclude_none=True)
+        if params.stream:
+            # Resolve the headers here, not in the generator, so a missing API key fails the
+            # request before any streaming starts.
+            url = f"{self.get_base_url().rstrip('/')}/messages"
+            return self._stream_messages(url, self._messages_headers(), body)
+        return AnthropicMessageResponse(**await self._post("messages", body, default_timeout=300.0))
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        """Forward count_tokens to Anthropic's native /v1/messages/count_tokens endpoint."""
+        self._validate_model_allowed(params.model)
+        body = params.model_dump(exclude_none=True)
+        return AnthropicCountTokensResponse(**await self._post("messages/count_tokens", body, default_timeout=30.0))
 
     async def list_provider_model_ids(self) -> Iterable[str]:
         api_key = self._get_api_key_from_config_or_provider_data()

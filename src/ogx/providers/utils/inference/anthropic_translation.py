@@ -536,10 +536,11 @@ async def passthrough_anthropic_stream(
         Extra keyword arguments forwarded to ``httpx.AsyncClient`` constructor.
         Used by providers like vLLM to inject TLS / proxy / network config.
     timeout:
-        Default timeout for the client (seconds).
+        Default timeout for the client (seconds). A ``timeout`` in
+        ``httpx_client_kwargs`` (i.e. ``network.timeout``) takes precedence.
     """
-    client_kwargs = httpx_client_kwargs or {}
-    async with httpx.AsyncClient(timeout=timeout, **client_kwargs) as client:
+    client_kwargs = {"timeout": timeout, **(httpx_client_kwargs or {})}
+    async with httpx.AsyncClient(**client_kwargs) as client:
         async with client.stream("POST", url, json=req_body, headers=headers) as resp:
             resp.raise_for_status()
             event_type: str | None = None
