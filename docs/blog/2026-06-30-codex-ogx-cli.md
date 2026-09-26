@@ -28,7 +28,7 @@ OGX gives those tools a common front door:
 
 That makes OGX a good fit for agentic development across laptops, shared dev servers, and production-like environments. It is not just a proxy. It is a control plane for model access, auth shape, provider routing, and day-to-day debugging.
 
-Codex uses OGX through the Responses API, but the provider setup is useful beyond Codex. Once a model provider such as vLLM, Ollama, or OpenAI is registered in OGX, other OpenAI-compatible clients can use the same model access layer through chat completions or completions when those endpoints are enabled. That includes Python scripts using the OpenAI SDK, notebooks, OpenCode, LiteLLM or LangChain-style apps, and internal tools that already speak OpenAI-compatible APIs. Teams can configure routing and auth once in OGX, then reuse that setup from Codex and from simpler inference clients.
+Codex uses OGX through the Responses API, but the provider setup is useful beyond Codex. Once a model provider such as vLLM, Ollama, or OpenAI is registered in OGX, other OpenAI-compatible clients can use the same model access layer through chat completions or completions when those endpoints are enabled. That includes Python scripts using the OpenAI SDK, notebooks, OpenCode, LiteLLM or LangChain-style apps, and internal tools that already speak OpenAI-compatible APIs. Teams can configure routing and auth once in OGX, then re-use that setup from Codex and from simpler inference clients.
 
 ## What the command does
 
