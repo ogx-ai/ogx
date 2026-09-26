@@ -972,22 +972,40 @@ jobs:
             echo "Publishing test image: ${IMAGE}:test-${VERSION} (package: ${PACKAGE_NAME})"
           fi
 
-      - name: Wait for package on test PyPI
-        if: steps.meta.outputs.install_mode == 'test-pypi'
+      - name: Wait for packages on the selected index
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
+          INSTALL_MODE: ${{ steps.meta.outputs.install_mode }}
+          PACKAGE_NAME: ${{ steps.meta.outputs.package_name || 'ogx' }}
         run: |
-          VERSION="${{ needs.compute-version.outputs.version }}"
-          PACKAGE_NAME="${{ steps.meta.outputs.package_name }}"
-          URL="https://test.pypi.org/pypi/${PACKAGE_NAME}/${VERSION}/json"
-          echo "Polling ${URL} ..."
+          case "$INSTALL_MODE" in
+            pypi) INDEX_URL="https://pypi.org/simple" ;;
+            test-pypi) INDEX_URL="https://test.pypi.org/simple" ;;
+            *) echo "::error::Failed to select package index for ${INSTALL_MODE}"; exit 1 ;;
+          esac
+          PACKAGES=("$PACKAGE_NAME")
+          # Pre-rename releases can bundle their API instead of publishing it separately.
+          if [ "$PACKAGE_NAME" == "ogx" ]; then PACKAGES+=(ogx-api); fi
+
           for i in $(seq 1 20); do
-            if curl -sf "$URL" -o /dev/null; then
-              echo "${PACKAGE_NAME}==${VERSION} is available on test PyPI"
+            READY=true
+            for package in "${PACKAGES[@]}"; do
+              WHEEL_PREFIX="${package//-/_}-${VERSION}-"
+              if ! curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
+                -H 'Accept: application/vnd.pypi.simple.v1+json' "${INDEX_URL}/${package}/" \
+                | jq --exit-status --arg prefix "$WHEEL_PREFIX" \
+                  'any(.files[]; (.filename | startswith($prefix) and endswith(".whl")) and (.yanked | not))' > /dev/null; then
+                echo "Attempt ${i}/20: ${package}==${VERSION} is not yet available on ${INDEX_URL}"
+                READY=false
+              fi
+            done
+            if [ "$READY" == "true" ]; then
+              echo "Release wheels are available on ${INDEX_URL}"
               exit 0
             fi
-            echo "Attempt ${i}/20: not yet available, waiting 30s..."
-            sleep 30
+            if [ "$i" -lt 20 ]; then sleep 30; fi
           done
-          echo "::error::${PACKAGE_NAME}==${VERSION} did not appear on test PyPI after 10 minutes"
+          echo "::error::Failed to find release wheels for ${PACKAGES[*]}==${VERSION} on ${INDEX_URL} after 20 attempts"
           exit 1
 
       - name: Generate config labels
