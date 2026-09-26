@@ -197,6 +197,14 @@ class TestRerankUsesNetworkConfig:
         assert kwargs["timeout"] == httpx.Timeout(12.0)
         assert kwargs["limits"].max_connections == 7
 
+    async def test_keeps_the_shared_ssl_context_when_only_a_proxy_is_configured(self):
+        adapter = _make_adapter(network={"proxy": {"url": "http://proxy.example.com:3128"}})
+
+        kwargs = await self._rerank_client_kwargs(adapter)
+
+        assert set(kwargs["mounts"]) == {"http://", "https://"}
+        assert kwargs["verify"] is adapter.shared_ssl_context
+
     async def test_uses_shared_ssl_context_without_network_config(self):
         adapter = _make_adapter()
 

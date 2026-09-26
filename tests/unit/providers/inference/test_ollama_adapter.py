@@ -248,3 +248,13 @@ async def test_streaming_passthrough_applies_network_config():
     assert set(stream_kwargs["mounts"]) == {"http://", "https://"}
     assert stream_kwargs["headers"] == {"X-Route": "team-a"}
     assert stream_kwargs["timeout"] == httpx.Timeout(12.0)
+
+
+@pytest.mark.parametrize("call,_default_timeout", ADHOC_CALLS)
+async def test_adhoc_calls_keep_the_shared_ssl_context_when_only_a_proxy_is_configured(call, _default_timeout):
+    adapter = _make_adapter(network={"proxy": {"url": "http://proxy.example.com:3128"}})
+
+    kwargs = await _client_kwargs_used_by(call, adapter)
+
+    assert set(kwargs["mounts"]) == {"http://", "https://"}
+    assert kwargs["verify"] is adapter.shared_ssl_context

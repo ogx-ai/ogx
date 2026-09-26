@@ -692,6 +692,42 @@ class TestOpenAIMixinAdhocClientKwargs:
 
         assert kwargs == {"verify": mixin.shared_ssl_context}
 
+    @pytest.mark.parametrize(
+        "network,setting",
+        [
+            (NetworkConfig(proxy=ProxyConfig(url="http://proxy.example.com:3128")), "mounts"),
+            (NetworkConfig(timeout=12.0), "timeout"),
+            (NetworkConfig(headers={"X-Route": "team-a"}), "headers"),
+            (NetworkConfig(limits=LimitsConfig(max_connections=7)), "limits"),
+        ],
+        ids=["proxy-only", "timeout-only", "headers-only", "limits-only"],
+    )
+    def test_network_config_without_tls_keeps_the_shared_ssl_context(self, network, setting):
+        """Only setting something other than tls used to drop `verify`, so httpx silently fell back
+        to its own default CA bundle instead of the shared SSL context."""
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig(network=network))
+
+        kwargs = mixin._build_httpx_client_kwargs()
+
+        assert kwargs["verify"] is mixin.shared_ssl_context
+        assert setting in kwargs
+
+    def test_configured_tls_takes_precedence_over_the_shared_ssl_context(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=False)))
+        mixin = OpenAIMixinImpl(config=config)
+
+        assert mixin._build_httpx_client_kwargs()["verify"] is False
+
+    def test_configured_tls_context_is_not_replaced_by_the_shared_one(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=True, min_version="TLSv1.3")))
+        mixin = OpenAIMixinImpl(config=config)
+
+        verify = mixin._build_httpx_client_kwargs()["verify"]
+
+        assert isinstance(verify, ssl.SSLContext)
+        assert verify is not mixin.shared_ssl_context
+        assert verify.minimum_version == ssl.TLSVersion.TLSv1_3
+
     def test_applies_every_network_setting(self):
         config = RemoteInferenceProviderConfig(
             network=NetworkConfig(

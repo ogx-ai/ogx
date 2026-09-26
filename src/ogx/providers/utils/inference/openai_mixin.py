@@ -295,15 +295,15 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """Build ``httpx.AsyncClient`` kwargs for ad-hoc calls outside the OpenAI client.
 
         Health checks, Anthropic passthrough and rerank build their own client, which must
-        apply ``config.network`` (proxy, TLS, headers, timeout, pool limits) exactly like the
-        primary client does, and otherwise reuse the shared SSL context.
+        apply ``config.network`` (proxy, TLS, headers, timeout, pool limits). TLS verification
+        uses the shared SSL context unless ``network.tls`` configures its own, so setting only a
+        proxy, headers, a timeout or limits does not silently change how certificates are checked.
 
         ``default_timeout`` (seconds) is the call's own timeout and only applies when
         ``network.timeout`` is unset: an operator-configured timeout takes precedence.
         """
         kwargs = build_network_client_kwargs(self.config.network)
-        if not kwargs:
-            kwargs["verify"] = self.shared_ssl_context
+        kwargs.setdefault("verify", self.shared_ssl_context)
         if default_timeout is not None:
             kwargs.setdefault("timeout", httpx.Timeout(default_timeout))
         return kwargs
