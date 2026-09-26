@@ -146,7 +146,7 @@ class OllamaInferenceAdapter(OpenAIMixin):
         if request.stream:
             return self._passthrough_anthropic_stream(url, headers, body)
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs(default_timeout=300.0)) as client:
             resp = await client.post(url, json=body, headers=headers)
             resp.raise_for_status()
             return AnthropicMessageResponse(**resp.json())
@@ -162,6 +162,7 @@ class OllamaInferenceAdapter(OpenAIMixin):
             url=url,
             req_body=body,
             headers=headers,
+            httpx_client_kwargs=self._build_httpx_client_kwargs(),
         ):
             yield event
 
@@ -188,7 +189,7 @@ class OllamaInferenceAdapter(OpenAIMixin):
         api_key = self._get_api_key_from_config_or_provider_data() or "no-key-required"
         headers["x-api-key"] = api_key
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs(default_timeout=30.0)) as client:
             resp = await client.post(url, json=body, headers=headers)
             resp.raise_for_status()
             return AnthropicCountTokensResponse(**resp.json())
@@ -213,7 +214,7 @@ class OllamaInferenceAdapter(OpenAIMixin):
         """
         try:
             url = f"{self._get_ollama_base_url()}/api/version"
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            async with httpx.AsyncClient(**self._build_httpx_client_kwargs(default_timeout=30.0)) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
             return HealthResponse(status=HealthStatus.OK)

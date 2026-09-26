@@ -14,6 +14,8 @@ misconfigured base_url fails loudly at construction time instead of
 mis-typing the models. The same check backs the adapters' health() methods.
 """
 
+from typing import Any
+
 import httpx
 
 from ogx_api import HealthResponse, HealthStatus
@@ -34,6 +36,15 @@ class ServerUnreachableError(ValueError):
     """The configured server could not be reached at all (connection failure, DNS, or timeout)."""
 
 
+def _probe_client_kwargs(client_kwargs: dict[str, Any] | None, timeout: float) -> dict[str, Any]:
+    """httpx client kwargs for a probe: the adapter's network config, with the probe's own timeout.
+
+    The probe timeout always wins over ``network.timeout``: it is deliberately short (see
+    SIGNATURE_TIMEOUT), so a long configured timeout must not stretch it.
+    """
+    return {**(client_kwargs or {}), "timeout": timeout}
+
+
 def _root_url(base_url: str) -> str:
     """Derive the server root from an OpenAI-compatible base URL (strips /v1)."""
     return base_url.rstrip("/").removesuffix("/v1").rstrip("/")
@@ -47,6 +58,7 @@ async def verify_server_signature(
     *,
     api_key: str | None = None,
     timeout: float = SIGNATURE_TIMEOUT,
+    client_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """Verify that the server at base_url is the expected engine type.
 
@@ -59,6 +71,7 @@ async def verify_server_signature(
     :param server_name: Human-readable engine name for error messages
     :param api_key: Bearer token for servers fronted by authentication
     :param timeout: Request timeout in seconds
+    :param client_kwargs: httpx.AsyncClient kwargs that apply the adapter's network config (proxy, TLS, headers)
     :raises ServerUnreachableError: If the server cannot be reached at all
     :raises ValueError: If the server does not identify as the expected engine
     """
@@ -66,7 +79,7 @@ async def verify_server_signature(
     url = f"{root}{path}"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(**_probe_client_kwargs(client_kwargs, timeout)) as client:
             response = await client.get(url, headers=headers)
     except httpx.HTTPError as e:
         raise ServerUnreachableError(f"Failed to verify {root} is a {server_name} server: {e}") from e
@@ -92,36 +105,55 @@ async def check_server_signature(
     *,
     api_key: str | None = None,
     timeout: float = SIGNATURE_TIMEOUT,
+    client_kwargs: dict[str, Any] | None = None,
 ) -> HealthResponse:
     """Check that the server at base_url is the expected engine type without raising.
 
     :return: HealthResponse with status OK, or ERROR with a diagnostic message
     """
     try:
-        await verify_server_signature(base_url, path, signature_keys, server_name, api_key=api_key, timeout=timeout)
+        await verify_server_signature(
+            base_url, path, signature_keys, server_name, api_key=api_key, timeout=timeout, client_kwargs=client_kwargs
+        )
     except ValueError as e:
         return HealthResponse(status=HealthStatus.ERROR, message=str(e))
     return HealthResponse(status=HealthStatus.OK)
 
 
-async def check_llama_cpp_server(base_url: str, *, api_key: str | None = None) -> HealthResponse:
+async def check_llama_cpp_server(
+    base_url: str, *, api_key: str | None = None, client_kwargs: dict[str, Any] | None = None
+) -> HealthResponse:
     """Health check that the server at base_url is a llama.cpp llama-server."""
-    return await check_server_signature(base_url, "/props", _LLAMA_CPP_PROPS_KEYS, "llama.cpp", api_key=api_key)
+    return await check_server_signature(
+        base_url, "/props", _LLAMA_CPP_PROPS_KEYS, "llama.cpp", api_key=api_key, client_kwargs=client_kwargs
+    )
 
 
-async def check_text_embeddings_inference_server(base_url: str, *, api_key: str | None = None) -> HealthResponse:
+async def check_text_embeddings_inference_server(
+    base_url: str, *, api_key: str | None = None, client_kwargs: dict[str, Any] | None = None
+) -> HealthResponse:
     """Health check that the server at base_url is a Text-Embeddings-Inference server."""
-    return await check_server_signature(base_url, "/info", _TEI_INFO_KEYS, "Text-Embeddings-Inference", api_key=api_key)
+    return await check_server_signature(
+        base_url, "/info", _TEI_INFO_KEYS, "Text-Embeddings-Inference", api_key=api_key, client_kwargs=client_kwargs
+    )
 
 
-async def verify_llama_cpp_server(base_url: str, *, api_key: str | None = None) -> None:
+async def verify_llama_cpp_server(
+    base_url: str, *, api_key: str | None = None, client_kwargs: dict[str, Any] | None = None
+) -> None:
     """Verify that the server at base_url is a llama.cpp llama-server."""
-    await verify_server_signature(base_url, "/props", _LLAMA_CPP_PROPS_KEYS, "llama.cpp", api_key=api_key)
+    await verify_server_signature(
+        base_url, "/props", _LLAMA_CPP_PROPS_KEYS, "llama.cpp", api_key=api_key, client_kwargs=client_kwargs
+    )
 
 
-async def verify_text_embeddings_inference_server(base_url: str, *, api_key: str | None = None) -> None:
+async def verify_text_embeddings_inference_server(
+    base_url: str, *, api_key: str | None = None, client_kwargs: dict[str, Any] | None = None
+) -> None:
     """Verify that the server at base_url is a Text-Embeddings-Inference server."""
-    await verify_server_signature(base_url, "/info", _TEI_INFO_KEYS, "Text-Embeddings-Inference", api_key=api_key)
+    await verify_server_signature(
+        base_url, "/info", _TEI_INFO_KEYS, "Text-Embeddings-Inference", api_key=api_key, client_kwargs=client_kwargs
+    )
 
 
 async def get_text_embeddings_inference_model_id(
@@ -129,6 +161,7 @@ async def get_text_embeddings_inference_model_id(
     *,
     api_key: str | None = None,
     timeout: float = SIGNATURE_TIMEOUT,
+    client_kwargs: dict[str, Any] | None = None,
 ) -> str:
     """Get the model ID served by a Text-Embeddings-Inference server.
 
@@ -138,6 +171,7 @@ async def get_text_embeddings_inference_model_id(
     :param base_url: The OpenAI-compatible base URL (e.g. http://host:8080/v1)
     :param api_key: Bearer token for servers fronted by authentication
     :param timeout: Request timeout in seconds
+    :param client_kwargs: httpx.AsyncClient kwargs that apply the adapter's network config (proxy, TLS, headers)
     :return: The served model ID
     :raises ServerUnreachableError: If the server cannot be reached at all
     :raises ValueError: If the server does not report a model ID
@@ -146,7 +180,7 @@ async def get_text_embeddings_inference_model_id(
     url = f"{root}/info"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(**_probe_client_kwargs(client_kwargs, timeout)) as client:
             response = await client.get(url, headers=headers)
     except httpx.HTTPError as e:
         raise ServerUnreachableError(f"Failed to query {root} for the served model: {e}") from e

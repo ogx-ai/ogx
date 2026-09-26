@@ -6,8 +6,9 @@
 
 """Unit tests for Anthropic<->OpenAI translation utilities in anthropic_translation."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from ogx.providers.utils.inference.anthropic_translation import (
@@ -16,6 +17,7 @@ from ogx.providers.utils.inference.anthropic_translation import (
     openai_response_to_anthropic,
     openai_stream_to_anthropic,
     parse_anthropic_sse_event,
+    passthrough_anthropic_stream,
 )
 from ogx_api.messages.models import (
     AnthropicBase64ImageSource,
@@ -1078,3 +1080,48 @@ class TestUpstreamStreamClosure:
         events = [event async for event in openai_stream_to_anthropic(failing_stream(), "m")]
         assert events[-1].type == "error"
         assert closed == [True]
+
+
+class TestPassthroughStreamClientKwargs:
+    """passthrough_anthropic_stream builds its own httpx client from caller-supplied kwargs."""
+
+    @staticmethod
+    async def _client_kwargs(**stream_kwargs) -> dict:
+        with patch("ogx.providers.utils.inference.anthropic_translation.httpx.AsyncClient") as mock_client_class:
+            response = MagicMock()
+            response.aiter_lines = lambda: _empty_lines()
+            stream = MagicMock()
+            stream.__aenter__ = AsyncMock(return_value=response)
+            stream.__aexit__ = AsyncMock(return_value=None)
+            client = MagicMock()
+            client.stream = MagicMock(return_value=stream)
+            mock_client_class.return_value.__aenter__.return_value = client
+
+            async for _ in passthrough_anthropic_stream(
+                url="http://localhost/v1/messages", req_body={}, headers={}, **stream_kwargs
+            ):
+                pass
+
+        return mock_client_class.call_args.kwargs
+
+    async def test_default_timeout_is_used_without_network_timeout(self):
+        kwargs = await self._client_kwargs(httpx_client_kwargs={"verify": False})
+
+        assert kwargs == {"timeout": 300.0, "verify": False}
+
+    async def test_network_timeout_overrides_the_default_instead_of_colliding_with_it(self):
+        """A provider passing network.timeout in the client kwargs used to raise a
+        duplicate-keyword TypeError."""
+        network_timeout = httpx.Timeout(12.0)
+
+        kwargs = await self._client_kwargs(httpx_client_kwargs={"timeout": network_timeout})
+
+        assert kwargs["timeout"] is network_timeout
+
+    async def test_works_without_client_kwargs(self):
+        assert await self._client_kwargs() == {"timeout": 300.0}
+
+
+async def _empty_lines():
+    return
+    yield

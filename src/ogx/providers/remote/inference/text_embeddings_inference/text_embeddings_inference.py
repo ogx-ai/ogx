@@ -58,7 +58,9 @@ class TextEmbeddingsInferenceAdapter(OpenAIMixin):
         # Text-Embeddings-Inference server. A server that is simply not up yet
         # only warns, matching the Ollama adapter's behaviour.
         try:
-            await verify_text_embeddings_inference_server(self.get_base_url(), api_key=self._signature_api_key())
+            await verify_text_embeddings_inference_server(
+                self.get_base_url(), api_key=self._signature_api_key(), client_kwargs=self._build_httpx_client_kwargs()
+            )
         except ServerUnreachableError as e:
             logger.warning(
                 "Text-Embeddings-Inference server is not running; it must be reachable before models can be listed",
@@ -76,7 +78,9 @@ class TextEmbeddingsInferenceAdapter(OpenAIMixin):
 
             HealthResponse: A dictionary containing the health status.
         """
-        return await check_text_embeddings_inference_server(self.get_base_url(), api_key=self._signature_api_key())
+        return await check_text_embeddings_inference_server(
+            self.get_base_url(), api_key=self._signature_api_key(), client_kwargs=self._build_httpx_client_kwargs()
+        )
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # TEI only hosts embedding models, so every discovered model is an embedding model
@@ -90,7 +94,9 @@ class TextEmbeddingsInferenceAdapter(OpenAIMixin):
     async def list_provider_model_ids(self) -> Iterable[str]:
         # TEI has no /v1/models endpoint; the single served model is reported
         # by its native GET /info endpoint.
-        model_id = await get_text_embeddings_inference_model_id(self.get_base_url(), api_key=self._signature_api_key())
+        model_id = await get_text_embeddings_inference_model_id(
+            self.get_base_url(), api_key=self._signature_api_key(), client_kwargs=self._build_httpx_client_kwargs()
+        )
         return [model_id]
 
     async def openai_chat_completion(

@@ -50,7 +50,9 @@ class LlamaCppServerInferenceAdapter(OpenAIMixin):
         # llama.cpp server. A server that is simply not up yet only warns,
         # matching the Ollama adapter's behaviour.
         try:
-            await verify_llama_cpp_server(self.get_base_url(), api_key=self._signature_api_key())
+            await verify_llama_cpp_server(
+                self.get_base_url(), api_key=self._signature_api_key(), client_kwargs=self._build_httpx_client_kwargs()
+            )
         except ServerUnreachableError as e:
             logger.warning(
                 "llama.cpp server is not running; it must be reachable before models can be listed",
@@ -68,7 +70,9 @@ class LlamaCppServerInferenceAdapter(OpenAIMixin):
 
             HealthResponse: A dictionary containing the health status.
         """
-        return await check_llama_cpp_server(self.get_base_url(), api_key=self._signature_api_key())
+        return await check_llama_cpp_server(
+            self.get_base_url(), api_key=self._signature_api_key(), client_kwargs=self._build_httpx_client_kwargs()
+        )
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # llama.cpp's /v1/models response does not expose a model task/type field
@@ -114,7 +118,7 @@ class LlamaCppServerInferenceAdapter(OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         try:
-            async with httpx.AsyncClient(verify=self.shared_ssl_context) as client:
+            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
                 if response.status_code != 200:
                     raise RuntimeError(
