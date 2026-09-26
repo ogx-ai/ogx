@@ -46,7 +46,7 @@ class ReActToolParser(ToolParser):
             tool_name = react_output.action.tool_name
             tool_params = react_output.action.tool_params
             params = {param.name: param.value for param in tool_params}
-            if tool_name and tool_params:
+            if tool_name:
                 call_id = str(uuid.uuid4())
                 tool_calls = [
                     ToolCall(
