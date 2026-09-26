@@ -60,7 +60,7 @@ A version is released when:
 
 ### Release Owner
 
-Each release has a designated **Release Owner** from the [CODEOWNERS](./CODEOWNERS) group who is responsible for:
+Each release has a designated **Release Owner** from the [CODEOWNERS](./.github/CODEOWNERS) group who is responsible for:
 
 1. Creating a dedicated Slack thread in `#release` channel
 2. Coordinating testing activities
