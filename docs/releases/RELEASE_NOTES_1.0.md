@@ -3,7 +3,7 @@
 
 **Release Date:** May 2026
 
-OGX 1.0 marks the project's first major-stable release. The `/v1` HTTP API surface is now covered by the stability contract documented in [`docs/docs/concepts/apis/api_leveling.mdx`](../concepts/apis/api_leveling.mdx): no breaking changes to `/v1` datatypes or on-disk storage schemas within the 1.x line. APIs that are not yet stable continue to live under `/v1alpha` and `/v1beta`.
+OGX 1.0 marks the project's first major-stable release. The `/v1` HTTP API surface is now covered by the stability contract documented in [`docs/docs/concepts/apis/api_leveling.mdx`](../docs/concepts/apis/api_leveling.mdx): no breaking changes to `/v1` datatypes or on-disk storage schemas within the 1.x line. APIs that are not yet stable continue to live under `/v1alpha` and `/v1beta`.
 
 The headline themes for 1.0:
 
