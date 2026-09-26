@@ -82,7 +82,7 @@ Claude Code sends requests to the Anthropic Messages API (`/v1/messages`). OGX i
 - **Messages format**: Anthropic → OpenAI format (when provider doesn't support Messages API natively)
 - **Tool calls**: Anthropic `tool_use` blocks → OpenAI `tool_calls`
 - **Streaming**: OpenAI SSE events → Anthropic format (`message_start`, `content_block_delta`, etc.)
-- **Thinking blocks**: Extended thinking support for supported models
+- **Thinking blocks**: `thinking` is mapped to the backend's reasoning effort for reasoning models, and the backend's reasoning text is returned as thinking blocks (see [Extended thinking](/docs/api-anthropic-messages#extended-thinking))
 
 **Native passthrough** (no translation needed):
 - Ollama with `/v1/messages` support
@@ -188,7 +188,7 @@ registered_resources:
 ### Core Capabilities
 - ✅ **All Messages API features**: Multi-turn conversations, system messages, streaming
 - ✅ **Tool use**: File operations, shell commands, code execution (via Claude Code's built-in tools)
-- ✅ **Extended thinking**: Thinking blocks for reasoning transparency
+- ✅ **Extended thinking**: For reasoning models (gpt-oss, DeepSeek-R1, Qwen3, QwQ, OpenAI o-series, and similar), thinking blocks for reasoning transparency. Other models reject `thinking` requests with a 400
 - ✅ **Token counting**: `/v1/messages/count_tokens` endpoint
 - ✅ **Prompt caching**: When using providers that support it (Anthropic, Bedrock)
 - ✅ **Any inference provider**: OpenAI, vLLM, Ollama, Fireworks, Together, Groq, Bedrock, etc.
@@ -198,10 +198,10 @@ Different providers have different strengths when used with Claude Code:
 
 | Provider | Native Messages API | Thinking Support | Prompt Caching | Notes |
 |----------|-------------------|------------------|----------------|-------|
-| **OpenAI** | ❌ (translated) | ⚠️ (via reasoning) | ❌ | Works well, no translation overhead for responses |
-| **vLLM** | ✅ | ❌ | ❌ | Serves Messages API natively with compatible models |
-| **Ollama** | ✅ | ❌ | ❌ | Serves Messages API natively with compatible models |
-| **Bedrock, Fireworks, Groq, Together** | ❌ (translated) | ❌ | ❌ | Works via OpenAI translation |
+| **OpenAI** | ❌ (translated) | ⚠️ (reasoning effort is applied; OpenAI does not return reasoning text, so there are no thinking blocks) | ❌ | Works well, no translation overhead for responses |
+| **vLLM** | ✅ | ⚠️ (`thinking` is passed through; depends on the server's support) | ❌ | Serves Messages API natively with compatible models |
+| **Ollama** | ✅ | ⚠️ (`thinking` is passed through; depends on the server's support) | ❌ | Serves Messages API natively with compatible models |
+| **Bedrock, Fireworks, Groq, Together** | ❌ (translated) | ⚠️ (reasoning models, when the backend accepts `reasoning_effort` and returns reasoning text) | ❌ | Works via OpenAI translation |
 
 ## Configuration Examples
 
@@ -359,7 +359,7 @@ While OGX provides full Messages API compatibility, there are some behavioral di
 
 | Feature | Anthropic Claude | Open Models (via OGX) |
 |---------|------------------|-------------------------------|
-| **Thinking blocks** | Native support | Varies by model (GPT-4o has reasoning) |
+| **Thinking blocks** | Native support | Reasoning models only. Effort is coarse (`budget_tokens` is not a token cap) and blocks are unsigned |
 | **Prompt caching** | Available | Only if provider supports it |
 | **Extended context** | 200K+ tokens | Depends on model (Qwen3: 32K, Llama3: 128K) |
 | **Tool use format** | Optimized for Claude | Translated to OpenAI format |

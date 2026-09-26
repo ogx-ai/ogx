@@ -9,7 +9,9 @@
 Exercised once here against the real models.dev data; adapter-specific test
 files only need to check that they delegate to classify_model correctly."""
 
-from ogx.providers.utils.inference.models_dev_registry import classify_model
+import pytest
+
+from ogx.providers.utils.inference.models_dev_registry import classify_model, supports_reasoning
 from ogx_api import ModelType
 
 
@@ -76,3 +78,49 @@ class TestClassifyModel:
         assert model.provider_id == "my-provider"
         assert model.identifier == "some/embed-model"
         assert model.provider_resource_id == "some/embed-model"
+
+
+class TestSupportsReasoning:
+    """supports_reasoning() gates Anthropic ``thinking`` on translated (non-native) providers."""
+
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "gpt-oss:20b",  # Ollama tag
+            "openai/gpt-oss-20b",
+            "Qwen/Qwen3-0.6B",  # not in models.dev: name heuristic
+            "qwen3:0.6b",
+            "deepseek-r1:1.5b",
+            "deepseek-ai/DeepSeek-R1",
+            "o3-mini",
+            "o4-mini",
+            "QwQ-32B",
+            "Qwen3-Next-80B-A3B-Thinking",
+        ],
+    )
+    def test_reasoning_models(self, model_id):
+        assert supports_reasoning(model_id)
+
+    @pytest.mark.parametrize(
+        "model_id",
+        [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "llama3.2:3b-instruct-fp16",
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "Qwen3-Embedding-0.6B",
+            "Qwen/Qwen3-Reranker-0.6B",
+            "Qwen3-Next-80B-A3B-Instruct-FP8",
+            "gpt-5-chat-latest",
+            "qwen2.5:1.5b",
+            "mistral:latest",
+        ],
+    )
+    def test_non_reasoning_models(self, model_id):
+        assert not supports_reasoning(model_id)
+
+    def test_unknown_model_is_not_reasoning(self):
+        assert not supports_reasoning("my-private-finetune-v2")
+
+    def test_is_case_insensitive(self):
+        assert supports_reasoning("GPT-OSS:20B")

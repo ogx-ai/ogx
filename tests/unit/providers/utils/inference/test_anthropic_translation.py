@@ -6,6 +6,7 @@
 
 """Unit tests for Anthropic<->OpenAI translation utilities in anthropic_translation."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,9 +14,11 @@ import pytest
 from ogx.providers.utils.inference.anthropic_translation import (
     anthropic_request_to_openai,
     convert_tool_choice_to_openai,
+    is_thinking_requested,
     openai_response_to_anthropic,
     openai_stream_to_anthropic,
     parse_anthropic_sse_event,
+    thinking_to_reasoning_effort,
 )
 from ogx_api.messages.models import (
     AnthropicBase64ImageSource,
@@ -1078,3 +1081,234 @@ class TestUpstreamStreamClosure:
         events = [event async for event in openai_stream_to_anthropic(failing_stream(), "m")]
         assert events[-1].type == "error"
         assert closed == [True]
+
+
+# -- Thinking (Anthropic thinking <-> OpenAI reasoning) --
+
+
+def _thinking_request(thinking: AnthropicThinkingConfig | None) -> AnthropicCreateMessageRequest:
+    return AnthropicCreateMessageRequest(
+        model="qwen3-32b",
+        messages=[AnthropicMessage(role="user", content="Think about this")],
+        max_tokens=8192,
+        thinking=thinking,
+    )
+
+
+class TestThinkingToReasoningEffort:
+    @pytest.mark.parametrize(
+        "budget,effort",
+        [
+            (None, "medium"),
+            (1024, "low"),
+            (2048, "low"),
+            (2049, "medium"),
+            (4000, "medium"),  # Claude Code "think"
+            (8192, "medium"),
+            (8193, "high"),
+            (10000, "high"),  # Claude Code "think hard"
+            (31999, "high"),  # Claude Code "ultrathink"
+        ],
+    )
+    def test_enabled_budget_maps_to_effort(self, budget, effort):
+        assert thinking_to_reasoning_effort(AnthropicThinkingConfig(type="enabled", budget_tokens=budget)) == effort
+
+    def test_adaptive_leaves_the_effort_to_the_backend(self):
+        assert thinking_to_reasoning_effort(AnthropicThinkingConfig(type="adaptive")) is None
+
+    def test_disabled_sends_no_effort(self):
+        assert thinking_to_reasoning_effort(AnthropicThinkingConfig(type="disabled")) is None
+
+    @pytest.mark.parametrize(
+        "thinking,requested",
+        [
+            (None, False),
+            (AnthropicThinkingConfig(type="disabled"), False),
+            (AnthropicThinkingConfig(type="enabled", budget_tokens=2048), True),
+            (AnthropicThinkingConfig(type="adaptive"), True),
+        ],
+    )
+    def test_is_thinking_requested(self, thinking, requested):
+        assert is_thinking_requested(thinking) is requested
+
+
+class TestThinkingRequestTranslation:
+    def test_enabled_on_a_reasoning_model_sets_reasoning_effort(self):
+        request = _thinking_request(AnthropicThinkingConfig(type="enabled", budget_tokens=10000))
+
+        result = anthropic_request_to_openai(request, reasoning_capable=True)
+
+        assert result.reasoning_effort == "high"
+
+    def test_adaptive_on_a_reasoning_model_is_accepted_without_an_effort(self):
+        result = anthropic_request_to_openai(
+            _thinking_request(AnthropicThinkingConfig(type="adaptive")), reasoning_capable=True
+        )
+
+        assert result.reasoning_effort is None
+
+    @pytest.mark.parametrize("config", [AnthropicThinkingConfig(type="enabled", budget_tokens=4096)])
+    def test_model_that_cannot_reason_is_rejected_naming_the_model(self, config):
+        with pytest.raises(ValueError, match="model 'qwen3-32b' is not known to support reasoning"):
+            anthropic_request_to_openai(_thinking_request(config), reasoning_capable=False)
+
+    @pytest.mark.parametrize("capable", [True, False])
+    def test_no_thinking_and_disabled_thinking_send_no_effort(self, capable):
+        for thinking in (None, AnthropicThinkingConfig(type="disabled")):
+            result = anthropic_request_to_openai(_thinking_request(thinking), reasoning_capable=capable)
+            assert result.reasoning_effort is None
+
+
+def _completion(message: SimpleNamespace, finish_reason: str = "stop") -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=message, finish_reason=finish_reason)],
+        usage=None,
+    )
+
+
+class TestThinkingResponseTranslation:
+    @pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
+    def test_reasoning_becomes_a_leading_thinking_block(self, field):
+        """vLLM/DeepSeek call the field reasoning_content, newer vLLM and Ollama call it reasoning."""
+        message = SimpleNamespace(content="42", tool_calls=None, **{field: "Let me work it out."})
+
+        response = openai_response_to_anthropic(_completion(message), "m", include_thinking=True)
+
+        assert [b.type for b in response.content] == ["thinking", "text"]
+        assert response.content[0].thinking == "Let me work it out."
+        assert response.content[0].signature == ""
+        assert response.content[1].text == "42"
+
+    def test_thinking_block_precedes_tool_use(self):
+        tool_call = SimpleNamespace(id="call_1", function=SimpleNamespace(name="calc", arguments="{}"))
+        message = SimpleNamespace(content=None, tool_calls=[tool_call], reasoning_content="Need a tool.")
+
+        response = openai_response_to_anthropic(_completion(message, "tool_calls"), "m", include_thinking=True)
+
+        assert [b.type for b in response.content] == ["thinking", "tool_use"]
+        assert response.stop_reason == "tool_use"
+
+    def test_reasoning_is_dropped_when_thinking_was_not_requested(self):
+        message = SimpleNamespace(content="42", tool_calls=None, reasoning_content="Hidden.")
+
+        response = openai_response_to_anthropic(_completion(message), "m")
+
+        assert [b.type for b in response.content] == ["text"]
+
+    def test_no_thinking_block_when_the_backend_returned_no_reasoning(self):
+        message = SimpleNamespace(content="42", tool_calls=None, reasoning_content=None)
+
+        response = openai_response_to_anthropic(_completion(message), "m", include_thinking=True)
+
+        assert [b.type for b in response.content] == ["text"]
+
+
+def _delta_chunk(*, content=None, reasoning=None, tool_calls=None, finish_reason=None, field="reasoning_content"):
+    delta = SimpleNamespace(content=content, tool_calls=tool_calls, **{field: reasoning})
+    return SimpleNamespace(choices=[SimpleNamespace(delta=delta, finish_reason=finish_reason)], usage=None)
+
+
+async def _stream_events(chunks, **kwargs):
+    async def stream():
+        for chunk in chunks:
+            yield chunk
+
+    return [event async for event in openai_stream_to_anthropic(stream(), "m", **kwargs)]
+
+
+def _block_events(events):
+    """The content-block structure as (event type, index, block or delta type) tuples."""
+    summary = []
+    for event in events:
+        if event.type == "content_block_start":
+            summary.append(("start", event.index, event.content_block.type))
+        elif event.type == "content_block_delta":
+            summary.append(("delta", event.index, event.delta.type))
+        elif event.type == "content_block_stop":
+            summary.append(("stop", event.index))
+    return summary
+
+
+class TestThinkingStreamTranslation:
+    async def test_reasoning_then_answer_streams_a_thinking_block_then_a_text_block(self):
+        events = await _stream_events(
+            [
+                _delta_chunk(reasoning="Let me "),
+                _delta_chunk(reasoning="think."),
+                _delta_chunk(content="The answer"),
+                _delta_chunk(content=" is 42", finish_reason="stop"),
+            ],
+            include_thinking=True,
+        )
+
+        assert _block_events(events) == [
+            ("start", 0, "thinking"),
+            ("delta", 0, "thinking_delta"),
+            ("delta", 0, "thinking_delta"),
+            ("stop", 0),
+            ("start", 1, "text"),
+            ("delta", 1, "text_delta"),
+            ("delta", 1, "text_delta"),
+            ("stop", 1),
+        ]
+        thinking = [
+            e.delta.thinking for e in events if e.type == "content_block_delta" and e.delta.type == "thinking_delta"
+        ]
+        assert "".join(thinking) == "Let me think."
+        start = next(e for e in events if e.type == "content_block_start")
+        assert start.content_block.signature == ""
+
+    @pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
+    async def test_both_reasoning_field_names_are_read(self, field):
+        events = await _stream_events(
+            [_delta_chunk(reasoning="hmm", field=field), _delta_chunk(content="ok", finish_reason="stop")],
+            include_thinking=True,
+        )
+
+        assert ("delta", 0, "thinking_delta") in _block_events(events)
+
+    async def test_reasoning_then_tool_call_closes_the_thinking_block_first(self):
+        tool_delta = SimpleNamespace(index=0, id="call_1", function=SimpleNamespace(name="calc", arguments="{}"))
+        events = await _stream_events(
+            [
+                _delta_chunk(reasoning="Need a tool."),
+                _delta_chunk(tool_calls=[tool_delta], finish_reason="tool_calls"),
+            ],
+            include_thinking=True,
+        )
+
+        assert _block_events(events) == [
+            ("start", 0, "thinking"),
+            ("delta", 0, "thinking_delta"),
+            ("stop", 0),
+            ("start", 1, "tool_use"),
+            ("delta", 1, "input_json_delta"),
+            ("stop", 1),
+        ]
+
+    async def test_reasoning_after_text_opens_a_new_thinking_block(self):
+        events = await _stream_events(
+            [_delta_chunk(content="Hi"), _delta_chunk(reasoning="More thought", finish_reason="stop")],
+            include_thinking=True,
+        )
+
+        assert _block_events(events) == [
+            ("start", 0, "text"),
+            ("delta", 0, "text_delta"),
+            ("stop", 0),
+            ("start", 1, "thinking"),
+            ("delta", 1, "thinking_delta"),
+            ("stop", 1),
+        ]
+
+    async def test_reasoning_is_dropped_when_thinking_was_not_requested(self):
+        events = await _stream_events(
+            [_delta_chunk(reasoning="Hidden."), _delta_chunk(content="ok", finish_reason="stop")]
+        )
+
+        assert _block_events(events) == [("start", 0, "text"), ("delta", 0, "text_delta"), ("stop", 0)]
+
+    async def test_answer_without_reasoning_is_unchanged_when_thinking_is_requested(self):
+        events = await _stream_events([_delta_chunk(content="ok", finish_reason="stop")], include_thinking=True)
+
+        assert _block_events(events) == [("start", 0, "text"), ("delta", 0, "text_delta"), ("stop", 0)]

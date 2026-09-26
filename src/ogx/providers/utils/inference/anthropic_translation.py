@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -39,6 +39,7 @@ from ogx_api.messages.models import (
     AnthropicStreamEvent,
     AnthropicTextBlock,
     AnthropicThinkingBlock,
+    AnthropicThinkingConfig,
     AnthropicTool,
     AnthropicToolResultBlock,
     AnthropicToolUseBlock,
@@ -71,6 +72,11 @@ _STOP_REASON_TO_FINISH = {
     "max_tokens": "length",
     "pause_turn": "stop",
 }
+
+# Anthropic's thinking budget (max thinking tokens) mapped onto OpenAI's coarser reasoning
+# effort. Claude Code's budgets are 4000 ("think"), 10000 ("think hard") and 31999 ("ultrathink").
+_LOW_EFFORT_MAX_BUDGET_TOKENS = 2048
+_MEDIUM_EFFORT_MAX_BUDGET_TOKENS = 8192
 
 # Maps OpenAI finish_reason -> Anthropic stop_reason
 _FINISH_TO_STOP_REASON = {
@@ -229,13 +235,57 @@ def convert_tool_choice_to_openai(tool_choice: Any) -> Any:
     return "auto"
 
 
-def anthropic_request_to_openai(request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
-    """Convert an Anthropic CreateMessage request to OpenAI chat completion params."""
-    if request.thinking and request.thinking.type in ("enabled", "adaptive"):
-        raise ValueError(
-            "Failed to process thinking request: extended thinking requires a native "
-            "Anthropic-compatible provider; translation mode does not support it"
-        )
+def is_thinking_requested(thinking: AnthropicThinkingConfig | None) -> bool:
+    """Whether the request asks for extended thinking (``enabled`` or ``adaptive``)."""
+    return thinking is not None and thinking.type in ("enabled", "adaptive")
+
+
+def thinking_to_reasoning_effort(thinking: AnthropicThinkingConfig) -> Literal["low", "medium", "high"] | None:
+    """Map an Anthropic thinking config to an OpenAI ``reasoning_effort``.
+
+    ``enabled`` is sized by ``budget_tokens`` (medium when absent). ``adaptive`` lets the
+    model decide how much to think, so it maps to no explicit effort and the backend's
+    own default applies. Returns None when no effort should be sent.
+    """
+    if thinking.type != "enabled":
+        return None
+    budget = thinking.budget_tokens
+    if budget is None:
+        return "medium"
+    if budget <= _LOW_EFFORT_MAX_BUDGET_TOKENS:
+        return "low"
+    if budget <= _MEDIUM_EFFORT_MAX_BUDGET_TOKENS:
+        return "medium"
+    return "high"
+
+
+def _reasoning_text(obj: Any) -> str | None:
+    """Reasoning text a backend attached to a message or streaming delta, if any.
+
+    OpenAI-compatible servers disagree on the field name: vLLM and DeepSeek use
+    ``reasoning_content``, newer vLLM and Ollama use ``reasoning``.
+    """
+    return getattr(obj, "reasoning_content", None) or getattr(obj, "reasoning", None) or None
+
+
+def anthropic_request_to_openai(
+    request: AnthropicCreateMessageRequest, *, reasoning_capable: bool = False
+) -> OpenAIChatCompletionRequestWithExtraBody:
+    """Convert an Anthropic CreateMessage request to OpenAI chat completion params.
+
+    ``thinking`` (enabled or adaptive) is mapped to ``reasoning_effort`` when the target
+    model is ``reasoning_capable`` and rejected otherwise, rather than silently dropped.
+    """
+    thinking = request.thinking
+    reasoning_effort: Literal["low", "medium", "high"] | None = None
+    if thinking is not None and is_thinking_requested(thinking):
+        if not reasoning_capable:
+            raise ValueError(
+                "Failed to process thinking request: extended thinking requires a native "
+                "Anthropic-compatible provider or a reasoning-capable model, and model "
+                f"'{request.model}' is not known to support reasoning"
+            )
+        reasoning_effort = thinking_to_reasoning_effort(thinking)
 
     messages = convert_messages_to_openai(request.system, request.messages)
     tools = convert_tools_to_openai(request.tools) if request.tools else None
@@ -261,17 +311,30 @@ def anthropic_request_to_openai(request: AnthropicCreateMessageRequest) -> OpenA
         parallel_tool_calls=parallel_tool_calls,
         stream=request.stream or False,
         service_tier=request.service_tier,  # type: ignore[arg-type]
+        reasoning_effort=reasoning_effort,
         **(extra_body or {}),
     )
 
 
-def openai_response_to_anthropic(response: OpenAIChatCompletion, request_model: str) -> AnthropicMessageResponse:
-    """Convert an OpenAI ChatCompletion response to Anthropic message format."""
+def openai_response_to_anthropic(
+    response: OpenAIChatCompletion, request_model: str, *, include_thinking: bool = False
+) -> AnthropicMessageResponse:
+    """Convert an OpenAI ChatCompletion response to Anthropic message format.
+
+    With ``include_thinking`` (the request enabled thinking), reasoning text the backend
+    returned becomes a leading ``thinking`` block. Without it, reasoning is dropped as
+    Anthropic clients do not expect thinking blocks they did not ask for.
+    """
     content: list[AnthropicContentBlock] = []
 
     if response.choices:
         choice = response.choices[0]
         message = choice.message
+
+        reasoning = _reasoning_text(message) if include_thinking and message else None
+        if reasoning:
+            # Anthropic clients require a signature field; there is nothing to sign here.
+            content.append(AnthropicThinkingBlock(thinking=reasoning, signature=""))
 
         if message and message.content:
             content.append(AnthropicTextBlock(text=message.content))
@@ -325,6 +388,7 @@ def openai_response_to_anthropic(response: OpenAIChatCompletion, request_model: 
 async def _translate_openai_stream_events(
     openai_stream: AsyncIterator[OpenAIChatCompletionChunk],
     request_model: str,
+    include_thinking: bool = False,
 ) -> AsyncIterator[AnthropicStreamEvent]:
     """Translate OpenAI streaming chunks to Anthropic streaming events."""
 
@@ -340,7 +404,8 @@ async def _translate_openai_stream_events(
     yield PingEvent()
 
     content_block_index = 0
-    in_text_block = False
+    # The single text or thinking block currently open. Tool blocks are tracked separately.
+    open_block: Literal["text", "thinking"] | None = None
     in_tool_blocks: dict[int, bool] = {}
     tool_call_index_to_block_index: dict[int, int] = {}
     output_tokens = 0
@@ -363,13 +428,37 @@ async def _translate_openai_stream_events(
             choice = chunk.choices[0]
             delta = choice.delta
 
+            reasoning = _reasoning_text(delta) if include_thinking and delta else None
+            if reasoning:
+                if open_block == "text":
+                    yield ContentBlockStopEvent(index=content_block_index)
+                    yield PingEvent()
+                    content_block_index += 1
+                    open_block = None
+                if open_block is None:
+                    yield ContentBlockStartEvent(
+                        index=content_block_index,
+                        # Anthropic clients require a signature field; there is nothing to sign here.
+                        content_block=AnthropicThinkingBlock(thinking="", signature=""),
+                    )
+                    open_block = "thinking"
+                yield ContentBlockDeltaEvent(
+                    index=content_block_index,
+                    delta=_ThinkingDelta(thinking=reasoning),
+                )
+
             if delta and delta.content:
-                if not in_text_block:
+                if open_block == "thinking":
+                    yield ContentBlockStopEvent(index=content_block_index)
+                    yield PingEvent()
+                    content_block_index += 1
+                    open_block = None
+                if open_block is None:
                     yield ContentBlockStartEvent(
                         index=content_block_index,
                         content_block=AnthropicTextBlock(text=""),
                     )
-                    in_text_block = True
+                    open_block = "text"
 
                 yield ContentBlockDeltaEvent(
                     index=content_block_index,
@@ -381,11 +470,11 @@ async def _translate_openai_stream_events(
                     tc_idx = tc_delta.index if tc_delta.index is not None else 0
 
                     if tc_idx not in in_tool_blocks:
-                        if in_text_block:
+                        if open_block is not None:
                             yield ContentBlockStopEvent(index=content_block_index)
                             yield PingEvent()
                             content_block_index += 1
-                            in_text_block = False
+                            open_block = None
 
                         in_tool_blocks[tc_idx] = True
                         tool_call_index_to_block_index[tc_idx] = content_block_index
@@ -423,7 +512,7 @@ async def _translate_openai_stream_events(
         return
 
     # Close any open blocks
-    if in_text_block:
+    if open_block is not None:
         yield ContentBlockStopEvent(index=content_block_index)
         yield PingEvent()
 
@@ -447,14 +536,18 @@ async def _translate_openai_stream_events(
 async def openai_stream_to_anthropic(
     openai_stream: AsyncIterator[OpenAIChatCompletionChunk],
     request_model: str,
+    *,
+    include_thinking: bool = False,
 ) -> AsyncIterator[AnthropicStreamEvent]:
     """Translate OpenAI streaming chunks to Anthropic streaming events.
+
+    With ``include_thinking``, reasoning deltas become ``thinking`` content blocks.
 
     Always closes the upstream stream, including when the consumer abandons
     the translation mid-stream.
     """
     try:
-        async for event in _translate_openai_stream_events(openai_stream, request_model):
+        async for event in _translate_openai_stream_events(openai_stream, request_model, include_thinking):
             yield event
     finally:
         await close_async_stream(openai_stream)

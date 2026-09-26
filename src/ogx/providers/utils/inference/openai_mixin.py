@@ -25,6 +25,7 @@ from ogx.providers.utils.inference.http_client import (
     build_network_client_kwargs,
 )
 from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
+from ogx.providers.utils.inference.models_dev_registry import supports_reasoning
 from ogx.providers.utils.inference.openai_compat import (
     get_stream_options_for_telemetry,
     prepare_openai_completion_params,
@@ -624,19 +625,23 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         """Handle Anthropic Messages API via translation to OpenAI chat completions."""
         from ogx.providers.utils.inference.anthropic_translation import (
             anthropic_request_to_openai,
+            is_thinking_requested,
             openai_response_to_anthropic,
             openai_stream_to_anthropic,
         )
 
-        openai_params = anthropic_request_to_openai(params)
+        include_thinking = is_thinking_requested(params.thinking)
+        openai_params = anthropic_request_to_openai(
+            params, reasoning_capable=include_thinking and supports_reasoning(params.model)
+        )
         self._validate_model_allowed(openai_params.model)
 
         result = await self.openai_chat_completion(openai_params)
 
         if isinstance(result, AsyncIterator):
-            return openai_stream_to_anthropic(result, params.model)
+            return openai_stream_to_anthropic(result, params.model, include_thinking=include_thinking)
 
-        return openai_response_to_anthropic(result, params.model)
+        return openai_response_to_anthropic(result, params.model, include_thinking=include_thinking)
 
     async def anthropic_count_tokens(
         self,
