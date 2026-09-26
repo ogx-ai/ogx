@@ -885,7 +885,11 @@ this could be just a hash
     apis: list[str] = Field(
         default_factory=list,
         description="""
-The list of APIs to serve. If not specified, all APIs specified in the provider_map will be served""",
+The list of APIs to serve over HTTP. If not specified, all APIs specified in the provider_map will
+be served. The list gates route registration only: an API left out is still resolved in-process for
+providers that depend on it. Two exceptions to the list: the stack administration APIs (admin,
+inspect, providers) are always served, and serving responses also serves conversations and
+prompts.""",
     )
 
     providers: dict[str, list[Provider]] = Field(

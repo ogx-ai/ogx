@@ -60,6 +60,18 @@ REPO_ROOT = Path(__file__).parent.parent.parent.parent
 
 logger = get_logger(name=__name__, category="core::server")
 
+# APIs that administer or describe the stack itself rather than serving inference
+# traffic. Operators need them reachable to diagnose a deployment, so `apis:` cannot opt
+# out of them. (It can still list them; doing so is simply redundant.)
+ALWAYS_SERVED_APIS = ("admin", "inspect", "providers")
+
+# Built-in, user-facing APIs implied by serving `responses`: the builtin responses
+# provider hard-depends on their impls in-process (see providers/registry/responses.py),
+# and OpenAI clients on a responses deployment expect their HTTP surface. A deployment
+# that fronts responses with its own gateway drops `responses` from `apis:`, which turns
+# these off with it.
+RESPONSES_IMPLIED_APIS = ("conversations", "prompts")
+
 
 def warn_with_traceback(
     message: Warning | str,
@@ -135,6 +147,28 @@ class StackApp(FastAPI):
         self.stack: Stack = Stack(config)
 
 
+def apis_to_serve(run_config: StackConfig, impls: dict[Api, Any]) -> set[str]:
+    """Return the names of the APIs whose HTTP routers should be registered.
+
+    An `apis:` list is authoritative for the user-facing surface, except that serving
+    `responses` implies the built-in APIs a responses deployment is expected to expose.
+    Without a list, everything the providers give us is served.
+    """
+    served = set(run_config.apis) if run_config.apis else {api.value for api in impls}
+
+    if Api.responses.value in served:
+        served.update(RESPONSES_IMPLIED_APIS)
+
+    for inf in builtin_automatically_routed_apis():
+        # if we do not serve the corresponding router API, we should not serve the routing table API
+        if inf.router_api.value not in served:
+            continue
+        served.add(inf.routing_table_api.value)
+
+    served.update(ALWAYS_SERVED_APIS)
+    return served
+
+
 @asynccontextmanager
 async def lifespan(app: StackApp) -> AsyncIterator[None]:
     """FastAPI lifespan context manager that starts background tasks and handles shutdown.
@@ -163,32 +197,22 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
     if external_apis:
         register_external_api_routers(external_apis)
 
-    if app.stack.run_config.apis:
-        apis_to_serve = set(app.stack.run_config.apis)
-    else:
-        apis_to_serve = set(impls.keys())
+    served_apis = apis_to_serve(app.stack.run_config, impls)
 
-    for inf in builtin_automatically_routed_apis():
-        # if we do not serve the corresponding router API, we should not serve the routing table API
-        if inf.router_api.value not in apis_to_serve:
-            continue
-        apis_to_serve.add(inf.routing_table_api.value)
-
-    apis_to_serve.add("admin")
-    apis_to_serve.add("inspect")
-    apis_to_serve.add("providers")
-    apis_to_serve.add("prompts")
-    apis_to_serve.add("conversations")
-
-    for api_str in apis_to_serve:
+    for api_str in sorted(served_apis):
         api = Api(api_str)
-        impl = impls[api]
+        impl = impls.get(api)
+        if impl is None:
+            # `apis:` can name an API that no configured provider backs; the resolver
+            # ignores those, so there is nothing to build a router from.
+            logger.warning("Skipping API with no implementation", api=api_str)
+            continue
         router = build_fastapi_router(api, impl)
         if router:
             app.include_router(router)
             logger.debug("Registered FastAPI router", api=str(api))
 
-    logger.debug("Serving APIs", apis=list(apis_to_serve))
+    logger.debug("Serving APIs", apis=sorted(served_apis))
 
     # Start the registry refresh background task
     app.stack.create_registry_refresh_task()
