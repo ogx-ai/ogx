@@ -131,6 +131,9 @@ class ToolExecutor:
         self.vector_stores_config = vector_stores_config or VectorStoresConfig()
         # Optional MCPSessionManager for session reuse within a request (fix for #4452)
         self.mcp_session_manager = mcp_session_manager
+        # Connector-resolved MCP endpoints are admin-configured and may be private.
+        # Caller-supplied Responses server_url values are not added here and are SSRF-checked.
+        self.trusted_mcp_endpoints: set[str] = set()
 
     async def execute_tool_call(
         self,
@@ -393,11 +396,13 @@ class ToolExecutor:
 
         try:
             if mcp_tool_to_server and function_name in mcp_tool_to_server:
-                from ogx.providers.utils.tools.mcp import invoke_mcp_tool
+                from ogx.providers.utils.tools.mcp import invoke_mcp_tool, validate_mcp_endpoint
 
                 mcp_tool = mcp_tool_to_server[function_name]
                 if not mcp_tool.server_url:
                     raise ValueError(f"Failed to invoke MCP tool {function_name}: server_url is not set")
+                if mcp_tool.server_url not in self.trusted_mcp_endpoints:
+                    validate_mcp_endpoint(mcp_tool.server_url)
                 attributes = {
                     "server_label": mcp_tool.server_label,
                     "server_url": mcp_tool.server_url,
