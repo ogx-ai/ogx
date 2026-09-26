@@ -882,10 +882,12 @@ this could be just a hash
         default=None,
         description="Reference to the container image if this package refers to a container",
     )
-    apis: list[str] = Field(
-        default_factory=list,
+    apis: list[str] | None = Field(
+        default=None,
         description="""
-The list of APIs to serve. If not specified, all APIs specified in the provider_map will be served""",
+The list of APIs to serve. If not specified, all APIs specified in the provider_map will be served.
+An explicit list is authoritative, including when it is empty: an empty list serves no
+provider-backed APIs, which is not the same as omitting the field.""",
     )
 
     providers: dict[str, list[Provider]] = Field(
