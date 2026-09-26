@@ -101,10 +101,18 @@ class _FactoryDispatcher:
         return getattr(module, method_name, None)
 
 
+# Unprefixed model IDs the claude CLI requests, so `claude` works against `ogx go` without --model.
+# Keep this in sync with the CLI's default models as new generations ship: an unregistered ID fails
+# to resolve. Older IDs stay for older CLI versions. Newest first within each tier, because
+# `ogx connect claude` picks the first model that matches a tier.
 _CLAUDE_CODE_ALIASES: list[str] = [
     "claude-haiku-4-5",
+    "claude-sonnet-5",
     "claude-sonnet-4-6",
+    "claude-opus-5",
     "claude-opus-4-7",
+    "claude-fable-5",
+    "claude-mythos-5",
 ]
 
 # Inference provider IDs checked in priority order when building Claude Code aliases.
