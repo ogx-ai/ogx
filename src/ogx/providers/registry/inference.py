@@ -12,19 +12,6 @@ from ogx_api import (
     RemoteProviderSpec,
 )
 
-BUILTIN_DEPS = [
-    "accelerate",
-    "fairscale",
-    "torch",
-    "torchvision",
-    "transformers",
-    "zmq",
-    "lm-format-enforcer",
-    "sentence-transformers>=6.0.0",
-    "torchao==0.8.0",
-    "fbgemm-gpu-genai==1.1.2",
-]
-
 
 def available_providers() -> list[ProviderSpec]:
     """Return the list of available inference provider specifications.
@@ -39,10 +26,7 @@ def available_providers() -> list[ProviderSpec]:
             # CrossEncoder depends on torchao.quantization
             pip_packages=[
                 "torch torchvision torchao>=0.12.0 --extra-index-url https://download.pytorch.org/whl/cpu",
-                # Floor must match the `starter` extra in pyproject.toml: the provider passes
-                # trust_remote_code= to SentenceTransformer() (added in 2.3.0), and only 6.x
-                # supports the transformers>=5 constraint. Without a floor, pip can resolve an
-                # ancient release (e.g. 0.2.3) whose signatures raise TypeError at request time.
+                # Floor must match the `starter` extra in pyproject.toml -- update both
                 "sentence-transformers>=6.0.0",  # we installed cpu versions of pytorch so sentence-transformers doesn't pull in cuda deps
                 # required by some SentenceTransformers architectures for tensor rearrange/merge ops
                 "einops",
