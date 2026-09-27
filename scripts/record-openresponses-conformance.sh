@@ -77,7 +77,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 OGX_TEST_INFERENCE_MODE=record-if-missing \
 OGX_TEST_RECORDING_DIR="$RECORDING_DIR" \
 OGX_LOG_WIDTH=200 \
-nohup ogx stack run ci-tests --port "$PORT" \
+nohup ogx stack run ci-tests --port "$PORT" --insecure \
     > "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 echo "Server PID: $SERVER_PID"

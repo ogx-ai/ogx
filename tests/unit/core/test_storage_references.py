@@ -86,6 +86,52 @@ def test_valid_configuration_passes_validation():
     assert stores.conversations is not None and stores.conversations.backend == "sql_default"
 
 
+def test_inference_store_defaults_enabled_when_omitted() -> None:
+    """Omitting the `inference` key keeps persistence enabled (backward compatible default).
+
+    Existing deployments that omit the key keep their behavior; a non-persisting
+    config is expressed with `inference.enabled: false` rather than by deleting
+    the key or nulling the reference.
+    """
+    stores = ServerStoresConfig()
+    assert stores.inference is not None
+    assert stores.inference.enabled is True
+    assert stores.inference.backend == "sql_default"
+    assert stores.inference.table_name == "inference_store"
+
+
+def test_inference_store_enabled_false_disables_persistence() -> None:
+    """Setting `inference.enabled` to false opts out of chat completion persistence."""
+    stores = ServerStoresConfig(
+        inference=InferenceStoreReference(backend="sql_default", table_name="inference_store", enabled=False)
+    )
+    assert stores.inference is not None
+    assert stores.inference.enabled is False
+
+
+def test_inference_store_enabled_flag_parsing() -> None:
+    """Lock the enabled-flag semantics when parsing `ServerStoresConfig`.
+
+    - `inference` key absent       -> enabled default (persistence on)
+    - `inference.enabled: false`   -> disabled (persistence off)
+    """
+    base = ServerStoresConfig().model_dump(mode="python")
+
+    # Omit the inference key entirely: the default applies (persistence on).
+    omitted = dict(base)
+    omitted.pop("inference")
+    stores_omitted = ServerStoresConfig.model_validate(omitted)
+    assert stores_omitted.inference is not None
+    assert stores_omitted.inference.enabled is True
+
+    # Explicitly disable persistence via the flag.
+    disabled = dict(base)
+    disabled["inference"] = {**base["inference"], "enabled": False}
+    stores_disabled = ServerStoresConfig.model_validate(disabled)
+    assert stores_disabled.inference is not None
+    assert stores_disabled.inference.enabled is False
+
+
 @pytest.mark.parametrize("backend_key", ["kv_default", "sql_default"])
 def test_default_backends_resolve_env_vars(backend_key, monkeypatch):
     """Default StorageConfig backends must contain real paths, not literal

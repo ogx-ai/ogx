@@ -255,7 +255,7 @@ async def test_create_gin_index_executes_correct_sql():
     index = PGVectorIndex(
         vector_store=vector_store,
         dimension=768,
-        pool=pool,
+        pool_factory=AsyncMock(return_value=pool),
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
     )
@@ -289,7 +289,7 @@ async def test_create_gin_index_raises_runtime_error_on_db_error():
     index = PGVectorIndex(
         vector_store=vector_store,
         dimension=768,
-        pool=pool,
+        pool_factory=AsyncMock(return_value=pool),
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
     )
@@ -316,7 +316,7 @@ async def test_gin_index_creation_in_initialize_call():
     index = PGVectorIndex(
         vector_store=vector_store,
         dimension=768,
-        pool=pool,
+        pool_factory=AsyncMock(return_value=pool),
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
     )
@@ -341,7 +341,7 @@ async def test_set_ef_search_called_before_select_in_query_vector(mock_asyncpg_p
             provider_id="pgvector",
         ),
         dimension=embedding_dimension,
-        pool=pool,
+        pool_factory=AsyncMock(return_value=pool),
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=50),
     )
@@ -384,7 +384,7 @@ async def test_apply_default_ef_search_for_query_vector(mock_asyncpg_pool, embed
             provider_id="pgvector",
         ),
         dimension=embedding_dimension,
-        pool=pool,
+        pool_factory=AsyncMock(return_value=pool),
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64),
     )
@@ -419,7 +419,7 @@ async def test_add_chunks_does_not_run_analyze_on_write():
             provider_id="pgvector",
         ),
         dimension=2,
-        pool=pool,
+        pool_factory=AsyncMock(return_value=pool),
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=40),
     )

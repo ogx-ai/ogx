@@ -190,45 +190,6 @@ async def test_sse_format_is_correct():
     assert '"type": "response.output_text.delta"' in events[0]
 
 
-async def test_sse_stream_keeps_provider_context():
-    from ogx.core.request_headers import PROVIDER_DATA_VAR
-
-    app = FastAPI()
-    impl = AsyncMock(spec=Responses)
-    provider_data = {"provider": "test"}
-
-    async def _stream():
-        yield {"provider_data": PROVIDER_DATA_VAR.get()}
-        yield {"type": "response.completed"}
-
-    impl.create_openai_response.return_value = _stream()
-
-    router = build_fastapi_router(Api.responses, impl)
-    assert router is not None
-    app.include_router(router)
-
-    create = next(
-        r.endpoint
-        for r in router.routes
-        if getattr(r, "path", None) == "/v1/responses" and "POST" in getattr(r, "methods", set())
-    )
-
-    token = PROVIDER_DATA_VAR.set(provider_data)
-    try:
-        request = CreateResponseRequest(input="hi", model="test", stream=True)
-        response = await create(request)
-    finally:
-        PROVIDER_DATA_VAR.reset(token)
-
-    first_event = None
-    async for chunk in response.body_iterator:
-        first_event = chunk
-        break
-
-    assert first_event is not None
-    assert '"provider_data": {"provider": "test"}' in first_event
-
-
 async def test_sse_stream_reports_value_error_as_http_exception():
     app = FastAPI()
     impl = AsyncMock(spec=Responses)

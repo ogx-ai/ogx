@@ -62,7 +62,7 @@ jobs:
           # Use the virtual environment created by the build step (name comes from build config)
           source ci-test/bin/activate
           uv pip list
-          nohup ogx stack run tests/external/config.yaml > server.log 2>&1 &
+          nohup ogx stack run tests/external/config.yaml --insecure > server.log 2>&1 &
 
       - name: Wait for OGX server to be ready
         run: |

@@ -52,7 +52,6 @@ def make_completion_adapter(monkeypatch):
         a = VertexAIInferenceAdapter(config=VertexAIConfig(project="p", location="l"))
         fake_client = MagicMock()
         fake_client.aio.models.generate_content = AsyncMock(return_value=fake_response)
-        monkeypatch.setattr(a, "_get_provider_model_id", AsyncMock(return_value="gemini-2.5-flash"))
         monkeypatch.setattr(a, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(a, "_get_client", lambda: fake_client)
         return a, fake_client
@@ -97,7 +96,6 @@ class TestOpenAICompletion:
         fake_chunk = _make_fake_streaming_chunk("hi")
         fake_client = MagicMock()
         fake_client.aio.models.generate_content_stream = AsyncMock(return_value=_async_pager([fake_chunk]))
-        monkeypatch.setattr(adapter, "_get_provider_model_id", AsyncMock(return_value="gemini-2.5-flash"))
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
         params = OpenAICompletionRequestWithExtraBody(model="google/gemini-2.5-flash", prompt=["a", "b"], stream=True)
@@ -195,7 +193,6 @@ class TestOpenAICompletion:
         fake_client = SimpleNamespace(
             aio=SimpleNamespace(models=SimpleNamespace(generate_content_stream=AsyncMock(return_value=fake_stream())))
         )
-        monkeypatch.setattr(adapter, "_get_provider_model_id", AsyncMock(return_value="gemini-2.5-flash"))
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
 
@@ -220,7 +217,6 @@ class TestOpenAICompletion:
         fake_client = SimpleNamespace(
             aio=SimpleNamespace(models=SimpleNamespace(generate_content_stream=AsyncMock(return_value=fake_stream())))
         )
-        monkeypatch.setattr(adapter, "_get_provider_model_id", AsyncMock(return_value="gemini-2.5-flash"))
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
 
@@ -240,7 +236,6 @@ class TestOpenAICompletion:
         fake_chunk = _make_fake_streaming_chunk("hi")
         fake_client = MagicMock()
         fake_client.aio.models.generate_content_stream = AsyncMock(return_value=_async_pager([fake_chunk]))
-        monkeypatch.setattr(adapter, "_get_provider_model_id", AsyncMock(return_value="gemini-2.5-flash"))
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
         params = OpenAICompletionRequestWithExtraBody(model="google/gemini-2.5-flash", prompt=["hello"], stream=True)
@@ -249,7 +244,6 @@ class TestOpenAICompletion:
 
     def _patch_streaming_dependencies(self, monkeypatch, adapter, fake_client):
         """Patch streaming dependencies for completion tests."""
-        monkeypatch.setattr(adapter, "_get_provider_model_id", AsyncMock(return_value="gemini-2.5-flash"))
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
 
@@ -392,7 +386,6 @@ class TestCompletionModelExtra:
         fake_client = SimpleNamespace(
             aio=SimpleNamespace(models=SimpleNamespace(generate_content_stream=AsyncMock(return_value=fake_stream())))
         )
-        monkeypatch.setattr(adapter, "_get_provider_model_id", AsyncMock(return_value="gemini-2.5-flash"))
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
 
@@ -433,16 +426,11 @@ class TestCompletionStreamOptions:
         )
         stream_call_args: dict[str, Any] = {}
 
-        async def _provider_model_id(_: str) -> str:
-            """Return a fixed provider model identifier."""
-            return "gemini-2.5-flash"
-
         async def _stream_completion(client, model_id, contents, config, model, stream_options=None):
             """Handle stream completion."""
             stream_call_args["stream_options"] = stream_options
             return _async_pager([])
 
-        monkeypatch.setattr(adapter, "_get_provider_model_id", _provider_model_id)
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
         monkeypatch.setattr(

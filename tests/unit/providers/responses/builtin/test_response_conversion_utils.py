@@ -15,6 +15,7 @@ from ogx.providers.inline.responses.builtin.responses.utils import (
     convert_response_content_to_chat_content,
     convert_response_input_to_chat_messages,
     convert_response_text_to_chat_response_format,
+    extract_citations_from_text,
     get_message_type_by_role,
     is_function_tool_call,
 )
@@ -94,6 +95,27 @@ class TestConvertChatChoiceToResponseMessage:
         assert len(result.content) == 1
         assert isinstance(result.content[0], OpenAIResponseOutputMessageContentOutputText)
         assert result.content[0].text == ""
+
+    async def test_populates_fallback_citation_when_model_does_not_cite_inline(self):
+        """Regression test: file_search results were retrieved and used to answer, but the
+        model (e.g. a small local model) never echoed the `<|file-id|>` citation marker.
+        The response should still carry file_citation annotations for the retrieved files.
+        """
+        choice = OpenAIChoice(
+            message=OpenAIChatCompletionResponseMessage(
+                content="Global warming is caused by greenhouse gases trapping heat."
+            ),
+            finish_reason="stop",
+            index=0,
+        )
+
+        result = await convert_chat_choice_to_response_message(choice, citation_files={"file-abc123": "climate.pdf"})
+
+        assert isinstance(result.content[0], OpenAIResponseOutputMessageContentOutputText)
+        assert result.content[0].text == "Global warming is caused by greenhouse gases trapping heat."
+        assert len(result.content[0].annotations) == 1
+        assert result.content[0].annotations[0].file_id == "file-abc123"
+        assert result.content[0].annotations[0].filename == "climate.pdf"
 
 
 class TestConvertResponseContentToChatContent:
@@ -807,3 +829,84 @@ class TestExtractCitationsFromText:
         assert cleaned_text[expected_annotations[0].index] == "."
         assert cleaned_text[expected_annotations[1].index] == "?"
         assert cleaned_text[expected_annotations[2].index] == "!"
+
+    def test_extract_citations_accepts_bracket_and_paren_variants(self):
+        """Some models approximate the instructed `<|file-id|>` marker with brackets/parens."""
+        text = "Fact one [file-abc123]. Fact two (file-def456)."
+        file_mapping = {"file-abc123": "doc1.pdf", "file-def456": "doc2.txt"}
+
+        annotations, cleaned_text = _extract_citations_from_text(text, file_mapping)
+
+        assert cleaned_text == "Fact one. Fact two."
+        assert [a.file_id for a in annotations] == ["file-abc123", "file-def456"]
+
+    def test_extract_citations_preserves_unknown_file_id_markers(self):
+        """Regression test: a marker whose file id isn't in citation_files (e.g. stale or
+        mismatched) must not be silently deleted from the user-visible text — only markers
+        for recognized files are stripped out, since those become real annotations instead.
+        """
+        text = "Some fact <|file-unknown|>."
+        annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
+
+        assert annotations == []
+        assert cleaned_text == "Some fact <|file-unknown|>."
+
+    def test_extract_citations_preserves_unknown_marker_alongside_known_one(self):
+        """A mix of a known and an unknown marker: only the known one is stripped/cited."""
+        text = "Cited fact <|file-abc123|>. Uncited fact <|file-unknown|>."
+        annotations, cleaned_text = _extract_citations_from_text(text, {"file-abc123": "doc1.pdf"})
+
+        assert [a.file_id for a in annotations] == ["file-abc123"]
+        assert cleaned_text == "Cited fact. Uncited fact <|file-unknown|>."
+
+
+class TestExtractCitationsFromTextWithFallback:
+    def test_falls_back_to_retrieved_files_when_model_does_not_cite(self):
+        """Small/local models often ignore the citation-marker instruction entirely.
+
+        When that happens but file_search actually retrieved documents, we should still
+        surface file_citation annotations rather than silently returning an empty list.
+        """
+        text = "Global warming is caused by greenhouse gases."
+        citation_files = {"file-abc123": "climate.pdf"}
+
+        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+
+        assert cleaned_text == text
+        assert len(annotations) == 1
+        assert annotations[0].file_id == "file-abc123"
+        assert annotations[0].filename == "climate.pdf"
+        assert annotations[0].index == len(cleaned_text)
+
+    def test_fallback_cites_only_single_highest_scoring_file(self):
+        """When several files were retrieved but the model cited none of them, we should
+
+        attribute the answer to only the top-ranked file rather than every file retrieved
+        this turn, since the retrieval set doesn't imply the whole answer draws equally on
+        all of them. tool_executor.py orders citation_files by descending score, so the
+        fallback picks the first entry.
+        """
+        text = "Global warming is caused by greenhouse gases."
+        citation_files = {"file-abc123": "climate.pdf", "file-def456": "unrelated.pdf"}
+
+        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+
+        assert len(annotations) == 1
+        assert annotations[0].file_id == "file-abc123"
+        assert annotations[0].filename == "climate.pdf"
+        assert annotations[0].index == len(cleaned_text)
+
+    def test_no_fallback_when_no_files_were_retrieved(self):
+        annotations, cleaned_text = extract_citations_from_text("No sources used here.", {})
+
+        assert annotations == []
+        assert cleaned_text == "No sources used here."
+
+    def test_real_marker_citations_take_precedence_over_fallback(self):
+        text = "Cited fact <|file-abc123|>. Uncited fact."
+        citation_files = {"file-abc123": "doc1.pdf", "file-def456": "doc2.txt"}
+
+        annotations, cleaned_text = extract_citations_from_text(text, citation_files)
+
+        assert [a.file_id for a in annotations] == ["file-abc123"]
+        assert cleaned_text == "Cited fact. Uncited fact."

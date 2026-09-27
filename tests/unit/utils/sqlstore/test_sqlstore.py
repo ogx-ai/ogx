@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import inspect
 
 from ogx.core.storage.datatypes import PostgresSqlStoreConfig
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
@@ -48,6 +49,28 @@ async def test_sqlstore_shutdown_disposes_engine():
         assert store._engine is None, (
             "Engine not disposed after shutdown. This causes process hang on exit with aiosqlite >= 0.22"
         )
+
+
+async def test_sqlstore_create_index_is_idempotent() -> None:
+    with TemporaryDirectory() as tmp_dir:
+        store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/indexes.db"))
+        await store.create_table(
+            "items",
+            {"id": ColumnType.STRING, "tenant": ColumnType.STRING, "created_at": ColumnType.INTEGER},
+        )
+
+        await store.create_index("idx_items_tenant_created", "items", ["tenant", "created_at"])
+        await store.create_index("idx_items_tenant_created", "items", ["tenant", "created_at"])
+
+        assert store._engine is not None
+        async with store._engine.connect() as connection:
+            indexes = await connection.run_sync(lambda sync_connection: inspect(sync_connection).get_indexes("items"))
+        assert [index["name"] for index in indexes].count("idx_items_tenant_created") == 1
+        assert next(index for index in indexes if index["name"] == "idx_items_tenant_created")["column_names"] == [
+            "tenant",
+            "created_at",
+        ]
+        await store.shutdown()
 
 
 async def test_sqlite_sqlstore():

@@ -34,6 +34,10 @@ IBM WatsonX inference provider for accessing AI models on IBM's WatsonX platform
 | `network.timeout.connect` | `float \| None` | No |  | Connection timeout in seconds. |
 | `network.timeout.read` | `float \| None` | No |  | Read timeout in seconds. |
 | `network.headers` | `dict[str, str] \| None` | No |  | Additional HTTP headers to include in all requests. |
+| `network.limits` | `LimitsConfig \| None` | No |  | HTTP connection pool limits (max connections, keepalive connections, keepalive expiry). None uses httpx's own defaults. |
+| `network.limits.max_connections` | `int \| None` | No | 100 | Maximum number of concurrent connections in the pool. None means no limit. Values must be >= 1 if set. |
+| `network.limits.max_keepalive_connections` | `int \| None` | No | 20 | Maximum number of idle keep-alive connections to retain. None means no limit. Values must be >= 0 if set. |
+| `network.limits.keepalive_expiry` | `float \| None` | No | 5.0 | Time in seconds to keep idle keep-alive connections open before closing them. None means no expiry. Values must be >= 0 if set. |
 | `base_url` | `HttpUrl \| None` | No | https://us-south.ml.cloud.ibm.com | A base url for accessing the watsonx.ai |
 | `project_id` | `str \| None` | No |  | The watsonx.ai project ID |
 | `timeout` | `int` | No | 60 | Timeout for the HTTP requests |

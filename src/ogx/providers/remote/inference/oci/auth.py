@@ -101,6 +101,6 @@ class OciUserPrincipalAuth(HttpxOciAuth):
             user=config["user"],
             fingerprint=config["fingerprint"],
             private_key_file_location=config.get("key_file"),
-            pass_phrase="none",  # type: ignore
+            pass_phrase="none",  # noqa: S106
             private_key_content=key_content,
         )

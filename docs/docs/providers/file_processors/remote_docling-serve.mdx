@@ -27,7 +27,7 @@ description: |
   Then start OGX with the remote Docling Serve provider:
 
   ```bash
-  DOCLING_SERVE_URL=http://localhost:5001/v1 ogx stack run \
+  DOCLING_SERVE_URL=http://localhost:5001 ogx stack run \
     --providers "file_processors=remote::docling-serve,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \
     --port 8321
   ```
@@ -39,7 +39,7 @@ description: |
     - provider_id: docling-serve
       provider_type: remote::docling-serve
       config:
-        base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}
+        base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001}
         api_key: ${env.DOCLING_SERVE_API_KEY:=}
   ```
 
@@ -82,7 +82,7 @@ docker run -p 5001:5001 quay.io/docling-project/docling-serve
 Then start OGX with the remote Docling Serve provider:
 
 ```bash
-DOCLING_SERVE_URL=http://localhost:5001/v1 ogx stack run \
+DOCLING_SERVE_URL=http://localhost:5001 ogx stack run \
   --providers "file_processors=remote::docling-serve,files=inline::localfs,vector_io=inline::faiss,inference=inline::sentence-transformers,inference=remote::ollama" \
   --port 8321
 ```
@@ -94,7 +94,7 @@ file_processors:
   - provider_id: docling-serve
     provider_type: remote::docling-serve
     config:
-      base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}
+      base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001}
       api_key: ${env.DOCLING_SERVE_API_KEY:=}
 ```
 
@@ -107,13 +107,15 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `base_url` | `str` | No | http://localhost:5001/v1 | Base URL of the Docling Serve instance |
+| `base_url` | `str` | No | http://localhost:5001 | Base URL of the Docling Serve instance. Do not include /v1 suffix - AsyncDoclingServiceClient adds it automatically. For backward compatibility, /v1 suffix will be stripped if present. |
 | `api_key` | `SecretStr \| None` | No |  | API key for authenticating with Docling Serve (optional, required if server has DOCLING_SERVE_API_KEY set) |
 | `default_chunk_size_tokens` | `int` | No | 800 | Default chunk size in tokens when chunking_strategy type is 'auto' |
+| `mode` | `Literal[async, sync, auto]` | No | async | API mode: 'async' (use asynchronous submit/poll endpoints, recommended for both local and SaaS), 'sync' (use synchronous endpoints, fallback option), or 'auto' (detect server capabilities) |
 
 ## Sample Configuration
 
 ```yaml
-base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001/v1}
+base_url: ${env.DOCLING_SERVE_URL:=http://localhost:5001}
 api_key: ${env.DOCLING_SERVE_API_KEY:=}
+mode: ${env.DOCLING_SERVE_MODE:=async}
 ```

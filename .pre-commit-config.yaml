@@ -91,7 +91,7 @@ repos:
         files: ^(pyproject\.toml|uv\.lock)$
       - id: mypy-full
         name: mypy (full type_checking)
-        entry: ./scripts/uv-run-with-index.sh run --group dev --group type_checking mypy
+        entry: ./scripts/uv-run-with-index.sh run --group dev mypy
         language: system
         pass_filenames: false
         stages: [manual]
@@ -208,6 +208,7 @@ repos:
               echo;
               exit 1;
             } || true
+          - --
       - id: generate-ci-docs
         name: Generate CI documentation
         additional_dependencies:
@@ -253,6 +254,7 @@ repos:
               exit 1
             fi
             exit 0
+          - --
       - id: no-fstring-logging
         name: Block f-string logging (use structlog key-value style)
         entry: ./scripts/check-no-fstring-logging.sh
@@ -277,6 +279,7 @@ repos:
               echo;
               exit 1;
             } || true
+          - --
       - id: no-sql-string-interpolation
         name: Block f-string SQL construction (SQL injection risk)
         entry: bash
@@ -304,6 +307,7 @@ repos:
               echo;
               exit 1;
             } || true
+          - --
       - id: check-api-independence
         name: Ensure ogx_api does not import ogx
         entry: bash
@@ -352,6 +356,27 @@ repos:
         language: system
         types: [python]
         pass_filenames: true
+      - id: no-stale-list-deps-cli
+        name: Block removed llama CLI and invalid top-level ogx list-deps
+        entry: bash
+        language: system
+        pass_filenames: true
+        files: '^(docs/|.*\.mdx?$)'
+        args:
+          - -c
+          - |
+            matches=$(grep -EnH '\bllama stack list-deps\b|\bogx list-deps\b' "$@" || true)
+            if [ -n "$matches" ]; then
+              echo
+              echo "Stale list-deps CLI usage found."
+              echo "The 'llama' CLI entry point was removed and there is no top-level 'ogx list-deps' command."
+              echo "Use 'ogx stack list-deps' instead."
+              echo
+              echo "$matches"
+              exit 1
+            fi
+            exit 0
+          - --
 
 # markdownlint must run after distro-codegen and provider-codegen which generate markdown files
 -   repo: https://github.com/igorshubovych/markdownlint-cli

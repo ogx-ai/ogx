@@ -103,6 +103,7 @@ export function JsonViewer({ content }: JsonViewerProps) {
     }
 
     if (node.type === "array") {
+      const arrayValue = node.value as JsonValue[];
       return (
         <div key={path}>
           <div
@@ -121,12 +122,12 @@ export function JsonViewer({ content }: JsonViewerProps) {
               </span>
             )}
             <span className="text-muted-foreground">
-              [{node.value.length} {node.value.length === 1 ? "item" : "items"}]
+              [{arrayValue.length} {arrayValue.length === 1 ? "item" : "items"}]
             </span>
           </div>
           {isExpanded && (
             <div>
-              {node.value.map((item: JsonValue, index: number) =>
+              {arrayValue.map((item: JsonValue, index: number) =>
                 renderValue(
                   {
                     key: index.toString(),
@@ -244,8 +245,9 @@ export function JsonViewer({ content }: JsonViewerProps) {
               const addKeys = (obj: JsonValue, prefix: string = "root") => {
                 allKeys.add(prefix);
                 if (obj && typeof obj === "object") {
+                  const record = obj as Record<string, JsonValue>;
                   Object.keys(obj).forEach(key => {
-                    addKeys(obj[key], `${prefix}.${key}`);
+                    addKeys(record[key], `${prefix}.${key}`);
                   });
                 }
               };

@@ -59,7 +59,11 @@ class VectorIO(Protocol):
         self,
         request: InsertChunksRequest,
     ) -> None:
-        """Insert embedded chunks into a vector database."""
+        """Insert embedded chunks into a vector database.
+
+        Uses upsert semantics: if a chunk with the same chunk_id already exists,
+        it is replaced with the new data.
+        """
         ...
 
     async def query_chunks(

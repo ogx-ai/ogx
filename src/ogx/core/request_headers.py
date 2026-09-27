@@ -55,7 +55,7 @@ class NeedsRequestProviderData:
     __provider_spec__: "ProviderSpec"
 
     def get_request_provider_data(self) -> Any:
-        spec = self.__provider_spec__  # type: ignore[attr-defined]
+        spec = self.__provider_spec__
         if not spec:
             raise ValueError(f"Provider spec not set on {self.__class__}")
 
@@ -68,7 +68,7 @@ class NeedsRequestProviderData:
         if not val:
             return None
 
-        validator = instantiate_class_type(validator_class)  # type: ignore[no-untyped-call]
+        validator = instantiate_class_type(validator_class)
         try:
             provider_data = validator(**val)
             return provider_data

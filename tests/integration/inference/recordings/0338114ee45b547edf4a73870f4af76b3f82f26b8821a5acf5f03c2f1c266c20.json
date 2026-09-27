@@ -1,0 +1,67 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[openai_client-txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b-inference:chat_completion:non_streaming_01]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet do humans live on?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-0338114ee45b",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Humans live on **Earth**. It's the third planet from the Sun and the only known planet in the universe to support life.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Here's a thinking process:\n\n1.  **Analyze User Input:** The user asks, \"Which planet do humans live on?\"\n2.  **Identify Key Fact:** The answer is Earth. Humans live on Earth.\n3.  **Formulate Response:** Simple, direct, and accurate. I'll state that humans live on Earth, and optionally add a brief context if needed, but keep it concise.\n4.  **Check for Accuracy:** Yes, Earth is the third planet from the Sun and the only known planet to support human life.\n5.  **Generate Output:** \"Humans live on Earth.\" or slightly expanded but factual. I'll just answer directly.\u2705",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 171,
+          "prompt_tokens": 23,
+          "total_tokens": 194,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

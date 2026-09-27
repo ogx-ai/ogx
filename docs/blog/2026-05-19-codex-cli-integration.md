@@ -43,13 +43,13 @@ Three steps. Assumes you have OGX and Codex CLI already installed.
 
 ```bash
 export OPENAI_API_KEY="your-key-here"
-ogx stack run starter
+ogx run starter
 ```
 
 For Ollama instead of OpenAI:
 
 ```bash
-OLLAMA_URL=http://localhost:11434/v1 ogx stack run starter
+OLLAMA_URL=http://localhost:11434/v1 ogx run starter
 ```
 
 ### 2. Configure Codex CLI

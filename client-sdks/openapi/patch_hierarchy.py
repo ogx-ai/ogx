@@ -152,10 +152,12 @@ def patch_optional_import(api_file: Path) -> bool:
 
 
 def patch_ogx_client(client_file: Path, pairs: list[tuple[str, str]]) -> bool:
-    """Patch OgxClient to wire up parent-child API relationships.
+    """Patch OgxClient and AsyncOgxClient to wire up parent-child API relationships.
 
-    Looks for the '# Nested API structure' comment and inserts assignments like:
+    Looks for all '# Nested API structure' comment anchors and inserts assignments like:
         self.chat.completions = self.completions
+
+    This handles both OgxClient and AsyncOgxClient in the same file.
 
     Returns True if the file was modified.
     """
@@ -166,14 +168,13 @@ def patch_ogx_client(client_file: Path, pairs: list[tuple[str, str]]) -> bool:
     with open(client_file) as f:
         lines = f.readlines()
 
-    # Find the anchor comment
-    comment_idx = None
+    # Find all anchor comment indices
+    comment_indices = []
     for i, line in enumerate(lines):
         if "# Nested API structure" in line:
-            comment_idx = i
-            break
+            comment_indices.append(i)
 
-    if comment_idx is None:
+    if not comment_indices:
         print(f"  Warning: '# Nested API structure' comment not found in {client_file}")
         return False
 
@@ -185,30 +186,32 @@ def patch_ogx_client(client_file: Path, pairs: list[tuple[str, str]]) -> bool:
         if any(test_line in line for line in lines):
             return False
 
-    comment_line = lines[comment_idx]
-    indent = len(comment_line) - len(comment_line.lstrip())
+    # Patch each anchor (process in reverse so line indices remain valid)
+    for comment_idx in reversed(comment_indices):
+        comment_line = lines[comment_idx]
+        indent = len(comment_line) - len(comment_line.lstrip())
 
-    patch_lines = [f"{' ' * indent}# Wire up parent-child API relationships\n"]
-    for parent_tag, child_tag in pairs:
-        parent_snake = to_snake_case(parent_tag)
-        child_snake = to_snake_case(child_tag)
-        patch_lines.append(f"{' ' * indent}self.{parent_snake}.{child_snake} = self.{child_snake}\n")
-        # Also add a short alias if the child name is prefixed with the parent name
-        # e.g., chat_completions -> chat.completions
-        if child_snake.startswith(f"{parent_snake}_"):
-            subresource_name = child_snake.removeprefix(f"{parent_snake}_")
-            patch_lines.append(
-                f"{' ' * indent}self.{parent_snake}.__dict__['{subresource_name}'] = self.{child_snake}\n"
-            )
+        patch_lines = [f"{' ' * indent}# Wire up parent-child API relationships\n"]
+        for parent_tag, child_tag in pairs:
+            parent_snake = to_snake_case(parent_tag)
+            child_snake = to_snake_case(child_tag)
+            patch_lines.append(f"{' ' * indent}self.{parent_snake}.{child_snake} = self.{child_snake}\n")
+            # Also add a short alias if the child name is prefixed with the parent name
+            # e.g., chat_completions -> chat.completions
+            if child_snake.startswith(f"{parent_snake}_"):
+                subresource_name = child_snake.removeprefix(f"{parent_snake}_")
+                patch_lines.append(
+                    f"{' ' * indent}self.{parent_snake}.__dict__['{subresource_name}'] = self.{child_snake}\n"
+                )
 
-    insert_idx = comment_idx + 1
-    for line in reversed(patch_lines):
-        lines.insert(insert_idx, line)
+        insert_idx = comment_idx + 1
+        for line in reversed(patch_lines):
+            lines.insert(insert_idx, line)
 
     with open(client_file, "w") as f:
         f.writelines(lines)
 
-    print(f"  Patched OgxClient with {len(pairs)} parent-child relationships")
+    print(f"  Patched OgxClient and AsyncOgxClient with {len(pairs)} parent-child relationships each")
     return True
 
 

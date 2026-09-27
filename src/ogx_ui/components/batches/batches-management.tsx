@@ -28,15 +28,15 @@ interface Batch {
   endpoint: string;
   status: string;
   created_at: number;
-  completed_at: number | null;
-  cancelled_at: number | null;
-  expired_at: number | null;
-  failed_at: number | null;
+  completed_at?: number | null;
+  cancelled_at?: number | null;
+  expired_at?: number | null;
+  failed_at?: number | null;
   input_file_id: string;
-  output_file_id: string | null;
-  error_file_id: string | null;
-  request_counts: BatchRequestCounts | null;
-  errors: { object: string; data: unknown[] } | null;
+  output_file_id?: string | null;
+  error_file_id?: string | null;
+  request_counts?: BatchRequestCounts | null;
+  errors?: { object?: string; data?: unknown[] } | null;
 }
 
 type FetchStatus = "loading" | "idle" | "error";
@@ -117,7 +117,7 @@ export function BatchesManagement() {
 
     try {
       const response = await client.batches.list();
-      const data = response.data ?? (response as unknown as Batch[]);
+      const data = (response.data ?? response) as unknown as Batch[];
       setBatches(Array.isArray(data) ? data : []);
       setStatus("idle");
     } catch (err: unknown) {

@@ -5,8 +5,11 @@
 # the root directory of this source tree.
 
 
+from ogx.core.datatypes import VectorStoresConfig
+from ogx.providers.utils.memory.openai_vector_store_mixin import OpenAIVectorStoreMixin
 from ogx.providers.utils.memory.vector_store import RERANKER_TYPE_RRF, RERANKER_TYPE_WEIGHTED
 from ogx.providers.utils.vector_io.vector_utils import WeightedInMemoryAggregator
+from ogx_api.vector_io import SearchRankingOptions
 
 
 class TestNormalizeScores:
@@ -207,6 +210,50 @@ class TestCombineSearchResults:
         assert len(combined) == 3
         assert all(0 <= score <= 1 for score in combined.values())
 
+    def test_combine_search_results_weighted_uses_weights(self):
+        """Test explicit vector/keyword weights override weighted alpha."""
+        vector_scores = {"vector-doc": 1.0, "keyword-doc": 0.0}
+        keyword_scores = {"vector-doc": 0.0, "keyword-doc": 1.0}
+
+        vector_only = WeightedInMemoryAggregator.combine_search_results(
+            vector_scores,
+            keyword_scores,
+            reranker_type=RERANKER_TYPE_WEIGHTED,
+            reranker_params={"alpha": 0.5, "weights": {"vector": 1.0, "keyword": 0.0}},
+        )
+        keyword_only = WeightedInMemoryAggregator.combine_search_results(
+            vector_scores,
+            keyword_scores,
+            reranker_type=RERANKER_TYPE_WEIGHTED,
+            reranker_params={"alpha": 0.5, "weights": {"vector": 0.0, "keyword": 1.0}},
+        )
+
+        assert vector_only["vector-doc"] > vector_only["keyword-doc"]
+        assert keyword_only["keyword-doc"] > keyword_only["vector-doc"]
+        assert vector_only != keyword_only
+
+    def test_combine_search_results_rrf_uses_weights(self):
+        """Test explicit vector/keyword weights affect RRF scoring."""
+        vector_scores = {"vector-doc": 1.0, "keyword-doc": 0.0}
+        keyword_scores = {"vector-doc": 0.0, "keyword-doc": 1.0}
+
+        vector_only = WeightedInMemoryAggregator.combine_search_results(
+            vector_scores,
+            keyword_scores,
+            reranker_type=RERANKER_TYPE_RRF,
+            reranker_params={"impact_factor": 60.0, "weights": {"vector": 1.0, "keyword": 0.0}},
+        )
+        keyword_only = WeightedInMemoryAggregator.combine_search_results(
+            vector_scores,
+            keyword_scores,
+            reranker_type=RERANKER_TYPE_RRF,
+            reranker_params={"impact_factor": 60.0, "weights": {"vector": 0.0, "keyword": 1.0}},
+        )
+
+        assert vector_only["vector-doc"] > vector_only["keyword-doc"]
+        assert keyword_only["keyword-doc"] > keyword_only["vector-doc"]
+        assert vector_only != keyword_only
+
     def test_combine_search_results_unknown_type(self):
         """Test combining with unknown reranker type defaults to RRF."""
         vector_scores = {"doc1": 0.9}
@@ -246,3 +293,18 @@ class TestCombineSearchResults:
         # Test with both empty
         combined = WeightedInMemoryAggregator.combine_search_results({}, {})
         assert len(combined) == 0
+
+
+class TestBuildRerankerParams:
+    def test_build_reranker_params_preserves_weights(self):
+        """Test vector store request ranking options preserve weights for reranker inputs."""
+        weights = {"vector": 0.2, "keyword": 0.8}
+
+        params = OpenAIVectorStoreMixin._build_reranker_params(
+            object(),
+            SearchRankingOptions(ranker="rrf", weights=weights),
+            VectorStoresConfig(),
+        )
+
+        assert params["reranker_type"] == RERANKER_TYPE_RRF
+        assert params["reranker_params"]["weights"] == weights

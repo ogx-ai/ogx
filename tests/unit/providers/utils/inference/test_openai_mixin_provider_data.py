@@ -188,7 +188,22 @@ class TestOpenAIMixinProviderDataApiKey:
                 _ = mixin_with_provider_data_field_and_none_api_key.client
 
     def test_error_message_includes_correct_field_names(self, mixin_with_provider_data_field_and_none_api_key):
-        """Test that error message includes correct field name and header information"""
+        """Test that error message references the provider-id-based key and header (not the backend type)"""
+        with pytest.raises(ValueError) as exc_info:
+            _ = mixin_with_provider_data_field_and_none_api_key.client
+
+        error_message = str(exc_info.value)
+        provider_id = mixin_with_provider_data_field_and_none_api_key.__provider_id__
+        assert f"{provider_id}_api_key" in error_message
+        assert "x-ogx-provider-data" in error_message
+        # The backend-type key should not leak into the client-facing message.
+        assert "test_api_key" not in error_message
+
+    def test_error_message_falls_back_to_type_key_without_provider_id(
+        self, mixin_with_provider_data_field_and_none_api_key
+    ):
+        """Without a provider id, the message falls back to the provider's internal key."""
+        mixin_with_provider_data_field_and_none_api_key.__provider_id__ = None
         with pytest.raises(ValueError) as exc_info:
             _ = mixin_with_provider_data_field_and_none_api_key.client
 

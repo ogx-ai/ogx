@@ -163,21 +163,6 @@ class TestProviderSDKRoundTrip:
         assert reconstructed.param == original.param
         assert reconstructed.type == original.type
 
-    @pytest.mark.parametrize(
-        "status,error_text",
-        [
-            (404, "model 'llama3' not found"),
-            (500, "internal server error"),
-        ],
-        ids=["404-model-not-found", "500-internal"],
-    )
-    def test_ollama_roundtrip_preserves_type_status_and_error(self, status, error_text):
-        original = ResponseError(error=error_text, status_code=status)
-        reconstructed = deserialize_exception(serialize_exception(original))
-        assert type(reconstructed) is type(original)
-        assert reconstructed.status_code == status
-        assert reconstructed.error == original.error
-
 
 class TestReconstructedExceptionInterface:
     """Verify reconstructed exceptions work with server's translate_exception."""

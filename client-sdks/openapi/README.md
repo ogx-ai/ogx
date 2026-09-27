@@ -1,6 +1,6 @@
 # OpenAPI Generator SDK
 
-Alternative SDK generation using [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator) instead of Stainless. See [#4609](https://github.com/ogx-ai/ogx/issues/4609) for context.
+The `ogx-client` Python SDK is generated with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator). The base OpenAPI spec and resource-hierarchy config are read from `../spec` and enriched before code generation.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ uv pip install ruamel.yaml
 ```bash
 cd client-sdks/openapi
 
-make openapi    # Generate enriched OpenAPI spec from Stainless config
+make openapi    # Generate enriched OpenAPI spec from the base spec + resource config
 make hierarchy  # Process spec for hierarchical SDK structure
 make sdk        # Generate Python SDK (runs full pipeline)
 make version    # Show version that will be used
@@ -54,10 +54,10 @@ The `make sdk` target runs the full pipeline and will automatically check for re
 ## How it Works
 
 ```text
-merge_stainless_config.py  ->  build_hierarchy.py  ->  openapi-generator  ->  patch_hierarchy.py
+merge_resources.py  ->  build_hierarchy.py  ->  openapi-generator  ->  patch_hierarchy.py
 ```
 
-1. **`merge_stainless_config.py`** reads base spec from `../stainless/openapi.yml`, enriches it with resource mappings from `../stainless/config.yml`, and applies patches from `patches.yml`. This is the only step that depends on the Stainless config.
+1. **`merge_resources.py`** reads the base spec from `../spec/openapi.yml`, enriches it with resource mappings from `../spec/resources.yml`, and applies patches from `patches.yml`. This is the only step that depends on the resource-hierarchy config.
 2. **`build_hierarchy.py`** extracts tag hierarchies, reduces endpoints to leaf tags, creates dummy endpoints for parent resource groups, and applies schema fixes for openapi-generator compatibility.
 3. **`openapi-generator`** generates the Python SDK from the processed spec using custom Mustache templates.
 4. **`patch_hierarchy.py`** patches the generated API classes to wire up parent-child relationships, enabling nested access like `client.chat.completions.create(...)`.
@@ -76,7 +76,7 @@ merge_stainless_config.py  ->  build_hierarchy.py  ->  openapi-generator  ->  pa
 
 The CI workflow (`.github/workflows/openapi-generator-validation.yml`) automatically validates SDK generation on every PR:
 
-- ✅ Generates OpenAPI spec from Stainless config
+- ✅ Generates OpenAPI spec from the base spec + resource config
 - ✅ Builds Python SDK (1,134 files)
 - ✅ Verifies SDK installation and imports
 - ✅ Runs integration tests against generated SDK
@@ -92,78 +92,58 @@ The CI workflow (`.github/workflows/openapi-generator-validation.yml`) automatic
 
 ### Continuous Delivery
 
-The CD workflow (`.github/workflows/publish-openapi-sdk.yml`) automatically publishes SDK to PyPI:
+The `ogx-client` package is published through the unified PyPI/NPM release workflow (`.github/workflows/pypi.yml`) alongside other ogx packages.
 
 **Automatic publishing (via tags):**
 
-- Tags matching `openapi-sdk-v*` trigger builds
-- Stable versions (e.g., `openapi-sdk-v1.0.0`) → Published to TestPyPI
-- Pre-release versions (e.g., `openapi-sdk-v1.0.0-rc1`) → Built only, not published
+- Tags matching `v*` trigger the unified workflow
+- The workflow builds all packages including `ogx-client`
 
 **Manual publishing (via GitHub UI):**
 
-- Go to Actions → "Publish OpenAPI SDK to PyPI"
-- Choose target (TestPyPI/PyPI) and dry-run mode
+- Go to Actions → "Build, test, and publish packages"
+- Choose `packages: clients-only` (or `all`) and the desired `dry_run` mode
 
 ## Publishing to PyPI
 
-The SDK can be published to PyPI using the GitHub Actions workflow at `.github/workflows/publish-openapi-sdk.yml`.
+The SDK is published as `ogx-client` via the unified workflow at `.github/workflows/pypi.yml`.
 
 ### Manual Publishing (via GitHub UI)
 
-1. Go to Actions → "Publish OpenAPI SDK to PyPI"
+1. Go to Actions → "Build, test, and publish packages"
 2. Click "Run workflow"
 3. Select options:
-   - **publish_to**: `testpypi` (for testing) or `pypi` (production)
-   - **dry_run**: `true` to build only without publishing
+   - **packages**: `clients-only` or `all`
+   - **dry_run**: `test-pypi` (default), `build-only`, or `off` (production)
 
 ### Automatic Publishing (via Git Tags)
 
-Push a tag matching `openapi-sdk-v*` to trigger automatic builds:
+Push a version tag to trigger the unified workflow:
 
 ```bash
-# Stable release → Published to TestPyPI
-git tag openapi-sdk-v1.0.0
-git push origin openapi-sdk-v1.0.0
-
-# Pre-release → Built only, not published
-git tag openapi-sdk-v1.0.0-rc1
-git push origin openapi-sdk-v1.0.0-rc1
+# Release → triggers unified workflow for all packages
+git tag v1.0.0
+git push origin v1.0.0
 ```
-
-**Note:** Pre-release tags (containing `-rc`, `-alpha`, or `-beta`) are built for validation but not published to avoid cluttering the package index.
-
-### Required Secrets
-
-Configure these GitHub secrets for the repository:
-
-- `TEST_PYPI_API_TOKEN` - TestPyPI API token
-- `PYPI_API_TOKEN` - Production PyPI API token
 
 ### Testing the Published Package
 
 After publishing to TestPyPI:
 
 ```bash
-pip install --index-url https://test.pypi.org/simple/ ogx-open-client
+pip install --index-url https://test.pypi.org/simple/ ogx-client
 ```
 
 After publishing to PyPI:
 
 ```bash
-pip install ogx-open-client
+pip install ogx-client
 ```
-
-## Documentation
-
-- **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - End-to-end code examples for all major API features
-- **[STRATEGY.md](STRATEGY.md)** - Long-term strategy, ownership, versioning, and deprecation policy
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Production deployment guide, environment setup, rollback procedures
 
 ## Files
 
 - `Makefile` - Build orchestration
-- `merge_stainless_config.py` - Merge Stainless config into OpenAPI spec
+- `merge_resources.py` - Merge the resource-hierarchy config into the OpenAPI spec
 - `build_hierarchy.py` - Extract hierarchy and prepare spec for code generation
 - `patch_hierarchy.py` - Post-generation patching for nested API structure
 - `patches.yml` - OpenAPI spec patches for codegen compatibility

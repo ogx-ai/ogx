@@ -14,7 +14,6 @@ from ogx.core.storage.datatypes import (
     SqliteSqlStoreConfig,
     SqlStoreReference,
     StorageBackendConfig,
-    StorageBackendType,
 )
 from ogx_api.internal.sqlstore import SqlStore
 
@@ -29,20 +28,6 @@ SqlStoreConfig = Annotated[
     SqliteSqlStoreConfig | PostgresSqlStoreConfig,
     Field(discriminator="type"),
 ]
-
-
-def get_pip_packages(store_config: dict | SqlStoreConfig) -> list[str]:
-    """Get pip packages for SQL store config, handling both dict and object cases."""
-    if isinstance(store_config, dict):
-        store_type = store_config.get("type")
-        if store_type == StorageBackendType.SQL_SQLITE.value:
-            return SqliteSqlStoreConfig.pip_packages()
-        elif store_type == StorageBackendType.SQL_POSTGRES.value:
-            return PostgresSqlStoreConfig.pip_packages()
-        else:
-            raise ValueError(f"Unknown SQL store type: {store_type}")
-    else:
-        return store_config.pip_packages()
 
 
 async def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
@@ -86,6 +71,19 @@ async def _sqlstore_impl(reference: SqlStoreReference) -> SqlStore:
             raise ValueError(f"Unknown sqlstore type {backend_config.type}")
 
 
+async def get_system_sqlstore(reference: SqlStoreReference) -> SqlStore:
+    """Return a plain SqlStore for internal/system tables that are not user-scoped.
+
+    Unlike authorized_sqlstore(), this performs no per-request access-control
+    filtering and captures no per-request owner. It is intended only for
+    infrastructure tables — such as the job queue — that are shared across
+    processes (the server and its workers) and therefore have no meaningful
+    per-request owner. Do not use it for user-facing data; use
+    authorized_sqlstore() for that.
+    """
+    return await _sqlstore_impl(reference)
+
+
 def register_sqlstore_backends(backends: dict[str, StorageBackendConfig]) -> None:
     """Register the set of available SQL store backends for reference resolution."""
     global _SQLSTORE_BACKENDS
@@ -96,17 +94,6 @@ def register_sqlstore_backends(backends: dict[str, StorageBackendConfig]) -> Non
     _SQLSTORE_LOCKS.clear()
     for name, cfg in backends.items():
         _SQLSTORE_BACKENDS[name] = cfg
-
-
-def reset_sqlstore_engines() -> None:
-    """Reset engines on all cached SqlStore instances.
-
-    Called after Stack.initialize() completes in a temporary event loop so
-    engines are recreated lazily in uvicorn's request-handling event loop.
-    """
-    for instance in _SQLSTORE_INSTANCES.values():
-        if hasattr(instance, "reset_engine"):
-            instance.reset_engine()
 
 
 async def shutdown_sqlstore_backends() -> None:

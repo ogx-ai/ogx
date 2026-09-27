@@ -14,7 +14,7 @@ from termcolor import cprint
 from ogx.core.build import get_provider_dependencies
 from ogx.core.datatypes import StackConfig
 from ogx.core.distribution import get_provider_registry
-from ogx.core.stack import run_config_from_dynamic_config_spec
+from ogx.core.stack import replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.log import get_logger
 
 from .utils import add_dependent_providers
@@ -90,15 +90,7 @@ def run_stack_list_deps_command(args: argparse.Namespace) -> None:
             with open(config_file) as f:
                 try:
                     contents = yaml.safe_load(f)
-                    # Remove auth provider_config to avoid validation errors with env var syntax.
-                    # We only need provider dependencies, not auth config (auth has no pip_packages).
-                    # This is simpler than modifying the schema to accept type="" which would require
-                    # removing discriminated union and adding custom validation logic and modifying
-                    # all 4 auth provider config classes (a very invasive change)
-                    if "server" in contents and "auth" in contents["server"]:
-                        if "provider_config" in contents["server"]["auth"]:
-                            contents["server"]["auth"]["provider_config"] = None
-                    config = StackConfig(**contents)
+                    config = StackConfig(**replace_env_vars(contents, ignore_unresolved=True))
                 except Exception as e:
                     cprint(
                         f"Could not parse config file {config_file}: {e}",

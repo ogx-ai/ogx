@@ -57,6 +57,11 @@ uv run python scripts/provider_codegen.py
 ./scripts/integration-tests.sh --stack-config starter
 ```
 
+Pass `--client-version latest` to generate the Python client from
+`client-sdks/openapi` and install it over the PyPI pin before running
+(the CI `client-version=latest` equivalent), or `--client-version published`
+to verify the `uv.lock`-resolved PyPI client is installed.
+
 ### Manage test recordings
 
 ```bash

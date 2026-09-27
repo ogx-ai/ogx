@@ -9,14 +9,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ogx.core.datatypes import StackConfig
+from ogx.core.datatypes import Api, StackConfig
+from ogx.core.jobs.runtime import get_job_runtime
 from ogx.core.server.fastapi_router_registry import (
     _ROUTER_FACTORIES,
     build_fastapi_router,
     get_router_routes,
 )
 from ogx_api import (
-    Api,
     HealthInfo,
     HealthStatus,
     Inspect,
@@ -32,7 +32,7 @@ class DistributionInspectConfig(BaseModel):
     config: StackConfig
 
 
-async def get_provider_impl(config: DistributionInspectConfig, deps: dict[str, Any]) -> "DistributionInspectImpl":
+async def get_provider_impl(config: DistributionInspectConfig, deps: dict[Api, Any]) -> "DistributionInspectImpl":
     """Create and initialize a DistributionInspectImpl instance.
 
     Args:
@@ -50,7 +50,7 @@ async def get_provider_impl(config: DistributionInspectConfig, deps: dict[str, A
 class DistributionInspectImpl(Inspect):
     """Implementation of the Inspect API providing route listing, health, and version endpoints."""
 
-    def __init__(self, config: DistributionInspectConfig, deps: dict[str, Any]) -> None:
+    def __init__(self, config: DistributionInspectConfig, deps: dict[Api, Any]) -> None:
         self.stack_config = config.config
         self.deps = deps
 
@@ -104,6 +104,9 @@ class DistributionInspectImpl(Inspect):
         return ListRoutesResponse(data=ret)
 
     async def health(self) -> HealthInfo:
+        runtime = get_job_runtime()
+        if runtime is not None and not runtime.pool.is_healthy:
+            return HealthInfo(status=HealthStatus.ERROR)
         return HealthInfo(status=HealthStatus.OK)
 
     async def version(self) -> VersionInfo:

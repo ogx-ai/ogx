@@ -260,7 +260,7 @@ class TestServiceTier:
         [
             pytest.param("flex", "flex", id="flex"),
             pytest.param("priority", "priority", id="priority"),
-            pytest.param("default", "standard", id="default_maps_to_standard"),
+            pytest.param("default", _OMITTED, id="default_omitted"),
             pytest.param("auto", _OMITTED, id="auto_omitted"),
             pytest.param(None, _OMITTED, id="none_omitted"),
         ],
@@ -316,22 +316,17 @@ class TestTelemetryStreamOptions:
         )
         stream_call_args: dict[str, Any] = {}
 
-        async def _provider_model_id(_: str) -> str:
-            """Return a fixed provider model identifier."""
-            return "gemini-2.5-flash"
-
         async def _stream_chat_completion(client, model_id, contents, config, model, stream_options=None):
             """Handle stream chat completion."""
             stream_call_args["stream_options"] = stream_options
             return _async_pager([])
 
-        monkeypatch.setattr(adapter, "_get_provider_model_id", _provider_model_id)
         monkeypatch.setattr(adapter, "_validate_model_allowed", lambda _: None)
         monkeypatch.setattr(adapter, "_get_client", lambda: fake_client)
         monkeypatch.setattr(adapter, "_build_generation_config", lambda *_args, **_kwargs: object())
         monkeypatch.setattr(
             "ogx.providers.remote.inference.vertexai.vertexai.converters.convert_openai_messages_to_gemini",
-            lambda messages: (None, [{"role": "user", "parts": [{"text": "ok"}]}]),
+            lambda messages, signature_by_call_id=None: (None, [{"role": "user", "parts": [{"text": "ok"}]}]),
         )
         monkeypatch.setattr(
             "ogx.providers.remote.inference.vertexai.vertexai.converters.convert_openai_tools_to_gemini",

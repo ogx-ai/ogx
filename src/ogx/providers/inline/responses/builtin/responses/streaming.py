@@ -107,14 +107,19 @@ from ogx_api import (
 )
 from ogx_api.inference import ServiceTier
 
+from .truncation import build_turn_groups as _build_turn_groups
+from .truncation import drop_oldest_turn
+from .truncation import is_context_length_error as _is_context_length_error
 from .types import (
     AssistantMessageWithReasoning,
     ChatCompletionContext,
     ChatCompletionResult,
 )
 from .utils import (
+    StreamingCitationCleaner,
     convert_chat_choice_to_response_message,
     convert_mcp_tool_choice,
+    extract_citations_from_text,
     is_function_tool_call,
     run_guardrails,
     should_summarize_reasoning,
@@ -124,9 +129,36 @@ from .utils import (
 logger = get_logger(name=__name__, category="agents::builtin")
 tracer = trace.get_tracer(__name__)
 
+
+class _InferenceResult:
+    """Mutable result container for _run_inference_loop."""
+
+    completion_result: ChatCompletionResult | None
+    final_status: str
+    incomplete_reason: str | None
+    messages: list[OpenAIMessageParam] | None
+
+    def __init__(self) -> None:
+        self.completion_result: ChatCompletionResult | None = None
+        self.final_status: str = "completed"
+        self.incomplete_reason: str | None = None
+        # Snapshot of the messages _run_inference_loop was operating on for its
+        # current attempt. _run_inference_loop grows this list locally (e.g. across
+        # tool-calling rounds) via reassignment, which never propagates back to the
+        # caller's own `messages` variable -- so the caller reads this instead of its
+        # own (potentially stale) copy when it needs to know what was actually sent.
+        self.messages: list[OpenAIMessageParam] | None = None
+
+
+class _ContextLengthRetryError(Exception):
+    """Raised by _run_inference_loop to request a context-length truncation retry."""
+
+
 # Built-in tool names that the server knows how to execute itself.
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
 _SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+
+_MAX_HALLUCINATED_TOOL_RETRIES = 3
 
 _GUARDRAIL_BATCH_CHARS = 200
 
@@ -234,7 +266,8 @@ class StreamingResponseOrchestrator:
         max_infer_iters: int,
         tool_executor,  # Will be the tool execution logic from the main class
         instructions: str | None,
-        moderation_endpoint: str | None,
+        skills: list[str] | None = None,
+        moderation_endpoint: str | None = None,
         moderation_headers: dict[str, str] | None = None,
         enable_guardrails: bool = False,
         connectors_api: Connectors | None = None,
@@ -272,6 +305,7 @@ class StreamingResponseOrchestrator:
         self.previous_response_id = previous_response_id
         # System message that is inserted into the model's context
         self.instructions = instructions
+        self.skills = skills
         # Whether to allow more than one function tool call generated per turn.
         self.parallel_tool_calls = parallel_tool_calls
         # Max number of total calls to built-in tools that can be processed in a response
@@ -388,6 +422,7 @@ class StreamingResponseOrchestrator:
             incomplete_details=incomplete_details,
             usage=self.accumulated_usage,
             instructions=self.instructions,
+            skills=self.skills,
             prompt=self.prompt,
             parallel_tool_calls=self.parallel_tool_calls if self.parallel_tool_calls is not None else True,
             max_tool_calls=self.max_tool_calls,
@@ -427,25 +462,11 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if input_violation_message:
-                logger.debug("Input guardrail violation", input_violation_message=input_violation_message)
                 yield await self._create_refusal_response(input_violation_message)
                 return
 
-        # Only 'disabled' truncation is supported for now
-        # TODO: Implement actual truncation logic when 'auto' mode is supported
-        if self.truncation == ResponseTruncation.auto:
-            logger.warning("Truncation mode 'auto' is not yet supported")
-            self.sequence_number += 1
-            error = OpenAIResponseError(
-                code="server_error",
-                message="Truncation mode 'auto' is not supported. Use 'disabled' to let the inference provider reject oversized contexts.",
-            )
-            failure_response = self._snapshot_response("failed", output_messages, error=error)
-            yield OpenAIResponseObjectStreamResponseFailed(
-                response=failure_response,
-                sequence_number=self.sequence_number,
-            )
-            return
+        # Pass through: truncation=auto is handled reactively below by catching
+        # context-length errors, dropping the oldest semantic turn, and retrying.
 
         async for stream_event in self._process_tools(output_messages):
             yield stream_event
@@ -479,14 +500,117 @@ class StreamingResponseOrchestrator:
             else:
                 chat_tool_choice = processed_tool_choice.model_dump()
 
+        messages: list[OpenAIMessageParam] = self.ctx.messages.copy()
+        inference_succeeded = False
+        context_length_exhausted = False
+        for _ in range(self.max_infer_iters):
+            ic = _InferenceResult()
+            try:
+                async for event in self._run_inference_loop(
+                    messages,
+                    output_messages,
+                    chat_tool_choice,
+                    allowed_tool_names,
+                    ic,
+                ):
+                    yield event
+                inference_succeeded = True
+            except ModelNotFoundError:
+                raise
+            except _ContextLengthRetryError:
+                # Context-length from provider - truncate oldest turn and retry.
+                # Use ic.messages (what _run_inference_loop actually sent) rather than
+                # our own `messages`: _run_inference_loop grows the conversation across
+                # tool-calling rounds via a local reassignment that never propagates
+                # back to this scope, so our `messages` can be stale by the time a
+                # context-length error surfaces here.
+                current_messages = ic.messages if ic.messages is not None else messages
+                groups = _build_turn_groups(current_messages)
+                if groups.turns_turns:
+                    new_messages = drop_oldest_turn(current_messages, groups)
+                    if new_messages:
+                        messages = new_messages
+                        continue
+                # No more turns to drop - truncation is exhausted.
+                messages = current_messages
+                context_length_exhausted = True
+                break
+
+            break  # success; exit retry loop
+        else:
+            # Hit max_infer_iters while still getting context-length errors on every
+            # attempt (e.g. many small turns, each retry only dropping one).
+            context_length_exhausted = True
+
+        # _run_inference_loop sets self.final_messages on success (includes assistant response).
+        # For context-length retry where no more turns to drop, set from truncated messages.
+        if not inference_succeeded:
+            self.final_messages = messages.copy()
+
+        if context_length_exhausted:
+            # ic here is either fresh (default final_status="completed") or from an
+            # unrelated earlier iteration -- neither reflects reality. Report the
+            # truncation exhaustion explicitly instead of falling through to the
+            # completed/incomplete checks below, which would otherwise report false
+            # success (see issue #6501).
+            self.sequence_number += 1
+            error = OpenAIResponseError(
+                code="context_length_exceeded",
+                message="The conversation exceeds the model's context window and could not be reduced "
+                "further by truncation.",
+            )
+            failure_response = self._snapshot_response("failed", output_messages, error=error)
+            yield OpenAIResponseObjectStreamResponseFailed(
+                response=failure_response,
+                sequence_number=self.sequence_number,
+            )
+            return
+
+        if ic.final_status == "incomplete":
+            self.sequence_number += 1
+            incomplete_details = (
+                OpenAIResponseIncompleteDetails(reason=ic.incomplete_reason) if ic.incomplete_reason else None
+            )
+            final_response = self._snapshot_response(
+                "incomplete", output_messages, incomplete_details=incomplete_details
+            )
+            yield OpenAIResponseObjectStreamResponseIncomplete(
+                response=final_response,
+                sequence_number=self.sequence_number,
+            )
+        if ic.final_status == "completed":
+            self.sequence_number += 1
+            final_response = self._snapshot_response("completed", output_messages)
+            yield OpenAIResponseObjectStreamResponseCompleted(
+                response=final_response, sequence_number=self.sequence_number
+            )
+
+    async def _run_inference_loop(
+        self,
+        messages: list[OpenAIMessageParam],
+        output_messages: list,
+        chat_tool_choice: str | dict[str, Any] | None,
+        allowed_tool_names: set[str] | None,
+        ic: _InferenceResult,
+    ) -> AsyncIterator[OpenAIResponseObjectStream]:
+        """Run the streaming inference while-True loop, yielding events as we go.
+
+        Populates ``ic`` with the final result for inspection by the caller.
+        May raise ``ModelNotFoundError`` to propagate to the caller.
+        """
+
         n_iter = 0
-        messages = self.ctx.messages.copy()
-        final_status = "completed"
-        incomplete_reason: str | None = None
+        n_hallucinated_retries = 0
         last_completion_result: ChatCompletionResult | None = None
 
         try:
             while True:
+                # Keep ic.messages current so a caller catching an exception raised
+                # below (e.g. _ContextLengthRetryError) sees the messages this
+                # iteration was actually operating on, including any growth from
+                # earlier tool-calling rounds in this same call.
+                ic.messages = messages
+
                 if (
                     self.max_output_tokens is not None
                     and self.accumulated_builtin_output_tokens >= self.max_output_tokens
@@ -496,8 +620,8 @@ class StreamingResponseOrchestrator:
                         accumulated_builtin_output_tokens=self.accumulated_builtin_output_tokens,
                         max_output_tokens=self.max_output_tokens,
                     )
-                    final_status = "incomplete"
-                    incomplete_reason = "max_output_tokens"
+                    ic.final_status = "incomplete"
+                    ic.incomplete_reason = "max_output_tokens"
                     break
 
                 remaining_output_tokens = (
@@ -518,7 +642,6 @@ class StreamingResponseOrchestrator:
                         for tool in self.ctx.chat_tools
                         if tool.get("function", {}).get("name") in allowed_tool_names
                     ]
-                logger.debug("calling openai_chat_completion with tools", effective_tools=effective_tools)
 
                 logprobs = (
                     True
@@ -561,11 +684,12 @@ class StreamingResponseOrchestrator:
                 )
                 # Use reasoning-aware method when reasoning is explicitly requested
                 completion_result: (
-                    OpenAIChatCompletion
-                    | AsyncIterator[OpenAIChatCompletionChunk]
-                    | OpenAIChatCompletionWithReasoning
+                    OpenAIChatCompletionWithReasoning
+                    | OpenAIChatCompletion
                     | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]
-                )
+                    | AsyncIterator[OpenAIChatCompletionChunk]
+                    | None
+                ) = None
                 if self.reasoning and self.reasoning.effort and self.reasoning.effort != "none":
                     try:
                         # Pass a copy — the router mutates params.model (strips provider prefix).
@@ -590,6 +714,7 @@ class StreamingResponseOrchestrator:
                         completion_result_data = stream_event_or_result
                     else:
                         yield stream_event_or_result
+
                 # If violation detected, skip the rest of processing since we already sent refusal
                 if self.violation_detected:
                     return
@@ -614,6 +739,7 @@ class StreamingResponseOrchestrator:
                     non_function_tool_calls,
                     approvals,
                     next_turn_messages,
+                    has_hallucinated_retries,
                 ) = self._separate_tool_calls(current_response, messages, completion_result_data.reasoning_content)
                 # add any approval requests required
                 for tool_call in approvals:
@@ -694,8 +820,21 @@ class StreamingResponseOrchestrator:
                 ):
                     yield stream_event
                 messages = next_turn_messages
-                if not function_tool_calls and not non_function_tool_calls:
+                if not function_tool_calls and not non_function_tool_calls and not has_hallucinated_retries:
                     break
+
+                if has_hallucinated_retries:
+                    n_hallucinated_retries += 1
+                    if n_hallucinated_retries >= _MAX_HALLUCINATED_TOOL_RETRIES:
+                        logger.warning(
+                            "Exiting inference loop; model keeps hallucinating tool names",
+                            retries=n_hallucinated_retries,
+                        )
+                        ic.final_status = "incomplete"
+                        ic.incomplete_reason = "max_iterations_exceeded"
+                        break
+                else:
+                    n_hallucinated_retries = 0
 
                 if function_tool_calls:
                     logger.info("Exiting inference loop since there is a function (client-side) tool call")
@@ -716,19 +855,30 @@ class StreamingResponseOrchestrator:
                         n_iter=n_iter,
                         max_infer_iters=self.max_infer_iters,
                     )
-                    final_status = "incomplete"
-                    incomplete_reason = "max_iterations_exceeded"
+                    ic.final_status = "incomplete"
+                    ic.incomplete_reason = "max_iterations_exceeded"
                     break
 
             if last_completion_result and last_completion_result.finish_reason == "length":
-                final_status = "incomplete"
-                incomplete_reason = "length"
+                ic.final_status = "incomplete"
+                ic.incomplete_reason = "length"
+
+            # Store final messages (includes assistant response from last turn)
+            self.final_messages = messages.copy()
 
         except ModelNotFoundError:
             raise
         except Exception as exc:  # noqa: BLE001
+            if _is_context_length_error(exc):
+                # Context-length exceeded from provider - signal retry with truncation
+                logger.warning(
+                    "Context length exceeded during response generation - will retry with truncated history",
+                    error_type=type(exc).__name__,
+                )
+                raise _ContextLengthRetryError() from exc
             self.final_messages = messages.copy()
             self.sequence_number += 1
+            ic.final_status = "failed"
 
             if isinstance(exc, APIStatusError) or (hasattr(exc, "status_code") and hasattr(exc, "body")):
                 logger.warning("Provider SDK error during response generation", exc=exc)
@@ -749,55 +899,37 @@ class StreamingResponseOrchestrator:
             )
             return
 
-        self.final_messages = messages.copy()
-
-        if final_status == "incomplete":
-            self.sequence_number += 1
-            incomplete_details = (
-                OpenAIResponseIncompleteDetails(reason=incomplete_reason) if incomplete_reason else None
-            )
-            final_response = self._snapshot_response(
-                "incomplete", output_messages, incomplete_details=incomplete_details
-            )
-            yield OpenAIResponseObjectStreamResponseIncomplete(
-                response=final_response,
-                sequence_number=self.sequence_number,
-            )
-        else:
-            self.sequence_number += 1
-            final_response = self._snapshot_response("completed", output_messages)
-            yield OpenAIResponseObjectStreamResponseCompleted(
-                response=final_response, sequence_number=self.sequence_number
-            )
-
     def _separate_tool_calls(
         self, current_response, messages, reasoning_content: str | None = None
-    ) -> tuple[list, list, list, list]:
-        """Separate tool calls into function and non-function categories."""
+    ) -> tuple[list, list, list, list, bool]:
+        """Separate tool calls into function and non-function categories.
+
+        Returns (function_tool_calls, non_function_tool_calls, approvals,
+        next_turn_messages, has_hallucinated_retries).  The last flag is True
+        when the model hallucinated a tool name in a server-only loop and an
+        error was fed back — the caller should re-enter the inference loop.
+        """
         function_tool_calls = []
         non_function_tool_calls = []
         approvals = []
         next_turn_messages = messages.copy()
+        has_hallucinated_retries = False
 
         for choice in current_response.choices:
             # Convert response message to input message format for multi-turn.
-            # Use AssistantMessageWithReasoning if reasoning was present in the
-            # CC response. Providers will be check for this AssistantMessageWithReasoning
-            # message
+            # Assign base type first, then narrow to AssistantMessageWithReasoning
+            # if reasoning was present in the CC response.
+            message: OpenAIAssistantMessageParam | AssistantMessageWithReasoning = OpenAIAssistantMessageParam(
+                content=choice.message.content,
+                tool_calls=choice.message.tool_calls,
+            )
             if reasoning_content:
                 message = AssistantMessageWithReasoning(
                     content=choice.message.content,
                     tool_calls=choice.message.tool_calls,
                     reasoning_content=reasoning_content,
                 )
-            else:
-                message = OpenAIAssistantMessageParam(  # type: ignore[assignment]
-                    content=choice.message.content,
-                    tool_calls=choice.message.tool_calls,
-                )
             next_turn_messages.append(message)
-            logger.debug("Choice message content", content=choice.message.content)
-            logger.debug("Choice message tool_calls", tool_calls=choice.message.tool_calls)
 
             if choice.message.tool_calls and self.ctx.response_tools:
                 executed_tool_calls: list = []
@@ -811,16 +943,40 @@ class StreamingResponseOrchestrator:
                         and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES
                         and tool_call.function.name not in self.mcp_tool_to_server
                     ):
-                        # The model called a tool name that is neither a registered function tool,
-                        # nor a server-side built-in, nor an MCP tool — it hallucinated a name.
-                        # Return it to the client as a function_call output item rather than
-                        # crashing the server with an unhandled ValueError.
-                        logger.warning(
-                            "Model called unrecognized tool ; treating as a client-side function call.",
-                            name=tool_call.function.name,
-                        )
-                        function_tool_calls.append(tool_call)
-                        executed_tool_calls.append(tool_call)
+                        # The model hallucinated a tool name — it doesn't match
+                        # any registered function tool, server-side built-in, or
+                        # MCP tool.
+                        has_client_tools = any(t.type == "function" for t in self.ctx.response_tools)
+                        if has_client_tools:
+                            # A client is expected to handle function calls, so
+                            # surface the hallucinated name as a client-side
+                            # function call to avoid a server 500.
+                            logger.warning(
+                                "Model called unrecognized tool; treating as a client-side function call",
+                                name=tool_call.function.name,
+                            )
+                            function_tool_calls.append(tool_call)
+                            executed_tool_calls.append(tool_call)
+                        else:
+                            # Server-only loop — no client will ever supply a
+                            # result for this call. Feed an error back to the
+                            # model so it can self-correct on the next iteration.
+                            logger.warning(
+                                "Model called unrecognized tool; returning error to model",
+                                name=tool_call.function.name,
+                            )
+                            available = sorted(self.mcp_tool_to_server.keys())
+                            next_turn_messages.append(
+                                OpenAIToolMessageParam(
+                                    tool_call_id=tool_call.id,
+                                    content=(
+                                        f"Error: tool '{tool_call.function.name}' is not available. "
+                                        f"Available tools are: {', '.join(available)}. "
+                                        "Please use one of these tools instead."
+                                    ),
+                                )
+                            )
+                            has_hallucinated_retries = True
                     else:
                         if self._approval_required(tool_call.function.name):
                             approval_response = self.ctx.approval_response(
@@ -852,7 +1008,7 @@ class StreamingResponseOrchestrator:
                     else:
                         next_turn_messages.pop()
 
-        return function_tool_calls, non_function_tool_calls, approvals, next_turn_messages
+        return function_tool_calls, non_function_tool_calls, approvals, next_turn_messages, has_hallucinated_retries
 
     def _accumulate_chunk_usage(self, chunk: OpenAIChatCompletionChunk) -> None:
         """Accumulate usage from a streaming chunk into the response usage format."""
@@ -1052,6 +1208,10 @@ class StreamingResponseOrchestrator:
         refusal_text_accumulated = []
         pending_guardrail_events: list[OpenAIResponseObjectStream] = []
         chars_since_last_check = 0
+        # Cleans citation markers out of delta text as it streams, so a client
+        # reconstructing output from deltas sees the same text as content_part.done /
+        # output_item.done (which clean the fully accumulated text once streaming ends).
+        citation_cleaner = StreamingCitationCleaner(self.citation_files)
 
         async for raw_chunk in completion_result:
             # Providers returning OpenAIChatCompletionChunkWithReasoning wrap
@@ -1114,21 +1274,27 @@ class StreamingResponseOrchestrator:
                             ),
                             sequence_number=self.sequence_number,
                         )
-                    self.sequence_number += 1
+                    # Withhold citation markers (and any text that might still turn into
+                    # one) from the delta stream, so it stays consistent with the cleaned
+                    # text in content_part.done / output_item.done below. A marker split
+                    # across chunk boundaries can cause this to yield nothing for a chunk.
+                    cleaned_delta = citation_cleaner.feed(chunk_choice.delta.content)
+                    if cleaned_delta:
+                        self.sequence_number += 1
 
-                    text_delta_event = OpenAIResponseObjectStreamResponseOutputTextDelta(
-                        content_index=content_index,
-                        delta=chunk_choice.delta.content,
-                        item_id=message_item_id,
-                        logprobs=chunk_logprobs if chunk_logprobs is not None else [],
-                        output_index=message_output_index,
-                        sequence_number=self.sequence_number,
-                    )
-                    # Buffer text delta events for guardrail check
-                    if self.enable_guardrails:
-                        pending_guardrail_events.append(text_delta_event)
-                    else:
-                        yield text_delta_event
+                        text_delta_event = OpenAIResponseObjectStreamResponseOutputTextDelta(
+                            content_index=content_index,
+                            delta=cleaned_delta,
+                            item_id=message_item_id,
+                            logprobs=chunk_logprobs if chunk_logprobs is not None else [],
+                            output_index=message_output_index,
+                            sequence_number=self.sequence_number,
+                        )
+                        # Buffer text delta events for guardrail check
+                        if self.enable_guardrails:
+                            pending_guardrail_events.append(text_delta_event)
+                        else:
+                            yield text_delta_event
 
                 # Collect content for final response
                 content_delta = chunk_choice.delta.content or ""
@@ -1176,7 +1342,7 @@ class StreamingResponseOrchestrator:
                 # chunk: OpenAIChatCompletionChunk annotation above.
                 if chunk_choice.delta.tool_calls:
                     for tool_call in chunk_choice.delta.tool_calls:
-                        response_tool_call = chat_response_tool_calls.get(tool_call.index, None)  # type: ignore[arg-type]
+                        response_tool_call = chat_response_tool_calls.get(tool_call.index, None)
                         # Create new tool call entry if this is the first chunk for this index
                         is_new_tool_call = response_tool_call is None
                         if is_new_tool_call:
@@ -1188,16 +1354,16 @@ class StreamingResponseOrchestrator:
                             if tool_call_dict.get("function") and tool_call_dict["function"].get("arguments") is None:
                                 tool_call_dict["function"]["arguments"] = ""
                             response_tool_call = OpenAIChatCompletionToolCall(**tool_call_dict)
-                            chat_response_tool_calls[tool_call.index] = response_tool_call  # type: ignore[index]
+                            chat_response_tool_calls[tool_call.index] = response_tool_call
 
                             # Create item ID for this tool call for streaming events
                             tool_call_item_id = f"fc_{uuid.uuid4()}"
-                            tool_call_item_ids[tool_call.index] = tool_call_item_id  # type: ignore[index]
+                            tool_call_item_ids[tool_call.index] = tool_call_item_id
 
                             # Emit output_item.added event for the new function call
                             self.sequence_number += 1
-                            is_mcp_tool = tool_call.function.name and tool_call.function.name in self.mcp_tool_to_server  # type: ignore[union-attr]
-                            if not is_mcp_tool and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES:  # type: ignore[union-attr]
+                            is_mcp_tool = tool_call.function.name and tool_call.function.name in self.mcp_tool_to_server
+                            if not is_mcp_tool and tool_call.function.name not in _SERVER_SIDE_BUILTIN_TOOL_NAMES:
                                 # for MCP tools (and even other non-function tools) we emit an output message item later
                                 function_call_item = OpenAIResponseOutputMessageFunctionToolCall(
                                     arguments="",  # Will be filled incrementally via delta events
@@ -1260,7 +1426,6 @@ class StreamingResponseOrchestrator:
                     headers=self.moderation_headers,
                 )
                 if violation_message:
-                    logger.debug("Output guardrail violation", violation_message=violation_message)
                     pending_guardrail_events.clear()
                     yield await self._create_refusal_response(violation_message)
                     self.violation_detected = True
@@ -1279,7 +1444,6 @@ class StreamingResponseOrchestrator:
                 headers=self.moderation_headers,
             )
             if violation_message:
-                logger.debug("Output guardrail violation", violation_message=violation_message)
                 pending_guardrail_events.clear()
                 yield await self._create_refusal_response(violation_message)
                 self.violation_detected = True
@@ -1317,7 +1481,25 @@ class StreamingResponseOrchestrator:
 
         # Emit content_part.done event if text content was streamed (before content gets cleared)
         if content_part_emitted:
+            # Flush any text the citation cleaner was still withholding (e.g. a marker-like
+            # sequence that never completed) so delta-reconstructed text catches up with
+            # the cleaned text below before the round closes out. Guardrail buffering
+            # doesn't apply here: the moderation check above already ran over the full raw
+            # accumulated text, which includes whatever this flush contains.
+            flushed_delta = citation_cleaner.flush()
+            if flushed_delta:
+                self.sequence_number += 1
+                yield OpenAIResponseObjectStreamResponseOutputTextDelta(
+                    content_index=content_index,
+                    delta=flushed_delta,
+                    item_id=message_item_id,
+                    logprobs=[],
+                    output_index=message_output_index,
+                    sequence_number=self.sequence_number,
+                )
+
             final_text = "".join(chat_response_content)
+            part_annotations, part_clean_text = extract_citations_from_text(final_text, self.citation_files)
             self.sequence_number += 1
             yield OpenAIResponseObjectStreamResponseContentPartDone(
                 content_index=content_index,
@@ -1325,7 +1507,8 @@ class StreamingResponseOrchestrator:
                 item_id=message_item_id,
                 output_index=message_output_index,
                 part=OpenAIResponseContentPartOutputText(
-                    text=final_text,
+                    text=part_clean_text,
+                    annotations=list(part_annotations),
                     logprobs=[],
                 ),
                 sequence_number=self.sequence_number,
@@ -1360,10 +1543,11 @@ class StreamingResponseOrchestrator:
             content_parts = []
             if content_part_emitted:
                 final_text = "".join(chat_response_content)
+                final_annotations, final_clean_text = extract_citations_from_text(final_text, self.citation_files)
                 content_parts.append(
                     OpenAIResponseOutputMessageContentOutputText(
-                        text=final_text,
-                        annotations=[],
+                        text=final_clean_text,
+                        annotations=list(final_annotations),
                         logprobs=chat_response_logprobs if chat_response_logprobs else [],
                     )
                 )

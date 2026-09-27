@@ -145,7 +145,7 @@ These are the symbols an external provider imports to register itself with the O
 
 - The `Api` enum.
 - Provider spec types: `ProviderSpec`, `InlineProviderSpec`, `RemoteProviderSpec`, `AdapterSpec`, and the `api_dependencies` machinery.
-- Protocol classes: `Inference`, `Responses`, `VectorIO`, `Safety`, `Files`, `Batches`, etc. — the abstract interfaces a provider implements.
+- Protocol classes: `Inference`, `Responses`, `VectorIO`, `Files`, `Batches`, etc. — the abstract interfaces a provider implements. Responses guardrails call a configured moderation endpoint; there is no separate `Safety` protocol.
 - Configuration base classes and the `webmethod(...)` decorator + `WebMethod` model.
 - Registry helpers and resource base classes (`Resource`, `ResourceType`).
 
@@ -205,7 +205,7 @@ A breaking change in *either* surface (an API datatype graduating past `v1` rule
 
 Internal helpers and base classes that are not part of either surface should not be re-exported from `ogx_api.types` or `ogx_api.provider`. If a symbol must be public for an external provider but doesn't fit cleanly into the API datatype track, it belongs in the Provider SDK surface.
 
-Shared resource/value types (`Model`, `Shield`, `ToolGroup`, `VectorStore`) live canonically in `ogx_api.types` and are re-exported from `ogx_api.provider` for convenience — these are the only symbols intentionally present in both namespaces.
+Shared resource/value types (`Model`, `ToolGroup`, `VectorStore`) live canonically in `ogx_api.types` and are re-exported from `ogx_api.provider` for convenience — these are the only symbols intentionally present in both namespaces.
 
 ### Configuration files
 

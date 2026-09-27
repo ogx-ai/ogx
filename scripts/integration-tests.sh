@@ -21,9 +21,12 @@ TEST_PATTERN=""
 INFERENCE_MODE="replay"
 TEXT_MODEL=""
 VISION_MODEL=""
+RERANK_MODEL=""
 EXTRA_PARAMS=""
 COLLECT_ONLY=false
 TYPESCRIPT_ONLY=false
+INSTALL_DEPS=false
+CLIENT_VERSION=""
 
 # Function to display usage
 usage() {
@@ -36,12 +39,19 @@ Options:
     --setup STRING           Test setup (models, env) to use (e.g., 'ollama', 'ollama-vision', 'gpt', 'vllm')
     --text-model STRING      Override text model (e.g. 'ollama/llama3.2:3b', 'openai/gpt-4o')
     --vision-model STRING    Override vision model (e.g. 'ollama/llama3.2-vision:11b')
+    --rerank-model STRING    Override rerank model (e.g. 'vllm/Qwen/Qwen3-Reranker-0.6B')
     --inference-mode STRING  Inference mode: replay, record-if-missing or record (default: replay)
     --subdirs STRING         Comma-separated list of test subdirectories to run (overrides suite)
     --file PATH              Single test file to run (e.g. tests/integration/responses/test_foo.py)
     --pattern STRING         Regex pattern to pass to pytest -k
     --collect-only           Collect tests only without running them (skips server startup)
     --typescript-only        Skip Python tests and run only TypeScript client tests
+    --install-deps           Install missing provider dependencies before running tests
+                             (mirrors the CI setup step: ogx stack list-deps <config> | xargs -L1 uv pip install)
+    --client-version STRING  Client version to test against (mirrors CI client-version):
+                             'latest' generates ogx-client from client-sdks/openapi and installs
+                             it over the PyPI pin; 'published' verifies the uv.lock-resolved
+                             PyPI version is installed (default: no client management)
     --help                   Show this help message
 
 Suites are defined in tests/integration/suites.py and define which tests to run.
@@ -70,6 +80,9 @@ Examples:
 
     # Override model (setup still provides env, e.g. OLLAMA_URL)
     $0 --stack-config server:ci-tests --suite base --setup ollama --text-model ollama/llama3.2:1b
+
+    # Test against the in-repo generated ogx-client (CI client-version=latest equivalent)
+    $0 --stack-config server:ci-tests --suite base --setup gpt --client-version latest
 EOF
 }
 
@@ -90,6 +103,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --vision-model)
         VISION_MODEL="$2"
+        shift 2
+        ;;
+    --rerank-model)
+        RERANK_MODEL="$2"
         shift 2
         ;;
     --subdirs)
@@ -119,6 +136,14 @@ while [[ $# -gt 0 ]]; do
     --typescript-only)
         TYPESCRIPT_ONLY=true
         shift
+        ;;
+    --install-deps)
+        INSTALL_DEPS=true
+        shift
+        ;;
+    --client-version)
+        CLIENT_VERSION="$2"
+        shift 2
         ;;
     --help)
         usage
@@ -161,7 +186,9 @@ echo "Stack Config: $STACK_CONFIG"
 echo "Setup: $TEST_SETUP"
 echo "Text model: ${TEXT_MODEL:- (from setup)}"
 echo "Vision model: ${VISION_MODEL:- (from setup)}"
+echo "Rerank model: ${RERANK_MODEL:- (from setup)}"
 echo "Inference Mode: $INFERENCE_MODE"
+echo "Client Version: ${CLIENT_VERSION:- (none)}"
 echo "Test Suite: $TEST_SUITE"
 echo "Test Subdirs: $TEST_SUBDIRS"
 echo "Test Pattern: $TEST_PATTERN"
@@ -183,6 +210,9 @@ if [[ -n "$TEXT_MODEL" ]]; then
 fi
 if [[ -n "$VISION_MODEL" ]]; then
     EXTRA_PARAMS="$EXTRA_PARAMS --vision-model=$VISION_MODEL"
+fi
+if [[ -n "$RERANK_MODEL" ]]; then
+    EXTRA_PARAMS="$EXTRA_PARAMS --rerank-model=$RERANK_MODEL"
 fi
 
 if [[ "$COLLECT_ONLY" == true ]]; then
@@ -253,6 +283,182 @@ if ! command -v pytest &>/dev/null; then
     exit 1
 fi
 
+# Manage the ogx-client package to mirror CI's client-version input
+# (.github/actions/install-ogx-client). 'latest' generates the SDK from this
+# checkout and installs it over the PyPI pin; 'published' verifies the
+# uv.lock-resolved PyPI version is installed. This never runs `uv sync` or
+# `uv run`: a re-sync would revert a locally installed client back to the
+# lockfile's PyPI pin.
+ensure_client_version() {
+    local sdk_dir="$ROOT_DIR/client-sdks/openapi/sdks/python"
+
+    case "$CLIENT_VERSION" in
+    latest)
+        if ! command -v java &>/dev/null || ! command -v node &>/dev/null; then
+            echo "Failed to run --client-version latest: java and node are required" >&2
+            return 1
+        fi
+        if ! command -v openapi-generator-cli &>/dev/null && ! command -v openapi-generator &>/dev/null; then
+            echo "Failed to run --client-version latest: openapi-generator-cli is required (npm install -g @openapitools/openapi-generator-cli)" >&2
+            return 1
+        fi
+        echo "=== Generating ogx-client SDK from checkout ==="
+        if ! make -C "$ROOT_DIR/client-sdks/openapi" sdk OPEN=0; then
+            echo "Failed to generate ogx-client SDK" >&2
+            return 1
+        fi
+        echo "Installing ogx-client from: $sdk_dir"
+        if ! uv pip install --upgrade "$sdk_dir"; then
+            echo "Failed to install ogx-client from $sdk_dir" >&2
+            return 1
+        fi
+        local expected
+        expected=$(grep -m1 '^version = ' "$sdk_dir/pyproject.toml" | cut -d'"' -f2)
+        if ! verify_client_version "$expected"; then
+            return 1
+        fi
+        ;;
+    published)
+        if ! verify_client_version "" --lock; then
+            return 1
+        fi
+        ;;
+    *)
+        echo "Unknown client-version: $CLIENT_VERSION (expected 'latest' or 'published')" >&2
+        return 1
+        ;;
+    esac
+
+    # Soft check: flag if the dev packages are not editable installs
+    local pkg
+    for pkg in ogx ogx-api; do
+        if uv pip show "$pkg" >/dev/null 2>&1; then
+            if ! uv pip show "$pkg" | grep -qi "editable"; then
+                echo "Warning: $pkg is not an editable install (run 'uv sync' to install from this checkout)"
+            fi
+        fi
+    done
+    echo "Installed ogx packages:"
+    uv pip list | grep ogx
+    return 0
+}
+
+# Verify the installed ogx-client version. With $2 == "--lock", verify
+# against the version pinned in uv.lock; otherwise verify against $1.
+verify_client_version() {
+    local expected="$1"
+    local installed
+    installed=$(uv pip show ogx-client 2>/dev/null | awk '/^Version:/ {print $2}')
+    if [[ -z "$installed" ]]; then
+        echo "ogx-client is not installed. Run 'uv sync --all-groups' first." >&2
+        return 1
+    fi
+    if [[ "${2:-}" == "--lock" ]]; then
+        expected=$(awk '/^name = "ogx-client"$/{getline; if ($0 ~ /^version = /) {print; exit}}' "$ROOT_DIR/uv.lock" | cut -d'"' -f2)
+        if [[ -z "$expected" ]]; then
+            echo "Failed to determine the ogx-client version pinned in uv.lock" >&2
+            return 1
+        fi
+    fi
+    if [[ "$installed" != "$expected" ]]; then
+        echo "ogx-client version mismatch: installed=$installed expected=$expected" >&2
+        echo "Run 'uv sync --all-groups' to install the expected version." >&2
+        return 1
+    fi
+    echo "✅ ogx-client $installed matches expected version"
+    return 0
+}
+
+# Preflight: ensure the client version matches the requested mode.
+# Skipped for typescript-only runs (the TS client is managed separately via TS_CLIENT_PATH).
+if [[ -n "$CLIENT_VERSION" && "$TYPESCRIPT_ONLY" == false ]]; then
+    ensure_client_version || exit 1
+fi
+
+# Function to check that the provider dependencies for a stack config are
+# installed, mirroring the CI setup step in .github/actions/setup-test-environment
+#   ogx stack list-deps <config> | xargs -L1 uv pip install
+# which is not visible to local runs. With INSTALL_DEPS=true, missing
+# dependencies are installed automatically; otherwise the function fails with
+# the exact command to run.
+check_provider_dependencies() {
+    local config_name="$1"
+
+    local deps_output
+    if ! deps_output=$(ogx stack list-deps "$config_name" 2>/dev/null); then
+        echo "Warning: Could not determine dependencies for '$config_name', skipping dependency check"
+        return 0
+    fi
+
+    local installed
+    installed=" $(uv pip list --format=freeze 2>/dev/null | cut -d= -f1 | tr '[:upper:]' '[:lower:]' | sed 's/[_.]/-/g' | tr '\n' ' ')"
+
+    local missing=()
+    local token name skip_next=false
+    for token in $deps_output; do
+        if $skip_next; then
+            skip_next=false
+            continue
+        fi
+        case "$token" in
+        --*)
+            # Skip pip flags and their values (e.g. --extra-index-url <url>)
+            skip_next=true
+            continue
+            ;;
+        -*)
+            continue
+            ;;
+        esac
+        # Strip extras, version specifiers, and environment markers to get the package name
+        name=$(echo "$token" | sed -E 's/\[.*\]//; s/[<>=!~;].*//' | tr '[:upper:]' '[:lower:]' | sed 's/[_.]/-/g')
+        if [[ -n "$name" && ! "$installed" == *" $name "* ]]; then
+            missing+=("$token")
+        fi
+    done
+
+    if [[ ${#missing[@]} -eq 0 ]]; then
+        echo "✅ All provider dependencies for '$config_name' are installed"
+        return 0
+    fi
+
+    if [[ "$INSTALL_DEPS" == true ]]; then
+        echo "Installing missing provider dependencies: ${missing[*]}"
+        if ! ogx stack list-deps "$config_name" | xargs -L1 uv pip install; then
+            echo "Failed to install provider dependencies for '$config_name'" >&2
+            return 1
+        fi
+        return 0
+    fi
+
+    echo "❌ Missing required provider dependencies for '$config_name':"
+    for token in "${missing[@]}"; do
+        echo "   - $token"
+    done
+    echo ""
+    echo "Install them with (the same step CI runs):"
+    echo "    ogx stack list-deps $config_name | xargs -L1 uv pip install"
+    echo ""
+    echo "Or re-run this script with --install-deps to install them automatically."
+    return 1
+}
+
+# Preflight: ensure provider dependencies are installed for the stack config.
+# Skipped for docker configs (dependencies are baked into the image), remote
+# http configs, and collect-only runs.
+if [[ "$COLLECT_ONLY" == false && -n "$STACK_CONFIG" ]]; then
+    case "$STACK_CONFIG" in
+    docker:* | http://*)
+        ;;
+    server:*)
+        check_provider_dependencies "${STACK_CONFIG#server:}" || exit 1
+        ;;
+    *)
+        check_provider_dependencies "$STACK_CONFIG" || exit 1
+        ;;
+    esac
+fi
+
 # Helper function to find next available port
 find_available_port() {
     local start_port=$1
@@ -305,12 +511,13 @@ run_client_ts_tests() {
         npm install "$TS_CLIENT_PATH" --silent
     else
         # It's an npm version specifier - install from npm
+        # (no --silent: it suppresses even npm errors, which hid this install's ETARGET failure from CI logs)
         echo "Installing ogx-client@${TS_CLIENT_PATH} from npm"
         if [[ "${CI:-}" == "true" || "${CI:-}" == "1" ]]; then
             npm ci --silent
-            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}"
         else
-            npm install "ogx-client@${TS_CLIENT_PATH}" --silent
+            npm install "ogx-client@${TS_CLIENT_PATH}"
         fi
     fi
 
@@ -371,9 +578,14 @@ if [[ "$STACK_CONFIG" == *"server:"* && "$COLLECT_ONLY" == false ]]; then
     export OTEL_BSP_EXPORT_TIMEOUT="2000"
     export OTEL_METRIC_EXPORT_INTERVAL="200"
 
+    # Start the standalone metrics scrape server (default port 9464) so the metrics
+    # endpoint integration tests (tests/integration/inspect/test_metrics_endpoint.py) can
+    # scrape it. Exported so both the server process and the pytest process observe the flag.
+    export OGX_METRICS_ENDPOINT_ENABLED="1"
+
     # remove "server:" from STACK_CONFIG
     stack_config=$(echo "$STACK_CONFIG" | sed 's/^server://')
-    nohup ogx stack run $stack_config >server-main.log 2>&1 &
+    nohup ogx stack run $stack_config --insecure >server-main.log 2>&1 &
 
     echo "Waiting for OGX Server to start on port $OGX_PORT..."
     for i in {1..60}; do
@@ -506,6 +718,12 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     [ -n "${AWS_BEDROCK_BEARER_TOKEN:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEDROCK_BEARER_TOKEN=$AWS_BEDROCK_BEARER_TOKEN"
     [ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK"
     [ -n "${AWS_DEFAULT_REGION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
+    [ -n "${AWS_ACCESS_KEY_ID:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID"
+    [ -n "${AWS_SECRET_ACCESS_KEY:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY"
+    [ -n "${AWS_SESSION_TOKEN:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN"
+    [ -n "${AWS_ROLE_ARN:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_ROLE_ARN=$AWS_ROLE_ARN"
+    [ -n "${AWS_WEB_IDENTITY_TOKEN_FILE:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_WEB_IDENTITY_TOKEN_FILE=$AWS_WEB_IDENTITY_TOKEN_FILE"
+    [ -n "${AWS_ROLE_SESSION_NAME:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e AWS_ROLE_SESSION_NAME=$AWS_ROLE_SESSION_NAME"
     [ -n "${VERTEX_AI_PROJECT:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_PROJECT=$VERTEX_AI_PROJECT"
     [ -n "${VERTEX_AI_LOCATION:-}" ] && DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e VERTEX_AI_LOCATION=$VERTEX_AI_LOCATION"
 
@@ -622,7 +840,9 @@ if [[ -n "$STACK_CONFIG" ]]; then
     STACK_CONFIG_ARG="--stack-config=$STACK_CONFIG"
 fi
 
-# Run Python tests unless typescript-only mode
+# Run Python tests unless typescript-only mode.
+# The embedding and rerank models come from the setup defaults (tests/integration/suites.py)
+# so setups with a remote provider can record/replay embedding and rerank calls.
 if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
     pytest -s -v $PYTEST_TARGET \
         $STACK_CONFIG_ARG \
@@ -630,8 +850,6 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         -k "$PYTEST_PATTERN" \
         $EXTRA_PARAMS \
         --color=yes \
-        --embedding-model=sentence-transformers/nomic-ai/nomic-embed-text-v1.5 \
-        --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?
 else

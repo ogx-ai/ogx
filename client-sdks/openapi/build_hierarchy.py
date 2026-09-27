@@ -8,8 +8,8 @@
 """
 Process OpenAPI spec to extract tag hierarchy and prepare for SDK generation.
 
-This script operates on a Stainless-independent OpenAPI spec (the output of
-merge_stainless_config.py) and performs the following transformations:
+This script operates on the enriched OpenAPI spec (the output of
+merge_resources.py) and performs the following transformations:
 
 1. Extracts tag hierarchies from multi-tag endpoints (e.g., [chat, completions])
 2. Reduces endpoint tags to only the leaf tag (for openapi-generator class assignment)

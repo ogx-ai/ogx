@@ -192,7 +192,7 @@ Whether you're prototyping locally or deploying at scale, OGX makes it easy:
 uv venv --python 3.12 --seed
 source .venv/bin/activate
 uv pip install -U ogx
-uv run ogx list-deps starter | xargs -L1 uv pip install
+uv run ogx stack list-deps starter | xargs -L1 uv pip install
 
 # Start Ollama and pull a model
 ollama serve
@@ -200,7 +200,7 @@ ollama run gpt-oss:20b
 
 # Launch OGX with the starter distribution
 
-OLLAMA_URL=http://localhost:11434/v1 uv run ogx stack run starter
+OLLAMA_URL=http://localhost:11434/v1 uv run ogx run starter
 ```
 
 ```python

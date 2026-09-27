@@ -5,10 +5,11 @@
 # the root directory of this source tree.
 
 import io
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, UploadFile
+from pypdf import PdfReader
 
 from ogx.providers.inline.file_processor.pypdf.config import PyPDFFileProcessorConfig
 from ogx.providers.inline.file_processor.pypdf.pypdf import PyPDFFileProcessor
@@ -85,5 +86,57 @@ async def test_allows_markdown_files(pypdf_processor):
     file = UploadFile(filename="README.md", file=io.BytesIO(md_bytes))
 
     result = await pypdf_processor.process_file(file=file)
+    assert result is not None
+    assert len(result.chunks) >= 1
+
+
+async def test_rejects_password_protected_pdf(pypdf_processor):
+    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\nxref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n115\n%%EOF"
+    file = UploadFile(filename="secret.pdf", file=io.BytesIO(pdf_bytes))
+
+    mock_reader = MagicMock(spec=PdfReader)
+    mock_reader.is_encrypted = True
+    mock_reader.decrypt.return_value = 0
+
+    with patch("ogx.providers.inline.file_processor.pypdf.pypdf.PdfReader", return_value=mock_reader):
+        with pytest.raises(HTTPException) as exc_info:
+            await pypdf_processor.process_file(file=file)
+
+    assert exc_info.value.status_code == 422
+    assert "Password-protected" in exc_info.value.detail
+
+
+async def test_rejects_corrupted_encrypted_pdf(pypdf_processor):
+    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\nxref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n115\n%%EOF"
+    file = UploadFile(filename="corrupted.pdf", file=io.BytesIO(pdf_bytes))
+
+    mock_reader = MagicMock(spec=PdfReader)
+    mock_reader.is_encrypted = True
+    mock_reader.decrypt.side_effect = Exception("corrupted encryption metadata")
+
+    with patch("ogx.providers.inline.file_processor.pypdf.pypdf.PdfReader", return_value=mock_reader):
+        with pytest.raises(HTTPException) as exc_info:
+            await pypdf_processor.process_file(file=file)
+
+    assert exc_info.value.status_code == 422
+    assert "Password-protected" in exc_info.value.detail
+
+
+async def test_allows_owner_encrypted_pdf(pypdf_processor):
+    pdf_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\nxref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n115\n%%EOF"
+    file = UploadFile(filename="ibm-earnings.pdf", file=io.BytesIO(pdf_bytes))
+
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = "IBM quarterly earnings results"
+
+    mock_reader = MagicMock(spec=PdfReader)
+    mock_reader.is_encrypted = True
+    mock_reader.decrypt.return_value = 2
+    mock_reader.pages = [mock_page]
+    mock_reader.metadata = None
+
+    with patch("ogx.providers.inline.file_processor.pypdf.pypdf.PdfReader", return_value=mock_reader):
+        result = await pypdf_processor.process_file(file=file)
+
     assert result is not None
     assert len(result.chunks) >= 1

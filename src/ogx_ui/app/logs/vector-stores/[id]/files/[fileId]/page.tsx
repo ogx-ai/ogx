@@ -132,7 +132,7 @@ export default function FileDetailPage() {
     );
   }
   if (isLoadingStore) {
-    return <DetailLoadingView title={title} />;
+    return <DetailLoadingView />;
   }
   if (!store) {
     return <DetailNotFoundView title={title} id={vectorStoreId} />;
@@ -221,21 +221,21 @@ export default function FileDetailPage() {
             <div className="text-destructive text-sm">
               Error loading content summary: {errorContents.message}
             </div>
-          ) : contents?.content && contents.content.length > 0 ? (
+          ) : contents?.data && contents.data.length > 0 ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="font-medium text-gray-600 dark:text-gray-400">
                     Content Items:
                   </span>
-                  <span className="ml-2">{contents.content.length}</span>
+                  <span className="ml-2">{contents.data.length}</span>
                 </div>
                 <div>
                   <span className="font-medium text-gray-600 dark:text-gray-400">
                     Total Characters:
                   </span>
                   <span className="ml-2">
-                    {contents.content.reduce(
+                    {contents.data.reduce(
                       (total, item) => total + item.text.length,
                       0
                     )}
@@ -248,7 +248,7 @@ export default function FileDetailPage() {
                 </span>
                 <div className="mt-1 bg-gray-50 dark:bg-gray-800 rounded-md p-3">
                   <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-3">
-                    {contents.content[0]?.text.substring(0, 200)}...
+                    {contents.data[0]?.text.substring(0, 200)}...
                   </p>
                 </div>
               </div>
@@ -286,7 +286,7 @@ export default function FileDetailPage() {
           <PropertyItem label="Store Name" value={store.name || ""} />
           <PropertyItem
             label="Provider ID"
-            value={(store.metadata.provider_id as string) || ""}
+            value={(store.metadata?.provider_id as string) || ""}
           />
         </>
       )}

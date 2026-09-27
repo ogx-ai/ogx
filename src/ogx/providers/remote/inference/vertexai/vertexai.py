@@ -19,12 +19,14 @@ from google.oauth2.credentials import Credentials
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.core.storage.kvstore import kvstore_impl
 from ogx.log import get_logger
 from ogx.providers.remote.inference.vertexai import converters
 from ogx.providers.remote.inference.vertexai.config import (
     VertexAIConfig,
     VertexAIProviderDataValidator,
 )
+from ogx.providers.remote.inference.vertexai.thought_signature_store import ThoughtSignatureStore
 from ogx.providers.remote.inference.vertexai.utils import build_http_options as _build_http_options
 from ogx.providers.utils.inference.openai_compat import get_stream_options_for_telemetry
 from ogx.providers.utils.inference.prompt_adapter import localize_image_content
@@ -140,7 +142,7 @@ class GeminiCompletionSamplingParams(BaseModel):
 class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     """Inference adapter for Google Vertex AI platform."""
 
-    # extra="allow" lets the routing infra inject model_store, __provider_id__, etc.
+    # extra="allow" lets the routing infra inject model_store, __provider_spec__, etc.
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
 
     config: VertexAIConfig
@@ -148,6 +150,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
     _http_options: genai_types.HttpOptions | None = PrivateAttr(default=None)
     _http_options_initialized: bool = PrivateAttr(default=False)
     _model_cache: dict[str, Model] = PrivateAttr(default_factory=dict)
+    _thought_signature_store: ThoughtSignatureStore | None = PrivateAttr(default=None)
     embedding_model_metadata: dict[str, dict[str, int]] = {
         "publishers/google/models/text-embedding-004": {"embedding_dimension": 768, "context_length": 2048},
         "publishers/google/models/gemini-embedding-001": {"embedding_dimension": 3072, "context_length": 2048},
@@ -155,6 +158,8 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         "models/text-embedding-004": {"embedding_dimension": 768, "context_length": 2048},
         "models/gemini-embedding-001": {"embedding_dimension": 3072, "context_length": 2048},
     }
+
+    __provider_id__: str  # automatically set by the resolver when instantiating the provider
 
     async def _close_managed_httpx_client(self) -> None:
         if self._http_options is None:
@@ -188,6 +193,14 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         _ensure_http_options() and create httpx.AsyncClient in the wrong event loop.
         The client will be created on first use via _get_client().
         """
+        if self.config.thought_signature_store is not None:
+            kv = await kvstore_impl(self.config.thought_signature_store)
+            self._thought_signature_store = ThoughtSignatureStore(kv)
+            logger.info(
+                "VertexAI thought_signature store configured",
+                backend=self.config.thought_signature_store.backend,
+                namespace=self.config.thought_signature_store.namespace,
+            )
         try:
             # Don't create the client here - it will be created lazily on first use
             # This avoids calling _ensure_http_options() in the temporary startup event loop
@@ -202,41 +215,17 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 exc_info=True,
             )
 
-    def _reset_client(self) -> None:
-        """Reset cached client and HTTP options after a temporary event loop exits.
-
-        When StackApp.__init__ runs stack.initialize() inside a temporary event
-        loop (via ThreadPoolExecutor), model listing may trigger lazy client
-        creation via _get_client().  The Google genai Client eagerly creates an
-        internal httpx.AsyncClient bound to the temporary loop.  After the
-        temporary loop is closed, the cached client holds connections tied to
-        the dead loop, causing ``RuntimeError: Event loop is closed`` on the
-        first inference request.
-
-        This method clears the cached client without awaiting async close
-        (the temporary loop is already terminated) so that a fresh client is
-        created on the next _get_client() call — this time on uvicorn's
-        request-handling event loop.
-
-        Compare ``reset_sqlstore_engines()`` which serves the same purpose for
-        SQL engines.
-        """
-        self._default_client = None
-        self._http_options = None
-        self._http_options_initialized = False
-
     async def shutdown(self) -> None:
         await self._close_managed_httpx_client()
         self._http_options = None
         self._http_options_initialized = False
         self._default_client = None
+        self._thought_signature_store = None
 
     async def register_model(self, model: Model) -> Model:
         provider_resource_id = model.provider_resource_id or model.identifier
         if not await self.check_model_availability(provider_resource_id):
-            raise ValueError(
-                f"Model {provider_resource_id} is not available from provider {self.__provider_id__}"  # type: ignore[attr-defined]
-            )
+            raise ValueError(f"Model {provider_resource_id} is not available from provider {self.__provider_id__}")
         return model
 
     async def unregister_model(self, model_id: str) -> None:
@@ -387,16 +376,6 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 ) from None
         return self._default_client
 
-    async def _get_provider_model_id(self, model: str) -> str:
-        # model_store is injected at runtime by the routing infra
-        if hasattr(self, "model_store") and self.model_store and await self.model_store.has_model(model):  # type: ignore[attr-defined]
-            model_obj: Model = await self.model_store.get_model(model)  # type: ignore[attr-defined]
-            if model_obj.provider_resource_id is None:
-                raise ValueError(f"Model {model} has no provider_resource_id")
-            return model_obj.provider_resource_id
-
-        return model
-
     async def list_provider_model_ids(self) -> list[str]:
         """List model IDs available from the configured Vertex AI project.
 
@@ -445,7 +424,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 continue
             if metadata := self.embedding_model_metadata.get(provider_model_id):
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.embedding,
@@ -453,7 +432,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 )
             else:
                 model = Model(
-                    provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                    provider_id=self.__provider_id__,
                     provider_resource_id=provider_model_id,
                     identifier=provider_model_id,
                     model_type=ModelType.llm,
@@ -576,7 +555,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         different vocabulary for the same concept:
 
         - ``"auto"``     → ``None``        (omit; let the API decide)
-        - ``"default"``  → ``"standard"``  (Gemini's default tier)
+        - ``"default"``  → ``None``        (omit; Vertex AI rejects ``"standard"``)
         - ``"flex"``     → ``"flex"``
         - ``"priority"`` → ``"priority"``
 
@@ -587,7 +566,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
 
         _map: dict[str, str | None] = {
             "auto": None,
-            "default": "standard",
+            "default": None,
             "flex": "flex",
             "priority": "priority",
         }
@@ -658,12 +637,20 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             is_first_chunk = True
             last_chunk: Any = None
             async for chunk in stream:
-                yield converters.convert_gemini_stream_chunk_to_openai(
+                signatures: dict[str, str] = {}
+                openai_chunk = converters.convert_gemini_stream_chunk_to_openai(
                     chunk=chunk,
                     model=model,
                     completion_id=completion_id,
                     is_first_chunk=is_first_chunk,
+                    signatures_out=signatures,
                 )
+                # Persist before yield: code after yield only runs when the
+                # consumer pulls the next item, and is skipped if the stream is
+                # closed after this chunk (client has the call id already).
+                if signatures and self._thought_signature_store is not None:
+                    await self._thought_signature_store.put_many(signatures)
+                yield openai_chunk
                 is_first_chunk = False
                 last_chunk = chunk
 
@@ -782,7 +769,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 
@@ -790,7 +777,13 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         tools, tool_choice = self._resolve_deprecated_tools(params)
 
         messages = list(await asyncio.gather(*[self._localize_image_url(message) for message in params.messages]))
-        system_instruction, contents = converters.convert_openai_messages_to_gemini(messages)
+        store = self._thought_signature_store
+        call_ids = converters.collect_tool_call_ids(messages) if store else []
+        signature_by_call_id = await store.get_many(call_ids) if store and call_ids else {}
+        system_instruction, contents = converters.convert_openai_messages_to_gemini(
+            messages,
+            signature_by_call_id or None,
+        )
         tools_input = converters.convert_openai_tools_to_gemini(tools)
         config = self._build_generation_config(
             params,
@@ -818,7 +811,15 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
             contents=request_contents,
             config=config,
         )
-        return converters.convert_gemini_response_to_openai(response=response, model=params.model)
+        signatures: dict[str, str] = {}
+        completion = converters.convert_gemini_response_to_openai(
+            response=response,
+            model=params.model,
+            signatures_out=signatures,
+        )
+        if self._thought_signature_store is not None and signatures:
+            await self._thought_signature_store.put_many(signatures)
+        return completion
 
     @staticmethod
     def _validate_completion_prompt(prompt: Any) -> list[str]:
@@ -866,7 +867,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
         prompts = self._validate_completion_prompt(params.prompt)
         self._warn_unsupported_completion_params(params)
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
         config = self._build_completion_config(params)
@@ -957,7 +958,7 @@ class VertexAIInferenceAdapter(NeedsRequestProviderData, BaseModel):
                 ignored_keys=list(params.model_extra.keys()),
             )
 
-        provider_model_id = await self._get_provider_model_id(params.model)
+        provider_model_id = params.model
         self._validate_model_allowed(provider_model_id)
         client = self._get_client()
 

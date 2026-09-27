@@ -22,7 +22,11 @@ class LlamaCppServerConfig(RemoteInferenceProviderConfig):
     )
 
     @classmethod
-    def sample_run_config(cls, **kwargs) -> dict[str, Any]:
+    def sample_run_config(
+        cls,
+        base_url: str = "${env.LLAMA_CPP_SERVER_URL:=http://localhost:8080/v1}",
+        **kwargs,
+    ) -> dict[str, Any]:
         return {
-            "base_url": "http://localhost:8080/v1",
+            "base_url": base_url,
         }

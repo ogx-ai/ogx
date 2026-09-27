@@ -36,7 +36,7 @@ jobs:
           fetch-depth: ${{ github.actor == 'dependabot[bot]' && 0 || 2 }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.12'
           cache: pip
@@ -62,7 +62,7 @@ jobs:
         run: python -m pip install 'pre-commit>=4.4.0'
 
       - name: Cache pre-commit
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
@@ -156,9 +156,9 @@ jobs:
         id: client-config
         uses: ./.github/actions/install-ogx-client
 
-      - name: Sync dev + type_checking dependencies
+      - name: Sync dev dependencies
         run: |
-          uv sync --group dev --group type_checking
+          uv sync --group dev
 
           # Install specific client version after sync if needed
           if [ "${{ steps.client-config.outputs.install-after-sync }}" = "true" ]; then
@@ -169,7 +169,7 @@ jobs:
       - name: Run mypy (full type_checking)
         run: |
           set +e
-          uv run --group dev --group type_checking mypy
+          uv run --group dev mypy
           status=$?
           if [ $status -ne 0 ]; then
             echo "::error::Full mypy failed. Reproduce locally with 'uv run pre-commit run mypy-full --hook-stage manual --all-files'."
@@ -179,7 +179,7 @@ jobs:
       - name: Check if any unused recordings
         run: |
           set -e
-          PYTHONPATH=$PWD uv run --group test ./scripts/cleanup_recordings.py --delete
+          PYTHONPATH=$PWD uv run --group dev ./scripts/cleanup_recordings.py --delete
           changes=$(git status --short tests/integration | grep 'recordings' || true)
           if [ -n "$changes" ]; then
             echo "::error::Unused integration recordings detected. Run 'PYTHONPATH=$(pwd) uv run ./scripts/cleanup_recordings.py --delete' locally and commit the deletions."

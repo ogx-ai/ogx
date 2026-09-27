@@ -880,6 +880,7 @@ class OpenAIResponseObject(BaseModel):
     truncation: ResponseTruncation | None = None
     usage: OpenAIResponseUsage | None = None
     instructions: str | None = None
+    skills: list[str] | None = None
     max_tool_calls: int | None = None
     reasoning: OpenAIResponseReasoning | None = None
     max_output_tokens: int | None = None

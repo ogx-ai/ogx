@@ -133,6 +133,7 @@ class QReCCBenchmark(BenchmarkRunner):
                     vector_store_name=f"qrecc-conv-{conv_id}",
                     checkpoint_path=checkpoint_path,
                     resume=self.resume,
+                    chunking_strategy=self.chunking_strategy,
                 )
             except Exception as e:
                 logger.error(f"Ingestion failed for conversation {conv_id}: {e}")

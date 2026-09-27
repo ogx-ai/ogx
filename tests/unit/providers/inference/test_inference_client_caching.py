@@ -24,6 +24,8 @@ from ogx.providers.remote.inference.groq.config import GroqConfig
 from ogx.providers.remote.inference.groq.groq import GroqInferenceAdapter
 from ogx.providers.remote.inference.llama_openai_compat.config import LlamaCompatConfig
 from ogx.providers.remote.inference.llama_openai_compat.llama import LlamaCompatInferenceAdapter
+from ogx.providers.remote.inference.meta.config import MetaConfig
+from ogx.providers.remote.inference.meta.meta import MetaInferenceAdapter
 from ogx.providers.remote.inference.nvidia.config import NVIDIAConfig
 from ogx.providers.remote.inference.nvidia.nvidia import NVIDIAInferenceAdapter
 from ogx.providers.remote.inference.openai.config import OpenAIConfig
@@ -65,6 +67,12 @@ from ogx.providers.remote.inference.watsonx.watsonx import WatsonXInferenceAdapt
             LlamaCompatConfig,
             LlamaCompatInferenceAdapter,
             "ogx.providers.remote.inference.llama_openai_compat.config.LlamaProviderDataValidator",
+            {},
+        ),
+        (
+            MetaConfig,
+            MetaInferenceAdapter,
+            "ogx.providers.remote.inference.meta.config.MetaProviderDataValidator",
             {},
         ),
         (

@@ -36,6 +36,7 @@ class BenchmarkRunner(ABC):
         use_batch_api: bool = False,
         batch_id: str | None = None,
         extra_body: dict | None = None,
+        chunking_strategy: dict | None = None,
     ):
         self.client = client
         self.base_url = base_url
@@ -48,6 +49,7 @@ class BenchmarkRunner(ABC):
         self.use_batch_api = use_batch_api
         self.batch_id = batch_id
         self.extra_body = extra_body
+        self.chunking_strategy = chunking_strategy
 
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)

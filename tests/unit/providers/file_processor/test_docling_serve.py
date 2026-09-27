@@ -5,17 +5,25 @@
 # the root directory of this source tree.
 
 import io
+import json
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import httpx
 import pytest
+from docling.datamodel.service.chunking import HybridChunkerOptions
+from docling.datamodel.service.options import ConvertDocumentsOptions
+from docling.datamodel.service.targets import ZipTarget
+from docling.service_client import RawServiceResult
+from docling_core.types.io import DocumentStream
 from fastapi import UploadFile
 from pydantic import SecretStr
 
 from ogx.providers.remote.file_processor.docling_serve.config import DoclingServeFileProcessorConfig
 from ogx.providers.remote.file_processor.docling_serve.docling_serve import DoclingServeFileProcessor
+from ogx_api.common.errors import InvalidParameterError
 from ogx_api.file_processors import ProcessFileRequest
 from ogx_api.vector_io import (
     VectorStoreChunkingStrategyAuto,
@@ -33,34 +41,80 @@ def _make_httpx_response(json_body: dict, status_code: int = 200) -> httpx.Respo
     )
 
 
+def _make_chunk_archive(chunks: list[dict]) -> bytes:
+    buffer = io.BytesIO()
+    with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as archive:
+        archive.writestr("test.chunks.jsonl", "\n".join(json.dumps(chunk) for chunk in chunks))
+    return buffer.getvalue()
+
+
+def _make_httpx_chunk_response(chunks: list[dict], status_code: int = 200) -> httpx.Response:
+    return httpx.Response(
+        status_code=status_code,
+        content=_make_chunk_archive(chunks),
+        headers={"content-type": "application/zip"},
+        request=httpx.Request("POST", "http://test"),
+    )
+
+
 CONVERT_RESPONSE = {
     "document": {
         "md_content": "# Hello World\n\nThis is a test document with some content.",
     },
 }
 
-CHUNK_RESPONSE = {
-    "chunks": [
-        {"text": "First chunk of text.", "meta": {"headings": ["Introduction"]}},
-        {"text": "Second chunk of text.", "meta": {}},
-        {"text": "Third chunk of text.", "meta": {"headings": ["Conclusion"]}},
-    ],
-}
+CHUNK_RESPONSE = [
+    {
+        "filename": "test.pdf",
+        "chunk_index": 0,
+        "text": "First chunk of text.",
+        "num_tokens": 5,
+        "headings": ["Introduction"],
+        "doc_items": ["#/texts/0"],
+        "page_numbers": [1],
+    },
+    {
+        "filename": "test.pdf",
+        "chunk_index": 1,
+        "text": "Second chunk of text.",
+        "num_tokens": 5,
+        "doc_items": ["#/texts/1"],
+    },
+    {
+        "filename": "test.pdf",
+        "chunk_index": 2,
+        "text": "Third chunk of text.",
+        "num_tokens": 5,
+        "headings": ["Safety, Security", "Conclusion"],
+        "doc_items": ["#/texts/2"],
+        "page_numbers": [2, 3],
+    },
+]
 
 
 class TestDoclingServeFileProcessor:
     @pytest.fixture
     def config(self) -> DoclingServeFileProcessorConfig:
         return DoclingServeFileProcessorConfig(
-            base_url="http://localhost:5001/v1",
+            base_url="http://localhost:5001",
             default_chunk_size_tokens=512,
+            mode="sync",
+        )
+
+    @pytest.fixture
+    def config_async(self) -> DoclingServeFileProcessorConfig:
+        return DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            default_chunk_size_tokens=512,
+            mode="async",
         )
 
     @pytest.fixture
     def config_with_api_key(self) -> DoclingServeFileProcessorConfig:
         return DoclingServeFileProcessorConfig(
-            base_url="http://localhost:5001/v1",
+            base_url="http://localhost:5001",
             api_key=SecretStr("test-secret-key"),
+            mode="sync",
         )
 
     @pytest.fixture
@@ -87,7 +141,7 @@ class TestDoclingServeFileProcessor:
         with pytest.raises(ValueError, match="Cannot provide both file and file_id"):
             await processor.process_file(request, file=upload_file)
 
-    # -- convert (no chunking) --
+    # -- convert (no chunking) - sync mode --
 
     async def test_process_file_no_chunking(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest()
@@ -98,13 +152,14 @@ class TestDoclingServeFileProcessor:
 
         mock_post.assert_called_once()
         call_kwargs = mock_post.call_args
-        assert "/convert/file" in call_kwargs.args[0]
+        assert "/v1/convert/file" in call_kwargs.args[0]
         assert call_kwargs.kwargs["files"]["files"][0] == "test.pdf"
 
         assert len(response.chunks) == 1
         assert response.chunks[0].content == CONVERT_RESPONSE["document"]["md_content"]
         assert response.metadata["processor"] == "docling-serve"
         assert response.metadata["extraction_method"] == "docling-serve"
+        assert response.metadata["conversion_method"] == "sync"
         assert "processing_time_ms" in response.metadata
         assert response.metadata["file_size_bytes"] == len(b"%PDF-fake-content")
 
@@ -120,18 +175,22 @@ class TestDoclingServeFileProcessor:
         assert len(response.chunks) == 0
         assert response.metadata["processor"] == "docling-serve"
 
-    # -- chunk (with chunking strategy) --
+    # -- chunk (with chunking strategy) - sync mode --
 
     async def test_process_file_auto_chunking(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
-        mock_response = _make_httpx_response(CHUNK_RESPONSE)
+        mock_response = _make_httpx_chunk_response(CHUNK_RESPONSE)
 
         with patch("httpx.AsyncClient.post", return_value=mock_response) as mock_post:
             response = await processor.process_file(request, file=upload_file)
 
         call_kwargs = mock_post.call_args
-        assert "/chunk/hybrid/file" in call_kwargs.args[0]
-        assert call_kwargs.kwargs["data"]["chunking_max_tokens"] == "512"
+        assert "/v1/convert/file" in call_kwargs.args[0]
+        assert call_kwargs.kwargs["data"]["to_formats"] == ["chunks"]
+        chunking_options = json.loads(call_kwargs.kwargs["data"]["chunking_options"])
+        assert chunking_options["max_tokens"] == 512
+        assert chunking_options["use_markdown_tables"] is False
+        assert call_kwargs.kwargs["data"]["target_type"] == "zip"
 
         assert len(response.chunks) == 3
         assert response.chunks[0].content == "First chunk of text."
@@ -141,33 +200,89 @@ class TestDoclingServeFileProcessor:
     async def test_process_file_static_chunking(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         static_config = VectorStoreChunkingStrategyStaticConfig(max_chunk_size_tokens=256)
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyStatic(static=static_config))
-        mock_response = _make_httpx_response(CHUNK_RESPONSE)
+        mock_response = _make_httpx_chunk_response(CHUNK_RESPONSE)
 
         with patch("httpx.AsyncClient.post", return_value=mock_response) as mock_post:
             response = await processor.process_file(request, file=upload_file)
 
         call_kwargs = mock_post.call_args
-        assert "/chunk/hybrid/file" in call_kwargs.args[0]
-        assert call_kwargs.kwargs["data"]["chunking_max_tokens"] == "256"
+        chunking_options = json.loads(call_kwargs.kwargs["data"]["chunking_options"])
+        assert chunking_options["max_tokens"] == 256
         assert len(response.chunks) == 3
+
+    async def test_process_file_markdown_table_chunking(self, files_api: AsyncMock, upload_file: UploadFile):
+        config = DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            mode="sync",
+        )
+        processor = DoclingServeFileProcessor(config, files_api=files_api)
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyAuto(),
+            options={"use_markdown_tables": True},
+        )
+
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)) as mock_post:
+            await processor.process_file(request, file=upload_file)
+
+        chunking_options = json.loads(mock_post.call_args.kwargs["data"]["chunking_options"])
+        assert chunking_options["use_markdown_tables"] is True
+
+    async def test_process_file_rejects_non_boolean_markdown_table_option(
+        self, processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyAuto(),
+            options={"use_markdown_tables": "true"},
+        )
+
+        with pytest.raises(InvalidParameterError, match="options.use_markdown_tables"):
+            await processor.process_file(request, file=upload_file)
 
     async def test_chunking_empty_response(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response({"chunks": []})):
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response([])):
             response = await processor.process_file(request, file=upload_file)
 
         assert len(response.chunks) == 0
 
     async def test_chunking_skips_blank_chunks(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
-        body = {"chunks": [{"text": "real text", "meta": {}}, {"text": "   ", "meta": {}}, {"text": "", "meta": {}}]}
+        body = [
+            {"filename": "test.pdf", "chunk_index": 0, "text": "real text", "doc_items": []},
+            {"filename": "test.pdf", "chunk_index": 1, "text": "   ", "doc_items": []},
+            {"filename": "test.pdf", "chunk_index": 2, "text": "", "doc_items": []},
+        ]
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(body)):
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(body)):
             response = await processor.process_file(request, file=upload_file)
 
         assert len(response.chunks) == 1
         assert response.chunks[0].content == "real text"
+
+    @pytest.mark.parametrize(("num_tokens", "expected"), [(0, 0), (None, 3)])
+    async def test_chunk_token_count_falls_back_only_when_missing(
+        self,
+        processor: DoclingServeFileProcessor,
+        upload_file: UploadFile,
+        num_tokens: int | None,
+        expected: int,
+    ):
+        request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
+        body = [
+            {
+                "filename": "test.pdf",
+                "chunk_index": 0,
+                "text": "three token words",
+                "num_tokens": num_tokens,
+                "doc_items": [],
+            }
+        ]
+
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(body)):
+            response = await processor.process_file(request, file=upload_file)
+
+        assert response.chunks[0].chunk_metadata.content_token_count == expected
 
     # -- chunk metadata mapping --
 
@@ -188,26 +303,29 @@ class TestDoclingServeFileProcessor:
     async def test_chunk_id_uniqueness(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CHUNK_RESPONSE)):
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
         ids = [c.chunk_id for c in response.chunks]
         assert len(ids) == len(set(ids))
 
-    async def test_headings_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
+    async def test_structural_metadata_propagated(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CHUNK_RESPONSE)):
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
-        assert response.chunks[0].metadata["headings"] == ["Introduction"]
+        assert response.chunks[0].metadata["headings"] == "Introduction"
+        assert response.chunks[0].metadata["page_numbers"] == "1"
         assert "headings" not in response.chunks[1].metadata
-        assert response.chunks[2].metadata["headings"] == ["Conclusion"]
+        assert "page_numbers" not in response.chunks[1].metadata
+        assert response.chunks[2].metadata["headings"] == "Safety, Security > Conclusion"
+        assert response.chunks[2].metadata["page_numbers"] == "2, 3"
 
     async def test_chunk_window_set(self, processor: DoclingServeFileProcessor, upload_file: UploadFile):
         request = ProcessFileRequest(chunking_strategy=VectorStoreChunkingStrategyAuto())
 
-        with patch("httpx.AsyncClient.post", return_value=_make_httpx_response(CHUNK_RESPONSE)):
+        with patch("httpx.AsyncClient.post", return_value=_make_httpx_chunk_response(CHUNK_RESPONSE)):
             response = await processor.process_file(request, file=upload_file)
 
         for i, chunk in enumerate(response.chunks):
@@ -284,15 +402,215 @@ class TestDoclingServeFileProcessor:
         sent_files = mock_post.call_args.kwargs["files"]["files"]
         assert sent_files[2] == "application/octet-stream"
 
+    # -- async mode tests --
+
+    async def test_auto_mode_falls_back_to_sync(self, files_api: AsyncMock, upload_file: UploadFile):
+        """Test that mode='auto' gracefully falls back to sync when async is unavailable."""
+        # Use auto mode for fallback behavior
+        config_auto = DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            mode="auto",
+        )
+        processor = DoclingServeFileProcessor(config_auto, files_api=files_api)
+        request = ProcessFileRequest()
+
+        # Mock SDK to raise network exception
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+
+        sync_response = _make_httpx_response(CONVERT_RESPONSE)
+
+        with (
+            patch(
+                "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient",
+                return_value=mock_client,
+            ),
+            patch("httpx.AsyncClient.post", return_value=sync_response) as mock_post,
+        ):
+            response = await processor.process_file(request, file=upload_file)
+
+        # Verify sync endpoint was called after async failed
+        mock_post.assert_called_once()
+        assert "/v1/convert/file" in mock_post.call_args.args[0]
+
+        # Verify we got content from sync fallback
+        assert len(response.chunks) == 1
+        assert response.chunks[0].content == CONVERT_RESPONSE["document"]["md_content"]
+        assert response.metadata["conversion_method"] == "sync"
+
 
 class TestDoclingServeFileProcessorConfig:
     def test_default_values(self):
         config = DoclingServeFileProcessorConfig()
-        assert config.base_url == "http://localhost:5001/v1"
+        assert config.base_url == "http://localhost:5001"
         assert config.api_key is None
         assert config.default_chunk_size_tokens >= 100
+        assert config.mode == "async"
 
     def test_sample_run_config(self):
         sample = DoclingServeFileProcessorConfig.sample_run_config()
         assert "base_url" in sample
         assert "api_key" in sample
+        assert set(sample) == {"base_url", "api_key", "mode"}
+
+
+class TestIBMSaaSCompatibility:
+    """Tests for IBM Docling SaaS specific behavior."""
+
+    @pytest.fixture
+    def ibm_saas_config(self) -> DoclingServeFileProcessorConfig:
+        """Config pointing to IBM SaaS endpoint."""
+        return DoclingServeFileProcessorConfig(
+            base_url="https://api.aws-c1.dcls.saas.ibm.com/test-instance",
+            api_key=SecretStr("test-api-key"),
+            mode="async",
+        )
+
+    @pytest.fixture
+    def files_api(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def ibm_processor(
+        self, ibm_saas_config: DoclingServeFileProcessorConfig, files_api: AsyncMock
+    ) -> DoclingServeFileProcessor:
+        return DoclingServeFileProcessor(ibm_saas_config, files_api=files_api)
+
+    @pytest.fixture
+    def upload_file(self) -> UploadFile:
+        return UploadFile(file=io.BytesIO(b"%PDF-fake-content"), filename="test.pdf")
+
+    async def test_ibm_saas_blocks_chunking_with_clear_error(
+        self, ibm_processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        """IBM SaaS should reject chunking requests with a clear error message."""
+        from ogx_api.common.errors import InvalidParameterError
+
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyStatic(
+                static=VectorStoreChunkingStrategyStaticConfig(max_chunk_size_tokens=512)
+            )
+        )
+
+        # Mock AsyncDoclingServiceClient to simulate IBM SaaS 405 error
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient"
+        ) as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            # Mock submit() raising 405 (Method Not Allowed)
+            mock_response = AsyncMock()
+            mock_response.status_code = 405
+            mock_error = httpx.HTTPStatusError("Method Not Allowed", request=AsyncMock(), response=mock_response)
+            mock_instance.submit.side_effect = mock_error
+
+            with pytest.raises(InvalidParameterError) as exc_info:
+                await ibm_processor.process_file(request, file=upload_file)
+
+        error_msg = str(exc_info.value)
+        assert "chunking_strategy" in error_msg
+        assert "not supported" in error_msg
+        assert "remove 'chunking_strategy'" in error_msg
+
+    async def test_ibm_saas_allows_conversion_without_chunking(
+        self, ibm_processor: DoclingServeFileProcessor, upload_file: UploadFile
+    ):
+        """IBM SaaS should allow conversion without chunking."""
+
+        # Should NOT raise for conversion without chunking
+        request = ProcessFileRequest()
+
+        # Mock AsyncDoclingServiceClient to avoid actual API calls
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient"
+        ) as mock_client:
+            # Mock the async context manager
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            # Mock submit() returning a job
+            mock_job = AsyncMock()
+            mock_instance.submit.return_value = mock_job
+
+            # Mock job.result() returning presigned URL response (IBM SaaS format)
+            mock_result = SimpleNamespace(
+                documents=[SimpleNamespace(artifacts=[SimpleNamespace(uri="https://s3.amazonaws.com/test.md")])]
+            )
+            mock_job.result.return_value = mock_result
+
+            # Mock httpx download of presigned URL
+            with patch("httpx.AsyncClient") as mock_http:
+                mock_http_instance = AsyncMock()
+                mock_http.return_value.__aenter__.return_value = mock_http_instance
+
+                mock_response = AsyncMock()
+                mock_response.text = "# Test Document\n\nContent here."
+                mock_response.raise_for_status = MagicMock()
+                mock_http_instance.get.return_value = mock_response
+
+                # This should NOT raise InvalidParameterError
+                result = await ibm_processor.process_file(request, file=upload_file)
+
+                assert result.chunks is not None
+                assert len(result.chunks) > 0
+                assert result.metadata["conversion_method"] == "async"
+                source = mock_instance.submit.await_args.kwargs["source"]
+                assert isinstance(source, DocumentStream)
+                assert source.name == "test.pdf"
+                assert source.stream.getvalue() == b"%PDF-fake-content"
+
+    @pytest.mark.parametrize("use_markdown_tables", [False, True])
+    async def test_local_docker_allows_chunking(self, upload_file: UploadFile, use_markdown_tables: bool):
+        """Local docling-serve should allow chunking (successful response)."""
+        # Local config
+        local_config = DoclingServeFileProcessorConfig(
+            base_url="http://localhost:5001",
+            mode="async",
+        )
+        processor = DoclingServeFileProcessor(local_config, files_api=AsyncMock())
+
+        request = ProcessFileRequest(
+            chunking_strategy=VectorStoreChunkingStrategyStatic(
+                static=VectorStoreChunkingStrategyStaticConfig(max_chunk_size_tokens=512)
+            ),
+            options={"use_markdown_tables": use_markdown_tables},
+        )
+
+        # Mock AsyncDoclingServiceClient to simulate successful chunking
+        with patch(
+            "ogx.providers.remote.file_processor.docling_serve.docling_serve.AsyncDoclingServiceClient"
+        ) as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_instance
+
+            # Mock submit() returning a successful conversion job
+            mock_job = AsyncMock()
+            mock_job.result.return_value = RawServiceResult(
+                content=_make_chunk_archive(CHUNK_RESPONSE),
+                content_type="application/zip",
+                filename="converted_docs.zip",
+            )
+            mock_instance.submit.return_value = mock_job
+
+            # Should succeed without raising InvalidParameterError
+            result = await processor.process_file(request, file=upload_file)
+
+            submit_kwargs = mock_instance.submit.await_args.kwargs
+            source = submit_kwargs["source"]
+            assert isinstance(source, DocumentStream)
+            assert source.name == "test.pdf"
+            assert source.stream.getvalue() == b"%PDF-fake-content"
+            options = submit_kwargs["options"]
+            assert isinstance(options, ConvertDocumentsOptions)
+            assert options.to_formats == ["chunks"]
+            assert isinstance(options.chunking_options, HybridChunkerOptions)
+            assert options.chunking_options.max_tokens == 512
+            assert options.chunking_options.use_markdown_tables is use_markdown_tables
+            assert isinstance(submit_kwargs["target"], ZipTarget)
+        assert result.chunks is not None
+        assert len(result.chunks) > 0
+        assert result.chunks[0].metadata["headings"] == "Introduction"
+        assert result.chunks[0].metadata["page_numbers"] == "1"
+        assert result.metadata["conversion_method"] == "async"

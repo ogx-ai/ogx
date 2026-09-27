@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthClient } from "@/hooks/use-auth-client";
-import { ContentsAPI, VectorStoreContentItem } from "@/lib/contents-api";
+import {
+  ContentsAPI,
+  VectorStoreContent,
+  VectorStoreContentItem,
+} from "@/lib/contents-api";
 import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
 import type { VectorStoreFile } from "ogx-client/resources/vector-stores/files";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,7 +43,7 @@ export default function ContentsListPage() {
   const fileId = params.fileId as string;
   const client = useAuthClient();
 
-  const getTextFromContent = (content: unknown): string => {
+  const getTextFromContent = (content: VectorStoreContent | string): string => {
     if (typeof content === "string") {
       return content;
     } else if (content && content.type === "text") {
@@ -164,7 +168,7 @@ export default function ContentsListPage() {
     );
   }
   if (isLoadingStore) {
-    return <DetailLoadingView title={title} />;
+    return <DetailLoadingView />;
   }
   if (!store) {
     return <DetailNotFoundView title={title} id={vectorStoreId} />;
@@ -255,7 +259,7 @@ export default function ContentsListPage() {
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
                       {content.metadata.chunk_window
-                        ? content.metadata.chunk_window
+                        ? (content.metadata.chunk_window as string)
                         : `${content.metadata.content_length || 0} chars`}
                     </TableCell>
                     <TableCell className="text-xs">
@@ -331,7 +335,7 @@ export default function ContentsListPage() {
           <PropertyItem label="Store Name" value={store.name || ""} />
           <PropertyItem
             label="Provider ID"
-            value={(store.metadata.provider_id as string) || ""}
+            value={(store.metadata?.provider_id as string) || ""}
           />
         </>
       )}

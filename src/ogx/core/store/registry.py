@@ -6,6 +6,7 @@
 
 import asyncio
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Protocol
 
@@ -27,8 +28,6 @@ class DistributionRegistry(Protocol):
     async def initialize(self) -> None: ...
 
     async def get(self, type: str, identifier: str) -> RoutableObjectWithProvider | None: ...
-
-    def get_cached(self, type: str, identifier: str) -> RoutableObjectWithProvider | None: ...
 
     async def update(self, obj: RoutableObjectWithProvider) -> RoutableObjectWithProvider: ...
 
@@ -53,7 +52,7 @@ def _parse_registry_values(values: list[str]) -> list[RoutableObjectWithProvider
     all_objects = []
     for value in values:
         try:
-            obj = pydantic.TypeAdapter(RoutableObjectWithProvider).validate_json(value)
+            obj: RoutableObjectWithProvider = pydantic.TypeAdapter(RoutableObjectWithProvider).validate_json(value)
             all_objects.append(obj)
         except pydantic.ValidationError as e:
             logger.error("Error parsing registry value", raw_value=value, error=str(e))
@@ -70,10 +69,6 @@ class DiskDistributionRegistry(DistributionRegistry):
 
     async def initialize(self) -> None:
         pass
-
-    def get_cached(self, type: str, identifier: str) -> RoutableObjectWithProvider | None:
-        # Disk registry does not have a cache
-        raise NotImplementedError("Disk registry does not have a cache")
 
     async def get_all(self) -> list[RoutableObjectWithProvider]:
         start_key, end_key = _get_registry_key_range()
@@ -153,7 +148,7 @@ class CachedDiskDistributionRegistry(DiskDistributionRegistry):
         self._last_refresh_time = 0.0
 
     @asynccontextmanager
-    async def _locked_cache(self):
+    async def _locked_cache(self) -> AsyncIterator[dict[tuple[str, str], RoutableObjectWithProvider]]:
         """Context manager for safely accessing the cache with a lock."""
         async with self._cache_lock:
             yield self.cache
@@ -180,9 +175,6 @@ class CachedDiskDistributionRegistry(DiskDistributionRegistry):
 
     async def initialize(self) -> None:
         await self._ensure_initialized()
-
-    def get_cached(self, type: str, identifier: str) -> RoutableObjectWithProvider | None:
-        return self.cache.get((type, identifier), None)
 
     def _should_refresh_cache(self) -> bool:
         """Check if cache should be refreshed based on TTL."""
@@ -237,10 +229,10 @@ class CachedDiskDistributionRegistry(DiskDistributionRegistry):
 
     async def register(self, obj: RoutableObjectWithProvider) -> bool:
         await self._ensure_initialized()
-        # Use super().get() (DB read) rather than self.get_cached() so that in
-        # multi-worker deployments, where each process has its own in-memory
-        # cache, we always read the authoritative stored object regardless of
-        # whether this worker's cache was warmed by _ensure_initialized().
+        # Read from disk (not cache) to handle multi-worker scenarios where
+        # each process has its own in-memory cache. This ensures we always
+        # get the authoritative stored object regardless of whether this
+        # worker's cache was warmed by _ensure_initialized().
         existing_obj = await super().get(obj.type, obj.identifier)
         success = await super().register(obj)
 

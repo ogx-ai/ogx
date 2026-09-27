@@ -56,7 +56,7 @@ jobs:
         run: |
           uv run --no-sync ogx stack run \
             --providers "file_processors=inline::docling,files=inline::localfs" \
-            --port 8321 &
+            --port 8321 --insecure &
           # Wait for server to be ready
           for i in $(seq 1 60); do
             if curl -sf http://localhost:8321/v1/health > /dev/null 2>&1; then

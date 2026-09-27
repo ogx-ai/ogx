@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Iterable
 
 import aiohttp
 
@@ -15,10 +15,13 @@ from ogx_api import (
     Model,
     ModelType,
     OpenAIChatCompletionContentPartTextParam,
+    OpenAIChatCompletionRequestWithExtraBody,
+    OpenAIChatCompletionWithReasoning,
     RerankData,
     RerankResponse,
 )
 from ogx_api.inference import RerankRequest
+from ogx_api.inference.models import OpenAIChatCompletionChunkWithReasoning
 
 from . import NVIDIAConfig
 from .utils import _is_nvidia_hosted
@@ -54,7 +57,12 @@ class NVIDIAInferenceAdapter(OpenAIMixin):
                     "API key is required for hosted NVIDIA NIM. Either provide an API key or use a self-hosted NIM."
                 )
 
-    def get_api_key(self) -> str:
+    async def openai_chat_completions_with_reasoning(
+        self, params: OpenAIChatCompletionRequestWithExtraBody
+    ) -> OpenAIChatCompletionWithReasoning | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
+        raise NotImplementedError("openai_chat_completions_with_reasoning is not implemented")
+
+    def get_api_key(self) -> str | None:
         """
         Get the API key for OpenAI mixin.
 
@@ -83,8 +91,15 @@ class NVIDIAInferenceAdapter(OpenAIMixin):
         dynamic_ids: Iterable[str] = []
         try:
             dynamic_ids = await super().list_provider_model_ids()
-        except Exception:
-            # If the dynamic listing fails, proceed with just configured rerank IDs
+        except Exception as e:
+            # Proceed with just the configured rerank IDs, but surface the failure so a
+            # misconfiguration (e.g. missing or invalid API key) is not silently reduced
+            # to an empty model list.
+            logger.warning(
+                "Failed to list dynamic models from NVIDIA endpoint; returning only configured rerank models",
+                base_url=str(self.config.base_url),
+                error=str(e),
+            )
             dynamic_ids = []
 
         configured_rerank_ids = list(self.config.rerank_model_to_url.keys())
@@ -96,7 +111,7 @@ class NVIDIAInferenceAdapter(OpenAIMixin):
         """
         if identifier in self.config.rerank_model_to_url:
             return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
+                provider_id=self.__provider_id__,
                 provider_resource_id=identifier,
                 identifier=identifier,
                 model_type=ModelType.rerank,

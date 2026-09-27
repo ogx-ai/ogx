@@ -52,8 +52,14 @@ describe("ContentsListPage", () => {
     id: "vs_123",
     name: "Test Vector Store",
     created_at: 1710000000,
-    status: "ready",
-    file_counts: { total: 5 },
+    status: "completed",
+    file_counts: {
+      total: 5,
+      completed: 5,
+      cancelled: 0,
+      failed: 0,
+      in_progress: 0,
+    },
     usage_bytes: 1024,
     metadata: {
       provider_id: "test_provider",
@@ -65,14 +71,20 @@ describe("ContentsListPage", () => {
     status: "completed",
     created_at: 1710001000,
     usage_bytes: 512,
-    chunking_strategy: { type: "fixed_size" },
+    vector_store_id: "vs_123",
+    chunking_strategy: { static: {}, type: "static" },
   };
 
   const mockContents: VectorStoreContentItem[] = [
     {
       id: "content_1",
       object: "vector_store.content",
-      content: "First piece of content for testing.",
+      vector_store_id: "vs_123",
+      file_id: "file_456",
+      content: {
+        text: "First piece of content for testing.",
+        type: "text",
+      },
       embedding: [0.1, 0.2, 0.3, 0.4, 0.5],
       metadata: {
         chunk_window: "0-35",
@@ -83,8 +95,12 @@ describe("ContentsListPage", () => {
     {
       id: "content_2",
       object: "vector_store.content",
-      content:
-        "Second piece of content with longer text for testing truncation and display.",
+      vector_store_id: "vs_123",
+      file_id: "file_456",
+      content: {
+        text: "Second piece of content with longer text for testing truncation and display.",
+        type: "text",
+      },
       embedding: [0.6, 0.7, 0.8],
       metadata: {
         chunk_window: "36-95",
@@ -95,7 +111,12 @@ describe("ContentsListPage", () => {
     {
       id: "content_3",
       object: "vector_store.content",
-      content: "Third content without embedding.",
+      vector_store_id: "vs_123",
+      file_id: "file_456",
+      content: {
+        text: "Third content without embedding.",
+        type: "text",
+      },
       embedding: undefined,
       metadata: {
         content_length: 33,
@@ -414,7 +435,7 @@ describe("ContentsListPage", () => {
 
         expect(screen.getByText("completed")).toBeInTheDocument();
         expect(screen.getByText("512")).toBeInTheDocument();
-        expect(screen.getByText("fixed_size")).toBeInTheDocument();
+        expect(screen.getByText("static")).toBeInTheDocument();
         expect(screen.getByText("test_provider")).toBeInTheDocument();
       });
     });

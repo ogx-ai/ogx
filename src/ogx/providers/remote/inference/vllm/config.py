@@ -10,8 +10,10 @@ from pathlib import Path
 from pydantic import Field, HttpUrl, SecretStr, model_validator
 
 from ogx.providers.utils.inference.model_registry import (
-    NetworkConfig,
     RemoteInferenceProviderConfig,
+)
+from ogx.providers.utils.inference.network_config import (
+    NetworkConfig,
     TLSConfig,
 )
 from ogx_api import json_schema_type

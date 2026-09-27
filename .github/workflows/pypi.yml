@@ -5,7 +5,7 @@
 # This workflow builds, tests, and publishes all ogx packages:
 # - ogx (PyPI)
 # - ogx-api (PyPI)
-# - ogx-client-python (PyPI, from external repo)
+# - ogx-client (PyPI, OpenAPI-generated SDK)
 # - ogx-client-typescript (npm, from external repo)
 #
 # =============================================================================
@@ -70,9 +70,9 @@
 #   which were published under the old package name. The CLI binary and home
 #   directory are derived automatically ("llama-stack" -> "llama"/".llama").
 #
-# skip_latest: When true, production image builds are tagged only with the
-#   version and not also as "latest". Use when backfilling an older release so
-#   it does not become the default image users pull.
+# skip_latest: When true, production images receive only their version tag and
+#   npm clients use release-X.Y instead of latest. Use when backfilling an older
+#   release. Release events also compare against GitHub's latest stable version.
 #
 # =============================================================================
 
@@ -135,7 +135,7 @@ on:
         type: string
         default: 'ogx'
       skip_latest:
-        description: 'Do not also tag/push images as "latest". Use when backfilling an older release so it does not become the default pull.'
+        description: 'Keep Docker and npm latest tags unchanged when backfilling an older release.'
         required: false
         type: boolean
         default: false
@@ -170,7 +170,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -225,11 +225,12 @@ jobs:
             path: .
             type: local
             registry: pypi
-          # External packages (client SDKs from other repos)
-          - package: ogx-client-python
-            repo: ogx-ai/ogx-client-python
-            type: external
+          # OpenAPI-generated SDK (built from spec in this repo)
+          - package: ogx-client
+            path: client-sdks/openapi
+            type: openapi-sdk
             registry: pypi
+          # External packages (client SDKs from other repos)
           - package: ogx-client-typescript
             repo: ogx-ai/ogx-client-typescript
             type: external
@@ -241,6 +242,8 @@ jobs:
         id: should-build
         run: |
           PACKAGES="${{ inputs.packages || 'all' }}"
+          # Clients are published before preparation locks the server to their exact version.
+          if [ "${{ github.event_name }}" == "release" ]; then PACKAGES="ogx-only"; fi
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
@@ -248,7 +251,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "ogx-only" ] && [ "$TYPE" == "local" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "clients-only" ] && [ "$TYPE" == "external" ]; then
+          elif [ "$PACKAGES" == "clients-only" ] && { [ "$TYPE" == "external" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           else
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -257,13 +260,13 @@ jobs:
 
       # === LOCAL PACKAGE STEPS ===
       - name: Checkout local repo
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # for setuptools-scm
 
       - name: Install dependent PRs if needed
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
         uses: depends-on/depends-on-action@826c144163ac67bf08347590a5f81afd45da63ca # main
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -309,7 +312,7 @@ jobs:
       # === PYTHON SETUP (for all Python packages) ===
       - name: Set up Python
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'pypi'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
 
@@ -350,76 +353,68 @@ jobs:
         env:
           SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.compute-version.outputs.version }}
 
+      # === OPENAPI SDK BUILD (ogx-client) ===
+      - name: Set up Java (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Set up Node.js (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '20'
+
+      - name: Install openapi-generator-cli (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        # Wrapper version intentionally not pinned: the generator JAR version that
+        # determines SDK output is pinned in client-sdks/openapi/openapitools.json.
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      # Cache the generator JAR (downloaded from Maven Central on first use) to
+      # avoid repeated large downloads and rate-limit (HTTP 429) failures in CI.
+      # The key tracks openapitools.json so the cache invalidates when the pinned
+      # generator version changes.
+      - name: Cache openapi-generator JAR (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.openapi-generator
+          key: openapi-generator-${{ runner.os }}-${{ hashFiles('client-sdks/openapi/openapitools.json') }}
+
+      - name: Generate and build OpenAPI SDK
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        working-directory: ${{ matrix.path }}
+        run: |
+          VERSION="${{ needs.compute-version.outputs.version }}"
+          echo "Generating SDK (ogx_client) at version ${VERSION}..."
+          make sdk VERSION="${VERSION}"
+
+          cd sdks/python
+          echo "Building Python package..."
+          uv build --out-dir ../../dist --no-build-isolation
+
+      - name: Verify OpenAPI SDK generation
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        working-directory: ${{ matrix.path }}
+        run: |
+          PY_FILE_COUNT=$(find sdks/python -name "*.py" | wc -l)
+          echo "Generated Python files: $PY_FILE_COUNT"
+          if [ "$PY_FILE_COUNT" -le 10 ]; then
+            echo "::error::Too few Python files generated (expected > 10, got $PY_FILE_COUNT)"
+            exit 1
+          fi
+          echo "SDK generated successfully"
+
       # === EXTERNAL PYTHON PACKAGE BUILD ===
-      - name: Check and bump version if exists on PyPI
+      - name: Set external Python package version
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external' && matrix.registry == 'pypi'
         id: version-check
-        run: |
-          BASE_VERSION="${{ needs.compute-version.outputs.version }}"
-          MATRIX_PACKAGE="${{ matrix.package }}"
-
-          # Map matrix package name to actual PyPI package name
-          if [ "$MATRIX_PACKAGE" == "ogx-client-python" ]; then
-            PACKAGE="ogx-client"
-          else
-            PACKAGE="$MATRIX_PACKAGE"
-          fi
-
-          # Function to check if version exists on PyPI
-          check_version_exists() {
-            local pkg=$1
-            local ver=$2
-            if curl -sf "https://pypi.org/pypi/${pkg}/${ver}/json" -o /dev/null 2>&1; then
-              return 0  # exists
-            else
-              return 1  # does not exist
-            fi
-          }
-
-          # Start with the base version and increment patch if needed
-          VERSION="$BASE_VERSION"
-
-          # Only check/bump for non-dev versions (production releases)
-          if [[ ! "$VERSION" =~ \.dev ]]; then
-            echo "Checking if ${PACKAGE} ${VERSION} exists on PyPI..."
-
-            # Parse version components
-            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-              SUFFIX="${BASH_REMATCH[4]}"
-
-              # Keep incrementing patch version until we find one that doesn't exist
-              MAX_ATTEMPTS=10
-              ATTEMPT=0
-              while check_version_exists "$PACKAGE" "$VERSION"; do
-                ATTEMPT=$((ATTEMPT + 1))
-                if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-                  echo "::error::Reached maximum attempts ($MAX_ATTEMPTS) trying to find unused version"
-                  exit 1
-                fi
-
-                echo "Version ${VERSION} already exists on PyPI, trying next patch version..."
-                PATCH=$((PATCH + 1))
-                VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
-                echo "Checking ${VERSION}..."
-              done
-
-              if [ "$VERSION" != "$BASE_VERSION" ]; then
-                echo "::notice::Bumped ${MATRIX_PACKAGE} (PyPI: ${PACKAGE}) version from ${BASE_VERSION} to ${VERSION} (already existed on PyPI)"
-              else
-                echo "Version ${VERSION} is available on PyPI for ${PACKAGE}"
-              fi
-            else
-              echo "::warning::Could not parse version ${VERSION}, using as-is"
-            fi
-          else
-            echo "Dev version detected (${VERSION}), skipping PyPI check"
-          fi
-
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Final version: ${VERSION}"
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
+        run: echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Build external Python package
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external' && matrix.registry == 'pypi'
@@ -438,76 +433,14 @@ jobs:
           python -m build --outdir dist
 
       # === NPM PACKAGE BUILD ===
-      - name: Check and bump npm version if exists
+      - name: Set npm package version
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
         id: npm-version-check
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
         run: |
-          BASE_VERSION="${{ needs.compute-version.outputs.version }}"
-          MATRIX_PACKAGE="${{ matrix.package }}"
-
-          # Map matrix package name to actual npm package name
-          if [ "$MATRIX_PACKAGE" == "ogx-client-typescript" ]; then
-            PACKAGE="ogx-client"
-          else
-            PACKAGE="$MATRIX_PACKAGE"
-          fi
-
-          # Convert PEP 440 dev version to valid semver for npm
-          # e.g. 0.4.5.dev20260202 -> 0.4.5-dev.20260202
-          VERSION="${BASE_VERSION/.dev/-dev.}"
-
-          # Function to check if version exists on npm using registry API
-          check_npm_version_exists() {
-            local pkg=$1
-            local ver=$2
-            if curl -sf "https://registry.npmjs.org/${pkg}/${ver}" -o /dev/null 2>&1; then
-              return 0  # exists
-            else
-              return 1  # does not exist
-            fi
-          }
-
-          # Only check/bump for non-dev versions (production releases)
-          if [[ ! "$VERSION" =~ -dev\. ]]; then
-            echo "Checking if ${PACKAGE} ${VERSION} exists on npm..."
-
-            # Parse version components (semver format)
-            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-              SUFFIX="${BASH_REMATCH[4]}"
-
-              # Keep incrementing patch version until we find one that doesn't exist
-              MAX_ATTEMPTS=10
-              ATTEMPT=0
-              while check_npm_version_exists "$PACKAGE" "$VERSION"; do
-                ATTEMPT=$((ATTEMPT + 1))
-                if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-                  echo "::error::Reached maximum attempts ($MAX_ATTEMPTS) trying to find unused version"
-                  exit 1
-                fi
-
-                echo "Version ${VERSION} already exists on npm, trying next patch version..."
-                PATCH=$((PATCH + 1))
-                VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
-                echo "Checking ${VERSION}..."
-              done
-
-              if [ "$VERSION" != "${BASE_VERSION/.dev/-dev.}" ]; then
-                echo "::notice::Bumped ${MATRIX_PACKAGE} (npm: ${PACKAGE}) version from ${BASE_VERSION/.dev/-dev.} to ${VERSION} (already existed on npm)"
-              else
-                echo "Version ${VERSION} is available on npm for ${PACKAGE}"
-              fi
-            else
-              echo "::warning::Could not parse version ${VERSION}, using as-is"
-            fi
-          else
-            echo "Dev version detected (${VERSION}), skipping npm check"
-          fi
-
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Final version: ${VERSION}"
+          # Translate PEP 440 development versions to npm semver without changing the release.
+          echo "version=${VERSION/.dev/-dev.}" >> "$GITHUB_OUTPUT"
 
       - name: Build TypeScript package
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
@@ -515,7 +448,7 @@ jobs:
         run: |
           NPM_VERSION="${{ steps.npm-version-check.outputs.version }}"
           echo "Setting version to $NPM_VERSION"
-          npm version "$NPM_VERSION" --no-git-tag-version
+          npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version
           npm install
           npm run build
 
@@ -525,7 +458,7 @@ jobs:
         run: uv pip install --system twine check-wheel-contents
 
       - name: Check wheel contents (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local' && matrix.registry == 'pypi'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk') && matrix.registry == 'pypi'
         run: check-wheel-contents --ignore W002,W004 ${{ matrix.path }}/dist/*.whl
 
       - name: Check wheel contents (external)
@@ -533,7 +466,7 @@ jobs:
         run: check-wheel-contents --ignore W002,W004 external-repo/dist/*.whl
 
       - name: Validate package with twine (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local' && matrix.registry == 'pypi'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk') && matrix.registry == 'pypi'
         run: twine check ${{ matrix.path }}/dist/*
 
       - name: Validate package with twine (external)
@@ -542,7 +475,7 @@ jobs:
 
       # === LIST AND UPLOAD ARTIFACTS ===
       - name: List dist contents (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
         run: ls -la ${{ matrix.path }}/dist/
 
       - name: List dist contents (external Python)
@@ -559,7 +492,7 @@ jobs:
           ls -la dist/
 
       - name: Upload artifacts (local)
-        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'local'
+        if: steps.should-build.outputs.skip != 'true' && (matrix.type == 'local' || matrix.type == 'openapi-sdk')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Packages-${{ matrix.package }}
@@ -611,20 +544,20 @@ jobs:
           path: dist-stack
         continue-on-error: true
 
-      - name: Download ogx-client-python artifacts
-        id: download-client-python
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: Packages-ogx-client-python
-          path: dist-client-python
-        continue-on-error: true
-
       - name: Download ogx-client-typescript artifacts
         id: download-client-ts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: Packages-ogx-client-typescript
           path: dist-client-ts
+        continue-on-error: true
+
+      - name: Download ogx-client artifacts (OpenAPI SDK)
+        id: download-client-python
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: Packages-ogx-client
+          path: dist-client-python
         continue-on-error: true
 
       - name: Create venv and install Python packages
@@ -700,7 +633,7 @@ jobs:
           fi
 
   # Publish packages to PyPI/npm
-  # Order: ogx-client-python, ogx-client-typescript, ogx-api, ogx
+  # Order: ogx-client-typescript, ogx-client, ogx-api, ogx
   publish-packages:
     name: Publish ${{ matrix.package }}
     if: |
@@ -715,18 +648,18 @@ jobs:
       id-token: write  # for PyPI trusted publishing
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: test-package
+    needs: [test-package, compute-version]
     strategy:
       max-parallel: 1
       matrix:
         include:
           # Order matters! Dependencies are published first
-          - package: ogx-client-python
-            registry: pypi
-            type: external
           - package: ogx-client-typescript
             registry: npm
             type: external
+          - package: ogx-client
+            registry: pypi
+            type: openapi-sdk
           - package: ogx-api
             registry: pypi
             type: local
@@ -740,6 +673,8 @@ jobs:
         id: should-publish
         run: |
           PACKAGES="${{ inputs.packages || 'all' }}"
+          # Clients are published before preparation locks the server to their exact version.
+          if [ "${{ github.event_name }}" == "release" ]; then PACKAGES="ogx-only"; fi
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
@@ -747,7 +682,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "ogx-only" ] && [ "$TYPE" == "local" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "clients-only" ] && [ "$TYPE" == "external" ]; then
+          elif [ "$PACKAGES" == "clients-only" ] && { [ "$TYPE" == "external" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           else
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -857,6 +792,8 @@ jobs:
         if: steps.should-publish.outputs.skip != 'true' && matrix.registry == 'npm' && steps.check-artifacts.outputs.has_artifacts == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.compute-version.outputs.version }}
+          SKIP_LATEST: ${{ inputs.skip_latest }}
         run: |
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"
@@ -881,7 +818,15 @@ jobs:
             fi
             # Extract and publish from the tarball
             TARBALL=$(find ./dist -name '*.tgz' | head -1)
-            npm publish "$TARBALL" --access public
+            DIST_TAG="latest"
+            if [ "$SKIP_LATEST" == "true" ]; then
+              if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\. ]]; then
+                echo "::error::Failed to determine npm release stream from ${VERSION}"
+                exit 1
+              fi
+              DIST_TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            fi
+            npm publish "$TARBALL" --access public --tag "$DIST_TAG"
           else
             echo "DRY RUN: Verifying npm package (not publishing)"
             echo "Package tarball:"
@@ -953,13 +898,15 @@ jobs:
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
 
       - name: Log in to DockerHub
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Determine image tags and build args
         id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
           DISTRO="${{ matrix.distro }}"
@@ -985,7 +932,25 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
-            if [ "${{ inputs.skip_latest }}" == "true" ]; then
+            SKIP_LATEST="${{ inputs.skip_latest }}"
+            if [ "$EVENT" == "release" ] && [ "$SKIP_LATEST" != "true" ]; then
+              if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                SKIP_LATEST="true"
+              else
+                if ! LATEST_TAG=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name'); then
+                  echo "::error::Failed to look up the latest release; refusing to overwrite Docker latest"
+                  exit 1
+                fi
+                LATEST_VERSION="${LATEST_TAG#v}"
+                if [[ ! "$LATEST_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                  echo "::error::Failed to parse latest release ${LATEST_TAG}; refusing to overwrite Docker latest"
+                  exit 1
+                fi
+                NEWEST_VERSION=$(printf '%s\n' "$VERSION" "$LATEST_VERSION" | sort -V | tail -1)
+                if [ "$NEWEST_VERSION" != "$VERSION" ]; then SKIP_LATEST="true"; fi
+              fi
+            fi
+            if [ "$SKIP_LATEST" == "true" ]; then
               TAGS="${IMAGE}:${VERSION}"
               LATEST_NOTE=""
             else
@@ -1041,7 +1006,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: containers/Containerfile
@@ -1102,7 +1067,7 @@ jobs:
           trivy-config: 'trivy.yaml'
 
       - name: Upload Trivy image scan results to GitHub Security
-        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v3
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v3
         if: always()
         with:
           sarif_file: 'trivy-image-${{ matrix.distro }}.sarif'

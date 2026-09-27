@@ -32,6 +32,27 @@ log = get_logger(name=__name__, category="providers::file_processors")
 
 SINGLE_CHUNK_WINDOW_TOKENS = 1_000_000
 
+MARKITDOWN_MIME_TYPES = {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+    "application/msword",  # .doc
+    "application/vnd.ms-powerpoint",  # .ppt
+    "application/vnd.ms-excel",  # .xls
+    "application/rtf",  # .rtf
+    "application/epub+zip",  # .epub
+    "application/rss+xml",  # .rss
+    "application/zip",  # .zip
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/bmp",
+    "image/tiff",
+    "image/webp",
+    "audio/mpeg",  # .mp3
+    "audio/x-wav",  # .wav
+}
+
 
 class MarkItDownFileProcessor:
     """MarkItDown-based file processor using Microsoft's MarkItDown library.
@@ -45,6 +66,9 @@ class MarkItDownFileProcessor:
         self.files_api = files_api
         self.converter = MarkItDown()
         self._converter_lock = threading.Lock()
+
+    def supported_mime_types(self) -> set[str] | None:
+        return MARKITDOWN_MIME_TYPES
 
     async def process_file(
         self,

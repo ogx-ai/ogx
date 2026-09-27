@@ -25,14 +25,16 @@ async function proxyRequest(request: NextRequest, method: string) {
       }
     });
 
-    const requestOptions: RequestInit = {
+    // `duplex` is required by Node's fetch() for ReadableStream bodies but isn't
+    // yet part of TypeScript's bundled RequestInit type.
+    const requestOptions: RequestInit & { duplex?: "half" } = {
       method,
       headers,
     };
 
     if (["POST", "PUT", "PATCH"].includes(method) && request.body) {
       requestOptions.body = request.body;
-      requestOptions.duplex = "half" as RequestDuplex;
+      requestOptions.duplex = "half";
     }
 
     const response = await fetch(targetUrl, requestOptions);

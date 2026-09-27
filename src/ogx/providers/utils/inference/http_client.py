@@ -14,7 +14,8 @@ import httpx
 from openai._base_client import DefaultAsyncHttpxClient
 
 from ogx.log import get_logger
-from ogx.providers.utils.inference.model_registry import (
+from ogx.providers.utils.inference.network_config import (
+    LimitsConfig,
     NetworkConfig,
     ProxyConfig,
     TimeoutConfig,
@@ -117,6 +118,14 @@ def _build_proxy_mounts(proxy_config: ProxyConfig) -> dict[str, httpx.AsyncHTTPT
     return mounts if mounts else None
 
 
+def _build_limits(limits_config: LimitsConfig) -> httpx.Limits:
+    return httpx.Limits(
+        max_connections=limits_config.max_connections,
+        max_keepalive_connections=limits_config.max_keepalive_connections,
+        keepalive_expiry=limits_config.keepalive_expiry,
+    )
+
+
 def build_network_client_kwargs(network_config: NetworkConfig | None) -> dict[str, Any]:
     """
     Build httpx.AsyncClient kwargs from network configuration.
@@ -160,6 +169,9 @@ def build_network_client_kwargs(network_config: NetworkConfig | None) -> dict[st
 
     if network_config.headers:
         client_kwargs["headers"] = network_config.headers
+
+    if network_config.limits:
+        client_kwargs["limits"] = _build_limits(network_config.limits)
 
     return client_kwargs
 

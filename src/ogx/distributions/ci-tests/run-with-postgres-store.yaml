@@ -73,11 +73,19 @@ providers:
     config:
       project: ${env.VERTEX_AI_PROJECT:=}
       location: ${env.VERTEX_AI_LOCATION:=global}
+      thought_signature_store:
+        namespace: vertexai_thought_signatures
+        backend: kv_default
   - provider_id: groq
     provider_type: remote::groq
     config:
       base_url: https://api.groq.com/openai/v1
       api_key: ${env.GROQ_API_KEY:=}
+  - provider_id: meta
+    provider_type: remote::meta
+    config:
+      base_url: https://api.meta.ai/v1
+      api_key: ${env.META_API_KEY:=}
   - provider_id: sambanova
     provider_type: remote::sambanova
     config:
@@ -93,13 +101,21 @@ providers:
   - provider_id: sentence-transformers
     provider_type: inline::sentence-transformers
     config:
-      trust_remote_code: true
+      trust_remote_code: false
   - provider_id: ${env.WATSONX_API_KEY:+watsonx}
     provider_type: remote::watsonx
     config:
       base_url: ${env.WATSONX_BASE_URL:=https://us-south.ml.cloud.ibm.com}
       api_key: ${env.WATSONX_API_KEY:=}
       project_id: ${env.WATSONX_PROJECT_ID:=}
+  - provider_id: ${env.LLAMA_CPP_SERVER_URL:+llama-cpp-server}
+    provider_type: remote::llama-cpp-server
+    config:
+      base_url: ${env.LLAMA_CPP_SERVER_URL:=http://localhost:8080/v1}
+  - provider_id: ${env.TEI_URL:+text-embeddings-inference}
+    provider_type: remote::text-embeddings-inference
+    config:
+      base_url: ${env.TEI_URL:=http://localhost:8080/v1}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -215,6 +231,8 @@ providers:
           backend: sql_default
           max_write_queue_size: 10000
           num_writers: 4
+      memory_config:
+        default_vector_store_provider_id: sqlite-vec
   skills:
   - provider_id: builtin
     provider_type: inline::builtin
@@ -239,6 +257,11 @@ providers:
       api_key: ${env.NIMBLE_API_KEY:=}
       max_results: 3
       search_depth: lite
+  - provider_id: serply-search
+    provider_type: remote::serply-search
+    config:
+      api_key: ${env.SERPLY_API_KEY:=}
+      max_results: 3
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol
@@ -280,6 +303,7 @@ storage:
       backend: sql_default
       max_write_queue_size: 10000
       num_writers: 4
+      enabled: true
     conversations:
       table_name: openai_conversations
       backend: sql_default
@@ -338,6 +362,9 @@ server:
         uri: ${env.AUTH_JWKS_URI:=}
         key_recheck_period: ${env.AUTH_JWKS_RECHECK_PERIOD:=3600}
       verify_tls: ${env.AUTH_VERIFY_TLS:=true}
+  tenancy:
+    mode: ${env.OGX_TENANCY_MODE:=disabled}
+    default_tenant_id: ${env.OGX_DEFAULT_TENANT_ID:=}
 vector_stores:
   default_provider_id: faiss
   default_embedding_model:

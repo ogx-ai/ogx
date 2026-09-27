@@ -20,6 +20,7 @@ on:
       - 'pyproject.toml'
       - '.github/workflows/integration-tests.yml' # This workflow
       - '.github/actions/setup-ollama/action.yml'
+      - '.github/actions/setup-tei/action.yml'
       - '.github/actions/setup-test-environment/action.yml'
       - '.github/actions/run-and-record-tests/action.yml'
       - 'scripts/integration-tests.sh'
@@ -43,10 +44,6 @@ on:
         default: 'ollama'
   workflow_call:
     inputs:
-      sdk_install_url:
-        required: false
-        type: string
-        description: 'URL to install Python SDK from (for testing preview builds)'
       matrix_key:
         required: false
         type: string
@@ -150,7 +147,9 @@ jobs:
         client: ${{ github.event_name == 'pull_request' && fromJSON('["server"]') || fromJSON('["library", "server"]') }}
         # Use Python 3.13 only on nightly schedule (daily latest client test), otherwise use 3.12
         python-version: ${{ github.event.schedule == '0 0 * * *' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12"]') }}
-        node-version: [22]
+        # Pinned to 22.22 due to node-fetch v2 "Premature close" regression in 22.23.0
+        # (nodejs/node#63989). Unpin once a patched 22.x ships with nodejs/node#64004.
+        node-version: ['22.22']
         client-version: ${{ (github.event.schedule == '0 0 * * *' || github.event.inputs.test-all-client-versions == 'true' || inputs.test-all-client-versions == true) && fromJSON('["published", "latest"]') || fromJSON('["latest"]') }}
         # Test configurations: Either from matrix_json input or generated from ci_matrix.json
         config: ${{ fromJSON(inputs.matrix_json || needs.generate-matrix.outputs.matrix).include }}
@@ -166,11 +165,10 @@ jobs:
       # called from pull_request_target workflows.
       - name: Setup test environment
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/setup-test-environment@68c0994a790e4f029007f3cce12a744d69a7d435
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@0807a93e8508bb22dcd633de0a993343a6b1b346
         with:
           python-version: ${{ matrix.python-version }}
           client-version: ${{ matrix.client-version }}
-          sdk_install_url: ${{ inputs.sdk_install_url || '' }}
           setup: ${{ matrix.config.setup }}
           suite: ${{ matrix.config.suite }}
           inference-mode: ${{ matrix.config.inference_mode || 'replay' }}
@@ -193,7 +191,7 @@ jobs:
 
       - name: Run tests
         if: ${{ matrix.config.allowed_clients == null || contains(matrix.config.allowed_clients, matrix.client) }}
-        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@fb32709e3b29816b52085c92820531e4e6d94be8
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@0807a93e8508bb22dcd633de0a993343a6b1b346
         env:
           OPENAI_API_KEY: dummy
           AZURE_API_KEY: replay-mode-dummy-key
@@ -207,6 +205,7 @@ jobs:
           AWS_BEARER_TOKEN_BEDROCK: replay-mode-dummy-key
           AWS_DEFAULT_REGION: us-west-2
           GEMINI_API_KEY: replay-mode-dummy-key
+          FIREWORKS_API_KEY: replay-mode-dummy-key
           TAVILY_SEARCH_API_KEY: ${{ secrets.TAVILY_SEARCH_API_KEY || 'replay-mode-dummy-key' }}
           TS_CLIENT_PATH: ${{ steps.setup-ts-client.outputs.ts-client-path || '' }}
         with:

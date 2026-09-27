@@ -135,7 +135,7 @@ class WeightedInMemoryAggregator:
         vector_scores: dict[str, float],
         keyword_scores: dict[str, float],
         reranker_type: str = "rrf",
-        reranker_params: dict[str, float] | None = None,
+        reranker_params: dict[str, Any] | None = None,
     ) -> dict[str, float]:
         """
         Combine vector and keyword search results using specified reranking strategy.
@@ -152,12 +152,41 @@ class WeightedInMemoryAggregator:
         if reranker_params is None:
             reranker_params = {}
 
+        weights = reranker_params.get("weights")
         if reranker_type == "weighted":
             alpha = reranker_params.get("alpha", 0.5)
+            if isinstance(weights, dict):
+                vector_weight = float(weights.get("vector", 0.0))
+                keyword_weight = float(weights.get("keyword", 0.0))
+                all_ids = set(vector_scores.keys()) | set(keyword_scores.keys())
+                normalized_vector_scores = WeightedInMemoryAggregator._normalize_scores(vector_scores)
+                normalized_keyword_scores = WeightedInMemoryAggregator._normalize_scores(keyword_scores)
+                return {
+                    doc_id: (keyword_weight * normalized_keyword_scores.get(doc_id, 0.0))
+                    + (vector_weight * normalized_vector_scores.get(doc_id, 0.0))
+                    for doc_id in all_ids
+                }
             return WeightedInMemoryAggregator.weighted_rerank(vector_scores, keyword_scores, alpha)
         else:
             # Default to RRF for None, RRF, or any unknown types
             impact_factor = reranker_params.get("impact_factor", 60.0)
+            if isinstance(weights, dict):
+                vector_weight = float(weights.get("vector", 0.0))
+                keyword_weight = float(weights.get("keyword", 0.0))
+                vector_ranks = {
+                    doc_id: i + 1
+                    for i, (doc_id, _) in enumerate(sorted(vector_scores.items(), key=lambda x: x[1], reverse=True))
+                }
+                keyword_ranks = {
+                    doc_id: i + 1
+                    for i, (doc_id, _) in enumerate(sorted(keyword_scores.items(), key=lambda x: x[1], reverse=True))
+                }
+                all_ids = set(vector_scores.keys()) | set(keyword_scores.keys())
+                return {
+                    doc_id: (vector_weight / (impact_factor + vector_ranks.get(doc_id, float("inf"))))
+                    + (keyword_weight / (impact_factor + keyword_ranks.get(doc_id, float("inf"))))
+                    for doc_id in all_ids
+                }
             return WeightedInMemoryAggregator.rrf_rerank(vector_scores, keyword_scores, impact_factor)
 
 

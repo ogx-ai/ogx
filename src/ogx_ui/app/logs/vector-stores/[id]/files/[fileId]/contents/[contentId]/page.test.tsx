@@ -50,8 +50,14 @@ describe("ContentDetailPage", () => {
     id: "vs_123",
     name: "Test Vector Store",
     created_at: 1710000000,
-    status: "ready",
-    file_counts: { total: 5 },
+    status: "completed",
+    file_counts: {
+      total: 5,
+      completed: 5,
+      cancelled: 0,
+      failed: 0,
+      in_progress: 0,
+    },
     usage_bytes: 1024,
     metadata: {
       provider_id: "test_provider",
@@ -63,13 +69,19 @@ describe("ContentDetailPage", () => {
     status: "completed",
     created_at: 1710001000,
     usage_bytes: 512,
-    chunking_strategy: { type: "fixed_size" },
+    vector_store_id: "vs_123",
+    chunking_strategy: { static: {}, type: "static" },
   };
 
   const mockContent: VectorStoreContentItem = {
     id: "content_789",
     object: "vector_store.content",
-    content: "This is test content for the vector store.",
+    vector_store_id: "vs_123",
+    file_id: "file_456",
+    content: {
+      text: "This is test content for the vector store.",
+      type: "text",
+    },
     embedding: [0.1, 0.2, 0.3, 0.4, 0.5],
     metadata: {
       chunk_window: "0-45",

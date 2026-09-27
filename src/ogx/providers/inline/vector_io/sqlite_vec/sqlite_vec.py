@@ -104,6 +104,12 @@ OPENAI_VECTOR_STORES_FILES_PREFIX = f"openai_vector_stores_files:sqlite_vec:{VER
 OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX = f"openai_vector_stores_files_contents:sqlite_vec:{VERSION}::"
 
 
+def _prepare_fts_query(query_string: str) -> str:
+    terms = re.findall(r"[\w]+", query_string, flags=re.UNICODE)
+    operator = " " if re.fullmatch(r"[\w\s]+", query_string, flags=re.UNICODE) else " OR "
+    return operator.join(f'"{term}"' for term in terms)
+
+
 def serialize_vector(vector: list[float]) -> bytes:
     """Serialize a list of floats into a compact binary representation."""
     return struct.pack(f"{len(vector)}f", *vector)
@@ -388,6 +394,9 @@ class SQLiteVecIndex(EmbeddingIndex):
         """
         # Translate filters to SQL WHERE clause
         filter_clause, filter_params = self._translate_filters(filters)
+        fts_query = _prepare_fts_query(query_string)
+        if not fts_query:
+            return QueryChunksResponse(chunks=[], scores=[])
 
         def _execute_query():
             connection = _create_sqlite_connection(self.db_path)
@@ -403,7 +412,7 @@ class SQLiteVecIndex(EmbeddingIndex):
                     ORDER BY score ASC
                     LIMIT ?;
                 """
-                cur.execute(query_sql, (query_string, *filter_params, k))
+                cur.execute(query_sql, (fts_query, *filter_params, k))
                 return cur.fetchall()
             finally:
                 cur.close()

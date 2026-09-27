@@ -16,6 +16,7 @@ from ogx.core.datatypes import (
     RerankerModel,
     VectorStoresConfig,
 )
+from ogx.core.storage.datatypes import ResponsesStoreReference
 from ogx.core.storage.kvstore.config import PostgresKVStoreConfig
 from ogx.core.storage.sqlstore.sqlstore import PostgresSqlStoreConfig
 from ogx.core.utils.dynamic import instantiate_class_type
@@ -34,6 +35,7 @@ from ogx.providers.inline.vector_io.sqlite_vec.config import (
 from ogx.providers.registry.inference import available_providers
 from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
 from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
+from ogx.providers.remote.tool_runtime.serply_search.config import SerplySearchToolConfig
 from ogx.providers.remote.tool_runtime.tavily_search.config import TavilySearchToolConfig
 from ogx.providers.remote.vector_io.chroma.config import ChromaVectorIOConfig
 from ogx.providers.remote.vector_io.elasticsearch.config import ElasticsearchVectorIOConfig
@@ -71,6 +73,7 @@ ENABLED_INFERENCE_PROVIDERS = [
     "nvidia",
     "bedrock",
     "azure",
+    "meta",
 ]
 
 INFERENCE_PROVIDER_IDS = {
@@ -153,6 +156,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
             BuildProvider(provider_type="remote::nimble-search"),
+            BuildProvider(provider_type="remote::serply-search"),
             BuildProvider(provider_type="inline::file-search"),
             BuildProvider(provider_type="remote::model-context-protocol"),
         ],
@@ -169,7 +173,22 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
     embedding_provider = Provider(
         provider_id="sentence-transformers",
         provider_type="inline::sentence-transformers",
-        config=SentenceTransformersInferenceConfig.sample_run_config(),
+        config=SentenceTransformersInferenceConfig(trust_remote_code=False).model_dump(),
+    )
+    responses_provider = Provider(
+        provider_id="builtin",
+        provider_type="inline::builtin",
+        config={
+            "persistence": {
+                "responses": ResponsesStoreReference(
+                    backend="sql_default",
+                    table_name="responses",
+                ).model_dump(exclude_none=True),
+            },
+            "memory_config": {
+                "default_vector_store_provider_id": "sqlite-vec",
+            },
+        },
     )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
@@ -240,6 +259,7 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 config=InfinispanVectorIOConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
         ],
+        "responses": [responses_provider],
         "files": [files_provider],
         "skills": [
             Provider(
@@ -270,6 +290,11 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 provider_id="nimble-search",
                 provider_type="remote::nimble-search",
                 config=NimbleSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+            Provider(
+                provider_id="serply-search",
+                provider_type="remote::serply-search",
+                config=SerplySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="file-search",
@@ -355,6 +380,10 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
             "GROQ_API_KEY": (
                 "",
                 "Groq API Key",
+            ),
+            "META_API_KEY": (
+                "",
+                "Meta AI API Key",
             ),
             "ANTHROPIC_API_KEY": (
                 "",

@@ -379,6 +379,10 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
                 ],
             )
 
+        if self.kvstore is not None:
+            key = f"{VECTOR_DBS_PREFIX}{vector_store.identifier}"
+            await self.kvstore.set(key=key, value=vector_store.model_dump_json())
+
         self.cache[vector_store.identifier] = VectorStoreWithIndex(
             vector_store, WeaviateIndex(client=client, collection_name=sanitized_collection_name), self.inference_api
         )
@@ -386,11 +390,13 @@ class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProt
     async def unregister_vector_store(self, vector_store_id: str) -> None:
         client = self._get_client()
         sanitized_collection_name = sanitize_collection_name(vector_store_id, weaviate_format=True)
-        if vector_store_id not in self.cache or client.collections.exists(sanitized_collection_name) is False:
-            return
-        client.collections.delete(sanitized_collection_name)
-        await self.cache[vector_store_id].index.delete()
-        del self.cache[vector_store_id]
+        if vector_store_id in self.cache and client.collections.exists(sanitized_collection_name):
+            client.collections.delete(sanitized_collection_name)
+            await self.cache[vector_store_id].index.delete()
+            del self.cache[vector_store_id]
+
+        if self.kvstore is not None:
+            await self.kvstore.delete(key=f"{VECTOR_DBS_PREFIX}{vector_store_id}")
 
     async def _get_and_cache_vector_store_index(self, vector_store_id: str) -> VectorStoreWithIndex | None:
         if vector_store_id in self.cache:

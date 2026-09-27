@@ -19,7 +19,7 @@ ADK/Gemini ecosystem clients can call OGX natively.
 
 Usage:
     # Start a OGX server first:
-    OLLAMA_URL=http://localhost:11434/v1 uv run --extra starter ogx stack run starter --port 8321
+    OLLAMA_URL=http://localhost:11434/v1 uv run --extra starter ogx run starter --port 8321
 
     # Then run this script:
     uv run python scripts/test_interactions_api.py --base-url http://localhost:8321 --model ollama/llama3.2:3b

@@ -1,0 +1,114 @@
+---
+title: OpenAI-compatible remote gateways
+description: Point the remote::openai inference provider at any OpenAI-compatible API, including multi-model gateways such as DaoXE.
+sidebar_label: OpenAI-compatible gateways
+sidebar_position: 5
+---
+
+# OpenAI-compatible remote gateways
+
+OGX's [`remote::openai`](/docs/providers/inference/remote_openai) inference provider talks to any endpoint that implements the OpenAI Chat Completions (and related) HTTP surface. You do not need a custom provider package for third-party multi-model gateways: set `base_url` (and an API key) on `remote::openai`.
+
+This is the same mechanism the [starter distribution](/docs/distributions/self_hosted_distro/starter) uses when you export `OPENAI_API_KEY` and optionally `OPENAI_BASE_URL`. See also the [OpenAI API compatibility](/docs/api-openai/) overview and the [Open Responses / OpenAI compatibility blog post](/blog/open-responses-openai-compatibility).
+
+## Example: DaoXE
+
+[DaoXE](https://daoxe.com) is a multi-model, multi-protocol API gateway. For OGX, use its **OpenAI-compatible** base URL:
+
+```text
+https://daoxe.com/v1
+```
+
+DaoXE also exposes other client protocols (for example Anthropic Messages) for non-OGX clients. Inside OGX you configure only the OpenAI-compatible path above.
+
+:::note Availability
+DaoXE is **not available in mainland China**. Create an account and API key at [daoxe.com](https://daoxe.com). Model IDs are **account-scoped** (availability can differ by plan or group). Always discover exact IDs with authenticated `GET /v1/models` rather than hard-coding a public catalog.
+:::
+
+### Option A — starter distribution + environment variables
+
+```bash
+export OPENAI_API_KEY="your_daoxe_api_key"
+export OPENAI_BASE_URL="https://daoxe.com/v1"
+uvx --from 'ogx[starter]' ogx run starter
+```
+
+With the starter's default `provider_id: openai`, registered model IDs look like `openai/<upstream_model_id>`. List them after the server is up:
+
+```bash
+curl -s http://localhost:8321/v1/models | python -m json.tool
+```
+
+### Option B — explicit `config.yaml` entry
+
+Prefer a dedicated provider ID when you also keep a direct OpenAI key, or when you want clearer model prefixes:
+
+```yaml
+version: 2
+apis:
+  - inference
+  - responses
+providers:
+  inference:
+    - provider_id: daoxe
+      provider_type: remote::openai
+      config:
+        api_key: ${env.DAOXE_API_KEY}
+        base_url: https://daoxe.com/v1
+        # Optional: pin models after discovery
+        # allowed_models:
+        #   - your_exact_model_id
+        refresh_models: true
+```
+
+Start the server with that config (see [Customizing config.yaml](/docs/distributions/customizing_run_yaml) and [Starting the OGX server](/docs/distributions/starting_ogx_server)). Model IDs will be prefixed with the provider ID, for example `daoxe/<your_exact_model_id>`.
+
+### Call OGX with the OpenAI SDK
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="fake")
+
+# Replace with an ID from GET /v1/models for your server
+response = client.chat.completions.create(
+    model="daoxe/your_exact_model_id",
+    messages=[{"role": "user", "content": "Hello from OGX + DaoXE"}],
+    max_tokens=64,
+)
+print(response.choices[0].message.content)
+```
+
+### Call DaoXE directly (without OGX)
+
+If you only need the gateway (no vector stores, Responses orchestration, etc.), point the OpenAI client at DaoXE:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://daoxe.com/v1",
+    api_key="your_daoxe_api_key",
+)
+
+response = client.chat.completions.create(
+    model="your_exact_model_id",  # from DaoXE GET /v1/models
+    messages=[{"role": "user", "content": "Hello"}],
+    max_tokens=64,
+)
+print(response.choices[0].message.content)
+```
+
+Auditable examples and a low-cost smoke benchmark live at [seven7763/DaoXE-AI](https://github.com/seven7763/DaoXE-AI).
+
+## Related providers
+
+| Goal | Provider |
+|------|----------|
+| OpenAI API or any OpenAI-compatible gateway (`base_url` override) | [`remote::openai`](/docs/providers/inference/remote_openai) |
+| Arbitrary OpenAI-compatible endpoint without a fixed default URL | [`remote::passthrough`](/docs/providers/inference/remote_passthrough) |
+| Llama API OpenAI-compat surface | [`remote::llama-openai-compat`](/docs/providers/inference/remote_llama-openai-compat) |
+
+## Disclosure
+
+This page was contributed by a DaoXE maintainer. Configuration uses only stock OGX providers; no DaoXE-specific adapter is required.

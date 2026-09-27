@@ -375,37 +375,150 @@ paths:
           description: Authorization token
           title: Authorization
         description: Authorization token
-  /v1alpha/file-processors/process:
-    post:
+  /v1alpha/file-processors/jobs:
+    get:
       responses:
         '200':
-          description: The processed file chunks.
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProcessFileResponse'
+                $ref: '#/components/schemas/ListProcessFileJobsResponse'
         '400':
-          description: Bad Request
           $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
         '429':
-          description: Too Many Requests
           $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
         '500':
-          description: Internal Server Error
           $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
         default:
-          description: Default Response
           $ref: '#/components/responses/DefaultError'
+          description: Default Response
       tags:
       - File Processors
-      summary: Process a file into chunks ready for vector database storage.
-      description: Process a file into chunks ready for vector database storage. Supports direct upload via multipart form or processing files already uploaded to file storage via file_id. Exactly one of file or file_id must be provided.
-      operationId: process_file_v1alpha_file_processors_process_post
+      summary: List file-processing jobs.
+      description: List file-processing jobs, most recent first.
+      operationId: list_process_file_jobs_v1alpha_file_processors_jobs_get
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Return jobs after this job ID.
+          title: After
+        description: Return jobs after this job ID.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Maximum jobs to return.
+          default: 100
+          title: Limit
+        description: Maximum jobs to return.
+    post:
+      responses:
+        '200':
+          description: The created file-processing job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFileJob'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - File Processors
+      summary: Submit a file for asynchronous processing.
+      description: Submit a file for processing and return immediately with a job handle. The work runs out-of-process so the server is not blocked. Poll GET /file-processors/jobs/{job_id} until the status is terminal. Supports direct upload via multipart form or a previously uploaded file_id.
+      operationId: create_process_file_job_v1alpha_file_processors_jobs_post
       requestBody:
         content:
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Body_process_file_v1alpha_file_processors_process_post'
+              $ref: '#/components/schemas/Body_create_process_file_job_v1alpha_file_processors_jobs_post'
+  /v1alpha/file-processors/jobs/{job_id}:
+    get:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFileJob'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - File Processors
+      summary: Retrieve a file-processing job.
+      description: Retrieve the current state of a file-processing job, including its result once completed.
+      operationId: retrieve_process_file_job_v1alpha_file_processors_jobs__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
+  /v1alpha/file-processors/jobs/{job_id}/cancel:
+    post:
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessFileJob'
+        '400':
+          $ref: '#/components/responses/BadRequest400'
+          description: Bad Request
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+          description: Too Many Requests
+        '500':
+          $ref: '#/components/responses/InternalServerError500'
+          description: Internal Server Error
+        default:
+          $ref: '#/components/responses/DefaultError'
+          description: Default Response
+      tags:
+      - File Processors
+      summary: Cancel a file-processing job.
+      description: Cancel a scheduled or in-progress file-processing job.
+      operationId: cancel_process_file_job_v1alpha_file_processors_jobs__job_id__cancel_post
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Job Id
   /v1alpha/interactions:
     post:
       responses:
@@ -1142,13 +1255,11 @@ components:
       title: ListOpenAIChatCompletionResponse
       description: Response from listing OpenAI-compatible chat completions.
     OpenAIAssistantMessageParam:
-      additionalProperties: true
-      description: A message containing the model's (assistant) response in an OpenAI-compatible chat completion request.
       properties:
         role:
-          description: Must be 'assistant' to identify this as the model's response.
-          title: Role
           type: string
+          title: Role
+          description: Must be 'assistant' to identify this as the model's response.
           enum:
           - assistant
         content:
@@ -1159,15 +1270,13 @@ components:
             type: array
             title: list[OpenAIChatCompletionContentPartTextParam]
           - type: 'null'
-          description: The content of the model's response.
           title: string | list[OpenAIChatCompletionContentPartTextParam]
-          nullable: true
+          description: The content of the model's response.
         name:
           anyOf:
           - type: string
           - type: 'null'
           description: The name of the assistant message participant.
-          nullable: true
         tool_calls:
           anyOf:
           - items:
@@ -1175,9 +1284,10 @@ components:
             type: array
           - type: 'null'
           description: List of tool calls. Each tool call is an OpenAIChatCompletionToolCall object.
-          nullable: true
-      title: OpenAIAssistantMessageParam
+      additionalProperties: true
       type: object
+      title: OpenAIAssistantMessageParam
+      description: A message containing the model's (assistant) response in an OpenAI-compatible chat completion request.
     OpenAIChatCompletionContentPartImageParam:
       properties:
         type:
@@ -1548,24 +1658,17 @@ components:
       title: OpenAITopLogProb
       description: The top log probability for a token from an OpenAI-compatible chat completion response.
     OpenAIUserMessageParam:
-      description: A message from the user in an OpenAI-compatible chat completion request.
       properties:
         role:
-          description: Must be 'user' to identify this as a user message.
-          title: Role
           type: string
+          title: Role
+          description: Must be 'user' to identify this as a user message.
           enum:
           - user
         content:
           anyOf:
           - type: string
           - items:
-              discriminator:
-                mapping:
-                  file: '#/components/schemas/OpenAIFile'
-                  image_url: '#/components/schemas/OpenAIChatCompletionContentPartImageParam'
-                  text: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
-                propertyName: type
               oneOf:
               - $ref: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
                 title: OpenAIChatCompletionContentPartTextParam
@@ -1573,21 +1676,27 @@ components:
                 title: OpenAIChatCompletionContentPartImageParam
               - $ref: '#/components/schemas/OpenAIFile'
                 title: OpenAIFile
+              discriminator:
+                propertyName: type
+                mapping:
+                  file: '#/components/schemas/OpenAIFile'
+                  image_url: '#/components/schemas/OpenAIChatCompletionContentPartImageParam'
+                  text: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
               title: OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile
             type: array
             title: list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile]
-          description: The content of the message, which can include text and other media.
           title: string | list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile]
+          description: The content of the message, which can include text and other media.
         name:
           anyOf:
           - type: string
           - type: 'null'
           description: The name of the user message participant.
-          nullable: true
+      type: object
       required:
       - content
       title: OpenAIUserMessageParam
-      type: object
+      description: A message from the user in an OpenAI-compatible chat completion request.
     OpenAIJSONSchema:
       properties:
         name:
@@ -1671,12 +1780,12 @@ components:
         messages:
           items:
             oneOf:
-            - $ref: '#/components/schemas/OpenAIUserMessageParam-Input'
-              title: OpenAIUserMessageParam-Input
+            - $ref: '#/components/schemas/OpenAIUserMessageParam'
+              title: OpenAIUserMessageParam
             - $ref: '#/components/schemas/OpenAISystemMessageParam'
               title: OpenAISystemMessageParam
-            - $ref: '#/components/schemas/OpenAIAssistantMessageParam-Input'
-              title: OpenAIAssistantMessageParam-Input
+            - $ref: '#/components/schemas/OpenAIAssistantMessageParam'
+              title: OpenAIAssistantMessageParam
             - $ref: '#/components/schemas/OpenAIToolMessageParam'
               title: OpenAIToolMessageParam
             - $ref: '#/components/schemas/OpenAIDeveloperMessageParam'
@@ -1684,12 +1793,12 @@ components:
             discriminator:
               propertyName: role
               mapping:
-                assistant: '#/components/schemas/OpenAIAssistantMessageParam-Input'
+                assistant: '#/components/schemas/OpenAIAssistantMessageParam'
                 developer: '#/components/schemas/OpenAIDeveloperMessageParam'
                 system: '#/components/schemas/OpenAISystemMessageParam'
                 tool: '#/components/schemas/OpenAIToolMessageParam'
-                user: '#/components/schemas/OpenAIUserMessageParam-Input'
-            title: OpenAIUserMessageParam-Input | ... (5 variants)
+                user: '#/components/schemas/OpenAIUserMessageParam'
+            title: OpenAIUserMessageParam | ... (5 variants)
           type: array
           minItems: 1
           title: Messages
@@ -2108,12 +2217,12 @@ components:
         input_messages:
           items:
             oneOf:
-            - $ref: '#/components/schemas/OpenAIUserMessageParam-Output'
-              title: OpenAIUserMessageParam-Output
+            - $ref: '#/components/schemas/OpenAIUserMessageParam'
+              title: OpenAIUserMessageParam
             - $ref: '#/components/schemas/OpenAISystemMessageParam'
               title: OpenAISystemMessageParam
-            - $ref: '#/components/schemas/OpenAIAssistantMessageParam-Output'
-              title: OpenAIAssistantMessageParam-Output
+            - $ref: '#/components/schemas/OpenAIAssistantMessageParam'
+              title: OpenAIAssistantMessageParam
             - $ref: '#/components/schemas/OpenAIToolMessageParam'
               title: OpenAIToolMessageParam
             - $ref: '#/components/schemas/OpenAIDeveloperMessageParam'
@@ -2121,12 +2230,12 @@ components:
             discriminator:
               propertyName: role
               mapping:
-                assistant: '#/components/schemas/OpenAIAssistantMessageParam-Output'
+                assistant: '#/components/schemas/OpenAIAssistantMessageParam'
                 developer: '#/components/schemas/OpenAIDeveloperMessageParam'
                 system: '#/components/schemas/OpenAISystemMessageParam'
                 tool: '#/components/schemas/OpenAIToolMessageParam'
-                user: '#/components/schemas/OpenAIUserMessageParam-Output'
-            title: OpenAIUserMessageParam-Output | ... (5 variants)
+                user: '#/components/schemas/OpenAIUserMessageParam'
+            title: OpenAIUserMessageParam | ... (5 variants)
           type: array
           title: Input Messages
           description: The input messages used to generate this completion.
@@ -2283,7 +2392,6 @@ components:
           description: List of choices.
           items:
             $ref: '#/components/schemas/OpenAICompletionChoice'
-          minItems: 1
           title: Choices
           type: array
         created:
@@ -2301,6 +2409,10 @@ components:
           type: string
           enum:
           - text_completion
+        usage:
+          $ref: '#/components/schemas/OpenAIChatCompletionUsage'
+          description: Token usage information (typically included in the final chunk with stream_options).
+          nullable: true
       required:
       - id
       - choices
@@ -2716,22 +2828,11 @@ components:
       title: OpenAIResponseMCPApprovalResponse
       description: A response to an MCP approval request.
     OpenAIResponseMessage:
-      description: |-
-        Corresponds to the various Message types in the Responses API.
-        They are all under one type because the Responses API gives them all
-        the same "type" value, and there is no way to tell them apart in certain
-        scenarios.
       properties:
         content:
           anyOf:
           - type: string
           - items:
-              discriminator:
-                mapping:
-                  input_file: '#/components/schemas/OpenAIResponseInputMessageContentFile'
-                  input_image: '#/components/schemas/OpenAIResponseInputMessageContentImage'
-                  input_text: '#/components/schemas/OpenAIResponseInputMessageContentText'
-                propertyName: type
               oneOf:
               - $ref: '#/components/schemas/OpenAIResponseInputMessageContentText'
                 title: OpenAIResponseInputMessageContentText
@@ -2739,20 +2840,26 @@ components:
                 title: OpenAIResponseInputMessageContentImage
               - $ref: '#/components/schemas/OpenAIResponseInputMessageContentFile'
                 title: OpenAIResponseInputMessageContentFile
+              discriminator:
+                propertyName: type
+                mapping:
+                  input_file: '#/components/schemas/OpenAIResponseInputMessageContentFile'
+                  input_image: '#/components/schemas/OpenAIResponseInputMessageContentImage'
+                  input_text: '#/components/schemas/OpenAIResponseInputMessageContentText'
               title: OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile
             type: array
             title: list[OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile]
           - items:
-              discriminator:
-                mapping:
-                  output_text: '#/components/schemas/OpenAIResponseOutputMessageContentOutputText'
-                  refusal: '#/components/schemas/OpenAIResponseContentPartRefusal'
-                propertyName: type
               oneOf:
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageContentOutputText'
                 title: OpenAIResponseOutputMessageContentOutputText
               - $ref: '#/components/schemas/OpenAIResponseContentPartRefusal'
                 title: OpenAIResponseContentPartRefusal
+              discriminator:
+                propertyName: type
+                mapping:
+                  output_text: '#/components/schemas/OpenAIResponseOutputMessageContentOutputText'
+                  refusal: '#/components/schemas/OpenAIResponseContentPartRefusal'
               title: OpenAIResponseOutputMessageContentOutputText | OpenAIResponseContentPartRefusal
             type: array
             title: list[OpenAIResponseOutputMessageContentOutputText | OpenAIResponseContentPartRefusal]
@@ -2773,25 +2880,28 @@ components:
             - assistant
           title: string
         type:
-          title: Type
           type: string
+          title: Type
           enum:
           - message
         id:
           anyOf:
           - type: string
           - type: 'null'
-          nullable: true
         status:
           anyOf:
           - type: string
           - type: 'null'
-          nullable: true
+      type: object
       required:
       - content
       - role
       title: OpenAIResponseMessage
-      type: object
+      description: |-
+        Corresponds to the various Message types in the Responses API.
+        They are all under one type because the Responses API gives them all
+        the same "type" value, and there is no way to tell them apart in certain
+        scenarios.
     OpenAIResponseOutputMessageContent:
       discriminator:
         mapping:
@@ -2805,25 +2915,17 @@ components:
         title: OpenAIResponseContentPartRefusal
       title: OpenAIResponseOutputMessageContentOutputText | OpenAIResponseContentPartRefusal
     OpenAIResponseOutputMessageContentOutputText:
-      description: Text content within an output message of an OpenAI response.
       properties:
         text:
+          type: string
           title: Text
-          type: string
         type:
-          title: Type
           type: string
+          title: Type
           enum:
           - output_text
         annotations:
           items:
-            discriminator:
-              mapping:
-                container_file_citation: '#/components/schemas/OpenAIResponseAnnotationContainerFileCitation'
-                file_citation: '#/components/schemas/OpenAIResponseAnnotationFileCitation'
-                file_path: '#/components/schemas/OpenAIResponseAnnotationFilePath'
-                url_citation: '#/components/schemas/OpenAIResponseAnnotationCitation'
-              propertyName: type
             oneOf:
             - $ref: '#/components/schemas/OpenAIResponseAnnotationFileCitation'
               title: OpenAIResponseAnnotationFileCitation
@@ -2833,20 +2935,27 @@ components:
               title: OpenAIResponseAnnotationContainerFileCitation
             - $ref: '#/components/schemas/OpenAIResponseAnnotationFilePath'
               title: OpenAIResponseAnnotationFilePath
+            discriminator:
+              propertyName: type
+              mapping:
+                container_file_citation: '#/components/schemas/OpenAIResponseAnnotationContainerFileCitation'
+                file_citation: '#/components/schemas/OpenAIResponseAnnotationFileCitation'
+                file_path: '#/components/schemas/OpenAIResponseAnnotationFilePath'
+                url_citation: '#/components/schemas/OpenAIResponseAnnotationCitation'
             title: OpenAIResponseAnnotationFileCitation | ... (4 variants)
-          title: Annotations
           type: array
+          title: Annotations
         logprobs:
           anyOf:
           - items:
               $ref: '#/components/schemas/OpenAITokenLogProb'
             type: array
           - type: 'null'
-          nullable: true
+      type: object
       required:
       - text
       title: OpenAIResponseOutputMessageContentOutputText
-      type: object
+      description: Text content within an output message of an OpenAI response.
     OpenAIResponseOutputMessageFileSearchToolCall:
       properties:
         id:
@@ -2970,17 +3079,16 @@ components:
       title: OpenAIResponseOutputMessageMCPListTools
       description: MCP list tools output message containing available tools from an MCP server.
     OpenAIResponseOutputMessageWebSearchToolCall:
-      description: Web search tool call output message for OpenAI responses.
       properties:
         id:
+          type: string
           title: Id
-          type: string
         status:
+          type: string
           title: Status
-          type: string
         type:
-          title: Type
           type: string
+          title: Type
           enum:
           - web_search_call
         action:
@@ -2993,22 +3101,22 @@ components:
             title: WebSearchActionFind
           - type: 'null'
           title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
-          nullable: true
+      type: object
       required:
       - id
       - status
       title: OpenAIResponseOutputMessageWebSearchToolCall
-      type: object
+      description: Web search tool call output message for OpenAI responses.
     CreateConversationRequest:
       properties:
         items:
           anyOf:
           - items:
               oneOf:
-              - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
-                title: OpenAIResponseMessage-Input
-              - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-                title: OpenAIResponseOutputMessageWebSearchToolCall-Input
+              - $ref: '#/components/schemas/OpenAIResponseMessage'
+                title: OpenAIResponseMessage
+              - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+                title: OpenAIResponseOutputMessageWebSearchToolCall
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
                 title: OpenAIResponseOutputMessageFileSearchToolCall
               - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -3038,10 +3146,10 @@ components:
                   mcp_approval_response: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
                   mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
                   mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                  message: '#/components/schemas/OpenAIResponseMessage-Input'
+                  message: '#/components/schemas/OpenAIResponseMessage'
                   reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                  web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-              title: OpenAIResponseMessage-Input | ... (11 variants)
+                  web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+              title: OpenAIResponseMessage | ... (11 variants)
             type: array
           - type: 'null'
           description: Initial items to include in the conversation context.
@@ -3131,10 +3239,10 @@ components:
         data:
           items:
             oneOf:
-            - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
-              title: OpenAIResponseMessage-Output
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
-              title: OpenAIResponseOutputMessageWebSearchToolCall-Output
+            - $ref: '#/components/schemas/OpenAIResponseMessage'
+              title: OpenAIResponseMessage
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+              title: OpenAIResponseOutputMessageWebSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
               title: OpenAIResponseOutputMessageFileSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -3164,10 +3272,10 @@ components:
                 mcp_approval_response: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
                 mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
                 mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                message: '#/components/schemas/OpenAIResponseMessage-Output'
+                message: '#/components/schemas/OpenAIResponseMessage'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
-            title: OpenAIResponseMessage-Output | ... (11 variants)
+                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+            title: OpenAIResponseMessage | ... (11 variants)
           type: array
           title: Data
           description: List of conversation items
@@ -3198,10 +3306,10 @@ components:
         items:
           items:
             oneOf:
-            - $ref: '#/components/schemas/OpenAIResponseMessage-Input'
-              title: OpenAIResponseMessage-Input
-            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-              title: OpenAIResponseOutputMessageWebSearchToolCall-Input
+            - $ref: '#/components/schemas/OpenAIResponseMessage'
+              title: OpenAIResponseMessage
+            - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+              title: OpenAIResponseOutputMessageWebSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
               title: OpenAIResponseOutputMessageFileSearchToolCall
             - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -3231,10 +3339,10 @@ components:
                 mcp_approval_response: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
                 mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
                 mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-                message: '#/components/schemas/OpenAIResponseMessage-Input'
+                message: '#/components/schemas/OpenAIResponseMessage'
                 reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Input'
-            title: OpenAIResponseMessage-Input | ... (11 variants)
+                web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+            title: OpenAIResponseMessage | ... (11 variants)
           type: array
           maxItems: 20
           title: Items
@@ -4201,6 +4309,12 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
         max_tool_calls:
           anyOf:
           - type: integer
@@ -4623,6 +4737,12 @@ components:
         instructions:
           anyOf:
           - type: string
+          - type: 'null'
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
           - type: 'null'
         max_tool_calls:
           anyOf:
@@ -5980,19 +6100,19 @@ components:
       title: UnionType
       type: object
     ImageContentItem:
-      description: A image content item
       properties:
         type:
-          title: Type
           type: string
+          title: Type
           enum:
           - image
         image:
           $ref: '#/components/schemas/_URLOrData'
+      type: object
       required:
       - image
       title: ImageContentItem
-      type: object
+      description: A image content item
     InterleavedContent:
       anyOf:
       - type: string
@@ -6228,31 +6348,31 @@ components:
           anyOf:
           - type: string
           - oneOf:
-            - $ref: '#/components/schemas/ImageContentItem-Output'
-              title: ImageContentItem-Output
+            - $ref: '#/components/schemas/ImageContentItem'
+              title: ImageContentItem
             - $ref: '#/components/schemas/TextContentItem'
               title: TextContentItem
             discriminator:
               propertyName: type
               mapping:
-                image: '#/components/schemas/ImageContentItem-Output'
+                image: '#/components/schemas/ImageContentItem'
                 text: '#/components/schemas/TextContentItem'
-            title: ImageContentItem-Output | TextContentItem
+            title: ImageContentItem | TextContentItem
           - items:
               oneOf:
-              - $ref: '#/components/schemas/ImageContentItem-Output'
-                title: ImageContentItem-Output
+              - $ref: '#/components/schemas/ImageContentItem'
+                title: ImageContentItem
               - $ref: '#/components/schemas/TextContentItem'
                 title: TextContentItem
               discriminator:
                 propertyName: type
                 mapping:
-                  image: '#/components/schemas/ImageContentItem-Output'
+                  image: '#/components/schemas/ImageContentItem'
                   text: '#/components/schemas/TextContentItem'
-              title: ImageContentItem-Output | TextContentItem
+              title: ImageContentItem | TextContentItem
             type: array
-            title: list[ImageContentItem-Output | TextContentItem]
-          title: string | list[ImageContentItem-Output | TextContentItem]
+            title: list[ImageContentItem | TextContentItem]
+          title: string | list[ImageContentItem | TextContentItem]
         chunk_id:
           type: string
           title: Chunk Id
@@ -6322,7 +6442,7 @@ components:
           description: The ID of the vector store to insert chunks into.
         chunks:
           items:
-            $ref: '#/components/schemas/EmbeddedChunk-Input'
+            $ref: '#/components/schemas/EmbeddedChunk'
           type: array
           title: Chunks
           description: The list of embedded chunks to insert.
@@ -6347,31 +6467,31 @@ components:
           anyOf:
           - type: string
           - oneOf:
-            - $ref: '#/components/schemas/ImageContentItem-Input'
-              title: ImageContentItem-Input
+            - $ref: '#/components/schemas/ImageContentItem'
+              title: ImageContentItem
             - $ref: '#/components/schemas/TextContentItem'
               title: TextContentItem
             discriminator:
               propertyName: type
               mapping:
-                image: '#/components/schemas/ImageContentItem-Input'
+                image: '#/components/schemas/ImageContentItem'
                 text: '#/components/schemas/TextContentItem'
-            title: ImageContentItem-Input | TextContentItem
+            title: ImageContentItem | TextContentItem
           - items:
               oneOf:
-              - $ref: '#/components/schemas/ImageContentItem-Input'
-                title: ImageContentItem-Input
+              - $ref: '#/components/schemas/ImageContentItem'
+                title: ImageContentItem
               - $ref: '#/components/schemas/TextContentItem'
                 title: TextContentItem
               discriminator:
                 propertyName: type
                 mapping:
-                  image: '#/components/schemas/ImageContentItem-Input'
+                  image: '#/components/schemas/ImageContentItem'
                   text: '#/components/schemas/TextContentItem'
-              title: ImageContentItem-Input | TextContentItem
+              title: ImageContentItem | TextContentItem
             type: array
-            title: list[ImageContentItem-Input | TextContentItem]
-          title: string | list[ImageContentItem-Input | TextContentItem]
+            title: list[ImageContentItem | TextContentItem]
+          title: string | list[ImageContentItem | TextContentItem]
           description: The query content to search for.
         params:
           anyOf:
@@ -6389,7 +6509,7 @@ components:
       properties:
         chunks:
           items:
-            $ref: '#/components/schemas/EmbeddedChunk-Output'
+            $ref: '#/components/schemas/EmbeddedChunk'
           type: array
           title: Chunks
         scores:
@@ -7279,6 +7399,32 @@ components:
         Represents token usage details including input tokens, output tokens, a
         breakdown of output tokens, and the total tokens used. Only populated on
         batches created after September 7, 2025.
+    Body_create_process_file_job_v1alpha_file_processors_jobs_post:
+      properties:
+        file:
+          anyOf:
+          - type: string
+            contentMediaType: application/octet-stream
+          - type: 'null'
+          description: The File object to be uploaded and processed. Mutually exclusive with file_id.
+        file_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: ID of file already uploaded to file storage. Mutually exclusive with file.
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional processing options. Provider-specific parameters.
+        chunking_strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Optional chunking strategy for splitting content into chunks. Must be valid JSON string.
+      type: object
+      title: Body_create_process_file_job_v1alpha_file_processors_jobs_post
     Body_create_skill_v1alpha_skills_post:
       properties:
         file:
@@ -7306,32 +7452,6 @@ components:
       required:
       - file
       title: Body_create_skill_version_v1alpha_skills__skill_id__versions_post
-    Body_process_file_v1alpha_file_processors_process_post:
-      properties:
-        file:
-          anyOf:
-          - type: string
-            contentMediaType: application/octet-stream
-          - type: 'null'
-          description: The File object to be uploaded and processed. Mutually exclusive with file_id.
-        file_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: ID of file already uploaded to file storage. Mutually exclusive with file.
-        options:
-          anyOf:
-          - additionalProperties: true
-            type: object
-          - type: 'null'
-          description: Optional processing options. Provider-specific parameters (e.g., OCR settings, output format).
-        chunking_strategy:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: Optional chunking strategy for splitting content into chunks. Must be valid JSON string.
-      type: object
-      title: Body_process_file_v1alpha_file_processors_process_post
     ChatCompletionMessage:
       properties:
         id:
@@ -7518,100 +7638,37 @@ components:
       - reasoning.encrypted_content
       title: ConversationItemInclude
       description: Specify additional output data to include in the model response.
-    EmbeddedChunk-Input:
+    EmbeddedChunk:
       properties:
         content:
           anyOf:
           - type: string
           - oneOf:
-            - $ref: '#/components/schemas/ImageContentItem-Input'
-              title: ImageContentItem-Input
+            - $ref: '#/components/schemas/ImageContentItem'
+              title: ImageContentItem
             - $ref: '#/components/schemas/TextContentItem'
               title: TextContentItem
             discriminator:
               propertyName: type
               mapping:
-                image: '#/components/schemas/ImageContentItem-Input'
+                image: '#/components/schemas/ImageContentItem'
                 text: '#/components/schemas/TextContentItem'
-            title: ImageContentItem-Input | TextContentItem
+            title: ImageContentItem | TextContentItem
           - items:
               oneOf:
-              - $ref: '#/components/schemas/ImageContentItem-Input'
-                title: ImageContentItem-Input
+              - $ref: '#/components/schemas/ImageContentItem'
+                title: ImageContentItem
               - $ref: '#/components/schemas/TextContentItem'
                 title: TextContentItem
               discriminator:
                 propertyName: type
                 mapping:
-                  image: '#/components/schemas/ImageContentItem-Input'
+                  image: '#/components/schemas/ImageContentItem'
                   text: '#/components/schemas/TextContentItem'
-              title: ImageContentItem-Input | TextContentItem
+              title: ImageContentItem | TextContentItem
             type: array
-            title: list[ImageContentItem-Input | TextContentItem]
-          title: string | list[ImageContentItem-Input | TextContentItem]
-        chunk_id:
-          type: string
-          title: Chunk Id
-        metadata:
-          additionalProperties: true
-          type: object
-          title: Metadata
-        chunk_metadata:
-          $ref: '#/components/schemas/ChunkMetadata'
-        embedding:
-          items:
-            type: number
-          type: array
-          title: Embedding
-        embedding_model:
-          type: string
-          title: Embedding Model
-        embedding_dimension:
-          type: integer
-          title: Embedding Dimension
-      type: object
-      required:
-      - content
-      - chunk_id
-      - chunk_metadata
-      - embedding
-      - embedding_model
-      - embedding_dimension
-      title: EmbeddedChunk
-      description: |-
-        A chunk of content with its embedding vector for vector database operations.
-        Inherits all fields from Chunk and adds embedding-related fields.
-    EmbeddedChunk-Output:
-      properties:
-        content:
-          anyOf:
-          - type: string
-          - oneOf:
-            - $ref: '#/components/schemas/ImageContentItem-Output'
-              title: ImageContentItem-Output
-            - $ref: '#/components/schemas/TextContentItem'
-              title: TextContentItem
-            discriminator:
-              propertyName: type
-              mapping:
-                image: '#/components/schemas/ImageContentItem-Output'
-                text: '#/components/schemas/TextContentItem'
-            title: ImageContentItem-Output | TextContentItem
-          - items:
-              oneOf:
-              - $ref: '#/components/schemas/ImageContentItem-Output'
-                title: ImageContentItem-Output
-              - $ref: '#/components/schemas/TextContentItem'
-                title: TextContentItem
-              discriminator:
-                propertyName: type
-                mapping:
-                  image: '#/components/schemas/ImageContentItem-Output'
-                  text: '#/components/schemas/TextContentItem'
-              title: ImageContentItem-Output | TextContentItem
-            type: array
-            title: list[ImageContentItem-Output | TextContentItem]
-          title: string | list[ImageContentItem-Output | TextContentItem]
+            title: list[ImageContentItem | TextContentItem]
+          title: string | list[ImageContentItem | TextContentItem]
         chunk_id:
           type: string
           title: Chunk Id
@@ -8049,34 +8106,6 @@ components:
       - Not Implemented
       title: HealthStatus
       description: Health check status values for provider readiness.
-    ImageContentItem-Input:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - image
-        image:
-          $ref: '#/components/schemas/_URLOrData'
-      type: object
-      required:
-      - image
-      title: ImageContentItem
-      description: A image content item
-    ImageContentItem-Output:
-      properties:
-        type:
-          type: string
-          title: Type
-          enum:
-          - image
-        image:
-          $ref: '#/components/schemas/_URLOrData'
-      type: object
-      required:
-      - image
-      title: ImageContentItem
-      description: A image content item
     InputTokensDetails:
       properties:
         cached_tokens:
@@ -8088,6 +8117,16 @@ components:
       - cached_tokens
       title: InputTokensDetails
       description: A detailed breakdown of the input tokens.
+    JobStatus:
+      type: string
+      enum:
+      - completed
+      - in_progress
+      - failed
+      - scheduled
+      - cancelled
+      title: JobStatus
+      description: Status of a job execution.
     ListConnectorsResponse:
       properties:
         data:
@@ -8100,6 +8139,24 @@ components:
       - data
       title: ListConnectorsResponse
       description: Response containing a list of configured connectors
+    ListProcessFileJobsResponse:
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ProcessFileJob'
+          type: array
+          title: Data
+          description: The list of file-processing jobs.
+        has_more:
+          type: boolean
+          title: Has More
+          description: Whether more jobs are available after this page.
+          default: false
+      type: object
+      required:
+      - data
+      title: ListProcessFileJobsResponse
+      description: Response model listing file-processing jobs.
     ListSkillVersionsResponse:
       properties:
         object:
@@ -8197,80 +8254,18 @@ components:
       - name
       title: MCPListToolsTool
       description: Tool definition returned by MCP list tools operation.
-    OpenAIAssistantMessageParam-Input:
-      properties:
-        role:
-          type: string
-          title: Role
-          description: Must be 'assistant' to identify this as the model's response.
-          enum:
-          - assistant
-        content:
-          anyOf:
-          - type: string
-          - items:
-              $ref: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
-            type: array
-            title: list[OpenAIChatCompletionContentPartTextParam]
-          - type: 'null'
-          title: string | list[OpenAIChatCompletionContentPartTextParam]
-          description: The content of the model's response.
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The name of the assistant message participant.
-        tool_calls:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/ChatCompletionMessageToolCall'
-            type: array
-          - type: 'null'
-          description: List of tool calls. Each tool call is an OpenAIChatCompletionToolCall object.
-      additionalProperties: true
-      type: object
-      title: OpenAIAssistantMessageParam
-      description: A message containing the model's (assistant) response in an OpenAI-compatible chat completion request.
-    OpenAIAssistantMessageParam-Output:
-      properties:
-        role:
-          type: string
-          title: Role
-          description: Must be 'assistant' to identify this as the model's response.
-          enum:
-          - assistant
-        content:
-          anyOf:
-          - type: string
-          - items:
-              $ref: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
-            type: array
-            title: list[OpenAIChatCompletionContentPartTextParam]
-          - type: 'null'
-          title: string | list[OpenAIChatCompletionContentPartTextParam]
-          description: The content of the model's response.
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The name of the assistant message participant.
-        tool_calls:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/ChatCompletionMessageToolCall'
-            type: array
-          - type: 'null'
-          description: List of tool calls. Each tool call is an OpenAIChatCompletionToolCall object.
-      additionalProperties: true
-      type: object
-      title: OpenAIAssistantMessageParam
-      description: A message containing the model's (assistant) response in an OpenAI-compatible chat completion request.
     OpenAIAttachFileRequest:
       properties:
         file_id:
           type: string
           title: File Id
           description: The ID of the file to attach.
+        options:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          description: Optional provider-specific file processing parameters.
         attributes:
           anyOf:
           - additionalProperties:
@@ -8596,240 +8591,6 @@ components:
       type: object
       title: OpenAIResponseInputToolChoiceWebSearch
       description: Indicates that the model should use web search to generate a response
-    OpenAIResponseMessage-Input:
-      properties:
-        content:
-          anyOf:
-          - type: string
-          - items:
-              oneOf:
-              - $ref: '#/components/schemas/OpenAIResponseInputMessageContentText'
-                title: OpenAIResponseInputMessageContentText
-              - $ref: '#/components/schemas/OpenAIResponseInputMessageContentImage'
-                title: OpenAIResponseInputMessageContentImage
-              - $ref: '#/components/schemas/OpenAIResponseInputMessageContentFile'
-                title: OpenAIResponseInputMessageContentFile
-              discriminator:
-                propertyName: type
-                mapping:
-                  input_file: '#/components/schemas/OpenAIResponseInputMessageContentFile'
-                  input_image: '#/components/schemas/OpenAIResponseInputMessageContentImage'
-                  input_text: '#/components/schemas/OpenAIResponseInputMessageContentText'
-              title: OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile
-            type: array
-            title: list[OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile]
-          - items:
-              oneOf:
-              - $ref: '#/components/schemas/OpenAIResponseOutputMessageContentOutputText-Input'
-                title: OpenAIResponseOutputMessageContentOutputText-Input
-              - $ref: '#/components/schemas/OpenAIResponseContentPartRefusal'
-                title: OpenAIResponseContentPartRefusal
-              discriminator:
-                propertyName: type
-                mapping:
-                  output_text: '#/components/schemas/OpenAIResponseOutputMessageContentOutputText-Input'
-                  refusal: '#/components/schemas/OpenAIResponseContentPartRefusal'
-              title: OpenAIResponseOutputMessageContentOutputText-Input | OpenAIResponseContentPartRefusal
-            type: array
-            title: list[OpenAIResponseOutputMessageContentOutputText-Input | OpenAIResponseContentPartRefusal]
-          title: string | list[OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile] | list[OpenAIResponseOutputMessageContentOutputText-Input | OpenAIResponseContentPartRefusal]
-        role:
-          anyOf:
-          - type: string
-            enum:
-            - system
-          - type: string
-            enum:
-            - developer
-          - type: string
-            enum:
-            - user
-          - type: string
-            enum:
-            - assistant
-          title: string
-        type:
-          type: string
-          title: Type
-          enum:
-          - message
-        id:
-          anyOf:
-          - type: string
-          - type: 'null'
-        status:
-          anyOf:
-          - type: string
-          - type: 'null'
-      type: object
-      required:
-      - content
-      - role
-      title: OpenAIResponseMessage
-      description: |-
-        Corresponds to the various Message types in the Responses API.
-        They are all under one type because the Responses API gives them all
-        the same "type" value, and there is no way to tell them apart in certain
-        scenarios.
-    OpenAIResponseMessage-Output:
-      properties:
-        content:
-          anyOf:
-          - type: string
-          - items:
-              oneOf:
-              - $ref: '#/components/schemas/OpenAIResponseInputMessageContentText'
-                title: OpenAIResponseInputMessageContentText
-              - $ref: '#/components/schemas/OpenAIResponseInputMessageContentImage'
-                title: OpenAIResponseInputMessageContentImage
-              - $ref: '#/components/schemas/OpenAIResponseInputMessageContentFile'
-                title: OpenAIResponseInputMessageContentFile
-              discriminator:
-                propertyName: type
-                mapping:
-                  input_file: '#/components/schemas/OpenAIResponseInputMessageContentFile'
-                  input_image: '#/components/schemas/OpenAIResponseInputMessageContentImage'
-                  input_text: '#/components/schemas/OpenAIResponseInputMessageContentText'
-              title: OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile
-            type: array
-            title: list[OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile]
-          - items:
-              oneOf:
-              - $ref: '#/components/schemas/OpenAIResponseOutputMessageContentOutputText-Output'
-                title: OpenAIResponseOutputMessageContentOutputText-Output
-              - $ref: '#/components/schemas/OpenAIResponseContentPartRefusal'
-                title: OpenAIResponseContentPartRefusal
-              discriminator:
-                propertyName: type
-                mapping:
-                  output_text: '#/components/schemas/OpenAIResponseOutputMessageContentOutputText-Output'
-                  refusal: '#/components/schemas/OpenAIResponseContentPartRefusal'
-              title: OpenAIResponseOutputMessageContentOutputText-Output | OpenAIResponseContentPartRefusal
-            type: array
-            title: list[OpenAIResponseOutputMessageContentOutputText-Output | OpenAIResponseContentPartRefusal]
-          title: string | list[OpenAIResponseInputMessageContentText | OpenAIResponseInputMessageContentImage | OpenAIResponseInputMessageContentFile] | list[OpenAIResponseOutputMessageContentOutputText-Output | OpenAIResponseContentPartRefusal]
-        role:
-          anyOf:
-          - type: string
-            enum:
-            - system
-          - type: string
-            enum:
-            - developer
-          - type: string
-            enum:
-            - user
-          - type: string
-            enum:
-            - assistant
-          title: string
-        type:
-          type: string
-          title: Type
-          enum:
-          - message
-        id:
-          anyOf:
-          - type: string
-          - type: 'null'
-        status:
-          anyOf:
-          - type: string
-          - type: 'null'
-      type: object
-      required:
-      - content
-      - role
-      title: OpenAIResponseMessage
-      description: |-
-        Corresponds to the various Message types in the Responses API.
-        They are all under one type because the Responses API gives them all
-        the same "type" value, and there is no way to tell them apart in certain
-        scenarios.
-    OpenAIResponseOutputMessageContentOutputText-Input:
-      properties:
-        text:
-          type: string
-          title: Text
-        type:
-          type: string
-          title: Type
-          enum:
-          - output_text
-        annotations:
-          items:
-            oneOf:
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationFileCitation'
-              title: OpenAIResponseAnnotationFileCitation
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationCitation'
-              title: OpenAIResponseAnnotationCitation
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationContainerFileCitation'
-              title: OpenAIResponseAnnotationContainerFileCitation
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationFilePath'
-              title: OpenAIResponseAnnotationFilePath
-            discriminator:
-              propertyName: type
-              mapping:
-                container_file_citation: '#/components/schemas/OpenAIResponseAnnotationContainerFileCitation'
-                file_citation: '#/components/schemas/OpenAIResponseAnnotationFileCitation'
-                file_path: '#/components/schemas/OpenAIResponseAnnotationFilePath'
-                url_citation: '#/components/schemas/OpenAIResponseAnnotationCitation'
-            title: OpenAIResponseAnnotationFileCitation | ... (4 variants)
-          type: array
-          title: Annotations
-        logprobs:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/OpenAITokenLogProb'
-            type: array
-          - type: 'null'
-      type: object
-      required:
-      - text
-      title: OpenAIResponseOutputMessageContentOutputText
-      description: Text content within an output message of an OpenAI response.
-    OpenAIResponseOutputMessageContentOutputText-Output:
-      properties:
-        text:
-          type: string
-          title: Text
-        type:
-          type: string
-          title: Type
-          enum:
-          - output_text
-        annotations:
-          items:
-            oneOf:
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationFileCitation'
-              title: OpenAIResponseAnnotationFileCitation
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationCitation'
-              title: OpenAIResponseAnnotationCitation
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationContainerFileCitation'
-              title: OpenAIResponseAnnotationContainerFileCitation
-            - $ref: '#/components/schemas/OpenAIResponseAnnotationFilePath'
-              title: OpenAIResponseAnnotationFilePath
-            discriminator:
-              propertyName: type
-              mapping:
-                container_file_citation: '#/components/schemas/OpenAIResponseAnnotationContainerFileCitation'
-                file_citation: '#/components/schemas/OpenAIResponseAnnotationFileCitation'
-                file_path: '#/components/schemas/OpenAIResponseAnnotationFilePath'
-                url_citation: '#/components/schemas/OpenAIResponseAnnotationCitation'
-            title: OpenAIResponseAnnotationFileCitation | ... (4 variants)
-          type: array
-          title: Annotations
-        logprobs:
-          anyOf:
-          - items:
-              $ref: '#/components/schemas/OpenAITokenLogProb'
-            type: array
-          - type: 'null'
-      type: object
-      required:
-      - text
-      title: OpenAIResponseOutputMessageContentOutputText
-      description: Text content within an output message of an OpenAI response.
     OpenAIResponseOutputMessageFileSearchToolCallResults:
       properties:
         attributes:
@@ -8931,64 +8692,6 @@ components:
       - text
       title: OpenAIResponseOutputMessageReasoningSummary
       description: A summary of reasoning output from the model.
-    OpenAIResponseOutputMessageWebSearchToolCall-Input:
-      properties:
-        id:
-          type: string
-          title: Id
-        status:
-          type: string
-          title: Status
-        type:
-          type: string
-          title: Type
-          enum:
-          - web_search_call
-        action:
-          anyOf:
-          - $ref: '#/components/schemas/WebSearchActionSearch'
-            title: WebSearchActionSearch
-          - $ref: '#/components/schemas/WebSearchActionOpenPage'
-            title: WebSearchActionOpenPage
-          - $ref: '#/components/schemas/WebSearchActionFind'
-            title: WebSearchActionFind
-          - type: 'null'
-          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
-      type: object
-      required:
-      - id
-      - status
-      title: OpenAIResponseOutputMessageWebSearchToolCall
-      description: Web search tool call output message for OpenAI responses.
-    OpenAIResponseOutputMessageWebSearchToolCall-Output:
-      properties:
-        id:
-          type: string
-          title: Id
-        status:
-          type: string
-          title: Status
-        type:
-          type: string
-          title: Type
-          enum:
-          - web_search_call
-        action:
-          anyOf:
-          - $ref: '#/components/schemas/WebSearchActionSearch'
-            title: WebSearchActionSearch
-          - $ref: '#/components/schemas/WebSearchActionOpenPage'
-            title: WebSearchActionOpenPage
-          - $ref: '#/components/schemas/WebSearchActionFind'
-            title: WebSearchActionFind
-          - type: 'null'
-          title: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind
-      type: object
-      required:
-      - id
-      - status
-      title: OpenAIResponseOutputMessageWebSearchToolCall
-      description: Web search tool call output message for OpenAI responses.
     OpenAIResponseReasoning:
       properties:
         effort:
@@ -9163,86 +8866,6 @@ components:
       type: object
       title: OpenAIUpdateVectorStoreRequest
       description: Request body for updating a vector store.
-    OpenAIUserMessageParam-Input:
-      properties:
-        role:
-          type: string
-          title: Role
-          description: Must be 'user' to identify this as a user message.
-          enum:
-          - user
-        content:
-          anyOf:
-          - type: string
-          - items:
-              oneOf:
-              - $ref: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
-                title: OpenAIChatCompletionContentPartTextParam
-              - $ref: '#/components/schemas/OpenAIChatCompletionContentPartImageParam'
-                title: OpenAIChatCompletionContentPartImageParam
-              - $ref: '#/components/schemas/OpenAIFile'
-                title: OpenAIFile
-              discriminator:
-                propertyName: type
-                mapping:
-                  file: '#/components/schemas/OpenAIFile'
-                  image_url: '#/components/schemas/OpenAIChatCompletionContentPartImageParam'
-                  text: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
-              title: OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile
-            type: array
-            title: list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile]
-          title: string | list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile]
-          description: The content of the message, which can include text and other media.
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The name of the user message participant.
-      type: object
-      required:
-      - content
-      title: OpenAIUserMessageParam
-      description: A message from the user in an OpenAI-compatible chat completion request.
-    OpenAIUserMessageParam-Output:
-      properties:
-        role:
-          type: string
-          title: Role
-          description: Must be 'user' to identify this as a user message.
-          enum:
-          - user
-        content:
-          anyOf:
-          - type: string
-          - items:
-              oneOf:
-              - $ref: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
-                title: OpenAIChatCompletionContentPartTextParam
-              - $ref: '#/components/schemas/OpenAIChatCompletionContentPartImageParam'
-                title: OpenAIChatCompletionContentPartImageParam
-              - $ref: '#/components/schemas/OpenAIFile'
-                title: OpenAIFile
-              discriminator:
-                propertyName: type
-                mapping:
-                  file: '#/components/schemas/OpenAIFile'
-                  image_url: '#/components/schemas/OpenAIChatCompletionContentPartImageParam'
-                  text: '#/components/schemas/OpenAIChatCompletionContentPartTextParam'
-              title: OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile
-            type: array
-            title: list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile]
-          title: string | list[OpenAIChatCompletionContentPartTextParam | OpenAIChatCompletionContentPartImageParam | OpenAIFile]
-          description: The content of the message, which can include text and other media.
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          description: The name of the user message participant.
-      type: object
-      required:
-      - content
-      title: OpenAIUserMessageParam
-      description: A message from the user in an OpenAI-compatible chat completion request.
     OutputTokensDetails:
       properties:
         reasoning_tokens:
@@ -9254,6 +8877,44 @@ components:
       - reasoning_tokens
       title: OutputTokensDetails
       description: A detailed breakdown of the output tokens.
+    ProcessFileJob:
+      properties:
+        job_id:
+          type: string
+          title: Job Id
+          description: Unique identifier for the job.
+        status:
+          $ref: '#/components/schemas/JobStatus'
+          description: Current execution status of the job.
+        created_at:
+          type: integer
+          title: Created At
+          description: Unix timestamp (seconds) for when the job was created.
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/ProcessFileResponse'
+            title: ProcessFileResponse
+          - type: 'null'
+          description: The processed file result. Present only once the job has completed successfully.
+          title: ProcessFileResponse
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Error message. Present only if the job failed.
+      type: object
+      required:
+      - job_id
+      - status
+      - created_at
+      title: ProcessFileJob
+      description: |-
+        An asynchronous file-processing job.
+
+        Returned when a file is submitted for processing via the job-based API. Poll
+        by job_id until ``status`` is terminal (completed/failed/cancelled). When
+        completed, ``result`` holds the processed chunks; when failed, ``error``
+        explains why.
     ProcessFileResponse:
       properties:
         chunks:
@@ -9290,6 +8951,7 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+          description: Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and "classifier". Other string values are accepted for OpenAI API compatibility but are not supported.
         score_threshold:
           anyOf:
           - type: number
@@ -10569,6 +10231,18 @@ components:
             The container image to use for this implementation. If one is provided, pip_packages will be ignored.
             If a provider depends on other providers, the dependencies MUST NOT specify a container image.
           nullable: true
+        execution_mode:
+          default: inline
+          description: |2
+
+            How this provider's work is executed. 'inline' runs the implementation in the server
+            process (default, unchanged behavior). 'worker' runs the implementation in a separate
+            worker process via the job queue, so long or large operations do not block the server.
+          enum:
+          - inline
+          - worker
+          title: Execution Mode
+          type: string
         description:
           anyOf:
           - type: string
@@ -11139,69 +10813,6 @@ components:
       - completion_id
       title: ListChatCompletionMessagesRequest
       type: object
-    EmbeddedChunk:
-      description: |-
-        A chunk of content with its embedding vector for vector database operations.
-        Inherits all fields from Chunk and adds embedding-related fields.
-      properties:
-        content:
-          anyOf:
-          - type: string
-          - discriminator:
-              mapping:
-                image: '#/components/schemas/ImageContentItem'
-                text: '#/components/schemas/TextContentItem'
-              propertyName: type
-            oneOf:
-            - $ref: '#/components/schemas/ImageContentItem'
-              title: ImageContentItem
-            - $ref: '#/components/schemas/TextContentItem'
-              title: TextContentItem
-            title: ImageContentItem | TextContentItem
-          - items:
-              discriminator:
-                mapping:
-                  image: '#/components/schemas/ImageContentItem'
-                  text: '#/components/schemas/TextContentItem'
-                propertyName: type
-              oneOf:
-              - $ref: '#/components/schemas/ImageContentItem'
-                title: ImageContentItem
-              - $ref: '#/components/schemas/TextContentItem'
-                title: TextContentItem
-              title: ImageContentItem | TextContentItem
-            type: array
-            title: list[ImageContentItem | TextContentItem]
-          title: string | list[ImageContentItem | TextContentItem]
-        chunk_id:
-          title: Chunk Id
-          type: string
-        metadata:
-          additionalProperties: true
-          title: Metadata
-          type: object
-        chunk_metadata:
-          $ref: '#/components/schemas/ChunkMetadata'
-        embedding:
-          items:
-            type: number
-          title: Embedding
-          type: array
-        embedding_model:
-          title: Embedding Model
-          type: string
-        embedding_dimension:
-          title: Embedding Dimension
-          type: integer
-      required:
-      - content
-      - chunk_id
-      - chunk_metadata
-      - embedding
-      - embedding_model
-      - embedding_dimension
-      title: EmbeddedChunk
-      type: object
     VectorStoreCreateRequest:
       description: Request to create a vector store.
       properties:
@@ -11371,16 +10982,6 @@ components:
       - batch_id
       title: CancelBatchRequest
       type: object
-    JobStatus:
-      description: Status of a job execution.
-      enum:
-      - completed
-      - in_progress
-      - failed
-      - scheduled
-      - cancelled
-      title: JobStatus
-      type: string
     Job:
       description: A job execution instance with status tracking.
       properties:
@@ -12573,10 +12174,10 @@ components:
     OpenAIResponseMessageOutputUnion:
       anyOf:
       - oneOf:
-        - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
-          title: OpenAIResponseMessage-Output
-        - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
-          title: OpenAIResponseOutputMessageWebSearchToolCall-Output
+        - $ref: '#/components/schemas/OpenAIResponseMessage'
+          title: OpenAIResponseMessage
+        - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+          title: OpenAIResponseOutputMessageWebSearchToolCall
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
           title: OpenAIResponseOutputMessageFileSearchToolCall
         - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -12597,11 +12198,11 @@ components:
             mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
             mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
             mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-            message: '#/components/schemas/OpenAIResponseMessage-Output'
+            message: '#/components/schemas/OpenAIResponseMessage'
             reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-            web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+            web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
         x-stainless-naming: OpenAIResponseMessageOutputOneOf
-        title: OpenAIResponseMessage-Output | ... (8 variants)
+        title: OpenAIResponseMessage | ... (8 variants)
       - $ref: '#/components/schemas/OpenAIResponseInputFunctionToolCallOutput'
         title: OpenAIResponseInputFunctionToolCallOutput
       - $ref: '#/components/schemas/OpenAIResponseMCPApprovalResponse'
@@ -12612,10 +12213,10 @@ components:
       x-stainless-naming: OpenAIResponseMessageOutputUnion
     OpenAIResponseOutputItem:
       oneOf:
-      - $ref: '#/components/schemas/OpenAIResponseMessage-Output'
-        title: OpenAIResponseMessage-Output
-      - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
-        title: OpenAIResponseOutputMessageWebSearchToolCall-Output
+      - $ref: '#/components/schemas/OpenAIResponseMessage'
+        title: OpenAIResponseMessage
+      - $ref: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
+        title: OpenAIResponseOutputMessageWebSearchToolCall
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageFileSearchToolCall'
         title: OpenAIResponseOutputMessageFileSearchToolCall
       - $ref: '#/components/schemas/OpenAIResponseOutputMessageFunctionToolCall'
@@ -12636,11 +12237,11 @@ components:
           mcp_approval_request: '#/components/schemas/OpenAIResponseMCPApprovalRequest'
           mcp_call: '#/components/schemas/OpenAIResponseOutputMessageMCPCall'
           mcp_list_tools: '#/components/schemas/OpenAIResponseOutputMessageMCPListTools'
-          message: '#/components/schemas/OpenAIResponseMessage-Output'
+          message: '#/components/schemas/OpenAIResponseMessage'
           reasoning: '#/components/schemas/OpenAIResponseOutputMessageReasoningItem'
-          web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall-Output'
+          web_search_call: '#/components/schemas/OpenAIResponseOutputMessageWebSearchToolCall'
       x-stainless-naming: OpenAIResponseOutputItem
-      title: OpenAIResponseMessage-Output | ... (8 variants)
+      title: OpenAIResponseMessage | ... (8 variants)
     ChatCompletionMessageToolCall:
       properties:
         id:

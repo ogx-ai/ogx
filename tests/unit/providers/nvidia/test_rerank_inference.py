@@ -259,3 +259,19 @@ async def test_list_provider_model_ids_uses_configured_on_dynamic_failure():
     # Should still return configured rerank ids
     configured_ids = list(adapter.config.rerank_model_to_url.keys())
     assert set(ids) == set(configured_ids)
+
+
+async def test_list_provider_model_ids_logs_on_dynamic_failure():
+    """A dynamic listing failure is surfaced via a warning, not silently swallowed (issue #4320)."""
+    adapter = create_adapter()
+
+    error = Exception("401 invalid api key")
+    with (
+        patch.object(OpenAIMixin, "list_provider_model_ids", new=AsyncMock(side_effect=error)),
+        patch("ogx.providers.remote.inference.nvidia.nvidia.logger") as mock_logger,
+    ):
+        await adapter.list_provider_model_ids()
+
+    mock_logger.warning.assert_called_once()
+    # The original error text is included so the misconfiguration is diagnosable.
+    assert "401 invalid api key" in str(mock_logger.warning.call_args)

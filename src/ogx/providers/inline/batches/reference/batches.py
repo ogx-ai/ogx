@@ -16,6 +16,9 @@ from typing import Any
 from openai.types.batch import BatchError, Errors
 from pydantic import BaseModel
 
+from ogx.core.access_control.datatypes import RouteAccessRule
+from ogx.core.access_control.route_access import is_route_allowed
+from ogx.core.request_headers import get_authenticated_user
 from ogx.core.storage.sqlstore.authorized_sqlstore import AuthorizedSqlStore
 from ogx.log import get_logger
 from ogx.providers.utils.files.response import response_body_bytes
@@ -39,6 +42,7 @@ from ogx_api import (
     OpenAISystemMessageParam,
     OpenAIToolMessageParam,
     OpenAIUserMessageParam,
+    RouteAccessDeniedError,
 )
 from ogx_api.batches.models import (
     CancelBatchRequest,
@@ -129,12 +133,14 @@ class ReferenceBatchesImpl(Batches):
         files_api: Files,
         models_api: Models,
         sql_store: AuthorizedSqlStore,
+        route_policy: list[RouteAccessRule] | None = None,
     ) -> None:
         self.config = config
         self.sql_store = sql_store
         self.inference_api = inference_api
         self.files_api = files_api
         self.models_api = models_api
+        self.route_policy = route_policy or []
         self._processing_tasks: dict[str, asyncio.Task] = {}
         self._batch_semaphore = asyncio.Semaphore(config.max_concurrent_batches)
         self._update_batch_lock = asyncio.Lock()
@@ -163,7 +169,34 @@ class ReferenceBatchesImpl(Batches):
                 "Shutdown initiated with active batch processing tasks", active_tasks=len(self._processing_tasks)
             )
 
-    # TODO (SECURITY): this currently works w/ configured api keys, not with x-ogx-provider-data or with user policy restrictions
+    # SECURITY NOTE: batch processing runs in a background asyncio.Task spawned from
+    # create_batch() while still inside the creating request's context. asyncio.create_task()
+    # snapshots contextvars at spawn time, so that task retains the creating user's
+    # authenticated identity (get_authenticated_user()) and provider data
+    # (x-ogx-provider-data) for its entire lifetime -- per-request inference credentials and
+    # AuthorizedSqlStore-backed policy checks (list_batches, retrieve_batch, cancel_batch) are
+    # therefore enforced the same way they are for a live, synchronous request. This is
+    # exercised by test_list_batches_scoped_to_creating_user,
+    # test_retrieve_batch_denied_for_other_user, test_cancel_batch_denied_for_other_user, and
+    # test_batch_processing_preserves_creating_users_context in test_reference.py.
+    #
+    # This guarantee holds only within a single server process's lifetime: initialize() does
+    # not yet resume in-progress batches after a restart (see the TODO there), so today there
+    # is no code path that processes a batch outside its creating request's context. If
+    # restart resumption is implemented, it must explicitly re-enter the original user's
+    # RequestProviderDataContext before resuming -- resuming with no context would silently
+    # fall back to server-configured credentials and bypass per-user policy.
+    #
+    # The above is resource-level (AuthorizedSqlStore) and per-request-credential
+    # enforcement; it does NOT cover route-level authorization. RouteAuthorizationMiddleware
+    # only inspects the outer HTTP request's own path (e.g. POST /v1/batches), so a
+    # route_policy rule forbidding a user from a route like /v1/embeddings would not stop
+    # that user from creating a batch whose endpoint is /v1/embeddings: batch processing
+    # calls the inference API directly in-process, never through that middleware. The
+    # is_route_allowed() check below re-applies the same route_policy to request.endpoint
+    # at creation time (every line's "url" is required to match request.endpoint, so
+    # checking once here covers the whole batch) so that guarantee holds for batches too.
+    # See test_create_batch_denied_by_route_policy in test_reference.py.
     async def create_batch(
         self,
         request: CreateBatchRequest,
@@ -211,6 +244,16 @@ class ReferenceBatchesImpl(Batches):
             raise ValueError(
                 f"Invalid endpoint: {request.endpoint}. Supported values: /v1/chat/completions, /v1/completions, /v1/embeddings. Code: invalid_value. Param: endpoint",
             )
+
+        # Every request line in the batch is executed against request.endpoint (lines
+        # with a different "url" are rejected in _validate_input), so checking the
+        # batch endpoint once here is equivalent to checking every line. This runs the
+        # same route_policy evaluation RouteAuthorizationMiddleware applies to a live
+        # request to this endpoint -- batch processing calls the inference API directly
+        # in-process and never passes through that middleware, so without this check a
+        # route forbidden at the HTTP layer would remain reachable through a batch.
+        if not is_route_allowed(request.endpoint, get_authenticated_user(), self.route_policy):
+            raise RouteAccessDeniedError(request.endpoint)
 
         if request.completion_window != "24h":
             raise ValueError(
@@ -300,9 +343,12 @@ class ReferenceBatchesImpl(Batches):
         request: ListBatchesRequest,
     ) -> ListBatchesResponse:
         """
-        List all batches, eventually only for the current user.
+        List batches visible to the authenticated caller.
 
-        With no notion of user, we return all batches.
+        Filtering is delegated to AuthorizedSqlStore.fetch_all, which enforces the
+        configured access policy at the row level -- this returns only batches the caller
+        owns (or is otherwise permitted to see under that policy), not all batches in the
+        table. See test_list_batches_scoped_to_creating_user in test_reference.py.
         """
         results = await self.sql_store.fetch_all(
             table=TABLE_BATCHES,
@@ -373,7 +419,7 @@ class ReferenceBatchesImpl(Batches):
         Read & validate input, return errors and valid input.
 
         Validation of
-        - input_file_id existance
+        - input_file_id existence
         - valid json
         - custom_id, method, url, body presence and valid
         - no streaming
@@ -649,7 +695,15 @@ class ReferenceBatchesImpl(Batches):
         request_id = f"batch_req_{batch_id}_{request.line_num}"
 
         try:
-            # TODO(SECURITY): review body for security issues
+            # SECURITY NOTE: request.body comes from a user-uploaded file, but it is not a
+            # wider attack surface than a live request with the same body: it is validated by
+            # the same OpenAI*RequestWithExtraBody Pydantic models (a malformed body raises
+            # ValidationError, caught below and reported as a per-line batch error rather than
+            # failing the whole batch) and executed through the same InferenceRouter as
+            # /v1/chat/completions, /v1/completions, and /v1/embeddings -- so it is subject to
+            # the same model resolution (_validate_input already resolves and checks
+            # body.model before we get here), the same per-request credentials, and the same
+            # policy enforcement described in the note on create_batch above.
             if request.url == "/v1/chat/completions":
                 request.body["messages"] = [convert_to_openai_message_param(msg) for msg in request.body["messages"]]
                 chat_params = OpenAIChatCompletionRequestWithExtraBody(**request.body)

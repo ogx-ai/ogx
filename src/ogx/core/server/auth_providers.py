@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import ipaddress
 import json
 import re
 import ssl
@@ -22,15 +23,30 @@ from ogx.core.datatypes import (
     CustomAuthConfig,
     GitHubTokenAuthConfig,
     KubernetesAuthProviderConfig,
+    LocalApiKeyAuthConfig,
     OAuth2TokenAuthConfig,
     UpstreamHeaderAuthConfig,
     User,
     _validate_tenant_id,
 )
 from ogx.log import get_logger
-from ogx_api import AuthServiceUnavailableError, TokenValidationError
+from ogx_api import AuthServiceUnavailableError, TokenValidationError, UntrustedProxyError
 
 logger = get_logger(name=__name__, category="core::auth")
+
+# FIPS-approved JWT signing algorithms (asymmetric only).
+# Symmetric algorithms (HS256, etc.) are excluded to prevent algorithm confusion attacks.
+FIPS_APPROVED_JWT_ALGORITHMS = [
+    "RS256",
+    "RS384",
+    "RS512",
+    "PS256",
+    "PS384",
+    "PS512",
+    "ES256",
+    "ES384",
+    "ES512",
+]
 
 
 def _resolve_tenant_id(raw_value: str | None) -> str | None:
@@ -101,6 +117,32 @@ class AuthProvider(ABC):
     def get_auth_error_message(self, scope: Scope | None = None) -> str:
         """Return provider-specific authentication error message."""
         return "Authentication required"
+
+
+class LocalApiKeyAuthProvider(AuthProvider):
+    """Validates requests against a configured set of API keys.
+
+    Any valid key is treated as both an admin and an owner, granting full
+    access to all resources. The resolved user has ``roles=admin,owner`` and
+    ``teams=<key>`` so the default access-policy rules (``user in owners`` /
+    ``user is owner``) work as expected. This provider does not resolve a
+    tenant ID, so it is incompatible with multi-tenant mode.
+    """
+
+    def __init__(self, config: LocalApiKeyAuthConfig) -> None:
+        self.config = config
+        self._valid_keys: set[str] = set(config.api_keys)
+
+    async def validate_token(self, token: str, scope: Scope | None = None) -> User:
+        if token not in self._valid_keys:
+            raise TokenValidationError("Invalid or missing API key")
+        return User(
+            principal=token,
+            attributes={"roles": ["admin", "owner"], "teams": [token]},
+        )
+
+    async def close(self) -> None:
+        pass
 
 
 def get_attributes_from_claims(claims: dict[str, Any], mapping: dict[str, str]) -> dict[str, list[str]]:
@@ -210,13 +252,13 @@ class OAuth2TokenAuthProvider(AuthProvider):
         try:
             jwks_client: jwt.PyJWKClient = self._get_jwks_client()
             signing_key = jwks_client.get_signing_key_from_jwt(token)
-            algorithm = jwt.get_unverified_header(token)["alg"]
 
-            # Decode and verify the JWT
+            # Decode and verify the JWT using a static allowlist of FIPS-approved algorithms.
+            # Never trust the algorithm from the unverified token header (algorithm confusion attack).
             claims = jwt.decode(
                 token,
                 signing_key.key,
-                algorithms=[algorithm],
+                algorithms=FIPS_APPROVED_JWT_ALGORITHMS,
                 audience=self.config.audience,
                 issuer=self.config.issuer,
                 options={"verify_exp": True, "verify_aud": True, "verify_iss": True},
@@ -252,7 +294,7 @@ class OAuth2TokenAuthProvider(AuthProvider):
         if self.config.introspection is None:
             raise ValueError("Introspection is not configured")
 
-        ssl_ctxt: ssl.SSLContext | bool
+        ssl_ctxt: ssl.SSLContext | bool = True
         if not self.config.verify_tls:
             logger.warning("TLS verification is disabled for token introspection")
             ssl_ctxt = False
@@ -625,18 +667,44 @@ class UpstreamHeaderAuthProvider(AuthProvider):
     Used when an upstream gateway (Authorino, Istio, or any reverse proxy) handles
     authentication and injects user identity into request headers. This provider
     trusts the headers and performs no token validation or outbound calls.
+
+    When trusted_proxy_cidrs is configured, requests are verified against the
+    CIDR allowlist before identity headers are read.
     """
 
     def __init__(self, config: UpstreamHeaderAuthConfig) -> None:
         self.config = config
+        self._trusted_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None = None
+        if config.trusted_proxy_cidrs:
+            self._trusted_networks = [ipaddress.ip_network(cidr, strict=False) for cidr in config.trusted_proxy_cidrs]
 
     @property
     def requires_http_bearer(self) -> bool:
         return False
 
+    def _verify_proxy_cidr(self, scope: Scope) -> None:
+        assert self._trusted_networks is not None
+        client = scope.get("client")
+        if not client:
+            raise UntrustedProxyError("Request rejected: unable to determine client IP for proxy verification")
+        client_ip_str = client[0]
+        try:
+            client_ip = ipaddress.ip_address(client_ip_str)
+        except ValueError as err:
+            logger.warning("Failed to parse client IP for proxy verification", client_ip=client_ip_str)
+            raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist") from err
+        for network in self._trusted_networks:
+            if client_ip in network:
+                return
+        logger.warning("Client IP not in trusted proxy CIDR allowlist", client_ip=client_ip_str)
+        raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist")
+
     async def validate_token(self, token: str, scope: Scope | None = None) -> User:
         if scope is None:
             raise ValueError("Missing required authentication header: " + self.config.principal_header)
+
+        if self._trusted_networks is not None:
+            self._verify_proxy_cidr(scope)
 
         headers = dict(scope.get("headers", []))
 
@@ -718,6 +786,8 @@ def create_auth_provider(config: AuthenticationConfig) -> AuthProvider:
     """Factory function to create the appropriate auth provider."""
     provider_config = config.provider_config
 
+    if isinstance(provider_config, LocalApiKeyAuthConfig):
+        return LocalApiKeyAuthProvider(provider_config)
     if isinstance(provider_config, CustomAuthConfig):
         return CustomAuthProvider(provider_config)
     elif isinstance(provider_config, OAuth2TokenAuthConfig):

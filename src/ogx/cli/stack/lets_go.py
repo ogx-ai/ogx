@@ -12,6 +12,7 @@ import importlib
 import inspect
 import logging  # allow-direct-logging :: for direct logging control in _suppress_provider_logs
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,7 @@ from ogx.cli.subcommand import Subcommand
 from ogx.core.build import get_provider_dependencies
 from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
+from ogx.core.server_tls import generate_self_signed_cert
 from ogx.core.stack import extract_env_var_references, replace_env_vars, run_config_from_dynamic_config_spec
 from ogx.core.utils.config_dirs import DISTRIBS_BASE_DIR
 from ogx.core.utils.dynamic import instantiate_class_type
@@ -203,6 +205,24 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Enable debug logging during provider scanning and server startup.",
     )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        default=False,
+        help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host to bind the server to",
+    )
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        default=False,
+        help="Disable authentication entirely (generates no server.auth block in config).",
+    )
 
 
 def _add_file_search_and_responses(run_config: StackConfig) -> None:
@@ -243,12 +263,13 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     if "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: brave -> tavily -> bing
+    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply
     _web_search_order = [
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),
         ("remote::nimble-search", "nimble-search"),
+        ("remote::serply-search", "serply-search"),
     ]
     tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
     existing_web_search: set[str] = {
@@ -314,7 +335,11 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     cprint("  ✓ inline::builtin responses (built-in)", color="green")
 
 
-def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    """Async core: provider probing, config generation, and embedding detection.
+
+    Returns a dict with 'config_file', 'stack_args', and 'port' for the caller
+    to pass to uvicorn after asyncio.run() returns."""
     if args.enable_ui:
         try:
             _start_ui_development_server(args.port)
@@ -325,20 +350,20 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         providers_spec = args.providers_override
         autodetect_embedding: tuple[QualifiedModel, int | None] | None = None
     else:
-        providers_spec, autodetect_embedding = _autodetect_providers(debug=getattr(args, "debug", False))
+        providers_spec, autodetect_embedding = await _autodetect_providers(debug=getattr(args, "debug", False))
 
     has_inference = any(p.startswith("inference=") for p in (providers_spec or "").split(","))
     if not has_inference:
         parser.error("No inference providers detected. Nothing to run.")
 
-    distro_dir = DISTRIBS_BASE_DIR / "letsgo-run" if args.persist_config else Path(tempfile.mkdtemp())
+    distro_dir = DISTRIBS_BASE_DIR / "go-run" if args.persist_config else Path(tempfile.mkdtemp())
     os.makedirs(distro_dir, exist_ok=True)
 
     try:
         run_config = run_config_from_dynamic_config_spec(
             dynamic_config_spec=providers_spec,
             distro_dir=distro_dir,
-            distro_name="letsgo-run",
+            distro_name="go-run",
         )
     except ValueError as e:
         cprint(str(e), color="red", file=sys.stderr)
@@ -392,7 +417,7 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         _add_file_search_and_responses(run_config)
     elif "vector_io" in run_config.providers:
         detected_result = (
-            autodetect_embedding if autodetect_embedding is not None else _detect_embedding_model(run_config)
+            autodetect_embedding if autodetect_embedding is not None else await _detect_embedding_model(run_config)
         )
         if detected_result:
             detected, embedding_dimension = detected_result
@@ -451,16 +476,58 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
 
     config_dict = run_config.model_dump(mode="json")
 
+    if not args.insecure:
+        cert_path, key_path = generate_self_signed_cert(distro_dir)
+        if "server" not in config_dict:
+            config_dict["server"] = {}
+        config_dict["server"]["tls_certfile"] = str(cert_path)
+        config_dict["server"]["tls_keyfile"] = str(key_path)
+        config_dict["server"]["insecure"] = False
+        cprint(f"  ✓ Generated self-signed TLS certificate → {cert_path}", color="green")
+
+    config_dict["server"]["host"] = args.host
+
+    if not args.no_auth:
+        api_keys = [f"ogk_{secrets.token_urlsafe(24)}" for _ in range(3)]
+        if "server" not in config_dict:
+            config_dict["server"] = {}
+        config_dict["server"]["auth"] = {
+            "provider_config": {"type": "local_api_key", "api_keys": api_keys},
+        }
+        cprint("  ✓ Simple authentication enabled", color="green")
+        cprint("    Here are keys you can use for authentication:", color="green")
+        for key in api_keys:
+            cprint(f"      {key}", color="yellow")
+        cprint(f'    curl -k -H "Authorization: Bearer {api_keys[0]}" \\', color="cyan")
+        cprint(f"      https://localhost:{args.port}/v1/chat/completions", color="cyan")
+        cprint("", color="green")
+
     config_file = distro_dir / "config.yaml"
     logger.info("Writing generated config to", config_file=config_file)
     with open(config_file, "w") as f:
         yaml.dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
+    return {
+        "config_file": config_file,
+        "stack_args": argparse.Namespace(
+            port=args.port,
+            enable_ui=args.enable_ui,
+            providers=None,
+            insecure=args.insecure,
+        ),
+    }
+
+
+def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Entry point for `ogx letsgo`.
+
+    Provider probing and embedding detection run inside asyncio.run() on
+    _run_letsgo_cmd_impl. After it returns, we call _uvicorn_run in a sync
+    context so uvicorn can start its own event loop without conflict."""
+    result = asyncio.run(_run_letsgo_cmd_impl(args, parser))
+    config_file: Path = result["config_file"]
+    stack_args: argparse.Namespace = result["stack_args"]
     try:
-        stack_args = argparse.Namespace()
-        stack_args.port = args.port
-        stack_args.enable_ui = args.enable_ui
-        stack_args.providers = None
         _uvicorn_run(config_file, stack_args, parser)
     except Exception:
         logger.exception("Failed to start the stack server")
@@ -493,7 +560,7 @@ def _install_provider_deps(normal_deps: list[str], special_deps: list[str]) -> N
             )
 
 
-def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedModel, int | None] | None]:
+async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedModel, int | None] | None]:
     """Probe all candidate providers and return a spec string and first detected embedding model.
 
     Each provider is probed by instantiating it and calling list_models() to confirm
@@ -505,6 +572,7 @@ def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedMode
         ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None, None),
         ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None, "VLLM_API_TOKEN"),
         ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None, None),
+        ("remote::text-embeddings-inference", "TEI_URL", "http://localhost:8080/v1", None, None),
         ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", None),
         (
             "remote::llama-openai-compat",
@@ -516,6 +584,7 @@ def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedMode
         ("remote::anthropic", None, "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", None),
         ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY", None),
         ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY", None),
+        ("remote::meta", None, "https://api.meta.ai/v1", "META_API_KEY", None),
     ]
 
     passed: list[str] = []
@@ -523,7 +592,7 @@ def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedMode
     detected_embedding: tuple[QualifiedModel, int | None] | None = None
     cprint("Scanning for available providers...", color="cyan")
     for provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env in candidates:
-        status, models, base_url, base_source, pip_packages = _probe_provider_availability(
+        status, models, base_url, base_source, pip_packages = await _probe_provider_availability(
             provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env, debug=debug
         )
 
@@ -681,24 +750,20 @@ def _pick_embedding_from_models(models: list[Any], provider_id: str) -> tuple[Qu
     return best
 
 
-def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, int | None] | None:
+async def _detect_embedding_model(run_config: StackConfig) -> tuple[QualifiedModel, int | None] | None:
     """Find an embedding model by instantiating each inference provider and calling list_models().
 
     Returns tuple of (QualifiedModel, embedding_dimension) or None if not found.
     Dimension may be None if not available in model metadata — caller must handle this.
     """
-
-    async def _detect_async() -> tuple[QualifiedModel, int | None] | None:
-        for provider in run_config.providers.get("inference", []):
-            if not provider.provider_id:
-                continue
-            models = await _list_models_from_provider(provider)
-            result = _pick_embedding_from_models(models, provider.provider_id)
-            if result is not None:
-                return result
-        return None
-
-    return asyncio.run(_detect_async())
+    for provider in run_config.providers.get("inference", []):
+        if not provider.provider_id:
+            continue
+        models = await _list_models_from_provider(provider)
+        result = _pick_embedding_from_models(models, provider.provider_id)
+        if result is not None:
+            return result
+    return None
 
 
 async def _instantiate_with_timeout(
@@ -748,7 +813,7 @@ def _suppress_provider_logs(suppress: bool = True) -> Generator[None, None, None
         logging.disable(previous_disable_level)
 
 
-def _probe_provider_availability(
+async def _probe_provider_availability(
     provider_type: str,
     base_url_env: str | None,
     default_base_url: str,
@@ -864,7 +929,7 @@ def _probe_provider_availability(
                     factory_name=_FactoryDispatcher.method_name_for_spec(provider_spec),
                 )
                 # Pass empty deps dict {} for single-provider probing
-                provider: ProbeableProvider = asyncio.run(_instantiate_with_timeout(factory_fn, config))  # type: ignore[arg-type]
+                provider: ProbeableProvider = await _instantiate_with_timeout(factory_fn, config)  # type: ignore[arg-type]
                 logger.debug("Provider instantiated successfully for provider", provider_type=provider_type)
 
                 # Set required attributes (normally done by resolver)
@@ -882,14 +947,14 @@ def _probe_provider_availability(
             # List models with timeout
             try:
                 logger.debug("Calling list_models for provider", provider_type=provider_type)
-                models = asyncio.run(_list_models_with_timeout(provider, timeout_seconds=5))
+                models = await _list_models_with_timeout(provider, timeout_seconds=5)
                 logger.debug("Listed models for provider", provider_type=provider_type, model_count=len(models))
 
                 # Cleanup provider: call shutdown() if available.
                 try:
                     shutdown_result = provider.shutdown()
                     if shutdown_result is not None:
-                        asyncio.run(shutdown_result)  # type: ignore[arg-type]
+                        await shutdown_result
                 except AttributeError:
                     # Provider did not declare `shutdown()`; surface as a warning.
                     cprint(
@@ -918,16 +983,16 @@ def _probe_provider_availability(
 
 
 class StackLetsGo(Subcommand):
-    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx letsgo' instead)."""
+    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx go' instead)."""
 
     def __init__(self, subparsers: Any) -> None:
         super().__init__()
         self.parser = subparsers.add_parser(
-            "letsgo",
-            prog="ogx stack letsgo",
+            "go",
+            prog="ogx stack go",
             description="""Auto-detect providers and start the stack.
 
-NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
+NOTE: 'ogx stack go' is deprecated. Use 'ogx go' instead.""",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
         self._add_arguments()
@@ -938,7 +1003,7 @@ NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
 
     def _run_stack_lets_go_cmd(self, args: argparse.Namespace) -> None:
         warnings.warn(
-            "'ogx stack letsgo' is deprecated and will be removed in a future release. Use 'ogx letsgo' instead.",
+            "'ogx stack go' is deprecated and will be removed in a future release. Use 'ogx go' instead.",
             FutureWarning,
             stacklevel=1,
         )

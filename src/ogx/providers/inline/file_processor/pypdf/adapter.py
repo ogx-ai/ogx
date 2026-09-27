@@ -21,6 +21,9 @@ class PyPDFFileProcessorAdapter:
         self.files_api = files_api
         self.processor = PyPDFFileProcessor(config, files_api)
 
+    def supported_mime_types(self) -> set[str] | None:
+        return {"application/pdf", "text/*"}
+
     async def process_file(
         self,
         request: ProcessFileRequest,

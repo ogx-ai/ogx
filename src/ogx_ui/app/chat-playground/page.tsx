@@ -26,9 +26,14 @@ import {
   removeConversation,
   updateConversation,
 } from "@/lib/conversation-history";
+import { filterModels, parseModelAllowlist } from "@/lib/model-filter";
+
+const configuredModelIds = parseModelAllowlist(
+  process.env.NEXT_PUBLIC_OGX_UI_ALLOWED_MODELS
+);
 
 type ModelWithMeta = Model & {
-  custom_metadata?: Record<string, unknown>;
+  custom_metadata?: Record<string, unknown> | null;
 };
 
 type VectorStoreInfo = {
@@ -140,7 +145,17 @@ function ChatPlaygroundContent() {
         );
 
         llmModels.sort((a, b) => a.id.localeCompare(b.id));
-        setModels(llmModels);
+        const visibleModels = filterModels(llmModels, configuredModelIds);
+        setModels(visibleModels);
+        setSelectedModel(currentModel => {
+          if (
+            currentModel &&
+            visibleModels.some(model => model.id === currentModel)
+          ) {
+            return currentModel;
+          }
+          return visibleModels[0]?.id ?? "";
+        });
       } catch (err) {
         console.error("Error fetching models:", err);
         setModelsError("Failed to load models");
@@ -161,7 +176,8 @@ function ChatPlaygroundContent() {
           order: "desc",
         });
         const stores =
-          (result as { data?: Record<string, unknown>[] }).data || [];
+          (result as unknown as { data?: Record<string, unknown>[] }).data ||
+          [];
         setVectorStores(
           stores.map((s: Record<string, unknown>) => ({
             id: s.id as string,
@@ -212,7 +228,8 @@ function ChatPlaygroundContent() {
         const result = await client.conversations.items.list(conversationParam);
         const itemList = Array.isArray(result)
           ? result
-          : (result as { data?: Record<string, unknown>[] }).data || [];
+          : (result as unknown as { data?: Record<string, unknown>[] }).data ||
+            [];
 
         // Convert items to messages
         const messages: Message[] = [];
@@ -447,7 +464,7 @@ function ChatPlaygroundContent() {
         for await (const chunk of response) {
           if (abortController.signal.aborted) break;
 
-          const chunkObj = chunk as Record<string, unknown>;
+          const chunkObj = chunk as unknown as Record<string, unknown>;
 
           if (chunkObj.type === "response.created" && chunkObj.response) {
             currentResponseId = (chunkObj.response as { id: string }).id;
@@ -713,6 +730,13 @@ function ChatPlaygroundContent() {
                 </Select>
                 {modelsError && (
                   <p className="text-destructive text-xs mt-1">{modelsError}</p>
+                )}
+                {!isModelsLoading && !modelsError && models.length === 0 && (
+                  <p className="text-muted-foreground text-xs mt-1">
+                    {configuredModelIds.length > 0
+                      ? "No models matched the configured allowlist."
+                      : "No models available."}
+                  </p>
                 )}
               </div>
 
