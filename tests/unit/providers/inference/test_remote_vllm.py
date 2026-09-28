@@ -10,6 +10,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
+import httpx
 import pytest
 from pydantic import SecretStr
 
@@ -18,6 +19,7 @@ from ogx.core.routers.inference import InferenceRouter
 from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
 from ogx.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
+from ogx.testing.api_recorder import APIRecordingMode, api_recording
 from ogx_api import (
     HealthStatus,
     Model,
@@ -31,6 +33,7 @@ from ogx_api import (
     OpenAICompletionRequestWithExtraBody,
     OpenAIDeveloperMessageParam,
 )
+from ogx_api.inference import RerankRequest
 
 # These are unit test for the remote vllm provider
 # implementation. This should only contain tests which are specific to
@@ -816,3 +819,51 @@ async def test_reasoning_wrapper_closes_inner_stream_when_abandoned(vllm_inferen
         await result.aclose()
 
     assert closed == [True]
+
+
+class TestRerankRecordReplay:
+    """rerank() posts with a raw ``httpx.AsyncClient``, so it only takes part in the
+    record/replay system if the recorder's httpx interceptors cover ``/rerank`` (#6626).
+    Without that, replay CI -- which has no vLLM server -- cannot exercise this path at all.
+    """
+
+    BODY = {"results": [{"index": 0, "relevance_score": 0.25}, {"index": 1, "relevance_score": 0.75}]}
+
+    @staticmethod
+    async def _adapter() -> VLLMInferenceAdapter:
+        adapter = VLLMInferenceAdapter(config=VLLMInferenceAdapterConfig(base_url="http://vllm.test:8000/v1"))
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+        return adapter
+
+    async def test_rerank_records_then_replays_with_no_server(self, tmp_path):
+        request = RerankRequest(model="rerank-model", query="why", items=["doc-a", "doc-b"])
+        adapter = await self._adapter()
+
+        # -- Record against a stand-in backend --
+        served: list[httpx.Request] = []
+
+        def serve(http_request: httpx.Request) -> httpx.Response:
+            served.append(http_request)
+            return httpx.Response(200, json=self.BODY)
+
+        with patch.object(
+            adapter, "_build_httpx_client_kwargs", return_value={"transport": httpx.MockTransport(serve)}
+        ):
+            with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(tmp_path)):
+                recorded = await adapter.rerank(request)
+
+        assert [http_request.url.path for http_request in served] == ["/rerank"]
+        assert [(d.index, d.relevance_score) for d in recorded.data] == [(1, 0.75), (0, 0.25)]
+
+        # -- Replay with nothing listening: the recorder must answer from disk --
+        def refuse(http_request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("no vLLM server in replay CI", request=http_request)
+
+        with patch.object(
+            adapter, "_build_httpx_client_kwargs", return_value={"transport": httpx.MockTransport(refuse)}
+        ):
+            with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(tmp_path)):
+                replayed = await adapter.rerank(request)
+
+        assert [(d.index, d.relevance_score) for d in replayed.data] == [(1, 0.75), (0, 0.25)]

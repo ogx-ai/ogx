@@ -16,6 +16,7 @@ inference/
   inference_store.py   # InferenceStore for persisting chat completion logs
   http_client.py       # HTTP client utilities
   models_dev_registry.py # Shared classify_model() for embedding/rerank model classification
+  server_signature.py    # Engine verification via native endpoints (/props, /info)
 ```
 
 ## OpenAIMixin (`openai_mixin.py`)
@@ -52,3 +53,7 @@ Persists chat completion request/response pairs to the SqlStore. Used by the inf
 ## Model classification (`models_dev_registry.py`)
 
 `classify_model(identifier, provider_id)` classifies embedding and rerank models for remote adapters whose `/v1/models` response has no model task/type field (vLLM, llama.cpp servers), returning `None` when `identifier` is neither so callers can fall back to their own default classification. Only embedding classification consults the [models.dev](https://models.dev) registry, enriching `Model.metadata` with `embedding_dimension`/`context_length` when it has an entry, and falling back to a name heuristic (`"embed"` in the identifier) otherwise; models.dev has no rerank entries, so rerank classification is a name heuristic (`"rerank"` in the identifier) only.
+
+## Server signature verification (`server_signature.py`)
+
+`verify_llama_cpp_server(base_url)` and `verify_text_embeddings_inference_server(base_url)` confirm that a server configured as an OpenAI-compatible endpoint is actually the expected engine, by GETting an engine-specific native endpoint on the server root (llama.cpp `GET /props`, TEI `GET /info`) and checking its response shape. They raise `ValueError` on an engine mismatch and `ServerUnreachableError` (a `ValueError` subclass) when the server cannot be reached at all. Adapters call these in `initialize()` to fail fast at construction time when a different engine is running on the configured port (only warning when the server is down, matching the Ollama adapter). The non-raising `check_llama_cpp_server()` / `check_text_embeddings_inference_server()` variants return a `HealthResponse` and back the adapters' `health()` methods.

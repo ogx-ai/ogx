@@ -85,6 +85,7 @@ Claude Code sends requests to the Anthropic Messages API (`/v1/messages`). OGX i
 - **Thinking blocks**: Extended thinking support for supported models
 
 **Native passthrough** (no translation needed):
+- Anthropic (the `anthropic` provider), including extended thinking
 - Ollama with `/v1/messages` support
 - vLLM with Anthropic format support
 
@@ -198,6 +199,7 @@ Different providers have different strengths when used with Claude Code:
 
 | Provider | Native Messages API | Thinking Support | Prompt Caching | Notes |
 |----------|-------------------|------------------|----------------|-------|
+| **Anthropic** | ✅ | ✅ | ✅ | Requests are forwarded to `/v1/messages` unchanged, so everything Claude Code sends works |
 | **OpenAI** | ❌ (translated) | ⚠️ (via reasoning) | ❌ | Works well, no translation overhead for responses |
 | **vLLM** | ✅ | ❌ | ❌ | Serves Messages API natively with compatible models |
 | **Ollama** | ✅ | ❌ | ❌ | Serves Messages API natively with compatible models |

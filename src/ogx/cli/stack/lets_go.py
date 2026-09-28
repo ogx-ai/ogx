@@ -101,10 +101,18 @@ class _FactoryDispatcher:
         return getattr(module, method_name, None)
 
 
+# Unprefixed model IDs the claude CLI requests, so `claude` works against `ogx go` without --model.
+# Keep this in sync with the CLI's default models as new generations ship: an unregistered ID fails
+# to resolve. Older IDs stay for older CLI versions. Newest first within each tier, because
+# `ogx connect claude` picks the first model that matches a tier.
 _CLAUDE_CODE_ALIASES: list[str] = [
     "claude-haiku-4-5",
+    "claude-sonnet-5",
     "claude-sonnet-4-6",
+    "claude-opus-5",
     "claude-opus-4-7",
+    "claude-fable-5",
+    "claude-mythos-5",
 ]
 
 # Inference provider IDs checked in priority order when building Claude Code aliases.
@@ -263,13 +271,14 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
     if "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: exa -> brave -> tavily -> bing
+    # Add web search providers in priority order: exa -> brave -> tavily -> bing -> nimble -> serply
     _web_search_order = [
         ("remote::exa-search", "exa-search"),
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),
         ("remote::nimble-search", "nimble-search"),
+        ("remote::serply-search", "serply-search"),
     ]
     tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
     existing_web_search: set[str] = {
@@ -572,6 +581,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None, None),
         ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None, "VLLM_API_TOKEN"),
         ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None, None),
+        ("remote::text-embeddings-inference", "TEI_URL", "http://localhost:8080/v1", None, None),
         ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", None),
         (
             "remote::llama-openai-compat",

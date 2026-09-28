@@ -8,7 +8,10 @@
 from collections.abc import AsyncIterator
 from typing import Any
 
+import httpx
+
 from ogx.log import get_logger
+from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
     OpenAIChatCompletion,
@@ -16,6 +19,12 @@ from ogx_api import (
     OpenAIChatCompletionRequestWithExtraBody,
     OpenAICompletion,
     OpenAICompletionRequestWithExtraBody,
+)
+from ogx_api.messages.models import (
+    ANTHROPIC_VERSION,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
 )
 
 from .config import FireworksImplConfig
@@ -40,7 +49,17 @@ def _strip_function_type_from_tools(tools: list[dict[str, Any]] | None) -> list[
 
 
 class FireworksInferenceAdapter(OpenAIMixin):
-    """Inference adapter for the Fireworks AI platform."""
+    """Inference adapter for the Fireworks AI platform.
+
+    Chat Completions go through the OpenAI-compatible mixin. Fireworks also exposes the
+    Anthropic Messages API natively, so ``anthropic_messages`` forwards directly to
+    ``/v1/messages`` instead of the mixin's translation fallback, which cannot represent
+    extended thinking, cache control or tool search. Fireworks has no
+    ``/v1/messages/count_tokens`` endpoint, so ``anthropic_count_tokens`` is not overridden:
+    the mixin's default implementation counts tokens by calling ``anthropic_messages`` (this
+    override) with ``max_tokens=1``, the same fallback every other provider without a native
+    counting endpoint uses.
+    """
 
     config: FireworksImplConfig
 
@@ -53,6 +72,40 @@ class FireworksInferenceAdapter(OpenAIMixin):
 
     def get_base_url(self) -> str:
         return str(self.config.base_url)
+
+    def _get_messages_base_url(self) -> str:
+        """Return the base URL without a trailing /v1, for building /v1/messages paths."""
+        base_url = self.get_base_url().rstrip("/")
+        if base_url.endswith("/v1"):
+            base_url = base_url[:-3]
+        return base_url
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        """Forward the request to Fireworks' native /v1/messages endpoint."""
+        url = f"{self._get_messages_base_url()}/v1/messages"
+        body = params.model_dump(exclude_none=True)
+        body["model"] = params.model
+        headers = {
+            "content-type": "application/json",
+            "anthropic-version": ANTHROPIC_VERSION,
+            "x-api-key": self._get_api_key_from_config_or_provider_data() or "no-key-required",
+        }
+
+        if params.stream:
+            return passthrough_anthropic_stream(
+                url=url,
+                req_body=body,
+                headers=headers,
+                httpx_client_kwargs=self._build_httpx_client_kwargs(),
+            )
+
+        async with httpx.AsyncClient(**self._build_httpx_client_kwargs(default_timeout=300.0)) as client:
+            resp = await client.post(url, json=body, headers=headers)
+            resp.raise_for_status()
+            return AnthropicMessageResponse(**resp.json())
 
     async def openai_chat_completion(
         self,
