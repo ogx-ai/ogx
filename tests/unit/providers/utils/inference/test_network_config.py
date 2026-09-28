@@ -679,3 +679,105 @@ class TestOpenAIMixinConnectionLimits:
         pool = mixin.client._client._transport._pool
         assert pool._max_connections == 500
         assert pool._max_keepalive_connections == 20
+
+
+class TestOpenAIMixinAdhocClientKwargs:
+    """_build_httpx_client_kwargs() feeds the standalone httpx clients used for health checks,
+    Anthropic passthrough and rerank, so they honour config.network like the primary client."""
+
+    def test_falls_back_to_shared_ssl_context_without_network_config(self):
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig())
+
+        kwargs = mixin._build_httpx_client_kwargs()
+
+        assert kwargs == {"verify": mixin.shared_ssl_context}
+
+    @pytest.mark.parametrize(
+        "network,setting",
+        [
+            (NetworkConfig(proxy=ProxyConfig(url="http://proxy.example.com:3128")), "mounts"),
+            (NetworkConfig(timeout=12.0), "timeout"),
+            (NetworkConfig(headers={"X-Route": "team-a"}), "headers"),
+            (NetworkConfig(limits=LimitsConfig(max_connections=7)), "limits"),
+        ],
+        ids=["proxy-only", "timeout-only", "headers-only", "limits-only"],
+    )
+    def test_network_config_without_tls_keeps_the_shared_ssl_context(self, network, setting):
+        """Only setting something other than tls used to drop `verify`, so httpx silently fell back
+        to its own default CA bundle instead of the shared SSL context."""
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig(network=network))
+
+        kwargs = mixin._build_httpx_client_kwargs()
+
+        assert kwargs["verify"] is mixin.shared_ssl_context
+        assert setting in kwargs
+
+    def test_configured_tls_takes_precedence_over_the_shared_ssl_context(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=False)))
+        mixin = OpenAIMixinImpl(config=config)
+
+        assert mixin._build_httpx_client_kwargs()["verify"] is False
+
+    def test_configured_tls_context_is_not_replaced_by_the_shared_one(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=True, min_version="TLSv1.3")))
+        mixin = OpenAIMixinImpl(config=config)
+
+        verify = mixin._build_httpx_client_kwargs()["verify"]
+
+        assert isinstance(verify, ssl.SSLContext)
+        assert verify is not mixin.shared_ssl_context
+        assert verify.minimum_version == ssl.TLSVersion.TLSv1_3
+
+    def test_applies_every_network_setting(self):
+        config = RemoteInferenceProviderConfig(
+            network=NetworkConfig(
+                tls=TLSConfig(verify=False),
+                proxy=ProxyConfig(url="http://proxy.example.com:3128"),
+                headers={"X-Route": "team-a"},
+                timeout=12.0,
+                limits=LimitsConfig(max_connections=7),
+            )
+        )
+        mixin = OpenAIMixinImpl(config=config)
+
+        kwargs = mixin._build_httpx_client_kwargs()
+
+        assert kwargs["verify"] is False
+        assert set(kwargs["mounts"]) == {"http://", "https://"}
+        assert kwargs["headers"] == {"X-Route": "team-a"}
+        assert kwargs["timeout"] == httpx.Timeout(12.0)
+        assert kwargs["limits"].max_connections == 7
+
+    def test_default_timeout_applies_when_network_timeout_is_unset(self):
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig())
+
+        assert mixin._build_httpx_client_kwargs(default_timeout=30.0)["timeout"] == httpx.Timeout(30.0)
+
+    def test_default_timeout_applies_alongside_other_network_settings(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(tls=TLSConfig(verify=False)))
+        mixin = OpenAIMixinImpl(config=config)
+
+        kwargs = mixin._build_httpx_client_kwargs(default_timeout=300.0)
+
+        assert kwargs["verify"] is False
+        assert kwargs["timeout"] == httpx.Timeout(300.0)
+
+    def test_configured_network_timeout_takes_precedence_over_default(self):
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(timeout=12.0))
+        mixin = OpenAIMixinImpl(config=config)
+
+        assert mixin._build_httpx_client_kwargs(default_timeout=300.0)["timeout"] == httpx.Timeout(12.0)
+
+    def test_no_timeout_is_set_without_a_default_or_network_timeout(self):
+        mixin = OpenAIMixinImpl(config=RemoteInferenceProviderConfig())
+
+        assert "timeout" not in mixin._build_httpx_client_kwargs()
+
+    def test_kwargs_construct_a_real_client(self):
+        """A network timeout plus a per-call default must not collide as duplicate arguments."""
+        config = RemoteInferenceProviderConfig(network=NetworkConfig(timeout=12.0))
+        mixin = OpenAIMixinImpl(config=config)
+
+        client = httpx.AsyncClient(**mixin._build_httpx_client_kwargs(default_timeout=300.0))
+
+        assert client.timeout == httpx.Timeout(12.0)

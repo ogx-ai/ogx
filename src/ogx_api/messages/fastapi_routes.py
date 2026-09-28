@@ -18,7 +18,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ogx_api.common.errors import ModelNotFoundError
-from ogx_api.router_utils import standard_responses
+from ogx_api.router_utils import standard_responses, try_translate_to_http_exception
 from ogx_api.utils import create_sse_event_with_type, get_sse_error_message, sse_stream
 from ogx_api.version import OGX_API_V1
 
@@ -74,6 +74,20 @@ def _anthropic_error_response(status_code: int, message: str) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=body.model_dump())
 
 
+def _anthropic_error_response_for_exception(exc: Exception, log_message: str) -> JSONResponse:
+    """Anthropic-format error response for an exception not already handled by a more specific
+    except clause. Preserves the status of anything try_translate_to_http_exception recognizes
+    (HTTPException, ValueError, or an exception carrying a ``status_code`` attribute, such as
+    AnthropicAPIError from the native Anthropic provider), and falls back to a generic 500 for
+    everything else.
+    """
+    http_exc = try_translate_to_http_exception(exc)
+    if http_exc is not None:
+        return _anthropic_error_response(http_exc.status_code, str(http_exc.detail))
+    logger.exception(log_message)
+    return _anthropic_error_response(500, "Internal server error")
+
+
 def create_router(impl: Messages) -> APIRouter:
     """Create a FastAPI router for the Anthropic Messages API.
 
@@ -118,9 +132,8 @@ def create_router(impl: Messages) -> APIRouter:
             return _anthropic_error_response(400, str(e))
         except HTTPException as e:
             return _anthropic_error_response(e.status_code, e.detail)
-        except Exception:
-            logger.exception("Failed to create message")
-            return _anthropic_error_response(500, "Internal server error")
+        except Exception as e:
+            return _anthropic_error_response_for_exception(e, "Failed to create message")
 
         response_headers = {"anthropic-version": ANTHROPIC_VERSION}
 
@@ -152,9 +165,14 @@ def create_router(impl: Messages) -> APIRouter:
             result = await impl.count_message_tokens(params)
         except NotImplementedError as e:
             return _anthropic_error_response(501, str(e))
-        except Exception:
-            logger.exception("Failed to count message tokens")
-            return _anthropic_error_response(500, "Internal server error")
+        except ModelNotFoundError as e:
+            return _anthropic_error_response(404, str(e))
+        except ValueError as e:
+            return _anthropic_error_response(400, str(e))
+        except HTTPException as e:
+            return _anthropic_error_response(e.status_code, e.detail)
+        except Exception as e:
+            return _anthropic_error_response_for_exception(e, "Failed to count message tokens")
 
         return JSONResponse(
             content=result.model_dump(),

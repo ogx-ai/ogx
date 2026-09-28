@@ -16,9 +16,6 @@ from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
 from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
-from ogx.providers.utils.inference.http_client import (
-    build_network_client_kwargs as _build_network_client_kwargs,
-)
 from ogx.providers.utils.inference.models_dev_registry import classify_model
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
@@ -102,13 +99,6 @@ class VLLMInferenceAdapter(OpenAIMixin):
             raise ValueError(
                 "You must provide a URL in config.yaml (or via the VLLM_URL environment variable) to use vLLM."
             )
-
-    def _build_httpx_client_kwargs(self) -> dict:
-        """Build httpx.AsyncClient kwargs that honour network/TLS configuration."""
-        kwargs = _build_network_client_kwargs(self.config.network)
-        if not kwargs:
-            kwargs["verify"] = self.shared_ssl_context
-        return kwargs
 
     async def health(self) -> HealthResponse:
         """

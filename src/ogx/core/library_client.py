@@ -7,6 +7,7 @@
 import asyncio
 import atexit
 import concurrent.futures
+import contextlib
 import inspect
 import json
 import logging  # allow-direct-logging
@@ -45,10 +46,11 @@ from termcolor import cprint
 
 from ogx.core.build import print_pip_install_help
 from ogx.core.configure import parse_and_maybe_upgrade_config
-from ogx.core.request_headers import PROVIDER_DATA_VAR, request_provider_data_context
+from ogx.core.request_headers import PROVIDER_DATA_VAR, request_provider_data_context, stamp_test_id_into_headers
 from ogx.core.resolver import ProviderRegistry
 from ogx.core.server.routes import RouteImpls, find_matching_route, initialize_route_impls
 from ogx.core.stack import Stack, get_stack_run_config_from_distro, replace_env_vars
+from ogx.core.testing_context import TEST_CONTEXT, reset_test_context, sync_test_context_from_provider_data
 from ogx.core.utils.config import redact_sensitive_fields
 from ogx.core.utils.context import preserve_contexts_async_generator
 from ogx.core.utils.exec import in_notebook
@@ -198,6 +200,23 @@ class _SSEAsyncByteStream(httpx.AsyncByteStream):
             await self._body_iterator.aclose()
 
 
+@contextlib.contextmanager
+def _test_context_from_header_scope() -> Generator[None, None, None]:
+    """Derive TEST_CONTEXT from the request's provider data for the duration of the context.
+
+    Uses the same sync_test_context_from_provider_data() the server middleware uses (see
+    ProviderDataMiddleware in server.py), so both stack modes populate TEST_CONTEXT from the
+    request the same way. Must be entered after request_provider_data_context, since it reads
+    PROVIDER_DATA_VAR.
+    """
+    token = sync_test_context_from_provider_data()
+    try:
+        yield
+    finally:
+        if token is not None:
+            reset_test_context(token)
+
+
 async def _route_call_in_process(
     *,
     method: str,
@@ -247,8 +266,9 @@ async def _route_call_in_process(
         keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
         if all(key not in request_headers for key in keys):
             request_headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
+    stamp_test_id_into_headers(request_headers)
 
-    with request_provider_data_context(request_headers):
+    with request_provider_data_context(request_headers), _test_context_from_header_scope():
         # Build the body dict from JSON body and/or post_params
         request_body: Any = {}
         if body and isinstance(body, dict):
@@ -327,7 +347,9 @@ async def _route_call_in_process(
                 mock_response = httpx.Response(
                     status_code=result.status_code,
                     stream=_SSEAsyncByteStream(
-                        preserve_contexts_async_generator(aiter(result.body_iterator), [PROVIDER_DATA_VAR])
+                        preserve_contexts_async_generator(
+                            aiter(result.body_iterator), [PROVIDER_DATA_VAR, TEST_CONTEXT]
+                        )
                     ),
                     headers={"Content-Type": content_type},
                     request=httpx.Request(method=method, url=url),
@@ -825,9 +847,10 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
             keys = ["X-OGX-Provider-Data", "x-ogx-provider-data"]
             if all(key not in request_headers for key in keys):
                 request_headers["X-OGX-Provider-Data"] = json.dumps(self.provider_data)
+        stamp_test_id_into_headers(request_headers)
 
         # Use context manager for provider data
-        with request_provider_data_context(request_headers):
+        with request_provider_data_context(request_headers), _test_context_from_header_scope():
             if stream:
                 response = await self._call_streaming(
                     cast_to=cast_to,
@@ -1018,7 +1041,7 @@ class AsyncOGXAsLibraryClient(AsyncOgxClient):
                     sse_event = f"data: {data}\n\n"
                     yield sse_event.encode("utf-8")
 
-        wrapped_gen = preserve_contexts_async_generator(gen(), [PROVIDER_DATA_VAR])
+        wrapped_gen = preserve_contexts_async_generator(gen(), [PROVIDER_DATA_VAR, TEST_CONTEXT])
 
         mock_response = httpx.Response(
             status_code=httpx.codes.OK,

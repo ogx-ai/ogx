@@ -399,6 +399,38 @@ class TestClaudeCodeAliases:
         for expected in _CLAUDE_CODE_ALIASES:
             assert expected in alias_model_ids
 
+    @pytest.mark.parametrize(
+        "model_id",
+        ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5", "claude-fable-5", "claude-mythos-5"],
+    )
+    def test_current_generation_models_are_registered_for_anthropic(self, model_id):
+        """The claude CLI requests these unprefixed IDs, and an unregistered one fails to resolve."""
+        aliases = _build_claude_code_aliases("inference=remote::anthropic")
+
+        alias = next(a for a in aliases if a.model_id == model_id)
+        assert alias.provider_id == "anthropic"
+        assert alias.provider_model_id == model_id
+
+    def test_previous_generation_models_stay_registered_for_older_cli_versions(self):
+        assert {"claude-sonnet-4-6", "claude-opus-4-7"} <= set(_CLAUDE_CODE_ALIASES)
+
+    def test_alias_ids_are_unique(self):
+        assert len(_CLAUDE_CODE_ALIASES) == len(set(_CLAUDE_CODE_ALIASES))
+
+    def test_newest_model_of_each_tier_comes_first(self):
+        """`ogx connect claude` maps each tier to the first matching model, so newer ones must precede older."""
+        assert _CLAUDE_CODE_ALIASES.index("claude-sonnet-5") < _CLAUDE_CODE_ALIASES.index("claude-sonnet-4-6")
+        assert _CLAUDE_CODE_ALIASES.index("claude-opus-5") < _CLAUDE_CODE_ALIASES.index("claude-opus-4-7")
+
+    def test_connect_claude_picks_the_newest_model_per_tier(self):
+        from ogx.cli.connect.claude import _detect_tier_models
+
+        assert _detect_tier_models(list(_CLAUDE_CODE_ALIASES)) == {
+            "haiku": "claude-haiku-4-5",
+            "sonnet": "claude-sonnet-5",
+            "opus": "claude-opus-5",
+        }
+
     def test_aliases_have_unprefixed_metadata(self):
         spec = "inference=remote::anthropic"
         aliases = _build_claude_code_aliases(spec)

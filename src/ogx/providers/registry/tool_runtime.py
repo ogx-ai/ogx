@@ -85,6 +85,17 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.tool_runtime,
+            adapter_type="serply-search",
+            provider_type="remote::serply-search",
+            module="ogx.providers.remote.tool_runtime.serply_search",
+            config_class="ogx.providers.remote.tool_runtime.serply_search.config.SerplySearchToolConfig",
+            pip_packages=[],
+            provider_data_validator="ogx.providers.remote.tool_runtime.serply_search.SerplySearchToolProviderDataValidator",
+            toolgroup_id="builtin::websearch",
+            description="Serply Search tool for web search via Serply's Google Search API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.tool_runtime,
             adapter_type="wolfram-alpha",
             provider_type="remote::wolfram-alpha",
             module="ogx.providers.remote.tool_runtime.wolfram_alpha",

@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from pydantic import SecretStr
 
@@ -534,3 +535,60 @@ class TestPassthroughStreamNetworkKwargs:
         kwargs = adapter._build_httpx_client_kwargs()
         assert "verify" in kwargs
         assert isinstance(kwargs["verify"], ssl.SSLContext)
+
+
+class TestNetworkTimeoutPrecedence:
+    """An operator-configured network.timeout overrides the call's own default timeout,
+    and must not collide with it as a duplicate httpx argument."""
+
+    async def test_messages_and_count_tokens_use_network_timeout(self):
+        adapter = MetaInferenceAdapter(config=MetaConfig(base_url="https://api.meta.ai/v1", network={"timeout": 12.0}))
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            response = MagicMock()
+            response.json.return_value = {"input_tokens": 3}
+            client = MagicMock()
+            client.post = AsyncMock(return_value=response)
+            mock_client_class.return_value.__aenter__.return_value = client
+
+            await adapter.anthropic_count_tokens(
+                AnthropicCountTokensRequest(model="test-model", messages=[{"role": "user", "content": "Hi"}])
+            )
+            assert mock_client_class.call_args.kwargs["timeout"] == httpx.Timeout(12.0)
+
+            response.json.return_value = {
+                "id": "msg-1",
+                "content": [{"type": "text", "text": "Hello"}],
+                "role": "assistant",
+                "stop_reason": "end_turn",
+                "type": "message",
+                "model": "test-model",
+                "stop_sequences": None,
+                "usage": {"input_tokens": 5, "output_tokens": 5},
+            }
+            await adapter.anthropic_messages(
+                AnthropicCreateMessageRequest(
+                    messages=[{"role": "user", "content": "Hi"}], model="test-model", max_tokens=16, stream=False
+                )
+            )
+            assert mock_client_class.call_args.kwargs["timeout"] == httpx.Timeout(12.0)
+
+    async def test_call_defaults_apply_without_network_timeout(self):
+        adapter = MetaInferenceAdapter(config=MetaConfig(base_url="https://api.meta.ai/v1"))
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            response = MagicMock()
+            response.json.return_value = {"input_tokens": 3}
+            client = MagicMock()
+            client.post = AsyncMock(return_value=response)
+            mock_client_class.return_value.__aenter__.return_value = client
+
+            await adapter.anthropic_count_tokens(
+                AnthropicCountTokensRequest(model="test-model", messages=[{"role": "user", "content": "Hi"}])
+            )
+
+        assert mock_client_class.call_args.kwargs["timeout"] == httpx.Timeout(30.0)

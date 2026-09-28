@@ -86,6 +86,20 @@ class TestPatchOgxClient:
 
         assert json.loads(request.headers[PROVIDER_DATA_HEADER]) == {"api_key": "abc", "__test_id": TEST_ID}
 
+    def test_malformed_existing_provider_data_is_discarded_rather_than_raising(
+        self, unpatched_ogx_client, test_context, monkeypatch
+    ):
+        """Injection delegates its header parsing to stamp_test_id_into_headers() (shared with
+        the in-process library-client path), which must not raise on a header it can't parse."""
+        monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "server")
+        patch_httpx_for_test_id()
+
+        request = _request()
+        request.headers[PROVIDER_DATA_HEADER] = "not-valid-json"
+        _ogx_client()._prepare_request(request)
+
+        assert json.loads(request.headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
+
     def test_no_injection_in_library_client_mode(self, unpatched_ogx_client, test_context, monkeypatch):
         monkeypatch.setenv("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
         patch_httpx_for_test_id()

@@ -9,7 +9,7 @@ import time
 import pytest
 from langchain_openai import ChatOpenAI
 
-from ..helpers import assert_text_contains, normalize_text
+from ..helpers import assert_text_contains, normalize_text, provider_from_model
 
 __all__ = [
     "assert_text_contains",
@@ -23,20 +23,6 @@ __all__ = [
     "extract_text_content",
     "langchain_chat",
 ]
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_provider_is_vertexai(client_with_models, model_id, reason=""):
