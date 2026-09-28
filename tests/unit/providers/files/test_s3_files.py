@@ -341,6 +341,8 @@ class TestS3FilesKeyPrefix:
             ("/team-a/projects/", "team-a/projects/"),
             ("a//b", "a/b/"),
             (" /team-a/ ", "team-a/"),
+            ("my folder", "my folder/"),
+            ("a /b", "a /b/"),
         ],
     )
     def test_key_prefix_is_normalized(self, configured, expected):

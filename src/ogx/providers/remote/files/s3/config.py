@@ -43,10 +43,10 @@ class S3FilesImplConfig(BaseModel):
             return ""
         # S3 has no directories; a "folder" is just a key prefix ending in "/". Accepting
         # "a/b", "/a/b" and "a/b/" as the same folder keeps the env var forgiving, and
-        # stripping whitespace keeps a stray space in the env var from creating a folder
-        # literally named " ".
-        segments = [segment.strip() for segment in str(v).split("/")]
-        segments = [segment for segment in segments if segment]
+        # stripping the value as a whole keeps a stray space around it from creating a
+        # folder literally named " ". Spaces anywhere else, including next to a "/",
+        # are legal in a key and are left alone.
+        segments = [segment for segment in str(v).strip().split("/") if segment]
         return f"{'/'.join(segments)}/" if segments else ""
 
     @classmethod
