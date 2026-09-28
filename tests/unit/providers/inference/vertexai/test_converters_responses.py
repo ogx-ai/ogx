@@ -394,8 +394,8 @@ class TestConvertGeminiStreamChunkToOpenAI:
         assert result.choices[0].delta.content is None
         assert result.choices[0].finish_reason is None
 
-    def test_stream_usage(self):
-        """Test that stream usage."""
+    def test_stream_chunk_does_not_carry_usage(self):
+        """Usage is left to the trailing usage-only chunk, even when Gemini attaches usage_metadata."""
         chunk = _make_response(
             candidates=[_make_candidate(parts=[_make_text_part("done")], finish_reason="STOP")],
             prompt_token_count=10,
@@ -403,9 +403,7 @@ class TestConvertGeminiStreamChunkToOpenAI:
             total_token_count=15,
         )
         result = convert_gemini_stream_chunk_to_openai(chunk, "model", "chatcmpl-u", is_first_chunk=False)
-        assert result.usage is not None
-        assert result.usage.prompt_tokens == 10
-        assert result.usage.completion_tokens == 5
+        assert result.usage is None
 
     def test_safety_filtered_chunk(self):
         """Test that safety filtered chunk."""
