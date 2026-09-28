@@ -117,7 +117,7 @@ class TestBuildHttpClientKwargs:
 
 
 class TestPassthroughMessagesNetworkKwargs:
-    """Tests that _passthrough_anthropic_messages passes httpx kwargs."""
+    """Tests that the Anthropic messages passthrough passes httpx kwargs."""
 
     async def test_stream_false_passes_kwargs(self, meta_adapter):
         meta_adapter.get_request_provider_data = MagicMock(return_value=None)
@@ -485,7 +485,7 @@ class TestApiKeyHeader:
 def mock_passthrough(monkeypatch):
     mock = MagicMock()
     monkeypatch.setattr(
-        "ogx.providers.remote.inference.meta.meta.passthrough_anthropic_stream",
+        "ogx.providers.utils.inference.anthropic_mixin.passthrough_anthropic_stream",
         mock,
     )
     return mock

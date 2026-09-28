@@ -18,11 +18,12 @@ import pytest
 from pydantic import SecretStr
 
 from ogx.providers.remote.inference.anthropic.anthropic import (
-    AnthropicAPIError,
     AnthropicInferenceAdapter,
     _make_schema_strict,
 )
 from ogx.providers.remote.inference.anthropic.config import AnthropicConfig
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicAPIError
+from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import Model, OpenAIChatCompletionRequestWithExtraBody, OpenAIUserMessageParam
 from ogx_api.inference.models import OpenAIJSONSchema, OpenAIResponseFormatJSONSchema
 from ogx_api.messages.models import (
@@ -90,7 +91,7 @@ def mock_client():
 @pytest.fixture
 def mock_passthrough(monkeypatch):
     mock = MagicMock()
-    monkeypatch.setattr("ogx.providers.remote.inference.anthropic.anthropic.passthrough_anthropic_stream", mock)
+    monkeypatch.setattr("ogx.providers.utils.inference.anthropic_mixin.passthrough_anthropic_stream", mock)
     return mock
 
 
@@ -459,7 +460,7 @@ class TestChatCompletionOpenAICompat:
             tools=[{"type": "function", "function": {"name": "my_func", "parameters": input_params}}],
         )
 
-        with patch.object(type(adapter).__mro__[1], "openai_chat_completion", new_callable=AsyncMock) as mock_super:
+        with patch.object(OpenAIMixin, "openai_chat_completion", new_callable=AsyncMock) as mock_super:
             mock_super.return_value = {}
             await adapter.openai_chat_completion(params)
 
