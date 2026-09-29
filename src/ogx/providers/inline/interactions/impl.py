@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, TypedDict
 
-import httpx
+import httpx2
 from fastapi.responses import JSONResponse
 
 from ogx.core.access_control.access_control import is_action_allowed
@@ -106,7 +106,7 @@ class _RawSSEStream(AsyncIterator[str]):
         return await self._iterator.__anext__()
 
     async def _stream(self) -> AsyncIterator[str]:
-        async with httpx.AsyncClient(**self._client_kwargs) as client:
+        async with httpx2.AsyncClient(**self._client_kwargs) as client:
             async with client.stream("POST", self._url, json=self._body) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
@@ -265,7 +265,7 @@ class BuiltinInteractionsImpl(Interactions):
         headers["content-type"] = "application/json"
         headers.update(passthrough["auth_headers"])
         client_kwargs["headers"] = headers
-        client_kwargs.setdefault("timeout", httpx.Timeout(300.0))
+        client_kwargs.setdefault("timeout", httpx2.Timeout(300.0))
         return client_kwargs
 
     async def _passthrough_request(
@@ -292,7 +292,7 @@ class BuiltinInteractionsImpl(Interactions):
         if request.stream:
             return self._passthrough_stream(url, body, client_kwargs)
 
-        async with httpx.AsyncClient(**client_kwargs) as client:
+        async with httpx2.AsyncClient(**client_kwargs) as client:
             resp = await client.post(url, json=body)
             if resp.status_code >= 400:
                 logger.error(

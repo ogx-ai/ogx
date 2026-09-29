@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -117,12 +117,12 @@ class TestBuildHttpClientKwargs:
 
 
 class TestPassthroughMessagesNetworkKwargs:
-    """Tests that the Anthropic messages passthrough passes httpx kwargs."""
+    """Tests that the Anthropic messages passthrough passes httpx2 kwargs."""
 
     async def test_stream_false_passes_kwargs(self, meta_adapter):
         meta_adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -160,7 +160,7 @@ class TestPassthroughMessagesNetworkKwargs:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -195,7 +195,7 @@ class TestPassthroughMessagesNetworkKwargs:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -229,7 +229,7 @@ class TestPassthroughMessagesNetworkKwargs:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -260,7 +260,7 @@ class TestPassthroughMessagesNetworkKwargs:
 
 
 class TestPassthroughCountTokensNetworkKwargs:
-    """Tests that anthropic_count_tokens passes httpx kwargs."""
+    """Tests that anthropic_count_tokens passes httpx2 kwargs."""
 
     async def test_count_tokens_passes_kwargs(self):
         config = MetaConfig(
@@ -271,7 +271,7 @@ class TestPassthroughCountTokensNetworkKwargs:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -297,7 +297,7 @@ class TestPassthroughCountTokensNetworkKwargs:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"input_tokens": 10}
@@ -320,7 +320,7 @@ class TestPassthroughCountTokensNetworkKwargs:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"input_tokens": 5}
@@ -351,7 +351,7 @@ class TestApiKeyHeader:
             return_value=SimpleNamespace(meta_api_key=SecretStr("secret-key-123"))
         )
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -389,7 +389,7 @@ class TestApiKeyHeader:
             return_value=SimpleNamespace(meta_api_key=SecretStr("secret-key-456"))
         )
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"input_tokens": 10}
@@ -413,7 +413,7 @@ class TestApiKeyHeader:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -448,7 +448,7 @@ class TestApiKeyHeader:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -492,7 +492,7 @@ def mock_passthrough(monkeypatch):
 
 
 class TestPassthroughStreamNetworkKwargs:
-    """Tests that streaming passthrough passes httpx kwargs."""
+    """Tests that streaming passthrough passes httpx2 kwargs."""
 
     async def test_stream_calls_passthrough_anthropic_stream_with_kwargs(self, mock_passthrough):
         config = MetaConfig(
@@ -539,14 +539,14 @@ class TestPassthroughStreamNetworkKwargs:
 
 class TestNetworkTimeoutPrecedence:
     """An operator-configured network.timeout overrides the call's own default timeout,
-    and must not collide with it as a duplicate httpx argument."""
+    and must not collide with it as a duplicate httpx2 argument."""
 
     async def test_messages_and_count_tokens_use_network_timeout(self):
         adapter = MetaInferenceAdapter(config=MetaConfig(base_url="https://api.meta.ai/v1", network={"timeout": 12.0}))
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             response = MagicMock()
             response.json.return_value = {"input_tokens": 3}
             client = MagicMock()
@@ -556,7 +556,7 @@ class TestNetworkTimeoutPrecedence:
             await adapter.anthropic_count_tokens(
                 AnthropicCountTokensRequest(model="test-model", messages=[{"role": "user", "content": "Hi"}])
             )
-            assert mock_client_class.call_args.kwargs["timeout"] == httpx.Timeout(12.0)
+            assert mock_client_class.call_args.kwargs["timeout"] == httpx2.Timeout(12.0)
 
             response.json.return_value = {
                 "id": "msg-1",
@@ -573,14 +573,14 @@ class TestNetworkTimeoutPrecedence:
                     messages=[{"role": "user", "content": "Hi"}], model="test-model", max_tokens=16, stream=False
                 )
             )
-            assert mock_client_class.call_args.kwargs["timeout"] == httpx.Timeout(12.0)
+            assert mock_client_class.call_args.kwargs["timeout"] == httpx2.Timeout(12.0)
 
     async def test_call_defaults_apply_without_network_timeout(self):
         adapter = MetaInferenceAdapter(config=MetaConfig(base_url="https://api.meta.ai/v1"))
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             response = MagicMock()
             response.json.return_value = {"input_tokens": 3}
             client = MagicMock()
@@ -591,4 +591,4 @@ class TestNetworkTimeoutPrecedence:
                 AnthropicCountTokensRequest(model="test-model", messages=[{"role": "user", "content": "Hi"}])
             )
 
-        assert mock_client_class.call_args.kwargs["timeout"] == httpx.Timeout(30.0)
+        assert mock_client_class.call_args.kwargs["timeout"] == httpx2.Timeout(30.0)

@@ -7,7 +7,7 @@
 import ssl
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from ogx.providers.inline.responses.builtin.responses.types import AssistantMessageWithReasoning
@@ -92,7 +92,7 @@ async def test_health_ok():
     adapter = OllamaInferenceAdapter(config=OllamaImplConfig(base_url="http://localhost:11434/v1"))
     adapter.__provider_id__ = "ollama"
 
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_client_instance = MagicMock()
@@ -112,7 +112,7 @@ async def test_health_error():
     adapter = OllamaInferenceAdapter(config=OllamaImplConfig(base_url="http://localhost:11434/v1"))
     adapter.__provider_id__ = "ollama"
 
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         mock_client_instance = MagicMock()
         mock_client_instance.get = AsyncMock(side_effect=Exception("Connection failed"))
         mock_client_class.return_value.__aenter__.return_value = mock_client_instance
@@ -177,8 +177,8 @@ ADHOC_CALLS = [
 
 
 async def _client_kwargs_used_by(call, adapter: OllamaInferenceAdapter) -> dict:
-    """Run one ad-hoc call against a mocked httpx and return the kwargs the client was built with."""
-    with patch("httpx.AsyncClient") as mock_client_class:
+    """Run one ad-hoc call against a mocked httpx2 and return the kwargs the client was built with."""
+    with patch("httpx2.AsyncClient") as mock_client_class:
         response = MagicMock()
         response.raise_for_status.return_value = None
         response.json.side_effect = lambda: {"input_tokens": 3, **_MESSAGE_RESPONSE}
@@ -208,7 +208,7 @@ async def test_adhoc_calls_apply_network_config(call, _default_timeout):
 async def test_adhoc_calls_prefer_configured_network_timeout(call, _default_timeout):
     kwargs = await _client_kwargs_used_by(call, _make_adapter(network=NETWORK_CONFIG))
 
-    assert kwargs["timeout"] == httpx.Timeout(12.0)
+    assert kwargs["timeout"] == httpx2.Timeout(12.0)
 
 
 @pytest.mark.parametrize("call,default_timeout", ADHOC_CALLS)
@@ -219,7 +219,7 @@ async def test_adhoc_calls_use_shared_ssl_context_and_own_timeout_without_networ
 
     assert kwargs["verify"] is adapter.shared_ssl_context
     assert isinstance(kwargs["verify"], ssl.SSLContext)
-    assert kwargs["timeout"] == httpx.Timeout(default_timeout)
+    assert kwargs["timeout"] == httpx2.Timeout(default_timeout)
     assert "mounts" not in kwargs
 
 
@@ -247,7 +247,7 @@ async def test_streaming_passthrough_applies_network_config():
     assert stream_kwargs["verify"] is False
     assert set(stream_kwargs["mounts"]) == {"http://", "https://"}
     assert stream_kwargs["headers"] == {"X-Route": "team-a"}
-    assert stream_kwargs["timeout"] == httpx.Timeout(12.0)
+    assert stream_kwargs["timeout"] == httpx2.Timeout(12.0)
 
 
 @pytest.mark.parametrize("call,_default_timeout", ADHOC_CALLS)

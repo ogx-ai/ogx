@@ -6,7 +6,7 @@
 
 """Tests for exception serialization/deserialization used in API recording replay."""
 
-import httpx
+import httpx2
 import pytest
 from ollama import ResponseError
 from openai import (
@@ -38,8 +38,8 @@ from ogx_api.common.errors import (
 
 def _openai_error(cls, status_code, body, message):
     """Construct an OpenAI error the way the SDK does internally."""
-    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
-    response = httpx.Response(status_code, json=body or {}, request=request)
+    request = httpx2.Request("POST", "https://api.openai.com/v1/chat/completions")
+    response = httpx2.Response(status_code, json=body or {}, request=request)
     return cls(message=message, response=response, body=body)
 
 
@@ -205,8 +205,8 @@ class TestIsProviderSdkException:
     """Test provider SDK exception detection used during serialization."""
 
     def test_openai_exception_detected(self):
-        request = httpx.Request("GET", "https://api.openai.com/v1/models")
-        response = httpx.Response(404, request=request)
+        request = httpx2.Request("GET", "https://api.openai.com/v1/models")
+        response = httpx2.Response(404, request=request)
         assert is_provider_sdk_exception(NotFoundError(message="x", response=response, body=None))
 
     def test_ollama_exception_detected(self):

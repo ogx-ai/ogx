@@ -8,7 +8,7 @@ import json
 import tempfile
 from pathlib import Path
 
-import httpx
+import httpx2
 import pytest
 
 from ogx.testing.api_recorder import (
@@ -26,7 +26,7 @@ def temp_storage_dir():
 
 
 class TestTeiModelLookupInterception:
-    """The TEI adapter discovers its single served model via a raw ``httpx.AsyncClient`` GET to
+    """The TEI adapter discovers its single served model via a raw ``httpx2.AsyncClient`` GET to
     the server's native ``/info`` endpoint (``server_signature.get_text_embeddings_inference_model_id``)
     -- TEI has no ``/v1/models`` endpoint, so the OpenAI-SDK patch never sees this request. The
     recorder must capture it as a model lookup so replay CI can discover the model with no
@@ -40,20 +40,20 @@ class TestTeiModelLookupInterception:
     }
 
     @staticmethod
-    def _backend(body: dict, calls: list | None = None) -> httpx.MockTransport:
-        def handler(request: httpx.Request) -> httpx.Response:
+    def _backend(body: dict, calls: list | None = None) -> httpx2.MockTransport:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             if calls is not None:
                 calls.append(request)
-            return httpx.Response(200, json=body)
+            return httpx2.Response(200, json=body)
 
-        return httpx.MockTransport(handler)
+        return httpx2.MockTransport(handler)
 
     @staticmethod
-    def _no_backend() -> httpx.MockTransport:
-        def handler(request: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectError("no backend is listening", request=request)
+    def _no_backend() -> httpx2.MockTransport:
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("no backend is listening", request=request)
 
-        return httpx.MockTransport(handler)
+        return httpx2.MockTransport(handler)
 
     @staticmethod
     def _recordings(storage: Path) -> list[Path]:
@@ -79,10 +79,10 @@ class TestTeiModelLookupInterception:
         """Record mode stores the /info response under the model-list naming convention
         (models-*.json) so it is found by the model-list lookup paths."""
         storage = temp_storage_dir / "tei_record"
-        calls: list[httpx.Request] = []
+        calls: list[httpx2.Request] = []
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(self.TEI_INFO_BODY, calls)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(self.TEI_INFO_BODY, calls)) as client:
                 response = await client.get(self.TEI_INFO_URL)
 
         assert response.json() == self.TEI_INFO_BODY
@@ -100,20 +100,20 @@ class TestTeiModelLookupInterception:
         """Replay mode must serve the recording without reaching the network -- this is the
         whole point: replay CI has no Text-Embeddings-Inference server."""
         storage = temp_storage_dir / "tei_replay"
-        calls: list[httpx.Request] = []
+        calls: list[httpx2.Request] = []
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(self.TEI_INFO_BODY, calls)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(self.TEI_INFO_BODY, calls)) as client:
                 await client.get(self.TEI_INFO_URL)
         assert len(calls) == 1
 
         with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._no_backend()) as client:
+            async with httpx2.AsyncClient(transport=self._no_backend()) as client:
                 replayed = await client.get(self.TEI_INFO_URL)
 
         # Still one call: replay answered from disk, the dead transport was never touched.
         assert len(calls) == 1
-        assert isinstance(replayed, httpx.Response)
+        assert isinstance(replayed, httpx2.Response)
         assert replayed.status_code == 200
         assert replayed.json() == self.TEI_INFO_BODY
 
@@ -130,7 +130,7 @@ class TestTeiModelLookupInterception:
         storage = temp_storage_dir / "tei_signature_replay"
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(self.TEI_INFO_BODY)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(self.TEI_INFO_BODY)) as client:
                 await client.get(self.TEI_INFO_URL)
 
         with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
@@ -146,11 +146,11 @@ class TestTeiModelLookupInterception:
         storage = temp_storage_dir / "tei_models"
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend({"model_id": "model-a"})) as client:
+            async with httpx2.AsyncClient(transport=self._backend({"model_id": "model-a"})) as client:
                 await client.get(self.TEI_INFO_URL)
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend({"model_id": "model-b"})) as client:
+            async with httpx2.AsyncClient(transport=self._backend({"model_id": "model-b"})) as client:
                 await client.get(self.TEI_INFO_URL)
 
         recordings = self._recordings(storage)
@@ -162,14 +162,14 @@ class TestTeiModelLookupInterception:
         storage = temp_storage_dir / "tei_rim"
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(self.TEI_INFO_BODY)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(self.TEI_INFO_BODY)) as client:
                 await client.get(self.TEI_INFO_URL)
 
         recordings = self._recordings(storage)
         mtime = (storage / "recordings" / recordings[0].name).stat().st_mtime_ns
 
         with api_recording(mode=APIRecordingMode.RECORD_IF_MISSING, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(self.TEI_INFO_BODY)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(self.TEI_INFO_BODY)) as client:
                 response = await client.get(self.TEI_INFO_URL)
 
         assert response.json() == self.TEI_INFO_BODY
@@ -182,7 +182,7 @@ class TestTeiModelLookupInterception:
         storage = temp_storage_dir / "tei_missing"
 
         with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._no_backend()) as client:
+            async with httpx2.AsyncClient(transport=self._no_backend()) as client:
                 with pytest.raises(RuntimeError, match="Recording not found for TEI model lookup"):
                     await client.get(self.TEI_INFO_URL)
 
@@ -190,10 +190,10 @@ class TestTeiModelLookupInterception:
         """The predicate stays narrow: llama.cpp's /props signature check and every other GET
         target must pass straight through to the transport."""
         storage = temp_storage_dir / "unrelated_get"
-        calls: list[httpx.Request] = []
+        calls: list[httpx2.Request] = []
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend({"total_slots": 1}, calls)) as client:
+            async with httpx2.AsyncClient(transport=self._backend({"total_slots": 1}, calls)) as client:
                 await client.get("http://localhost:8080/props")
 
         assert len(calls) == 1

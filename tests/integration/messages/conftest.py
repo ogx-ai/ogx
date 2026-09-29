@@ -8,7 +8,7 @@ import json
 import os
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 
 from ogx.core.library_client import OGXAsLibraryClient
@@ -36,8 +36,8 @@ def messages_base_url(ogx_client):
 
 @pytest.fixture
 def messages_client(messages_base_url):
-    """Provide an httpx client configured for Anthropic Messages API calls."""
-    client = httpx.Client(base_url=messages_base_url, timeout=60.0)
+    """Provide an httpx2 client configured for Anthropic Messages API calls."""
+    client = httpx2.Client(base_url=messages_base_url, timeout=60.0)
     yield client
     client.close()
 
@@ -86,16 +86,16 @@ def _build_headers() -> dict[str, str]:
 
 
 def make_messages_request(
-    client: httpx.Client,
+    client: httpx2.Client,
     **kwargs: Any,
-) -> httpx.Response:
+) -> httpx2.Response:
     """Make a non-streaming POST request to /v1/messages."""
     body = _build_messages_body(**kwargs)
     return client.post("/v1/messages", headers=_build_headers(), json=body)
 
 
 def make_streaming_messages_request(
-    client: httpx.Client,
+    client: httpx2.Client,
     **kwargs: Any,
 ) -> list[dict]:
     """Make a streaming POST request to /v1/messages and return parsed SSE events.

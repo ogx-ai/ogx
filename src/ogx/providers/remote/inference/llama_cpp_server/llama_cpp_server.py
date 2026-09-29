@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 
-import httpx
+import httpx2
 
 from ogx.log import get_logger
 from ogx.providers.remote.inference.llama_cpp_server.config import LlamaCppServerConfig
@@ -118,7 +118,7 @@ class LlamaCppServerInferenceAdapter(OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         try:
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
                 if response.status_code != 200:
                     raise RuntimeError(
@@ -146,5 +146,5 @@ class LlamaCppServerInferenceAdapter(OpenAIMixin):
 
                 return RerankResponse(data=rerank_data)
 
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             raise ConnectionError(f"Failed to connect to llama.cpp rerank API at {endpoint}: {e}") from e

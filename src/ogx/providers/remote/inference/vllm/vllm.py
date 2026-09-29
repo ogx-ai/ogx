@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 from urllib.parse import urljoin
 
-import httpx
+import httpx2
 from pydantic import ConfigDict
 
 from ogx.core.request_headers import get_authenticated_user
@@ -108,7 +108,7 @@ class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
             base_url = self.get_base_url()
             health_url = urljoin(base_url, "health")
 
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.get(health_url)
                 response.raise_for_status()
                 return HealthResponse(status=HealthStatus.OK)
@@ -238,7 +238,7 @@ class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         try:
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
                 if response.status_code != 200:
                     raise RuntimeError(
@@ -266,5 +266,5 @@ class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
 
                 return RerankResponse(data=rerank_data)
 
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             raise ConnectionError(f"Failed to connect to vLLM rerank API at {endpoint}: {e}") from e

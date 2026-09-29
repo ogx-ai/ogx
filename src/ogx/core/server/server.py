@@ -15,7 +15,7 @@ from importlib.metadata import version as parse_version
 from pathlib import Path
 from typing import Any, cast
 
-import httpx
+import httpx2
 import yaml
 import zstandard
 from fastapi import FastAPI, HTTPException, Request
@@ -117,7 +117,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     # but integration tests (and OpenAI client behavior expectations in this repo)
     # assert they surface as BadRequestError instead.
     if isinstance(exc, ResourceNotFoundError) and request.url.path.startswith("/v1/vector_stores"):
-        http_exc = HTTPException(status_code=httpx.codes.BAD_REQUEST, detail=str(exc))
+        http_exc = HTTPException(status_code=httpx2.codes.BAD_REQUEST, detail=str(exc))
 
     return JSONResponse(
         status_code=http_exc.status_code, content=OpenAIErrorResponse.from_message(http_exc.detail).to_dict()
@@ -248,7 +248,7 @@ class ClientVersionMiddleware:
                     if not _client_version_is_compatible(client_version, self.server_version):
                         return await _send_error_response(
                             send,
-                            status=httpx.codes.UPGRADE_REQUIRED,
+                            status=httpx2.codes.UPGRADE_REQUIRED,
                             message=f"Client version {client_version} is not compatible with server version {self.server_version}. Please update your client.",
                         )
                 except InvalidVersion:

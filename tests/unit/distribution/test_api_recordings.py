@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import httpx
+import httpx2
 import pytest
 from openai import AsyncOpenAI, NotFoundError
 
@@ -683,10 +683,10 @@ class TestExceptionRecordingReplay:
         # -- Setup: an OpenAI 404 error, as the SDK would raise against a real server --
         original_error = NotFoundError(
             message="Model not found",
-            response=httpx.Response(
+            response=httpx2.Response(
                 404,
                 json={"error": {"code": "not_found"}},
-                request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
+                request=httpx2.Request("POST", "https://api.openai.com/v1/chat/completions"),
             ),
             body={"error": {"code": "not_found"}},
         )
@@ -773,7 +773,7 @@ class TestExceptionRecordingReplay:
 
 class TestHttpxInterception:
     """The vLLM adapter's ``rerank()`` posts to a Jina-compatible ``{base_url}/rerank`` with a
-    raw ``httpx.AsyncClient`` (``src/ogx/providers/remote/inference/vllm/vllm.py``) -- not
+    raw ``httpx2.AsyncClient`` (``src/ogx/providers/remote/inference/vllm/vllm.py``) -- not
     through the OpenAI SDK, and not through aiohttp. The recorder's ``/rerank`` match used to
     live only on the aiohttp patch, so these calls were neither recorded nor replayable (#6626).
     """
@@ -789,24 +789,24 @@ class TestHttpxInterception:
     }
 
     @staticmethod
-    def _backend(body: dict, calls: list | None = None) -> httpx.MockTransport:
+    def _backend(body: dict, calls: list | None = None) -> httpx2.MockTransport:
         """A stand-in backend that answers every request with ``body``."""
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             if calls is not None:
                 calls.append(request)
-            return httpx.Response(200, json=body)
+            return httpx2.Response(200, json=body)
 
-        return httpx.MockTransport(handler)
+        return httpx2.MockTransport(handler)
 
     @staticmethod
-    def _no_backend() -> httpx.MockTransport:
+    def _no_backend() -> httpx2.MockTransport:
         """A stand-in for replay CI, where no live backend is listening."""
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectError("no backend is listening", request=request)
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("no backend is listening", request=request)
 
-        return httpx.MockTransport(handler)
+        return httpx2.MockTransport(handler)
 
     @staticmethod
     def _recordings(storage: Path) -> list[Path]:
@@ -824,7 +824,7 @@ class TestHttpxInterception:
         ],
     )
     def test_intercepted_paths(self, url, intercepted):
-        """The raw-httpx call sites the recorder owns. Everything else -- chat/completions,
+        """The raw-httpx2 call sites the recorder owns. Everything else -- chat/completions,
         embeddings -- is intercepted at the provider-SDK layer instead."""
         assert _should_intercept_httpx(url) is intercepted
 
@@ -834,17 +834,17 @@ class TestHttpxInterception:
         storage = temp_storage_dir / "rerank_stream"
 
         with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._no_backend()) as client:
-                with pytest.raises(RuntimeError, match="Recording not found for httpx stream POST"):
+            async with httpx2.AsyncClient(transport=self._no_backend()) as client:
+                with pytest.raises(RuntimeError, match="Recording not found for httpx2 stream POST"):
                     async with client.stream("POST", self.RERANK_URL, json=self.RERANK_PAYLOAD):
                         pass
 
     async def test_rerank_post_is_recorded(self, temp_storage_dir):
-        """Record mode must capture a raw-httpx ``/rerank`` response to disk."""
+        """Record mode must capture a raw-httpx2 ``/rerank`` response to disk."""
         storage = temp_storage_dir / "rerank_record"
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(self.RERANK_BODY)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(self.RERANK_BODY)) as client:
                 response = await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
 
         assert response.json() == self.RERANK_BODY
@@ -860,21 +860,21 @@ class TestHttpxInterception:
         """Replay mode must serve the recording without reaching the network -- this is the
         whole point: replay CI has no vLLM server."""
         storage = temp_storage_dir / "rerank_replay"
-        calls: list[httpx.Request] = []
+        calls: list[httpx2.Request] = []
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(self.RERANK_BODY, calls)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(self.RERANK_BODY, calls)) as client:
                 await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
         assert len(calls) == 1
 
         with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._no_backend()) as client:
+            async with httpx2.AsyncClient(transport=self._no_backend()) as client:
                 replayed = await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
 
         # Still one call: replay answered from disk, the dead transport was never touched.
         assert len(calls) == 1
         # vllm.py:311-327 reads exactly these three off the response.
-        assert isinstance(replayed, httpx.Response)
+        assert isinstance(replayed, httpx2.Response)
         assert replayed.status_code == 200
         assert replayed.json() == self.RERANK_BODY
         assert json.loads(replayed.text) == self.RERANK_BODY
@@ -885,8 +885,8 @@ class TestHttpxInterception:
         storage = temp_storage_dir / "rerank_missing"
 
         with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._no_backend()) as client:
-                with pytest.raises(RuntimeError, match="Recording not found for httpx POST"):
+            async with httpx2.AsyncClient(transport=self._no_backend()) as client:
+                with pytest.raises(RuntimeError, match="Recording not found for httpx2 POST"):
                     await client.post(self.RERANK_URL, json=self.RERANK_PAYLOAD)
 
     async def test_messages_passthrough_is_still_intercepted(self, temp_storage_dir):
@@ -896,19 +896,19 @@ class TestHttpxInterception:
         url = "http://ollama.test:11434/v1/messages"
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend(body)) as client:
+            async with httpx2.AsyncClient(transport=self._backend(body)) as client:
                 await client.post(url, json={"model": "m", "messages": []})
 
         assert len(self._recordings(storage)) == 1
 
     async def test_unrelated_httpx_post_is_not_intercepted(self, temp_storage_dir):
-        """The predicate stays narrow: chat/completions is the OpenAI SDK's job, and raw httpx
+        """The predicate stays narrow: chat/completions is the OpenAI SDK's job, and raw httpx2
         posts elsewhere must pass straight through to the transport."""
         storage = temp_storage_dir / "unrelated"
-        calls: list[httpx.Request] = []
+        calls: list[httpx2.Request] = []
 
         with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(storage)):
-            async with httpx.AsyncClient(transport=self._backend({"ok": True}, calls)) as client:
+            async with httpx2.AsyncClient(transport=self._backend({"ok": True}, calls)) as client:
                 await client.post("http://vllm.test:8000/v1/chat/completions", json={"model": "m"})
 
         assert len(calls) == 1

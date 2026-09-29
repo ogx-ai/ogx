@@ -10,7 +10,7 @@ import ssl
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -66,7 +66,7 @@ class TestMessagesPassthrough:
     async def test_posts_to_the_messages_url(self):
         adapter = _adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -82,7 +82,7 @@ class TestMessagesPassthrough:
     async def test_url_without_v1_suffix_in_base_url(self):
         adapter = _adapter(base_url="https://api.fireworks.ai/inference")
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -97,7 +97,7 @@ class TestMessagesPassthrough:
     async def test_sends_anthropic_headers_and_config_api_key(self):
         adapter = _adapter(api_key="config-key")
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -118,7 +118,7 @@ class TestMessagesPassthrough:
             return_value=SimpleNamespace(fireworks_api_key=SecretStr("per-request-key"))
         )
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -134,7 +134,7 @@ class TestMessagesPassthrough:
     async def test_no_api_key_sends_no_key_required(self):
         adapter = _adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -152,7 +152,7 @@ class TestMessagesPassthrough:
         which is the whole point of native passthrough over chat-completions translation."""
         adapter = _adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -173,7 +173,7 @@ class TestMessagesPassthrough:
     async def test_returns_the_parsed_response(self):
         adapter = _adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client
@@ -225,11 +225,11 @@ class TestUpstreamErrors:
     async def test_error_response_raises_anthropic_api_error_with_status(self):
         adapter = _adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
-            error_response = httpx.Response(
+        with patch("httpx2.AsyncClient") as mock_client_class:
+            error_response = httpx2.Response(
                 429,
                 json={"type": "error", "error": {"type": "rate_limit_error", "message": "rate limited"}},
-                request=httpx.Request("POST", "https://api.fireworks.ai/inference/v1/messages"),
+                request=httpx2.Request("POST", "https://api.fireworks.ai/inference/v1/messages"),
             )
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=error_response)
@@ -253,7 +253,7 @@ class TestCountTokensFallsBackToMessages:
     async def test_count_tokens_posts_to_messages_not_count_tokens(self):
         adapter = _adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post = AsyncMock(return_value=MagicMock(json=lambda: _MESSAGE_RESPONSE_BODY))
             mock_client_class.return_value.__aenter__.return_value = mock_client

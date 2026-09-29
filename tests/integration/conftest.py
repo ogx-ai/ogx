@@ -54,6 +54,7 @@ def pytest_sessionstart(session):
 def suppress_httpx_logs(caplog):
     """Suppress httpx INFO logs for all integration tests"""
     caplog.set_level(logging.WARNING, logger="httpx")
+    caplog.set_level(logging.WARNING, logger="httpx2")
 
 
 @pytest.fixture(autouse=True)

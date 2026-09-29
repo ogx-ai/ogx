@@ -9,7 +9,7 @@ import json
 import logging  # allow-direct-logging
 from unittest.mock import Mock, patch
 
-import httpx
+import httpx2
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -76,9 +76,9 @@ def custom_auth_client():
 
 def test_custom_auth_connection_error_returns_503(custom_auth_client, suppress_auth_errors):
     async def mock_connect_error(*args, **kwargs):
-        raise httpx.ConnectError("Connection refused")
+        raise httpx2.ConnectError("Connection refused")
 
-    with patch("httpx.AsyncClient.post", new=mock_connect_error):
+    with patch("httpx2.AsyncClient.post", new=mock_connect_error):
         response = custom_auth_client.get("/test", headers={"Authorization": "Bearer token"})
         assert response.status_code == 503
         assert "Authentication service unavailable" in response.json()["error"]["message"]
@@ -86,9 +86,9 @@ def test_custom_auth_connection_error_returns_503(custom_auth_client, suppress_a
 
 def test_custom_auth_timeout_returns_503(custom_auth_client, suppress_auth_errors):
     async def mock_timeout(*args, **kwargs):
-        raise httpx.ReadTimeout("Read timed out")
+        raise httpx2.ReadTimeout("Read timed out")
 
-    with patch("httpx.AsyncClient.post", new=mock_timeout):
+    with patch("httpx2.AsyncClient.post", new=mock_timeout):
         response = custom_auth_client.get("/test", headers={"Authorization": "Bearer token"})
         assert response.status_code == 503
         assert "Authentication service" in response.json()["error"]["message"]
@@ -247,9 +247,9 @@ def introspection_client():
 
 def test_introspection_connection_error_returns_503(introspection_client, suppress_auth_errors):
     async def mock_connect_error(*args, **kwargs):
-        raise httpx.ConnectError("Connection refused")
+        raise httpx2.ConnectError("Connection refused")
 
-    with patch("httpx.AsyncClient.post", new=mock_connect_error):
+    with patch("httpx2.AsyncClient.post", new=mock_connect_error):
         response = introspection_client.get("/test", headers={"Authorization": "Bearer token"})
         assert response.status_code == 503
         assert "Authentication service unavailable" in response.json()["error"]["message"]
@@ -257,9 +257,9 @@ def test_introspection_connection_error_returns_503(introspection_client, suppre
 
 def test_introspection_timeout_returns_503(introspection_client, suppress_auth_errors):
     async def mock_timeout(*args, **kwargs):
-        raise httpx.ReadTimeout("Read timed out")
+        raise httpx2.ReadTimeout("Read timed out")
 
-    with patch("httpx.AsyncClient.post", new=mock_timeout):
+    with patch("httpx2.AsyncClient.post", new=mock_timeout):
         response = introspection_client.get("/test", headers={"Authorization": "Bearer token"})
         assert response.status_code == 503
         assert "Authentication service" in response.json()["error"]["message"]
@@ -293,9 +293,9 @@ def kubernetes_auth_client():
 
 def test_kubernetes_auth_connection_error_returns_503(kubernetes_auth_client, suppress_auth_errors):
     async def mock_connect_error(*args, **kwargs):
-        raise httpx.ConnectError("Connection refused")
+        raise httpx2.ConnectError("Connection refused")
 
-    with patch("httpx.AsyncClient.post", new=mock_connect_error):
+    with patch("httpx2.AsyncClient.post", new=mock_connect_error):
         response = kubernetes_auth_client.get("/test", headers={"Authorization": "Bearer token"})
         assert response.status_code == 503
         assert "Authentication service unavailable" in response.json()["error"]["message"]
@@ -303,9 +303,9 @@ def test_kubernetes_auth_connection_error_returns_503(kubernetes_auth_client, su
 
 def test_kubernetes_auth_timeout_returns_503(kubernetes_auth_client, suppress_auth_errors):
     async def mock_timeout(*args, **kwargs):
-        raise httpx.ReadTimeout("Read timed out")
+        raise httpx2.ReadTimeout("Read timed out")
 
-    with patch("httpx.AsyncClient.post", new=mock_timeout):
+    with patch("httpx2.AsyncClient.post", new=mock_timeout):
         response = kubernetes_auth_client.get("/test", headers={"Authorization": "Bearer token"})
         assert response.status_code == 503
         assert "Authentication service" in response.json()["error"]["message"]

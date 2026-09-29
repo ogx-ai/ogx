@@ -5,14 +5,14 @@
 # the root directory of this source tree.
 
 """Tests for test-ID injection: the OgxClient._prepare_request patch, and the
-httpx event-hook clients used for openai.OpenAI/AsyncOpenAI and langchain (#6627).
+httpx2 event-hook clients used for openai.OpenAI/AsyncOpenAI and langchain (#6627).
 
 Injection is unconditional -- it applies in every stack mode (#6667) -- so these tests
 only distinguish an active test context (test_id is set) from no test context at all."""
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from ogx_client import OgxClient
 from openai import OpenAI
@@ -46,8 +46,8 @@ def test_context():
     reset_test_context(token)
 
 
-def _request() -> httpx.Request:
-    return httpx.Request("POST", "http://localhost:8321/v1/responses", json={})
+def _request() -> httpx2.Request:
+    return httpx2.Request("POST", "http://localhost:8321/v1/responses", json={})
 
 
 def _ogx_client() -> OgxClient:
@@ -131,71 +131,71 @@ class TestPatchOgxClient:
 
 
 class TestBuildTestIdHttpClient:
-    """build_test_id_http_client()/build_test_id_async_http_client() use httpx's own public,
+    """build_test_id_http_client()/build_test_id_async_http_client() use httpx2's own public,
     documented event_hooks mechanism -- no openai/langchain internals involved -- so the same
     two functions cover openai.OpenAI, openai.AsyncOpenAI, and langchain's ChatOpenAI uniformly."""
 
     def test_returns_configured_httpx_client(self):
         client = build_test_id_http_client()
-        assert isinstance(client, httpx.Client)
+        assert isinstance(client, httpx2.Client)
         client.close()
 
     async def test_returns_configured_httpx_async_client(self):
         client = build_test_id_async_http_client()
-        assert isinstance(client, httpx.AsyncClient)
+        assert isinstance(client, httpx2.AsyncClient)
         await client.aclose()
 
     def test_sync_client_injects_test_id(self, test_context):
-        captured: list[httpx.Request] = []
+        captured: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             captured.append(request)
-            return httpx.Response(200, json={})
+            return httpx2.Response(200, json={})
 
-        with build_test_id_http_client(transport=httpx.MockTransport(handler)) as client:
+        with build_test_id_http_client(transport=httpx2.MockTransport(handler)) as client:
             client.post("http://localhost:8321/v1/responses", json={})
 
         assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
 
     async def test_async_client_injects_test_id(self, test_context):
-        captured: list[httpx.Request] = []
+        captured: list[httpx2.Request] = []
 
-        async def handler(request: httpx.Request) -> httpx.Response:
+        async def handler(request: httpx2.Request) -> httpx2.Response:
             captured.append(request)
-            return httpx.Response(200, json={})
+            return httpx2.Response(200, json={})
 
-        async with build_test_id_async_http_client(transport=httpx.MockTransport(handler)) as client:
+        async with build_test_id_async_http_client(transport=httpx2.MockTransport(handler)) as client:
             await client.post("http://localhost:8321/v1/responses", json={})
 
         assert json.loads(captured[0].headers[PROVIDER_DATA_HEADER]) == {"__test_id": TEST_ID}
 
     def test_no_injection_without_an_active_test_context(self):
-        captured: list[httpx.Request] = []
+        captured: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             captured.append(request)
-            return httpx.Response(200, json={})
+            return httpx2.Response(200, json={})
 
-        with build_test_id_http_client(transport=httpx.MockTransport(handler)) as client:
+        with build_test_id_http_client(transport=httpx2.MockTransport(handler)) as client:
             client.post("http://localhost:8321/v1/responses", json={})
 
         assert PROVIDER_DATA_HEADER not in captured[0].headers
 
     def test_preserves_callers_own_event_hooks(self, test_context):
         """Passing event_hooks= must add our hook alongside the caller's, not replace it."""
-        own_hook_calls: list[httpx.Request] = []
+        own_hook_calls: list[httpx2.Request] = []
 
-        def own_hook(request: httpx.Request) -> None:
+        def own_hook(request: httpx2.Request) -> None:
             own_hook_calls.append(request)
 
-        captured: list[httpx.Request] = []
+        captured: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             captured.append(request)
-            return httpx.Response(200, json={})
+            return httpx2.Response(200, json={})
 
         with build_test_id_http_client(
-            event_hooks={"request": [own_hook]}, transport=httpx.MockTransport(handler)
+            event_hooks={"request": [own_hook]}, transport=httpx2.MockTransport(handler)
         ) as client:
             client.post("http://localhost:8321/v1/responses", json={})
 
@@ -205,11 +205,11 @@ class TestBuildTestIdHttpClient:
     def test_openai_client_with_http_client_gets_test_id(self, test_context):
         """End-to-end: a real openai.OpenAI() constructed with http_client=build_test_id_http_client()
         stamps __test_id, without touching OpenAI._prepare_request at all."""
-        captured: list[httpx.Request] = []
+        captured: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             captured.append(request)
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "id": "chatcmpl-1",
@@ -225,7 +225,7 @@ class TestBuildTestIdHttpClient:
         client = OpenAI(
             api_key="fake",
             base_url="http://localhost:8321/v1",
-            http_client=build_test_id_http_client(transport=httpx.MockTransport(handler)),
+            http_client=build_test_id_http_client(transport=httpx2.MockTransport(handler)),
             max_retries=0,
         )
 

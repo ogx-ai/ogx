@@ -7,7 +7,7 @@
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
-import httpx
+import httpx2
 
 from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
@@ -29,7 +29,7 @@ class AnthropicAPIError(Exception):
         self.status_code = status_code
 
 
-def _error_message(response: httpx.Response) -> str:
+def _error_message(response: httpx2.Response) -> str:
     """The message from an Anthropic error body ({"type": "error", "error": {"message": ...}})."""
     try:
         body = response.json()
@@ -126,7 +126,7 @@ class AnthropicMixin(OpenAIMixin):
                 httpx_client_kwargs=self._build_httpx_client_kwargs(self.anthropic_messages_timeout),
             ):
                 yield event
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             # The response body is already closed here, so only the status is available.
             raise AnthropicAPIError(
                 e.response.status_code,
@@ -148,11 +148,11 @@ class AnthropicMixin(OpenAIMixin):
         if params.stream:
             return self._passthrough_anthropic_stream(url, headers, body)
 
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs(self.anthropic_messages_timeout)) as client:
+        async with httpx2.AsyncClient(**self._build_httpx_client_kwargs(self.anthropic_messages_timeout)) as client:
             try:
                 resp = await client.post(url, json=body, headers=headers)
                 resp.raise_for_status()
-            except httpx.HTTPStatusError as e:
+            except httpx2.HTTPStatusError as e:
                 raise AnthropicAPIError(e.response.status_code, _error_message(e.response)) from e
             return AnthropicMessageResponse(**resp.json())
 
@@ -171,10 +171,10 @@ class AnthropicMixin(OpenAIMixin):
         body = params.model_dump(exclude_none=True)
         headers = self._anthropic_headers()
 
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs(self.anthropic_count_tokens_timeout)) as client:
+        async with httpx2.AsyncClient(**self._build_httpx_client_kwargs(self.anthropic_count_tokens_timeout)) as client:
             try:
                 resp = await client.post(url, json=body, headers=headers)
                 resp.raise_for_status()
-            except httpx.HTTPStatusError as e:
+            except httpx2.HTTPStatusError as e:
                 raise AnthropicAPIError(e.response.status_code, _error_message(e.response)) from e
             return AnthropicCountTokensResponse(**resp.json())

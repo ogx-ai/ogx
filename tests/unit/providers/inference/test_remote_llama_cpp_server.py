@@ -7,7 +7,7 @@
 import ssl
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -64,7 +64,7 @@ class TestRerank:
     async def test_rerank_posts_to_v1_rerank_endpoint(self):
         adapter = _make_adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client_instance = _mock_httpx_client(mock_client_class, [{"index": 0, "relevance_score": 0.9}])
 
             request = RerankRequest(model="bge-reranker-v2-m3", query="test", items=["doc1"])
@@ -76,7 +76,7 @@ class TestRerank:
     async def test_rerank_sends_auth_header(self):
         adapter = _make_adapter(api_key="my-secret-token")
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client_instance = _mock_httpx_client(mock_client_class, [{"index": 0, "relevance_score": 0.9}])
 
             request = RerankRequest(model="bge-reranker-v2-m3", query="test", items=["doc1"])
@@ -88,7 +88,7 @@ class TestRerank:
     async def test_rerank_no_auth_header_without_key(self):
         adapter = _make_adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client_instance = _mock_httpx_client(mock_client_class, [{"index": 0, "relevance_score": 0.9}])
 
             request = RerankRequest(model="bge-reranker-v2-m3", query="test", items=["doc1"])
@@ -100,7 +100,7 @@ class TestRerank:
     async def test_rerank_sends_top_n_when_max_num_results_set(self):
         adapter = _make_adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_client_instance = _mock_httpx_client(mock_client_class, [{"index": 0, "relevance_score": 0.9}])
 
             request = RerankRequest(model="bge-reranker-v2-m3", query="test", items=["doc1", "doc2"], max_num_results=1)
@@ -112,7 +112,7 @@ class TestRerank:
     async def test_rerank_sorts_results_descending_by_score(self):
         adapter = _make_adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             _mock_httpx_client(
                 mock_client_class,
                 [
@@ -147,7 +147,7 @@ class TestRerank:
     async def test_rerank_raises_runtime_error_on_non_200(self):
         adapter = _make_adapter()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 500
             mock_response.text = "internal error"
@@ -161,11 +161,11 @@ class TestRerank:
 
 
 class TestRerankUsesNetworkConfig:
-    """rerank() builds its own httpx client, which must honour config.network like the OpenAI client."""
+    """rerank() builds its own httpx2 client, which must honour config.network like the OpenAI client."""
 
     @staticmethod
     async def _rerank_client_kwargs(adapter: LlamaCppServerInferenceAdapter) -> dict:
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             response = MagicMock()
             response.status_code = 200
             response.json.return_value = {"results": [{"index": 0, "relevance_score": 0.9}]}
@@ -194,7 +194,7 @@ class TestRerankUsesNetworkConfig:
         assert kwargs["verify"] is False
         assert set(kwargs["mounts"]) == {"http://", "https://"}
         assert kwargs["headers"] == {"X-Route": "team-a"}
-        assert kwargs["timeout"] == httpx.Timeout(12.0)
+        assert kwargs["timeout"] == httpx2.Timeout(12.0)
         assert kwargs["limits"].max_connections == 7
 
     async def test_keeps_the_shared_ssl_context_when_only_a_proxy_is_configured(self):
@@ -215,19 +215,19 @@ class TestRerankUsesNetworkConfig:
 
 
 def _install_mock_transport(monkeypatch, handler):
-    real_client = httpx.AsyncClient
+    real_client = httpx2.AsyncClient
 
     def factory(*args, **kwargs):
         kwargs.pop("transport", None)
-        return real_client(transport=httpx.MockTransport(handler))
+        return real_client(transport=httpx2.MockTransport(handler))
 
-    monkeypatch.setattr(server_signature.httpx, "AsyncClient", factory)
+    monkeypatch.setattr(server_signature.httpx2, "AsyncClient", factory)
 
 
 class TestHealth:
     async def test_ok_for_llama_cpp_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -237,8 +237,8 @@ class TestHealth:
         assert result["status"] == HealthStatus.OK
 
     async def test_error_for_non_llama_cpp_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(404, text="Not Found")
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(404, text="Not Found")
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -249,11 +249,11 @@ class TestHealth:
         assert "Failed to verify" in result["message"]
 
     async def test_sends_auth_credential(self, monkeypatch):
-        seen: list[httpx.Request] = []
+        seen: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             seen.append(request)
-            return httpx.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
+            return httpx2.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter(api_key=SecretStr("sekret"))
@@ -265,8 +265,8 @@ class TestHealth:
 
 class TestInitialize:
     async def test_ok_for_llama_cpp_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -274,8 +274,8 @@ class TestInitialize:
         await adapter.initialize()
 
     async def test_raises_for_non_llama_cpp_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(404, text="Not Found")
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(404, text="Not Found")
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -285,8 +285,8 @@ class TestInitialize:
         assert not isinstance(excinfo.value, ServerUnreachableError)
 
     async def test_unreachable_server_does_not_raise(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectError("connection refused")
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("connection refused")
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -308,18 +308,18 @@ class TestSignatureProbesUseNetworkConfig:
 
     @staticmethod
     def _capture(monkeypatch):
-        real_client = httpx.AsyncClient
+        real_client = httpx2.AsyncClient
         captured: list[dict] = []
 
         def factory(*args, **kwargs):
             captured.append(kwargs)
             return real_client(
-                transport=httpx.MockTransport(
-                    lambda request: httpx.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
+                transport=httpx2.MockTransport(
+                    lambda request: httpx2.Response(200, json={"default_generation_settings": {}, "total_slots": 1})
                 )
             )
 
-        monkeypatch.setattr(server_signature.httpx, "AsyncClient", factory)
+        monkeypatch.setattr(server_signature.httpx2, "AsyncClient", factory)
         return captured
 
     @pytest.mark.parametrize("probe", ["initialize", "health"])

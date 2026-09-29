@@ -7,7 +7,7 @@
 import json
 from unittest.mock import AsyncMock, MagicMock
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -18,14 +18,14 @@ from ogx.providers.remote.tool_runtime.serply_search.serply_search import Serply
 @pytest.fixture
 def serply_search():
     impl = SerplySearchToolRuntimeImpl(SerplySearchToolConfig(api_key="test-key", max_results=3))
-    impl._client = MagicMock(spec=httpx.AsyncClient)
+    impl._client = MagicMock(spec=httpx2.AsyncClient)
     impl.get_request_provider_data = MagicMock(return_value=None)
     return impl
 
 
-def _serply_response(count: int = 1) -> httpx.Response:
+def _serply_response(count: int = 1) -> httpx2.Response:
     # Shape of GET /v1/search: each organic result carries title, link, and description.
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "results": [
@@ -37,7 +37,7 @@ def _serply_response(count: int = 1) -> httpx.Response:
                 for i in range(count)
             ],
         },
-        request=httpx.Request("GET", SerplySearchToolRuntimeImpl._SEARCH_URL),
+        request=httpx2.Request("GET", SerplySearchToolRuntimeImpl._SEARCH_URL),
     )
 
 
@@ -87,7 +87,7 @@ async def test_unknown_search_context_size_keeps_config_default(serply_search, m
 
 async def test_max_results_is_clamped_to_api_ceiling(mock_serply_response):
     impl = SerplySearchToolRuntimeImpl(SerplySearchToolConfig(api_key="test-key", max_results=50))
-    impl._client = MagicMock(spec=httpx.AsyncClient)
+    impl._client = MagicMock(spec=httpx2.AsyncClient)
     impl._client.get = AsyncMock(return_value=mock_serply_response)
     impl.get_request_provider_data = MagicMock(return_value=None)
     await impl.invoke_tool("web_search", {"query": "q"})
@@ -146,7 +146,7 @@ async def test_api_key_sent_as_header_not_params(serply_search, mock_serply_resp
 
 async def test_missing_api_key_sends_no_auth_header(mock_serply_response):
     impl = SerplySearchToolRuntimeImpl(SerplySearchToolConfig(api_key=None))
-    impl._client = MagicMock(spec=httpx.AsyncClient)
+    impl._client = MagicMock(spec=httpx2.AsyncClient)
     impl._client.get = AsyncMock(return_value=mock_serply_response)
     impl.get_request_provider_data = MagicMock(return_value=None)
     await impl.invoke_tool("web_search", {"query": "q"})
@@ -163,10 +163,10 @@ async def test_provider_data_overrides_config_api_key(serply_search, mock_serply
 
 
 async def test_401_returns_graceful_tool_error(serply_search):
-    unauthorized = httpx.Response(
+    unauthorized = httpx2.Response(
         401,
         json={"detail": "Invalid API key"},
-        request=httpx.Request("GET", SerplySearchToolRuntimeImpl._SEARCH_URL),
+        request=httpx2.Request("GET", SerplySearchToolRuntimeImpl._SEARCH_URL),
     )
     serply_search._client.get = AsyncMock(return_value=unauthorized)
     result = await serply_search.invoke_tool("web_search", {"query": "q"})
@@ -177,10 +177,10 @@ async def test_401_returns_graceful_tool_error(serply_search):
 
 
 async def test_other_http_errors_raise(serply_search):
-    server_error = httpx.Response(
+    server_error = httpx2.Response(
         500,
-        request=httpx.Request("GET", SerplySearchToolRuntimeImpl._SEARCH_URL),
+        request=httpx2.Request("GET", SerplySearchToolRuntimeImpl._SEARCH_URL),
     )
     serply_search._client.get = AsyncMock(return_value=server_error)
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(httpx2.HTTPStatusError):
         await serply_search.invoke_tool("web_search", {"query": "q"})

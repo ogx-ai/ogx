@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -30,19 +30,19 @@ def _make_adapter(**config_kwargs) -> TextEmbeddingsInferenceAdapter:
 
 
 def _install_mock_transport(monkeypatch, handler):
-    real_client = httpx.AsyncClient
+    real_client = httpx2.AsyncClient
 
     def factory(*args, **kwargs):
         kwargs.pop("transport", None)
-        return real_client(transport=httpx.MockTransport(handler))
+        return real_client(transport=httpx2.MockTransport(handler))
 
-    monkeypatch.setattr(server_signature.httpx, "AsyncClient", factory)
+    monkeypatch.setattr(server_signature.httpx2, "AsyncClient", factory)
 
 
 class TestHealth:
     async def test_ok_for_tei_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json={"model_id": "BAAI/bge-small-en-v1.5"})
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(200, json={"model_id": "BAAI/bge-small-en-v1.5"})
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -52,8 +52,8 @@ class TestHealth:
         assert result["status"] == HealthStatus.OK
 
     async def test_error_for_non_tei_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(404, text="Not Found")
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(404, text="Not Found")
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -64,11 +64,11 @@ class TestHealth:
         assert "Failed to verify" in result["message"]
 
     async def test_sends_auth_credential(self, monkeypatch):
-        seen: list[httpx.Request] = []
+        seen: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             seen.append(request)
-            return httpx.Response(200, json={"model_id": "BAAI/bge-small-en-v1.5"})
+            return httpx2.Response(200, json={"model_id": "BAAI/bge-small-en-v1.5"})
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter(api_key=SecretStr("sekret"))
@@ -80,8 +80,8 @@ class TestHealth:
 
 class TestInitialize:
     async def test_ok_for_tei_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json={"model_id": "BAAI/bge-small-en-v1.5"})
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(200, json={"model_id": "BAAI/bge-small-en-v1.5"})
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -89,8 +89,8 @@ class TestInitialize:
         await adapter.initialize()
 
     async def test_raises_for_non_tei_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(404, text="Not Found")
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            return httpx2.Response(404, text="Not Found")
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -100,8 +100,8 @@ class TestInitialize:
         assert not isinstance(excinfo.value, ServerUnreachableError)
 
     async def test_unreachable_server_does_not_raise(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectError("connection refused")
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("connection refused")
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -111,11 +111,11 @@ class TestInitialize:
 
 class TestListProviderModelIds:
     async def test_lists_model_from_info_endpoint(self, monkeypatch):
-        seen: list[httpx.Request] = []
+        seen: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             seen.append(request)
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "model_id": "nomic-ai/nomic-embed-text-v1.5",
@@ -132,11 +132,11 @@ class TestListProviderModelIds:
         assert str(seen[0].url) == "http://mocked.localhost:8080/info"
 
     async def test_sends_auth_credential(self, monkeypatch):
-        seen: list[httpx.Request] = []
+        seen: list[httpx2.Request] = []
 
-        def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx2.Request) -> httpx2.Response:
             seen.append(request)
-            return httpx.Response(200, json={"model_id": "nomic-ai/nomic-embed-text-v1.5"})
+            return httpx2.Response(200, json={"model_id": "nomic-ai/nomic-embed-text-v1.5"})
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter(api_key=SecretStr("sekret"))
@@ -146,8 +146,8 @@ class TestListProviderModelIds:
         assert seen[0].headers["Authorization"] == "Bearer sekret"
 
     async def test_propagates_unreachable_server(self, monkeypatch):
-        def handler(request: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectError("connection refused")
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("connection refused")
 
         _install_mock_transport(monkeypatch, handler)
         adapter = _make_adapter()
@@ -204,16 +204,18 @@ class TestSignatureProbesUseNetworkConfig:
 
     @staticmethod
     def _capture(monkeypatch):
-        real_client = httpx.AsyncClient
+        real_client = httpx2.AsyncClient
         captured: list[dict] = []
 
         def factory(*args, **kwargs):
             captured.append(kwargs)
             return real_client(
-                transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"model_id": "BAAI/bge-small"}))
+                transport=httpx2.MockTransport(
+                    lambda request: httpx2.Response(200, json={"model_id": "BAAI/bge-small"})
+                )
             )
 
-        monkeypatch.setattr(server_signature.httpx, "AsyncClient", factory)
+        monkeypatch.setattr(server_signature.httpx2, "AsyncClient", factory)
         return captured
 
     @pytest.mark.parametrize("probe", ["initialize", "health", "list_provider_model_ids"])

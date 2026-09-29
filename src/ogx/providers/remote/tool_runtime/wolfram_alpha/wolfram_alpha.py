@@ -7,7 +7,7 @@
 import json
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
 from ogx_api import (
@@ -85,7 +85,7 @@ class WolframAlphaToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
             "format": "plaintext",
             "output": "json",
         }
-        async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
+        async with httpx2.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.get(params=params, url=self.url)
             response.raise_for_status()
         return ToolInvocationResult(content=json.dumps(self._clean_wolfram_alpha_response(response.json())))

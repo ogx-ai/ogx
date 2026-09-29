@@ -8,7 +8,7 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
-import httpx
+import httpx2
 import pytest
 
 from ogx.providers.inline.interactions.config import InteractionsConfig
@@ -505,7 +505,7 @@ class TestPassthroughRequest:
         mock_client.__aexit__.return_value = None
         mock_client.post = AsyncMock(return_value=mock_response)
         async_client_ctor = MagicMock(return_value=mock_client)
-        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
+        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx2.AsyncClient", async_client_ctor)
 
         result = await impl._passthrough_request(passthrough, request)
 
@@ -529,7 +529,7 @@ class TestPassthroughRequest:
         }
         request = GoogleCreateInteractionRequest(model="gemini/gemini-2.5-flash", input="hello", stream=False)
 
-        built_kwargs = {"headers": {"x-custom-header": "enabled"}, "timeout": httpx.Timeout(42.0)}
+        built_kwargs = {"headers": {"x-custom-header": "enabled"}, "timeout": httpx2.Timeout(42.0)}
         build_kwargs_mock = MagicMock(return_value=built_kwargs)
         monkeypatch.setattr(
             "ogx.providers.inline.interactions.impl.build_network_client_kwargs",
@@ -550,7 +550,7 @@ class TestPassthroughRequest:
         mock_client.__aexit__.return_value = None
         mock_client.post = AsyncMock(return_value=mock_response)
         async_client_ctor = MagicMock(return_value=mock_client)
-        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
+        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx2.AsyncClient", async_client_ctor)
 
         await impl._passthrough_request(passthrough, request)
 
@@ -597,7 +597,7 @@ class TestPassthroughRequest:
         mock_client.__aexit__.return_value = None
         mock_client.post = AsyncMock(return_value=mock_response)
         async_client_ctor = MagicMock(return_value=mock_client)
-        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx.AsyncClient", async_client_ctor)
+        monkeypatch.setattr("ogx.providers.inline.interactions.impl.httpx2.AsyncClient", async_client_ctor)
 
         result = await impl._passthrough_request(passthrough, request)
 
