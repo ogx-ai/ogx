@@ -33,7 +33,7 @@ def available_providers() -> list[ProviderSpec]:
                 "fonttools>=4.60.2",
                 "pillow",
                 "pandas",
-                "mcp>=1.28.1,<2.0",
+                "mcp>=2.0",
             ]
             + KVSTORE_DEPS,  # TODO make this dynamic based on the kvstore config
             module="ogx.providers.inline.responses.builtin",

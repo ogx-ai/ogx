@@ -78,20 +78,14 @@ jobs:
           curl -fsSL https://claude.ai/install.sh | bash -s -- "${CLI_VERSION}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # The mcp<2.0 constraint keeps this install from re-resolving the SDK's
-      # dependencies past pyproject.toml's own mcp cap: without it, the latest
-      # claude-agent-sdk pulls mcp 2.x, which removed the McpError alias and
-      # crashes the OGX server at import time before the smoke tests can run.
-      # The SDK accepts mcp 1.x, so this is safe today. Remove the constraint
-      # (and its comment) once OGX itself migrates to mcp 2.x (see issue #5952).
       - name: Install Claude Agent SDK
         env:
           SDK_VERSION: ${{ inputs.agent-sdk-version }}
         run: |
           if [ -n "${SDK_VERSION}" ]; then
-            uv pip install "claude-agent-sdk==${SDK_VERSION}" "mcp>=1.28.1,<2.0"
+            uv pip install "claude-agent-sdk==${SDK_VERSION}"
           else
-            uv pip install --upgrade claude-agent-sdk "mcp>=1.28.1,<2.0"
+            uv pip install --upgrade claude-agent-sdk
           fi
 
       # Nothing above is pinned ahead of time, so this is where we find out what actually got
