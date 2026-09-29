@@ -6,7 +6,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -21,13 +21,13 @@ def exa_search():
 
 @pytest.fixture
 def exa_search_client(exa_search):
-    exa_search._client = MagicMock(spec=httpx.AsyncClient)
+    exa_search._client = MagicMock(spec=httpx2.AsyncClient)
     return exa_search
 
 
 @pytest.fixture
 def mock_exa_response():
-    return httpx.Response(
+    return httpx2.Response(
         200,
         json={
             "requestId": "req-123",
@@ -42,7 +42,7 @@ def mock_exa_response():
                 }
             ],
         },
-        request=httpx.Request("POST", "https://api.exa.ai/search"),
+        request=httpx2.Request("POST", "https://api.exa.ai/search"),
     )
 
 
@@ -189,16 +189,16 @@ class TestProviderDataApiKeyOverride:
 
     async def test_api_key_omitted_from_body_when_both_keys_null(self):
         """Request headers should not include x-api-key when no key is available."""
-        mock_response = httpx.Response(
+        mock_response = httpx2.Response(
             200,
             json={
                 "requestId": "req-123",
                 "results": [],
             },
-            request=httpx.Request("POST", "https://api.exa.ai/search"),
+            request=httpx2.Request("POST", "https://api.exa.ai/search"),
         )
         impl = ExaSearchToolRuntimeImpl(ExaSearchToolConfig(max_results=3))
-        impl._client = MagicMock(spec=httpx.AsyncClient)
+        impl._client = MagicMock(spec=httpx2.AsyncClient)
         impl._client.post = AsyncMock(return_value=mock_response)
         with patch.object(impl, "get_request_provider_data", return_value=None):
             await impl.invoke_tool("web_search", {"query": "test query"})
