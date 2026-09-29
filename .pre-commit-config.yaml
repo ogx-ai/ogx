@@ -255,6 +255,26 @@ repos:
             fi
             exit 0
           - --
+      - id: no-direct-httpx
+        name: Block direct httpx imports (use httpx2)
+        entry: bash
+        exclude: '^client-sdks/openapi/.*$'
+        language: system
+        types: [python]
+        pass_filenames: true
+        args:
+          - -c
+          - |
+            matches=$(grep -EnH '^[^#]*\b(import\s+httpx\b|from\s+httpx\s+import\b)' "$@" | grep -v -e '#\s*allow-direct-httpx' || true)
+            if [ -n "$matches" ]; then
+              # GitHub Actions annotation format
+              while IFS=: read -r file line_num rest; do
+                echo "::error file=$file,line=$line_num::Do not use 'import httpx' or 'from httpx import' in $file. Use httpx2 instead: import httpx2 / from httpx2 import .... The remaining httpx imports are deliberate boundaries (google-genai, the mcp 1.x SDK, and the generated client SDK). If a direct httpx import is truly needed, add: # allow-direct-httpx"
+              done <<< "$matches"
+              exit 1
+            fi
+            exit 0
+          - --
       - id: no-fstring-logging
         name: Block f-string logging (use structlog key-value style)
         entry: ./scripts/check-no-fstring-logging.sh

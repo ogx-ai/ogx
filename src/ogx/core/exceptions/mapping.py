@@ -14,7 +14,7 @@ to HTTP status codes. It is used by:
 
 import asyncio
 
-import httpx
+import httpx  # allow-direct-httpx: SDKs still built on httpx raise httpx exception classes we must map
 import httpx2
 from fastapi import HTTPException
 from openai import BadRequestError

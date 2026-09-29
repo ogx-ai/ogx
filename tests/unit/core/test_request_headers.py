@@ -14,7 +14,7 @@ call does with this same header anyway.
 
 import json
 
-import httpx
+import httpx  # allow-direct-httpx: exercises the httpx request branch of the test-id stamping
 import pytest
 
 from ogx.core.request_headers import stamp_test_id_into_headers

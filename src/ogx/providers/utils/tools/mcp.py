@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 
-import httpx
+import httpx  # allow-direct-httpx: the mcp 1.x client SDK is httpx-based
 from mcp import ClientSession, McpError
 from mcp import types as mcp_types
 from mcp.client.sse import sse_client

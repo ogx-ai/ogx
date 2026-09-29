@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
-import httpx
+import httpx  # allow-direct-httpx: the generated OgxClient (httpx-based) still sends httpx requests
 import httpx2
 from openai import NOT_GIVEN
 
