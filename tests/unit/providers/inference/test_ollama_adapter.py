@@ -233,7 +233,7 @@ async def test_streaming_passthrough_applies_network_config():
         yield
 
     with patch(
-        "ogx.providers.remote.inference.ollama.ollama.passthrough_anthropic_stream", side_effect=_no_events
+        "ogx.providers.utils.inference.anthropic_mixin.passthrough_anthropic_stream", side_effect=_no_events
     ) as mock_stream:
         result = await adapter.anthropic_messages(
             AnthropicCreateMessageRequest(

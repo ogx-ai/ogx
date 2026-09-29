@@ -17,7 +17,7 @@ import pytest
 from fastapi import HTTPException
 
 from ogx.core.server.fastapi_router_registry import get_router_routes
-from ogx.providers.remote.inference.anthropic.anthropic import AnthropicAPIError
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicAPIError
 from ogx_api.common.errors import ModelNotFoundError
 from ogx_api.messages.api import Messages
 from ogx_api.messages.fastapi_routes import create_router

@@ -78,8 +78,8 @@ def _anthropic_error_response_for_exception(exc: Exception, log_message: str) ->
     """Anthropic-format error response for an exception not already handled by a more specific
     except clause. Preserves the status of anything try_translate_to_http_exception recognizes
     (HTTPException, ValueError, or an exception carrying a ``status_code`` attribute, such as
-    AnthropicAPIError from the native Anthropic provider), and falls back to a generic 500 for
-    everything else.
+    the AnthropicAPIError raised by the native /v1/messages passthrough providers), and falls
+    back to a generic 500 for everything else.
     """
     http_exc = try_translate_to_http_exception(exc)
     if http_exc is not None:

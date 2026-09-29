@@ -227,16 +227,7 @@ export OGX_TEST_INFERENCE_MODE="$INFERENCE_MODE"
 export SQLITE_STORE_DIR=$(mktemp -d)
 echo "Setting SQLITE_STORE_DIR: $SQLITE_STORE_DIR"
 
-# Determine stack config type for api_recorder test isolation
 if [[ "$COLLECT_ONLY" == false ]]; then
-    if [[ "$STACK_CONFIG" == server:* ]] || [[ "$STACK_CONFIG" == docker:* ]] || [[ "$STACK_CONFIG" == http://* ]]; then
-        export OGX_TEST_STACK_CONFIG_TYPE="server"
-        echo "Setting stack config type: server"
-    else
-        export OGX_TEST_STACK_CONFIG_TYPE="library_client"
-        echo "Setting stack config type: library_client"
-    fi
-
     # Set MCP host for in-process MCP server tests
     # - For library client and server mode: localhost (both on same host)
     # - For docker mode on Linux: localhost (container uses host network, shares network namespace)
@@ -692,7 +683,6 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     # Build environment variables for docker run
     DOCKER_ENV_VARS=""
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_INFERENCE_MODE=$INFERENCE_MODE"
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_STACK_CONFIG_TYPE=server"
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_MCP_HOST=${OGX_TEST_MCP_HOST:-host.docker.internal}"
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OTEL_SDK_DISABLED=true"
     # Disabled: https://github.com/ogx-ai/ogx/issues/4089
@@ -880,8 +870,9 @@ else
     exit 1
 fi
 
-# Run TypeScript client tests if TS_CLIENT_PATH is set
-if [[ $exit_code -eq 0 && -n "${TS_CLIENT_PATH:-}" && "${OGX_TEST_STACK_CONFIG_TYPE:-}" == "server" ]]; then
+# Run TypeScript client tests if TS_CLIENT_PATH is set (only meaningful against a real server)
+if [[ $exit_code -eq 0 && -n "${TS_CLIENT_PATH:-}" ]] \
+    && ([[ "$STACK_CONFIG" == server:* ]] || [[ "$STACK_CONFIG" == docker:* ]] || [[ "$STACK_CONFIG" == http://* ]]); then
     run_client_ts_tests
 fi
 

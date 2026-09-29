@@ -91,9 +91,6 @@ jobs:
           OGX_TEST_INFERENCE_MODE: "replay"
           # Pin recording dir to workspace so the server finds tests/integration/*/recordings/
           OGX_TEST_RECORDING_DIR: ${{ github.workspace }}/tests/integration/common
-          # Tell the server to sync test context from client headers so recordings
-          # are looked up in the correct per-test-directory (e.g. responses/recordings/)
-          OGX_TEST_STACK_CONFIG_TYPE: "server"
         if: ${{ matrix.auth-provider == 'oauth2_token' }}
         run: |
           run_dir=$(mktemp -d)

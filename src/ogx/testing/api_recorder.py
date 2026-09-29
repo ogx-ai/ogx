@@ -319,20 +319,20 @@ def normalize_http_request(url: str, method: str, payload: dict[str, Any]) -> st
 
 
 def _inject_test_id(request: httpx.Request) -> None:
-    """Stamp the current test's ID into the request's provider-data header, in server mode.
+    """Stamp the current test's ID into the request's provider-data header.
 
-    This is needed for server mode where the test ID must be transported from client to
-    server via HTTP headers, so the server can key recordings/replay and per-test state
-    (see ogx.core.testing_context.sync_test_context_from_provider_data). In library_client
-    mode this is a no-op since everything runs in the same process; the in-process call path
-    stamps the header itself instead, via the same stamp_test_id_into_headers() this
-    delegates to (see ogx.core.library_client), so the two can't drift apart. No-op outside
-    an active test context too (test_id is None), so this is safe to install unconditionally.
+    Installed unconditionally in every stack mode: in server mode the header is how the test
+    ID crosses into the server process, so the server can key recordings/replay and per-test
+    state (see ogx.core.testing_context.sync_test_context_from_provider_data); in library_client
+    mode the header is redundant (the ContextVar stays authoritative in-process, and the
+    in-process call path stamps its own request headers the same way -- see
+    ogx.core.library_client), but harmless, since recording hashes never included headers.
+    Both paths delegate to the same stamp_test_id_into_headers() so they can't drift apart.
+    No-op outside an active test context too (test_id is None).
     """
-    stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
     test_id = get_test_context()
 
-    if stack_config_type != "server" or not test_id:
+    if not test_id:
         return
 
     stamp_test_id_into_headers(request.headers)
@@ -378,9 +378,10 @@ def build_test_id_async_http_client(**kwargs: Any) -> httpx.AsyncClient:
 def patch_httpx_for_test_id():
     """Patch OgxClient._prepare_request to inject the current test's ID into requests.
 
-    This is needed for server mode where the test ID must be transported from
-    client to server via HTTP headers. In library_client mode this patch is a no-op
-    since everything runs in the same process.
+    The test ID must be transported from client to server via HTTP headers whenever the
+    request crosses a process boundary. OgxClient's in-process library-client subclasses
+    bypass _prepare_request entirely for their in-process calls (see library_client.py), so
+    this patch only ever fires for real HTTP requests.
 
     OgxClient._prepare_request is our own generated client's documented hook for mutating
     requests after construction but before sending (not a private SDK internal). openai.OpenAI
@@ -1371,7 +1372,6 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
                 logger.error(f"  Endpoint: {endpoint}")
                 logger.error(f"  Model: {body.get('model', 'unknown')}")
                 logger.error(f"  Test context: {get_test_context()}")
-                logger.error(f"  Stack config type: {os.environ.get('OGX_TEST_STACK_CONFIG_TYPE', 'library_client')}")
             raise RuntimeError(
                 f"Recording not found for request hash: {request_hash}\n"
                 f"Model: {body.get('model', 'unknown')} | Request: {method} {url}\n"

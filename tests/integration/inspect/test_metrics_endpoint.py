@@ -11,6 +11,10 @@ started on its own port (OGX_METRICS_PORT, default 9464) only when the server is
 with OGX_METRICS_ENDPOINT_ENABLED, which scripts/integration-tests.sh sets for native
 server-mode runs. The endpoint is scraped with a raw HTTP client (not the typed SDK)
 because it returns Prometheus text and lives on a dedicated port separate from the API.
+
+The server-mode-only part of the gate lives in tests/integration/conftest.py's
+pytest_collection_modifyitems, keyed off this file's path: a module-level `pytestmark`
+can't see the --stack-config option that decides the mode.
 """
 
 import os
@@ -23,8 +27,8 @@ _METRICS_ENABLED = os.environ.get("OGX_METRICS_ENDPOINT_ENABLED", "").strip().lo
 _METRICS_PORT = int(os.environ.get("OGX_METRICS_PORT", "9464"))
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("OGX_TEST_STACK_CONFIG_TYPE") != "server" or not _METRICS_ENABLED,
-    reason="The metrics scrape server is only started when OGX_METRICS_ENDPOINT_ENABLED is set in server mode",
+    not _METRICS_ENABLED,
+    reason="The metrics scrape server is only started when OGX_METRICS_ENDPOINT_ENABLED is set",
 )
 
 

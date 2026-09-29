@@ -16,6 +16,7 @@ from pydantic import SecretStr
 
 from ogx.providers.remote.inference.fireworks.config import FireworksImplConfig
 from ogx.providers.remote.inference.fireworks.fireworks import FireworksInferenceAdapter
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicAPIError
 from ogx_api.messages.models import (
     AnthropicCountTokensRequest,
     AnthropicCreateMessageRequest,
@@ -190,7 +191,7 @@ class TestMessagesPassthrough:
 def mock_passthrough(monkeypatch):
     mock = MagicMock()
     monkeypatch.setattr(
-        "ogx.providers.remote.inference.fireworks.fireworks.passthrough_anthropic_stream",
+        "ogx.providers.utils.inference.anthropic_mixin.passthrough_anthropic_stream",
         mock,
     )
     return mock
@@ -221,7 +222,7 @@ class TestStreamingPassthrough:
 
 
 class TestUpstreamErrors:
-    async def test_error_response_raises_http_status_error(self):
+    async def test_error_response_raises_anthropic_api_error_with_status(self):
         adapter = _adapter()
 
         with patch("httpx.AsyncClient") as mock_client_class:
@@ -237,15 +238,15 @@ class TestUpstreamErrors:
             request = AnthropicCreateMessageRequest(
                 messages=[{"role": "user", "content": "Hi"}], model="test-model", max_tokens=16, stream=False
             )
-            with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            with pytest.raises(AnthropicAPIError, match="rate limited") as exc_info:
                 await adapter.anthropic_messages(request)
 
-            assert exc_info.value.response.status_code == 429
+            assert exc_info.value.status_code == 429
 
 
 class TestCountTokensFallsBackToMessages:
-    """Fireworks has no /v1/messages/count_tokens endpoint (#6673), so anthropic_count_tokens is
-    not overridden: it must inherit OpenAIMixin's default, which counts by calling
+    """Fireworks has no /v1/messages/count_tokens endpoint (#6673), so the mixin's
+    anthropic_count_tokens falls back to OpenAIMixin's default, which counts by calling
     anthropic_messages() -- our native override, not the chat-completions translation -- with
     max_tokens=1."""
 
@@ -265,6 +266,7 @@ class TestCountTokensFallsBackToMessages:
             assert body["max_tokens"] == 1
             assert result.input_tokens == 5
 
-    async def test_count_tokens_is_not_overridden(self):
-        """Guards the design decision itself: no /v1/messages/count_tokens endpoint exists to call."""
-        assert "anthropic_count_tokens" not in FireworksInferenceAdapter.__dict__
+    def test_count_tokens_has_no_native_endpoint(self):
+        """Guards the design decision itself: no /v1/messages/count_tokens endpoint exists to call,
+        so the mixin's count_tokens falls back to the OpenAIMixin default."""
+        assert _adapter()._anthropic_count_tokens_url() is None
