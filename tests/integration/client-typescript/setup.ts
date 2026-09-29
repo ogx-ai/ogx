@@ -65,8 +65,10 @@ beforeAll(() => {
 export function createTestClient(testId?: string): OgxClient {
   const headers: Record<string, string> = {};
 
-  // In server mode with replay, send test ID for recording isolation
-  if (process.env['OGX_TEST_STACK_CONFIG_TYPE'] === 'server' && testId) {
+  // Send the test ID for recording isolation. The TS client only ever runs against a real
+  // server (scripts/integration-tests.sh only invokes it then), so this always applies when
+  // a test ID is supplied.
+  if (testId) {
     headers['X-OGX-Provider-Data'] = JSON.stringify({
       __test_id: testId,
     });

@@ -21,6 +21,7 @@ TEST_PATTERN=""
 INFERENCE_MODE="replay"
 TEXT_MODEL=""
 VISION_MODEL=""
+RERANK_MODEL=""
 EXTRA_PARAMS=""
 COLLECT_ONLY=false
 TYPESCRIPT_ONLY=false
@@ -38,6 +39,7 @@ Options:
     --setup STRING           Test setup (models, env) to use (e.g., 'ollama', 'ollama-vision', 'gpt', 'vllm')
     --text-model STRING      Override text model (e.g. 'ollama/llama3.2:3b', 'openai/gpt-4o')
     --vision-model STRING    Override vision model (e.g. 'ollama/llama3.2-vision:11b')
+    --rerank-model STRING    Override rerank model (e.g. 'vllm/Qwen/Qwen3-Reranker-0.6B')
     --inference-mode STRING  Inference mode: replay, record-if-missing or record (default: replay)
     --subdirs STRING         Comma-separated list of test subdirectories to run (overrides suite)
     --file PATH              Single test file to run (e.g. tests/integration/responses/test_foo.py)
@@ -101,6 +103,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --vision-model)
         VISION_MODEL="$2"
+        shift 2
+        ;;
+    --rerank-model)
+        RERANK_MODEL="$2"
         shift 2
         ;;
     --subdirs)
@@ -180,6 +186,7 @@ echo "Stack Config: $STACK_CONFIG"
 echo "Setup: $TEST_SETUP"
 echo "Text model: ${TEXT_MODEL:- (from setup)}"
 echo "Vision model: ${VISION_MODEL:- (from setup)}"
+echo "Rerank model: ${RERANK_MODEL:- (from setup)}"
 echo "Inference Mode: $INFERENCE_MODE"
 echo "Client Version: ${CLIENT_VERSION:- (none)}"
 echo "Test Suite: $TEST_SUITE"
@@ -204,6 +211,9 @@ fi
 if [[ -n "$VISION_MODEL" ]]; then
     EXTRA_PARAMS="$EXTRA_PARAMS --vision-model=$VISION_MODEL"
 fi
+if [[ -n "$RERANK_MODEL" ]]; then
+    EXTRA_PARAMS="$EXTRA_PARAMS --rerank-model=$RERANK_MODEL"
+fi
 
 if [[ "$COLLECT_ONLY" == true ]]; then
     EXTRA_PARAMS="$EXTRA_PARAMS --collect-only"
@@ -217,16 +227,7 @@ export OGX_TEST_INFERENCE_MODE="$INFERENCE_MODE"
 export SQLITE_STORE_DIR=$(mktemp -d)
 echo "Setting SQLITE_STORE_DIR: $SQLITE_STORE_DIR"
 
-# Determine stack config type for api_recorder test isolation
 if [[ "$COLLECT_ONLY" == false ]]; then
-    if [[ "$STACK_CONFIG" == server:* ]] || [[ "$STACK_CONFIG" == docker:* ]] || [[ "$STACK_CONFIG" == http://* ]]; then
-        export OGX_TEST_STACK_CONFIG_TYPE="server"
-        echo "Setting stack config type: server"
-    else
-        export OGX_TEST_STACK_CONFIG_TYPE="library_client"
-        echo "Setting stack config type: library_client"
-    fi
-
     # Set MCP host for in-process MCP server tests
     # - For library client and server mode: localhost (both on same host)
     # - For docker mode on Linux: localhost (container uses host network, shares network namespace)
@@ -682,7 +683,6 @@ if [[ "$STACK_CONFIG" == *"docker:"* && "$COLLECT_ONLY" == false ]]; then
     # Build environment variables for docker run
     DOCKER_ENV_VARS=""
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_INFERENCE_MODE=$INFERENCE_MODE"
-    DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_STACK_CONFIG_TYPE=server"
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OGX_TEST_MCP_HOST=${OGX_TEST_MCP_HOST:-host.docker.internal}"
     DOCKER_ENV_VARS="$DOCKER_ENV_VARS -e OTEL_SDK_DISABLED=true"
     # Disabled: https://github.com/ogx-ai/ogx/issues/4089
@@ -831,8 +831,8 @@ if [[ -n "$STACK_CONFIG" ]]; then
 fi
 
 # Run Python tests unless typescript-only mode.
-# The embedding model comes from the setup defaults (tests/integration/suites.py)
-# so setups with a remote provider can record/replay embedding calls.
+# The embedding and rerank models come from the setup defaults (tests/integration/suites.py)
+# so setups with a remote provider can record/replay embedding and rerank calls.
 if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
     pytest -s -v $PYTEST_TARGET \
         $STACK_CONFIG_ARG \
@@ -840,7 +840,6 @@ if [[ "$TYPESCRIPT_ONLY" == "false" ]]; then
         -k "$PYTEST_PATTERN" \
         $EXTRA_PARAMS \
         --color=yes \
-        --rerank-model=sentence-transformers/Qwen/Qwen3-Reranker-0.6B \
         --capture=tee-sys
     exit_code=$?
 else
@@ -871,8 +870,9 @@ else
     exit 1
 fi
 
-# Run TypeScript client tests if TS_CLIENT_PATH is set
-if [[ $exit_code -eq 0 && -n "${TS_CLIENT_PATH:-}" && "${OGX_TEST_STACK_CONFIG_TYPE:-}" == "server" ]]; then
+# Run TypeScript client tests if TS_CLIENT_PATH is set (only meaningful against a real server)
+if [[ $exit_code -eq 0 && -n "${TS_CLIENT_PATH:-}" ]] \
+    && ([[ "$STACK_CONFIG" == server:* ]] || [[ "$STACK_CONFIG" == docker:* ]] || [[ "$STACK_CONFIG" == http://* ]]); then
     run_client_ts_tests
 fi
 

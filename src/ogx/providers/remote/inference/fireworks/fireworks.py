@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from ogx.log import get_logger
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api import (
     OpenAIChatCompletion,
@@ -39,8 +40,16 @@ def _strip_function_type_from_tools(tools: list[dict[str, Any]] | None) -> list[
     return sanitized
 
 
-class FireworksInferenceAdapter(OpenAIMixin):
-    """Inference adapter for the Fireworks AI platform."""
+class FireworksInferenceAdapter(AnthropicMixin, OpenAIMixin):
+    """Inference adapter for the Fireworks AI platform.
+
+    Chat Completions go through the OpenAI-compatible mixin. Fireworks also exposes the
+    Anthropic Messages API natively, so ``anthropic_messages`` forwards directly to
+    ``/v1/messages`` (via :class:`AnthropicMixin`) instead of the translation fallback,
+    which cannot represent extended thinking, cache control or tool search. Fireworks has
+    no ``/v1/messages/count_tokens`` endpoint, so ``anthropic_count_tokens`` falls back to
+    counting via ``anthropic_messages`` with ``max_tokens=1``.
+    """
 
     config: FireworksImplConfig
 
@@ -53,6 +62,10 @@ class FireworksInferenceAdapter(OpenAIMixin):
 
     def get_base_url(self) -> str:
         return str(self.config.base_url)
+
+    def _anthropic_count_tokens_url(self) -> str | None:
+        """Fireworks has no native /v1/messages/count_tokens endpoint."""
+        return None
 
     async def openai_chat_completion(
         self,

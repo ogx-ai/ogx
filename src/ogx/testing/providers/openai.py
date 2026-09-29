@@ -39,7 +39,12 @@ def create_error(status_code: int, body: dict | None, message: str) -> APIStatus
     error_class = _ERROR_BY_STATUS.get(status_code, APIStatusError)
     request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
     response = httpx.Response(status_code, json=body or {}, request=request)
-    return error_class(message=message, response=response, body=body)
+    # openai >= 3 annotates APIStatusError.response as httpx2.Response, but only reads
+    # status_code, headers and request off it, all of which httpx.Response provides. httpx2 is
+    # present transitively (anthropic requires it) but is not a direct dependency here, and
+    # this module builds its Response with httpx; switching to httpx2.Response would just move
+    # the ignore to the declared floor, where openai 2.x annotates the same field as httpx.
+    return error_class(message=message, response=response, body=body)  # type: ignore[arg-type]
 
 
 PROVIDER = ProviderConfig(

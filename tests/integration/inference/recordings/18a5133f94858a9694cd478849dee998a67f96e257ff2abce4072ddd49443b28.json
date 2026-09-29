@@ -1,0 +1,44 @@
+{
+  "test_id": "tests/integration/inference/test_rerank.py::test_rerank_semantic_correctness[rerank=llama-cpp-server/bge-reranker-v2-m3-What is a reranking model? -items0-A reranking model reranks a list of items based on the query. ]",
+  "request": {
+    "test_id": "tests/integration/inference/test_rerank.py::test_rerank_semantic_correctness[rerank=llama-cpp-server/bge-reranker-v2-m3-What is a reranking model? -items0-A reranking model reranks a list of items based on the query. ]",
+    "url": "http://localhost:8080/v1/rerank",
+    "method": "POST",
+    "payload": {
+      "model": "bge-reranker-v2-m3",
+      "query": "What is a reranking model? ",
+      "documents": [
+        "A reranking model reranks a list of items based on the query. ",
+        "Machine learning algorithms learn patterns from data. ",
+        "Python is a programming language. "
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "bge-reranker-v2-m3",
+      "object": "list",
+      "usage": {
+        "prompt_tokens": 68,
+        "total_tokens": 68
+      },
+      "results": [
+        {
+          "index": 0,
+          "relevance_score": 6.34004545211792
+        },
+        {
+          "index": 1,
+          "relevance_score": -9.215534210205078
+        },
+        {
+          "index": 2,
+          "relevance_score": -11.028850555419922
+        }
+      ]
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

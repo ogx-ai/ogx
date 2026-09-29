@@ -4,12 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 from collections.abc import AsyncIterator
-from functools import cache
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import urljoin
 
 import httpx
-import models_dev as _models_dev
 from pydantic import ConfigDict
 
 from ogx.core.request_headers import get_authenticated_user
@@ -17,17 +15,14 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
-from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
-from ogx.providers.utils.inference.http_client import (
-    build_network_client_kwargs as _build_network_client_kwargs,
-)
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
+from ogx.providers.utils.inference.models_dev_registry import classify_model
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx_api import (
     HealthResponse,
     HealthStatus,
     Model,
-    ModelType,
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionChunkWithReasoning,
@@ -41,38 +36,10 @@ from ogx_api import (
     RerankResponse,
 )
 from ogx_api.inference import RerankRequest
-from ogx_api.messages.models import (
-    ANTHROPIC_VERSION,
-    AnthropicCountTokensRequest,
-    AnthropicCountTokensResponse,
-    AnthropicCreateMessageRequest,
-    AnthropicMessageResponse,
-    AnthropicStreamEvent,
-)
 
 from .config import VLLMInferenceAdapterConfig
 
 log = get_logger(name=__name__, category="inference::vllm")
-
-
-def _is_embedding_model(model_id: str, model: _models_dev.Model) -> bool:
-    return (model.family is not None and "embed" in model.family) or "embed" in model_id.lower()
-
-
-@cache
-def _models_dev_index() -> dict[str, _models_dev.Model]:
-    index: dict[str, _models_dev.Model] = {}
-    # Sort so huggingface is processed last: vLLM serves HF model IDs and the
-    # huggingface provider entry is the most authoritative source for them.
-    for provider in sorted(_models_dev.providers(), key=lambda p: p.id == "huggingface"):
-        for model_id, model in provider.models.items():
-            if _is_embedding_model(model_id, model):
-                index[model_id] = model
-    return index
-
-
-def _lookup_models_dev(identifier: str) -> _models_dev.Model | None:
-    return _models_dev_index().get(identifier)
 
 
 def _convert_developer_messages(messages: list[Any]) -> list[Any]:
@@ -89,7 +56,7 @@ def _convert_developer_messages(messages: list[Any]) -> list[Any]:
     return converted_messages
 
 
-class VLLMInferenceAdapter(OpenAIMixin):
+class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
     """Inference adapter for remote vLLM servers."""
 
     config: VLLMInferenceAdapterConfig
@@ -97,6 +64,8 @@ class VLLMInferenceAdapter(OpenAIMixin):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     provider_data_api_key_field: str = "vllm_api_token"
+    anthropic_auth_style: ClassVar[str] = "bearer"
+    anthropic_no_key_placeholder: ClassVar[str | None] = None
 
     def get_api_key(self) -> str | None:
         if self.config.auth_credential:
@@ -124,13 +93,6 @@ class VLLMInferenceAdapter(OpenAIMixin):
             raise ValueError(
                 "You must provide a URL in config.yaml (or via the VLLM_URL environment variable) to use vLLM."
             )
-
-    def _build_httpx_client_kwargs(self) -> dict:
-        """Build httpx.AsyncClient kwargs that honour network/TLS configuration."""
-        kwargs = _build_network_client_kwargs(self.config.network)
-        if not kwargs:
-            kwargs["verify"] = self.shared_ssl_context
-        return kwargs
 
     async def health(self) -> HealthResponse:
         """
@@ -232,96 +194,12 @@ class VLLMInferenceAdapter(OpenAIMixin):
             base_url = base_url[:-3]
         return base_url
 
-    async def anthropic_messages(
-        self,
-        params: AnthropicCreateMessageRequest,
-    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
-        """Handle Anthropic Messages via native /v1/messages endpoint."""
-        url = f"{self._get_base_url_without_version()}/v1/messages"
-        body = params.model_dump(exclude_none=True)
-        body["model"] = params.model
-        headers = {
-            "content-type": "application/json",
-            "anthropic-version": ANTHROPIC_VERSION,
-        }
-
-        api_key = self._get_api_key_from_config_or_provider_data()
-        if api_key and api_key != "NO KEY REQUIRED":
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        if params.stream:
-            return passthrough_anthropic_stream(
-                url=url,
-                req_body=body,
-                headers=headers,
-                httpx_client_kwargs=self._build_httpx_client_kwargs(),
-            )
-
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers, timeout=300)
-            resp.raise_for_status()
-            return AnthropicMessageResponse(**resp.json())
-
-    async def anthropic_count_tokens(
-        self,
-        params: AnthropicCountTokensRequest,
-    ) -> AnthropicCountTokensResponse:
-        """Forward count_tokens to vLLM's /v1/messages/count_tokens endpoint."""
-        url = f"{self._get_base_url_without_version()}/v1/messages/count_tokens"
-        body = params.model_dump(exclude_none=True)
-        body["model"] = params.model
-        headers = {
-            "content-type": "application/json",
-            "anthropic-version": ANTHROPIC_VERSION,
-        }
-
-        api_key = self._get_api_key_from_config_or_provider_data()
-        if api_key and api_key != "NO KEY REQUIRED":
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
-            resp = await client.post(url, json=body, headers=headers, timeout=30)
-            resp.raise_for_status()
-            return AnthropicCountTokensResponse(**resp.json())
-
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # vLLM's /v1/models response does not expose a model task/type field,
         # so we classify with models.dev with a name fallback.
-        md = _lookup_models_dev(identifier)
-        is_embedding = md is not None or "embed" in identifier.lower()
-
-        if is_embedding:
-            metadata: dict[str, int] = {}
-            if md is not None:
-                if md.limit.output:
-                    metadata["embedding_dimension"] = md.limit.output
-                if md.limit.context:
-                    metadata["context_length"] = md.limit.context
-                log.debug(
-                    "Classified embedding model via models.dev",
-                    identifier=identifier,
-                    family=md.family,
-                    metadata=metadata,
-                )
-            else:
-                log.debug(
-                    "Classified embedding model via name heuristic (not in models.dev)",
-                    identifier=identifier,
-                )
-            return Model(
-                provider_id=self.__provider_id__,
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.embedding,
-                metadata=metadata,
-            )
-        if "rerank" in identifier.lower():
-            return Model(
-                provider_id=self.__provider_id__,
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.rerank,
-            )
+        model = classify_model(identifier, self.__provider_id__)
+        if model is not None:
+            return model
         return super().construct_model_from_identifier(identifier)
 
     async def rerank(

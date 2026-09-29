@@ -13,6 +13,7 @@ from ogx.providers.utils.inference.model_registry import RemoteInferenceProvider
 from ogx_api import json_schema_type
 
 DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
+DEFAULT_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
 
 
 class DeepSeekProviderDataValidator(BaseModel):
@@ -31,6 +32,14 @@ class DeepSeekImplConfig(RemoteInferenceProviderConfig):
     base_url: HttpUrl | None = Field(
         default=HttpUrl(os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)),
         description="Base URL for the DeepSeek API",
+    )
+
+    anthropic_base_url: HttpUrl = Field(
+        default=HttpUrl(os.environ.get("DEEPSEEK_ANTHROPIC_BASE_URL", DEFAULT_ANTHROPIC_BASE_URL)),
+        description=(
+            "Base URL for DeepSeek's native Anthropic-compatible /v1/messages endpoint. This is a "
+            "separate host path from the OpenAI-compatible base_url, not a suffix of it."
+        ),
     )
 
     @classmethod

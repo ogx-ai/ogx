@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
-from openai import NOT_GIVEN, OpenAI
+import httpx
+from openai import NOT_GIVEN
 
 from ogx.core.id_generation import reset_id_override, set_id_override
 from ogx.log import get_logger
@@ -33,12 +34,23 @@ _current_mode: str | None = None
 _current_storage: ResponseStorage | None = None
 _original_methods: dict[str, Any] = {}
 
+# Deliberately not in _original_methods: patch_inference_clients() reassigns that dict and
+# unpatch_inference_clients() clears it, while the _prepare_request patch is installed
+# once per process and never removed. Only OgxClient is patched here -- it is our own
+# generated client, which calls self._prepare_request(request) as a documented extension
+# point (see client-sdks/openapi/templates/python/ogx_client.mustache). openai.OpenAI /
+# AsyncOpenAI clients get test-ID injection through build_test_id_http_client() /
+# build_test_id_async_http_client() instead, since their own _prepare_request is a private,
+# semver-exempt implementation detail (see #6627).
+_prepare_request_originals: dict[type, Callable[..., None]] = {}
+
 # Per-test deterministic ID counters (test_id -> id_kind -> counter)
 _id_counters: dict[str, dict[str, int]] = {}
 
 # Test context uses ContextVar since it changes per-test and needs async isolation
 from openai.types.completion_choice import CompletionChoice
 
+from ogx.core.request_headers import stamp_test_id_into_headers
 from ogx.core.testing_context import get_test_context, is_debug_mode, set_test_context
 
 # update the "finish_reason" field, since its type definition is wrong (no None is accepted)
@@ -67,7 +79,10 @@ _ID_KIND_PREFIXES: dict[str, str] = {
     "tool_call": "call_",
 }
 
-_SHARED_MODEL_LIST_ENDPOINTS = {"/v1/models"}
+# /info is Text-Embeddings-Inference's model lookup: TEI has no /v1/models
+# endpoint, so its single served model is discovered via GET /info and recorded
+# like a model-list response.
+_SHARED_MODEL_LIST_ENDPOINTS = {"/v1/models", "/info"}
 _LOCAL_MODEL_LIST_HOSTS = {"0.0.0.0", "127.0.0.1", "localhost"}  # noqa: S104
 _DEFAULT_TEST_SERVER_PORT = 8321
 
@@ -303,61 +318,94 @@ def normalize_http_request(url: str, method: str, payload: dict[str, Any]) -> st
     return request_hash
 
 
+def _inject_test_id(request: httpx.Request) -> None:
+    """Stamp the current test's ID into the request's provider-data header.
+
+    Installed unconditionally in every stack mode: in server mode the header is how the test
+    ID crosses into the server process, so the server can key recordings/replay and per-test
+    state (see ogx.core.testing_context.sync_test_context_from_provider_data); in library_client
+    mode the header is redundant (the ContextVar stays authoritative in-process, and the
+    in-process call path stamps its own request headers the same way -- see
+    ogx.core.library_client), but harmless, since recording hashes never included headers.
+    Both paths delegate to the same stamp_test_id_into_headers() so they can't drift apart.
+    No-op outside an active test context too (test_id is None).
+    """
+    test_id = get_test_context()
+
+    if not test_id:
+        return
+
+    stamp_test_id_into_headers(request.headers)
+
+    if is_debug_mode():
+        logger.info("[RECORDING DEBUG] Injected test ID into request header:")
+        logger.info(f"  Test ID: {test_id}")
+        logger.info(f"  URL: {request.url}")
+
+
+async def _inject_test_id_async(request: httpx.Request) -> None:
+    # httpx.AsyncClient requires its event hooks to be coroutine functions, but the
+    # injection logic itself is plain sync header mutation -- no I/O to await.
+    _inject_test_id(request)
+
+
+def build_test_id_http_client(**kwargs: Any) -> httpx.Client:
+    """Build an httpx.Client that stamps the current test's ID onto every outgoing request.
+
+    Pass as ``http_client=`` to any client that accepts a custom httpx.Client (openai.OpenAI,
+    langchain's ChatOpenAI's `http_client`, etc.) instead of relying on that SDK's own request
+    hook, which may be a private implementation detail. Uses httpx's own public, documented
+    event_hooks mechanism (https://www.python-httpx.org/advanced/event-hooks/), so it covers
+    any client built on httpx -- including ones openai.OpenAI wraps under a differently-named
+    but structurally-compatible httpx fork (see src/ogx/testing/providers/openai.py).
+
+    Any keyword arguments accepted by httpx.Client() may be passed through, e.g. to combine
+    with a caller's own event_hooks.
+    """
+    event_hooks = dict(kwargs.pop("event_hooks", None) or {})
+    event_hooks["request"] = [*event_hooks.get("request", []), _inject_test_id]
+    return httpx.Client(event_hooks=event_hooks, **kwargs)
+
+
+def build_test_id_async_http_client(**kwargs: Any) -> httpx.AsyncClient:
+    """Async counterpart of build_test_id_http_client(); pass as ``http_client=`` to
+    openai.AsyncOpenAI, or as ``http_async_client=`` to langchain's ChatOpenAI."""
+    event_hooks = dict(kwargs.pop("event_hooks", None) or {})
+    event_hooks["request"] = [*event_hooks.get("request", []), _inject_test_id_async]
+    return httpx.AsyncClient(event_hooks=event_hooks, **kwargs)
+
+
 def patch_httpx_for_test_id():
-    """Patch client _prepare_request methods to inject test ID into provider data header.
+    """Patch OgxClient._prepare_request to inject the current test's ID into requests.
 
-    This is needed for server mode where the test ID must be transported from
-    client to server via HTTP headers. In library_client mode, this patch is a no-op
-    since everything runs in the same process.
+    The test ID must be transported from client to server via HTTP headers whenever the
+    request crosses a process boundary. OgxClient's in-process library-client subclasses
+    bypass _prepare_request entirely for their in-process calls (see library_client.py), so
+    this patch only ever fires for real HTTP requests.
 
-    We use the _prepare_request hook the client provides for mutating
-    requests after construction but before sending.
+    OgxClient._prepare_request is our own generated client's documented hook for mutating
+    requests after construction but before sending (not a private SDK internal). openai.OpenAI
+    / AsyncOpenAI clients are not patched here -- construct them with
+    http_client=build_test_id_http_client() (or build_test_id_async_http_client() for the
+    async client / langchain's ChatOpenAI) instead.
     """
     try:
         from ogx_client import OgxClient
     except ImportError as e:
         raise ImportError("OgxClient was not found, install with `uv pip install ogx[client]`") from e
 
-    if "ogx_client_prepare_request" in _original_methods:
+    if _prepare_request_originals:
         return
 
-    _original_methods["ogx_client_prepare_request"] = OgxClient._prepare_request
-    _original_methods["openai_prepare_request"] = OpenAI._prepare_request
+    original = OgxClient._prepare_request
 
     def patched_prepare_request(self, request):
-        # Call original first (it's a sync method that returns None)
-        # Use .get() to handle cases where the originals weren't stored yet
-        ogx_orig = _original_methods.get("ogx_client_prepare_request")
-        if ogx_orig is not None:
-            ogx_orig(self, request)
-        openai_orig = _original_methods.get("openai_prepare_request")
-        if openai_orig is not None:
-            openai_orig(self, request)
-
-        # Only inject test ID in server mode
-        stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
-        test_id = get_test_context()
-
-        if stack_config_type == "server" and test_id:
-            provider_data_header = request.headers.get("X-OGX-Provider-Data")
-
-            if provider_data_header:
-                provider_data = json.loads(provider_data_header)
-            else:
-                provider_data = {}
-
-            provider_data["__test_id"] = test_id
-            request.headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
-
-            if is_debug_mode():
-                logger.info("[RECORDING DEBUG] Injected test ID into request header:")
-                logger.info(f"  Test ID: {test_id}")
-                logger.info(f"  URL: {request.url}")
-
+        original(self, request)
+        _inject_test_id(request)
         return None
 
+    _prepare_request_originals[OgxClient] = original
     OgxClient._prepare_request = patched_prepare_request
-    OpenAI._prepare_request = patched_prepare_request
 
 
 def get_api_recording_mode() -> APIRecordingMode:
@@ -637,6 +685,19 @@ class ResponseStorage:
 
         return results
 
+    def _has_model_list_recording(self, request_hash: str, response: dict[str, Any]) -> bool:
+        """Return True if a model-list recording for this exact model set already exists.
+
+        The model-list filename digest (see _model_identifiers_digest) covers only the
+        model identifiers, so an existing file with the same digest means the live
+        server serves the same model set as a previous record run.
+        """
+        digest = _model_identifiers_digest(response)
+        response_file = f"models-{request_hash}-{digest}.json"
+        if (self._get_test_dir() / response_file).exists():
+            return True
+        return (self.base_dir / "recordings" / response_file).exists()
+
 
 def _recording_from_file(response_path) -> dict[str, Any]:
     with open(response_path) as f:
@@ -670,9 +731,12 @@ def _model_identifiers_digest(response: dict[str, Any]) -> str:
 
         Supported endpoints:
         - '/v1/models' (OpenAI): response body is: [ { id: ... }, ... ]
+        - '/info' (Text-Embeddings-Inference): response body is: { "model_id": ... }
         Returns a list of unique identifiers or None if structure doesn't match.
         """
         items = response["body"]
+        if isinstance(items, dict):
+            return [items["model_id"]]
         idents = [m.id for m in items]
         return sorted(set(idents))
 
@@ -688,6 +752,10 @@ def _combine_model_list_responses(endpoint: str, records: list[dict[str, Any]]) 
     """
     if not records:
         return None
+
+    if endpoint == "/info":
+        # TEI serves a single model, so there is nothing to union
+        return records[0]
 
     seen: dict[str, dict[str, Any]] = {}
     for rec in records:
@@ -863,18 +931,117 @@ def _patched_aiohttp_post(original_post, session_self, url: str, **kwargs):
         raise AssertionError(f"Invalid mode: {_current_mode}")
 
 
-async def _patched_httpx_async_post(original_post, self, url, **kwargs):
-    """Patched version of httpx.AsyncClient.post for recording/replay of Messages API passthrough.
+# URL fragments the httpx interceptors record and replay. Surfaces reached through a
+# provider SDK are patched at the SDK level instead, so only raw-httpx call sites belong
+# here: the Anthropic Messages and Google Interactions passthroughs, and the
+# Jina-compatible /rerank endpoint the vLLM adapter posts to directly (vllm.py rerank()).
+_INTERCEPTED_HTTPX_PATHS = ("/v1/messages", "/interactions", "/rerank")
 
-    Intercepts requests to /v1/messages endpoints so the native Ollama passthrough
-    path can be recorded and replayed without a live backend.
+
+def _should_intercept_httpx(url: str) -> bool:
+    """Whether an httpx request to this URL is one the recorder records and replays.
+
+    Shared by the post and stream patches so the two cannot drift apart.
+    """
+    return any(path in url for path in _INTERCEPTED_HTTPX_PATHS)
+
+
+def _is_tei_model_lookup_url(url: str) -> bool:
+    """Whether this URL is a Text-Embeddings-Inference GET /info model lookup.
+
+    TEI has no /v1/models endpoint; its native GET /info endpoint at the server
+    root reports the single served model. The adapter's signature checks (health
+    and initialize) issue the identical request, so the same recording serves
+    both the model lookup and those checks.
+    """
+    return urlparse(url).path == "/info"
+
+
+async def _patched_httpx_async_get(original_get, self, url, **kwargs):
+    """Patched version of httpx.AsyncClient.get for recording/replay of the TEI model lookup.
+
+    Records and replays the Text-Embeddings-Inference GET /info request as a
+    model-list response (models-*.json, shared across tests) so the served model
+    can be discovered without a live backend.
     """
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
+    if not _is_tei_model_lookup_url(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+        return await original_get(self, url, **kwargs)
 
-    if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    headers = dict(kwargs.get("headers") or {})
+    request_hash = normalize_inference_request("GET", url_str, headers, {})
+
+    if _current_mode in (APIRecordingMode.REPLAY, APIRecordingMode.RECORD_IF_MISSING):
+        records = _current_storage._model_list_responses(request_hash)
+        recording = _combine_model_list_responses("/info", records)
+        if recording:
+            import httpx as _httpx
+
+            mock_request = _httpx.Request("GET", url_str)
+            return _httpx.Response(
+                status_code=recording["response"].get("status", 200),
+                headers={"content-type": "application/json"},
+                content=json.dumps(recording["response"]["body"]).encode(),
+                request=mock_request,
+            )
+        elif _current_mode == APIRecordingMode.REPLAY:
+            raise RuntimeError(
+                f"Recording not found for TEI model lookup GET {url_str}\n"
+                f"\n"
+                f"Run './scripts/integration-tests.sh --inference-mode record-if-missing' with a running "
+                f"Text-Embeddings-Inference server to generate."
+            )
+
+    if _current_mode in (APIRecordingMode.RECORD, APIRecordingMode.RECORD_IF_MISSING):
+        response = await original_get(self, url, **kwargs)
+
+        try:
+            body = response.json()
+        except ValueError:
+            # Not a usable TEI /info response (e.g. misconfigured base_url); let
+            # the caller surface its own error instead of recording a bad lookup.
+            return response
+
+        if response.status_code != 200 or not isinstance(body, dict) or not isinstance(body.get("model_id"), str):
+            return response
+
+        response_data = {
+            "status": response.status_code,
+            "body": body,
+            "is_streaming": False,
+        }
+        request_data = {
+            "test_id": get_test_context(),
+            "url": url_str,
+            "method": "GET",
+            "endpoint": "/info",
+            "headers": headers,
+        }
+        if _current_mode == APIRecordingMode.RECORD_IF_MISSING and _current_storage._has_model_list_recording(
+            request_hash, response_data
+        ):
+            # The server reports the same model as an existing recording; skip
+            # the write to avoid a git diff on every record run.
+            return response
+        _current_storage.store_recording(request_hash, request_data, response_data)
+        return response
+
+    raise AssertionError(f"Invalid mode: {_current_mode}")
+
+
+async def _patched_httpx_async_post(original_post, self, url, **kwargs):
+    """Patched version of httpx.AsyncClient.post for recording/replay of raw-httpx endpoints.
+
+    Intercepts the endpoints listed in _INTERCEPTED_HTTPX_PATHS -- the native Messages and
+    Interactions passthroughs, and the vLLM rerank endpoint -- so those paths can be
+    recorded and replayed without a live backend.
+    """
+    global _current_mode, _current_storage
+
+    url_str = str(url)
+    if not _should_intercept_httpx(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return await original_post(self, url, **kwargs)
 
     json_payload = kwargs.get("json", {})
@@ -923,17 +1090,15 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
 
 
 def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
-    """Patched version of httpx.AsyncClient.stream for recording/replay of streaming Messages API passthrough.
+    """Patched version of httpx.AsyncClient.stream for recording/replay of streaming raw-httpx endpoints.
 
-    Intercepts streaming requests to /v1/messages endpoints. Returns an async context manager
-    that either replays recorded SSE events or records live ones.
+    Intercepts streaming requests to the endpoints listed in _INTERCEPTED_HTTPX_PATHS. Returns
+    an async context manager that either replays recorded SSE events or records live ones.
     """
     global _current_mode, _current_storage
 
     url_str = str(url)
-    is_passthrough = "/v1/messages" in url_str or "/interactions" in url_str
-
-    if not is_passthrough or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
+    if not _should_intercept_httpx(url_str) or _current_mode == APIRecordingMode.LIVE or _current_storage is None:
         return original_stream(self, method, url, **kwargs)
 
     json_payload = kwargs.get("json", {})
@@ -1164,8 +1329,9 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
     if mode == APIRecordingMode.REPLAY or mode == APIRecordingMode.RECORD_IF_MISSING:
         # Model-list responses reflect which models are available in the current
         # environment (e.g. which models were pulled), so only REPLAY may use the
-        # recorded union. In RECORD_IF_MISSING we must fetch live and re-record,
-        # otherwise a stale union would hide newly pulled models.
+        # recorded union. In RECORD_IF_MISSING we must fetch live (and re-record
+        # when the model set changed -- see the write-skip below), otherwise a
+        # stale union would hide newly pulled models.
         if _is_model_list_endpoint(endpoint) and mode == APIRecordingMode.REPLAY:
             records = storage._model_list_responses(request_hash)
             recording = _combine_model_list_responses(endpoint, records)
@@ -1206,7 +1372,6 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
                 logger.error(f"  Endpoint: {endpoint}")
                 logger.error(f"  Model: {body.get('model', 'unknown')}")
                 logger.error(f"  Test context: {get_test_context()}")
-                logger.error(f"  Stack config type: {os.environ.get('OGX_TEST_STACK_CONFIG_TYPE', 'library_client')}")
             raise RuntimeError(
                 f"Recording not found for request hash: {request_hash}\n"
                 f"Model: {body.get('model', 'unknown')} | Request: {method} {url}\n"
@@ -1281,6 +1446,25 @@ async def _patched_inference_method(original_method, self, client_type, endpoint
             return replay_recorded_stream()
         else:
             response_data = {"body": response, "is_streaming": False}
+            if (
+                mode == APIRecordingMode.RECORD_IF_MISSING
+                and endpoint == "/v1/models"
+                and storage._has_model_list_recording(request_hash, response_data)
+            ):
+                # Model-list endpoints are always fetched live in record-if-missing mode
+                # (see the lookup block above) so newly pulled models are picked up.
+                # But providers like vLLM embed per-server-startup values in model
+                # objects that _normalize_response does not cover -- vLLM adds a nested
+                # permission[] array with a fresh random id and created timestamp on
+                # every start, plus vLLM-specific fields such as root. Unconditionally
+                # re-writing the recording then produces a git diff on every record run
+                # even for an unchanged model set, and the commit-recordings workflow
+                # commits that diff every time, looping "Recordings update from CI"
+                # (observed in #6635). The filename digest covers exactly the model
+                # set, so when a recording for this set already exists we serve the
+                # live response and skip the write; a changed model set still records
+                # a new file.
+                return response
             storage.store_recording(request_hash, request_data, response_data)
             return response
 
@@ -1486,6 +1670,7 @@ def patch_inference_clients():
         "aiohttp_post": aiohttp.ClientSession.post,
         "httpx_async_post": httpx.AsyncClient.post,
         "httpx_async_stream": httpx.AsyncClient.stream,
+        "httpx_async_get": httpx.AsyncClient.get,
     }
 
     # Google genai patching (optional - only if google-genai is installed)
@@ -1567,9 +1752,14 @@ def patch_inference_clients():
     def patched_httpx_async_stream(self, method, url, **kwargs):
         return _patched_httpx_async_stream(_original_methods["httpx_async_stream"], self, method, url, **kwargs)
 
+    # Create patched method for httpx AsyncClient GET (TEI model lookup)
+    async def patched_httpx_async_get(self, url, **kwargs):
+        return await _patched_httpx_async_get(_original_methods["httpx_async_get"], self, url, **kwargs)
+
     # Apply httpx patches
     httpx.AsyncClient.post = patched_httpx_async_post
     httpx.AsyncClient.stream = patched_httpx_async_stream
+    httpx.AsyncClient.get = patched_httpx_async_get
 
     # Apply google-genai patches (if available)
     if "genai_generate_content" in _original_methods:
@@ -1637,6 +1827,7 @@ def unpatch_inference_clients():
     # Restore httpx methods
     httpx.AsyncClient.post = _original_methods["httpx_async_post"]
     httpx.AsyncClient.stream = _original_methods["httpx_async_stream"]
+    httpx.AsyncClient.get = _original_methods["httpx_async_get"]
 
     # Restore google-genai methods (if they were patched)
     if "genai_generate_content" in _original_methods:
