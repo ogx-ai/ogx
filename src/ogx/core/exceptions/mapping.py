@@ -32,8 +32,9 @@ EXCEPTION_MAP: dict[type, tuple[int, str]] = {
     AccessDeniedError: (httpx2.codes.FORBIDDEN, "Permission denied"),
     ConnectionError: (httpx2.codes.BAD_GATEWAY, "Connection error"),
     httpx2.ConnectError: (httpx2.codes.BAD_GATEWAY, "Connection error"),
-    # SDKs that still build on httpx (e.g. google-genai, ollama) raise httpx
-    # exceptions; map those alongside the httpx2 equivalents until they migrate.
+    # SDKs that still build on httpx (e.g. google-genai, qdrant-client,
+    # docling-slim) raise httpx exceptions; map those alongside the httpx2
+    # equivalents until they migrate.
     httpx.ConnectError: (httpx.codes.BAD_GATEWAY, "Connection error"),
     TimeoutError: (httpx2.codes.GATEWAY_TIMEOUT, "Operation timed out"),
     asyncio.TimeoutError: (httpx2.codes.GATEWAY_TIMEOUT, "Operation timed out"),
@@ -41,7 +42,14 @@ EXCEPTION_MAP: dict[type, tuple[int, str]] = {
     AuthenticationRequiredError: (httpx2.codes.UNAUTHORIZED, "Authentication required"),
 }
 
-# For deserialization by class name (used by testing/exception_utils.py)
+# For deserialization by class name (used by testing/exception_utils.py).
+# httpx.ConnectError and httpx2.ConnectError share the simple name
+# "ConnectError"; the dict comprehension keeps the last insertion, so the
+# httpx (v1) class intentionally wins. That preserves pre-migration replay
+# behavior, since recordings only ever stored "ConnectError" for httpx
+# exceptions before httpx2 existed. Reordering EXCEPTION_MAP would silently
+# flip which class deserializes, so keep httpx.ConnectError last among the
+# shared-name entries.
 EXCEPTION_TYPES_BY_NAME: dict[str, type[Exception]] = {cls.__name__: cls for cls in EXCEPTION_MAP}
 
 
