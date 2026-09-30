@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterable
 from typing import Any
 
-import httpx
+import httpx2
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from openai.types.chat import ChatCompletionChunk
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -277,7 +277,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
                     extra_params["http_client"], self.config.network
                 )
         elif network_kwargs:
-            extra_params["http_client"] = httpx.AsyncClient(**network_kwargs)
+            extra_params["http_client"] = httpx2.AsyncClient(**network_kwargs)
         else:
             extra_params["http_client"] = DefaultAsyncHttpxClient(verify=self.shared_ssl_context)
 
@@ -292,7 +292,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         return client
 
     def _build_httpx_client_kwargs(self, default_timeout: float | None = None) -> dict[str, Any]:
-        """Build ``httpx.AsyncClient`` kwargs for ad-hoc calls outside the OpenAI client.
+        """Build ``httpx2.AsyncClient`` kwargs for ad-hoc calls outside the OpenAI client.
 
         Health checks, Anthropic passthrough and rerank build their own client, which must
         apply ``config.network`` (proxy, TLS, headers, timeout, pool limits). TLS verification
@@ -305,7 +305,7 @@ class OpenAIMixin(NeedsRequestProviderData, ABC, BaseModel):
         kwargs = build_network_client_kwargs(self.config.network)
         kwargs.setdefault("verify", self.shared_ssl_context)
         if default_timeout is not None:
-            kwargs.setdefault("timeout", httpx.Timeout(default_timeout))
+            kwargs.setdefault("timeout", httpx2.Timeout(default_timeout))
         return kwargs
 
     def _get_api_key_from_config_or_provider_data(self) -> str | None:

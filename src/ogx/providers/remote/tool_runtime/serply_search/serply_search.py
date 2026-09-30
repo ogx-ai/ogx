@@ -7,7 +7,7 @@
 import json
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
 from ogx_api import (
@@ -34,10 +34,10 @@ class SerplySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
 
     def __init__(self, config: SerplySearchToolConfig):
         self.config = config
-        self._client: httpx.AsyncClient | None = None
+        self._client: httpx2.AsyncClient | None = None
 
     async def initialize(self) -> None:
-        self._client = httpx.AsyncClient(timeout=self.config.to_httpx_timeout())
+        self._client = httpx2.AsyncClient(timeout=self.config.to_httpx_timeout())
 
     async def shutdown(self) -> None:
         if self._client:

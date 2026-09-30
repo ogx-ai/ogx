@@ -13,7 +13,7 @@ import ssl
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -75,8 +75,8 @@ def _request(**overrides) -> AnthropicCreateMessageRequest:
 
 @pytest.fixture
 def mock_client():
-    """A patched httpx.AsyncClient whose post() returns a successful messages response."""
-    with patch("httpx.AsyncClient") as client_class:
+    """A patched httpx2.AsyncClient whose post() returns a successful messages response."""
+    with patch("httpx2.AsyncClient") as client_class:
         response = MagicMock()
         response.is_error = False
         response.json.return_value = MESSAGE_RESPONSE
@@ -97,21 +97,21 @@ def mock_passthrough(monkeypatch):
 
 @pytest.fixture
 def wire(monkeypatch):
-    """Route the adapter's httpx clients through a MockTransport; returns the captured requests."""
-    captured: list[httpx.Request] = []
-    responder = {"handler": lambda request: httpx.Response(200, json=MESSAGE_RESPONSE)}
-    real_client = httpx.AsyncClient
+    """Route the adapter's httpx2 clients through a MockTransport; returns the captured requests."""
+    captured: list[httpx2.Request] = []
+    responder = {"handler": lambda request: httpx2.Response(200, json=MESSAGE_RESPONSE)}
+    real_client = httpx2.AsyncClient
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         captured.append(request)
         return responder["handler"](request)
 
     def make_client(*args, **kwargs):
         kwargs.pop("verify", None)
         kwargs.pop("mounts", None)
-        return real_client(*args, transport=httpx.MockTransport(handler), **kwargs)
+        return real_client(*args, transport=httpx2.MockTransport(handler), **kwargs)
 
-    monkeypatch.setattr(httpx, "AsyncClient", make_client)
+    monkeypatch.setattr(httpx2, "AsyncClient", make_client)
     captured_holder = SimpleNamespace(requests=captured, respond=lambda fn: responder.update(handler=fn))
     return captured_holder
 
@@ -141,7 +141,7 @@ class TestDoesNotTranslate:
 
 
 class TestMessagesRequest:
-    """Uses the wire fixture (a real httpx.MockTransport) rather than a mocked httpx.AsyncClient,
+    """Uses the wire fixture (a real httpx2.MockTransport) rather than a mocked httpx2.AsyncClient,
     so these assert on what was actually sent, not on how the adapter happened to call a mock."""
 
     async def test_posts_to_the_anthropic_messages_url(self, wire):
@@ -206,7 +206,7 @@ class TestNetworkConfig:
         assert kwargs["verify"] is False
         assert set(kwargs["mounts"]) == {"http://", "https://"}
         assert kwargs["headers"] == {"X-Route": "team-a"}
-        assert kwargs["timeout"] == httpx.Timeout(12.0)
+        assert kwargs["timeout"] == httpx2.Timeout(12.0)
         assert kwargs["limits"].max_connections == 7
 
     async def test_uses_shared_ssl_context_and_call_timeout_without_network_config(self, mock_client):
@@ -217,7 +217,7 @@ class TestNetworkConfig:
         kwargs = mock_client.call_args.kwargs
         assert kwargs["verify"] is adapter.shared_ssl_context
         assert isinstance(kwargs["verify"], ssl.SSLContext)
-        assert kwargs["timeout"] == httpx.Timeout(300.0)
+        assert kwargs["timeout"] == httpx2.Timeout(300.0)
 
     async def test_streaming_passes_network_kwargs_to_the_shared_helper(self, mock_passthrough):
         async def no_events():
@@ -237,7 +237,7 @@ class TestNetworkConfig:
         client_kwargs = call_kwargs["httpx_client_kwargs"]
         assert client_kwargs["verify"] is False
         assert set(client_kwargs["mounts"]) == {"http://", "https://"}
-        assert client_kwargs["timeout"] == httpx.Timeout(12.0)
+        assert client_kwargs["timeout"] == httpx2.Timeout(12.0)
 
     async def test_streaming_uses_shared_ssl_context_without_network_config(self, mock_passthrough):
         async def no_events():
@@ -253,12 +253,12 @@ class TestNetworkConfig:
 
         assert mock_passthrough.call_args.kwargs["httpx_client_kwargs"] == {
             "verify": adapter.shared_ssl_context,
-            "timeout": httpx.Timeout(300.0),
+            "timeout": httpx2.Timeout(300.0),
         }
 
     async def test_streaming_with_a_network_timeout_builds_a_real_client(self, wire):
         """The helper's own default timeout used to collide with network.timeout as a duplicate argument."""
-        wire.respond(lambda request: httpx.Response(200, text=""))
+        wire.respond(lambda request: httpx2.Response(200, text=""))
 
         result = await _adapter(network={"timeout": 12.0}).anthropic_messages(_request(stream=True))
         events = [event async for event in result]
@@ -269,7 +269,7 @@ class TestNetworkConfig:
 
 class TestCountTokens:
     async def test_posts_to_count_tokens_with_headers(self, wire):
-        wire.respond(lambda request: httpx.Response(200, json={"input_tokens": 14}))
+        wire.respond(lambda request: httpx2.Response(200, json={"input_tokens": 14}))
 
         result = await _adapter().anthropic_count_tokens(
             AnthropicCountTokensRequest(model="claude-haiku-4-5", messages=[{"role": "user", "content": "Hi"}])
@@ -286,14 +286,14 @@ class TestCountTokens:
         request = AnthropicCountTokensRequest(model="claude-haiku-4-5", messages=[{"role": "user", "content": "Hi"}])
 
         await _adapter().anthropic_count_tokens(request)
-        assert mock_client.call_args.kwargs["timeout"] == httpx.Timeout(30.0)
+        assert mock_client.call_args.kwargs["timeout"] == httpx2.Timeout(30.0)
 
         await _adapter(network=NETWORK_CONFIG).anthropic_count_tokens(request)
-        assert mock_client.call_args.kwargs["timeout"] == httpx.Timeout(12.0)
+        assert mock_client.call_args.kwargs["timeout"] == httpx2.Timeout(12.0)
         assert mock_client.call_args.kwargs["verify"] is False
 
     async def test_provider_data_api_key_overrides_config(self, wire):
-        wire.respond(lambda request: httpx.Response(200, json={"input_tokens": 1}))
+        wire.respond(lambda request: httpx2.Response(200, json={"input_tokens": 1}))
         adapter = _adapter()
         adapter.get_request_provider_data = MagicMock(
             return_value=SimpleNamespace(anthropic_api_key=SecretStr("per-request-key"))
@@ -315,7 +315,7 @@ class TestUpstreamErrors:
     """
 
     async def test_error_response_without_a_json_body_falls_back_to_the_status(self, wire):
-        wire.respond(lambda request: httpx.Response(529, text="not json"))
+        wire.respond(lambda request: httpx2.Response(529, text="not json"))
 
         with pytest.raises(AnthropicAPIError, match="status 529") as exc_info:
             await _adapter().anthropic_messages(_request())
@@ -323,7 +323,7 @@ class TestUpstreamErrors:
         assert exc_info.value.status_code == 529
 
     async def test_count_tokens_error_keeps_status(self, wire):
-        wire.respond(lambda request: httpx.Response(400, json={"type": "error", "error": {"message": "bad request"}}))
+        wire.respond(lambda request: httpx2.Response(400, json={"type": "error", "error": {"message": "bad request"}}))
 
         with pytest.raises(AnthropicAPIError, match="bad request") as exc_info:
             await _adapter().anthropic_count_tokens(
@@ -334,10 +334,10 @@ class TestUpstreamErrors:
 
     async def test_streaming_error_keeps_status(self, mock_passthrough):
         async def failing():
-            raise httpx.HTTPStatusError(
+            raise httpx2.HTTPStatusError(
                 "429",
-                request=httpx.Request("POST", MESSAGES_URL),
-                response=httpx.Response(429, request=httpx.Request("POST", MESSAGES_URL)),
+                request=httpx2.Request("POST", MESSAGES_URL),
+                response=httpx2.Response(429, request=httpx2.Request("POST", MESSAGES_URL)),
             )
             yield
 
@@ -358,7 +358,7 @@ class TestUpstreamErrors:
 
 
 class TestOnTheWire:
-    """Real httpx requests and SSE parsing against a mock transport."""
+    """Real httpx2 requests and SSE parsing against a mock transport."""
 
     async def test_non_streaming_request_body_and_headers(self, wire):
         request = _request(thinking=AnthropicThinkingConfig(type="enabled", budget_tokens=2048), temperature=1.0)
@@ -400,7 +400,7 @@ class TestOnTheWire:
                 "",
             ]
         )
-        wire.respond(lambda request: httpx.Response(200, text=sse, headers={"content-type": "text/event-stream"}))
+        wire.respond(lambda request: httpx2.Response(200, text=sse, headers={"content-type": "text/event-stream"}))
 
         result = await _adapter().anthropic_messages(
             _request(stream=True, thinking=AnthropicThinkingConfig(type="enabled", budget_tokens=1024))
@@ -421,7 +421,7 @@ class TestOnTheWire:
 
     async def test_upstream_error_reaches_the_caller_with_its_message(self, wire):
         wire.respond(
-            lambda request: httpx.Response(
+            lambda request: httpx2.Response(
                 401,
                 json={"type": "error", "error": {"type": "authentication_error", "message": "invalid x-api-key"}},
             )

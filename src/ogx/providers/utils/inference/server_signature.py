@@ -16,7 +16,7 @@ mis-typing the models. The same check backs the adapters' health() methods.
 
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx_api import HealthResponse, HealthStatus
 
@@ -37,7 +37,7 @@ class ServerUnreachableError(ValueError):
 
 
 def _probe_client_kwargs(client_kwargs: dict[str, Any] | None, timeout: float) -> dict[str, Any]:
-    """httpx client kwargs for a probe: the adapter's network config, with the probe's own timeout.
+    """httpx2 client kwargs for a probe: the adapter's network config, with the probe's own timeout.
 
     The probe timeout always wins over ``network.timeout``: it is deliberately short (see
     SIGNATURE_TIMEOUT), so a long configured timeout must not stretch it.
@@ -71,7 +71,7 @@ async def verify_server_signature(
     :param server_name: Human-readable engine name for error messages
     :param api_key: Bearer token for servers fronted by authentication
     :param timeout: Request timeout in seconds
-    :param client_kwargs: httpx.AsyncClient kwargs that apply the adapter's network config (proxy, TLS, headers)
+    :param client_kwargs: httpx2.AsyncClient kwargs that apply the adapter's network config (proxy, TLS, headers)
     :raises ServerUnreachableError: If the server cannot be reached at all
     :raises ValueError: If the server does not identify as the expected engine
     """
@@ -79,9 +79,9 @@ async def verify_server_signature(
     url = f"{root}{path}"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
-        async with httpx.AsyncClient(**_probe_client_kwargs(client_kwargs, timeout)) as client:
+        async with httpx2.AsyncClient(**_probe_client_kwargs(client_kwargs, timeout)) as client:
             response = await client.get(url, headers=headers)
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise ServerUnreachableError(f"Failed to verify {root} is a {server_name} server: {e}") from e
     if response.status_code != 200:
         raise ValueError(
@@ -171,7 +171,7 @@ async def get_text_embeddings_inference_model_id(
     :param base_url: The OpenAI-compatible base URL (e.g. http://host:8080/v1)
     :param api_key: Bearer token for servers fronted by authentication
     :param timeout: Request timeout in seconds
-    :param client_kwargs: httpx.AsyncClient kwargs that apply the adapter's network config (proxy, TLS, headers)
+    :param client_kwargs: httpx2.AsyncClient kwargs that apply the adapter's network config (proxy, TLS, headers)
     :return: The served model ID
     :raises ServerUnreachableError: If the server cannot be reached at all
     :raises ValueError: If the server does not report a model ID
@@ -180,9 +180,9 @@ async def get_text_embeddings_inference_model_id(
     url = f"{root}/info"
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
-        async with httpx.AsyncClient(**_probe_client_kwargs(client_kwargs, timeout)) as client:
+        async with httpx2.AsyncClient(**_probe_client_kwargs(client_kwargs, timeout)) as client:
             response = await client.get(url, headers=headers)
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise ServerUnreachableError(f"Failed to query {root} for the served model: {e}") from e
     if response.status_code != 200:
         raise ValueError(f"Failed to query {root} for the served model: GET /info returned HTTP {response.status_code}")

@@ -22,7 +22,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, TypeVar, Union, get_args, get_origin
 
-import httpx
+import httpx  # allow-direct-httpx: builds httpx responses consumed by the generated (httpx-based) ogx-client SDK
 import yaml
 from fastapi import Response as FastAPIResponse
 

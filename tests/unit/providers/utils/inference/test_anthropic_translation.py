@@ -8,7 +8,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from ogx.providers.utils.inference.anthropic_translation import (
@@ -1083,11 +1083,11 @@ class TestUpstreamStreamClosure:
 
 
 class TestPassthroughStreamClientKwargs:
-    """passthrough_anthropic_stream builds its own httpx client from caller-supplied kwargs."""
+    """passthrough_anthropic_stream builds its own httpx2 client from caller-supplied kwargs."""
 
     @staticmethod
     async def _client_kwargs(**stream_kwargs) -> dict:
-        with patch("ogx.providers.utils.inference.anthropic_translation.httpx.AsyncClient") as mock_client_class:
+        with patch("ogx.providers.utils.inference.anthropic_translation.httpx2.AsyncClient") as mock_client_class:
             response = MagicMock()
             response.aiter_lines = lambda: _empty_lines()
             stream = MagicMock()
@@ -1112,7 +1112,7 @@ class TestPassthroughStreamClientKwargs:
     async def test_network_timeout_overrides_the_default_instead_of_colliding_with_it(self):
         """A provider passing network.timeout in the client kwargs used to raise a
         duplicate-keyword TypeError."""
-        network_timeout = httpx.Timeout(12.0)
+        network_timeout = httpx2.Timeout(12.0)
 
         kwargs = await self._client_kwargs(httpx_client_kwargs={"timeout": network_timeout})
 

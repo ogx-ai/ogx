@@ -7,7 +7,7 @@
 
 from collections.abc import AsyncIterator
 
-import httpx
+import httpx2
 
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
@@ -138,7 +138,7 @@ class OllamaInferenceAdapter(AnthropicMixin, OpenAIMixin):
         """
         try:
             url = f"{self._get_ollama_base_url()}/api/version"
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs(default_timeout=30.0)) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs(default_timeout=30.0)) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
             return HealthResponse(status=HealthStatus.OK)

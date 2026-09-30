@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 if TYPE_CHECKING:
     from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
-import httpx
+import httpx2
 from openai import AsyncOpenAI, AuthenticationError, PermissionDeniedError
 from pydantic import PrivateAttr
 
@@ -101,7 +101,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
 
     # built once in initialize() so get_extra_client_params() can stay sync;
     # reusing one client also avoids opening a new socket per request
-    _sigv4_http_client: httpx.AsyncClient | None = PrivateAttr(default=None)
+    _sigv4_http_client: httpx2.AsyncClient | None = PrivateAttr(default=None)
     _bedrock_client: Any = PrivateAttr(default=None)
 
     @property
@@ -128,7 +128,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
 
         return True
 
-    def _build_sigv4_http_client(self) -> httpx.AsyncClient:
+    def _build_sigv4_http_client(self) -> httpx2.AsyncClient:
         # lazy import so bearer-token installs don't need boto3/botocore
         from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
@@ -150,7 +150,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
         auth = BedrockSigV4Auth(**{k: v for k, v in sigv4_args.items() if v is not None})
         network_config = cfg.network
         network_kwargs = build_network_client_kwargs(network_config)
-        client = httpx.AsyncClient(auth=auth, **network_kwargs)
+        client = httpx2.AsyncClient(auth=auth, **network_kwargs)
         if network_config is not None:
             set_client_network_fingerprint(client, network_config_fingerprint(network_config))
         return client

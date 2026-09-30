@@ -9,7 +9,7 @@
 import argparse
 from unittest.mock import MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from openai import APIConnectionError, APIStatusError
 
@@ -109,7 +109,7 @@ class TestClaudeDetection:
 class TestServerProbe:
     def test_exits_when_server_unreachable(self, connect_claude: ConnectClaude) -> None:
         mock_client = MagicMock()
-        mock_client.models.list.side_effect = APIConnectionError(request=httpx.Request("GET", "http://localhost"))
+        mock_client.models.list.side_effect = APIConnectionError(request=httpx2.Request("GET", "http://localhost"))
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):
             with pytest.raises(SystemExit):
@@ -117,7 +117,7 @@ class TestServerProbe:
 
     def test_exits_on_server_error(self, connect_claude: ConnectClaude) -> None:
         mock_client = MagicMock()
-        mock_response = httpx.Response(500, request=httpx.Request("GET", "http://localhost"))
+        mock_response = httpx2.Response(500, request=httpx2.Request("GET", "http://localhost"))
         mock_client.models.list.side_effect = APIStatusError("server error", response=mock_response, body=None)
 
         with patch("ogx.cli.connect.claude.OpenAI", return_value=mock_client):

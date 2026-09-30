@@ -10,7 +10,7 @@ providers that use it (anthropic, meta, ollama, vllm, fireworks, deepseek)."""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -86,8 +86,8 @@ def _count_tokens_request():
 
 @pytest.fixture
 def mock_client():
-    """A patched httpx.AsyncClient; returns (client_class, client, response) for assertions."""
-    with patch("httpx.AsyncClient") as client_class:
+    """A patched httpx2.AsyncClient; returns (client_class, client, response) for assertions."""
+    with patch("httpx2.AsyncClient") as client_class:
         response = MagicMock()
         response.json.return_value = MESSAGE_BODY
         client = MagicMock()
@@ -218,10 +218,10 @@ class TestHeadersAndBody:
 
 class TestErrors:
     async def test_error_preserves_status_and_body_message(self, mock_client):
-        response = httpx.Response(
+        response = httpx2.Response(
             400,
             json={"type": "error", "error": {"type": "invalid_request_error", "message": "bad request"}},
-            request=httpx.Request("POST", "https://api.example.com/v1/messages"),
+            request=httpx2.Request("POST", "https://api.example.com/v1/messages"),
         )
         mock_client.client.post = AsyncMock(return_value=response)
 
@@ -231,8 +231,8 @@ class TestErrors:
         assert exc_info.value.status_code == 400
 
     async def test_error_without_json_body_falls_back_to_status(self, mock_client):
-        response = httpx.Response(
-            529, text="not json", request=httpx.Request("POST", "https://api.example.com/v1/messages")
+        response = httpx2.Response(
+            529, text="not json", request=httpx2.Request("POST", "https://api.example.com/v1/messages")
         )
         mock_client.client.post = AsyncMock(return_value=response)
 
@@ -243,10 +243,10 @@ class TestErrors:
 
     async def test_streaming_error_keeps_status(self, monkeypatch):
         async def failing(**_kwargs):
-            raise httpx.HTTPStatusError(
+            raise httpx2.HTTPStatusError(
                 "429",
-                request=httpx.Request("POST", "https://api.example.com/v1/messages"),
-                response=httpx.Response(429, request=httpx.Request("POST", "https://api.example.com/v1/messages")),
+                request=httpx2.Request("POST", "https://api.example.com/v1/messages"),
+                response=httpx2.Response(429, request=httpx2.Request("POST", "https://api.example.com/v1/messages")),
             )
             yield
 
@@ -307,11 +307,11 @@ class TestTimeouts:
     async def test_default_timeouts_per_call(self, mock_client):
         adapter = _adapter("meta")
         await adapter.anthropic_messages(_message_request())
-        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx.Timeout(300.0)
+        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx2.Timeout(300.0)
 
         mock_client.response.json.return_value = {"input_tokens": 1}
         await adapter.anthropic_count_tokens(_count_tokens_request())
-        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx.Timeout(30.0)
+        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx2.Timeout(30.0)
 
     @pytest.mark.parametrize("provider", PROVIDERS)
     async def test_network_timeout_takes_precedence(self, provider, mock_client):
@@ -319,14 +319,14 @@ class TestTimeouts:
         adapter.config.network = NetworkConfig(timeout=12.0)
 
         await adapter.anthropic_messages(_message_request())
-        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx.Timeout(12.0)
+        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx2.Timeout(12.0)
 
         if provider not in ("fireworks", "deepseek"):
             # Fireworks and DeepSeek have no native endpoint and count via anthropic_messages,
             # which expects a message response rather than a count_tokens one.
             mock_client.response.json.return_value = {"input_tokens": 1}
         await adapter.anthropic_count_tokens(_count_tokens_request())
-        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx.Timeout(12.0)
+        assert mock_client.client_class.call_args.kwargs["timeout"] == httpx2.Timeout(12.0)
 
     async def test_streaming_passes_client_kwargs_to_the_shared_helper(self, monkeypatch):
         async def no_events(**_kwargs):
@@ -344,4 +344,4 @@ class TestTimeouts:
             pass
 
         client_kwargs = mock.call_args.kwargs["httpx_client_kwargs"]
-        assert client_kwargs["timeout"] == httpx.Timeout(12.0)
+        assert client_kwargs["timeout"] == httpx2.Timeout(12.0)

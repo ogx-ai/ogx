@@ -20,7 +20,7 @@ can't see the --stack-config option that decides the mode.
 import os
 from urllib.parse import urlsplit
 
-import httpx
+import httpx2
 import pytest
 
 _METRICS_ENABLED = os.environ.get("OGX_METRICS_ENDPOINT_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
@@ -48,9 +48,9 @@ def test_metrics_endpoint_exposes_prometheus_format(ogx_client):
 
     # Exercise a regular API endpoint so request-level metrics are recorded.
     for _ in range(3):
-        httpx.get(f"{api_base_url}/v1/health", timeout=30.0)
+        httpx2.get(f"{api_base_url}/v1/health", timeout=30.0)
 
-    resp = httpx.get(_metrics_url(ogx_client), timeout=30.0)
+    resp = httpx2.get(_metrics_url(ogx_client), timeout=30.0)
 
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/plain")
@@ -67,7 +67,7 @@ def test_metrics_endpoint_exposes_prometheus_format(ogx_client):
 
 def test_metrics_endpoint_requires_no_auth(ogx_client):
     """The scrape server is on a separate port and must be reachable without auth."""
-    resp = httpx.get(_metrics_url(ogx_client), timeout=30.0)
+    resp = httpx2.get(_metrics_url(ogx_client), timeout=30.0)
 
     assert resp.status_code == 200
 
@@ -76,6 +76,6 @@ def test_metrics_endpoint_is_off_the_api_port(ogx_client):
     """The API port must not serve a /v1/metrics route; metrics live on their own port."""
     api_base_url = _api_base_url(ogx_client)
 
-    resp = httpx.get(f"{api_base_url}/v1/metrics", timeout=30.0)
+    resp = httpx2.get(f"{api_base_url}/v1/metrics", timeout=30.0)
 
     assert resp.status_code == 404

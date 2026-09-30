@@ -233,6 +233,16 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _remove_api(run_config: StackConfig, api: str) -> None:
+    """Drop an API from an explicit `apis:` list.
+
+    A config without an `apis:` list serves whatever the providers supply, so dropping
+    the provider is enough.
+    """
+    if run_config.apis is not None:
+        run_config.apis = [a for a in run_config.apis if a != api]
+
+
 def _add_file_search_and_responses(run_config: StackConfig) -> None:
     """Add file-search and responses providers to the stack config.
 
@@ -245,8 +255,9 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         run_config.providers["tool_runtime"].append(
             Provider(provider_id="file-search", provider_type="inline::file-search")
         )
-    # Add tool_runtime to APIs if not already present
-    if "tool_runtime" not in run_config.apis:
+    # Add tool_runtime to APIs if not already present. A config without an `apis:` list
+    # serves every provider-backed API, so there is nothing to add there.
+    if run_config.apis is not None and "tool_runtime" not in run_config.apis:
         run_config.apis.append("tool_runtime")
 
     # Add responses API with builtin provider
@@ -268,16 +279,17 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             )
         )
     # Add responses to APIs if not already present
-    if "responses" not in run_config.apis:
+    if run_config.apis is not None and "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply
+    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply -> exa
     _web_search_order = [
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),
         ("remote::nimble-search", "nimble-search"),
         ("remote::serply-search", "serply-search"),
+        ("remote::exa-search", "exa-search"),
     ]
     tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
     existing_web_search: set[str] = {
@@ -439,7 +451,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                     color="yellow",
                 )
                 run_config.providers.pop("vector_io", None)
-                run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+                _remove_api(run_config, "vector_io")
             else:
                 existing = run_config.vector_stores or VectorStoresConfig()
                 run_config.vector_stores = existing.model_copy(update={"default_embedding_model": detected})
@@ -471,7 +483,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                 color="yellow",
             )
             run_config.providers.pop("vector_io", None)
-            run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+            _remove_api(run_config, "vector_io")
     else:
         cprint(
             "  ✗ No vector store provider detected — file-search and responses disabled.",

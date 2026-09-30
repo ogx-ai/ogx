@@ -18,7 +18,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.log import get_logger
 from ogx.providers.utils.inference.stream_utils import close_async_stream
@@ -520,7 +520,7 @@ async def passthrough_anthropic_stream(
 ) -> AsyncIterator[AnthropicStreamEvent]:
     """Yield SSE events from any Anthropic-compatible streaming provider.
 
-    Creates an ``httpx.AsyncClient`` internally and manages the request/response
+    Creates an ``httpx2.AsyncClient`` internally and manages the request/response
     lifecycle.  The caller is responsible for providing correct ``url``,
     ``req_body``, and ``headers`` (including authentication).
 
@@ -533,14 +533,14 @@ async def passthrough_anthropic_stream(
     headers:
         HTTP request headers (content-type, anthropic-version, x-api-key, etc.).
     httpx_client_kwargs:
-        Extra keyword arguments forwarded to ``httpx.AsyncClient`` constructor.
+        Extra keyword arguments forwarded to ``httpx2.AsyncClient`` constructor.
         Used by providers like vLLM to inject TLS / proxy / network config.
     timeout:
         Default timeout for the client (seconds). A ``timeout`` in
         ``httpx_client_kwargs`` (i.e. ``network.timeout``) takes precedence.
     """
     client_kwargs = {"timeout": timeout, **(httpx_client_kwargs or {})}
-    async with httpx.AsyncClient(**client_kwargs) as client:
+    async with httpx2.AsyncClient(**client_kwargs) as client:
         async with client.stream("POST", url, json=req_body, headers=headers) as resp:
             resp.raise_for_status()
             event_type: str | None = None

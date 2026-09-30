@@ -6,7 +6,7 @@
 
 from typing import Any
 
-import httpx
+import httpx2
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ogx.core.access_control.datatypes import RouteAccessRule
@@ -161,7 +161,7 @@ class AuthenticationMiddleware:
             except AuthServiceUnavailableError as e:
                 logger.warning("Authentication service unavailable", error=str(e))
                 return await self._send_auth_error(send, str(e), status=503, is_websocket=is_websocket)
-            except httpx.TimeoutException:
+            except httpx2.TimeoutException:
                 logger.warning("Authentication request timed out")
                 return await self._send_auth_error(
                     send, "Authentication service timeout", status=503, is_websocket=is_websocket

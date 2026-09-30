@@ -117,7 +117,7 @@ def build_forwarded_headers(
         raw_provider_data = provider_data
 
     # Coalesce header names case-insensitively to avoid emitting duplicates like
-    # {"Authorization": "...", "authorization": "..."} which some clients (e.g. httpx)
+    # {"Authorization": "...", "authorization": "..."} which some clients (e.g. httpx2)
     # will send as multiple header fields.
     result_by_normalized_name: dict[str, tuple[str, str]] = {}
     for data_key, header_name in forward_headers.items():

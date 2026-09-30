@@ -227,6 +227,11 @@ providers:
         namespace: skills
         backend: kv_default
   tool_runtime:
+  - provider_id: exa-search
+    provider_type: remote::exa-search
+    config:
+      api_key: ${env.EXA_API_KEY:=}
+      max_results: 3
   - provider_id: brave-search
     provider_type: remote::brave-search
     config:

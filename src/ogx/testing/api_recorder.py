@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
-import httpx
+import httpx  # allow-direct-httpx: the generated OgxClient (httpx-based) still sends httpx requests
+import httpx2
 from openai import NOT_GIVEN
 
 from ogx.core.id_generation import reset_id_override, set_id_override
@@ -318,7 +319,7 @@ def normalize_http_request(url: str, method: str, payload: dict[str, Any]) -> st
     return request_hash
 
 
-def _inject_test_id(request: httpx.Request) -> None:
+def _inject_test_id(request: httpx.Request | httpx2.Request) -> None:
     """Stamp the current test's ID into the request's provider-data header.
 
     Installed unconditionally in every stack mode: in server mode the header is how the test
@@ -343,36 +344,36 @@ def _inject_test_id(request: httpx.Request) -> None:
         logger.info(f"  URL: {request.url}")
 
 
-async def _inject_test_id_async(request: httpx.Request) -> None:
-    # httpx.AsyncClient requires its event hooks to be coroutine functions, but the
+async def _inject_test_id_async(request: httpx2.Request) -> None:
+    # httpx2.AsyncClient requires its event hooks to be coroutine functions, but the
     # injection logic itself is plain sync header mutation -- no I/O to await.
     _inject_test_id(request)
 
 
-def build_test_id_http_client(**kwargs: Any) -> httpx.Client:
-    """Build an httpx.Client that stamps the current test's ID onto every outgoing request.
+def build_test_id_http_client(**kwargs: Any) -> httpx2.Client:
+    """Build an httpx2.Client that stamps the current test's ID onto every outgoing request.
 
-    Pass as ``http_client=`` to any client that accepts a custom httpx.Client (openai.OpenAI,
+    Pass as ``http_client=`` to any client that accepts a custom httpx2.Client (openai.OpenAI,
     langchain's ChatOpenAI's `http_client`, etc.) instead of relying on that SDK's own request
-    hook, which may be a private implementation detail. Uses httpx's own public, documented
-    event_hooks mechanism (https://www.python-httpx.org/advanced/event-hooks/), so it covers
-    any client built on httpx -- including ones openai.OpenAI wraps under a differently-named
-    but structurally-compatible httpx fork (see src/ogx/testing/providers/openai.py).
+    hook, which may be a private implementation detail. Uses httpx2's own public, documented
+    event_hooks mechanism (https://www.python-httpx2.org/advanced/event-hooks/), so it covers
+    any client built on httpx2 -- including ones openai.OpenAI wraps under a differently-named
+    but structurally-compatible httpx2 fork (see src/ogx/testing/providers/openai.py).
 
-    Any keyword arguments accepted by httpx.Client() may be passed through, e.g. to combine
+    Any keyword arguments accepted by httpx2.Client() may be passed through, e.g. to combine
     with a caller's own event_hooks.
     """
     event_hooks = dict(kwargs.pop("event_hooks", None) or {})
     event_hooks["request"] = [*event_hooks.get("request", []), _inject_test_id]
-    return httpx.Client(event_hooks=event_hooks, **kwargs)
+    return httpx2.Client(event_hooks=event_hooks, **kwargs)
 
 
-def build_test_id_async_http_client(**kwargs: Any) -> httpx.AsyncClient:
+def build_test_id_async_http_client(**kwargs: Any) -> httpx2.AsyncClient:
     """Async counterpart of build_test_id_http_client(); pass as ``http_client=`` to
     openai.AsyncOpenAI, or as ``http_async_client=`` to langchain's ChatOpenAI."""
     event_hooks = dict(kwargs.pop("event_hooks", None) or {})
     event_hooks["request"] = [*event_hooks.get("request", []), _inject_test_id_async]
-    return httpx.AsyncClient(event_hooks=event_hooks, **kwargs)
+    return httpx2.AsyncClient(event_hooks=event_hooks, **kwargs)
 
 
 def patch_httpx_for_test_id():
@@ -931,15 +932,15 @@ def _patched_aiohttp_post(original_post, session_self, url: str, **kwargs):
         raise AssertionError(f"Invalid mode: {_current_mode}")
 
 
-# URL fragments the httpx interceptors record and replay. Surfaces reached through a
-# provider SDK are patched at the SDK level instead, so only raw-httpx call sites belong
+# URL fragments the httpx2 interceptors record and replay. Surfaces reached through a
+# provider SDK are patched at the SDK level instead, so only raw-httpx2 call sites belong
 # here: the Anthropic Messages and Google Interactions passthroughs, and the
 # Jina-compatible /rerank endpoint the vLLM adapter posts to directly (vllm.py rerank()).
 _INTERCEPTED_HTTPX_PATHS = ("/v1/messages", "/interactions", "/rerank")
 
 
 def _should_intercept_httpx(url: str) -> bool:
-    """Whether an httpx request to this URL is one the recorder records and replays.
+    """Whether an httpx2 request to this URL is one the recorder records and replays.
 
     Shared by the post and stream patches so the two cannot drift apart.
     """
@@ -958,7 +959,7 @@ def _is_tei_model_lookup_url(url: str) -> bool:
 
 
 async def _patched_httpx_async_get(original_get, self, url, **kwargs):
-    """Patched version of httpx.AsyncClient.get for recording/replay of the TEI model lookup.
+    """Patched version of httpx2.AsyncClient.get for recording/replay of the TEI model lookup.
 
     Records and replays the Text-Embeddings-Inference GET /info request as a
     model-list response (models-*.json, shared across tests) so the served model
@@ -977,7 +978,7 @@ async def _patched_httpx_async_get(original_get, self, url, **kwargs):
         records = _current_storage._model_list_responses(request_hash)
         recording = _combine_model_list_responses("/info", records)
         if recording:
-            import httpx as _httpx
+            import httpx2 as _httpx
 
             mock_request = _httpx.Request("GET", url_str)
             return _httpx.Response(
@@ -1032,7 +1033,7 @@ async def _patched_httpx_async_get(original_get, self, url, **kwargs):
 
 
 async def _patched_httpx_async_post(original_post, self, url, **kwargs):
-    """Patched version of httpx.AsyncClient.post for recording/replay of raw-httpx endpoints.
+    """Patched version of httpx2.AsyncClient.post for recording/replay of raw-httpx2 endpoints.
 
     Intercepts the endpoints listed in _INTERCEPTED_HTTPX_PATHS -- the native Messages and
     Interactions passthroughs, and the vLLM rerank endpoint -- so those paths can be
@@ -1050,7 +1051,7 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
     if _current_mode in (APIRecordingMode.REPLAY, APIRecordingMode.RECORD_IF_MISSING):
         recording = _current_storage.find_recording(request_hash)
         if recording:
-            import httpx as _httpx
+            import httpx2 as _httpx
 
             body_bytes = json.dumps(recording["response"]["body"]).encode()
             # Create a minimal request so raise_for_status() works on the mock response
@@ -1064,7 +1065,7 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
             return mock_response
         elif _current_mode == APIRecordingMode.REPLAY:
             raise RuntimeError(
-                f"Recording not found for httpx POST {url_str}\n"
+                f"Recording not found for httpx2 POST {url_str}\n"
                 f"\n"
                 f"Run './scripts/integration-tests.sh --inference-mode record-if-missing' with required API keys to generate."
             )
@@ -1090,7 +1091,7 @@ async def _patched_httpx_async_post(original_post, self, url, **kwargs):
 
 
 def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
-    """Patched version of httpx.AsyncClient.stream for recording/replay of streaming raw-httpx endpoints.
+    """Patched version of httpx2.AsyncClient.stream for recording/replay of streaming raw-httpx2 endpoints.
 
     Intercepts streaming requests to the endpoints listed in _INTERCEPTED_HTTPX_PATHS. Returns
     an async context manager that either replays recorded SSE events or records live ones.
@@ -1105,13 +1106,13 @@ def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
     request_hash = normalize_http_request(url_str, "POST", json_payload)
 
     class _ReplayStreamContext:
-        """Async context manager that replays recorded SSE events as a mock httpx response."""
+        """Async context manager that replays recorded SSE events as a mock httpx2 response."""
 
         def __init__(self, sse_lines: list[str]):
             self._sse_lines = sse_lines
 
         async def __aenter__(self):
-            import httpx as _httpx
+            import httpx2 as _httpx
 
             class _MockStreamResponse:
                 def __init__(self, lines):
@@ -1136,7 +1137,7 @@ def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
     # _RecordStreamContext is unused but kept for reference; actual recording uses _RecordCtx below
 
     class _RecordingStreamResponse:
-        """Wraps a real httpx streaming response to capture SSE lines for recording."""
+        """Wraps a real httpx2 streaming response to capture SSE lines for recording."""
 
         def __init__(self, response, url_str, json_payload, request_hash, test_id):
             self._response = response
@@ -1178,7 +1179,7 @@ def _patched_httpx_async_stream(original_stream, self, method, url, **kwargs):
             return _ReplayStreamContext(recording["response"]["body"])
         elif _current_mode == APIRecordingMode.REPLAY:
             raise RuntimeError(
-                f"Recording not found for httpx stream POST {url_str}\n"
+                f"Recording not found for httpx2 stream POST {url_str}\n"
                 f"\n"
                 f"Run './scripts/integration-tests.sh --inference-mode record-if-missing' with required API keys to generate."
             )
@@ -1648,7 +1649,7 @@ def patch_inference_clients():
     global _original_methods
 
     import aiohttp
-    import httpx
+    import httpx2
     from openai.resources.chat.completions import AsyncCompletions as AsyncChatCompletions
     from openai.resources.completions import AsyncCompletions
     from openai.resources.embeddings import AsyncEmbeddings
@@ -1658,7 +1659,7 @@ def patch_inference_clients():
     from ogx.providers.inline.file_processor.pypdf.adapter import PyPDFFileProcessorAdapter
     from ogx.providers.remote.tool_runtime.tavily_search.tavily_search import TavilySearchToolRuntimeImpl
 
-    # Store original methods for OpenAI clients, tool runtimes, file processors, aiohttp, and httpx
+    # Store original methods for OpenAI clients, tool runtimes, file processors, aiohttp, and httpx2
     _original_methods = {
         "chat_completions_create": AsyncChatCompletions.create,
         "completions_create": AsyncCompletions.create,
@@ -1668,9 +1669,9 @@ def patch_inference_clients():
         "tavily_invoke_tool": TavilySearchToolRuntimeImpl.invoke_tool,
         "pypdf_process_file": PyPDFFileProcessorAdapter.process_file,
         "aiohttp_post": aiohttp.ClientSession.post,
-        "httpx_async_post": httpx.AsyncClient.post,
-        "httpx_async_stream": httpx.AsyncClient.stream,
-        "httpx_async_get": httpx.AsyncClient.get,
+        "httpx_async_post": httpx2.AsyncClient.post,
+        "httpx_async_stream": httpx2.AsyncClient.stream,
+        "httpx_async_get": httpx2.AsyncClient.get,
     }
 
     # Google genai patching (optional - only if google-genai is installed)
@@ -1745,21 +1746,21 @@ def patch_inference_clients():
     # Apply aiohttp patch
     aiohttp.ClientSession.post = patched_aiohttp_session_post
 
-    # Create patched methods for httpx AsyncClient (Messages API passthrough)
+    # Create patched methods for httpx2 AsyncClient (Messages API passthrough)
     async def patched_httpx_async_post(self, url, **kwargs):
         return await _patched_httpx_async_post(_original_methods["httpx_async_post"], self, url, **kwargs)
 
     def patched_httpx_async_stream(self, method, url, **kwargs):
         return _patched_httpx_async_stream(_original_methods["httpx_async_stream"], self, method, url, **kwargs)
 
-    # Create patched method for httpx AsyncClient GET (TEI model lookup)
+    # Create patched method for httpx2 AsyncClient GET (TEI model lookup)
     async def patched_httpx_async_get(self, url, **kwargs):
         return await _patched_httpx_async_get(_original_methods["httpx_async_get"], self, url, **kwargs)
 
-    # Apply httpx patches
-    httpx.AsyncClient.post = patched_httpx_async_post
-    httpx.AsyncClient.stream = patched_httpx_async_stream
-    httpx.AsyncClient.get = patched_httpx_async_get
+    # Apply httpx2 patches
+    httpx2.AsyncClient.post = patched_httpx_async_post
+    httpx2.AsyncClient.stream = patched_httpx_async_stream
+    httpx2.AsyncClient.get = patched_httpx_async_get
 
     # Apply google-genai patches (if available)
     if "genai_generate_content" in _original_methods:
@@ -1798,7 +1799,7 @@ def unpatch_inference_clients():
 
     # Import here to avoid circular imports
     import aiohttp
-    import httpx
+    import httpx2
     from openai.resources.chat.completions import AsyncCompletions as AsyncChatCompletions
     from openai.resources.completions import AsyncCompletions
     from openai.resources.embeddings import AsyncEmbeddings
@@ -1824,10 +1825,10 @@ def unpatch_inference_clients():
     # Restore aiohttp method
     aiohttp.ClientSession.post = _original_methods["aiohttp_post"]
 
-    # Restore httpx methods
-    httpx.AsyncClient.post = _original_methods["httpx_async_post"]
-    httpx.AsyncClient.stream = _original_methods["httpx_async_stream"]
-    httpx.AsyncClient.get = _original_methods["httpx_async_get"]
+    # Restore httpx2 methods
+    httpx2.AsyncClient.post = _original_methods["httpx_async_post"]
+    httpx2.AsyncClient.stream = _original_methods["httpx_async_stream"]
+    httpx2.AsyncClient.get = _original_methods["httpx_async_get"]
 
     # Restore google-genai methods (if they were patched)
     if "genai_generate_content" in _original_methods:

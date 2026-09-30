@@ -18,7 +18,7 @@ These tests verify:
 import importlib.util
 from unittest.mock import MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 HAS_BOTO3 = importlib.util.find_spec("boto3") is not None
@@ -26,7 +26,7 @@ HAS_BOTO3 = importlib.util.find_spec("boto3") is not None
 
 @pytest.mark.skipif(not HAS_BOTO3, reason="boto3 not installed")
 class TestBedrockSigV4Auth:
-    """Tests for BedrockSigV4Auth httpx.Auth implementation."""
+    """Tests for BedrockSigV4Auth httpx2.Auth implementation."""
 
     def test_auth_flow_signs_request(self):
         """SigV4 auth should add AWS signature headers to request."""
@@ -51,7 +51,7 @@ class TestBedrockSigV4Auth:
             auth = BedrockSigV4Auth(region="us-east-1", service="bedrock")
 
             # Create a test request
-            request = httpx.Request(
+            request = httpx2.Request(
                 method="POST",
                 url="https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
                 headers={"content-type": "application/json"},
@@ -92,7 +92,7 @@ class TestBedrockSigV4Auth:
                 aws_role_session_name="test-session",
             )
 
-            request = httpx.Request(
+            request = httpx2.Request(
                 method="POST",
                 url="https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
                 content=b"{}",
@@ -131,7 +131,7 @@ class TestBedrockSigV4Auth:
 
             auth = BedrockSigV4Auth(region="us-west-2", service="bedrock")
 
-            request = httpx.Request(
+            request = httpx2.Request(
                 method="POST",
                 url="https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/chat/completions",
                 headers={"content-type": "application/json"},
@@ -156,7 +156,7 @@ class TestBedrockSigV4Auth:
 
             auth = BedrockSigV4Auth(region="us-east-1")
 
-            request = httpx.Request(
+            request = httpx2.Request(
                 method="POST",
                 url="https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
                 content=b"{}",
@@ -456,7 +456,7 @@ class TestBedrockInferenceAdapterAuthErrors:
 
 @pytest.mark.skipif(not HAS_BOTO3, reason="boto3 not installed")
 class TestSigV4MockTransport:
-    """Integration-style tests using httpx.MockTransport to verify SigV4 signing."""
+    """Integration-style tests using httpx2.MockTransport to verify SigV4 signing."""
 
     def test_sigv4_adds_aws4_signature_header(self):
         """SigV4 auth should add AWS4-HMAC-SHA256 Authorization header."""
@@ -465,10 +465,10 @@ class TestSigV4MockTransport:
         # Track the request that gets sent
         captured_request = None
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "AKIAIOSFODNN7EXAMPLE"
@@ -481,9 +481,9 @@ class TestSigV4MockTransport:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-east-1", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 client.post(
                     "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
                     json={"model": "test"},
@@ -507,10 +507,10 @@ class TestSigV4MockTransport:
 
         captured_request = None
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "AKIAIOSFODNN7EXAMPLE"
@@ -523,9 +523,9 @@ class TestSigV4MockTransport:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-east-1", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 client.post(
                     "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
                     json={"model": "test"},
@@ -544,10 +544,10 @@ class TestSigV4MockTransport:
 
         captured_request = None
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "ASIAIOSFODNN7EXAMPLE"
@@ -560,9 +560,9 @@ class TestSigV4MockTransport:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-west-2", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 client.post(
                     "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1/chat/completions",
                     json={"model": "test"},
@@ -580,10 +580,10 @@ class TestSigV4MockTransport:
 
         captured_request = None
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "AKIAIOSFODNN7EXAMPLE"
@@ -596,9 +596,9 @@ class TestSigV4MockTransport:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-east-1", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 # Simulate what OpenAI SDK does: add Bearer <NOTUSED> header
                 client.post(
                     "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
@@ -620,10 +620,10 @@ class TestSigV4MockTransport:
 
         captured_request = None
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "AKIAIOSFODNN7EXAMPLE"
@@ -636,10 +636,10 @@ class TestSigV4MockTransport:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-east-1", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
             # Use non-default port
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 client.post(
                     "https://localhost:8443/openai/v1/chat/completions",
                     json={"model": "test"},
@@ -683,10 +683,10 @@ class TestWebIdentityFederation:
 
         captured_request = None
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         # Simulate credentials from AssumeRoleWithWebIdentity
         # Note: ASIA prefix indicates temporary credentials (vs AKIA for static)
@@ -701,9 +701,9 @@ class TestWebIdentityFederation:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-east-2", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 client.post(
                     "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1/chat/completions",
                     json={
@@ -767,9 +767,9 @@ class TestWebIdentityFederation:
         call_count = 0
         captured_requests = []
 
-        def capture_request(request: httpx.Request) -> httpx.Response:
+        def capture_request(request: httpx2.Request) -> httpx2.Response:
             captured_requests.append(request)
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         # Simulate credentials that change (as would happen after refresh)
         initial_creds = MagicMock()
@@ -796,9 +796,9 @@ class TestWebIdentityFederation:
             mock_session.get_credentials.return_value = mock_creds
 
             auth = BedrockSigV4Auth(region="us-east-2", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            with httpx.Client(auth=auth, transport=transport) as client:
+            with httpx2.Client(auth=auth, transport=transport) as client:
                 # First request
                 client.post(
                     "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1/chat/completions",
@@ -833,10 +833,10 @@ class TestAsyncAuthFlow:
 
         captured_request = None
 
-        async def capture_request(request: httpx.Request) -> httpx.Response:
+        async def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "AKIAIOSFODNN7EXAMPLE"
@@ -849,9 +849,9 @@ class TestAsyncAuthFlow:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-east-1", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            async with httpx.AsyncClient(auth=auth, transport=transport) as client:
+            async with httpx2.AsyncClient(auth=auth, transport=transport) as client:
                 await client.post(
                     "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/chat/completions",
                     json={"model": "test"},
@@ -875,10 +875,10 @@ class TestAsyncAuthFlow:
 
         captured_request = None
 
-        async def capture_request(request: httpx.Request) -> httpx.Response:
+        async def capture_request(request: httpx2.Request) -> httpx2.Response:
             nonlocal captured_request
             captured_request = request
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
 
         mock_frozen_creds = MagicMock()
         mock_frozen_creds.access_key = "ASIAQWERTYUIOPASDFGH"
@@ -891,9 +891,9 @@ class TestAsyncAuthFlow:
             mock_session.get_credentials.return_value.get_frozen_credentials.return_value = mock_frozen_creds
 
             auth = BedrockSigV4Auth(region="us-east-2", service="bedrock")
-            transport = httpx.MockTransport(capture_request)
+            transport = httpx2.MockTransport(capture_request)
 
-            async with httpx.AsyncClient(auth=auth, transport=transport) as client:
+            async with httpx2.AsyncClient(auth=auth, transport=transport) as client:
                 await client.post(
                     "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1/chat/completions",
                     json={"model": "test"},

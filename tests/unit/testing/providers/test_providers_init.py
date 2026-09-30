@@ -9,7 +9,7 @@
 import types
 from unittest.mock import patch
 
-import httpx
+import httpx2
 import pytest
 from openai import NotFoundError
 
@@ -27,8 +27,8 @@ class TestDetectProvider:
     """Test provider detection from exception module path."""
 
     def test_openai_exception_detected(self):
-        request = httpx.Request("GET", "https://api.openai.com/v1/models")
-        response = httpx.Response(404, request=request)
+        request = httpx2.Request("GET", "https://api.openai.com/v1/models")
+        response = httpx2.Response(404, request=request)
         exc = NotFoundError(message="x", response=response, body=None)
         assert detect_provider(exc) == "openai"
 
