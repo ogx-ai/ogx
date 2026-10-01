@@ -8,7 +8,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-import httpx
+import httpx2
 import pytest
 from pydantic import ValidationError
 
@@ -205,7 +205,7 @@ async def test_file_search_surfaces_unsupported_hybrid_search_error(mock_vector_
             response_file_search_tool=_hybrid_search_file_search_tool(),
         )
 
-    assert excinfo.value.status_code == httpx.codes.BAD_REQUEST
+    assert excinfo.value.status_code == httpx2.codes.BAD_REQUEST
     assert "ranking_options.hybrid_search" in str(excinfo.value)
 
 
@@ -294,7 +294,7 @@ async def test_responses_create_rejects_unsupported_hybrid_search(
         )
 
     http_exc = translate_exception(excinfo.value)
-    assert http_exc.status_code == httpx.codes.BAD_REQUEST
+    assert http_exc.status_code == httpx2.codes.BAD_REQUEST
     assert "ranking_options.hybrid_search" in http_exc.detail
     assert _unsupported_hybrid_search_message() in http_exc.detail
 

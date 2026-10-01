@@ -8,7 +8,7 @@
 
 from unittest.mock import AsyncMock
 
-import httpx
+import httpx2
 import pytest
 
 from ogx.core.exceptions import translate_exception
@@ -60,7 +60,7 @@ async def test_resolve_memory_context_propagates_unsupported_hybrid_search():
             safety_identifier=None,
         )
 
-    assert translate_exception(excinfo.value).status_code == httpx.codes.BAD_REQUEST
+    assert translate_exception(excinfo.value).status_code == httpx2.codes.BAD_REQUEST
     request = vector_io.openai_search_vector_store.await_args.kwargs["request"]
     assert request.search_mode == "hybrid"
     assert request.ranking_options.hybrid_search.model_dump() == {"embedding_weight": 0.3, "text_weight": 0.7}
@@ -97,7 +97,7 @@ async def test_create_response_fails_when_memory_hybrid_search_is_unsupported(mo
         )
 
     http_exc = translate_exception(excinfo.value)
-    assert http_exc.status_code == httpx.codes.BAD_REQUEST
+    assert http_exc.status_code == httpx2.codes.BAD_REQUEST
     assert "ranking_options.hybrid_search" in http_exc.detail
     assert UNSUPPORTED_HYBRID_SEARCH_MESSAGE in http_exc.detail
     # The rejection happens before the model is asked anything.

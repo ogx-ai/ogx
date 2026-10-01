@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import asyncpg
-import httpx
+import httpx2
 import numpy as np
 import pytest
 
@@ -362,7 +362,7 @@ async def test_search_vector_store_hybrid_search_without_hybrid_support(faiss_ve
     with pytest.raises(InvalidParameterError) as excinfo:
         await _search_document_ids(faiss_vec_adapter, vector_store_id, ranking_options=ranking_options)
 
-    assert excinfo.value.status_code == httpx.codes.BAD_REQUEST
+    assert excinfo.value.status_code == httpx2.codes.BAD_REQUEST
     message = str(excinfo.value)
     assert "ranking_options.hybrid_search" in message
     assert vector_store_id in message
