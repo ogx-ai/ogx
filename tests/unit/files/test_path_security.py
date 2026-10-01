@@ -85,7 +85,7 @@ async def conversation_service():
             ),
         )
         register_sqlstore_backends({"sql_sec": storage.backends["sql_sec"]})
-        stack_config = StackConfig(distro_name="test", apis=[], providers={}, storage=storage)
+        stack_config = StackConfig(distro_name="test", providers={}, storage=storage)
         config = ConversationServiceConfig(config=stack_config, policy=[])
         svc = ConversationServiceImpl(config, {})
         await svc.initialize()

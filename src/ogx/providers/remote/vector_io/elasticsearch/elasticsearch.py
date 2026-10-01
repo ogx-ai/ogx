@@ -309,7 +309,7 @@ class ElasticsearchIndex(EmbeddingIndex):
         # Add reranker parameters if provided for RRF (e.g. rank_constant, rank_window_size, filter)
         # see https://www.elastic.co/docs/reference/elasticsearch/rest-apis/retrievers/rrf-retriever
         if reranker_type == "rrf" and reranker_params is not None:
-            allowed_rrf_params = {"rank_constant", "rank_windows_size", "filter"}
+            allowed_rrf_params = {"rank_constant", "rank_window_size", "filter"}
             rrf_params = dict(reranker_params)
             if "impact_factor" in rrf_params:
                 if "rank_constant" not in rrf_params:

@@ -28,6 +28,8 @@ from ogx_api.inference.models import (
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
     OpenAIChatCompletionUsage,
+    OpenAIChatCompletionUsageCompletionTokensDetails,
+    OpenAIChatCompletionUsagePromptTokensDetails,
     OpenAIChoice,
     OpenAIResponseFormatText,
     OpenAISystemMessageParam,
@@ -694,3 +696,65 @@ class TestContextLengthRetryExhaustion:
         assert len(calls[1]) == 1
         assert calls[1][0].content == "second turn"
         assert events[-1].type == "response.completed"
+
+
+# ---------------------------------------------------------------------------
+# _accumulate_usage regression tests
+# See: https://github.com/ogx-ai/ogx/issues/6699
+# ---------------------------------------------------------------------------
+
+
+def _make_usage(
+    prompt_tokens: int,
+    completion_tokens: int,
+    cached_tokens: int | None = None,
+    reasoning_tokens: int | None = None,
+) -> OpenAIChatCompletionUsage:
+    return OpenAIChatCompletionUsage(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens,
+        prompt_tokens_details=OpenAIChatCompletionUsagePromptTokensDetails(cached_tokens=cached_tokens)
+        if cached_tokens is not None
+        else None,
+        completion_tokens_details=OpenAIChatCompletionUsageCompletionTokensDetails(reasoning_tokens=reasoning_tokens)
+        if reasoning_tokens is not None
+        else None,
+    )
+
+
+class TestAccumulateUsage:
+    """cached_tokens and reasoning_tokens must sum across inference calls like the other
+    usage counters, not get overwritten by the latest call's value."""
+
+    def test_cached_and_reasoning_tokens_sum_across_calls(self):
+        orch = _build_orchestrator({})
+
+        orch._accumulate_usage(_make_usage(100, 20, cached_tokens=80, reasoning_tokens=10))
+        orch._accumulate_usage(_make_usage(150, 30, cached_tokens=120, reasoning_tokens=15))
+
+        usage = orch.accumulated_usage
+        assert usage.input_tokens == 250
+        assert usage.output_tokens == 50
+        assert usage.input_tokens_details.cached_tokens == 200
+        assert usage.output_tokens_details.reasoning_tokens == 25
+
+    def test_a_call_with_no_details_contributes_zero_not_a_reset(self):
+        orch = _build_orchestrator({})
+
+        orch._accumulate_usage(_make_usage(100, 20, cached_tokens=80, reasoning_tokens=10))
+        orch._accumulate_usage(_make_usage(50, 10))  # no prompt/completion_tokens_details at all
+
+        usage = orch.accumulated_usage
+        assert usage.input_tokens_details.cached_tokens == 80
+        assert usage.output_tokens_details.reasoning_tokens == 10
+
+    def test_first_call_with_no_details_starts_at_zero(self):
+        orch = _build_orchestrator({})
+
+        orch._accumulate_usage(_make_usage(50, 10))
+        orch._accumulate_usage(_make_usage(100, 20, cached_tokens=80, reasoning_tokens=10))
+
+        usage = orch.accumulated_usage
+        assert usage.input_tokens_details.cached_tokens == 80
+        assert usage.output_tokens_details.reasoning_tokens == 10

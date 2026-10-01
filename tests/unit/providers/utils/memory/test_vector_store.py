@@ -96,7 +96,7 @@ async def test_memory_tool_error_handling():
     mock_file2.id = "file_good2"
     memory_tool.files_api.openai_upload_file.side_effect = [mock_file1, mock_file2]
 
-    with patch("httpx.AsyncClient") as mock_client:
+    with patch("httpx2.AsyncClient") as mock_client:
         mock_instance = AsyncMock()
         mock_instance.get.side_effect = Exception("Bad URL")
         mock_client.return_value.__aenter__.return_value = mock_instance

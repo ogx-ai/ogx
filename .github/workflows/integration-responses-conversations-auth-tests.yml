@@ -91,9 +91,6 @@ jobs:
           OGX_TEST_INFERENCE_MODE: "replay"
           # Pin recording dir to workspace so the server finds tests/integration/*/recordings/
           OGX_TEST_RECORDING_DIR: ${{ github.workspace }}/tests/integration/common
-          # Tell the server to sync test context from client headers so recordings
-          # are looked up in the correct per-test-directory (e.g. responses/recordings/)
-          OGX_TEST_STACK_CONFIG_TYPE: "server"
         if: ${{ matrix.auth-provider == 'oauth2_token' }}
         run: |
           run_dir=$(mktemp -d)
@@ -123,8 +120,6 @@ jobs:
                   api_key: \${env.OPENAI_API_KEY}
               - provider_id: sentence-transformers
                 provider_type: inline::sentence-transformers
-                config:
-                  trust_remote_code: true
             vector_io:
               - provider_id: faiss
                 provider_type: inline::faiss

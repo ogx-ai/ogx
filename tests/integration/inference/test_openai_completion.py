@@ -11,22 +11,8 @@ import pytest
 from openai import OpenAI
 from pydantic import BaseModel
 
-from ..helpers import assert_text_contains
+from ..helpers import assert_text_contains, provider_from_model
 from ..test_cases.test_case import TestCase
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id):
@@ -46,7 +32,6 @@ def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id)
         # {"error":{"message":"Unknown request URL: GET /openai/v1/completions. Please check the URL for typos,
         # or see the docs at https://console.groq.com/docs/","type":"invalid_request_error","code":"unknown_url"}}
         "remote::groq",
-        "remote::llama-cpp-server",
         "remote::oci",
         "remote::gemini",  # https://generativelanguage.googleapis.com/v1beta/openai/completions -> 404
         "remote::anthropic",  # at least claude-3-{5,7}-{haiku,sonnet}-* / claude-{sonnet,opus}-4-* are not supported
@@ -72,6 +57,10 @@ def skip_if_doesnt_support_completions_logprobs(client_with_models, model_id):
         # absent from a top-5 of {2,0,5,6,1}). Revisit/remove this skip if Fireworks changes to
         # OpenAI-compatible top_logprobs semantics.
         "remote::fireworks",
+        # llama.cpp's /v1/completions only honors the legacy n_probs param and its own
+        # boolean logprobs + top_logprobs, returning a non-OAI {"content": [...]} shape.
+        # Integer logprobs=N (what these tests send) isn't honored at all.
+        "remote::llama-cpp-server",
     ):
         pytest.skip(f"Model {model_id} hosted by {provider_type} doesn't support /v1/completions logprobs.")
 
@@ -249,6 +238,16 @@ def test_openai_completion_streaming(ogx_client, client_with_models, text_model_
     assert len(content_str) > 10
 
 
+def skip_if_doesnt_support_completions_stream_usage(client_with_models, model_id):
+    provider_type = provider_from_model(client_with_models, model_id).provider_type
+    if provider_type in (
+        # llama.cpp's /v1/completions sends usage on the final streaming chunk alongside a
+        # (non-empty) choices entry, instead of OpenAI's trailing empty-choices usage chunk.
+        "remote::llama-cpp-server",
+    ):
+        pytest.skip(f"Model {model_id} hosted by {provider_type} doesn't support /v1/completions stream usage.")
+
+
 @pytest.mark.parametrize(
     "test_case",
     [
@@ -260,6 +259,7 @@ def test_openai_completion_streaming_with_usage(ogx_client, client_with_models, 
     empty choices list and a populated usage object.
     """
     skip_if_model_doesnt_support_openai_completion(client_with_models, text_model_id)
+    skip_if_doesnt_support_completions_stream_usage(client_with_models, text_model_id)
     tc = TestCase(test_case)
 
     # ollama needs more verbose prompting for some reason here...

@@ -12,15 +12,14 @@ import pytest
 
 from ogx.testing.api_recorder import patch_httpx_for_test_id
 from tests.integration.fixtures.common import instantiate_ogx_client
+from tests.integration.stack_config import is_server_stack_config
 from tests.integration.telemetry.collectors import InMemoryTelemetryManager, OtlpHttpTestCollector
 
 
 # TODO: Fix this to work with Automatic Instrumentation
 @pytest.fixture(scope="session")
-def telemetry_test_collector():
-    stack_mode = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
-
-    if stack_mode == "server":
+def telemetry_test_collector(request):
+    if is_server_stack_config(request.config.getoption("--stack-config", default=None)):
         # In server mode, the collector must be started and the server is already running.
         # The integration test script (scripts/integration-tests.sh) should have set
         # OGX_TEST_COLLECTOR_PORT and OTEL_EXPORTER_OTLP_ENDPOINT before starting the server.

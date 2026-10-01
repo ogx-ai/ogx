@@ -16,7 +16,7 @@ MCP_TOOLGROUP_ID = "mcp::localmcp"
 
 def default_tools():
     """Default tools for backward compatibility."""
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
     async def greet_everyone(url: str, ctx: Context) -> str:
         return "Hello, world!"
@@ -42,7 +42,7 @@ def default_tools():
 
 def dependency_tools():
     """Tools with natural dependencies for multi-turn testing."""
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
     async def get_user_id(username: str, ctx: Context) -> str:
         """
@@ -165,15 +165,12 @@ def make_mcp_server(
     import time
 
     import uvicorn
-    from mcp.server.fastmcp import FastMCP
-    from mcp.server.sse import SseServerTransport
-    from starlette.applications import Starlette
+    from mcp.server.mcpserver import MCPServer
     from starlette.responses import Response
-    from starlette.routing import Mount, Route
 
     from ogx.log import get_logger
 
-    server = FastMCP("FastMCP Test Server", log_level="WARNING")
+    server = MCPServer("FastMCP Test Server", log_level="WARNING")
 
     # Silence verbose MCP server logs
     import logging  # allow-direct-logging
@@ -186,33 +183,24 @@ def make_mcp_server(
     for tool_func in tools.values():
         server.tool()(tool_func)
 
-    sse = SseServerTransport("/messages/")
+    # host="0.0.0.0" avoids the auto-enabled DNS rebinding protection, which would
+    # reject non-localhost hosts (e.g. host.docker.internal in docker test mode)
+    app = server.sse_app(host="0.0.0.0")
 
-    async def handle_sse(request):
-        from starlette.exceptions import HTTPException
+    if required_auth_token:
+        from starlette.middleware.base import BaseHTTPMiddleware
 
-        auth_header: str | None = request.headers.get("Authorization")
-        auth_token = None
-        if auth_header and auth_header.startswith("Bearer "):
-            auth_token = auth_header.split(" ")[1]
+        async def require_bearer_token(request, call_next):
+            if request.url.path == "/sse":
+                auth_header = request.headers.get("Authorization")
+                auth_token = None
+                if auth_header and auth_header.startswith("Bearer "):
+                    auth_token = auth_header.split(" ")[1]
+                if auth_token != required_auth_token:
+                    return Response(status_code=401, content="Unauthorized")
+            return await call_next(request)
 
-        if required_auth_token and auth_token != required_auth_token:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-
-        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-            await server._mcp_server.run(
-                streams[0],
-                streams[1],
-                server._mcp_server.create_initialization_options(),
-            )
-            return Response()
-
-    app = Starlette(
-        routes=[
-            Route("/sse", endpoint=handle_sse),
-            Mount("/messages/", app=sse.handle_post_message),
-        ],
-    )
+        app.add_middleware(BaseHTTPMiddleware, dispatch=require_bearer_token)
 
     def get_open_port():
         import socket

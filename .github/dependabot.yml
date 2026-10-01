@@ -15,6 +15,12 @@ updates:
     schedule:
       interval: "weekly"
       day: "saturday"
+    # Batch all weekly updates into a single PR so the merge queue only has
+    # one python-deps PR to chew through instead of one per package.
+    groups:
+      python-deps:
+        patterns:
+          - "*"
     labels:
       - type/dependencies
       - python
@@ -26,19 +32,33 @@ updates:
     schedule:
       interval: "weekly"
       day: "saturday"
+    groups:
+      api-deps:
+        patterns:
+          - "*"
     labels:
       - type/dependencies
       - python
     commit-message:
       prefix: chore(api-deps)
 
+  # Covers every package.json in the repo. Batch all weekly updates into a
+  # single PR per directory so the merge queue gets at most three js-deps
+  # PRs per week instead of one per package.
   - package-ecosystem: npm
-    directory: "/ogx_ui"
+    directories:
+      - "/docs"
+      - "/src/ogx_ui"
+      - "/tests/integration/client-typescript"
     schedule:
       interval: "weekly"
       day: "saturday"
+    groups:
+      js-deps:
+        patterns:
+          - "*"
     labels:
       - type/dependencies
       - javascript
     commit-message:
-      prefix: chore(ui-deps)
+      prefix: chore(js-deps)

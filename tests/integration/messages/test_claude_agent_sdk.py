@@ -21,8 +21,12 @@ real CLI, which bakes the working directory, date, and platform into every
 request body, so the request-body hashes the recording system keys on are not
 reproducible across runs or machines; recording/replay is therefore not viable.
 
+The SDK is pointed at the installed `claude` binary (`cli_path`). Without that it
+would prefer the CLI bundled in its own package, and CI could not choose which CLI
+release this test exercises.
+
 The test self-skips unless both the `claude-agent-sdk` package and the `claude`
-binary are available, since the SDK requires the CLI at runtime.
+binary are available.
 """
 
 import asyncio
@@ -46,6 +50,7 @@ def _run_query(prompt: str, base_url: str, model: str, cwd: str) -> list:
 
     options = ClaudeAgentOptions(
         model=model,
+        cli_path=CLAUDE_CLI,
         # Run from an isolated directory so the spawned CLI does not pick up
         # repo-local context, which matters while permissions are bypassed.
         cwd=cwd,

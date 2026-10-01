@@ -36,13 +36,15 @@ def interactions_base_url(ogx_client):
 
 @pytest.fixture
 def genai_client(interactions_base_url):
-    """Provide a Google GenAI client configured to point at the OGX server."""
+    """Provide a Google GenAI client configured to point at the OGX server.
+
+    interactions_base_url above already skips outside server mode, so this always runs
+    against a real server and the test ID always needs to cross via the header.
+    """
     headers = {}
-    stack_config_type = os.environ.get("OGX_TEST_STACK_CONFIG_TYPE", "library_client")
     test_id = get_test_context()
-    if stack_config_type == "server" and test_id:
-        provider_data = {"__test_id": test_id}
-        headers["X-OGX-Provider-Data"] = json.dumps(provider_data)
+    if test_id:
+        headers["X-OGX-Provider-Data"] = json.dumps({"__test_id": test_id})
 
     client = genai.Client(
         api_key="no-key-required",

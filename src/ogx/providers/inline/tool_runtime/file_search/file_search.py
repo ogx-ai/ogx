@@ -10,7 +10,7 @@ import io
 import mimetypes
 from typing import Any
 
-import httpx
+import httpx2
 from fastapi import UploadFile
 from pydantic import TypeAdapter
 
@@ -69,7 +69,7 @@ async def raw_data_from_doc(doc: RAGDocument) -> tuple[bytes, str]:
             return file_data, mime_type
         else:
             validate_url_not_private(uri)
-            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            async with httpx2.AsyncClient(timeout=httpx2.Timeout(30.0, connect=10.0)) as client:
                 r = await client.get(uri)
                 r.raise_for_status()
                 mime_type = r.headers.get("content-type", "application/octet-stream")
