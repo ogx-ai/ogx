@@ -586,6 +586,83 @@ async def test_list_items_after_cursor_from_other_conversation_raises_error(serv
         await service.list_items(ListItemsRequest(conversation_id=conv2.id, after=cursor_from_conv1))
 
 
+async def test_add_items_rejects_item_id_from_other_conversation(service):
+    """An item ID that already belongs to another conversation must not be moved, and nothing in the batch is written."""
+    conv1 = await service.create_conversation(CreateConversationRequest())
+    conv2 = await service.create_conversation(CreateConversationRequest())
+    shared_id = "msg_" + "d" * 48
+
+    await service.add_items(
+        conv1.id,
+        AddItemsRequest(
+            items=[
+                OpenAIResponseMessage(
+                    type="message",
+                    role="user",
+                    content=[OpenAIResponseInputMessageContentText(type="input_text", text="Hello from conv1")],
+                    id=shared_id,
+                    status="completed",
+                )
+            ]
+        ),
+    )
+
+    with pytest.raises(InvalidParameterError, match=f"already belongs to conversation '{conv1.id}'"):
+        await service.add_items(
+            conv2.id,
+            AddItemsRequest(
+                items=[
+                    OpenAIResponseMessage(
+                        type="message",
+                        role="user",
+                        content=[OpenAIResponseInputMessageContentText(type="input_text", text="New in conv2")],
+                        status="completed",
+                    ),
+                    OpenAIResponseMessage(
+                        type="message",
+                        role="user",
+                        content=[OpenAIResponseInputMessageContentText(type="input_text", text="Stolen from conv1")],
+                        id=shared_id,
+                        status="completed",
+                    ),
+                ]
+            ),
+        )
+
+    conv1_items = await service.list_items(ListItemsRequest(conversation_id=conv1.id))
+    assert [item.id for item in conv1_items.data] == [shared_id]
+    assert conv1_items.data[0].content[0].text == "Hello from conv1"
+
+    conv2_items = await service.list_items(ListItemsRequest(conversation_id=conv2.id))
+    assert conv2_items.data == []
+
+
+async def test_add_items_same_id_in_same_conversation_updates_in_place(service):
+    """Re-adding an item ID to its own conversation stays an in-place update."""
+    conversation = await service.create_conversation(CreateConversationRequest())
+    item_id = "msg_" + "e" * 48
+
+    for text in ("first", "second"):
+        await service.add_items(
+            conversation.id,
+            AddItemsRequest(
+                items=[
+                    OpenAIResponseMessage(
+                        type="message",
+                        role="user",
+                        content=[OpenAIResponseInputMessageContentText(type="input_text", text=text)],
+                        id=item_id,
+                        status="completed",
+                    )
+                ]
+            ),
+        )
+
+    items = await service.list_items(ListItemsRequest(conversation_id=conversation.id))
+    assert [item.id for item in items.data] == [item_id]
+    assert items.data[0].content[0].text == "second"
+
+
 async def test_create_conversation_with_items_supports_pagination(service):
     """Items created via create_conversation should have unique timestamps for correct pagination."""
     items = [
