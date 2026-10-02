@@ -43,6 +43,7 @@ def redact_sensitive_fields(data: dict[str, Any]) -> dict[str, Any]:
         "api_token",
         "api-token",
         "authorization",
+        "connection_string",
         "credential",
         "moderation_headers",
         "password",
