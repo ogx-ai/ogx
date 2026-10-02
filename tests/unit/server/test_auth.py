@@ -229,21 +229,21 @@ def test_invalid_auth_header_format(http_client):
     assert "Invalid Authorization header format" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_success)
+@patch("httpx2.AsyncClient.post", new=mock_post_success)
 def test_valid_http_authentication(http_client, valid_api_key):
     response = http_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_failure)
+@patch("httpx2.AsyncClient.post", new=mock_post_failure)
 def test_invalid_http_authentication(http_client, invalid_api_key, suppress_auth_errors):
     response = http_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Authentication failed" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_exception)
+@patch("httpx2.AsyncClient.post", new=mock_post_exception)
 def test_http_auth_service_error(http_client, valid_api_key, suppress_auth_errors):
     response = http_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 401
@@ -257,21 +257,21 @@ def test_websocket_missing_auth_header_rejected(ws_client, suppress_auth_errors)
             websocket.receive_text()
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_failure)
+@patch("httpx2.AsyncClient.post", new=mock_post_failure)
 def test_websocket_invalid_authentication_rejected(ws_client, invalid_api_key, suppress_auth_errors):
     with pytest.raises(WebSocketDisconnect):
         with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {invalid_api_key}"}) as websocket:
             websocket.receive_text()
 
 
-@patch("httpx.AsyncClient.post", new=mock_post_success)
+@patch("httpx2.AsyncClient.post", new=mock_post_success)
 def test_websocket_valid_authentication_accepted(ws_client, valid_api_key):
     with ws_client.websocket_connect("/ws", headers={"Authorization": f"Bearer {valid_api_key}"}) as websocket:
         assert websocket.receive_text() == "authenticated"
 
 
 def test_http_auth_request_payload(http_client, valid_api_key, mock_auth_endpoint, suppress_auth_errors):
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch("httpx2.AsyncClient.post") as mock_post:
         mock_response = MockResponse(200, {"message": "Authentication successful"})
         mock_post.return_value = mock_response
 
@@ -307,7 +307,7 @@ async def test_http_middleware_with_access_attributes(mock_http_middleware, mock
 
     mock_scope["app"] = mock_app
 
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch("httpx2.AsyncClient.post") as mock_post:
         mock_response = MockResponse(
             200,
             {
@@ -844,35 +844,35 @@ async def mock_introspection_failed(*args, **kwargs):
     )
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_active)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_active)
 def test_valid_introspection_authentication(introspection_client, valid_api_key):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {valid_api_key}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_inactive)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_inactive)
 def test_inactive_introspection_authentication(introspection_client, invalid_api_key, suppress_auth_errors):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Token not active" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_invalid)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_invalid)
 def test_invalid_introspection_authentication(introspection_client, invalid_api_key, suppress_auth_errors):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Not JSON" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_failed)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_failed)
 def test_failed_introspection_authentication(introspection_client, invalid_api_key, suppress_auth_errors):
     response = introspection_client.get("/test", headers={"Authorization": f"Bearer {invalid_api_key}"})
     assert response.status_code == 401
     assert "Token introspection failed: 500" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_introspection_active)
+@patch("httpx2.AsyncClient.post", new=mock_introspection_active)
 def test_valid_introspection_with_custom_mapping_authentication(
     introspection_client_with_custom_mapping, valid_api_key
 ):
@@ -959,21 +959,21 @@ async def mock_kubernetes_selfsubjectreview_http_error(*args, **kwargs):
     return MockResponse(500, {"message": "Internal Server Error"})
 
 
-@patch("httpx.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_success)
+@patch("httpx2.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_success)
 def test_valid_kubernetes_auth_authentication(kubernetes_auth_client, valid_token):
     response = kubernetes_auth_client.get("/test", headers={"Authorization": f"Bearer {valid_token}"})
     assert response.status_code == 200
     assert response.json() == {"message": "Authentication successful"}
 
 
-@patch("httpx.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_failure)
+@patch("httpx2.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_failure)
 def test_invalid_kubernetes_auth_authentication(kubernetes_auth_client, invalid_token, suppress_auth_errors):
     response = kubernetes_auth_client.get("/test", headers={"Authorization": f"Bearer {invalid_token}"})
     assert response.status_code == 401
     assert "Invalid token" in response.json()["error"]["message"]
 
 
-@patch("httpx.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_http_error)
+@patch("httpx2.AsyncClient.post", new=mock_kubernetes_selfsubjectreview_http_error)
 def test_kubernetes_auth_http_error(kubernetes_auth_client, valid_token, suppress_auth_errors):
     response = kubernetes_auth_client.get("/test", headers={"Authorization": f"Bearer {valid_token}"})
     assert response.status_code == 401
@@ -983,7 +983,7 @@ def test_kubernetes_auth_http_error(kubernetes_auth_client, valid_token, suppres
 def test_kubernetes_auth_request_payload(
     kubernetes_auth_client, valid_token, mock_kubernetes_api_server, suppress_auth_errors
 ):
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch("httpx2.AsyncClient.post") as mock_post:
         mock_response = MockResponse(
             200,
             {

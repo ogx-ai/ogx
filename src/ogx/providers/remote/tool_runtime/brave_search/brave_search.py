@@ -6,7 +6,7 @@
 
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
 from ogx_api import (
@@ -104,7 +104,7 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
             result_limit = self._CONTEXT_SIZE_TO_COUNT[search_context_size]
             payload["count"] = result_limit
 
-        async with httpx.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
+        async with httpx2.AsyncClient(timeout=self.config.to_httpx_timeout()) as client:
             response = await client.get(
                 url=url,
                 params=payload,

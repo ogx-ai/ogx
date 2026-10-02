@@ -220,6 +220,37 @@ async def test_sqlstore_pagination_basic():
         assert result3.has_more is False
 
 
+async def test_sqlstore_pagination_same_order_value():
+    """Rows that share the cursor row's order value must not be skipped (keyset tiebreaker)."""
+    with TemporaryDirectory() as tmp_dir:
+        db_path = tmp_dir + "/test.db"
+        store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=db_path))
+
+        await store.create_table(
+            "test_records",
+            {
+                "id": ColumnType.STRING,
+                "created_at": ColumnType.INTEGER,
+                "name": ColumnType.STRING,
+            },
+        )
+
+        # All rows share the same created_at, so pagination must fall back to the
+        # unique id as a tiebreaker instead of dropping the tied rows.
+        for record_id in ["a", "b", "c", "d", "e"]:
+            await store.insert("test_records", {"id": record_id, "created_at": 1000, "name": record_id})
+
+        # The page after id "b" is every same-second row whose id sorts after "b".
+        result = await store.fetch_all(
+            table="test_records",
+            order_by=[("created_at", "desc")],
+            cursor=("id", "b"),
+            limit=10,
+        )
+
+        assert [row["id"] for row in result.data] == ["c", "d", "e"]
+
+
 async def test_sqlstore_pagination_with_filter():
     """Test pagination with WHERE conditions."""
     with TemporaryDirectory() as tmp_dir:

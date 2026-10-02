@@ -97,7 +97,7 @@ class ProviderResults:
 # ---------------------------------------------------------------------------
 
 # Self-hosted providers where the endpoint is not meaningful (localhost / user-managed)
-_SELF_HOSTED_PROVIDERS = {"vllm", "ollama", "tgi", "llama-cpp-server"}
+_SELF_HOSTED_PROVIDERS = {"vllm", "ollama", "tgi", "llama-cpp-server", "text-embeddings-inference"}
 
 _PROVIDER_RE = re.compile(r"txt=([a-zA-Z_-]+)/")
 _VIS_PROVIDER_RE = re.compile(r"vis=([a-zA-Z_-]+)/")

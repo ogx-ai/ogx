@@ -668,13 +668,13 @@ async def run_guardrails(
     if not messages or not moderation_endpoint:
         return None
 
-    import httpx
+    import httpx2
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+    async with httpx2.AsyncClient(timeout=httpx2.Timeout(30.0)) as client:
         try:
             resp = await client.post(moderation_endpoint, json={"input": messages}, headers=headers)
             resp.raise_for_status()
-        except (httpx.HTTPError, httpx.InvalidURL):
+        except (httpx2.HTTPError, httpx2.InvalidURL):
             logger.warning("Failed to call moderation endpoint", endpoint=moderation_endpoint)
             return "Failed to validate content: moderation service unavailable"
 

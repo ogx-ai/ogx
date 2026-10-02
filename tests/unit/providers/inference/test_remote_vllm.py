@@ -10,6 +10,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -18,6 +19,7 @@ from ogx.core.routers.inference import InferenceRouter
 from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
 from ogx.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
+from ogx.testing.api_recorder import APIRecordingMode, api_recording
 from ogx_api import (
     HealthStatus,
     Model,
@@ -31,6 +33,7 @@ from ogx_api import (
     OpenAICompletionRequestWithExtraBody,
     OpenAIDeveloperMessageParam,
 )
+from ogx_api.inference import RerankRequest
 
 # These are unit test for the remote vllm provider
 # implementation. This should only contain tests which are specific to
@@ -59,7 +62,7 @@ async def test_health_status_success(vllm_inference_adapter):
     This test verifies that the health method returns a HealthResponse with status OK
     when the /health endpoint responds successfully.
     """
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         # Create mock response
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -88,7 +91,7 @@ async def test_health_status_failure(vllm_inference_adapter):
     This test verifies that the health method returns a HealthResponse with status ERROR
     and an appropriate error message when the connection to the vLLM server fails.
     """
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         # Create mock client instance that raises an exception
         mock_client_instance = MagicMock()
         mock_client_instance.get.side_effect = Exception("Connection failed")
@@ -109,7 +112,7 @@ async def test_health_status_no_static_api_key(vllm_inference_adapter):
     This test verifies that the health method returns a HealthResponse with status OK
     when the /health endpoint responds successfully, regardless of API token configuration.
     """
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         # Create mock response
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -442,7 +445,7 @@ class TestConstructModelFromIdentifier:
         assert kwargs["verify"] is False
 
     async def test_health_passes_kwargs_to_httpx(self):
-        """health() should pass _build_httpx_client_kwargs() to httpx.AsyncClient."""
+        """health() should pass _build_httpx_client_kwargs() to httpx2.AsyncClient."""
         config = VLLMInferenceAdapterConfig(
             base_url="https://vllm.example.com/v1",
             network={"tls": {"verify": False}},
@@ -450,7 +453,7 @@ class TestConstructModelFromIdentifier:
         adapter = VLLMInferenceAdapter(config=config)
         await adapter.initialize()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status.return_value = None
             mock_client_instance = MagicMock()
@@ -489,7 +492,7 @@ class TestRerankTLSAndAuth:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -518,7 +521,7 @@ class TestRerankTLSAndAuth:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -544,7 +547,7 @@ class TestRerankTLSAndAuth:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -576,7 +579,7 @@ class TestRerankTLSAndAuth:
             return_value=SimpleNamespace(vllm_api_token=SecretStr("provider-data-token"))
         )
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -619,7 +622,7 @@ class TestBaseUrlVersionStripping:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status.return_value = None
             mock_response.json.return_value = {
@@ -655,7 +658,7 @@ class TestBaseUrlVersionStripping:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status.return_value = None
             mock_response.json.return_value = {"input_tokens": 10}
@@ -816,3 +819,51 @@ async def test_reasoning_wrapper_closes_inner_stream_when_abandoned(vllm_inferen
         await result.aclose()
 
     assert closed == [True]
+
+
+class TestRerankRecordReplay:
+    """rerank() posts with a raw ``httpx2.AsyncClient``, so it only takes part in the
+    record/replay system if the recorder's httpx2 interceptors cover ``/rerank`` (#6626).
+    Without that, replay CI -- which has no vLLM server -- cannot exercise this path at all.
+    """
+
+    BODY = {"results": [{"index": 0, "relevance_score": 0.25}, {"index": 1, "relevance_score": 0.75}]}
+
+    @staticmethod
+    async def _adapter() -> VLLMInferenceAdapter:
+        adapter = VLLMInferenceAdapter(config=VLLMInferenceAdapterConfig(base_url="http://vllm.test:8000/v1"))
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+        return adapter
+
+    async def test_rerank_records_then_replays_with_no_server(self, tmp_path):
+        request = RerankRequest(model="rerank-model", query="why", items=["doc-a", "doc-b"])
+        adapter = await self._adapter()
+
+        # -- Record against a stand-in backend --
+        served: list[httpx2.Request] = []
+
+        def serve(http_request: httpx2.Request) -> httpx2.Response:
+            served.append(http_request)
+            return httpx2.Response(200, json=self.BODY)
+
+        with patch.object(
+            adapter, "_build_httpx_client_kwargs", return_value={"transport": httpx2.MockTransport(serve)}
+        ):
+            with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(tmp_path)):
+                recorded = await adapter.rerank(request)
+
+        assert [http_request.url.path for http_request in served] == ["/rerank"]
+        assert [(d.index, d.relevance_score) for d in recorded.data] == [(1, 0.75), (0, 0.25)]
+
+        # -- Replay with nothing listening: the recorder must answer from disk --
+        def refuse(http_request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("no vLLM server in replay CI", request=http_request)
+
+        with patch.object(
+            adapter, "_build_httpx_client_kwargs", return_value={"transport": httpx2.MockTransport(refuse)}
+        ):
+            with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(tmp_path)):
+                replayed = await adapter.rerank(request)
+
+        assert [(d.index, d.relevance_score) for d in replayed.data] == [(1, 0.75), (0, 0.25)]

@@ -53,6 +53,13 @@ tests/
   `Block f-string logging` enforces this.
 - The pre-commit hook `Ensure 'ogx.log' usage for logging` enforces that all
   logging uses the project's logger, not the standard library directly.
+- Use `httpx2` for all HTTP client code. The pre-commit hook
+  `Block direct httpx imports (use httpx2)` rejects `import httpx` /
+  `from httpx import` unless the line is marked `# allow-direct-httpx`.
+  The marked exceptions are deliberate boundaries: the google-genai
+  client option (vertexai/utils.py), the mcp 1.x SDK (utils/tools/mcp.py),
+  the generated client-SDK boundary (library_client.py, api_recorder.py),
+  and the dual exception mapping (core/exceptions/mapping.py).
 
 ## Git Conventions
 

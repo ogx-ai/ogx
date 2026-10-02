@@ -3,7 +3,9 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
+import hashlib
 import json
+import uuid
 from typing import Any
 
 import weaviate
@@ -53,6 +55,13 @@ OPENAI_VECTOR_STORES_FILES_PREFIX = f"openai_vector_stores_files:weaviate:{VERSI
 OPENAI_VECTOR_STORES_FILES_CONTENTS_PREFIX = f"openai_vector_stores_files_contents:weaviate:{VERSION}::"
 
 
+def _chunk_uuid(chunk_id: str) -> str:
+    # Derive a UUID from the SHA-256 of chunk_id (same pattern as the Qdrant
+    # provider). SHA-256 is FIPS-compliant; uuid5 is not allowed in src/.
+    sha256_hash = hashlib.sha256(chunk_id.encode()).hexdigest()
+    return str(uuid.UUID(sha256_hash[:32]))
+
+
 class WeaviateIndex(EmbeddingIndex):
     """Embedding index backed by a Weaviate collection."""
 
@@ -68,6 +77,9 @@ class WeaviateIndex(EmbeddingIndex):
         if not chunks:
             return
 
+        # Derive the Weaviate object UUID from chunk_id so that re-inserting a chunk
+        # replaces the existing object (upsert) instead of creating a duplicate.
+        # Weaviate batch imports overwrite objects that share the same UUID.
         data_objects = []
         for chunk in chunks:
             data_objects.append(
@@ -77,6 +89,7 @@ class WeaviateIndex(EmbeddingIndex):
                         "chunk_content": chunk.model_dump_json(),
                     },
                     vector=chunk.embedding,  # Already a list[float]
+                    uuid=_chunk_uuid(chunk.chunk_id),
                 )
             )
 
@@ -291,6 +304,9 @@ class WeaviateIndex(EmbeddingIndex):
 
 class WeaviateVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """VectorIO adapter that uses Weaviate for similarity search and vector storage."""
+
+    # WeaviateIndex.query_hybrid hardcodes alpha=0.5, so Weaviate always weights vector and keyword equally.
+    supports_weighted_hybrid_search = False
 
     def __init__(
         self,

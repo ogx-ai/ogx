@@ -112,6 +112,10 @@ providers:
     provider_type: remote::llama-cpp-server
     config:
       base_url: ${env.LLAMA_CPP_SERVER_URL:=http://localhost:8080/v1}
+  - provider_id: ${env.TEI_URL:+text-embeddings-inference}
+    provider_type: remote::text-embeddings-inference
+    config:
+      base_url: ${env.TEI_URL:=http://localhost:8080/v1}
   vector_io:
   - provider_id: faiss
     provider_type: inline::faiss
@@ -237,6 +241,11 @@ providers:
         namespace: skills
         backend: kv_default
   tool_runtime:
+  - provider_id: exa-search
+    provider_type: remote::exa-search
+    config:
+      api_key: ${env.EXA_API_KEY:=}
+      max_results: 3
   - provider_id: brave-search
     provider_type: remote::brave-search
     config:
@@ -253,6 +262,11 @@ providers:
       api_key: ${env.NIMBLE_API_KEY:=}
       max_results: 3
       search_depth: lite
+  - provider_id: serply-search
+    provider_type: remote::serply-search
+    config:
+      api_key: ${env.SERPLY_API_KEY:=}
+      max_results: 3
   - provider_id: file-search
     provider_type: inline::file-search
   - provider_id: model-context-protocol

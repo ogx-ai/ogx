@@ -9,14 +9,20 @@ inputs:
     description: 'Setup name (ollama, ollama-vision, ollama-reasoning, etc.)'
     required: false
     default: 'ollama'
+  ollama-version:
+    description: 'Ollama server release to run (Docker Hub tag, without the leading v). Tracked weekly by check-provider-versions.yml.'
+    required: false
+    default: '0.34.2'
 runs:
   using: "composite"
   steps:
     - name: Start Ollama
       shell: bash
+      env:
+        OLLAMA_VERSION: ${{ inputs.ollama-version }}
       run: |
-        echo "Starting Ollama server..."
-        docker run -d --name ollama -p 11434:11434 ollama/ollama
+        echo "Starting Ollama server $OLLAMA_VERSION..."
+        docker run -d --name ollama -p 11434:11434 "ollama/ollama:${OLLAMA_VERSION}"
         echo "Verifying Ollama status..."
         timeout 30 bash -c 'while ! curl -s -L http://127.0.0.1:11434; do sleep 1 && echo "."; done'
         echo "Ollama is ready"

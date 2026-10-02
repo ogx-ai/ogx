@@ -115,11 +115,14 @@ def openai_client(base_url, api_key, provider):
         client = OGXAsLibraryClient(config, skip_logger_removal=True)
         return client
 
+    from ogx.testing.api_recorder import build_test_id_http_client
+
     client = OpenAI(
         base_url=base_url,
         api_key=api_key,
         max_retries=0,
         timeout=60.0,
+        http_client=build_test_id_http_client(),
     )
     yield client
     # Cleanup: close HTTP connections

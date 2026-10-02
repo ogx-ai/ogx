@@ -18,7 +18,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-import httpx
+import httpx2
 
 from ogx.log import get_logger
 from ogx.providers.utils.inference.stream_utils import close_async_stream
@@ -231,7 +231,7 @@ def convert_tool_choice_to_openai(tool_choice: Any) -> Any:
 
 def anthropic_request_to_openai(request: AnthropicCreateMessageRequest) -> OpenAIChatCompletionRequestWithExtraBody:
     """Convert an Anthropic CreateMessage request to OpenAI chat completion params."""
-    if request.thinking and request.thinking.type == "enabled":
+    if request.thinking and request.thinking.type in ("enabled", "adaptive"):
         raise ValueError(
             "Failed to process thinking request: extended thinking requires a native "
             "Anthropic-compatible provider; translation mode does not support it"
@@ -520,7 +520,7 @@ async def passthrough_anthropic_stream(
 ) -> AsyncIterator[AnthropicStreamEvent]:
     """Yield SSE events from any Anthropic-compatible streaming provider.
 
-    Creates an ``httpx.AsyncClient`` internally and manages the request/response
+    Creates an ``httpx2.AsyncClient`` internally and manages the request/response
     lifecycle.  The caller is responsible for providing correct ``url``,
     ``req_body``, and ``headers`` (including authentication).
 
@@ -533,13 +533,14 @@ async def passthrough_anthropic_stream(
     headers:
         HTTP request headers (content-type, anthropic-version, x-api-key, etc.).
     httpx_client_kwargs:
-        Extra keyword arguments forwarded to ``httpx.AsyncClient`` constructor.
+        Extra keyword arguments forwarded to ``httpx2.AsyncClient`` constructor.
         Used by providers like vLLM to inject TLS / proxy / network config.
     timeout:
-        Default timeout for the client (seconds).
+        Default timeout for the client (seconds). A ``timeout`` in
+        ``httpx_client_kwargs`` (i.e. ``network.timeout``) takes precedence.
     """
-    client_kwargs = httpx_client_kwargs or {}
-    async with httpx.AsyncClient(timeout=timeout, **client_kwargs) as client:
+    client_kwargs = {"timeout": timeout, **(httpx_client_kwargs or {})}
+    async with httpx2.AsyncClient(**client_kwargs) as client:
         async with client.stream("POST", url, json=req_body, headers=headers) as resp:
             resp.raise_for_status()
             event_type: str | None = None

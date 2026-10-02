@@ -211,11 +211,9 @@ class ReferenceBatchesImpl(Batches):
         each request creates a new batch with a unique ID.
 
         Args:
-            input_file_id: The ID of an uploaded file containing requests for the batch.
-            endpoint: The endpoint to be used for all requests in the batch.
-            completion_window: The time window within which the batch should be processed.
-            metadata: Optional metadata for the batch.
-            idempotency_key: Optional idempotency key for enabling idempotent behavior.
+            request: The `CreateBatchRequest` payload, holding input_file_id,
+                endpoint, completion_window, metadata, and an optional
+                idempotency_key.
 
         Returns:
             The created or existing batch object.

@@ -23,6 +23,7 @@ from ogx_api import (
     Connectors,
     GetConnectorRequest,
     Inference,
+    InvalidParameterError,
     MCPListToolsTool,
     ModelNotFoundError,
     OpenAIAssistantMessageParam,
@@ -596,7 +597,7 @@ class StreamingResponseOrchestrator:
         """Run the streaming inference while-True loop, yielding events as we go.
 
         Populates ``ic`` with the final result for inspection by the caller.
-        May raise ``ModelNotFoundError`` to propagate to the caller.
+        May raise ``ModelNotFoundError`` or ``InvalidParameterError`` to propagate to the caller.
         """
 
         n_iter = 0
@@ -868,6 +869,11 @@ class StreamingResponseOrchestrator:
 
         except ModelNotFoundError:
             raise
+        except InvalidParameterError:
+            # A rejected client parameter (e.g. ranking_options.hybrid_search on a vector store whose
+            # provider cannot apply the weights) is a 400, not a generated response that failed. Let it
+            # propagate so responses.create raises it instead of reporting a "server_error" failure.
+            raise
         except Exception as exc:  # noqa: BLE001
             if _is_context_length_error(exc):
                 # Context-length exceeded from provider - signal retry with truncation
@@ -1044,14 +1050,21 @@ class StreamingResponseOrchestrator:
                 output_tokens=self.accumulated_usage.output_tokens + usage.completion_tokens,
                 total_tokens=self.accumulated_usage.total_tokens + usage.total_tokens,
                 input_tokens_details=OpenAIResponseUsageInputTokensDetails(
-                    cached_tokens=usage.prompt_tokens_details.cached_tokens
-                    if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens is not None
-                    else self.accumulated_usage.input_tokens_details.cached_tokens
+                    cached_tokens=self.accumulated_usage.input_tokens_details.cached_tokens
+                    + (
+                        usage.prompt_tokens_details.cached_tokens
+                        if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens is not None
+                        else 0
+                    )
                 ),
                 output_tokens_details=OpenAIResponseUsageOutputTokensDetails(
-                    reasoning_tokens=usage.completion_tokens_details.reasoning_tokens
-                    if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens is not None
-                    else self.accumulated_usage.output_tokens_details.reasoning_tokens
+                    reasoning_tokens=self.accumulated_usage.output_tokens_details.reasoning_tokens
+                    + (
+                        usage.completion_tokens_details.reasoning_tokens
+                        if usage.completion_tokens_details
+                        and usage.completion_tokens_details.reasoning_tokens is not None
+                        else 0
+                    )
                 ),
             )
 

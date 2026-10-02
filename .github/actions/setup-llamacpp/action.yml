@@ -1,5 +1,5 @@
 name: Setup LlamaCpp
-description: Download and start a llama.cpp multi-model router (llama-server --models-preset) for chat + embedding
+description: Download and start a llama.cpp multi-model router (llama-server --models-preset) for chat + embedding + rerank
 inputs:
   port:
     description: 'Port for the router'
@@ -33,10 +33,11 @@ runs:
         # future optimization, skipped for now since the read is a page-cache hit.
 
         # Pinned sha256: GitHub release asset digest (b10964) and HuggingFace LFS oid
-        # (= content sha256) for the two models.
+        # (= content sha256) for the three models.
         LLAMA_TARBALL_SHA=9abf88aea48a55d0f80edb1ee20220b186848cca0b4e919d71518cfd7ca67443
         QWEN_SHA=361cc68159042c36ebff7715dc5a2e4612153e88f3e9c9c234820849d6dc9e1d
         NOMIC_SHA=3e24342164b3d94991ba9692fdc0dd08e3fd7362e0aacc396a9a5c54a544c3b7
+        RERANKER_SHA=a43c7c9b11a4c1517e5bf95151960e1621d1b72f7a493364b01e386cf1aaa1d3
 
         # 1. llama.cpp CPU binary, pinned to build b10964. bXXXX builds are published
         #    as GitHub prereleases; pinning to one build keeps CI reproducible. Verify
@@ -57,6 +58,7 @@ runs:
         }
         get_model ggml-org/Qwen3-0.6B-GGUF Qwen3-0.6B-Q8_0.gguf "$QWEN_SHA"
         get_model nomic-ai/nomic-embed-text-v1.5-GGUF nomic-embed-text-v1.5.Q8_0.gguf "$NOMIC_SHA"
+        get_model gpustack/bge-reranker-v2-m3-GGUF bge-reranker-v2-m3-Q8_0.gguf "$RERANKER_SHA"
 
         # 3. Router preset. Section names are the model IDs (routed by exact match);
         #    keys are CLI arg names with the leading dashes stripped. ctx-size is pinned
@@ -70,6 +72,13 @@ runs:
         [nomic-embed-text-v1.5]
         model = $WORKDIR/models/nomic-embed-text-v1.5.Q8_0.gguf
         embedding = 1
+        ctx-size = 4096
+
+        [bge-reranker-v2-m3]
+        model = $WORKDIR/models/bge-reranker-v2-m3-Q8_0.gguf
+        embedding = 1
+        pooling = rank
+        rerank = 1
         ctx-size = 4096
         EOF
         echo "Wrote router preset:"
@@ -88,12 +97,13 @@ runs:
           --models-preset "$WORKDIR/preset.ini" \
           --host 127.0.0.1 \
           --port "$PORT" \
-          --models-max 2 \
+          --models-max 3 \
           < /dev/null > "$WORKDIR/router.log" 2>&1 &
         echo "router launched (detached)"
 
-        # Wait for the router to accept connections, then confirm both models load.
+        # Wait for the router to accept connections, then confirm all three models load.
         timeout 120 bash -c "until curl -fsS http://localhost:$PORT/health >/dev/null; do sleep 2; done"
         curl -fsS "http://localhost:$PORT/v1/models" | grep -q "qwen3-0.6b"
         curl -fsS "http://localhost:$PORT/v1/models" | grep -q "nomic-embed-text-v1.5"
+        curl -fsS "http://localhost:$PORT/v1/models" | grep -q "bge-reranker-v2-m3"
         echo "router ready on :$PORT"

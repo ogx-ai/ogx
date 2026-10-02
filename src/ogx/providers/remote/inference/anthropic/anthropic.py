@@ -5,9 +5,11 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncIterator, Iterable
+from typing import ClassVar
 
 from anthropic import AsyncAnthropic
 
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api.inference.models import (
     OpenAIChatCompletion,
@@ -29,12 +31,20 @@ def _make_schema_strict(schema: dict) -> None:
             _make_schema_strict(prop)
 
 
-class AnthropicInferenceAdapter(OpenAIMixin):
-    """Inference adapter for Anthropic Claude models."""
+class AnthropicInferenceAdapter(AnthropicMixin, OpenAIMixin):
+    """Inference adapter for Anthropic Claude models.
+
+    Chat Completions go through the OpenAI-compatible mixin. The Messages API is Anthropic's
+    own wire format, so ``anthropic_messages``/``anthropic_count_tokens`` forward directly to
+    ``/v1/messages`` (via :class:`AnthropicMixin`) instead of using the translation fallback,
+    which cannot represent extended thinking.
+    """
 
     config: AnthropicConfig
 
     provider_data_api_key_field: str = "anthropic_api_key"
+    # Anthropic requires a key; a missing one is a configuration error, not an unauthenticated request.
+    anthropic_no_key_placeholder: ClassVar[str | None] = None
     # source: https://docs.claude.com/en/docs/build-with-claude/embeddings
     # TODO: add support for voyageai, which is where these models are hosted
     # embedding_model_metadata = {

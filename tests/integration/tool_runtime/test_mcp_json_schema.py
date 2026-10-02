@@ -21,7 +21,7 @@ AUTH_TOKEN = "test-token"
 @pytest.fixture(scope="function")
 def mcp_server_with_complex_schemas():
     """MCP server with tools that have complex schemas including $ref and $defs."""
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
     async def book_flight(flight: dict, passengers: list[dict], payment: dict, ctx: Context) -> dict:
         """
@@ -65,7 +65,7 @@ def mcp_server_with_complex_schemas():
 @pytest.fixture(scope="function")
 def mcp_server_with_output_schemas():
     """MCP server with tools that have output schemas defined."""
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
     async def get_weather(location: str, ctx: Context) -> dict:
         """

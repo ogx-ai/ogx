@@ -2,7 +2,7 @@
 #
 # podman build --platform linux/amd64 -f ./ollama-with-models.containerfile -t ollama-with-models .
 #
-FROM --platform=linux/amd64 ollama/ollama:latest
+FROM --platform=linux/amd64 ollama/ollama:0.34.2
 
 # Start ollama and pull models in a single layer
 RUN ollama serve & \
