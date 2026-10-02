@@ -33,7 +33,7 @@ const configuredModelIds = parseModelAllowlist(
 );
 
 type ModelWithMeta = Model & {
-  custom_metadata?: Record<string, unknown>;
+  custom_metadata?: Record<string, unknown> | null;
 };
 
 type VectorStoreInfo = {
@@ -176,7 +176,8 @@ function ChatPlaygroundContent() {
           order: "desc",
         });
         const stores =
-          (result as { data?: Record<string, unknown>[] }).data || [];
+          (result as unknown as { data?: Record<string, unknown>[] }).data ||
+          [];
         setVectorStores(
           stores.map((s: Record<string, unknown>) => ({
             id: s.id as string,
@@ -227,7 +228,8 @@ function ChatPlaygroundContent() {
         const result = await client.conversations.items.list(conversationParam);
         const itemList = Array.isArray(result)
           ? result
-          : (result as { data?: Record<string, unknown>[] }).data || [];
+          : (result as unknown as { data?: Record<string, unknown>[] }).data ||
+            [];
 
         // Convert items to messages
         const messages: Message[] = [];
@@ -462,7 +464,7 @@ function ChatPlaygroundContent() {
         for await (const chunk of response) {
           if (abortController.signal.aborted) break;
 
-          const chunkObj = chunk as Record<string, unknown>;
+          const chunkObj = chunk as unknown as Record<string, unknown>;
 
           if (chunkObj.type === "response.created" && chunkObj.response) {
             currentResponseId = (chunkObj.response as { id: string }).id;

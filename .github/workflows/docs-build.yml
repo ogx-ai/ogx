@@ -3,6 +3,11 @@ name: Documentation Build
 run-name: Build and validate documentation
 
 on:
+  pull_request:
+    paths: ['docs/**']
+  push:
+    branches: [main]
+    paths: ['docs/**']
   schedule:
     - cron: '0 0 * * *'  # Daily at 12 AM UTC
   workflow_dispatch:

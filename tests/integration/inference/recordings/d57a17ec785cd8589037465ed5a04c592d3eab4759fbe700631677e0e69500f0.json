@@ -1,0 +1,51 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_completion_stop_sequence[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b-inference:completion:stop_sequence]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "prompt": "Return the exact same sentence and don't add additional words): Michael Jordan was born in the year of 1963",
+      "stop": "1963",
+      "stream": false
+    },
+    "endpoint": "/v1/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.completion.Completion",
+      "__data__": {
+        "id": "rec-d57a17ec785c",
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "logprobs": null,
+            "text": " in Brooklyn. needed. The answer is Michael Jordan was born in the year of"
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "text_completion",
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 16,
+          "prompt_tokens": 25,
+          "total_tokens": 41,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

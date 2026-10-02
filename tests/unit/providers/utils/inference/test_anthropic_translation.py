@@ -6,8 +6,9 @@
 
 """Unit tests for Anthropic<->OpenAI translation utilities in anthropic_translation."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx2
 import pytest
 
 from ogx.providers.utils.inference.anthropic_translation import (
@@ -16,6 +17,7 @@ from ogx.providers.utils.inference.anthropic_translation import (
     openai_response_to_anthropic,
     openai_stream_to_anthropic,
     parse_anthropic_sse_event,
+    passthrough_anthropic_stream,
 )
 from ogx_api.messages.models import (
     AnthropicBase64ImageSource,
@@ -260,6 +262,68 @@ class TestRequestTranslation:
         assert msg["tool_call_id"] == "toolu_123"
         assert msg["content"] == "72F and sunny"
 
+    def test_tool_result_after_text_is_emitted_before_the_user_text(self):
+        """A tool message must follow the assistant message that requested the call.
+
+        Anthropic accepts a user turn whose text precedes its tool_result blocks, but
+        OpenAI rejects a user message sitting between the tool call and its result.
+        """
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(role="user", content="What is the weather?"),
+                AnthropicMessage(
+                    role="assistant",
+                    content=[AnthropicToolUseBlock(id="toolu_123", name="get_weather", input={"city": "SF"})],
+                ),
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicTextBlock(text="and New York?"),
+                        AnthropicToolResultBlock(tool_use_id="toolu_123", content="72F and sunny"),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = anthropic_request_to_openai(request)
+
+        roles = [_msg_to_dict(m)["role"] for m in result.messages]
+        assert roles == ["user", "assistant", "tool", "user"]
+        tool_msg = _msg_to_dict(result.messages[2])
+        assert tool_msg["tool_call_id"] == "toolu_123"
+        assert tool_msg["content"] == "72F and sunny"
+        assert _msg_to_dict(result.messages[3])["content"] == "and New York?"
+
+    def test_tool_results_split_by_text_stay_adjacent(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[
+                AnthropicMessage(
+                    role="assistant",
+                    content=[
+                        AnthropicToolUseBlock(id="toolu_1", name="a", input={}),
+                        AnthropicToolUseBlock(id="toolu_2", name="b", input={}),
+                    ],
+                ),
+                AnthropicMessage(
+                    role="user",
+                    content=[
+                        AnthropicToolResultBlock(tool_use_id="toolu_1", content="first"),
+                        AnthropicTextBlock(text="between"),
+                        AnthropicToolResultBlock(tool_use_id="toolu_2", content="second"),
+                    ],
+                ),
+            ],
+            max_tokens=100,
+        )
+        result = anthropic_request_to_openai(request)
+
+        roles = [_msg_to_dict(m)["role"] for m in result.messages]
+        assert roles == ["assistant", "tool", "tool", "user"]
+        assert [_msg_to_dict(m)["tool_call_id"] for m in result.messages[1:3]] == ["toolu_1", "toolu_2"]
+        assert _msg_to_dict(result.messages[3])["content"] == "between"
+
     def test_base64_image_in_user_message(self):
         request = AnthropicCreateMessageRequest(
             model="m",
@@ -484,6 +548,7 @@ class TestResponseTranslation:
         openai_resp.choices[0].finish_reason = "stop"
         openai_resp.usage = MagicMock()
         openai_resp.usage.prompt_tokens = 10
+        openai_resp.usage.prompt_tokens_details = None
         openai_resp.usage.completion_tokens = 5
 
         result = openai_response_to_anthropic(openai_resp, "claude-sonnet-4-20250514")
@@ -513,6 +578,7 @@ class TestResponseTranslation:
         openai_resp.choices[0].finish_reason = "tool_calls"
         openai_resp.usage = MagicMock()
         openai_resp.usage.prompt_tokens = 20
+        openai_resp.usage.prompt_tokens_details = None
         openai_resp.usage.completion_tokens = 10
 
         result = openai_response_to_anthropic(openai_resp, "m")
@@ -532,6 +598,7 @@ class TestResponseTranslation:
         openai_resp.choices[0].finish_reason = "length"
         openai_resp.usage = MagicMock()
         openai_resp.usage.prompt_tokens = 5
+        openai_resp.usage.prompt_tokens_details = None
         openai_resp.usage.completion_tokens = 100
 
         result = openai_response_to_anthropic(openai_resp, "m")
@@ -551,10 +618,31 @@ class TestResponseTranslation:
         openai_resp.usage.prompt_tokens_details.cached_tokens = 75
 
         result = openai_response_to_anthropic(openai_resp, "m")
-        assert result.usage.input_tokens == 100
+        # Anthropic's input_tokens excludes cached tokens; OpenAI's prompt_tokens
+        # includes them. 100 prompt tokens with 75 cached translate to 25, and the
+        # Anthropic-side total (input + cache_read) recovers the original 100.
+        assert result.usage.input_tokens == 25
         assert result.usage.output_tokens == 50
         assert result.usage.cache_read_input_tokens == 75
         assert result.usage.cache_creation_input_tokens is None
+        assert result.usage.input_tokens + result.usage.cache_read_input_tokens == 100
+
+    def test_fully_cached_prompt_translates_to_zero_input_tokens(self):
+        openai_resp = MagicMock()
+        openai_resp.choices = [MagicMock()]
+        openai_resp.choices[0].message = MagicMock()
+        openai_resp.choices[0].message.content = "response"
+        openai_resp.choices[0].message.tool_calls = None
+        openai_resp.choices[0].finish_reason = "stop"
+        openai_resp.usage = MagicMock()
+        openai_resp.usage.prompt_tokens = 80
+        openai_resp.usage.completion_tokens = 10
+        openai_resp.usage.prompt_tokens_details = MagicMock()
+        openai_resp.usage.prompt_tokens_details.cached_tokens = 80
+
+        result = openai_response_to_anthropic(openai_resp, "m")
+        assert result.usage.input_tokens == 0
+        assert result.usage.cache_read_input_tokens == 80
 
     def test_cache_metrics_missing(self):
         openai_resp = MagicMock()
@@ -579,6 +667,35 @@ class TestResponseTranslation:
 
 
 class TestStreamingTranslation:
+    async def test_streaming_usage_excludes_cached_tokens_from_input(self):
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = "hi"
+        chunk.choices[0].delta.tool_calls = None
+        chunk.choices[0].finish_reason = "stop"
+        chunk.usage = MagicMock()
+        chunk.usage.prompt_tokens = 100
+        chunk.usage.completion_tokens = 7
+        chunk.usage.prompt_tokens_details = MagicMock()
+        chunk.usage.prompt_tokens_details.cached_tokens = 75
+
+        async def mock_stream():
+            yield chunk
+
+        events = []
+        async for event in openai_stream_to_anthropic(mock_stream(), "m"):
+            events.append(event)
+
+        delta_events = [e for e in events if e.type == "message_delta"]
+        assert len(delta_events) == 1
+        usage = delta_events[0].usage
+        # Same convention as the non-streaming path: 100 prompt tokens with 75
+        # cached translate to 25 input tokens, and the sum recovers the total.
+        assert usage.input_tokens == 25
+        assert usage.cache_read_input_tokens == 75
+        assert usage.input_tokens + usage.cache_read_input_tokens == 100
+
     async def test_text_streaming(self):
         chunks = []
 
@@ -762,6 +879,16 @@ class TestThinkingConfig:
         with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
             anthropic_request_to_openai(request)
 
+    def test_thinking_adaptive_raises_in_translation_mode(self):
+        request = AnthropicCreateMessageRequest(
+            model="m",
+            messages=[AnthropicMessage(role="user", content="Think about this")],
+            max_tokens=8192,
+            thinking=AnthropicThinkingConfig(type="adaptive"),
+        )
+        with pytest.raises(ValueError, match="extended thinking requires a native Anthropic-compatible provider"):
+            anthropic_request_to_openai(request)
+
     def test_thinking_disabled_allowed_in_translation_mode(self):
         request = AnthropicCreateMessageRequest(
             model="m",
@@ -892,3 +1019,109 @@ class TestErrorStreamEvent:
         assert events[1].type == "ping"
         assert events[2].type == "error"
         assert len(events) == 3
+
+
+# -- Upstream stream closure --
+
+
+class TestUpstreamStreamClosure:
+    @staticmethod
+    def _make_chunk(text):
+        chunk = MagicMock()
+        chunk.choices = [MagicMock()]
+        chunk.choices[0].delta = MagicMock()
+        chunk.choices[0].delta.content = text
+        chunk.choices[0].delta.tool_calls = None
+        chunk.choices[0].finish_reason = None
+        chunk.usage = None
+        return chunk
+
+    async def test_upstream_closed_on_completion(self):
+        closed = []
+
+        async def mock_stream():
+            try:
+                yield self._make_chunk("hi")
+            finally:
+                closed.append(True)
+
+        events = [event async for event in openai_stream_to_anthropic(mock_stream(), "m")]
+        assert events[-1].type == "message_stop"
+        assert closed == [True]
+
+    async def test_upstream_closed_when_consumer_abandons_mid_stream(self):
+        closed = []
+
+        async def mock_stream():
+            try:
+                yield self._make_chunk("hi")
+                yield self._make_chunk("ho")
+            finally:
+                closed.append(True)
+
+        translation = openai_stream_to_anthropic(mock_stream(), "m")
+        assert (await translation.__anext__()).type == "message_start"
+        assert (await translation.__anext__()).type == "ping"
+        # Pull the first content event so the upstream stream has started.
+        assert (await translation.__anext__()).type == "content_block_start"
+        await translation.aclose()
+        assert closed == [True]
+
+    async def test_upstream_closed_on_upstream_error(self):
+        closed = []
+
+        async def failing_stream():
+            try:
+                yield self._make_chunk("partial")
+                raise RuntimeError("connection lost")
+            finally:
+                closed.append(True)
+
+        events = [event async for event in openai_stream_to_anthropic(failing_stream(), "m")]
+        assert events[-1].type == "error"
+        assert closed == [True]
+
+
+class TestPassthroughStreamClientKwargs:
+    """passthrough_anthropic_stream builds its own httpx2 client from caller-supplied kwargs."""
+
+    @staticmethod
+    async def _client_kwargs(**stream_kwargs) -> dict:
+        with patch("ogx.providers.utils.inference.anthropic_translation.httpx2.AsyncClient") as mock_client_class:
+            response = MagicMock()
+            response.aiter_lines = lambda: _empty_lines()
+            stream = MagicMock()
+            stream.__aenter__ = AsyncMock(return_value=response)
+            stream.__aexit__ = AsyncMock(return_value=None)
+            client = MagicMock()
+            client.stream = MagicMock(return_value=stream)
+            mock_client_class.return_value.__aenter__.return_value = client
+
+            async for _ in passthrough_anthropic_stream(
+                url="http://localhost/v1/messages", req_body={}, headers={}, **stream_kwargs
+            ):
+                pass
+
+        return mock_client_class.call_args.kwargs
+
+    async def test_default_timeout_is_used_without_network_timeout(self):
+        kwargs = await self._client_kwargs(httpx_client_kwargs={"verify": False})
+
+        assert kwargs == {"timeout": 300.0, "verify": False}
+
+    async def test_network_timeout_overrides_the_default_instead_of_colliding_with_it(self):
+        """A provider passing network.timeout in the client kwargs used to raise a
+        duplicate-keyword TypeError."""
+        network_timeout = httpx2.Timeout(12.0)
+
+        kwargs = await self._client_kwargs(httpx_client_kwargs={"timeout": network_timeout})
+
+        assert kwargs["timeout"] is network_timeout
+
+    async def test_works_without_client_kwargs(self):
+        assert await self._client_kwargs() == {"timeout": 300.0}
+
+
+async def _empty_lines():
+    return
+    yield

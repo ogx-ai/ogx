@@ -18,10 +18,17 @@ from . import fastapi_routes
 from .api import FileProcessors
 
 # Import models for re-export
-from .models import ProcessFileRequest, ProcessFileResponse
+from .models import (
+    ListProcessFileJobsResponse,
+    ProcessFileJob,
+    ProcessFileRequest,
+    ProcessFileResponse,
+)
 
 __all__ = [
     "FileProcessors",
+    "ListProcessFileJobsResponse",
+    "ProcessFileJob",
     "ProcessFileRequest",
     "ProcessFileResponse",
     "fastapi_routes",

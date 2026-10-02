@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import ipaddress
 import json
 import re
 import ssl
@@ -11,7 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlparse
 
-import httpx
+import httpx2
 import jwt
 from jwt.exceptions import PyJWKClientConnectionError
 from pydantic import BaseModel, Field
@@ -22,13 +23,14 @@ from ogx.core.datatypes import (
     CustomAuthConfig,
     GitHubTokenAuthConfig,
     KubernetesAuthProviderConfig,
+    LocalApiKeyAuthConfig,
     OAuth2TokenAuthConfig,
     UpstreamHeaderAuthConfig,
     User,
     _validate_tenant_id,
 )
 from ogx.log import get_logger
-from ogx_api import AuthServiceUnavailableError, TokenValidationError
+from ogx_api import AuthServiceUnavailableError, TokenValidationError, UntrustedProxyError
 
 logger = get_logger(name=__name__, category="core::auth")
 
@@ -115,6 +117,32 @@ class AuthProvider(ABC):
     def get_auth_error_message(self, scope: Scope | None = None) -> str:
         """Return provider-specific authentication error message."""
         return "Authentication required"
+
+
+class LocalApiKeyAuthProvider(AuthProvider):
+    """Validates requests against a configured set of API keys.
+
+    Any valid key is treated as both an admin and an owner, granting full
+    access to all resources. The resolved user has ``roles=admin,owner`` and
+    ``teams=<key>`` so the default access-policy rules (``user in owners`` /
+    ``user is owner``) work as expected. This provider does not resolve a
+    tenant ID, so it is incompatible with multi-tenant mode.
+    """
+
+    def __init__(self, config: LocalApiKeyAuthConfig) -> None:
+        self.config = config
+        self._valid_keys: set[str] = set(config.api_keys)
+
+    async def validate_token(self, token: str, scope: Scope | None = None) -> User:
+        if token not in self._valid_keys:
+            raise TokenValidationError("Invalid or missing API key")
+        return User(
+            principal=token,
+            attributes={"roles": ["admin", "owner"], "teams": [token]},
+        )
+
+    async def close(self) -> None:
+        pass
 
 
 def get_attributes_from_claims(claims: dict[str, Any], mapping: dict[str, str]) -> dict[str, list[str]]:
@@ -285,16 +313,16 @@ class OAuth2TokenAuthProvider(AuthProvider):
             form["client_id"] = self.config.introspection.client_id
             form["client_secret"] = self.config.introspection.client_secret.get_secret_value()
         else:
-            # httpx auth parameter expects tuple[str | bytes, str | bytes]
+            # httpx2 auth parameter expects tuple[str | bytes, str | bytes]
             post_kwargs["auth"] = (
                 self.config.introspection.client_id,
                 self.config.introspection.client_secret.get_secret_value(),
             )
 
         try:
-            async with httpx.AsyncClient(verify=ssl_ctxt, timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+            async with httpx2.AsyncClient(verify=ssl_ctxt, timeout=httpx2.Timeout(10.0, connect=5.0)) as client:
                 response = await client.post(**post_kwargs)
-                if response.status_code != httpx.codes.OK:
+                if response.status_code != httpx2.codes.OK:
                     logger.warning("Token introspection failed with status code", status_code=response.status_code)
                     raise ValueError(f"Token introspection failed: {response.status_code}")
 
@@ -315,7 +343,7 @@ class OAuth2TokenAuthProvider(AuthProvider):
                     attributes=access_attributes,
                     tenant_id=tenant_id,
                 )
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+        except (httpx2.TimeoutException, httpx2.ConnectError, httpx2.NetworkError) as exc:
             logger.warning("Failed to reach token introspection endpoint", error=str(exc))
             raise AuthServiceUnavailableError("Authentication service unavailable") from exc
         except ValueError:
@@ -344,7 +372,7 @@ class CustomAuthProvider(AuthProvider):
 
     def __init__(self, config: CustomAuthConfig) -> None:
         self.config = config
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0))
+        self._client = httpx2.AsyncClient(timeout=httpx2.Timeout(10.0, connect=5.0))
 
     async def validate_token(self, token: str, scope: Scope | None = None) -> User:
         """Validate a token using the custom authentication endpoint."""
@@ -378,7 +406,7 @@ class CustomAuthProvider(AuthProvider):
                 self.config.endpoint,
                 json=auth_request.model_dump(),
             )
-            if response.status_code != httpx.codes.OK:
+            if response.status_code != httpx2.codes.OK:
                 logger.warning("Authentication failed with status code", status_code=response.status_code)
                 raise ValueError(f"Authentication failed: {response.status_code}")
 
@@ -402,7 +430,7 @@ class CustomAuthProvider(AuthProvider):
                 logger.exception("Error parsing authentication response")
                 raise ValueError("Invalid authentication response format") from e
 
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+        except (httpx2.TimeoutException, httpx2.ConnectError, httpx2.NetworkError) as exc:
             logger.warning("Failed to reach custom auth endpoint", error=str(exc))
             raise AuthServiceUnavailableError("Authentication service unavailable") from exc
         except ValueError:
@@ -442,7 +470,7 @@ class GitHubTokenAuthProvider(AuthProvider):
         """
         try:
             user_info = await _get_github_user_info(token, self.config.github_api_base_url)
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             logger.warning("GitHub token validation failed", error=str(e))
             raise ValueError("GitHub token validation failed. Please check your token and try again.") from e
 
@@ -478,7 +506,7 @@ async def _get_github_user_info(access_token: str, github_api_base_url: str) -> 
         "User-Agent": "ogx",
     }
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+    async with httpx2.AsyncClient(timeout=httpx2.Timeout(10.0, connect=5.0)) as client:
         user_response = await client.get(f"{github_api_base_url}/user", headers=headers)
         user_response.raise_for_status()
         user_data = user_response.json()
@@ -486,7 +514,7 @@ async def _get_github_user_info(access_token: str, github_api_base_url: str) -> 
         organizations: list[str] = []
         try:
             organizations = await _fetch_github_organizations(client, github_api_base_url, headers)
-        except (httpx.HTTPError, TypeError, ValueError) as e:
+        except (httpx2.HTTPError, TypeError, ValueError) as e:
             logger.warning(
                 "Failed to fetch GitHub organization memberships, proceeding without org data",
                 error=str(e),
@@ -499,7 +527,7 @@ async def _get_github_user_info(access_token: str, github_api_base_url: str) -> 
 
 
 async def _fetch_github_organizations(
-    client: httpx.AsyncClient, github_api_base_url: str, headers: dict[str, str]
+    client: httpx2.AsyncClient, github_api_base_url: str, headers: dict[str, str]
 ) -> list[str]:
     """Fetch all organization logins for a GitHub user, handling pagination."""
     per_page = 100
@@ -517,7 +545,7 @@ async def _fetch_github_organizations(
             orgs_payload = orgs_response.json()
             if not isinstance(orgs_payload, list):
                 raise ValueError("Failed to parse GitHub organization memberships: expected list response")
-        except (httpx.HTTPError, TypeError, ValueError) as e:
+        except (httpx2.HTTPError, TypeError, ValueError) as e:
             if organizations:
                 logger.warning(
                     "Failed to fetch additional GitHub organization memberships, using partial org data",
@@ -550,7 +578,7 @@ class KubernetesAuthProvider(AuthProvider):
 
     def _httpx_verify_value(self) -> bool | str:
         """
-        Build the value for httpx's `verify` parameter.
+        Build the value for httpx2's `verify` parameter.
         - False disables verification.
         - Path string points to a CA bundle.
         - True uses system defaults.
@@ -571,7 +599,7 @@ class KubernetesAuthProvider(AuthProvider):
         verify = self._httpx_verify_value()
 
         try:
-            async with httpx.AsyncClient(verify=verify, timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+            async with httpx2.AsyncClient(verify=verify, timeout=httpx2.Timeout(10.0, connect=5.0)) as client:
                 response = await client.post(
                     review_api_url,
                     json=review_request,
@@ -581,9 +609,9 @@ class KubernetesAuthProvider(AuthProvider):
                     },
                 )
 
-                if response.status_code == httpx.codes.UNAUTHORIZED:
+                if response.status_code == httpx2.codes.UNAUTHORIZED:
                     raise TokenValidationError("Invalid token")
-                if response.status_code != httpx.codes.CREATED:
+                if response.status_code != httpx2.codes.CREATED:
                     logger.warning(
                         "Kubernetes SelfSubjectReview API failed with status code", status_code=response.status_code
                     )
@@ -619,7 +647,7 @@ class KubernetesAuthProvider(AuthProvider):
                     tenant_id=tenant_id,
                 )
 
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+        except (httpx2.TimeoutException, httpx2.ConnectError, httpx2.NetworkError) as exc:
             logger.warning("Failed to reach Kubernetes API server", error=str(exc))
             raise AuthServiceUnavailableError("Authentication service unavailable") from exc
         except TokenValidationError:
@@ -639,18 +667,44 @@ class UpstreamHeaderAuthProvider(AuthProvider):
     Used when an upstream gateway (Authorino, Istio, or any reverse proxy) handles
     authentication and injects user identity into request headers. This provider
     trusts the headers and performs no token validation or outbound calls.
+
+    When trusted_proxy_cidrs is configured, requests are verified against the
+    CIDR allowlist before identity headers are read.
     """
 
     def __init__(self, config: UpstreamHeaderAuthConfig) -> None:
         self.config = config
+        self._trusted_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None = None
+        if config.trusted_proxy_cidrs:
+            self._trusted_networks = [ipaddress.ip_network(cidr, strict=False) for cidr in config.trusted_proxy_cidrs]
 
     @property
     def requires_http_bearer(self) -> bool:
         return False
 
+    def _verify_proxy_cidr(self, scope: Scope) -> None:
+        assert self._trusted_networks is not None
+        client = scope.get("client")
+        if not client:
+            raise UntrustedProxyError("Request rejected: unable to determine client IP for proxy verification")
+        client_ip_str = client[0]
+        try:
+            client_ip = ipaddress.ip_address(client_ip_str)
+        except ValueError as err:
+            logger.warning("Failed to parse client IP for proxy verification", client_ip=client_ip_str)
+            raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist") from err
+        for network in self._trusted_networks:
+            if client_ip in network:
+                return
+        logger.warning("Client IP not in trusted proxy CIDR allowlist", client_ip=client_ip_str)
+        raise UntrustedProxyError("Request rejected: client IP is not in trusted proxy CIDR allowlist")
+
     async def validate_token(self, token: str, scope: Scope | None = None) -> User:
         if scope is None:
             raise ValueError("Missing required authentication header: " + self.config.principal_header)
+
+        if self._trusted_networks is not None:
+            self._verify_proxy_cidr(scope)
 
         headers = dict(scope.get("headers", []))
 
@@ -732,6 +786,8 @@ def create_auth_provider(config: AuthenticationConfig) -> AuthProvider:
     """Factory function to create the appropriate auth provider."""
     provider_config = config.provider_config
 
+    if isinstance(provider_config, LocalApiKeyAuthConfig):
+        return LocalApiKeyAuthProvider(provider_config)
     if isinstance(provider_config, CustomAuthConfig):
         return CustomAuthProvider(provider_config)
     elif isinstance(provider_config, OAuth2TokenAuthConfig):

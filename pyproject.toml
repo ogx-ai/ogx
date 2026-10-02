@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-fallback_version = "1.2.1.dev0"
+fallback_version = "1.4.1.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
 constraint-dependencies = [
-    "aiohttp>=3.14.0",                # CVE-2026-34993: CookieJar.load() RCE
+    "aiohttp>=3.14.3",                # CVE-2026-69244: parser DoS
     "authlib>=1.6.11",                 # CVE-2026-41425 + 7 more: account takeover, JWE padding oracle, sig bypass
-    "cryptography>=48.0.1",            # CVE-2026-39892: buffer overflow; CVE-2026-34073: DNS constraint bypass
+    "cryptography>=50.0.0",            # CVE-2026-69249: self-signed DoS; CVE-2026-69247: PKCS#7 oracle; CVE-2026-69248: wildcard DNS
     "fonttools>=4.60.2",
     "gitpython>=3.1.47",               # Command injection via Git options bypass
     "h11>=0.16.0",
@@ -19,8 +19,10 @@ constraint-dependencies = [
     "langgraph-checkpoint>=4.1.1",
     "langgraph-sdk>=0.3.15",
     "langsmith>=0.8.18",
-    "lxml>=6.1.0",                     # CVE-2026-41066: XML entity expansion with default resolve_entities=True
+    "locust>=2.46.5",
+    "lxml>=6.1.1",                     # Multiple CVEs
     "msgpack>=1.2.1",
+    "oauthlib>=4.0.0",
     "pillow>=12.3.0",                  # CVE-2026-42311: PSD RCE; CVE-2026-55379/55380/54060: font/GD DoS
     "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
     "pyasn1>=0.6.4",                   # CVE-2026-30922: DoS via unbounded recursion
@@ -29,11 +31,11 @@ constraint-dependencies = [
     "python-multipart>=0.0.31",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
     "python-socketio>=5.16.2",         # CVE-2025-61765: RCE via pickle deserialization
     "requests>=2.34.2",
-    "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
+    "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it; cap mirrored in .github/dependabot.yml
     "starlette>=1.3.1",                # CVE-2026-48710
-    "tornado>=6.5.6",
-    "urllib3>=2.7.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
-    "transformers>=4.57.2,<5.0.0",     # CVE-2026-1839 fix only in 5.x; ogx doesn't use Trainer; 5.x breaks HybridCache imports
+    "tornado>=6.5.8",
+    "urllib3>=2.8.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
+    "transformers>=5.0.0",              # CVE-2026-1839 fix in 5.x; ogx doesn't use Trainer
     "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
 
@@ -57,20 +59,21 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",
-    "fastapi>=0.115.0,<1.0",                          # server
-    "httpx",
+    "fastapi>=0.137.2,<1.0",                  # server; cap mirrored in .github/dependabot.yml
+    "httpx",                                  # still needed for the google-genai and generated client-SDK boundaries
+    "httpx2",
     "jinja2>=3.1.6",
     "jsonschema",
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
-    "openai>=2.41.0",
-    "python-dotenv>=1.2.2",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
+    "openai>=3.0.0",                          # 3.x is the first series built on httpx2; we pass httpx2 clients to it
+    "python-dotenv>=1.2.3",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
     "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. CVE-2026-48526: auth bypass via forged JWTs.
     "pydantic>=2.11.9",
     "rich",
-    "structlog>=24.1.0",
+    "structlog>=26.1.0",
     "termcolor",
-    "tiktoken",
-    "uvicorn>=0.34.0",                                # server
+    "tiktoken>=0.14.0",
+    "uvicorn>=0.53.0",                                # server
     "websockets>=14.0",                               # server - WebSocket transport for the Responses API
     "opentelemetry-sdk>=1.42.1",                      # server
     "opentelemetry-exporter-otlp-proto-http>=1.30.0", # server
@@ -80,175 +83,140 @@ dependencies = [
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "mcp>=1.28.1,<2.0",                                # for connectors
+    "mcp>=2.0",                                        # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
     "models-dev>=1.0.398",
 ]
 
 [project.optional-dependencies]
 client = [
-    "ogx-client>=1.2.0", # Optional for library-only usage
-]
-openclient = [
-    "ogx-open-client>=1.0.2",
+    "ogx-client>=1.4.0", # Optional for library-only usage
 ]
 starter = [
     "aiohttp",
-    "anthropic>=0.105.2",
-    "autoevals",
-    "boto3>=1.43.18",
-    "chardet",
+    "anthropic>=1.6.0",
+    "autoevals>=0.3.0",
+    "boto3>=1.43.95",
+    "chardet>=7.6.0",
     "chromadb-client",
-    "datasets>=4.0.0",
-    "docling-slim[service-client]>=2.103.0",  # AsyncDoclingServiceClient added in 2.103.0
+    "datasets>=5.0.1",
+    "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
     "einops",
-    "elasticsearch>=8.16.0,<9.0.0",
+    "elasticsearch>=9.5.1,<10.0.0",          # cap mirrored in .github/dependabot.yml
     "emoji",
-    "faiss-cpu",
+    "faiss-cpu>=1.15.0",
     "fire",
-    "fireworks-ai<=0.17.16",
-    "google-genai>=1.69.0,<2",
+    "google-genai>=2.23.0,<3",               # cap mirrored in .github/dependabot.yml
     "langdetect",
     "markitdown[all]",
-    "matplotlib",
-    "nltk>=3.10.0",                                      # CVE-2026-54293/CVE-2026-12243: path traversal in nltk.data.load()
-    "neo4j",
-    "numpy",
+    "matplotlib>=3.11.2",
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts; cap mirrored in .github/dependabot.yml
+    "neo4j>=6.3.1",
+    "numpy>=2.5.3",
     "ollama",
-    "pandas",
+    "pandas>=3.0.5",
     "pillow",
-    "pgvector>=0.3.0",
-    "pymilvus[milvus-lite]>=2.4.10",
-    "pymongo",
-    "pypdf>=6.13.3",
-    "pythainlp",
-    "qdrant-client",
-    "redis>=8.0.0",
+    "pgvector>=0.5.0",
+    "pymilvus[milvus-lite]>=3.0.1",
+    "pymongo>=4.18.1",
+    "pypdf>=6.16.2",
+    "pythainlp>=5.3.7",
+    "qdrant-client>=1.19.0",
+    "redis>=8.1.0",
     "requests",
-    "safetensors",
-    "scikit-learn",
-    "scipy",
-    "sentence-transformers>=5.6.0",
-    "sentencepiece",
+    "safetensors>=0.8.0",
+    "scipy>=1.18.1",
+    "sentence-transformers>=6.0.0",  # floor must match inline::sentence-transformers pip_packages in src/ogx/providers/registry/inference.py -- update both
+    "sentencepiece>=0.2.2",
     "sqlite-vec",
-    "together>=2",
+    "together>=2.34.0",
     "tokenizers",
-    "torch>=2.13.0",
-    "tqdm",
-    "tree_sitter",
-    "unstructured-client>=0.25.0",
-    "weaviate-client>=4.16.5",
+    "torch>=2.14.0",
+    "tqdm>=4.70.1",
+    "tree_sitter>=0.26.0",
+    "unstructured-client>=0.46.2",
+    "weaviate-client>=4.23.1",
 ]
 
 [dependency-groups]
+# The dev group contains everything needed for development: unit and integration test
+# dependencies, type stubs for complete mypy coverage, and developer tooling.
+# If a provider requires additional dependencies for testing, add them here too.
 dev = [
-    {include-group = "unit"},
-    "pytest>=8.4",
-    "pytest-timeout",
+    # Test dependencies (unit + integration)
+    "aiohttp",
+    "aiosqlite",
+    "anthropic>=1.6.0",
+    "asyncpg>=0.29.0",
+    "autoevals>=0.3.0",
+    "blobfile>=3.3.0",
+    "chardet>=7.6.0",
+    "chromadb>=1.0.15",
+    "coverage>=7.16.1",
+    "databricks-sdk>=0.139.0",
+    "datasets>=5.0.1",
+    "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
+    "elasticsearch>=9.5.1,<10.0.0",          # cap mirrored in .github/dependabot.yml
+    "faiss-cpu>=1.15.0",
+    "fairscale",
+    "google-genai>=2.23.0,<3",               # cap mirrored in .github/dependabot.yml
+    "langchain-core>=1.6.3",                            # CVE-2026-44843: insecure deserialization
+    "langchain-openai>=1.2.2",
+    "langgraph",
+    "lm-format-enforcer",
+    "markitdown[all]",
+    "mcp>=2.0",
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts; cap mirrored in .github/dependabot.yml
+    "moto[s3]>=5.1.10",
+    "nest-asyncio",
+    "neo4j>=6.3.1",
+    "ollama",
+    "peft>=0.21.0",
+    "pgvector>=0.5.0",
+    "psycopg2-binary>=2.9.13",
+    "pymilvus>=3.0.1",
+    "pymongo>=4.18.1",
+    "pypdf>=6.16.2",
+    "qdrant-client>=1.19.0",
+    "requests",
+    "sqlalchemy[asyncio]>=2.0.41",
+    "sqlite-vec",
+    "together>=2.34.0",
+    "torch>=2.14.0",
+    "torchtune",
+    "torchvision>=0.29.0",
+    "transformers",
+    "trl>=1.13.0",
+    "unstructured-client>=0.46.2",
+    "weaviate-client>=4.23.1",
+    # Type stubs and optional runtime dependencies for complete mypy coverage
+    "boto3-stubs[s3]",
+    "pandas>=3.0.5",
+    "pandas-stubs>=3.0.5.260914",
+    "streamlit>=1.64.0",
+    "streamlit-option-menu",
+    "types-jsonschema>=4.26.0.20260518",
+    "types-psutil>=7.2.2.20260906",
+    "types-requests>=2.33.0.20260906",
+    "types-setuptools>=84.0.0.20260812",
+    "types-tqdm>=4.70.0.20260906",
+    # Developer tooling
+    "black>=26.5.1",
+    "boto3>=1.43.95",
+    "mypy>=2.3.1",
+    "nbval",                         # For notebook testing
+    "ogx-client>=1.4.0",
+    "openapi-spec-validator>=0.9.0",
+    "pre-commit>=4.6.2",
+    "pytest>=8.4,<9.1",                        # CI/unit: 9.1.x monkeypatch.resolve() calls importlib.import_module, breaking tests that mock ogx.core.resolver.importlib.import_module (global); cap mirrored in .github/dependabot.yml
     "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",
     "pytest-json-report",
-    "pytest-socket>=0.8.0",                 # For blocking network access in unit tests
-    "nbval",                         # For notebook testing
-    "black>=26.5.1",
-    "ruff>=0.15.14",
-    "mypy",
-    "pre-commit>=4.4.0",
+    "pytest-socket>=0.8.1",                 # For blocking network access in unit tests
+    "pytest-timeout",
+    "ruff>=0.16.7",
     "ruamel.yaml",                   # needed for openapi generator
-    "openapi-spec-validator>=0.9.0",
-    "ogx-open-client>=1.0.2",
-    "boto3>=1.43.18",
-    "torch>=2.13.0",
-]
-# Type checking dependencies - includes type stubs and optional runtime dependencies
-# needed for complete mypy coverage across all optional features
-type_checking = [
-    "types-requests",
-    "types-setuptools",
-    "types-jsonschema",
-    "markitdown[all]",
-    "pypdf>=6.13.3",
-    "pandas-stubs",
-    "types-psutil>=7.2.2.20260518",
-    "types-tqdm",
-    "boto3-stubs[s3]",
-    "chardet",
-    "streamlit>=1.58.0",
-    "streamlit-option-menu",
-    "pandas",
-    "anthropic>=0.105.2",
-    "databricks-sdk>=0.114.0",
-    "fairscale",
-    "torchtune",
-    "trl>=1.5.0",
-    "peft",
-    "datasets",
-    "together",
-    "nest-asyncio",
-    "pymongo",
-    "torchvision",
-    "sqlite-vec",
-    "faiss-cpu",
-    "lm-format-enforcer",
-    "mcp>=1.28.1,<2.0",
-    "neo4j",
-    "ollama",
-    "langchain-openai>=1.2.2",
-    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
-    "langgraph",
-    "ogx-open-client>=1.0.2",
-]
-test-common = [
-    "aiohttp",
-    "aiosqlite",
-    "asyncpg>=0.29.0",
-    "chardet",
-    "mcp>=1.28.1,<2.0",
-    "neo4j",
-    "pgvector>=0.3.0",
-    "psycopg2-binary>=2.9.0",
-    "pypdf>=6.13.3",
-    "sqlalchemy[asyncio]>=2.0.41",
-]
-# These are the dependencies required for running unit tests.
-unit = [
-    {include-group = "test-common"},
-    "anthropic>=0.105.2",
-    "blobfile",
-    "coverage",
-    "databricks-sdk>=0.114.0",
-    "docling-slim[service-client]>=2.103.0",  # AsyncDoclingServiceClient added in 2.103.0
-    "faiss-cpu",
-    "markitdown[all]",
-    "moto[s3]>=5.1.10",
-    "ollama",
-    "sqlite-vec",
-    "together",
-    "unstructured-client>=0.25.0",
-]
-# These are the core dependencies required for running integration tests. They are shared across all
-# providers. If a provider requires additional dependencies, please add them to your environment
-# separately. If you are using "uv" to execute your tests, you can use the "--group" flag to specify extra
-# dependencies.
-test = [
-    {include-group = "test-common"},
-    "autoevals",
-    "chromadb>=1.0.15",
-    "datasets>=4.0.0",
-    "elasticsearch>=8.16.0, <9.0.0",
-    "google-genai>=1.69.0,<2",
-    "langchain-core>=0.3.85",                            # CVE-2026-44843: insecure deserialization
-    "langchain-openai>=1.2.2",
-    "langgraph",
-    "milvus-lite>=2.5.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",
-    "pymilvus>=2.6.2",
-    "qdrant-client",
-    "requests",
-    "torch>=2.13.0",
-    "torchvision>=0.27.0",
-    "transformers",
-    "weaviate-client>=4.16.4",
 ]
 docs = [
     "setuptools",
@@ -262,7 +230,7 @@ docs = [
     "sphinx-design",
     "sphinxcontrib.redoc",
     "sphinxcontrib.video",
-    "sphinxcontrib.mermaid",
+    "sphinxcontrib.mermaid>=2.1.1",
     "sphinx-reredirects",
     "tomli",
     "linkify",
@@ -493,7 +461,7 @@ module = [
     "torchtune.*",
     "fairscale.*",
     "torchvision.*",
-    "datasets",
+    "datasets>=5.0.1",
     "nest_asyncio",
     "streamlit_option_menu",
     "lmformatenforcer.*",

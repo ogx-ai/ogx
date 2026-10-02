@@ -7,7 +7,6 @@
 import asyncio
 import heapq
 import json
-import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -63,9 +62,6 @@ _PG_SQL_OPS: dict[str, str] = {
     "lt": "<",
     "lte": "<=",
 }
-
-# Regex for validating metadata key names to prevent SQL injection in JSONB paths
-_VALID_KEY_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
 def _quote_ident(name: str) -> str:
@@ -491,10 +487,6 @@ class PGVectorIndex(EmbeddingIndex):
         """Translate a comparison filter to PostgreSQL WHERE clause using JSONB operators."""
         key, value, op_type = filter_obj.key, filter_obj.value, filter_obj.type
 
-        # Validate key to prevent SQL injection in JSONB path
-        if not _VALID_KEY_PATTERN.match(key):
-            raise ValueError(f"Invalid metadata key name: {key!r}")
-
         # Use ->> to extract metadata value as text from the JSONB document column
         expr = f"document->'metadata'->>'{key}'"
 
@@ -507,16 +499,18 @@ class PGVectorIndex(EmbeddingIndex):
                 return f"({expr})::numeric {sql_op} ${param_idx}", [value], param_idx + 1
             else:
                 return f"{expr} {sql_op} ${param_idx}", [value], param_idx + 1
-        elif op_type == "in":
+        elif op_type in ("in", "nin"):
             if not isinstance(value, list):
-                raise ValueError(f"'in' filter requires a list value, got {type(value)}")
+                raise ValueError(f"'{op_type}' filter requires a list value, got {type(value)}")
+            sql_op = "IN" if op_type == "in" else "NOT IN"
             placeholders = ", ".join(f"${param_idx + i}" for i in range(len(value)))
-            return f"{expr} IN ({placeholders})", [str(v) for v in value], param_idx + len(value)
-        elif op_type == "nin":
-            if not isinstance(value, list):
-                raise ValueError(f"'nin' filter requires a list value, got {type(value)}")
-            placeholders = ", ".join(f"${param_idx + i}" for i in range(len(value)))
-            return f"{expr} NOT IN ({placeholders})", [str(v) for v in value], param_idx + len(value)
+            # Mirror the typed casts used for scalar comparisons so that e.g. [True] matches JSON true
+            # and [1] matches a stored 1.0, instead of comparing Python str() output against JSON text.
+            if value and all(isinstance(v, bool) for v in value):
+                return f"({expr})::boolean {sql_op} ({placeholders})", list(value), param_idx + len(value)
+            if value and all(isinstance(v, int | float) and not isinstance(v, bool) for v in value):
+                return f"({expr})::numeric {sql_op} ({placeholders})", list(value), param_idx + len(value)
+            return f"{expr} {sql_op} ({placeholders})", [str(v) for v in value], param_idx + len(value)
         else:
             raise ValueError(f"Unknown comparison operator: {op_type}")
 

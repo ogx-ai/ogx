@@ -138,6 +138,11 @@ async def resolve_memory_context(
         logger.debug("Skipping memory retrieval", reason="missing query text")
         return None
 
+    # Only VectorStoreNotFoundError is absorbed here: a missing memory store means there is nothing
+    # to recall, so the turn continues without memory context. Everything else, in particular the
+    # InvalidParameterError raised when memory.ranking_options.hybrid_search reaches a vector store
+    # whose provider cannot apply the weights, propagates and fails responses.create with a 400 --
+    # silently answering without the memory the caller asked for would hide the rejected parameter.
     try:
         with _memory_access_context(memory_config, vector_store.internal):
             search_response = await vector_io_api.openai_search_vector_store(

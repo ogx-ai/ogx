@@ -433,11 +433,11 @@ export function VectorStoreDetailView({
       <PropertyItem label="Usage Bytes" value={store.usage_bytes} />
       <PropertyItem
         label="Provider ID"
-        value={(store.metadata.provider_id as string) || ""}
+        value={(store.metadata?.provider_id as string) || ""}
       />
       <PropertyItem
         label="Provider DB ID"
-        value={(store.metadata.provider_vector_db_id as string) || ""}
+        value={(store.metadata?.provider_vector_db_id as string) || ""}
       />
     </PropertiesCard>
   );
@@ -500,10 +500,11 @@ export function VectorStoreDetailView({
                 isEditing={true}
                 initialData={{
                   name: store?.name || "",
-                  embedding_model: store?.metadata?.embedding_model || "",
+                  embedding_model:
+                    (store?.metadata?.embedding_model as string) || "",
                   embedding_dimension:
-                    store?.metadata?.embedding_dimension || 768,
-                  provider_id: store?.metadata?.provider_id || "",
+                    (store?.metadata?.embedding_dimension as number) || 768,
+                  provider_id: (store?.metadata?.provider_id as string) || "",
                 }}
               />
             </div>

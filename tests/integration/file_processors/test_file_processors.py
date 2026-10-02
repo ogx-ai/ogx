@@ -10,6 +10,23 @@ from pathlib import Path
 import pytest
 import requests
 
+from ogx.core.testing_context import get_test_context
+
+
+@pytest.fixture
+def test_context_headers() -> dict[str, str]:
+    """Propagate the test id on raw requests.
+
+    These tests bypass the OGX client, so nothing injects the header the
+    recorder relies on. A direct upload is now staged into the Files API before
+    processing, and deterministic file-ID allocation refuses to run without a
+    test id.
+    """
+    test_id = get_test_context()
+    if not test_id:
+        return {}
+    return {"X-OGX-Provider-Data": json.dumps({"__test_id": test_id})}
+
 
 @pytest.fixture(autouse=True)
 def skip_if_no_file_processor_provider(ogx_client, require_server):
@@ -45,11 +62,12 @@ def test_pdf_content(test_pdf_path: Path) -> bytes:
 class TestFileProcessors:
     """Provider-agnostic integration tests for the file-processors/process endpoint."""
 
-    def test_process_file_basic(self, process_url, test_pdf_content):
+    def test_process_file_basic(self, process_url, test_pdf_content, test_context_headers):
         """Test basic file processing without chunking."""
         resp = requests.post(
             process_url,
             files={"file": ("test.pdf", test_pdf_content, "application/pdf")},
+            headers=test_context_headers,
             timeout=120,
         )
         assert resp.status_code == 200, f"Unexpected status: {resp.status_code} {resp.text}"
@@ -69,12 +87,13 @@ class TestFileProcessors:
         assert chunk["content"] is not None
         assert len(chunk["content"].strip()) > 0
 
-    def test_process_file_with_auto_chunking(self, process_url, test_pdf_content):
+    def test_process_file_with_auto_chunking(self, process_url, test_pdf_content, test_context_headers):
         """Test file processing with auto chunking strategy."""
         chunking_strategy = json.dumps({"type": "auto"})
         resp = requests.post(
             process_url,
             files={"file": ("test.pdf", test_pdf_content, "application/pdf")},
+            headers=test_context_headers,
             data={"chunking_strategy": chunking_strategy},
             timeout=120,
         )
@@ -96,7 +115,7 @@ class TestFileProcessors:
             assert "document_id" in chunk["metadata"]
             assert chunk["metadata"]["filename"] == "test.pdf"
 
-    def test_process_file_with_static_chunking(self, process_url, test_pdf_content):
+    def test_process_file_with_static_chunking(self, process_url, test_pdf_content, test_context_headers):
         """Test file processing with static chunking strategy."""
         chunking_strategy = json.dumps(
             {
@@ -110,6 +129,7 @@ class TestFileProcessors:
         resp = requests.post(
             process_url,
             files={"file": ("test.pdf", test_pdf_content, "application/pdf")},
+            headers=test_context_headers,
             data={"chunking_strategy": chunking_strategy},
             timeout=120,
         )
@@ -125,12 +145,13 @@ class TestFileProcessors:
             chunk_ids.add(chunk["chunk_id"])
             assert chunk["chunk_metadata"]["content_token_count"] > 0
 
-    def test_chunk_id_uniqueness(self, process_url, test_pdf_content):
+    def test_chunk_id_uniqueness(self, process_url, test_pdf_content, test_context_headers):
         """Test chunk IDs are unique across chunks."""
         chunking_strategy = json.dumps({"type": "auto"})
         resp = requests.post(
             process_url,
             files={"file": ("test.pdf", test_pdf_content, "application/pdf")},
+            headers=test_context_headers,
             data={"chunking_strategy": chunking_strategy},
             timeout=120,
         )

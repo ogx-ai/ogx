@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ogx.core.datatypes import Api, StackConfig
+from ogx.core.jobs.runtime import get_job_runtime
 from ogx.core.server.fastapi_router_registry import (
     _ROUTER_FACTORIES,
     build_fastapi_router,
@@ -103,6 +104,9 @@ class DistributionInspectImpl(Inspect):
         return ListRoutesResponse(data=ret)
 
     async def health(self) -> HealthInfo:
+        runtime = get_job_runtime()
+        if runtime is not None and not runtime.pool.is_healthy:
+            return HealthInfo(status=HealthStatus.ERROR)
         return HealthInfo(status=HealthStatus.OK)
 
     async def version(self) -> VersionInfo:

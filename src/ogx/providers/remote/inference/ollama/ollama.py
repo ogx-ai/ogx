@@ -5,20 +5,18 @@
 # the root directory of this source tree.
 
 
-import asyncio
 from collections.abc import AsyncIterator
-from typing import Any
 
-import httpx
-from ollama import AsyncClient as AsyncOllamaClient
+import httpx2
 
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
 from ogx.providers.remote.inference.ollama.config import OllamaImplConfig
-from ogx.providers.utils.inference.anthropic_translation import passthrough_anthropic_stream
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx_api import (
     HealthResponse,
     HealthStatus,
@@ -30,19 +28,11 @@ from ogx_api import (
     OpenAIMessageParam,
     UnsupportedModelError,
 )
-from ogx_api.messages.models import (
-    ANTHROPIC_VERSION,
-    AnthropicCountTokensRequest,
-    AnthropicCountTokensResponse,
-    AnthropicCreateMessageRequest,
-    AnthropicMessageResponse,
-    AnthropicStreamEvent,
-)
 
 logger = get_logger(name=__name__, category="inference::ollama")
 
 
-class OllamaInferenceAdapter(OpenAIMixin):
+class OllamaInferenceAdapter(AnthropicMixin, OpenAIMixin):
     """Inference adapter for the Ollama local model runtime."""
 
     config: OllamaImplConfig
@@ -67,21 +57,6 @@ class OllamaInferenceAdapter(OpenAIMixin):
     }
 
     download_images: bool = True
-    _clients: dict[asyncio.AbstractEventLoop, AsyncOllamaClient] = {}
-
-    @property
-    def ollama_client(self) -> AsyncOllamaClient:
-        # ollama client attaches itself to the current event loop (sadly?)
-        loop = asyncio.get_running_loop()
-        if loop not in self._clients:
-            # Ollama client expects base URL without /v1 suffix
-            base_url_str = str(self.config.base_url)
-            if base_url_str.endswith("/v1"):
-                host = base_url_str[:-3]
-            else:
-                host = base_url_str
-            self._clients[loop] = AsyncOllamaClient(host=host)
-        return self._clients[loop]
 
     def get_api_key(self):
         return "NO KEY REQUIRED"
@@ -130,20 +105,11 @@ class OllamaInferenceAdapter(OpenAIMixin):
         params.messages = mapped_messages
 
         result = await self.openai_chat_completion(params)
+        # narrow the result type to AsyncIterator for the reasoning wrapper below
+        if not isinstance(result, AsyncIterator):
+            raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
-        async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:
-                reasoning = None
-                for choice in chunk.choices or []:
-                    reasoning = getattr(choice.delta, "reasoning", None) or getattr(
-                        choice.delta, "reasoning_content", None
-                    )
-                yield OpenAIChatCompletionChunkWithReasoning(
-                    chunk=chunk,
-                    reasoning_content=reasoning,
-                )
-
-        return _wrap_chunks()
+        return wrap_reasoning_chunks(result)
 
     def _get_ollama_base_url(self) -> str:
         """Get the Ollama base URL without trailing /v1 suffix."""
@@ -151,72 +117,6 @@ class OllamaInferenceAdapter(OpenAIMixin):
         if base_url_str.endswith("/v1"):
             return base_url_str[:-3]
         return base_url_str
-
-    async def _passthrough_anthropic_messages(
-        self,
-        request: AnthropicCreateMessageRequest,
-    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
-        """Forward the request directly to Ollama's /v1/messages endpoint."""
-        url = f"{self._get_ollama_base_url()}/v1/messages"
-        body = request.model_dump(exclude_none=True)
-        body["model"] = request.model
-        headers = {
-            "content-type": "application/json",
-            "anthropic-version": ANTHROPIC_VERSION,
-        }
-
-        api_key = self._get_api_key_from_config_or_provider_data() or "no-key-required"
-        headers["x-api-key"] = api_key
-
-        if request.stream:
-            return self._passthrough_anthropic_stream(url, headers, body)
-
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            return AnthropicMessageResponse(**resp.json())
-
-    async def _passthrough_anthropic_stream(
-        self,
-        url: str,
-        headers: dict[str, str],
-        body: dict[str, Any],
-    ) -> AsyncIterator[AnthropicStreamEvent]:
-        """Yield SSE events from an Anthropic-compatible provider via passthrough."""
-        async for event in passthrough_anthropic_stream(
-            url=url,
-            req_body=body,
-            headers=headers,
-        ):
-            yield event
-
-    async def anthropic_messages(
-        self,
-        params: AnthropicCreateMessageRequest,
-    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
-        """Handle Anthropic Messages via native /v1/messages endpoint."""
-        return await self._passthrough_anthropic_messages(params)
-
-    async def anthropic_count_tokens(
-        self,
-        params: AnthropicCountTokensRequest,
-    ) -> AnthropicCountTokensResponse:
-        """Forward count_tokens to Ollama's /v1/messages/count_tokens endpoint."""
-        url = f"{self._get_ollama_base_url()}/v1/messages/count_tokens"
-        body = params.model_dump(exclude_none=True)
-        body["model"] = params.model
-        headers = {
-            "content-type": "application/json",
-            "anthropic-version": ANTHROPIC_VERSION,
-        }
-
-        api_key = self._get_api_key_from_config_or_provider_data() or "no-key-required"
-        headers["x-api-key"] = api_key
-
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            resp.raise_for_status()
-            return AnthropicCountTokensResponse(**resp.json())
 
     async def initialize(self) -> None:
         logger.info("checking connectivity to Ollama", base_url=self.config.base_url)
@@ -232,17 +132,18 @@ class OllamaInferenceAdapter(OpenAIMixin):
         Performs a health check by verifying connectivity to the Ollama server.
         This method is used by initialize() and the Provider API to verify that the service is running
         correctly.
+        Uses the unauthenticated GET /api/version endpoint.
         Returns:
             HealthResponse: A dictionary containing the health status.
         """
         try:
-            await self.ollama_client.ps()
+            url = f"{self._get_ollama_base_url()}/api/version"
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs(default_timeout=30.0)) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
             return HealthResponse(status=HealthStatus.OK)
         except Exception as e:
             return HealthResponse(status=HealthStatus.ERROR, message=f"Health check failed: {str(e)}")
-
-    async def shutdown(self) -> None:
-        self._clients.clear()
 
     async def register_model(self, model: Model) -> Model:
         if await self.check_model_availability(model.provider_model_id):

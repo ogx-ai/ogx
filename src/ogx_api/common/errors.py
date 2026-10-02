@@ -9,7 +9,7 @@
 #   2. All classes should have a custom error message with the goal of informing the OGX user specifically
 #   3. All classes should set a status_code class attribute for HTTP response mapping
 
-import httpx
+import httpx2
 from pydantic import BaseModel
 
 
@@ -56,7 +56,7 @@ class OpenAIErrorResponse(BaseModel):
 class OGXError(Exception):
     """A base class for all OGX errors with an HTTP status code for API responses."""
 
-    status_code: httpx.codes
+    status_code: httpx2.codes
 
     def __init__(self, message: str):
         super().__init__(message)
@@ -118,7 +118,7 @@ class ResourceNotFoundError(OGXError):
         When provided, message format is: ``{resource_type} '{resource_name}' not found in {parent_resource}.``
     """
 
-    status_code: httpx.codes = httpx.codes.NOT_FOUND
+    status_code: httpx2.codes = httpx2.codes.NOT_FOUND
 
     def __init__(
         self,
@@ -167,6 +167,27 @@ class ConversationNotFoundError(ResourceNotFoundError):
 
     def __init__(self, conversation_id: str) -> None:
         super().__init__(conversation_id, resource_type="Conversation")
+
+
+class PromptNotFoundError(ResourceNotFoundError):
+    """raised when OGX cannot find a referenced prompt"""
+
+    def __init__(self, prompt_id: str) -> None:
+        super().__init__(prompt_id, resource_type="Prompt", client_command="prompts.list")
+
+
+class PromptVersionNotFoundError(ResourceNotFoundError):
+    """raised when OGX cannot find a referenced version within a prompt"""
+
+    def __init__(self, version: int, prompt_id: str) -> None:
+        super().__init__(
+            str(version),
+            resource_type="Prompt version",
+            client_command="prompts.list_versions",
+            client_command_args=prompt_id,
+            resource_name_plural="prompt versions",
+            parent_resource=f"prompt '{prompt_id}'",
+        )
 
 
 class ConversationItemNotFoundError(ResourceNotFoundError):
@@ -219,7 +240,7 @@ class BatchNotFoundError(ResourceNotFoundError):
 class UnsupportedModelError(OGXError):
     """raised when model is not present in the list of supported models"""
 
-    status_code: httpx.codes = httpx.codes.BAD_REQUEST
+    status_code: httpx2.codes = httpx2.codes.BAD_REQUEST
 
     def __init__(self, model_name: str, supported_models_list: list[str]):
         message = f"'{model_name}' model is not supported. Supported models are: {', '.join(supported_models_list)}"
@@ -229,7 +250,7 @@ class UnsupportedModelError(OGXError):
 class ModelTypeError(OGXError):
     """raised when a model is present but not the correct type"""
 
-    status_code: httpx.codes = httpx.codes.BAD_REQUEST
+    status_code: httpx2.codes = httpx2.codes.BAD_REQUEST
 
     def __init__(self, model_name: str, model_type: str, expected_model_type: str) -> None:
         message = (
@@ -241,7 +262,7 @@ class ModelTypeError(OGXError):
 class ConflictError(OGXError):
     """raised when an operation cannot be performed due to a conflict with the current state"""
 
-    status_code: httpx.codes = httpx.codes.CONFLICT
+    status_code: httpx2.codes = httpx2.codes.CONFLICT
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -250,7 +271,7 @@ class ConflictError(OGXError):
 class TokenValidationError(OGXError):
     """raised when token validation fails during authentication"""
 
-    status_code: httpx.codes = httpx.codes.UNAUTHORIZED
+    status_code: httpx2.codes = httpx2.codes.UNAUTHORIZED
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -259,9 +280,33 @@ class TokenValidationError(OGXError):
 class AuthServiceUnavailableError(OGXError):
     """raised when the authentication infrastructure is unreachable"""
 
-    status_code: httpx.codes = httpx.codes.SERVICE_UNAVAILABLE
+    status_code: httpx2.codes = httpx2.codes.SERVICE_UNAVAILABLE
 
     def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class UntrustedProxyError(OGXError):
+    """raised when a request fails trusted-proxy verification (CIDR allowlist)"""
+
+    status_code: httpx2.codes = httpx2.codes.FORBIDDEN
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class RouteAccessDeniedError(OGXError):
+    """raised when a route_policy rule denies the caller access to an API route.
+
+    Mirrors the 403 a live request to that route would get from
+    RouteAuthorizationMiddleware, for callers that execute a request against
+    a route outside that middleware's reach (e.g. batch processing).
+    """
+
+    status_code: httpx2.codes = httpx2.codes.FORBIDDEN
+
+    def __init__(self, route: str) -> None:
+        message = f"Access denied: insufficient permissions for route {route}"
         super().__init__(message)
 
 
@@ -276,7 +321,7 @@ class InvalidParameterError(ValueError, OGXError):
     :param constraint: Human-readable description of the constraint (e.g., "Must be >= 1.").
     """
 
-    status_code: httpx.codes = httpx.codes.BAD_REQUEST
+    status_code: httpx2.codes = httpx2.codes.BAD_REQUEST
 
     def __init__(self, param_name: str, value: object, constraint: str) -> None:
         message = f"Invalid value for '{param_name}': {value}. {constraint}"
@@ -295,7 +340,7 @@ class ServiceNotEnabledError(OGXError, ValueError):
         Separated from the base message by a blank line.
     """
 
-    status_code: httpx.codes = httpx.codes.SERVICE_UNAVAILABLE
+    status_code: httpx2.codes = httpx2.codes.SERVICE_UNAVAILABLE
 
     def __init__(self, service_name: str, *, provider_specific_message: str | None = None) -> None:
         message = f"Service '{service_name}' is not enabled. Please check your configuration and enable the service before trying again."
@@ -311,7 +356,7 @@ class InternalServerError(OGXError):
     Instead, sanitized error information should be logged for debugging purposes.
     """
 
-    status_code: httpx.codes = httpx.codes.INTERNAL_SERVER_ERROR
+    status_code: httpx2.codes = httpx2.codes.INTERNAL_SERVER_ERROR
 
     def __init__(self, detail: str | None = None) -> None:
         message = detail or "An internal error occurred while processing your request."
@@ -342,7 +387,7 @@ class ResponseInputItemNotFoundError(ResourceNotFoundError):
 class FileTooLargeError(OGXError):
     """raised when an uploaded file exceeds the maximum allowed size"""
 
-    status_code: httpx.codes = httpx.codes.REQUEST_ENTITY_TOO_LARGE
+    status_code: httpx2.codes = httpx2.codes.REQUEST_ENTITY_TOO_LARGE
 
     def __init__(self, file_size: int, max_size: int) -> None:
         message = (

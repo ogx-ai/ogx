@@ -108,7 +108,8 @@ class InferenceProvider(Protocol):
 
         Default raises NotImplementedError. OpenAIMixin provides translation via
         openai_chat_completion. Providers with native /v1/messages support
-        (e.g., Ollama, vLLM) override with direct passthrough.
+        (e.g., Anthropic, Meta AI, Ollama, vLLM, Fireworks, DeepSeek) use AnthropicMixin
+        to forward directly to the provider's own /v1/messages endpoint.
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support anthropic messages")
 

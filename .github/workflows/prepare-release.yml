@@ -8,6 +8,7 @@
 # Automates:
 #   - Updating fallback_version to the release version in both pyproject.toml files
 #   - Updating ogx-client pins to the release version
+#   - Regenerating and checking uv.lock after the client has been published
 #   - Committing all changes directly to the release branch
 #
 # =============================================================================
@@ -41,10 +42,10 @@ jobs:
           fetch-depth: 0
 
       - name: Validate inputs
+        env:
+          VERSION: ${{ inputs.version }}
+          BRANCH: ${{ inputs.release_branch }}
         run: |
-          VERSION="${{ inputs.version }}"
-          BRANCH="${{ inputs.release_branch }}"
-
           # Validate version format (X.Y.Z)
           if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "::error::Invalid version format: ${VERSION}. Expected X.Y.Z (e.g., 0.5.1)"
@@ -57,12 +58,34 @@ jobs:
             exit 1
           fi
 
+          if [ "$BRANCH" != "release-${VERSION%.*}.x" ]; then
+            echo "::error::Failed to prepare ${VERSION}: expected branch release-${VERSION%.*}.x"
+            exit 1
+          fi
+
           echo "Preparing release v${VERSION} on ${BRANCH}"
 
-      - name: Update version files and commit directly to release branch
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Verify the matching client is published
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
-          RELEASE_BRANCH="${{ inputs.release_branch }}"
+          if ! curl --fail --silent --show-error "https://pypi.org/pypi/ogx-client/${VERSION}/json" --output /dev/null; then
+            echo "::error::Failed to find ogx-client==${VERSION} on PyPI. Publish clients-only from the release branch first."
+            exit 1
+          fi
+
+      - name: Update version files and lock dependencies
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
 
           # --- Update fallback_version in both pyproject.toml files ---
           sed -i "s/^fallback_version = .*/fallback_version = \"${VERSION}\"/" pyproject.toml
@@ -73,6 +96,14 @@ jobs:
           # Match patterns like: "ogx-client>=X.Y.Z" or "ogx-client==X.Y.Z"
           sed -i -E "s/\"ogx-client[><=!]+[0-9]+\.[0-9]+\.[0-9]+[^\"]*\"/\"ogx-client==${VERSION}\"/" pyproject.toml
 
+          uv lock
+          uv lock --check
+
+      - name: Commit prepared release
+        env:
+          VERSION: ${{ inputs.version }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: |
           # Show what changed
           echo "=== Changes ==="
           git diff
@@ -85,7 +116,7 @@ jobs:
 
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml src/ogx_api/pyproject.toml
+          git add pyproject.toml src/ogx_api/pyproject.toml uv.lock
           git commit -s -m "chore: prepare release v${VERSION}"
           git push origin "HEAD:${RELEASE_BRANCH}"
           echo "Committed version updates directly to ${RELEASE_BRANCH}"

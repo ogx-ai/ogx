@@ -7,7 +7,7 @@ on:
     paths:
       # OpenAPI Generator files
       - 'client-sdks/openapi/Makefile'
-      - 'client-sdks/openapi/merge_stainless_config.py'
+      - 'client-sdks/openapi/merge_resources.py'
       - 'client-sdks/openapi/build_hierarchy.py'
       - 'client-sdks/openapi/patch_hierarchy.py'
       - 'client-sdks/openapi/patches.yml'
@@ -15,8 +15,8 @@ on:
       - 'client-sdks/openapi/openapitools.json'
       - 'client-sdks/openapi/README.md'
       # Stainless source files (our inputs)
-      - 'client-sdks/stainless/openapi.yml'
-      - 'client-sdks/stainless/config.yml'
+      - 'client-sdks/spec/openapi.yml'
+      - 'client-sdks/spec/resources.yml'
       # This workflow itself
       - '.github/workflows/openapi-generator-validation.yml'
   merge_group:
@@ -29,8 +29,8 @@ on:
       - 'release-[0-9]+.[0-9]+.x'
     paths:
       - 'client-sdks/openapi/**'
-      - 'client-sdks/stainless/openapi.yml'
-      - 'client-sdks/stainless/config.yml'
+      - 'client-sdks/spec/openapi.yml'
+      - 'client-sdks/spec/resources.yml'
       - '.github/workflows/openapi-generator-validation.yml'
   workflow_dispatch:
     inputs:
@@ -62,13 +62,13 @@ jobs:
           filters: |
             critical:
               - 'client-sdks/openapi/Makefile'
-              - 'client-sdks/openapi/merge_stainless_config.py'
+              - 'client-sdks/openapi/merge_resources.py'
               - 'client-sdks/openapi/build_hierarchy.py'
               - 'client-sdks/openapi/patch_hierarchy.py'
               - 'client-sdks/openapi/patches.yml'
               - 'client-sdks/openapi/openapitools.json'
-              - 'client-sdks/stainless/openapi.yml'
-              - 'client-sdks/stainless/config.yml'
+              - 'client-sdks/spec/openapi.yml'
+              - 'client-sdks/spec/resources.yml'
 
       - name: Determine test matrix
         id: set-matrix
@@ -130,7 +130,21 @@ jobs:
 
       - name: Install openapi-generator-cli (Linux)
         if: runner.os == 'Linux'
+        # Wrapper version intentionally not pinned: the generator JAR version that
+        # determines SDK output is pinned in client-sdks/openapi/openapitools.json.
         run: npm install -g @openapitools/openapi-generator-cli
+
+      # Cache the generator JAR (downloaded from Maven Central on first use) to
+      # avoid repeated large downloads and rate-limit (HTTP 429) failures in CI.
+      # The key tracks openapitools.json so the cache invalidates when the pinned
+      # generator version changes. Only applies to the npm-based Linux path;
+      # the macOS Homebrew formula bundles its own JAR.
+      - name: Cache openapi-generator JAR (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.openapi-generator
+          key: openapi-generator-${{ runner.os }}-${{ hashFiles('client-sdks/openapi/openapitools.json') }}
 
       - name: Install openapi-generator-cli (macOS)
         if: runner.os == 'macOS'
@@ -187,7 +201,7 @@ jobs:
 
       - name: Generate Python SDK
         working-directory: client-sdks/openapi
-        run: make sdk OPEN=0
+        run: make sdk
 
       - name: Validate generated SDK
         working-directory: client-sdks/openapi

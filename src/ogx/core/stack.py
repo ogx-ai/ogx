@@ -28,6 +28,8 @@ from ogx.core.datatypes import (
 )
 from ogx.core.distribution import get_provider_registry
 from ogx.core.inspect import DistributionInspectConfig, DistributionInspectImpl
+from ogx.core.jobs.bootstrap import initialize_job_runtime
+from ogx.core.jobs.runtime import JobRuntime, reset_job_runtime
 from ogx.core.prompts.prompts import PromptServiceConfig, PromptServiceImpl
 from ogx.core.providers import ProviderImpl, ProviderImplConfig
 from ogx.core.resolver import ProviderRegistry, resolve_impls
@@ -763,6 +765,7 @@ class Stack:
         self.run_config = run_config
         self.provider_registry = provider_registry
         self.impls = None
+        self.job_runtime: JobRuntime | None = None
 
     # Produces a stack of providers for the given run config. Not all APIs may be
     # asked for in the run config.
@@ -785,6 +788,10 @@ class Stack:
             raise ValueError("storage.stores.metadata must be configured with a kv_* backend")
         dist_registry, _ = await create_dist_registry(stores.metadata, self.run_config.distro_name)
         policy = self.run_config.server.auth.access_policy if self.run_config.server.auth else []
+
+        # Build the job queue + worker pool before resolving providers so that
+        # worker-mode providers can register descriptors and receive a proxy.
+        self.job_runtime = await initialize_job_runtime(self.run_config)
 
         internal_impls = {}
         add_internal_implementations(internal_impls, self.run_config, policy)
@@ -809,6 +816,12 @@ class Stack:
         await register_connectors(self.run_config, impls)
         await refresh_registry_once(impls)
         await validate_vector_stores_config(self.run_config.vector_stores, impls)
+
+        # Workers reclaim interrupted jobs so terminal resource cleanup happens
+        # inside the restored request identity and provider context.
+        if self.job_runtime is not None:
+            self.job_runtime.pool.start()
+
         self.impls = impls
 
     def create_registry_refresh_task(self):
@@ -832,6 +845,11 @@ class Stack:
         REGISTRY_REFRESH_TASK.add_done_callback(cb)
 
     async def shutdown(self):
+        if self.job_runtime is not None:
+            self.job_runtime.pool.shutdown()
+            reset_job_runtime()
+            self.job_runtime = None
+
         for impl in self.impls.values():
             impl_name = impl.__class__.__name__
             logger.debug("Shutting down", impl_name=impl_name)

@@ -56,8 +56,14 @@ describe("VectorStoreDetailView", () => {
         id: "vs_123",
         name: "Test Vector Store",
         created_at: 1710000000,
-        status: "ready",
-        file_counts: { total: 5 },
+        status: "completed",
+        file_counts: {
+          total: 5,
+          completed: 5,
+          cancelled: 0,
+          failed: 0,
+          in_progress: 0,
+        },
         usage_bytes: 1024,
         metadata: {
           provider_id: "test_provider",
@@ -101,8 +107,14 @@ describe("VectorStoreDetailView", () => {
         id: "vs_123",
         name: "Test Vector Store",
         created_at: 1710000000,
-        status: "ready",
-        file_counts: { total: 5 },
+        status: "completed",
+        file_counts: {
+          total: 5,
+          completed: 5,
+          cancelled: 0,
+          failed: 0,
+          in_progress: 0,
+        },
         usage_bytes: 1024,
         metadata: {
           provider_id: "test_provider",
@@ -141,8 +153,14 @@ describe("VectorStoreDetailView", () => {
       id: "vs_123",
       name: "Test Vector Store",
       created_at: 1710000000,
-      status: "ready",
-      file_counts: { total: 3 },
+      status: "completed",
+      file_counts: {
+        total: 3,
+        completed: 3,
+        cancelled: 0,
+        failed: 0,
+        in_progress: 0,
+      },
       usage_bytes: 2048,
       metadata: {
         provider_id: "test_provider",
@@ -155,18 +173,24 @@ describe("VectorStoreDetailView", () => {
         status: "completed",
         created_at: 1710000001,
         usage_bytes: 0,
+        vector_store_id: "vs_123",
+        chunking_strategy: { static: {}, type: "static" },
       },
       {
         id: "file_2",
         status: "completed",
         created_at: 1710000002,
         usage_bytes: 0,
+        vector_store_id: "vs_123",
+        chunking_strategy: { static: {}, type: "static" },
       },
       {
         id: "file_3",
         status: "completed",
         created_at: 1710000003,
         usage_bytes: 0,
+        vector_store_id: "vs_123",
+        chunking_strategy: { static: {}, type: "static" },
       },
     ];
 
@@ -185,7 +209,7 @@ describe("VectorStoreDetailView", () => {
       expect(
         screen.getByText(new Date(1710000000 * 1000).toLocaleString())
       ).toBeInTheDocument();
-      expect(screen.getByText("ready")).toBeInTheDocument();
+      expect(screen.getAllByText("completed").length).toBeGreaterThan(0);
       expect(screen.getByText("3")).toBeInTheDocument();
       expect(screen.getByText("2048")).toBeInTheDocument();
       expect(screen.getByText("test_provider")).toBeInTheDocument();
@@ -197,8 +221,14 @@ describe("VectorStoreDetailView", () => {
         id: "vs_minimal",
         name: "",
         created_at: 1710000000,
-        status: "ready",
-        file_counts: { total: 0 },
+        status: "completed",
+        file_counts: {
+          total: 0,
+          completed: 0,
+          cancelled: 0,
+          failed: 0,
+          in_progress: 0,
+        },
         usage_bytes: 0,
         metadata: {},
       };
@@ -206,7 +236,7 @@ describe("VectorStoreDetailView", () => {
       render(<VectorStoreDetailView {...defaultProps} store={minimalStore} />);
 
       expect(screen.getByText("vs_minimal")).toBeInTheDocument();
-      expect(screen.getByText("ready")).toBeInTheDocument();
+      expect(screen.getByText("completed")).toBeInTheDocument();
       const zeroTexts = screen.getAllByText("0");
       expect(zeroTexts.length).toBeGreaterThanOrEqual(2);
     });
@@ -228,8 +258,14 @@ describe("VectorStoreDetailView", () => {
       id: "vs_123",
       name: "Test Vector Store",
       created_at: 1710000000,
-      status: "ready",
-      file_counts: { total: 2 },
+      status: "completed",
+      file_counts: {
+        total: 2,
+        completed: 2,
+        cancelled: 0,
+        failed: 0,
+        in_progress: 0,
+      },
       usage_bytes: 2048,
       metadata: {},
     };
@@ -240,12 +276,16 @@ describe("VectorStoreDetailView", () => {
         status: "completed",
         created_at: 1710001000,
         usage_bytes: 1024,
+        vector_store_id: "vs_123",
+        chunking_strategy: { static: {}, type: "static" },
       },
       {
         id: "file_456",
-        status: "processing",
+        status: "in_progress",
         created_at: 1710002000,
         usage_bytes: 512,
+        vector_store_id: "vs_123",
+        chunking_strategy: { static: {}, type: "static" },
       },
     ];
 
@@ -269,14 +309,14 @@ describe("VectorStoreDetailView", () => {
       expect(screen.getByText("Usage Bytes")).toBeInTheDocument();
 
       expect(screen.getByText("file_123")).toBeInTheDocument();
-      expect(screen.getByText("completed")).toBeInTheDocument();
+      expect(screen.getAllByText("completed").length).toBeGreaterThan(0);
       expect(
         screen.getByText(new Date(1710001000 * 1000).toLocaleString())
       ).toBeInTheDocument();
       expect(screen.getByText("1024")).toBeInTheDocument();
 
       expect(screen.getByText("file_456")).toBeInTheDocument();
-      expect(screen.getByText("processing")).toBeInTheDocument();
+      expect(screen.getByText("in_progress")).toBeInTheDocument();
       expect(
         screen.getByText(new Date(1710002000 * 1000).toLocaleString())
       ).toBeInTheDocument();
@@ -334,8 +374,14 @@ describe("VectorStoreDetailView", () => {
       id: "vs_layout_test",
       name: "Layout Test Store",
       created_at: 1710000000,
-      status: "ready",
-      file_counts: { total: 1 },
+      status: "completed",
+      file_counts: {
+        total: 1,
+        completed: 1,
+        cancelled: 0,
+        failed: 0,
+        in_progress: 0,
+      },
       usage_bytes: 1024,
       metadata: {},
     };
@@ -345,6 +391,8 @@ describe("VectorStoreDetailView", () => {
         status: "completed",
         created_at: 1710000001,
         usage_bytes: 0,
+        vector_store_id: "vs_layout_test",
+        chunking_strategy: { static: {}, type: "static" },
       },
     ];
 
@@ -361,7 +409,7 @@ describe("VectorStoreDetailView", () => {
 
       expect(screen.getByText("vs_layout_test")).toBeInTheDocument();
       expect(screen.getByText("Layout Test Store")).toBeInTheDocument();
-      expect(screen.getByText("ready")).toBeInTheDocument();
+      expect(screen.getAllByText("completed").length).toBeGreaterThan(0);
       expect(screen.getByText("1")).toBeInTheDocument();
       expect(screen.getByText("1024")).toBeInTheDocument();
     });

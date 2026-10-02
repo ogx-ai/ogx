@@ -1,0 +1,67 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_non_streaming[client_with_models-txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b-inference:chat_completion:non_streaming_02]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Which planet has rings around it with a name starting with letter S?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-30c7ef587ea0",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Saturn is the planet in our solar system with prominent rings, and its name starts with the letter **S**. (While Jupiter, Uranus, and Neptune also have ring systems, none of their names begin with S.)",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Here's a thinking process:\n\n1.  **Analyze User Input:**\n   - Question: \"Which planet has rings around it with a name starting with letter S?\"\n   - Key elements: Planet, has rings, name starts with 'S'\n\n2.  **Identify Planets with Rings:**\n   - In our solar system, the gas giants have rings: Jupiter, Saturn, Uranus, Neptune.\n   - Saturn is the most famous for its prominent rings.\n   - Uranus and Neptune also have rings, but they're fainter.\n   - Jupiter has a very faint ring system.\n\n3. **Check Names Starting with 'S':**\n   - Saturn: starts with 'S'\n   - Others: Jupiter (J), Uranus (U), Neptune (N) - none start with S.\n   - Extrasolar? Not typically what's meant, but even then, not standard naming with 'S' for ring systems.\n   - So Saturn is the clear answer.\n\n4.  **Formulate Response:**\n   - Directly answer: Saturn\n   - Mention it's the planet with rings and its name starts with S.\n   - Optionally note that other planets have rings too, but Saturn is the one matching the letter condition.\n   - Keep it simple and accurate.\n\n   Check: \"Which planet has rings around it with a name starting with letter S?\" -> Saturn.\n   All good. I'll output a concise answer.\u2705",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 348,
+          "prompt_tokens": 30,
+          "total_tokens": 378,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 29
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

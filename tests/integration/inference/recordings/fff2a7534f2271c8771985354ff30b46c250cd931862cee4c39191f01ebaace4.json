@@ -1,0 +1,77 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_inference_store[openai_client-txt=llama-cpp-server/qwen3-0.6b-False]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hello, world!"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-fff2a7534f22",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Hello, world! \ud83d\ude0a How can I assist you today?",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user said \"Hello, world!\" and I need to respond. Let me check the prompt again. They just said \"Hello, world!\" so I should acknowledge that. The response should be friendly and confirm their message. Maybe add a line about how I'm here to help. Keep it simple and positive. Don't add any extra text, just a direct reply. Let me make sure there's no markdown and keep it natural.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 108,
+          "prompt_tokens": 12,
+          "total_tokens": 120,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 3
+          }
+        },
+        "timings": {
+          "cache_n": 3,
+          "prompt_n": 9,
+          "prompt_ms": 70.154,
+          "prompt_per_token_ms": 7.794888888888888,
+          "prompt_per_second": 128.28919234826242,
+          "predicted_n": 108,
+          "predicted_ms": 2551.407,
+          "predicted_per_token_ms": 23.84492523364486,
+          "predicted_per_second": 41.9376446015865
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -938,3 +938,6 @@ async def test_create_openai_response_with_output_types_as_input(
 
     assert stored_with_outputs.input == input_with_output_types
     assert len(stored_with_outputs.input) == 3
+
+
+# End of file

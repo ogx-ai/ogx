@@ -1,0 +1,44 @@
+{
+  "test_id": "tests/integration/inference/test_rerank.py::test_rerank_semantic_correctness[rerank=llama-cpp-server/bge-reranker-v2-m3-What is C++?-items1-C++ is a programming language. ]",
+  "request": {
+    "test_id": "tests/integration/inference/test_rerank.py::test_rerank_semantic_correctness[rerank=llama-cpp-server/bge-reranker-v2-m3-What is C++?-items1-C++ is a programming language. ]",
+    "url": "http://localhost:8080/v1/rerank",
+    "method": "POST",
+    "payload": {
+      "model": "bge-reranker-v2-m3",
+      "query": "What is C++?",
+      "documents": [
+        "Learning new things is interesting. ",
+        "C++ is a programming language. ",
+        "Books provide knowledge and entertainment. "
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "model": "bge-reranker-v2-m3",
+      "object": "list",
+      "usage": {
+        "prompt_tokens": 44,
+        "total_tokens": 44
+      },
+      "results": [
+        {
+          "index": 1,
+          "relevance_score": 8.328681945800781
+        },
+        {
+          "index": 0,
+          "relevance_score": -9.861507415771484
+        },
+        {
+          "index": 2,
+          "relevance_score": -11.038870811462402
+        }
+      ]
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

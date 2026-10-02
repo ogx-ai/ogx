@@ -41,7 +41,14 @@ logger = get_logger(name=__name__, category="core::routing_tables")
 class ModelsRoutingTable(CommonRoutingTableImpl, Models):
     """Routing table for managing model registrations, provider lookups, and dynamic model discovery."""
 
-    listed_providers: set[str] = set()
+    def __init__(
+        self,
+        impls_by_provider_id: dict[str, Any],
+        dist_registry: Any,
+        policy: list[Any],
+    ) -> None:
+        super().__init__(impls_by_provider_id, dist_registry, policy)
+        self.listed_providers: set[str] = set()
 
     async def _resolve_auto_model(self, provider_id: str, model_type: ModelType) -> str:
         """Resolve provider_model_id="auto" to an actual model from the provider.
@@ -88,6 +95,21 @@ class ModelsRoutingTable(CommonRoutingTableImpl, Models):
         return selected_model.provider_resource_id
 
     async def refresh(self) -> None:
+        # Delete listed_from_provider entries for inactive/disabled providers
+        existing_models = await self.get_all_with_type("model")
+        for model in existing_models:
+            if (
+                model.source == RegistryEntrySource.listed_from_provider
+                and model.provider_id not in self.impls_by_provider_id
+            ):
+                logger.debug(
+                    "Pruning model from disabled provider",
+                    model=model.identifier,
+                    provider_id=model.provider_id,
+                )
+                await self.unregister_object(model)
+                self.listed_providers.discard(model.provider_id)
+
         for provider_id, provider in self.impls_by_provider_id.items():
             refresh = await provider.should_refresh_models()
             refresh = refresh or provider_id not in self.listed_providers

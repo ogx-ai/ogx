@@ -18,9 +18,11 @@ from typing_extensions import Annotated
 {{/imports}}
 
 from {{packageName}}.api_client import ApiClient, RequestSerialized
+from {{packageName}}.async_api_client import AsyncApiClient
 from {{packageName}}.api_response import ApiResponse
 from {{packageName}}.rest import RESTResponseType
 from {{packageName}}.stream import Stream
+from {{packageName}}.async_stream import AsyncStream
 from {{packageName}}.lib._utils import pascal_to_snake_case
 
 
@@ -334,6 +336,149 @@ class {{classname}}:
             _host=_host,
             _request_auth=_request_auth
         )
+
+{{#vendorExtensions.x-operation-aliases}}
+    {{alias}} = {{target}}
+{{/vendorExtensions.x-operation-aliases}}
+
+{{/operation}}
+
+
+class Async{{classname}}({{classname}}):
+    """Async version of {{classname}}.
+
+    Inherits serialization and deserialization from {{classname}}.
+    Overrides HTTP methods to use async/await with AsyncApiClient.
+    """
+
+    def __init__(self, api_client=None) -> None:
+        if api_client is None:
+            api_client = AsyncApiClient.get_default()
+        self.api_client = api_client
+        self.logger = logging.getLogger(Async{{classname}}.__name__)
+
+        # Child API attributes (set by AsyncOgxClient based on x-nesting-path)
+{{#operation}}{{#vendorExtensions.x-nesting-path}}{{#-first}}{{#tags}}{{#-first}}{{#vendorExtensions.x-nesting-path}}{{^-last}}        self.{{.}}: Any | None = None  # Next in nesting path
+{{/-last}}{{/vendorExtensions.x-nesting-path}}{{/-first}}{{/tags}}{{/-first}}{{/vendorExtensions.x-nesting-path}}{{/operation}}
+
+    def _create_event_stream(self, response_data: RESTResponseType, stream_type_name: str) -> AsyncStream[Any]:
+        """Create a typed async event stream from an SSE response.
+
+        Args:
+            response_data: The raw HTTP response containing the SSE stream.
+            stream_type_name: The schema name for the streaming response type.
+        """
+        stream_class = None
+        discriminator_map = None
+        discriminator_property = None
+        try:
+            module_name = pascal_to_snake_case(stream_type_name)
+            model_module = importlib.import_module('{{packageName}}.models.' + module_name)
+            stream_class = getattr(model_module, stream_type_name)
+            discriminator_map = getattr(stream_class, 'discriminator_value_class_map', None)
+            discriminator_property = getattr(stream_class, 'discriminator_property_name', None)
+        except (ImportError, ModuleNotFoundError, AttributeError) as e:
+            self.logger.debug(f"Could not import stream type {stream_type_name}: {e}")
+
+        def stream_decoder(data_str: str) -> Any:
+            if not data_str:
+                return None
+            try:
+                data = json.loads(data_str)
+            except json.JSONDecodeError:
+                return data_str
+
+            if discriminator_map and discriminator_property:
+                disc_value = data.get(discriminator_property, '')
+                variant_class_name = discriminator_map.get(disc_value)
+                if variant_class_name:
+                    try:
+                        variant_module_name = pascal_to_snake_case(variant_class_name)
+                        variant_module = importlib.import_module('{{packageName}}.models.' + variant_module_name)
+                        variant_class = getattr(variant_module, variant_class_name)
+                        return variant_class.from_dict(data)
+                    except Exception as e:
+                        self.logger.debug(f"Failed to deserialize as {variant_class_name}: {e}")
+
+            if stream_class is not None:
+                try:
+                    result = stream_class.from_dict(data)
+                    if hasattr(result, 'actual_instance') and result.actual_instance is not None:
+                        return result.actual_instance
+                    return result
+                except Exception as e:
+                    self.logger.debug(f"Failed to deserialize as {stream_type_name}: {e}")
+
+            return data
+
+        return AsyncStream(
+            response=response_data.response,
+            client=self.api_client,
+            decoder=stream_decoder,
+        )
+
+{{#operation}}
+
+    @validate_call
+    async def {{#vendorExtensions.x-operation-name}}{{vendorExtensions.x-operation-name}}{{/vendorExtensions.x-operation-name}}{{^vendorExtensions.x-operation-name}}{{operationId}}{{/vendorExtensions.x-operation-name}}{{>partial_api_args}} -> {{#vendorExtensions.x-streaming}}{{#vendorExtensions.x-unwrap-list-response}}{{#returnType}}{{#returnContainer}}{{{returnBaseType}}} | AsyncStream[{{{returnBaseType}}}]{{/returnContainer}}{{^returnContainer}}{{{returnType}}} | AsyncStream[{{{returnType}}}]{{/returnContainer}}{{/returnType}}{{^returnType}}None | AsyncStream[None]{{/returnType}}{{/vendorExtensions.x-unwrap-list-response}}{{^vendorExtensions.x-unwrap-list-response}}{{{returnType}}}{{^returnType}}None{{/returnType}} | AsyncStream[{{{returnType}}}{{^returnType}}None{{/returnType}}]{{/vendorExtensions.x-unwrap-list-response}}{{/vendorExtensions.x-streaming}}{{^vendorExtensions.x-streaming}}{{#vendorExtensions.x-unwrap-list-response}}{{#returnType}}{{#returnContainer}}{{{returnBaseType}}}{{/returnContainer}}{{^returnContainer}}{{{returnType}}}{{/returnContainer}}{{/returnType}}{{^returnType}}None{{/returnType}}{{/vendorExtensions.x-unwrap-list-response}}{{^vendorExtensions.x-unwrap-list-response}}{{{returnType}}}{{^returnType}}None{{/returnType}}{{/vendorExtensions.x-unwrap-list-response}}{{/vendorExtensions.x-streaming}}:
+{{>partial_api}}
+
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+
+{{#vendorExtensions.x-streaming}}
+        # Check if this is a streaming response
+        content_type = response_data.response.headers.get('Content-Type', '')
+        if 'text/event-stream' in content_type:
+            return self._create_event_stream(response_data, "{{vendorExtensions.x-streaming-type}}")
+
+{{/vendorExtensions.x-streaming}}
+        await response_data.aread()
+        _deserialized = self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        ).data
+        # Unwrap List*Response wrappers to return the data field directly
+        {{#vendorExtensions.x-unwrap-list-response}}
+        if _deserialized is not None and hasattr(_deserialized, 'data'):
+            return _deserialized.data
+        {{/vendorExtensions.x-unwrap-list-response}}
+        return _deserialized
+
+    @validate_call
+    async def {{#vendorExtensions.x-operation-name}}{{vendorExtensions.x-operation-name}}{{/vendorExtensions.x-operation-name}}{{^vendorExtensions.x-operation-name}}{{operationId}}{{/vendorExtensions.x-operation-name}}_with_http_info{{>partial_api_args}} -> {{#vendorExtensions.x-streaming}}ApiResponse[{{{returnType}}}{{^returnType}}None{{/returnType}}] | AsyncStream[{{{returnType}}}{{^returnType}}None{{/returnType}}]{{/vendorExtensions.x-streaming}}{{^vendorExtensions.x-streaming}}ApiResponse[{{{returnType}}}{{^returnType}}None{{/returnType}}]{{/vendorExtensions.x-streaming}}:
+{{>partial_api}}
+
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+
+{{#vendorExtensions.x-streaming}}
+        # Check if this is a streaming response
+        content_type = response_data.response.headers.get('Content-Type', '')
+        if 'text/event-stream' in content_type:
+            return self._create_event_stream(response_data, "{{vendorExtensions.x-streaming-type}}")
+
+{{/vendorExtensions.x-streaming}}
+        await response_data.aread()
+        return self.api_client.response_deserialize(
+            response_data=response_data,
+            response_types_map=_response_types_map,
+        )
+
+    @validate_call
+    async def {{#vendorExtensions.x-operation-name}}{{vendorExtensions.x-operation-name}}{{/vendorExtensions.x-operation-name}}{{^vendorExtensions.x-operation-name}}{{operationId}}{{/vendorExtensions.x-operation-name}}_without_preload_content{{>partial_api_args}} -> RESTResponseType:
+{{>partial_api}}
+
+        response_data = await self.api_client.call_api(
+            *_param,
+            _request_timeout=_request_timeout
+        )
+        return response_data.response
+
 
 {{#vendorExtensions.x-operation-aliases}}
     {{alias}} = {{target}}

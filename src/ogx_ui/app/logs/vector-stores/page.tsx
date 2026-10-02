@@ -1,10 +1,7 @@
 "use client";
 
 import React from "react";
-import type {
-  ListVectorStoresResponse,
-  VectorStore,
-} from "ogx-client/resources/vector-stores/vector-stores";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
 import { useRouter } from "next/navigation";
 import { usePagination } from "@/hooks/use-pagination";
 import { Button } from "@/components/ui/button";
@@ -52,7 +49,11 @@ export default function VectorStoresPage() {
         limit: params.limit,
         order: params.order,
       } as Parameters<typeof client.vectorStores.list>[0]);
-      return response as ListVectorStoresResponse;
+      return {
+        data: response.data,
+        has_more: response.has_more,
+        last_id: response.last_id,
+      };
     },
     errorMessagePrefix: "vector stores",
   });
@@ -232,8 +233,10 @@ export default function VectorStoresPage() {
               {filteredStores.map(store => {
                 const fileCounts = store.file_counts;
                 const metadata = store.metadata || {};
-                const providerId = metadata.provider_id ?? "";
-                const providerDbId = metadata.provider_vector_db_id ?? "";
+                const providerId = String(metadata.provider_id ?? "");
+                const providerDbId = String(
+                  metadata.provider_vector_db_id ?? ""
+                );
 
                 return (
                   <TableRow
@@ -349,11 +352,15 @@ export default function VectorStoresPage() {
                   editingStore
                     ? {
                         name: editingStore.name || "",
-                        embedding_model:
-                          editingStore.metadata?.embedding_model || "",
-                        embedding_dimension:
-                          editingStore.metadata?.embedding_dimension || 768,
-                        provider_id: editingStore.metadata?.provider_id || "",
+                        embedding_model: String(
+                          editingStore.metadata?.embedding_model || ""
+                        ),
+                        embedding_dimension: Number(
+                          editingStore.metadata?.embedding_dimension || 768
+                        ),
+                        provider_id: String(
+                          editingStore.metadata?.provider_id || ""
+                        ),
                       }
                     : undefined
                 }

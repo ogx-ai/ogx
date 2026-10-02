@@ -57,7 +57,6 @@ def make_stack_config(**overrides) -> StackConfig:
     storage = overrides.pop("storage", _default_storage())
     defaults = dict(
         distro_name="test_image",
-        apis=[],
         providers={},
         storage=storage,
     )
@@ -401,7 +400,6 @@ pip_packages:
         # No importlib patch needed, should not import module when listing
         config = StackConfig(
             distro_name="test_image",
-            apis=[],
             providers={
                 "inference": [
                     Provider(
@@ -496,7 +494,6 @@ class TestGetExternalProvidersFromModule:
 
         config = StackConfig(
             distro_name="test_image",
-            apis=[],
             providers={
                 "inference": [
                     Provider(
@@ -532,7 +529,6 @@ class TestGetExternalProvidersFromModule:
 
         config = StackConfig(
             distro_name="test_image",
-            apis=[],
             providers={
                 "inference": [
                     Provider(provider_id="provider1", provider_type="provider1", config={}, module="provider1"),

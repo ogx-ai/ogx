@@ -40,6 +40,7 @@ PROVIDER_DISPLAY_NAMES = {
     "tgi": "TGI",
     "llama-cpp-server": "llama.cpp server",
     "llama-openai-compat": "Llama API",
+    "text-embeddings-inference": "Text-Embeddings-Inference",
 }
 
 SETUP_PROVIDER_ALIASES = {
@@ -64,11 +65,13 @@ SETUP_PROVIDER_ALIASES = {
     "tgi": "tgi",
     "llama-cpp-server": "llama-cpp-server",
     "llama-api": "llama-openai-compat",
+    "text-embeddings-inference": "text-embeddings-inference",
 }
 
 # These inference providers exist in the registry but do not have named
 # integration-test setups yet, so they are intentionally excluded from this doc.
 INTENTIONALLY_UNMAPPED_REGISTRY_PROVIDERS = {
+    "deepseek",
     "mistral",
     "meta",
     "nvidia",

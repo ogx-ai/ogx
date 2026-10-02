@@ -54,3 +54,18 @@ The tenancy mode is set process-wide during startup via `set_default_tenancy_mod
 Storage is configured in `StackConfig.storage` via `StorageConfig`. The `stores` field contains typed references (`KVStoreReference`, `SqlStoreReference`, `InferenceStoreReference`) that point to specific backend configurations.
 
 See `datatypes.py` for all config types and `StorageBackendType` for the enum of supported backends.
+
+### Inference Store (enabled flag)
+
+Setting `inference.enabled: false` on the inference store reference explicitly
+disables Chat Completions persistence. Omitting the flag (or the whole
+reference) keeps the store enabled for backward compatibility, and setting the
+reference itself to `null` remains a configuration error.
+
+When disabled, no `InferenceStore` is constructed, no `inference_store` table is
+created, and no background write workers run. Streaming and non-streaming Chat
+Completions continue to work. The history endpoints (`list`, `retrieve`, and
+`messages`) report that persistence is not configured (HTTP 501).
+
+Other stores (`responses`, `datasets`, `eval`, `files`, `prompts`, `vector_io`)
+are unaffected by disabling the inference store.

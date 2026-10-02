@@ -756,3 +756,6 @@ class TestResponsesProviderDataPropagation:
         for user in error_handler_users:
             assert user is not None, "Error handler should have a user identity"
             assert user.principal == "bob", "Error handler should run as bob, not the worker's inherited identity"
+
+
+# End of file

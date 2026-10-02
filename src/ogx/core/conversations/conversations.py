@@ -223,6 +223,16 @@ class ConversationServiceImpl(Conversations):
         """Validate conversation ID format and return the conversation if it exists."""
         return await self.get_conversation(GetConversationRequest(conversation_id=conversation_id))
 
+    async def _check_item_not_in_other_conversation(self, item_id: str, conversation_id: str) -> None:
+        """Reject a client-supplied item ID that already belongs to a different conversation."""
+        existing = await self.sql_store.fetch_one(table="conversation_items", where={"id": item_id})
+        if existing is not None and existing["conversation_id"] != conversation_id:
+            raise InvalidParameterError(
+                "items",
+                item_id,
+                f"Item already belongs to conversation '{existing['conversation_id']}'.",
+            )
+
     async def _next_sort_order(self, conversation_id: str) -> int:
         result = await self.sql_store.fetch_all(
             table="conversation_items",
@@ -239,13 +249,15 @@ class ConversationServiceImpl(Conversations):
         """Create (add) items to a conversation."""
         await self._get_validated_conversation(conversation_id)
 
-        created_items = []
         base_time = int(time.time())
         base_sort_order = await self._next_sort_order(conversation_id)
 
+        item_records: list[dict[str, Any]] = []
         for i, item in enumerate(request.items):
             item_dict = item.model_dump()
             item_id = self._get_or_generate_item_id(item, item_dict)
+            if item.id is not None:
+                await self._check_item_not_in_other_conversation(item_id, conversation_id)
 
             item_record = {
                 "id": item_id,
@@ -254,14 +266,16 @@ class ConversationServiceImpl(Conversations):
                 "sort_order": base_sort_order + i,
                 "item_data": item_dict,
             }
+            item_records.append(item_record)
 
+        for item_record in item_records:
             await self.sql_store.upsert(
                 table="conversation_items",
                 data=item_record,
                 conflict_columns=["id"],
             )
 
-            created_items.append(item_dict)
+        created_items = [item_record["item_data"] for item_record in item_records]
 
         logger.debug(
             "Created items in conversation", created_items_count=len(created_items), conversation_id=conversation_id

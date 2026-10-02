@@ -8,9 +8,17 @@ For the list of target models per provider and their CI lanes, see [TARGET_MODEL
 
 ```bash
 # Run all integration tests with existing recordings
-uv run --group test \
+uv run --group dev \
   pytest -sv tests/integration/ --stack-config=starter
 ```
+
+### Provider dependencies
+
+`scripts/integration-tests.sh` checks that the provider dependencies for the
+stack config are installed — the same `ogx stack list-deps <config> |
+xargs -L1 uv pip install` step CI runs — and fails early with the exact
+install command when any are missing. Pass `--install-deps` to install them
+automatically before running the tests.
 
 ## Configuration Options
 
@@ -39,6 +47,7 @@ Model parameters can be influenced by the following options:
 - `--vision-model`: comma-separated list of vision models.
 - `--embedding-model`: comma-separated list of embedding models.
 - `--judge-model`: comma-separated list of judge models.
+- `--rerank-model`: comma-separated list of rerank models.
 - `--embedding-dimension`: output dimensionality of the embedding model to use for testing. Default: 768
 
 Each of these are comma-separated lists and can be used to generate multiple parameter combinations. Note that tests will be skipped
@@ -54,7 +63,7 @@ if no model is specified.
 - `--setup`: global configuration that can be used with any suite. Setups prefill model/env defaults; explicit CLI flags always win.
   - Available setups:
     - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses llama3.2:3b-instruct-fp16)
-    - `vllm`: VLLM provider for efficient local inference (sets VLLM_URL, uses Llama-3.2-1B-Instruct)
+    - `vllm`: vLLM provider running natively on the host (sets VLLM_URL, uses Qwen/Qwen3-0.6B)
     - `gpt`: OpenAI GPT models for high-quality responses (uses gpt-4o)
     - `claude`: Anthropic Claude models for high-quality responses (uses claude-3-5-sonnet)
 
@@ -233,12 +242,13 @@ gh workflow run record-integration-tests.yml \
 **Available providers:**
 
 - `ollama` - No API keys (auto-runs on PRs)
+- `llama-cpp-server` - No API keys (auto-runs on PRs)
+- `vllm` - No API keys (auto-runs on PRs; installed natively from a pinned CPU wheel)
+- `text-embeddings-inference` - No API keys (auto-runs on PRs)
 - `gpt` - OpenAI (requires `OPENAI_API_KEY` secret)
 - `azure` - Azure OpenAI (requires `AZURE_API_KEY`, `AZURE_API_BASE` secrets)
 - `bedrock` - AWS Bedrock (requires `AWS_BEARER_TOKEN_BEDROCK` secret)
 - `watsonx` - IBM watsonx (requires `WATSONX_API_KEY`, `WATSONX_BASE_URL`, `WATSONX_PROJECT_ID` secrets)
-
-Note: `vllm` is not yet supported in this recording workflow (not in the provider matrix).
 
 **Adding new providers:**
 
@@ -304,8 +314,8 @@ def test_asymmetric_embeddings(ogx_client, embedding_model_id):
 TypeScript SDK tests can run alongside Python tests when testing against `server:<config>` stacks. Set `TS_CLIENT_PATH` to the path or version of `ogx-client-typescript` to enable:
 
 ```bash
-# Use published npm package (responses suite)
-TS_CLIENT_PATH=^0.3.2 scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
+# Use the latest published npm package (responses suite)
+TS_CLIENT_PATH=latest scripts/integration-tests.sh --stack-config server:ci-tests --suite responses --setup gpt
 
 # Use local checkout from ~/.cache (recommended for development)
 git clone https://github.com/ogx-ai/ogx-client-typescript.git ~/.cache/ogx-client-typescript

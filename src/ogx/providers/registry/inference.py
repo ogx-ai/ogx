@@ -12,19 +12,6 @@ from ogx_api import (
     RemoteProviderSpec,
 )
 
-BUILTIN_DEPS = [
-    "accelerate",
-    "fairscale",
-    "torch",
-    "torchvision",
-    "transformers",
-    "zmq",
-    "lm-format-enforcer",
-    "sentence-transformers",
-    "torchao==0.8.0",
-    "fbgemm-gpu-genai==1.1.2",
-]
-
 
 def available_providers() -> list[ProviderSpec]:
     """Return the list of available inference provider specifications.
@@ -39,7 +26,8 @@ def available_providers() -> list[ProviderSpec]:
             # CrossEncoder depends on torchao.quantization
             pip_packages=[
                 "torch torchvision torchao>=0.12.0 --extra-index-url https://download.pytorch.org/whl/cpu",
-                "sentence-transformers --no-deps",
+                # Floor must match the `starter` extra in pyproject.toml -- update both
+                "sentence-transformers>=6.0.0",  # we installed cpu versions of pytorch so sentence-transformers doesn't pull in cuda deps
                 # required by some SentenceTransformers architectures for tensor rearrange/merge ops
                 "einops",
                 # fast HF tokenization backend used by SentenceTransformers models
@@ -73,6 +61,16 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.inference,
+            adapter_type="deepseek",
+            provider_type="remote::deepseek",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.deepseek",
+            config_class="ogx.providers.remote.inference.deepseek.DeepSeekImplConfig",
+            provider_data_validator="ogx.providers.remote.inference.deepseek.config.DeepSeekProviderDataValidator",
+            description="DeepSeek inference provider for accessing DeepSeek models via the DeepSeek API.",
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
             adapter_type="ollama",
             provider_type="remote::ollama",
             pip_packages=["ollama", "aiohttp", "h11>=0.16.0"],
@@ -94,9 +92,7 @@ def available_providers() -> list[ProviderSpec]:
             api=Api.inference,
             adapter_type="fireworks",
             provider_type="remote::fireworks",
-            pip_packages=[
-                "fireworks-ai<=0.17.16",
-            ],
+            pip_packages=[],
             module="ogx.providers.remote.inference.fireworks",
             config_class="ogx.providers.remote.inference.fireworks.FireworksImplConfig",
             provider_data_validator="ogx.providers.remote.inference.fireworks.FireworksProviderDataValidator",
@@ -107,7 +103,7 @@ def available_providers() -> list[ProviderSpec]:
             adapter_type="together",
             provider_type="remote::together",
             pip_packages=[
-                "together>=2",
+                "together>=2.34.0",
             ],
             module="ogx.providers.remote.inference.together",
             config_class="ogx.providers.remote.inference.together.TogetherImplConfig",
@@ -208,6 +204,7 @@ Configuration:
 - Set VERTEX_AI_PROJECT environment variable (required)
 - Set VERTEX_AI_LOCATION environment variable (optional, defaults to global)
 - Use Google Cloud Application Default Credentials or service account key
+- For Gemini 3 tool loops, set thought_signature_store to a shared KV backend
 
 Authentication Setup:
 Option 1 (Recommended): gcloud auth application-default login
@@ -304,6 +301,15 @@ Oracle Cloud Infrastructure (OCI) Generative AI inference provider for accessing
 Provider documentation
 https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm
 """,
+        ),
+        RemoteProviderSpec(
+            api=Api.inference,
+            adapter_type="text-embeddings-inference",
+            provider_type="remote::text-embeddings-inference",
+            pip_packages=[],
+            module="ogx.providers.remote.inference.text_embeddings_inference",
+            config_class="ogx.providers.remote.inference.text_embeddings_inference.config.TextEmbeddingsInferenceConfig",
+            description="HuggingFace Text-Embeddings-Inference provider for embedding models served by a TEI server via its OpenAI-compatible /v1 endpoint.",
         ),
         RemoteProviderSpec(
             api=Api.inference,

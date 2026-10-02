@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useAuthClient } from "@/hooks/use-auth-client";
 import { Search, ChevronRight, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +52,6 @@ interface Tool {
 type LoadStatus = "loading" | "idle" | "error";
 
 export function ToolsManagement() {
-  const client = useAuthClient();
   const [toolGroups, setToolGroups] = useState<ToolGroup[]>([]);
   const [tools, setTools] = useState<Tool[]>([]);
   const [toolGroupsStatus, setToolGroupsStatus] =
@@ -71,37 +69,13 @@ export function ToolsManagement() {
   );
 
   const fetchToolGroups = useCallback(async () => {
-    try {
-      setToolGroupsStatus("loading");
-      const response = await client.toolgroups.list();
-
-      const groupsArray = Array.isArray(response)
-        ? response
-        : response &&
-            typeof response === "object" &&
-            "data" in response &&
-            Array.isArray((response as { data: unknown }).data)
-          ? (response as { data: ToolGroup[] }).data
-          : [];
-
-      setToolGroups(groupsArray);
-      setToolGroupsStatus("idle");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        msg.includes("404") ||
-        msg.includes("Not Found") ||
-        msg.includes("501")
-      ) {
-        setToolGroups([]);
-        setToolGroupsStatus("idle");
-      } else {
-        console.error("Failed to fetch tool groups:", err);
-        setToolGroupsError(msg);
-        setToolGroupsStatus("error");
-      }
-    }
-  }, [client]);
+    // Tool group listing was removed from the public client API (tool groups
+    // are now auto-registered from provider specs rather than queryable), so
+    // there's no data source to fetch from. Degrade gracefully to an empty
+    // list instead of erroring.
+    setToolGroups([]);
+    setToolGroupsStatus("idle");
+  }, []);
 
   const fetchTools = useCallback(async () => {
     try {
@@ -143,7 +117,7 @@ export function ToolsManagement() {
         setToolsStatus("error");
       }
     }
-  }, [client]);
+  }, []);
 
   useEffect(() => {
     fetchToolGroups();

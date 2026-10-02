@@ -22,7 +22,8 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::auto",
-            pip_packages=["chardet", "pypdf>=6.13.0", "markitdown[all]"],
+            execution_mode="worker",
+            pip_packages=["chardet", "pypdf>=6.16.2", "markitdown[all]"],
             module="ogx.providers.inline.file_processor.auto",
             config_class="ogx.providers.inline.file_processor.auto.AutoFileProcessorConfig",
             api_dependencies=[Api.files],
@@ -37,7 +38,8 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::pypdf",
-            pip_packages=["chardet", "pypdf>=6.13.0"],
+            execution_mode="worker",
+            pip_packages=["chardet", "pypdf>=6.16.2"],
             module="ogx.providers.inline.file_processor.pypdf",
             config_class="ogx.providers.inline.file_processor.pypdf.PyPDFFileProcessorConfig",
             api_dependencies=[Api.files],
@@ -46,6 +48,7 @@ def available_providers() -> list[ProviderSpec]:
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::markitdown",
+            execution_mode="worker",
             pip_packages=["markitdown[all]"],
             module="ogx.providers.inline.file_processor.markitdown",
             config_class="ogx.providers.inline.file_processor.markitdown.MarkItDownFileProcessorConfig",
@@ -90,6 +93,7 @@ or `remote::docling-serve` instead.
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::docling",
+            execution_mode="worker",
             pip_packages=["docling"],
             module="ogx.providers.inline.file_processor.docling",
             config_class="ogx.providers.inline.file_processor.docling.DoclingFileProcessorConfig",
@@ -107,8 +111,8 @@ preserves semantic boundaries. It supports PDF, DOCX, PPTX, HTML, and images.
 - **Layout preservation** — tables, lists, and nested structures are converted to Markdown
 - **Multi-format support** — PDF, DOCX, PPTX, HTML, and images
 - **Better RAG quality** — structured chunks with heading metadata produce more relevant retrieval results
-- **VLM-based processing** — optionally route Vision Language Model inference through the stack's model-serving
-  infrastructure for richer document understanding (layout analysis, OCR via vision models)
+- **VLM configuration validation** — VLM processing requires worker-side inference routing, which is not yet
+  supported; configuring `vlm_model` currently produces a clear startup error
 
 ## Usage
 
@@ -129,23 +133,13 @@ file_processors:
     config: {}
 ```
 
-### Enabling VLM Processing
+### VLM Processing
 
-To enable VLM-based document processing, set `vlm_model` to a vision model registered with the
-stack's inference API. The VLM pipeline routes inference through the stack's model-serving
-infrastructure — no separate GPU resources are needed for document processing.
+VLM-based document processing is not currently available while this provider runs in worker
+mode because auto-routed inference cannot yet be reconstructed in the worker process. A
+configuration with `vlm_model` fails startup rather than silently running a different pipeline.
 
-```yaml
-file_processors:
-  - provider_id: docling
-    provider_type: inline::docling
-    config:
-      vlm_model: granite-docling-258M
-      vlm_preset: granite_docling
-```
-
-When `vlm_model` is not set or no inference provider is available, the processor gracefully
-degrades to the standard non-VLM pipeline.
+Leave `vlm_model` unset to use the standard non-VLM pipeline.
 
 ## Installation
 
@@ -161,6 +155,7 @@ See [Docling's documentation](https://docling-project.github.io/docling/) for mo
         InlineProviderSpec(
             api=Api.file_processors,
             provider_type="inline::unstructured",
+            execution_mode="worker",
             pip_packages=["unstructured[all-docs]>=0.21.0"],  # Security fix in 0.21.0
             module="ogx.providers.inline.file_processor.unstructured",
             config_class="ogx.providers.inline.file_processor.unstructured.UnstructuredFileProcessorConfig",
@@ -282,7 +277,7 @@ See [Unstructured's documentation](https://docs.unstructured.io/) for more detai
             api=Api.file_processors,
             provider_type="remote::docling-serve",
             adapter_type="docling-serve",
-            pip_packages=["httpx", "docling-slim[service-client]>=2.103.0"],
+            pip_packages=["httpx2", "docling-slim[service-client]>=2.117.0"],
             module="ogx.providers.remote.file_processor.docling_serve",
             config_class="ogx.providers.remote.file_processor.docling_serve.DoclingServeFileProcessorConfig",
             api_dependencies=[Api.files],
@@ -340,7 +335,7 @@ See [Docling Serve's documentation](https://github.com/docling-project/docling-s
             provider_type="remote::unstructured-api",
             adapter_type="unstructured-api",
             pip_packages=[
-                "unstructured-client>=0.25.0",  # >=0.25.0: supports full feature set (chunking + split_pdf_page_range)
+                "unstructured-client>=0.46.2",  # >=0.25.0: supports full feature set (chunking + split_pdf_page_range)
             ],
             module="ogx.providers.remote.file_processor.unstructured_api",
             config_class="ogx.providers.remote.file_processor.unstructured_api.UnstructuredApiFileProcessorConfig",

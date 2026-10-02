@@ -10,6 +10,7 @@ This module defines the request and response models for the VectorIO API
 using Pydantic with Field descriptions for OpenAPI schema generation.
 """
 
+import math
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -458,6 +459,38 @@ VectorStoreChunkingStrategy = Annotated[
 register_schema(VectorStoreChunkingStrategy, name="VectorStoreChunkingStrategy")
 
 
+class HybridSearchOptions(BaseModel):
+    """Weights that balance embedding and keyword matches in hybrid search.
+
+    Matches OpenAI's file_search `ranking_options.hybrid_search`. The weights are relative:
+    they are normalized to sum to 1 and applied as weighted Reciprocal Rank Fusion. Vector stores
+    whose provider cannot apply the weights reject the search with a 400 error.
+
+    :param embedding_weight: Weight of the embedding (vector) ranking in the reciprocal rank fusion.
+    :param text_weight: Weight of the text (keyword) ranking in the reciprocal rank fusion.
+    """
+
+    embedding_weight: float = Field(
+        ge=0.0, allow_inf_nan=False, description="The weight of the embedding in the reciprocal ranking fusion."
+    )
+    text_weight: float = Field(
+        ge=0.0, allow_inf_nan=False, description="The weight of the text in the reciprocal ranking fusion."
+    )
+
+    @model_validator(mode="after")
+    def validate_weights(self) -> "HybridSearchOptions":
+        total_weight = self.embedding_weight + self.text_weight
+        if total_weight == 0:
+            raise ValueError("hybrid_search embedding_weight and text_weight must not both be 0")
+        if not math.isfinite(total_weight):
+            raise ValueError("hybrid_search embedding_weight and text_weight must have a finite sum")
+        return self
+
+
+# Rankers with their own score fusion or reranking, which hybrid_search's weighted RRF would silently replace.
+_HYBRID_SEARCH_CONFLICTING_RANKERS = frozenset({"weighted", "neural", "classifier", "normalized"})
+
+
 class SearchRankingOptions(BaseModel):
     """Options for ranking and filtering search results.
 
@@ -482,6 +515,9 @@ class SearchRankingOptions(BaseModel):
         - "weighted": Weighted combination of vector and keyword scores
         - "rrf": Reciprocal Rank Fusion algorithm
         - "neural": Neural reranking model (requires model parameter)
+        - "classifier": Classification model that scores chunks by quality/answerability and
+          filters below a confidence threshold (requires model parameter, optional confidence_threshold
+          via score_threshold)
         Note: For OpenAI API compatibility, any string value is accepted, but only the above values are supported.
     :param score_threshold: (Optional) Minimum relevance score threshold for results. Default: 0.0
     :param alpha: (Optional) Weight factor for weighted ranker (0-1).
@@ -501,9 +537,22 @@ class SearchRankingOptions(BaseModel):
     :param model: (Optional) Model identifier for neural reranker
         (e.g., "sentence-transformers/Qwen/Qwen3-Reranker-0.6B"). Required when ranker="neural" or when
         weights contains "neural".
+    :param hybrid_search: (Optional) OpenAI-compatible weights for embedding versus keyword matches.
+        Applied as weighted RRF after normalizing the weights to sum to 1. Setting it runs the search in
+        hybrid mode, whatever search_mode says. Vector stores whose provider cannot apply the weights
+        reject the search with a 400 instead of ranking the results some other way, which fails the whole
+        request when the search is a Responses file_search or memory retrieval. score_threshold then
+        filters the fused RRF scores, which are at most 1 / (impact_factor + 1). Cannot be combined with
+        weights or with the "weighted", "neural", "classifier", or "normalized" rankers.
     """
 
-    ranker: str | None = None
+    ranker: str | None = Field(
+        default=None,
+        description=(
+            'Name of the ranking algorithm. Supported values are "weighted", "rrf", "neural", and '
+            '"classifier". Other string values are accepted for OpenAI API compatibility but are not supported.'
+        ),
+    )
     # NOTE: OpenAI File Search Tool requires threshold to be between 0 and 1, however
     # we don't guarantee that the score is between 0 and 1, so will leave this unconstrained
     # and let the provider handle it
@@ -515,6 +564,26 @@ class SearchRankingOptions(BaseModel):
         description="Weights for combining vector, keyword, and neural scores. Keys: 'vector', 'keyword', 'neural'",
     )
     model: str | None = Field(default=None, description="Model identifier for neural reranker")
+    hybrid_search: HybridSearchOptions | None = Field(
+        default=None,
+        description=(
+            "Weights that control how reciprocal rank fusion balances semantic embedding matches versus "
+            "sparse keyword matches. Setting it selects hybrid search, and score_threshold then applies to the "
+            "fused reciprocal rank fusion scores. Vector stores whose provider cannot apply the weights reject "
+            "the search with a 400 error, which fails the whole request when the search is a Responses "
+            "file_search or memory retrieval."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_hybrid_search(self) -> "SearchRankingOptions":
+        if self.hybrid_search is None:
+            return self
+        if self.weights is not None:
+            raise ValueError("hybrid_search cannot be combined with weights")
+        if self.ranker in _HYBRID_SEARCH_CONFLICTING_RANKERS:
+            raise ValueError(f"hybrid_search cannot be combined with ranker '{self.ranker}'")
+        return self
 
     @field_validator("weights")
     @classmethod
@@ -826,6 +895,10 @@ class OpenAIAttachFileRequest(BaseModel):
     """Request body for attaching a file to a vector store."""
 
     file_id: str = Field(description="The ID of the file to attach.")
+    options: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional provider-specific file processing parameters.",
+    )
     attributes: VectorStoreFileAttributes | None = Field(
         default=None,
         description="Attributes to associate with the file.",
@@ -850,6 +923,7 @@ __all__ = [
     "DEFAULT_CHUNK_SIZE_TOKENS",
     "DeleteChunksRequest",
     "EmbeddedChunk",
+    "HybridSearchOptions",
     "InsertChunksRequest",
     "MAX_PAGINATION_LIMIT",
     "OpenAIAttachFileRequest",

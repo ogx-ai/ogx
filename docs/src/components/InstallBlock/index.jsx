@@ -4,15 +4,11 @@ import styles from './styles.module.css';
 const EXAMPLES = [
   {
     label: 'Server',
-    command: "uvx --from 'ogx[starter]' ogx run starter",
+    command: "uvx ogx go",
     tokens: [
       { text: 'uvx', style: 'tokenBinary' },
-      { text: '--from', style: 'tokenFlag' },
-      { text: "'ogx[starter]'", style: 'tokenPackage' },
       { text: 'ogx', style: 'tokenCommand' },
-      { text: 'stack', style: 'tokenSub' },
-      { text: 'run', style: 'tokenSub' },
-      { text: 'starter', style: 'tokenAccent' },
+      { text: 'go', style: 'tokenSub' },
     ],
   },
   {
