@@ -31,7 +31,7 @@ constraint-dependencies = [
     "python-multipart>=0.0.31",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
     "python-socketio>=5.16.2",         # CVE-2025-61765: RCE via pickle deserialization
     "requests>=2.34.2",
-    "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
+    "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it; cap mirrored in .github/dependabot.yml
     "starlette>=1.3.1",                # CVE-2026-48710
     "tornado>=6.5.8",
     "urllib3>=2.8.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
@@ -59,7 +59,7 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",
-    "fastapi>=0.137.2,<1.0",                  # server
+    "fastapi>=0.137.2,<1.0",                  # server; cap mirrored in .github/dependabot.yml
     "httpx",                                  # still needed for the google-genai and generated client-SDK boundaries
     "httpx2",
     "jinja2>=3.1.6",
@@ -102,15 +102,15 @@ starter = [
     "datasets>=5.0.1",
     "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
     "einops",
-    "elasticsearch>=9.5.1,<10.0.0",
+    "elasticsearch>=9.5.1,<10.0.0",          # cap mirrored in .github/dependabot.yml
     "emoji",
     "faiss-cpu>=1.15.0",
     "fire",
-    "google-genai>=2.23.0,<3",
+    "google-genai>=2.23.0,<3",               # cap mirrored in .github/dependabot.yml
     "langdetect",
     "markitdown[all]",
     "matplotlib>=3.11.2",
-    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts; cap mirrored in .github/dependabot.yml
     "neo4j>=6.3.1",
     "numpy>=2.5.3",
     "ollama",
@@ -156,17 +156,17 @@ dev = [
     "databricks-sdk>=0.139.0",
     "datasets>=5.0.1",
     "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
-    "elasticsearch>=9.5.1,<10.0.0",
+    "elasticsearch>=9.5.1,<10.0.0",          # cap mirrored in .github/dependabot.yml
     "faiss-cpu>=1.15.0",
     "fairscale",
-    "google-genai>=2.23.0,<3",
+    "google-genai>=2.23.0,<3",               # cap mirrored in .github/dependabot.yml
     "langchain-core>=1.6.3",                            # CVE-2026-44843: insecure deserialization
     "langchain-openai>=1.2.2",
     "langgraph",
     "lm-format-enforcer",
     "markitdown[all]",
     "mcp>=2.0",
-    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts; cap mirrored in .github/dependabot.yml
     "moto[s3]>=5.1.10",
     "nest-asyncio",
     "neo4j>=6.3.1",
@@ -208,7 +208,7 @@ dev = [
     "ogx-client>=1.4.0",
     "openapi-spec-validator>=0.9.0",
     "pre-commit>=4.6.2",
-    "pytest>=8.4,<9.1",                        # CI/unit: 9.1.x monkeypatch.resolve() calls importlib.import_module, breaking tests that mock ogx.core.resolver.importlib.import_module (global)
+    "pytest>=8.4,<9.1",                        # CI/unit: 9.1.x monkeypatch.resolve() calls importlib.import_module, breaking tests that mock ogx.core.resolver.importlib.import_module (global); cap mirrored in .github/dependabot.yml
     "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",

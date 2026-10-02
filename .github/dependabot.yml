@@ -21,8 +21,18 @@ updates:
       python-deps:
         patterns:
           - "*"
-    # Mirror '<' caps in pyproject.toml so dependabot does not silently widen them.
-    # When lifting a cap in pyproject.toml, update or remove the matching ignore rule here.
+    # Mirror every '<' cap in pyproject.toml so dependabot does not silently widen it.
+    # When adding or lifting a cap in pyproject.toml, add or remove the matching
+    # ignore rule here (each capped requirement in pyproject.toml points back here).
+    #
+    #   dependency       cap in pyproject.toml   ignore versions
+    #   ---------------- -----------------------  ---------------
+    #   elasticsearch    <10.0.0                  >=10.0.0
+    #   fastapi          <1.0                     >=1.0.0
+    #   google-genai     <3                       >=3.0.0
+    #   milvus-lite      <3.0                     >=3.0.0
+    #   pytest           <9.1                     >=9.1.0
+    #   setuptools       <81                      >=81
     ignore:
       - dependency-name: "elasticsearch"
         versions: [">=10.0.0"]
@@ -30,12 +40,8 @@ updates:
         versions: [">=1.0.0"]
       - dependency-name: "google-genai"
         versions: [">=3.0.0"]
-      - dependency-name: "mcp"
-        versions: [">=2.0.0"]
       - dependency-name: "milvus-lite"
         versions: [">=3.0.0"]
-      - dependency-name: "pypdf"
-        versions: [">=6.14.0"]
       - dependency-name: "pytest"
         versions: [">=9.1.0"]
       - dependency-name: "setuptools"
@@ -55,7 +61,13 @@ updates:
       api-deps:
         patterns:
           - "*"
-    # Mirror '<' caps in src/ogx_api/pyproject.toml so dependabot does not silently widen them.
+    # Mirror every '<' cap in src/ogx_api/pyproject.toml so dependabot does not
+    # silently widen it. When adding or lifting a cap there, add or remove the
+    # matching ignore rule here (fastapi points back here from that manifest).
+    #
+    #   dependency   cap in src/ogx_api/pyproject.toml   ignore versions
+    #   ------------ ------------------------------------ ---------------
+    #   fastapi      <1.0                                  >=1.0.0
     ignore:
       - dependency-name: "fastapi"
         versions: [">=1.0.0"]
