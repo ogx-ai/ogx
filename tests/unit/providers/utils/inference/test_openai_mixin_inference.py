@@ -4,6 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,10 +17,12 @@ from ogx_api import (
 )
 from ogx_api.messages.models import (
     AnthropicCountTokensRequest,
+    AnthropicCreateMessageRequest,
     AnthropicCustomToolDef,
     AnthropicMessage,
     AnthropicMessageResponse,
     AnthropicTextBlock,
+    AnthropicThinkingConfig,
     AnthropicUsage,
 )
 
@@ -566,3 +569,54 @@ class TestOpenAIMixinAnthropicCountTokens:
         assert call_args.system is not None
         assert call_args.tools is not None
         mixin.anthropic_messages = original_anthropic_messages
+
+
+class TestOpenAIMixinAnthropicThinking:
+    """anthropic_messages() maps thinking onto reasoning_effort for reasoning models only."""
+
+    @staticmethod
+    def _completion(message: SimpleNamespace) -> SimpleNamespace:
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=message, finish_reason="stop")],
+            usage=None,
+        )
+
+    @staticmethod
+    def _request(model: str, thinking: AnthropicThinkingConfig | None) -> AnthropicCreateMessageRequest:
+        return AnthropicCreateMessageRequest(
+            model=model,
+            messages=[AnthropicMessage(role="user", content="What is 6 x 7?")],
+            max_tokens=8192,
+            thinking=thinking,
+        )
+
+    async def test_reasoning_model_gets_reasoning_effort_and_returns_thinking(self, mixin):
+        message = SimpleNamespace(content="42", tool_calls=None, reasoning_content="6 times 7.")
+        mixin.openai_chat_completion = AsyncMock(return_value=self._completion(message))
+
+        response = await mixin.anthropic_messages(
+            self._request("gpt-oss-20b", AnthropicThinkingConfig(type="enabled", budget_tokens=10000))
+        )
+
+        assert mixin.openai_chat_completion.call_args[0][0].reasoning_effort == "high"
+        assert [b.type for b in response.content] == ["thinking", "text"]
+        assert response.content[0].thinking == "6 times 7."
+
+    async def test_model_that_cannot_reason_is_rejected_before_any_backend_call(self, mixin):
+        mixin.openai_chat_completion = AsyncMock()
+
+        with pytest.raises(ValueError, match="'gpt-4o' is not known to support reasoning"):
+            await mixin.anthropic_messages(
+                self._request("gpt-4o", AnthropicThinkingConfig(type="enabled", budget_tokens=4096))
+            )
+
+        mixin.openai_chat_completion.assert_not_awaited()
+
+    async def test_without_thinking_reasoning_is_not_surfaced(self, mixin):
+        message = SimpleNamespace(content="42", tool_calls=None, reasoning_content="Hidden.")
+        mixin.openai_chat_completion = AsyncMock(return_value=self._completion(message))
+
+        response = await mixin.anthropic_messages(self._request("gpt-oss-20b", None))
+
+        assert mixin.openai_chat_completion.call_args[0][0].reasoning_effort is None
+        assert [b.type for b in response.content] == ["text"]

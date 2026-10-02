@@ -13,8 +13,12 @@ falling back to a name heuristic for models it doesn't know about.
 Only embedding classification consults models.dev -- its registry has no rerank
 entries, so rerank classification is a name heuristic only, with no metadata
 enrichment.
+
+supports_reasoning() answers whether a chat model is a reasoning model, from the same
+registry plus a name heuristic.
 """
 
+import re
 from functools import cache
 
 import models_dev as _models_dev
@@ -112,3 +116,55 @@ def classify_model(identifier: str, provider_id: str) -> Model | None:
         )
 
     return None
+
+
+# models.dev misses many self-hosted identifiers (Qwen/Qwen3-0.6B, Ollama tags like
+# deepseek-r1:1.5b) and disagrees with itself across hosting providers, so families that
+# are known to reason are matched by name when the registry has no unanimous answer.
+_REASONING_NAME_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"(?:^|[/:._-])o[134](?:$|[-:._])",  # OpenAI o-series: o1, o3-mini, o4-mini
+        r"gpt-oss",
+        r"gpt-5(?!.*chat)",  # gpt-5-chat-latest is the non-reasoning variant
+        r"deepseek-(?:r1|reasoner)",
+        r"qwq",
+        r"qwen3(?!.*(?:embedding|rerank|guard|instruct|coder|tts))",  # hybrid-thinking Qwen3
+        r"thinking|reasoner|magistral",
+    )
+)
+
+
+@cache
+def _models_dev_reasoning_index() -> dict[str, bool]:
+    """Reasoning flag by lowercased model ID, for IDs where every hosting provider agrees.
+
+    The same model ID is often listed under several providers with different flags;
+    those are left out, so the name heuristic decides them.
+    """
+    flags: dict[str, set[bool]] = {}
+    for provider in _models_dev.providers():
+        for model_id, model in provider.models.items():
+            flags.setdefault(model_id.lower(), set()).add(bool(model.reasoning))
+    return {model_id: next(iter(values)) for model_id, values in flags.items() if len(values) == 1}
+
+
+def supports_reasoning(model_id: str) -> bool:
+    """Whether ``model_id`` is a reasoning model that accepts a reasoning-effort control.
+
+    Uses the models.dev registry when it has a unanimous answer for the identifier
+    (also tried without an ``org/`` prefix and with an Ollama ``name:tag`` written as
+    ``name-tag``), then falls back to matching well-known reasoning model families by name.
+    Unknown models are treated as not reasoning.
+    """
+    lowered = model_id.lower()
+    index = _models_dev_reasoning_index()
+    for candidate in (
+        lowered,
+        lowered.split("/")[-1],
+        lowered.replace(":", "-"),
+        lowered.split("/")[-1].replace(":", "-"),
+    ):
+        if candidate in index:
+            return index[candidate]
+    return any(pattern.search(lowered) for pattern in _REASONING_NAME_PATTERNS)
