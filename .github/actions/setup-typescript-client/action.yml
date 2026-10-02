@@ -28,7 +28,7 @@ runs:
         if [ "${{ inputs.client-version }}" = "latest" ]; then
           echo "ts-client-path=${{ github.workspace }}/.ts-client-checkout" >> $GITHUB_OUTPUT
         elif [ "${{ inputs.client-version }}" = "published" ]; then
-          echo "ts-client-path=^0.3.2" >> $GITHUB_OUTPUT
+          echo "ts-client-path=latest" >> $GITHUB_OUTPUT
         else
           echo "::error::Invalid client-version: ${{ inputs.client-version }}"
           exit 1

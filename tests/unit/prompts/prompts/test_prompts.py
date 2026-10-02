@@ -11,7 +11,9 @@ from ogx_api import (
     CreatePromptRequest,
     DeletePromptRequest,
     GetPromptRequest,
+    InvalidParameterError,
     ListPromptVersionsRequest,
+    PromptNotFoundError,
     SetDefaultVersionRequest,
     UpdatePromptRequest,
 )
@@ -49,7 +51,7 @@ class TestPrompts:
         )
         assert prompt.version == 2
 
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidParameterError):
             # now this is a stale version
             await temp_prompt_store.update_prompt(
                 UpdatePromptRequest(
@@ -57,7 +59,7 @@ class TestPrompts:
                 )
             )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidParameterError):
             # this version does not exist
             await temp_prompt_store.update_prompt(
                 UpdatePromptRequest(prompt_id=prompt.prompt_id, prompt="Another Update", version=99, variables=["v"])
@@ -66,7 +68,7 @@ class TestPrompts:
     async def test_delete_prompt(self, temp_prompt_store):
         prompt = await temp_prompt_store.create_prompt(CreatePromptRequest(prompt="to be deleted"))
         await temp_prompt_store.delete_prompt(DeletePromptRequest(prompt_id=prompt.prompt_id))
-        with pytest.raises(ValueError):
+        with pytest.raises(PromptNotFoundError):
             await temp_prompt_store.get_prompt(GetPromptRequest(prompt_id=prompt.prompt_id))
 
     async def test_list_prompts(self, temp_prompt_store):
@@ -112,7 +114,7 @@ class TestPrompts:
         assert prompt.prompt_id.startswith("pmpt_")
         assert len(prompt.prompt_id) == 53
 
-        with pytest.raises(ValueError):
+        with pytest.raises(PromptNotFoundError):
             await temp_prompt_store.get_prompt(GetPromptRequest(prompt_id="invalid_id"))
 
     async def test_list_shows_default_versions(self, temp_prompt_store):
@@ -151,7 +153,7 @@ class TestPrompts:
         ).data
         assert [v.is_default for v in versions] == [False, True, False]
 
-        with pytest.raises(ValueError):
+        with pytest.raises(PromptNotFoundError):
             await temp_prompt_store.list_prompt_versions(ListPromptVersionsRequest(prompt_id="nonexistent"))
 
     async def test_prompt_variable_validation(self, temp_prompt_store):

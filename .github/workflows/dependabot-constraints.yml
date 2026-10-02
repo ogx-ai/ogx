@@ -5,8 +5,10 @@
 # SECURITY NOTE: This workflow uses pull_request (not pull_request_target).
 # Security measures:
 # 1. Runs with read-only permissions (no write access to repo)
-# 2. Only runs for PRs on dependabot/uv/ branches (created exclusively by Dependabot)
-# 3. Results uploaded as artifacts; companion workflow handles commits
+# 2. Only runs for PRs on dependabot/uv/ branches authored by dependabot[bot]
+# 3. Parsed dependency names/versions are validated against strict allowlists
+#    before being interpolated into shell strings or commit messages
+# 4. Results uploaded as artifacts; companion workflow handles commits
 name: Dependabot constraint-dependencies
 
 run-name: Update constraint-dependencies for Dependabot PR
@@ -28,7 +30,9 @@ permissions:
 jobs:
   update-constraints:
     runs-on: ubuntu-latest
-    if: startsWith(github.head_ref, 'dependabot/uv/')
+    # github.event.pull_request.user.login (not github.actor) is stable across
+    # re-triggers caused by this bot's own follow-up commits.
+    if: startsWith(github.head_ref, 'dependabot/uv/') && github.event.pull_request.user.login == 'dependabot[bot]'
     timeout-minutes: 10
 
     steps:
@@ -51,23 +55,51 @@ jobs:
         run: |
           commit_msg=$(git log -1 --format="%B")
 
-          # Extract dependency-name and dependency-version from the structured
-          # updated-dependencies block in the Dependabot commit message
-          dep_name=$(echo "$commit_msg" | grep -oP '(?<=dependency-name: ).+' | head -1 | tr -d "[:space:]'\"")
-          dep_version=$(echo "$commit_msg" | grep -oP '(?<=dependency-version: ).+' | head -1 | tr -d "[:space:]'\"")
+          # Extract all (dependency-name, dependency-version) pairs from the
+          # structured updated-dependencies block in the Dependabot commit
+          # message. Grouped Dependabot PRs list one pair per dependency, in
+          # the same order in both the name and version lines.
+          strip_ws() { sed -e "s/^[[:space:]'\"]*//" -e "s/[[:space:]'\"]*$//"; }
 
-          if [ -z "$dep_name" ] || [ -z "$dep_version" ]; then
+          names=$(printf '%s\n' "$commit_msg" | grep -oP '(?<=dependency-name: ).+' | strip_ws)
+          versions=$(printf '%s\n' "$commit_msg" | grep -oP '(?<=dependency-version: ).+' | strip_ws)
+
+          # These values are later interpolated into shell strings, a JSON
+          # artifact, and a commit message, so reject anything that is not a
+          # plain package name / version before it can flow downstream.
+          deps=""
+          dep_names=""
+          dep_pairs=""
+          i=1
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            version=$(printf '%s\n' "$versions" | sed -n "${i}p")
+            i=$((i + 1))
+            if ! printf '%s' "$name" | grep -Eq '^[A-Za-z0-9._-]+$' \
+               || ! printf '%s' "$version" | grep -Eq '^[0-9][A-Za-z0-9.+-]*$'; then
+              echo "::warning::Skipping unparsable dependency entry: '$name' '$version'"
+              continue
+            fi
+            deps="${deps}${name} ${version}"$'\n'
+            dep_names="${dep_names}${dep_names:+,}$name"
+            dep_pairs="${dep_pairs}${dep_pairs:+,}${name} ${version}"
+          done <<< "$names"
+
+          if [ -z "$deps" ]; then
             echo "Could not parse dependency info from commit message"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           {
-            echo "dep_name=$dep_name"
-            echo "dep_version=$dep_version"
+            echo "deps<<DEPS_EOF"
+            printf '%s' "$deps"
+            echo "DEPS_EOF"
+            echo "dep_names=$dep_names"
+            echo "dep_pairs=$dep_pairs"
             echo "skip=false"
           } >> "$GITHUB_OUTPUT"
-          echo "Parsed: $dep_name $dep_version"
+          echo "Parsed $(printf '%s' "$deps" | grep -c .) dependencies: $dep_names"
 
       - name: Determine target pyproject from changed lock files
         if: steps.parse.outputs.skip != 'true'
@@ -95,25 +127,27 @@ jobs:
         if: steps.parse.outputs.skip != 'true' && steps.target.outputs.skip != 'true'
         id: update
         env:
-          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
-          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          DEPS: ${{ steps.parse.outputs.deps }}
           TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
         run: |
           changed=false
 
-          for pyproject in $TARGET_PYPROJECTS; do
-            echo "--- Checking $pyproject ---"
-            output=$(python3 .github/scripts/update_constraint_deps.py \
-              --dependency-name "$DEP_NAME" \
-              --dependency-version "$DEP_VERSION" \
-              --pyproject "$pyproject")
+          while read -r dep_name dep_version; do
+            [ -z "$dep_name" ] && continue
+            for pyproject in $TARGET_PYPROJECTS; do
+              echo "--- Checking $pyproject for $dep_name $dep_version ---"
+              output=$(python3 .github/scripts/update_constraint_deps.py \
+                --dependency-name "$dep_name" \
+                --dependency-version "$dep_version" \
+                --pyproject "$pyproject")
 
-            echo "$output"
+              echo "$output"
 
-            if echo "$output" | grep -q "updated=true"; then
-              changed=true
-            fi
-          done
+              if echo "$output" | grep -q "updated=true"; then
+                changed=true
+              fi
+            done
+          done <<< "$DEPS"
 
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
@@ -121,17 +155,27 @@ jobs:
         if: steps.parse.outputs.skip != 'true'
         id: registry
         env:
-          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
-          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          DEPS: ${{ steps.parse.outputs.deps }}
         run: |
-          output=$(python3 .github/scripts/update_registry_deps.py \
-            --dependency-name "$DEP_NAME" \
-            --dependency-version "$DEP_VERSION")
+          changed=false
+          changed_files=""
 
-          echo "$output"
+          while read -r dep_name dep_version; do
+            [ -z "$dep_name" ] && continue
+            output=$(python3 .github/scripts/update_registry_deps.py \
+              --dependency-name "$dep_name" \
+              --dependency-version "$dep_version")
 
-          if echo "$output" | grep -q "updated=true"; then
-            changed_files=$(echo "$output" | grep "^changed_files=" | cut -d= -f2)
+            echo "$output"
+
+            if echo "$output" | grep -q "updated=true"; then
+              changed=true
+              files=$(echo "$output" | grep "^changed_files=" | cut -d= -f2)
+              changed_files="${changed_files}${changed_files:+,}${files}"
+            fi
+          done <<< "$DEPS"
+
+          if [ "$changed" = "true" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "changed_files=$changed_files" >> "$GITHUB_OUTPUT"
           else
@@ -194,8 +238,8 @@ jobs:
           PYPROJECT_CHANGED: ${{ steps.update.outputs.changed }}
           REGISTRY_CHANGED: ${{ steps.registry.outputs.changed }}
           REGISTRY_FILES: ${{ steps.registry.outputs.changed_files }}
-          DEP_NAME: ${{ steps.parse.outputs.dep_name }}
-          DEP_VERSION: ${{ steps.parse.outputs.dep_version }}
+          DEP_NAMES: ${{ steps.parse.outputs.dep_names }}
+          DEP_PAIRS: ${{ steps.parse.outputs.dep_pairs }}
           TARGET_PYPROJECTS: ${{ steps.target.outputs.pyprojects }}
         run: |
           if [ "$PYPROJECT_CHANGED" = "true" ] || [ "$REGISTRY_CHANGED" = "true" ]; then
@@ -205,11 +249,14 @@ jobs:
           fi
 
           mkdir -p constraint-update
+          # DEP_NAMES / DEP_PAIRS were allowlist-sanitized at parse time
+          # (alphanumerics, '.', '_', '-', ',' only), so they are safe to
+          # interpolate into JSON here.
           cat > constraint-update/change-info.json <<EOF
           {
             "changed": "${CHANGED}",
-            "dep_name": "${DEP_NAME}",
-            "dep_version": "${DEP_VERSION}",
+            "dep_names": "${DEP_NAMES}",
+            "dep_pairs": "${DEP_PAIRS}",
             "registry_changed": "${REGISTRY_CHANGED}"
           }
           EOF

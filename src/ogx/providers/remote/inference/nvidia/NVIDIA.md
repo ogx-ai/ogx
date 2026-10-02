@@ -20,7 +20,7 @@ Build the NVIDIA environment:
 
 ```bash
 uv pip install ogx-client
-uv run ogx list-deps nvidia | xargs -L1 uv pip install
+uv run ogx stack list-deps nvidia | xargs -L1 uv pip install
 ```
 
 ### Basic Usage using the OGX Python Client

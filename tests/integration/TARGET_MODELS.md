@@ -14,18 +14,21 @@ These jobs come from the `default` section of `ci_matrix.json`. They all run in 
 | `bedrock` | `bedrock` | library client only; 3 roots |
 | `base` | `ollama-postgres` | server client only; Postgres store |
 | `vision` | `ollama-vision` | `test_vision_inference.py` only |
-| `responses` | `gpt` | `responses` only; Responses coverage: 136/136 (100%) |
-| `responses` | `azure` | `responses` only; Responses coverage: 111/136 (82%) |
-| `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 136/136 (100%) |
-| `responses` | `watsonx` | `responses` only; Responses coverage: 61/136 (45%) |
-| `responses` | `vertexai` | `responses` only; Responses coverage: 70/136 (51%) |
-| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/136 (20%) |
+| `responses` | `gpt` | `responses` only; Responses coverage: 137/137 (100%) |
+| `responses` | `azure` | `responses` only; Responses coverage: 112/137 (82%) |
+| `gpt-reasoning` | `gpt-reasoning` | 2 roots; Responses coverage: 137/137 (100%) |
+| `responses` | `watsonx` | `responses` only; Responses coverage: 62/137 (45%) |
+| `responses` | `vertexai` | `responses` only; Responses coverage: 70/137 (51%) |
+| `bedrock-responses` | `bedrock` | 6 roots; Responses coverage: 27/137 (20%) |
 | `base-vllm-subset` | `vllm` | `inference` only |
-| `vllm-reasoning` | `vllm` | `test_reasoning.py` only; Responses coverage: 3/136 (2%) |
-| `ollama-reasoning` | `ollama-reasoning` | 3 roots; Responses coverage: 2/136 (1%) |
+| `vllm-reasoning` | `vllm` | `test_reasoning.py` only; Responses coverage: 8/137 (6%) |
+| `ollama-reasoning` | `ollama-reasoning` | 5 roots; Responses coverage: 3/137 (2%) |
 | `messages` | `ollama` | `messages` only |
 | `messages-openai` | `gpt` | `messages` only |
 | `interactions` | `gemini` | `interactions` only |
+| `base` | `fireworks` |  |
+| `llama-cpp-server` | `llama-cpp-server` | `inference` only |
+| `text-embeddings-inference` | `text-embeddings-inference` | `test_openai_embeddings.py` only |
 
 ## CI Lanes (Scheduled)
 
@@ -42,32 +45,32 @@ Cron: `1 0 * * 0`
 |-------|------------|--------------|-----------------|--------------|------------|--------------|
 | `azure` | azure/gpt-4o | azure/gpt-4o | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
 | `bedrock` | bedrock/openai.gpt-oss-20b-1:0 | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `bedrock`, `bedrock-responses` | — |
+| `fireworks` | fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `base` | — |
 | `gemini` | gemini/gemini-2.5-flash-lite | — | gemini/text-embedding-004 | — | `interactions` | — |
-| `gpt` | openai/gpt-4o | openai/gpt-4o | openai/text-embedding-3-small | — | `responses`, `messages-openai` | — |
-| `gpt-reasoning` | openai/o4-mini | — | — | — | `gpt-reasoning` | — |
+| `gpt` | openai/gpt-4o | openai/gpt-4o | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses`, `messages-openai` | — |
+| `gpt-reasoning` | openai/o4-mini | — | openai/text-embedding-3-small | — | `gpt-reasoning` | — |
+| `llama-cpp-server` | llama-cpp-server/qwen3-0.6b | — | llama-cpp-server/nomic-embed-text-v1.5 | — | `llama-cpp-server` | — |
 | `ollama` | ollama/llama3.2:3b-instruct-fp16 | — | ollama/nomic-embed-text:v1.5 | — | `base`, `messages` | — |
-| `ollama-postgres` | ollama/llama3.2:3b-instruct-fp16 | — | sentence-transformers/nomic-embed-text-v1.5 | — | `base` | — |
-| `ollama-reasoning` | ollama/deepseek-r1:1.5b | — | — | — | `ollama-reasoning` | — |
+| `ollama-postgres` | ollama/llama3.2:3b-instruct-fp16 | — | ollama/nomic-embed-text:v1.5 | — | `base` | — |
+| `ollama-reasoning` | ollama/deepseek-r1:1.5b | — | ollama/nomic-embed-text:v1.5 | — | `ollama-reasoning` | — |
 | `ollama-vision` | — | ollama/llama3.2-vision:11b | ollama/nomic-embed-text:v1.5 | — | `vision` | — |
+| `text-embeddings-inference` | — | — | text-embeddings-inference/nomic-ai/nomic-embed-text-v1.5 | — | `text-embeddings-inference` | — |
 | `vertexai` | vertexai/publishers/google/models/gemini-2.0-flash | vertexai/publishers/google/models/gemini-2.0-flash | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
-| `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-embed-text-v1.5 | — | `base-vllm-subset`, `vllm-reasoning` | `base` |
+| `vllm` | vllm/Qwen/Qwen3-0.6B | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `base-vllm-subset`, `vllm-reasoning` | `base` |
 | `vllm-qwen3next` | Qwen3-Next-80B-A3B-Instruct-FP8 | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | — | `base` |
-| `watsonx` | watsonx/meta-llama/llama-3-3-70b-instruct | — | — | — | `responses` | — |
+| `watsonx` | watsonx/meta-llama/llama-3-3-70b-instruct | — | sentence-transformers/nomic-ai/nomic-embed-text-v1.5 | — | `responses` | — |
 
 ## Additional Named Setups
 
 | Setup | Text Model | Vision Model | Embedding Model | Safety Model | Default CI | Scheduled CI |
 |-------|------------|--------------|-----------------|--------------|------------|--------------|
 | `anthropic` | anthropic/claude-3-5-haiku-20241022 | — | — | — | — | — |
-| `cerebras` | cerebras/llama-3.3-70b | — | — | — | — | — |
+| `cerebras` | cerebras/gpt-oss-120b | — | — | — | — | — |
 | `databricks` | databricks/databricks-meta-llama-3-3-70b-instruct | — | databricks/databricks-bge-large-en | — | — | — |
-| `fireworks` | fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct | — | fireworks/accounts/fireworks/models/qwen3-embedding-8b | — | — | — |
 | `groq` | groq/llama-3.3-70b-versatile | — | — | — | — | — |
 | `llama-api` | llama_openai_compat/Llama-3.3-8B-Instruct | — | — | — | — | — |
-| `llama-cpp-server` | llama-cpp-server/qwen2.5 | — | sentence-transformers/nomic-embed-text-v1.5 | — | — | — |
 | `tgi` | tgi/Qwen/Qwen3-0.6B | — | — | — | — | — |
 | `together` | together/meta-llama/Llama-3.3-70B-Instruct-Turbo-Free | — | together/togethercomputer/m2-bert-80M-32k-retrieval | — | — | — |
-| `vllm-gpu-gpt-oss` | vllm/gpt-oss:20b | — | — | — | — | — |
 
 ## Responses Coverage Summary
 
@@ -75,12 +78,12 @@ This section is derived from the same replay recordings used to generate `docs/d
 
 | Provider | Tested | Passing | Coverage |
 |----------|--------|---------|----------|
-| OpenAI | 136 | 136 | 100% |
-| Azure | 111 | 111 | 82% |
+| OpenAI | 137 | 137 | 100% |
+| Azure | 112 | 112 | 82% |
 | Vertex AI | 70 | 70 | 51% |
-| WatsonX | 61 | 61 | 45% |
+| WatsonX | 62 | 62 | 45% |
 | Bedrock | 27 | 27 | 20% |
-| vLLM | 3 | 3 | 2% |
-| Ollama | 2 | 2 | 1% |
+| vLLM | 8 | 8 | 6% |
+| Ollama | 3 | 3 | 2% |
 
-Total Responses features counted: 136.
+Total Responses features counted: 137.

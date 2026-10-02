@@ -1,0 +1,134 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestEdgeCases::test_multiple_tools_with_different_schemas[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use one of the available tools"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "simple",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "complex",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/Complex"
+                }
+              },
+              "$defs": {
+                "Complex": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "with_output",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-8766f1da12c9",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "chatcmpl-tool-a02564ee638aaaf1",
+                  "function": {
+                    "arguments": "{\"x\": \"Hello, tool!\"}",
+                    "name": "simple"
+                  },
+                  "type": "function",
+                  "index": 0,
+                  "name": null
+                }
+              ],
+              "reasoning_content": "We need to use one of the available tools. The user says \"Use one of the available tools\". Probably we need to call a tool, maybe just test simple? We can choose any. Let's use simple with some string.",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 73,
+          "prompt_tokens": 398,
+          "total_tokens": 471,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

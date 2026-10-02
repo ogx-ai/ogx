@@ -78,6 +78,8 @@ def test_types_surface_contains_core_symbols() -> None:
         "ChatCompletionMessage",
         "OpenAIChatCompletion",
         "ListModelsResponse",
+        "ListProcessFileJobsResponse",
+        "ProcessFileJob",
         "Filter",
         "Model",
         "VectorStore",

@@ -12,6 +12,7 @@ import importlib
 import inspect
 import logging  # allow-direct-logging :: for direct logging control in _suppress_provider_logs
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -100,10 +101,18 @@ class _FactoryDispatcher:
         return getattr(module, method_name, None)
 
 
+# Unprefixed model IDs the claude CLI requests, so `claude` works against `ogx go` without --model.
+# Keep this in sync with the CLI's default models as new generations ship: an unregistered ID fails
+# to resolve. Older IDs stay for older CLI versions. Newest first within each tier, because
+# `ogx connect claude` picks the first model that matches a tier.
 _CLAUDE_CODE_ALIASES: list[str] = [
     "claude-haiku-4-5",
+    "claude-sonnet-5",
     "claude-sonnet-4-6",
+    "claude-opus-5",
     "claude-opus-4-7",
+    "claude-fable-5",
+    "claude-mythos-5",
 ]
 
 # Inference provider IDs checked in priority order when building Claude Code aliases.
@@ -210,6 +219,28 @@ def add_letsgo_arguments(parser: argparse.ArgumentParser) -> None:
         default=False,
         help="Allow running without TLS certificates. Disables FIPS enforcement. For local development only.",
     )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host to bind the server to",
+    )
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        default=False,
+        help="Disable authentication entirely (generates no server.auth block in config).",
+    )
+
+
+def _remove_api(run_config: StackConfig, api: str) -> None:
+    """Drop an API from an explicit `apis:` list.
+
+    A config without an `apis:` list serves whatever the providers supply, so dropping
+    the provider is enough.
+    """
+    if run_config.apis is not None:
+        run_config.apis = [a for a in run_config.apis if a != api]
 
 
 def _add_file_search_and_responses(run_config: StackConfig) -> None:
@@ -224,8 +255,9 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
         run_config.providers["tool_runtime"].append(
             Provider(provider_id="file-search", provider_type="inline::file-search")
         )
-    # Add tool_runtime to APIs if not already present
-    if "tool_runtime" not in run_config.apis:
+    # Add tool_runtime to APIs if not already present. A config without an `apis:` list
+    # serves every provider-backed API, so there is nothing to add there.
+    if run_config.apis is not None and "tool_runtime" not in run_config.apis:
         run_config.apis.append("tool_runtime")
 
     # Add responses API with builtin provider
@@ -247,15 +279,17 @@ def _add_file_search_and_responses(run_config: StackConfig) -> None:
             )
         )
     # Add responses to APIs if not already present
-    if "responses" not in run_config.apis:
+    if run_config.apis is not None and "responses" not in run_config.apis:
         run_config.apis.append("responses")
 
-    # Add web search providers in priority order: brave -> tavily -> bing
+    # Add web search providers in priority order: brave -> tavily -> bing -> nimble -> serply -> exa
     _web_search_order = [
         ("remote::brave-search", "brave-search"),
         ("remote::tavily-search", "tavily-search"),
         ("remote::bing-search", "bing-search"),
         ("remote::nimble-search", "nimble-search"),
+        ("remote::serply-search", "serply-search"),
+        ("remote::exa-search", "exa-search"),
     ]
     tool_runtime_registry = get_provider_registry().get(Api.tool_runtime, {})
     existing_web_search: set[str] = {
@@ -342,14 +376,14 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
     if not has_inference:
         parser.error("No inference providers detected. Nothing to run.")
 
-    distro_dir = DISTRIBS_BASE_DIR / "letsgo-run" if args.persist_config else Path(tempfile.mkdtemp())
+    distro_dir = DISTRIBS_BASE_DIR / "go-run" if args.persist_config else Path(tempfile.mkdtemp())
     os.makedirs(distro_dir, exist_ok=True)
 
     try:
         run_config = run_config_from_dynamic_config_spec(
             dynamic_config_spec=providers_spec,
             distro_dir=distro_dir,
-            distro_name="letsgo-run",
+            distro_name="go-run",
         )
     except ValueError as e:
         cprint(str(e), color="red", file=sys.stderr)
@@ -417,7 +451,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                     color="yellow",
                 )
                 run_config.providers.pop("vector_io", None)
-                run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+                _remove_api(run_config, "vector_io")
             else:
                 existing = run_config.vector_stores or VectorStoresConfig()
                 run_config.vector_stores = existing.model_copy(update={"default_embedding_model": detected})
@@ -449,7 +483,7 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
                 color="yellow",
             )
             run_config.providers.pop("vector_io", None)
-            run_config.apis = [a for a in run_config.apis if a != "vector_io"]
+            _remove_api(run_config, "vector_io")
     else:
         cprint(
             "  ✗ No vector store provider detected — file-search and responses disabled.",
@@ -470,6 +504,23 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
         config_dict["server"]["tls_keyfile"] = str(key_path)
         config_dict["server"]["insecure"] = False
         cprint(f"  ✓ Generated self-signed TLS certificate → {cert_path}", color="green")
+
+    config_dict["server"]["host"] = args.host
+
+    if not args.no_auth:
+        api_keys = [f"ogk_{secrets.token_urlsafe(24)}" for _ in range(3)]
+        if "server" not in config_dict:
+            config_dict["server"] = {}
+        config_dict["server"]["auth"] = {
+            "provider_config": {"type": "local_api_key", "api_keys": api_keys},
+        }
+        cprint("  ✓ Simple authentication enabled", color="green")
+        cprint("    Here are keys you can use for authentication:", color="green")
+        for key in api_keys:
+            cprint(f"      {key}", color="yellow")
+        cprint(f'    curl -k -H "Authorization: Bearer {api_keys[0]}" \\', color="cyan")
+        cprint(f"      https://localhost:{args.port}/v1/chat/completions", color="cyan")
+        cprint("", color="green")
 
     config_file = distro_dir / "config.yaml"
     logger.info("Writing generated config to", config_file=config_file)
@@ -541,6 +592,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         ("remote::ollama", "OLLAMA_URL", "http://localhost:11434/v1", None, None),
         ("remote::vllm", "VLLM_URL", "http://localhost:8000/v1", None, "VLLM_API_TOKEN"),
         ("remote::llama-cpp-server", "LLAMA_CPP_SERVER_URL", "http://localhost:8080/v1", None, None),
+        ("remote::text-embeddings-inference", "TEI_URL", "http://localhost:8080/v1", None, None),
         ("remote::openai", "OPENAI_BASE_URL", "https://api.openai.com/v1", "OPENAI_API_KEY", None),
         (
             "remote::llama-openai-compat",
@@ -552,6 +604,7 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         ("remote::anthropic", None, "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", None),
         ("remote::gemini", None, "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY", None),
         ("remote::azure", "AZURE_API_BASE", "", "AZURE_API_KEY", None),
+        ("remote::meta", None, "https://api.meta.ai/v1", "META_API_KEY", None),
     ]
 
     passed: list[str] = []
@@ -950,16 +1003,16 @@ async def _probe_provider_availability(
 
 
 class StackLetsGo(Subcommand):
-    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx letsgo' instead)."""
+    """Auto-detect providers, generate runtime config, and start the stack (deprecated, use 'ogx go' instead)."""
 
     def __init__(self, subparsers: Any) -> None:
         super().__init__()
         self.parser = subparsers.add_parser(
-            "letsgo",
-            prog="ogx stack letsgo",
+            "go",
+            prog="ogx stack go",
             description="""Auto-detect providers and start the stack.
 
-NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
+NOTE: 'ogx stack go' is deprecated. Use 'ogx go' instead.""",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
         self._add_arguments()
@@ -970,7 +1023,7 @@ NOTE: 'ogx stack letsgo' is deprecated. Use 'ogx letsgo' instead.""",
 
     def _run_stack_lets_go_cmd(self, args: argparse.Namespace) -> None:
         warnings.warn(
-            "'ogx stack letsgo' is deprecated and will be removed in a future release. Use 'ogx letsgo' instead.",
+            "'ogx stack go' is deprecated and will be removed in a future release. Use 'ogx go' instead.",
             FutureWarning,
             stacklevel=1,
         )

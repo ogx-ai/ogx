@@ -44,7 +44,7 @@ uv pip install ogx-api
 Minimal dependencies:
 
 - `openai>=2.5.0` - For OpenAI-compatible types
-- `fastapi>=0.115.0,<1.0` - For FastAPI route definitions
+- `fastapi>=0.137.2,<1.0` - For FastAPI route definitions
 - `pydantic>=2.11.9` - For data validation and serialization
 - `jsonschema` - For JSON schema utilities
 - `opentelemetry-sdk>=1.30.0` - For telemetry

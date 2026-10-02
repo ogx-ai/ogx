@@ -5,9 +5,11 @@
 # the root directory of this source tree.
 
 from collections.abc import AsyncIterator, Iterable
+from typing import ClassVar
 
 from anthropic import AsyncAnthropic
 
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
 from ogx_api.inference.models import (
     OpenAIChatCompletion,
@@ -20,12 +22,29 @@ from ogx_api.inference.models import (
 from .config import AnthropicConfig
 
 
-class AnthropicInferenceAdapter(OpenAIMixin):
-    """Inference adapter for Anthropic Claude models."""
+def _make_schema_strict(schema: dict) -> None:
+    """Recursively add additionalProperties: false to all object schemas for strict mode compliance."""
+    if schema.get("type") == "object":
+        if "additionalProperties" not in schema:
+            schema["additionalProperties"] = False
+        for prop in (schema.get("properties") or {}).values():
+            _make_schema_strict(prop)
+
+
+class AnthropicInferenceAdapter(AnthropicMixin, OpenAIMixin):
+    """Inference adapter for Anthropic Claude models.
+
+    Chat Completions go through the OpenAI-compatible mixin. The Messages API is Anthropic's
+    own wire format, so ``anthropic_messages``/``anthropic_count_tokens`` forward directly to
+    ``/v1/messages`` (via :class:`AnthropicMixin`) instead of using the translation fallback,
+    which cannot represent extended thinking.
+    """
 
     config: AnthropicConfig
 
     provider_data_api_key_field: str = "anthropic_api_key"
+    # Anthropic requires a key; a missing one is a configuration error, not an unauthenticated request.
+    anthropic_no_key_placeholder: ClassVar[str | None] = None
     # source: https://docs.claude.com/en/docs/build-with-claude/embeddings
     # TODO: add support for voyageai, which is where these models are hosted
     # embedding_model_metadata = {
@@ -56,6 +75,18 @@ class AnthropicInferenceAdapter(OpenAIMixin):
                 p = func.get("parameters")
                 if isinstance(p, dict) and not p:
                     func["parameters"] = {"type": "object"}
+        if (
+            params.response_format
+            and hasattr(params.response_format, "json_schema")
+            and params.response_format.json_schema
+        ):
+            js = params.response_format.json_schema
+            # Anthropic requires strict: true for json_schema response format
+            if js.get("strict") is None:
+                js["strict"] = True
+            schema = js.get("schema")
+            if js["strict"] and isinstance(schema, dict):
+                _make_schema_strict(schema)
         return await super().openai_chat_completion(params)
 
     async def openai_completion(

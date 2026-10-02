@@ -8,7 +8,7 @@ import asyncio
 import logging  # allow-direct-logging
 from unittest.mock import AsyncMock, patch
 
-import httpx
+import httpx2
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -35,8 +35,8 @@ class MockResponse:
     def raise_for_status(self):
         if self.status_code != 200:
             # Create a mock request for the HTTPStatusError
-            mock_request = httpx.Request("GET", "https://api.github.com/user")
-            raise httpx.HTTPStatusError(f"HTTP error: {self.status_code}", request=mock_request, response=self)
+            mock_request = httpx2.Request("GET", "https://api.github.com/user")
+            raise httpx2.HTTPStatusError(f"HTTP error: {self.status_code}", request=mock_request, response=self)
 
 
 @pytest.fixture
@@ -90,7 +90,7 @@ def test_authenticated_endpoint_with_invalid_bearer_format(github_token_client):
     assert "Invalid Authorization header format" in response.json()["error"]["message"]
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_authenticated_endpoint_with_valid_github_token(mock_client_class, github_token_client):
     """Test accessing protected endpoint with valid GitHub token"""
     # Mock the GitHub API responses
@@ -132,7 +132,7 @@ def test_authenticated_endpoint_with_valid_github_token(mock_client_class, githu
     assert calls[0][1]["headers"]["Authorization"] == "Bearer github_token_123"
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_authenticated_endpoint_with_invalid_github_token(mock_client_class, github_token_client, suppress_auth_errors):
     """Test accessing protected endpoint with invalid GitHub token"""
     # Mock the GitHub API to return 401 Unauthorized
@@ -149,7 +149,7 @@ def test_authenticated_endpoint_with_invalid_github_token(mock_client_class, git
     )
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_github_enterprise_support(mock_client_class):
     """Test GitHub Enterprise support with custom API base URL"""
     app = FastAPI()
@@ -207,7 +207,7 @@ def test_github_enterprise_support(mock_client_class):
     assert calls[1][1]["params"] == {"per_page": 100, "page": 1}
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_github_token_extracts_org_attributes(mock_client_class):
     """Test that organization memberships are extracted into user attributes"""
     from ogx.core.server.auth_providers import GitHubTokenAuthProvider
@@ -237,7 +237,7 @@ def test_github_token_extracts_org_attributes(mock_client_class):
     assert "org-b" in user.attributes["teams"]
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_github_token_handles_org_fetch_failure(mock_client_class, caplog):
     """Test that authentication succeeds even if fetching orgs fails"""
     from ogx.core.server.auth_providers import GitHubTokenAuthProvider
@@ -255,10 +255,10 @@ def test_github_token_handles_org_fetch_failure(mock_client_class, caplog):
     mock_client = AsyncMock()
     mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    mock_request = httpx.Request("GET", "https://api.github.com/user/orgs")
+    mock_request = httpx2.Request("GET", "https://api.github.com/user/orgs")
     mock_client.get.side_effect = [
         MockResponse(200, {"login": "testuser", "id": 12345}),
-        httpx.HTTPStatusError("403 Forbidden", request=mock_request, response=MockResponse(403, {})),
+        httpx2.HTTPStatusError("403 Forbidden", request=mock_request, response=MockResponse(403, {})),
     ]
 
     user = asyncio.run(provider.validate_token("token123"))
@@ -267,7 +267,7 @@ def test_github_token_handles_org_fetch_failure(mock_client_class, caplog):
     assert user.attributes.get("teams", []) == []
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_github_token_multiple_orgs(mock_client_class):
     """Test with user who belongs to multiple organizations"""
     from ogx.core.server.auth_providers import GitHubTokenAuthProvider
@@ -300,7 +300,7 @@ def test_github_token_multiple_orgs(mock_client_class):
     assert set(user.attributes["teams"]) == {"org-1", "org-2", "org-3", "org-4"}
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_github_token_fetches_paginated_orgs(mock_client_class):
     """Test that organization memberships are fetched across all GitHub org pages."""
     from ogx.core.server.auth_providers import GitHubTokenAuthProvider
@@ -339,7 +339,7 @@ def test_github_token_fetches_paginated_orgs(mock_client_class):
     assert calls[2][1]["params"] == {"per_page": 100, "page": 2}
 
 
-@patch("ogx.core.server.auth_providers.httpx.AsyncClient")
+@patch("ogx.core.server.auth_providers.httpx2.AsyncClient")
 def test_github_token_preserves_partial_orgs_if_later_page_fails(mock_client_class):
     """Test that already-fetched organizations are preserved if a later org page fails."""
     from ogx.core.server.auth_providers import GitHubTokenAuthProvider
@@ -355,14 +355,14 @@ def test_github_token_preserves_partial_orgs_if_later_page_fails(mock_client_cla
     provider = GitHubTokenAuthProvider(config)
 
     first_page_orgs = [{"login": f"org-{index}"} for index in range(1, 101)]
-    mock_request = httpx.Request("GET", "https://api.github.com/user/orgs")
+    mock_request = httpx2.Request("GET", "https://api.github.com/user/orgs")
 
     mock_client = AsyncMock()
     mock_client_class.return_value.__aenter__.return_value = mock_client
     mock_client.get.side_effect = [
         MockResponse(200, {"login": "multiorguser", "id": 99999}),
         MockResponse(200, first_page_orgs),
-        httpx.HTTPStatusError("503 Service Unavailable", request=mock_request, response=MockResponse(503, {})),
+        httpx2.HTTPStatusError("503 Service Unavailable", request=mock_request, response=MockResponse(503, {})),
     ]
 
     user = asyncio.run(provider.validate_token("token123"))

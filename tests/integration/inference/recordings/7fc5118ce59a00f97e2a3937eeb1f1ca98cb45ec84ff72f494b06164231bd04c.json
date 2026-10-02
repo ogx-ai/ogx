@@ -1,0 +1,142 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestEdgeCases::test_multiple_tools_with_different_schemas[txt=llama-cpp-server/qwen3-0.6b]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Use one of the available tools"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "simple",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "complex",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/Complex"
+                }
+              },
+              "$defs": {
+                "Complex": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "with_output",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-7fc5118ce59a",
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": [
+                {
+                  "id": "B0TCF4MbeFhcZDcFDqmIbNttSuhdVy1A",
+                  "function": {
+                    "arguments": "{\"x\": \"example_value\"}",
+                    "name": "simple"
+                  },
+                  "type": "function"
+                }
+              ],
+              "reasoning_content": "Okay, the user wants me to use one of the available tools. Let me check the functions provided. There's the simple function with a parameter x, the complex function which requires a data object with nested numbers, and the with_output function which takes an input string.\n\nThe user's query is a bit vague, but since they mentioned using one of the tools, I need to determine which one applies. The simplest approach is to check if there's a clear parameter needed. The complex function requires a data object with nested numbers, which might be relevant if the user is expecting a nested array. However, the simple function's parameter is just x, which is a string. Since the user hasn't provided specific data or parameters, maybe the simplest answer is to use the simple function. Alternatively, if there's no data to process, the complex function might not be necessary. But since the user is asking to use a tool, I should pick one based on the information given. The with_output function takes an input string, so perhaps the user wants to pass some data into it. But without specific details, I might not know. However, the tools don't have any parameters beyond what's listed, so maybe the correct answer is to use the complex function. Wait, the complex function's data is an object with nested numbers. But the user hasn't provided that. Hmm. Maybe the user expects me to use the simple function. Alternatively, maybe the answer is to call the complex function with an empty data. But since the tools don't specify that, perhaps the correct action is to use the simple function. Let me go with the simple function as the tool to use.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 361,
+          "prompt_tokens": 262,
+          "total_tokens": 623,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 51
+          }
+        },
+        "timings": {
+          "cache_n": 51,
+          "prompt_n": 211,
+          "prompt_ms": 988.675,
+          "prompt_per_token_ms": 4.6856635071090045,
+          "prompt_per_second": 213.41694692391334,
+          "predicted_n": 361,
+          "predicted_ms": 11696.98,
+          "predicted_per_token_ms": 32.49161111111111,
+          "predicted_per_second": 30.777174963110138
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -1,6 +1,6 @@
 # OpenAPI Generator SDK
 
-Alternative SDK generation using [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator) instead of Stainless. See [#4609](https://github.com/ogx-ai/ogx/issues/4609) for context.
+The `ogx-client` Python SDK is generated with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator). The base OpenAPI spec and resource-hierarchy config are read from `../spec` and enriched before code generation.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ uv pip install ruamel.yaml
 ```bash
 cd client-sdks/openapi
 
-make openapi    # Generate enriched OpenAPI spec from Stainless config
+make openapi    # Generate enriched OpenAPI spec from the base spec + resource config
 make hierarchy  # Process spec for hierarchical SDK structure
 make sdk        # Generate Python SDK (runs full pipeline)
 make version    # Show version that will be used
@@ -54,10 +54,10 @@ The `make sdk` target runs the full pipeline and will automatically check for re
 ## How it Works
 
 ```text
-merge_stainless_config.py  ->  build_hierarchy.py  ->  openapi-generator  ->  patch_hierarchy.py
+merge_resources.py  ->  build_hierarchy.py  ->  openapi-generator  ->  patch_hierarchy.py
 ```
 
-1. **`merge_stainless_config.py`** reads base spec from `../stainless/openapi.yml`, enriches it with resource mappings from `../stainless/config.yml`, and applies patches from `patches.yml`. This is the only step that depends on the Stainless config.
+1. **`merge_resources.py`** reads the base spec from `../spec/openapi.yml`, enriches it with resource mappings from `../spec/resources.yml`, and applies patches from `patches.yml`. This is the only step that depends on the resource-hierarchy config.
 2. **`build_hierarchy.py`** extracts tag hierarchies, reduces endpoints to leaf tags, creates dummy endpoints for parent resource groups, and applies schema fixes for openapi-generator compatibility.
 3. **`openapi-generator`** generates the Python SDK from the processed spec using custom Mustache templates.
 4. **`patch_hierarchy.py`** patches the generated API classes to wire up parent-child relationships, enabling nested access like `client.chat.completions.create(...)`.
@@ -76,7 +76,7 @@ merge_stainless_config.py  ->  build_hierarchy.py  ->  openapi-generator  ->  pa
 
 The CI workflow (`.github/workflows/openapi-generator-validation.yml`) automatically validates SDK generation on every PR:
 
-- ✅ Generates OpenAPI spec from Stainless config
+- ✅ Generates OpenAPI spec from the base spec + resource config
 - ✅ Builds Python SDK (1,134 files)
 - ✅ Verifies SDK installation and imports
 - ✅ Runs integration tests against generated SDK
@@ -140,15 +140,10 @@ After publishing to PyPI:
 pip install ogx-client
 ```
 
-## Documentation
-
-- **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - End-to-end code examples for all major API features
-- **[STRATEGY.md](STRATEGY.md)** - Long-term strategy, ownership, versioning, and deprecation policy
-
 ## Files
 
 - `Makefile` - Build orchestration
-- `merge_stainless_config.py` - Merge Stainless config into OpenAPI spec
+- `merge_resources.py` - Merge the resource-hierarchy config into the OpenAPI spec
 - `build_hierarchy.py` - Extract hierarchy and prepare spec for code generation
 - `patch_hierarchy.py` - Post-generation patching for nested API structure
 - `patches.yml` - OpenAPI spec patches for codegen compatibility

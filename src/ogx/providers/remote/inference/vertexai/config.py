@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from ogx.core.storage.datatypes import KVStoreReference
 from ogx.providers.utils.inference.model_registry import RemoteInferenceProviderConfig
 from ogx_api import json_schema_type
 
@@ -52,6 +53,14 @@ class VertexAIConfig(RemoteInferenceProviderConfig):
         default="global",
         description="Google Cloud location for Vertex AI",
     )
+    thought_signature_store: KVStoreReference | None = Field(
+        default=None,
+        description=(
+            "KV store for Gemini thought_signature values (keyed by tool call id). "
+            "Needed for multi-worker / restart-safe Gemini 3 tool loops; "
+            "use a shared backend (Redis/Postgres) across replicas."
+        ),
+    )
 
     @classmethod
     def sample_run_config(
@@ -64,4 +73,8 @@ class VertexAIConfig(RemoteInferenceProviderConfig):
         return {
             "project": project,
             "location": location,
+            "thought_signature_store": KVStoreReference(
+                backend="kv_default",
+                namespace="vertexai_thought_signatures",
+            ).model_dump(exclude_none=True),
         }

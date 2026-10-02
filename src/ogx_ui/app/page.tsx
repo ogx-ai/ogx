@@ -119,7 +119,7 @@ export default function Home() {
             const models = await client.models.list();
             const modelData = Array.isArray(models)
               ? models
-              : (models as Record<string, unknown>).data;
+              : (models as unknown as Record<string, unknown>).data;
             results.models = Array.isArray(modelData) ? modelData.length : 0;
           } catch {
             /* graceful fallback */
@@ -128,7 +128,7 @@ export default function Home() {
         (async () => {
           try {
             const res = await client.files.list();
-            const data = (res as Record<string, unknown>).data;
+            const data = (res as unknown as Record<string, unknown>).data;
             results.files = Array.isArray(data) ? data.length : 0;
           } catch {
             /* graceful fallback */
@@ -137,7 +137,7 @@ export default function Home() {
         (async () => {
           try {
             const res = await client.vectorStores.list();
-            const data = (res as Record<string, unknown>).data;
+            const data = (res as unknown as Record<string, unknown>).data;
             results.vectorStores = Array.isArray(data) ? data.length : 0;
           } catch {
             /* graceful fallback */

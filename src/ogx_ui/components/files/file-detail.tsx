@@ -57,17 +57,45 @@ export function FileDetail() {
         const response = await client.files.retrieve(fileId);
         setFile(response as FileResource);
       } catch (err) {
-        console.error("Failed to fetch file:", err);
-        setError(
-          err instanceof Error ? err : new Error("Failed to fetch file")
-        );
+        try {
+          const storesResponse = await client.vectorStores.list({
+            limit: 100,
+            order: "desc",
+          });
+          const stores =
+            (storesResponse as { data?: { id?: string }[] }).data ?? [];
+          const matchingStore = await Promise.any(
+            stores
+              .filter((store): store is { id: string } => Boolean(store.id))
+              .map(async store => {
+                const filesResponse = await client.vectorStores.files.list(
+                  store.id
+                );
+                const files =
+                  (filesResponse as { data?: { id?: string }[] }).data ?? [];
+                if (files.some(file => file.id === fileId)) {
+                  return store.id;
+                }
+                throw new Error("File is not in this vector store");
+              })
+          );
+          router.replace(
+            `/logs/vector-stores/${matchingStore}/files/${fileId}`
+          );
+          return;
+        } catch {
+          console.error("Failed to fetch file details:", err);
+          setError(
+            err instanceof Error ? err : new Error("Failed to fetch file")
+          );
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchFile();
-  }, [fileId, client]);
+  }, [fileId, client, router]);
 
   // Cleanup blob URL when component unmounts or content changes
   useEffect(() => {
@@ -168,7 +196,7 @@ export function FileDetail() {
         blob = new Blob([arrayBuffer], { type: mimeType });
       } else {
         // Use llama stack client for text content
-        const response = await client.files.content(fileId);
+        const response: unknown = await client.files.content(fileId);
 
         if (typeof response === "string") {
           blob = new Blob([response], { type: mimeType });
@@ -279,7 +307,7 @@ export function FileDetail() {
         downloadUrl = URL.createObjectURL(blob);
       } else {
         // Use llama stack client for text content
-        const response = await client.files.content(fileId);
+        const response: unknown = await client.files.content(fileId);
 
         if (typeof response === "string") {
           const blob = new Blob([response], { type: mimeType });

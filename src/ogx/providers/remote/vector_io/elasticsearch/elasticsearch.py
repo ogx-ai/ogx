@@ -309,7 +309,7 @@ class ElasticsearchIndex(EmbeddingIndex):
         # Add reranker parameters if provided for RRF (e.g. rank_constant, rank_window_size, filter)
         # see https://www.elastic.co/docs/reference/elasticsearch/rest-apis/retrievers/rrf-retriever
         if reranker_type == "rrf" and reranker_params is not None:
-            allowed_rrf_params = {"rank_constant", "rank_windows_size", "filter"}
+            allowed_rrf_params = {"rank_constant", "rank_window_size", "filter"}
             rrf_params = dict(reranker_params)
             if "impact_factor" in rrf_params:
                 if "rank_constant" not in rrf_params:
@@ -378,6 +378,10 @@ class ElasticsearchIndex(EmbeddingIndex):
 
 class ElasticsearchVectorIOAdapter(OpenAIVectorStoreMixin, VectorIO, VectorStoresProtocolPrivate):
     """Vector I/O adapter for remote Elasticsearch instances."""
+
+    # ElasticsearchIndex.query_hybrid drops "weights" from the RRF retriever's parameters as unsupported.
+    # Its "linear" retriever does apply weights, but hybrid_search maps to reranker_type="rrf".
+    supports_weighted_hybrid_search = False
 
     def __init__(
         self,

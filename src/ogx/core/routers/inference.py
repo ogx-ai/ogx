@@ -16,7 +16,7 @@ from pydantic import TypeAdapter
 
 from ogx.core.access_control.access_control import is_action_allowed
 from ogx.core.datatypes import ModelWithOwner
-from ogx.core.request_headers import get_authenticated_user
+from ogx.core.request_headers import PROVIDER_DATA_VAR, get_authenticated_user
 from ogx.log import get_logger
 from ogx.providers.utils.inference.inference_store import InferenceStore
 from ogx.telemetry.inference_metrics import (
@@ -45,7 +45,6 @@ from ogx_api import (
     OpenAIChatCompletionResponseMessage,
     OpenAIChatCompletionToolCall,
     OpenAIChatCompletionToolCallFunction,
-    OpenAIChatCompletionWithReasoning,
     OpenAIChoice,
     OpenAIChoiceLogprobs,
     OpenAICompletion,
@@ -62,6 +61,13 @@ from ogx_api import (
     RoutingTable,
 )
 from ogx_api.inference.models import RerankRequest
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCountTokensResponse,
+    AnthropicCreateMessageRequest,
+    AnthropicMessageResponse,
+    AnthropicStreamEvent,
+)
 
 logger = get_logger(name=__name__, category="core::routers")
 
@@ -69,6 +75,32 @@ logger = get_logger(name=__name__, category="core::routers")
 def _log_background_task_error(task: asyncio.Task) -> None:
     if not task.cancelled() and (exc := task.exception()):
         logger.error("Failed to store chat completion in background", error=str(exc))
+
+
+def _normalize_provider_data_key(provider: Inference) -> None:
+    """Map the client-facing ``{provider_id}_api_key`` to the impl's provider-data key.
+
+    Lets a client authenticate a named provider (e.g. ``providerA_api_key``) without
+    knowing the backend type (e.g. ``vllm_api_token``). The client key is matched
+    case-insensitively so the client need not reproduce the provider id's exact
+    casing. The legacy type-shaped key is passed through untouched, so existing
+    clients keep working.
+    """
+    provider_id = getattr(provider, "__provider_id__", None)
+    impl_key = getattr(provider, "provider_data_api_key_field", None)
+    if not provider_id or not impl_key:
+        return
+
+    provider_data = PROVIDER_DATA_VAR.get()
+    if not provider_data:
+        return
+
+    target = f"{provider_id}_api_key".lower()
+    client_key = next((key for key in provider_data if isinstance(key, str) and key.lower() == target), None)
+    if client_key is not None and client_key != impl_key:
+        # Re-set the contextvar with a normalized copy so the provider and its
+        # per-type validator observe the impl key; the client key is retained.
+        PROVIDER_DATA_VAR.set({**provider_data, impl_key: provider_data[client_key]})
 
 
 class InferenceRouter(Inference):
@@ -102,14 +134,6 @@ class InferenceRouter(Inference):
         metadata: dict[str, Any] | None = None,
         model_type: ModelType | None = None,
     ) -> None:
-        logger.debug(
-            "InferenceRouter.register_model",
-            model_id=model_id,
-            provider_model_id=provider_model_id,
-            provider_id=provider_id,
-            metadata=metadata,
-            model_type=model_type,
-        )
         request = RegisterModelRequest(
             model_id=model_id,
             provider_model_id=provider_model_id,
@@ -126,10 +150,13 @@ class InferenceRouter(Inference):
                 raise ModelTypeError(model_id, model.model_type, expected_model_type)
 
             provider = await self.routing_table.get_provider_impl(model.identifier)
-            return provider, model.provider_resource_id
+            provider_resource_id = model.provider_resource_id
+        else:
+            # Handles cases where clients use the provider format directly
+            provider, provider_resource_id = await self._get_provider_by_fallback(model_id, expected_model_type)
 
-        # Handles cases where clients use the provider format directly
-        return await self._get_provider_by_fallback(model_id, expected_model_type)
+        _normalize_provider_data_key(provider)
+        return provider, provider_resource_id
 
     async def _get_provider_by_fallback(self, model_id: str, expected_model_type: str) -> tuple[Inference, str]:
         """
@@ -158,11 +185,6 @@ class InferenceRouter(Inference):
         # Perform RBAC check
         user = get_authenticated_user()
         if not is_action_allowed(self.routing_table.policy, "read", temp_model, user):
-            logger.debug(
-                "Access denied to model via fallback path for user",
-                model_id=model_id,
-                user=user.principal if user else "anonymous",
-            )
             raise ModelNotFoundError(model_id)
 
         return self.routing_table.impls_by_provider_id[provider_id], provider_resource_id
@@ -182,13 +204,7 @@ class InferenceRouter(Inference):
     async def openai_completion(
         self,
         params: Annotated[OpenAICompletionRequestWithExtraBody, Body(...)],
-    ) -> OpenAICompletion:
-        logger.debug(
-            "InferenceRouter.openai_completion: model=, stream=, prompt",
-            model=params.model,
-            stream=params.stream,
-            prompt=params.prompt,
-        )
+    ) -> OpenAICompletion | AsyncIterator[OpenAICompletion]:
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
         inference_model_type_used_total.add(
@@ -197,22 +213,33 @@ class InferenceRouter(Inference):
         params.model = provider_resource_id
 
         if params.stream:
-            return await provider.openai_completion(params)
+            response_stream = await provider.openai_completion(params)
+            # Providers respond with their internal model id, so rewrite each
+            # chunk to carry the fully qualified model id the client requested
+            # (mirrors the non-streaming path below and the chat-streaming path).
+            return self._rewrite_completion_stream_model_id(response_stream, request_model_id)
 
         response = await provider.openai_completion(params)
         response.model = request_model_id
         return response
 
+    async def _rewrite_completion_stream_model_id(
+        self,
+        response: AsyncIterator[OpenAICompletion],
+        fully_qualified_model_id: str,
+    ) -> AsyncIterator[OpenAICompletion]:
+        """Yield streamed completion chunks with the requested model id restored."""
+        async for chunk in response:
+            # Skip None chunks, mirroring stream_tokens_and_compute_metrics_openai_chat
+            if chunk is None:
+                continue
+            chunk.model = fully_qualified_model_id
+            yield chunk
+
     async def openai_chat_completion(
         self,
         params: Annotated[OpenAIChatCompletionRequestWithExtraBody, Body(...)],
     ) -> OpenAIChatCompletion | AsyncIterator[OpenAIChatCompletionChunk]:
-        logger.debug(
-            "InferenceRouter.openai_chat_completion: model=, stream=, messages",
-            model=params.model,
-            stream=params.stream,
-            messages=params.messages,
-        )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
         inference_model_type_used_total.add(
@@ -292,7 +319,7 @@ class InferenceRouter(Inference):
     async def openai_chat_completions_with_reasoning(
         self,
         params: OpenAIChatCompletionRequestWithExtraBody,
-    ) -> OpenAIChatCompletionWithReasoning | AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
+    ) -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
         """Called by the Responses layer when a user requests reasoning.
 
         Routes to the provider's reasoning-aware CC implementation, which
@@ -314,13 +341,6 @@ class InferenceRouter(Inference):
         self,
         params: Annotated[OpenAIEmbeddingsRequestWithExtraBody, Body(...)],
     ) -> OpenAIEmbeddingsResponse:
-        logger.debug(
-            "InferenceRouter.openai_embeddings: model=, input_type=, encoding_format=, dimensions",
-            model=params.model,
-            type_params_input=type(params.input),
-            encoding_format=params.encoding_format,
-            dimensions=params.dimensions,
-        )
         request_model_id = params.model
         provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.embedding)
         inference_model_type_used_total.add(
@@ -331,6 +351,22 @@ class InferenceRouter(Inference):
         response = await provider.openai_embeddings(params)
         response.model = request_model_id
         return response
+
+    async def anthropic_messages(
+        self,
+        params: AnthropicCreateMessageRequest,
+    ) -> AnthropicMessageResponse | AsyncIterator[AnthropicStreamEvent]:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_messages(params)
+
+    async def anthropic_count_tokens(
+        self,
+        params: AnthropicCountTokensRequest,
+    ) -> AnthropicCountTokensResponse:
+        provider, provider_resource_id = await self._get_model_provider(params.model, ModelType.llm)
+        params.model = provider_resource_id
+        return await provider.anthropic_count_tokens(params)
 
     async def list_chat_completions(
         self,
@@ -375,7 +411,10 @@ class InferenceRouter(Inference):
         return response
 
     async def health(self) -> dict[str, HealthResponse]:
-        timeout = 1
+        # Cap for the whole fan-out; must exceed each adapter's internal
+        # health-check timeout (3.0s signature check, 5.0s default httpx2) so a
+        # slow-but-healthy server is not misreported as a router-level timeout.
+        timeout = 10.0
         impls_snapshot = dict(self.routing_table.impls_by_provider_id)
 
         async def _check_one(provider_id: str, impl: object) -> tuple[str, HealthResponse]:
@@ -578,6 +617,5 @@ class InferenceRouter(Inference):
                     model=fully_qualified_model_id,
                     object="chat.completion",
                 )
-                logger.debug("InferenceRouter.completion_response", final_response=final_response)
                 task = asyncio.create_task(self.store.store_chat_completion(final_response, messages))
                 task.add_done_callback(_log_background_task_error)

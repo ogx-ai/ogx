@@ -6,6 +6,7 @@
 
 from typing import Any
 
+from ogx.core.access_control.datatypes import RouteAccessRule
 from ogx.core.datatypes import AccessRule, Api
 from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
 from ogx_api import Files, Inference, Models
@@ -16,7 +17,12 @@ from .config import ReferenceBatchesImplConfig
 __all__ = ["ReferenceBatchesImpl", "ReferenceBatchesImplConfig"]
 
 
-async def get_provider_impl(config: ReferenceBatchesImplConfig, deps: dict[Api, Any], policy: list[AccessRule]):
+async def get_provider_impl(
+    config: ReferenceBatchesImplConfig,
+    deps: dict[Api, Any],
+    policy: list[AccessRule],
+    route_policy: list[RouteAccessRule],
+):
     sql_store = await authorized_sqlstore(config.sqlstore, policy)
     inference_api: Inference | None = deps.get(Api.inference)
     files_api: Files | None = deps.get(Api.files)
@@ -29,6 +35,6 @@ async def get_provider_impl(config: ReferenceBatchesImplConfig, deps: dict[Api, 
     if models_api is None:
         raise ValueError("Models API is required but not provided in dependencies")
 
-    impl = ReferenceBatchesImpl(config, inference_api, files_api, models_api, sql_store)
+    impl = ReferenceBatchesImpl(config, inference_api, files_api, models_api, sql_store, route_policy)
     await impl.initialize()
     return impl

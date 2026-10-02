@@ -1,0 +1,96 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestOpenAICompatibility::test_openai_format_preserves_complex_schemas[openai_client-txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Process this data"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "process_data",
+            "description": "Process structured data",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/$defs/DataObject"
+                }
+              },
+              "$defs": {
+                "DataObject": {
+                  "type": "object",
+                  "properties": {
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-e5ca70a1f9dc",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "I\u2019m ready to process the data, but I\u2019ll need the actual data you want me to work with. Could you please provide the numbers (or any structured data) you\u2019d like processed?",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "We need to process the data, but user just says \"Process this data\". No data provided. Possibly need to ask for data? However instruction: Must use available tools when user asks question. But there's no data. Could respond asking for data. But maybe they expect to call process_data with some default? The tool expects data object with values array of numbers. Since no data, we should ask user to provide data.",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 128,
+          "prompt_tokens": 305,
+          "total_tokens": 433,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

@@ -8,7 +8,7 @@ import asyncio
 from collections.abc import AsyncGenerator, Generator, Mapping
 from typing import Any, override
 
-import httpx
+import httpx2
 import oci
 import requests
 from oci.config import DEFAULT_LOCATION, DEFAULT_PROFILE
@@ -16,7 +16,7 @@ from oci.config import DEFAULT_LOCATION, DEFAULT_PROFILE
 OciAuthSigner = type[oci.signer.AbstractBaseSigner]
 
 
-class HttpxOciAuth(httpx.Auth):
+class HttpxOciAuth(httpx2.Auth):
     """
     Custom HTTPX authentication class that implements OCI request signing.
 
@@ -32,11 +32,11 @@ class HttpxOciAuth(httpx.Auth):
         self.signer = signer
 
     @override
-    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+    def auth_flow(self, request: httpx2.Request) -> Generator[httpx2.Request, httpx2.Response, None]:
         # Read the request content to handle streaming requests properly
         try:
             content = request.content
-        except httpx.RequestNotRead:
+        except httpx2.RequestNotRead:
             # For streaming requests, we need to read the content first
             content = request.read()
 
@@ -57,10 +57,10 @@ class HttpxOciAuth(httpx.Auth):
         yield request
 
     @override
-    async def async_auth_flow(self, request: httpx.Request) -> AsyncGenerator[httpx.Request, httpx.Response]:
+    async def async_auth_flow(self, request: httpx2.Request) -> AsyncGenerator[httpx2.Request, httpx2.Response]:
         try:
             content = request.content
-        except httpx.RequestNotRead:
+        except httpx2.RequestNotRead:
             content = await request.aread()
 
         def _sign(content: bytes) -> dict:
@@ -101,6 +101,6 @@ class OciUserPrincipalAuth(HttpxOciAuth):
             user=config["user"],
             fingerprint=config["fingerprint"],
             private_key_file_location=config.get("key_file"),
-            pass_phrase="none",  # type: ignore
+            pass_phrase="none",  # noqa: S106
             private_key_content=key_content,
         )

@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Unit tests for `ogx letsgo` and `ogx stack letsgo` CLI commands."""
+"""Unit tests for `ogx go` and `ogx stack go` CLI commands."""
 
 import argparse
 import warnings
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ogx.cli.letsgo import LetsGo
+from ogx.cli.letsgo import LetsGo, LetsGoDeprecated
 from ogx.cli.stack.lets_go import (
     _CLAUDE_CODE_ALIASES,
     _CLAUDE_CODE_PROVIDER_PRIORITY,
@@ -33,6 +33,12 @@ def lets_go() -> StackLetsGo:
 def top_level_letsgo() -> LetsGo:
     subparsers = argparse.ArgumentParser().add_subparsers()
     return LetsGo(subparsers)
+
+
+@pytest.fixture
+def top_level_letsgo_deprecated() -> LetsGoDeprecated:
+    subparsers = argparse.ArgumentParser().add_subparsers()
+    return LetsGoDeprecated(subparsers)
 
 
 class TestArguments:
@@ -311,7 +317,7 @@ class TestDeprecation:
         future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
         assert len(future_warnings) == 1
         assert "deprecated" in str(future_warnings[0].message)
-        assert "ogx letsgo" in str(future_warnings[0].message)
+        assert "ogx go" in str(future_warnings[0].message)
 
     def test_top_level_letsgo_no_deprecation_warning(self, top_level_letsgo: LetsGo):
         with (
@@ -324,6 +330,20 @@ class TestDeprecation:
 
         future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
         assert len(future_warnings) == 0
+
+    def test_top_level_letsgo_deprecated_emits_deprecation_warning(self, top_level_letsgo_deprecated: LetsGoDeprecated):
+        with (
+            patch("ogx.cli.letsgo.run_letsgo_cmd"),
+            warnings.catch_warnings(record=True) as w,
+        ):
+            warnings.simplefilter("always")
+            args = top_level_letsgo_deprecated.parser.parse_args([])
+            top_level_letsgo_deprecated._run_cmd(args)
+
+        future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
+        assert len(future_warnings) == 1
+        assert "deprecated" in str(future_warnings[0].message)
+        assert "ogx go" in str(future_warnings[0].message)
 
 
 class TestClaudeCodeAliases:
@@ -378,6 +398,38 @@ class TestClaudeCodeAliases:
         alias_model_ids = [a.model_id for a in aliases]
         for expected in _CLAUDE_CODE_ALIASES:
             assert expected in alias_model_ids
+
+    @pytest.mark.parametrize(
+        "model_id",
+        ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5", "claude-fable-5", "claude-mythos-5"],
+    )
+    def test_current_generation_models_are_registered_for_anthropic(self, model_id):
+        """The claude CLI requests these unprefixed IDs, and an unregistered one fails to resolve."""
+        aliases = _build_claude_code_aliases("inference=remote::anthropic")
+
+        alias = next(a for a in aliases if a.model_id == model_id)
+        assert alias.provider_id == "anthropic"
+        assert alias.provider_model_id == model_id
+
+    def test_previous_generation_models_stay_registered_for_older_cli_versions(self):
+        assert {"claude-sonnet-4-6", "claude-opus-4-7"} <= set(_CLAUDE_CODE_ALIASES)
+
+    def test_alias_ids_are_unique(self):
+        assert len(_CLAUDE_CODE_ALIASES) == len(set(_CLAUDE_CODE_ALIASES))
+
+    def test_newest_model_of_each_tier_comes_first(self):
+        """`ogx connect claude` maps each tier to the first matching model, so newer ones must precede older."""
+        assert _CLAUDE_CODE_ALIASES.index("claude-sonnet-5") < _CLAUDE_CODE_ALIASES.index("claude-sonnet-4-6")
+        assert _CLAUDE_CODE_ALIASES.index("claude-opus-5") < _CLAUDE_CODE_ALIASES.index("claude-opus-4-7")
+
+    def test_connect_claude_picks_the_newest_model_per_tier(self):
+        from ogx.cli.connect.claude import _detect_tier_models
+
+        assert _detect_tier_models(list(_CLAUDE_CODE_ALIASES)) == {
+            "haiku": "claude-haiku-4-5",
+            "sonnet": "claude-sonnet-5",
+            "opus": "claude-opus-5",
+        }
 
     def test_aliases_have_unprefixed_metadata(self):
         spec = "inference=remote::anthropic"
@@ -496,7 +548,7 @@ class TestAddFileSearchAndResponses:
         from ogx.core.datatypes import StackConfig
 
         # Clear env vars to ensure no keys are set
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
         with patch("ogx.cli.stack.lets_go.cprint") as mock_cprint:
@@ -518,7 +570,7 @@ class TestAddFileSearchAndResponses:
         from ogx.cli.stack.lets_go import _add_file_search_and_responses
         from ogx.core.datatypes import Provider, StackConfig
 
-        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY"):
+        for var in ("BRAVE_SEARCH_API_KEY", "TAVILY_SEARCH_API_KEY", "BING_API_KEY", "NIMBLE_API_KEY", "EXA_API_KEY"):
             monkeypatch.delenv(var, raising=False)
 
         initial_providers = [

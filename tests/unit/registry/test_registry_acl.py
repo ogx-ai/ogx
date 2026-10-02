@@ -22,7 +22,7 @@ async def test_registry_cache_with_acl(cached_disk_dist_registry):
     success = await cached_disk_dist_registry.register(model)
     assert success
 
-    cached_model = cached_disk_dist_registry.get_cached("model", "model-acl")
+    cached_model = cached_disk_dist_registry.cache.get(("model", "model-acl"))
     assert cached_model is not None
     assert cached_model.identifier == "model-acl"
     assert cached_model.owner.principal == "testuser"
@@ -56,7 +56,7 @@ async def test_registry_empty_acl(cached_disk_dist_registry):
 
     await cached_disk_dist_registry.register(model)
 
-    cached_model = cached_disk_dist_registry.get_cached("model", "model-empty-acl")
+    cached_model = cached_disk_dist_registry.cache.get(("model", "model-empty-acl"))
     assert cached_model is not None
     assert cached_model.owner is not None
     assert cached_model.owner.attributes is None
@@ -73,7 +73,7 @@ async def test_registry_empty_acl(cached_disk_dist_registry):
 
     await cached_disk_dist_registry.register(model)
 
-    cached_model = cached_disk_dist_registry.get_cached("model", "model-no-acl")
+    cached_model = cached_disk_dist_registry.cache.get(("model", "model-no-acl"))
     assert cached_model is not None
     assert cached_model.owner is None
 

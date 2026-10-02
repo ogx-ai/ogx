@@ -92,7 +92,7 @@ export function PromptList({ prompts, onEdit, onDelete }: PromptListProps) {
                   </div>
                 </TableCell>
                 <TableCell>
-                  {prompt.variables.length > 0 ? (
+                  {prompt.variables && prompt.variables.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
                       {prompt.variables.map(variable => (
                         <Badge

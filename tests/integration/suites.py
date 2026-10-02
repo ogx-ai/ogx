@@ -82,7 +82,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         },
         defaults={
             "text_model": "ollama/llama3.2:3b-instruct-fp16",
-            "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "vllm": Setup(
@@ -93,18 +93,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         },
         defaults={
             "text_model": "vllm/Qwen/Qwen3-0.6B",
-            "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
-            "rerank_model": "vllm/Qwen/Qwen3-Reranker-0.6B",
-        },
-    ),
-    "vllm-gpu-gpt-oss": Setup(
-        name="vllm-gpu",
-        description="vLLM GPU provider with gpt-oss:20b reasoning model",
-        env={
-            "VLLM_URL": "http://localhost:8000/v1",
-        },
-        defaults={
-            "text_model": "vllm/gpt-oss:20b",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
         },
     ),
     "ollama-reasoning": Setup(
@@ -115,6 +104,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         },
         defaults={
             "text_model": "ollama/deepseek-r1:1.5b",
+            "embedding_model": "ollama/nomic-embed-text:v1.5",
         },
     ),
     "bedrock": Setup(
@@ -130,14 +120,19 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "embedding_dimension": 768,
         },
     ),
+    # The gpt/azure/watsonx/vertexai setups default rerank_model to the ST reranker
+    # because the recorded node IDs of rerank-parameterized tests (langchain/langgraph
+    # in the responses suite) include the param value, and recording hashes are keyed
+    # by test_id. Setups without ST-rerank recordings (e.g. vllm) intentionally omit it.
     "gpt": Setup(
         name="gpt",
         description="OpenAI GPT models for high-quality responses and tool calling",
         defaults={
             "text_model": "openai/gpt-4o",
             "vision_model": "openai/gpt-4o",
-            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 1536,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "gpt-reasoning": Setup(
@@ -145,6 +140,8 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="OpenAI reasoning models (o4-mini) for reasoning effort tests",
         defaults={
             "text_model": "openai/o4-mini",
+            "embedding_model": "openai/text-embedding-3-small",
+            "embedding_dimension": 1536,
         },
     ),
     "azure": Setup(
@@ -155,6 +152,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "azure/gpt-4o",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "watsonx": Setup(
@@ -162,6 +160,8 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         description="IBM WatsonX AI models",
         defaults={
             "text_model": "watsonx/meta-llama/llama-3-3-70b-instruct",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "vertexai": Setup(
@@ -172,6 +172,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "vision_model": "vertexai/publishers/google/models/gemini-2.0-flash",
             "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
             "embedding_dimension": 768,
+            "rerank_model": "sentence-transformers/Qwen/Qwen3-Reranker-0.6B",
         },
     ),
     "tgi": Setup(
@@ -196,7 +197,7 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
         name="cerebras",
         description="Cerebras models",
         defaults={
-            "text_model": "cerebras/llama-3.3-70b",
+            "text_model": "cerebras/gpt-oss-120b",
         },
     ),
     "databricks": Setup(
@@ -210,9 +211,10 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     "fireworks": Setup(
         name="fireworks",
         description="Fireworks provider with a text model",
+        # Least expensive text model at https://docs.fireworks.ai/serverless/pricing
         defaults={
-            "text_model": "fireworks/accounts/fireworks/models/llama-v3p1-8b-instruct",
-            "embedding_model": "fireworks/accounts/fireworks/models/qwen3-embedding-8b",
+            "text_model": "fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
         },
     ),
     "anthropic": Setup(
@@ -247,13 +249,38 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
     ),
     "llama-cpp-server": Setup(
         name="llama-cpp-server",
-        description="llama.cpp server provider with OpenAI-compatible API",
+        description=(
+            "llama.cpp multi-model router (llama-server --models-preset) serving a text "
+            "model, an embedding model, and a rerank model over one OpenAI-compatible "
+            "endpoint. The URL must include the /v1 prefix because the OpenAI SDK appends "
+            "endpoint paths to it."
+        ),
         env={
-            "LLAMA_CPP_SERVER_URL": "http://localhost:8080",
+            "LLAMA_CPP_SERVER_URL": "http://localhost:8080/v1",
         },
         defaults={
-            "text_model": "llama-cpp-server/qwen2.5",
-            "embedding_model": "sentence-transformers/nomic-embed-text-v1.5",
+            # Model IDs are the router's INI section names; the provider strips the
+            # "llama-cpp-server/" prefix and sends the section name as the model.
+            "text_model": "llama-cpp-server/qwen3-0.6b",
+            "embedding_model": "llama-cpp-server/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
+            "rerank_model": "llama-cpp-server/bge-reranker-v2-m3",
+        },
+    ),
+    "text-embeddings-inference": Setup(
+        name="text-embeddings-inference",
+        description=(
+            "HuggingFace Text-Embeddings-Inference server (CPU) serving an embedding model "
+            "over its OpenAI-compatible endpoint. Embedding-only: suites that need a text "
+            "model must not use this setup. The URL must include the /v1 prefix because the "
+            "OpenAI SDK appends endpoint paths to it."
+        ),
+        env={
+            "TEI_URL": "http://localhost:8080/v1",
+        },
+        defaults={
+            "embedding_model": "text-embeddings-inference/nomic-ai/nomic-embed-text-v1.5",
+            "embedding_dimension": 768,
         },
     ),
     "vllm-qwen3next": Setup(
@@ -285,6 +312,21 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         roots=["tests/integration/inference"],
         default_setup="vllm",
     ),
+    # llama.cpp multi-model router backend (llama-server --models-preset), scoped like
+    # base-vllm-subset (the full inference directory). The router serves a text, an
+    # embedding, and a rerank model, but no vision model, so vision tests skip.
+    "llama-cpp-server": Suite(
+        name="llama-cpp-server",
+        roots=["tests/integration/inference"],
+        default_setup="llama-cpp-server",
+    ),
+    # Text-Embeddings-Inference backend. TEI only serves embeddings (no chat or
+    # completion endpoint), so this suite is scoped to the embeddings tests only.
+    "text-embeddings-inference": Suite(
+        name="text-embeddings-inference",
+        roots=["tests/integration/inference/test_openai_embeddings.py"],
+        default_setup="text-embeddings-inference",
+    ),
     "responses": Suite(
         name="responses",
         roots=["tests/integration/responses"],
@@ -312,7 +354,9 @@ SUITE_DEFINITIONS: dict[str, Suite] = {
         name="ollama-reasoning",
         roots=[
             "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_reasoning_passthrough",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_basic_streaming",
             "tests/integration/responses/test_reasoning.py::test_reasoning_non_streaming",
+            "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_with_tool_call",
             "tests/integration/responses/test_reasoning.py::test_reasoning_multi_turn_passthrough",
         ],
         default_setup="ollama-reasoning",

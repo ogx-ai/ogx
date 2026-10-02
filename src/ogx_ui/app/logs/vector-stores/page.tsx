@@ -1,10 +1,7 @@
 "use client";
 
 import React from "react";
-import type {
-  ListVectorStoresResponse,
-  VectorStore,
-} from "ogx-client/resources/vector-stores/vector-stores";
+import type { VectorStore } from "ogx-client/resources/vector-stores/vector-stores";
 import { useRouter } from "next/navigation";
 import { usePagination } from "@/hooks/use-pagination";
 import { Button } from "@/components/ui/button";
@@ -25,6 +22,7 @@ import {
   VectorStoreEditor,
   VectorStoreFormData,
 } from "@/components/vector-stores/vector-store-editor";
+import { buildVectorStoreParams } from "@/components/vector-stores/vector-store-params";
 
 export default function VectorStoresPage() {
   const router = useRouter();
@@ -41,6 +39,7 @@ export default function VectorStoresPage() {
     hasMore,
     error,
     loadMore,
+    refetch,
   } = usePagination<VectorStore>({
     limit: 20,
     order: "desc",
@@ -50,7 +49,11 @@ export default function VectorStoresPage() {
         limit: params.limit,
         order: params.order,
       } as Parameters<typeof client.vectorStores.list>[0]);
-      return response as ListVectorStoresResponse;
+      return {
+        data: response.data,
+        has_more: response.has_more,
+        last_id: response.last_id,
+      };
     },
     errorMessagePrefix: "vector stores",
   });
@@ -130,27 +133,12 @@ export default function VectorStoresPage() {
         return;
       }
 
-      const createParams: Record<string, unknown> = {
-        name: formData.name || undefined,
-      };
-
-      if (formData.provider_id) {
-        createParams.provider_id = formData.provider_id;
-      }
-      if (formData.embedding_model) {
-        createParams.embedding_model = formData.embedding_model;
-      }
-      if (formData.embedding_dimension) {
-        createParams.embedding_dimension = formData.embedding_dimension;
-      }
-
-      await client.vectorStores.create(createParams);
+      await client.vectorStores.create(buildVectorStoreParams(formData));
+      refetch();
 
       // Show success state with close button
       setShowSuccessState(true);
-      setModalError(
-        "✅ Vector store created successfully! You can close this modal and refresh the page to see changes."
-      );
+      setModalError("✅ Vector store created successfully!");
     } catch (err: unknown) {
       console.error("Failed to create vector store:", err);
       const errorMessage =
@@ -245,8 +233,10 @@ export default function VectorStoresPage() {
               {filteredStores.map(store => {
                 const fileCounts = store.file_counts;
                 const metadata = store.metadata || {};
-                const providerId = metadata.provider_id ?? "";
-                const providerDbId = metadata.provider_vector_db_id ?? "";
+                const providerId = String(metadata.provider_id ?? "");
+                const providerDbId = String(
+                  metadata.provider_vector_db_id ?? ""
+                );
 
                 return (
                   <TableRow
@@ -362,11 +352,15 @@ export default function VectorStoresPage() {
                   editingStore
                     ? {
                         name: editingStore.name || "",
-                        embedding_model:
-                          editingStore.metadata?.embedding_model || "",
-                        embedding_dimension:
-                          editingStore.metadata?.embedding_dimension || 768,
-                        provider_id: editingStore.metadata?.provider_id || "",
+                        embedding_model: String(
+                          editingStore.metadata?.embedding_model || ""
+                        ),
+                        embedding_dimension: Number(
+                          editingStore.metadata?.embedding_dimension || 768
+                        ),
+                        provider_id: String(
+                          editingStore.metadata?.provider_id || ""
+                        ),
                       }
                     : undefined
                 }

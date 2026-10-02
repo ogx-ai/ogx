@@ -72,9 +72,9 @@ The API is defined in the [YAML](_static/ogx-spec.yaml) and [HTML](_static/ogx-s
 
 ## Sample implementations
 
-To prove out the API, we implemented a handful of use cases to make things more concrete. The [ogx-apps](https://github.com/ogx-ai/ogx-apps) repository contains [6 different examples](https://github.com/ogx-ai/ogx-apps/tree/main/examples) ranging from very basic to a multi turn agent.
+To prove out the API, we implemented a handful of use cases to make things more concrete. The [Llama Stack Apps](https://github.com/ogx-ai/llama-stack-apps) repository contains [6 different examples](https://github.com/ogx-ai/llama-stack-apps/tree/main/examples) ranging from very basic to a multi turn agent.
 
-There is also a sample inference endpoint implementation in the [ogx](https://github.com/ogx-ai/ogx/blob/main/ogx.core/server/server.py) repository.
+There is also a sample inference endpoint implementation in the [OGX](https://github.com/ogx-ai/ogx/blob/main/src/ogx/core/server/server.py) repository.
 
 ## Limitations
 

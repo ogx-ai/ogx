@@ -262,10 +262,11 @@ async def pgvector_vec_index(embedding_dimension, mock_asyncpg_pool):
         provider_resource_id="pgvector:test-vector-db",
     )
 
+    pool_factory = AsyncMock(return_value=pool)
     index = PGVectorIndex(
         vector_store,
         embedding_dimension,
-        pool,
+        pool_factory=pool_factory,
         distance_metric="COSINE",
         vector_index=PGVectorHNSWVectorIndex(m=16, ef_construction=64, ef_search=40),
     )

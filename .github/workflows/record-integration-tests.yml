@@ -35,7 +35,7 @@ on:
         description: 'Comma-separated list of providers to record'
         type: string
         required: false
-        default: 'gpt,azure,watsonx,vertexai'
+        default: 'gpt,azure,watsonx,vertexai,fireworks'
       suite:
         description: 'Test suite override (default: per-provider from matrix)'
         type: string
@@ -143,13 +143,15 @@ jobs:
           fi
 
           # Determine which providers to run
-          # Security: For pull_request, only run ollama variants (no secrets needed)
+          # Security: For pull_request, only run secret-free providers (ollama variants,
+          # llama-cpp-server, vllm and text-embeddings-inference, which record against
+          # locally-started servers)
           # Manual workflow_dispatch uses input providers (defaults to API providers)
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             PROVIDERS="$INPUT_PROVIDERS"
           else
-            # Auto-trigger on PR: only ollama (no secrets exposed to any PR)
-            PROVIDERS="ollama,ollama-reasoning"
+            # Auto-trigger on PR: only secret-free providers (no secrets exposed to any PR)
+            PROVIDERS="ollama,ollama-reasoning,llama-cpp-server,vllm,text-embeddings-inference"
           fi
 
           {
@@ -223,6 +225,14 @@ jobs:
             suite: ollama-reasoning
           - setup: ollama
             suite: messages
+          - setup: llama-cpp-server
+            suite: llama-cpp-server
+          - setup: vllm
+            suite: base-vllm-subset
+          - setup: vllm
+            suite: vllm-reasoning
+          - setup: text-embeddings-inference
+            suite: text-embeddings-inference
           - setup: gpt
             suite: responses
           - setup: gpt
@@ -239,6 +249,8 @@ jobs:
             suite: responses
           - setup: gemini
             suite: interactions
+          - setup: fireworks
+            suite: base
     steps:
       - name: Check if provider should run
         id: should_run
@@ -258,6 +270,12 @@ jobs:
             echo "Skipping provider: $CURRENT"
           fi
 
+      - name: Reject Vertex AI recording for fork PRs
+        if: steps.should_run.outputs.run == 'true' && matrix.provider.setup == 'vertexai' && needs.compute-pr-info.outputs.is_fork_pr == 'true'
+        run: |
+          echo "::error::Failed to record with Vertex AI because Google Cloud authentication is intentionally unavailable for fork PRs. Push the commit to a branch in ogx-ai/ogx and dispatch the workflow from that branch."
+          exit 1
+
       - name: Checkout PR code
         if: steps.should_run.outputs.run == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -267,15 +285,17 @@ jobs:
           fetch-depth: 0
 
       - name: Authenticate to Google Cloud (Vertex AI)
+        id: vertex_auth
         if: steps.should_run.outputs.run == 'true' && matrix.provider.setup == 'vertexai' && needs.compute-pr-info.outputs.is_fork_pr != 'true'
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           project_id: ${{ secrets.VERTEX_AI_PROJECT }}
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          create_credentials_file: true
 
       - name: Setup test environment
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/ogx/.github/actions/setup-test-environment@e1ba4f9f10fa45750f5b4f186a0c4ae59bc93e4d
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@0807a93e8508bb22dcd633de0a993343a6b1b346
         with:
           python-version: "3.12"
           client-version: "latest"
@@ -309,7 +329,7 @@ jobs:
 
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@e1ba4f9f10fa45750f5b4f186a0c4ae59bc93e4d
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@0807a93e8508bb22dcd633de0a993343a6b1b346
         env:
           OPENAI_API_KEY: ${{ matrix.provider.setup == 'gpt' && secrets.OPENAI_API_KEY || '' }}
           AZURE_API_KEY: ${{ matrix.provider.setup == 'azure' && secrets.AZURE_API_KEY || '' }}
@@ -319,8 +339,9 @@ jobs:
           WATSONX_PROJECT_ID: ${{ matrix.provider.setup == 'watsonx' && secrets.WATSONX_PROJECT_ID || '' }}
           VERTEX_AI_PROJECT: ${{ matrix.provider.setup == 'vertexai' && secrets.VERTEX_AI_PROJECT || '' }}
           VERTEX_AI_LOCATION: ${{ matrix.provider.setup == 'vertexai' && 'global' || '' }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ matrix.provider.setup == 'vertexai' && secrets.GOOGLE_APPLICATION_CREDENTIALS || '' }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ matrix.provider.setup == 'vertexai' && steps.vertex_auth.outputs.credentials_file_path || '' }}
           GEMINI_API_KEY: ${{ matrix.provider.setup == 'gemini' && secrets.GEMINI_API_KEY || '' }}
+          FIREWORKS_API_KEY: ${{ matrix.provider.setup == 'fireworks' && secrets.FIREWORKS_API_KEY || '' }}
           TAVILY_SEARCH_API_KEY: ${{ contains(fromJSON('["gpt","azure","vertexai"]'), matrix.provider.setup) && secrets.TAVILY_SEARCH_API_KEY || '' }}
           AWS_BEDROCK_BEARER_TOKEN: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}
           AWS_BEARER_TOKEN_BEDROCK: ${{ matrix.provider.setup == 'bedrock' && secrets.AWS_BEARER_TOKEN_BEDROCK || '' }}

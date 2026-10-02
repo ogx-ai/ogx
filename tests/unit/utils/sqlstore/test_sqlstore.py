@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import inspect
 
 from ogx.core.storage.datatypes import PostgresSqlStoreConfig
 from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
@@ -48,6 +49,28 @@ async def test_sqlstore_shutdown_disposes_engine():
         assert store._engine is None, (
             "Engine not disposed after shutdown. This causes process hang on exit with aiosqlite >= 0.22"
         )
+
+
+async def test_sqlstore_create_index_is_idempotent() -> None:
+    with TemporaryDirectory() as tmp_dir:
+        store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=tmp_dir + "/indexes.db"))
+        await store.create_table(
+            "items",
+            {"id": ColumnType.STRING, "tenant": ColumnType.STRING, "created_at": ColumnType.INTEGER},
+        )
+
+        await store.create_index("idx_items_tenant_created", "items", ["tenant", "created_at"])
+        await store.create_index("idx_items_tenant_created", "items", ["tenant", "created_at"])
+
+        assert store._engine is not None
+        async with store._engine.connect() as connection:
+            indexes = await connection.run_sync(lambda sync_connection: inspect(sync_connection).get_indexes("items"))
+        assert [index["name"] for index in indexes].count("idx_items_tenant_created") == 1
+        assert next(index for index in indexes if index["name"] == "idx_items_tenant_created")["column_names"] == [
+            "tenant",
+            "created_at",
+        ]
+        await store.shutdown()
 
 
 async def test_sqlite_sqlstore():
@@ -195,6 +218,37 @@ async def test_sqlstore_pagination_basic():
         assert len(result3.data) == 1
         assert result3.data[0]["id"] == "zebra"
         assert result3.has_more is False
+
+
+async def test_sqlstore_pagination_same_order_value():
+    """Rows that share the cursor row's order value must not be skipped (keyset tiebreaker)."""
+    with TemporaryDirectory() as tmp_dir:
+        db_path = tmp_dir + "/test.db"
+        store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=db_path))
+
+        await store.create_table(
+            "test_records",
+            {
+                "id": ColumnType.STRING,
+                "created_at": ColumnType.INTEGER,
+                "name": ColumnType.STRING,
+            },
+        )
+
+        # All rows share the same created_at, so pagination must fall back to the
+        # unique id as a tiebreaker instead of dropping the tied rows.
+        for record_id in ["a", "b", "c", "d", "e"]:
+            await store.insert("test_records", {"id": record_id, "created_at": 1000, "name": record_id})
+
+        # The page after id "b" is every same-second row whose id sorts after "b".
+        result = await store.fetch_all(
+            table="test_records",
+            order_by=[("created_at", "desc")],
+            cursor=("id", "b"),
+            limit=10,
+        )
+
+        assert [row["id"] for row in result.data] == ["c", "d", "e"]
 
 
 async def test_sqlstore_pagination_with_filter():

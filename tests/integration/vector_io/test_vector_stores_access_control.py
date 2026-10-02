@@ -27,7 +27,7 @@ server with auth enabled:
 
 import os
 
-import httpx
+import httpx2
 import pytest
 
 
@@ -56,7 +56,7 @@ class VectorStoresClient:
         body: dict = {"name": name}
         if embedding_model:
             body["embedding_model"] = embedding_model
-        resp = httpx.post(
+        resp = httpx2.post(
             f"{self.base_url}/v1/vector_stores",
             headers=self._headers(),
             json=body,
@@ -65,30 +65,30 @@ class VectorStoresClient:
         resp.raise_for_status()
         return resp.json()
 
-    def retrieve(self, vector_store_id: str) -> httpx.Response:
-        return httpx.get(
+    def retrieve(self, vector_store_id: str) -> httpx2.Response:
+        return httpx2.get(
             f"{self.base_url}/v1/vector_stores/{vector_store_id}",
             headers=self._headers(),
             timeout=30.0,
         )
 
-    def update(self, vector_store_id: str, name: str) -> httpx.Response:
-        return httpx.post(
+    def update(self, vector_store_id: str, name: str) -> httpx2.Response:
+        return httpx2.post(
             f"{self.base_url}/v1/vector_stores/{vector_store_id}",
             headers=self._headers(),
             json={"name": name},
             timeout=30.0,
         )
 
-    def delete(self, vector_store_id: str) -> httpx.Response:
-        return httpx.delete(
+    def delete(self, vector_store_id: str) -> httpx2.Response:
+        return httpx2.delete(
             f"{self.base_url}/v1/vector_stores/{vector_store_id}",
             headers=self._headers(),
             timeout=30.0,
         )
 
-    def list_stores(self) -> httpx.Response:
-        return httpx.get(
+    def list_stores(self) -> httpx2.Response:
+        return httpx2.get(
             f"{self.base_url}/v1/vector_stores",
             headers=self._headers(),
             timeout=30.0,

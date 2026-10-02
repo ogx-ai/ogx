@@ -23,7 +23,7 @@ setup_logging()
 import pytest
 import requests
 import yaml
-from ogx_open_client import OgxClient
+from ogx_client import OgxClient
 from openai import OpenAI
 
 from ogx.core.datatypes import QualifiedModel, RerankerModel, VectorStoresConfig
@@ -134,6 +134,7 @@ def get_provider_data():
     # like sample run config on which we can do replace_env_vars()
     keymap = {
         "TAVILY_SEARCH_API_KEY": "tavily_search_api_key",
+        "EXA_API_KEY": "exa_search_api_key",
         "BRAVE_SEARCH_API_KEY": "brave_search_api_key",
         "FIREWORKS_API_KEY": "fireworks_api_key",
         "GEMINI_API_KEY": "gemini_api_key",
@@ -182,7 +183,7 @@ def client_with_models(
     model_ids = {m.id for m in client.models.list().data}
 
     if text_model_id and text_model_id not in model_ids:
-        raise ValueError(f"text_model_id {text_model_id} not found")
+        raise ValueError(f"text_model_id {text_model_id} not found in {model_ids}")
     if vision_model_id and vision_model_id not in model_ids:
         raise ValueError(f"vision_model_id {vision_model_id} not found")
     if judge_model_id and judge_model_id not in model_ids:
@@ -390,8 +391,12 @@ def require_server(ogx_client):
 
 @pytest.fixture(scope="session")
 def openai_client(ogx_client, require_server):
+    from ogx.testing.api_recorder import build_test_id_http_client
+
     base_url = f"{ogx_client.base_url}/v1"
-    client = OpenAI(base_url=base_url, api_key="fake", max_retries=0, timeout=30.0)
+    client = OpenAI(
+        base_url=base_url, api_key="fake", max_retries=0, timeout=30.0, http_client=build_test_id_http_client()
+    )
     yield client
     # Cleanup: close HTTP connections
     try:

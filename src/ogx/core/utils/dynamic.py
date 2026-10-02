@@ -18,5 +18,7 @@ def instantiate_class_type(fully_qualified_name: str) -> type[Any]:
         The class object referenced by the fully qualified name.
     """
     module_name, class_name = fully_qualified_name.rsplit(".", 1)
-    module = importlib.import_module(module_name)
-    return getattr(module, class_name)  # type: ignore[no-any-return]
+    cls = getattr(importlib.import_module(module_name), class_name)
+    if not isinstance(cls, type):
+        raise TypeError(f"{fully_qualified_name!r} does not refer to a class")
+    return cls

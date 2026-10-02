@@ -7,6 +7,8 @@
 
 from ogx.core.datatypes import Provider
 from ogx.distributions.template import DistributionTemplate
+from ogx.providers.remote.inference.llama_cpp_server.config import LlamaCppServerConfig
+from ogx.providers.remote.inference.text_embeddings_inference.config import TextEmbeddingsInferenceConfig
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
 from ogx_api import ConnectorInput, ModelInput, ModelType
 
@@ -86,10 +88,38 @@ def get_distribution_template() -> DistributionTemplate:
         }
     }
 
+    # Env-gated tenancy config. Defaults to DISABLED (no tenant_id column), matching
+    # the stock behaviour; the Praxis migration e2e workflow flips OGX_TENANCY_MODE=single
+    # + OGX_DEFAULT_TENANT_ID=<tenant> for the single-tenant leg so OGX stamps a
+    # populated tenant_id column. default_tenant_id is only validated when mode=single,
+    # so the empty default is safe when tenancy is disabled.
+    tenancy_config = {
+        "mode": "${env.OGX_TENANCY_MODE:=disabled}",
+        "default_tenant_id": "${env.OGX_DEFAULT_TENANT_ID:=}",
+    }
+
     watsonx_provider = Provider(
         provider_id="${env.WATSONX_API_KEY:+watsonx}",
         provider_type="remote::watsonx",
         config=WatsonXConfig.sample_run_config(),
+    )
+
+    # llama-cpp-server is a CI-only inference backend (see the llama-cpp-server test
+    # suite). It is env-gated so it only activates when LLAMA_CPP_SERVER_URL is set,
+    # which the setup-llamacpp action does by pointing at the local router.
+    llama_cpp_server_provider = Provider(
+        provider_id="${env.LLAMA_CPP_SERVER_URL:+llama-cpp-server}",
+        provider_type="remote::llama-cpp-server",
+        config=LlamaCppServerConfig.sample_run_config(),
+    )
+
+    # text-embeddings-inference is a CI-only inference backend (see the
+    # text-embeddings-inference test suite). It is env-gated so it only activates
+    # when TEI_URL is set, which the setup-tei action does by pointing at the local server.
+    text_embeddings_inference_provider = Provider(
+        provider_id="${env.TEI_URL:+text-embeddings-inference}",
+        provider_type="remote::text-embeddings-inference",
+        config=TextEmbeddingsInferenceConfig.sample_run_config(),
     )
 
     for run_config in template.run_configs.values():
@@ -107,11 +137,16 @@ def get_distribution_template() -> DistributionTemplate:
         # Add WatsonX inference provider (vertexai is already in starter distribution)
         run_config.provider_overrides["inference"].append(watsonx_provider)
 
-        for provider in run_config.provider_overrides["inference"]:
-            if provider.provider_type == "inline::sentence-transformers":
-                provider.config["trust_remote_code"] = True
+        # Add the CI-only llama-cpp-server inference provider
+        run_config.provider_overrides["inference"].append(llama_cpp_server_provider)
+
+        # Add the CI-only text-embeddings-inference inference provider
+        run_config.provider_overrides["inference"].append(text_embeddings_inference_provider)
 
         # Add conditional auth config
         run_config.auth_config = auth_config
+
+        # Add env-gated tenancy config (disabled by default)
+        run_config.tenancy_config = tenancy_config
 
     return template

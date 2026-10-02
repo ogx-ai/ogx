@@ -49,10 +49,6 @@ class RedisKVStoreConfig(CommonConfig):
         return f"redis://{self.host}:{self.port}"
 
     @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["redis"]
-
-    @classmethod
     def sample_run_config(cls) -> dict[str, str]:
         return {
             "type": StorageBackendType.KV_REDIS.value,
@@ -68,10 +64,6 @@ class SqliteKVStoreConfig(CommonConfig):
     db_path: str = Field(
         description="File path for the sqlite database",
     )
-
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["aiosqlite"]
 
     @classmethod
     def sample_run_config(cls, __distro_dir__: str, db_name: str = "kvstore.db") -> dict[str, str]:
@@ -125,10 +117,6 @@ class PostgresKVStoreConfig(CommonConfig):
             raise ValueError("Table name must be less than 63 characters")
         return v
 
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["asyncpg"]
-
 
 class MongoDBKVStoreConfig(CommonConfig):
     """Configuration for the MongoDB key-value store backend."""
@@ -140,10 +128,6 @@ class MongoDBKVStoreConfig(CommonConfig):
     user: str | None = None
     password: str | None = None
     collection_name: str = "ogx_kvstore"
-
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["pymongo"]
 
     @classmethod
     def sample_run_config(cls, collection_name: str = "ogx_kvstore") -> dict[str, str]:
@@ -167,11 +151,6 @@ class SqlAlchemySqlStoreConfig(BaseModel):
     @abstractmethod
     def engine_str(self) -> str | URL: ...
 
-    # TODO: move this when we have a better way to specify dependencies with internal APIs
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return ["sqlalchemy[asyncio]"]
-
 
 class SqliteSqlStoreConfig(SqlAlchemySqlStoreConfig):
     """Configuration for the SQLite SQL store backend."""
@@ -192,10 +171,6 @@ class SqliteSqlStoreConfig(SqlAlchemySqlStoreConfig):
             "db_path": "${env.SQLITE_STORE_DIR:=" + __distro_dir__ + "}/" + db_name,
         }
 
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return super().pip_packages() + ["aiosqlite"]
-
 
 class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     """Configuration for the PostgreSQL SQL store backend."""
@@ -206,6 +181,10 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
     db: str = "ogx"
     user: str
     password: SecretStr | None = None
+    ssl_mode: Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] | None = Field(
+        default=None, description="PostgreSQL SSL mode (e.g. require, verify-full)"
+    )
+    ca_cert_path: Path | None = None
     pool_size: int = Field(default=10, ge=1, description="Number of persistent connections in the pool")
     max_overflow: int = Field(default=20, ge=0, description="Max additional connections beyond pool_size")
     pool_recycle: int = Field(default=3600, ge=-1, description="Connection recycle interval in seconds, -1 to disable")
@@ -220,10 +199,6 @@ class PostgresSqlStoreConfig(SqlAlchemySqlStoreConfig):
             port=int(self.port),
             database=self.db,
         )
-
-    @classmethod
-    def pip_packages(cls) -> list[str]:
-        return super().pip_packages() + ["asyncpg"]
 
     @classmethod
     def sample_run_config(cls, **kwargs: object) -> dict[str, str]:
@@ -278,8 +253,8 @@ StorageBackendConfig = Annotated[
 ]
 
 
-class InferenceStoreReference(SqlStoreReference):
-    """Inference store configuration with queue tuning."""
+class _QueuedSqlStoreReference(SqlStoreReference):
+    """Base for SQL store references with background write-queue tuning."""
 
     max_write_queue_size: int = Field(
         default=10000,
@@ -291,7 +266,18 @@ class InferenceStoreReference(SqlStoreReference):
     )
 
 
-class ResponsesStoreReference(InferenceStoreReference):
+class InferenceStoreReference(_QueuedSqlStoreReference):
+    """Inference store configuration with queue tuning."""
+
+    enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether the store is enabled; when false, the store is not constructed and payloads are not persisted"
+        ),
+    )
+
+
+class ResponsesStoreReference(_QueuedSqlStoreReference):
     """Responses store configuration with queue tuning."""
 
     table_name: str = Field(

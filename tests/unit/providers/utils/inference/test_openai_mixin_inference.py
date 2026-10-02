@@ -14,6 +14,14 @@ from ogx_api import (
     OpenAIEmbeddingsRequestWithExtraBody,
     OpenAIUserMessageParam,
 )
+from ogx_api.messages.models import (
+    AnthropicCountTokensRequest,
+    AnthropicCustomToolDef,
+    AnthropicMessage,
+    AnthropicMessageResponse,
+    AnthropicTextBlock,
+    AnthropicUsage,
+)
 
 
 class TestOpenAIMixinAllowedModelsInference:
@@ -502,3 +510,59 @@ class TestOpenAIMixinUserProvidedStreamOptions:
                 assert call_kwargs["stream_options"]["include_usage"] is True
                 # Other options should be preserved
                 assert call_kwargs["stream_options"]["other_option"] is True
+
+
+class TestOpenAIMixinAnthropicCountTokens:
+    """Test cases for anthropic_count_tokens via anthropic_messages translation"""
+
+    async def test_count_tokens_returns_input_tokens(self, mixin, mock_client_context):
+        """Test that count tokens delegates to anthropic_messages with max_tokens=1"""
+        mock_response = AnthropicMessageResponse(
+            id="msg_test",
+            content=[AnthropicTextBlock(text="Hi")],
+            model="gpt-4",
+            stop_reason="max_tokens",
+            usage=AnthropicUsage(input_tokens=42, output_tokens=1),
+        )
+
+        original_anthropic_messages = mixin.anthropic_messages
+        mixin.anthropic_messages = AsyncMock(return_value=mock_response)
+
+        request = AnthropicCountTokensRequest(
+            model="gpt-4",
+            messages=[AnthropicMessage(role="user", content="Hello")],
+        )
+        result = await mixin.anthropic_count_tokens(request)
+
+        assert result.input_tokens == 42
+        mixin.anthropic_messages.assert_awaited_once()
+        call_args = mixin.anthropic_messages.call_args[0][0]
+        assert call_args.max_tokens == 1
+        mixin.anthropic_messages = original_anthropic_messages
+
+    async def test_count_tokens_with_system_and_tools(self, mixin, mock_client_context):
+        """Test that count tokens passes system prompt and tools through"""
+        mock_response = AnthropicMessageResponse(
+            id="msg_test",
+            content=[AnthropicTextBlock(text="Hi")],
+            model="gpt-4",
+            stop_reason="max_tokens",
+            usage=AnthropicUsage(input_tokens=100, output_tokens=1),
+        )
+
+        original_anthropic_messages = mixin.anthropic_messages
+        mixin.anthropic_messages = AsyncMock(return_value=mock_response)
+
+        request = AnthropicCountTokensRequest(
+            model="gpt-4",
+            system=[AnthropicTextBlock(text="You are helpful.")],
+            messages=[AnthropicMessage(role="user", content="Count me")],
+            tools=[AnthropicCustomToolDef(name="calculator", input_schema={"type": "object"})],
+        )
+        result = await mixin.anthropic_count_tokens(request)
+
+        assert result.input_tokens == 100
+        call_args = mixin.anthropic_messages.call_args[0][0]
+        assert call_args.system is not None
+        assert call_args.tools is not None
+        mixin.anthropic_messages = original_anthropic_messages

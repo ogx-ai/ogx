@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, NoReturn
 if TYPE_CHECKING:
     from ogx.providers.remote.inference.bedrock.config import BedrockConfig
 
-import httpx
-from openai import AuthenticationError, PermissionDeniedError
+import httpx2
+from openai import AsyncOpenAI, AuthenticationError, PermissionDeniedError
 from pydantic import PrivateAttr
 
 from ogx.log import get_logger
@@ -25,6 +25,7 @@ from ogx.providers.utils.inference.http_client import (
     set_client_network_fingerprint,
 )
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx_api import (
     InternalServerError,
     OpenAIChatCompletion,
@@ -39,6 +40,10 @@ from ogx_api import (
 )
 
 logger = get_logger(name=__name__, category="inference::bedrock")
+
+_DEFAULT_REGION = "us-east-2"
+_BEDROCK_RUNTIME_URL = "https://bedrock-runtime.{region}.amazonaws.com/openai/v1"
+_BEDROCK_MANTLE_URL = "https://bedrock-mantle.{region}.api.aws/v1"
 
 
 class BedrockInferenceAdapter(OpenAIMixin):
@@ -86,15 +91,18 @@ class BedrockInferenceAdapter(OpenAIMixin):
 
     Credentials are automatically refreshed by boto3 when they expire.
 
-    Note: Bedrock's OpenAI-compatible endpoint does not support /v1/models
-    for dynamic model discovery. Models must be pre-registered in the config.
+    Models are auto-discovered at startup via two paths:
+    - SigV4 auth: uses the ListFoundationModels control-plane API
+    - Bearer token auth: queries the mantle endpoint's /v1/models
+    Pre-registered models in the config are also supported.
     """
 
     provider_data_api_key_field: str | None = "aws_bedrock_bearer_token"
 
     # built once in initialize() so get_extra_client_params() can stay sync;
     # reusing one client also avoids opening a new socket per request
-    _sigv4_http_client: httpx.AsyncClient | None = PrivateAttr(default=None)
+    _sigv4_http_client: httpx2.AsyncClient | None = PrivateAttr(default=None)
+    _bedrock_client: Any = PrivateAttr(default=None)
 
     @property
     def _bedrock_config(self) -> "BedrockConfig":
@@ -105,8 +113,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
         return self.config
 
     def get_base_url(self) -> str:
-        region = self._bedrock_config.region_name or "us-east-2"
-        return f"https://bedrock-runtime.{region}.amazonaws.com/openai/v1"
+        return _BEDROCK_RUNTIME_URL.format(region=self._bedrock_config.region_name or _DEFAULT_REGION)
 
     def _should_use_sigv4(self) -> bool:
         # checked per-request so a bearer token in provider data can override SigV4 at runtime
@@ -121,7 +128,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
 
         return True
 
-    def _build_sigv4_http_client(self) -> httpx.AsyncClient:
+    def _build_sigv4_http_client(self) -> httpx2.AsyncClient:
         # lazy import so bearer-token installs don't need boto3/botocore
         from ogx.providers.utils.bedrock.sigv4_auth import BedrockSigV4Auth
 
@@ -143,7 +150,7 @@ class BedrockInferenceAdapter(OpenAIMixin):
         auth = BedrockSigV4Auth(**{k: v for k, v in sigv4_args.items() if v is not None})
         network_config = cfg.network
         network_kwargs = build_network_client_kwargs(network_config)
-        client = httpx.AsyncClient(auth=auth, **network_kwargs)
+        client = httpx2.AsyncClient(auth=auth, **network_kwargs)
         if network_config is not None:
             set_client_network_fingerprint(client, network_config_fingerprint(network_config))
         return client
@@ -154,6 +161,13 @@ class BedrockInferenceAdapter(OpenAIMixin):
         # per-request bearer token overrides are handled in get_extra_client_params()
         if not self._bedrock_config.has_bearer_token():
             self._sigv4_http_client = self._build_sigv4_http_client()
+            # separate boto3 client for the bedrock control-plane API (ListFoundationModels)
+            try:
+                from ogx.providers.utils.bedrock.client import create_bedrock_client
+
+                self._bedrock_client = create_bedrock_client(self._bedrock_config, "bedrock")
+            except Exception:
+                logger.debug("Could not create Bedrock control-plane client, model discovery will be skipped")
 
     def get_api_key(self) -> str | None:
         if self._should_use_sigv4():
@@ -169,11 +183,33 @@ class BedrockInferenceAdapter(OpenAIMixin):
         return {}
 
     async def list_provider_model_ids(self) -> Iterable[str]:
-        # bedrock's openai-compatible endpoint doesn't expose /v1/models
-        return []
+        if self._should_use_sigv4():
+            # SigV4 path: bedrock-runtime doesn't expose /v1/models,
+            # use the control-plane ListFoundationModels API instead
+            if self._bedrock_client is None:
+                return []
+            try:
+                response = await asyncio.to_thread(
+                    self._bedrock_client.list_foundation_models,
+                    byInferenceType="ON_DEMAND",
+                )
+            except Exception:
+                logger.warning("Failed to list Bedrock foundation models", exc_info=True)
+                return []
+            return [
+                m["modelId"] for m in response.get("modelSummaries", []) if m.get("modelLifecycleStatus") == "ACTIVE"
+            ]
+        # bearer token path: bedrock-runtime doesn't expose /v1/models,
+        # but the mantle endpoint does — query it directly
+        mantle_url = _BEDROCK_MANTLE_URL.format(region=self._bedrock_config.region_name or _DEFAULT_REGION)
+        try:
+            client = AsyncOpenAI(base_url=mantle_url, api_key=self.get_api_key())
+            return [m.id async for m in client.models.list()]
+        except Exception:
+            logger.warning("Failed to list models from Bedrock mantle endpoint", exc_info=True)
+            return []
 
     async def check_model_availability(self, model: str) -> bool:
-        # no /v1/models to query — accept whatever is registered in config
         return True
 
     async def shutdown(self) -> None:
@@ -239,20 +275,11 @@ class BedrockInferenceAdapter(OpenAIMixin):
         params.messages = mapped_messages
 
         result = await self.openai_chat_completion(params)
+        # narrow the result type to AsyncIterator for the reasoning wrapper below
+        if not isinstance(result, AsyncIterator):
+            raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
-        async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:
-                reasoning = None
-                for choice in chunk.choices or []:
-                    reasoning = getattr(choice.delta, "reasoning", None) or getattr(
-                        choice.delta, "reasoning_content", None
-                    )
-                yield OpenAIChatCompletionChunkWithReasoning(
-                    chunk=chunk,
-                    reasoning_content=reasoning,
-                )
-
-        return _wrap_chunks()
+        return wrap_reasoning_chunks(result)
 
     async def openai_chat_completion(
         self,

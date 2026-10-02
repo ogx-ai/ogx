@@ -78,9 +78,7 @@ def build_route_to_api_map(
     Returns:
         Dict mapping "HTTP_METHOD:path" strings to RouteInfo(api, method)
     """
-    from fastapi.routing import APIRoute
-
-    from ogx.core.server.fastapi_router_registry import build_fastapi_router
+    from ogx.core.server.fastapi_router_registry import build_fastapi_router, get_router_routes
     from ogx_api import Api
 
     route_to_api: dict[str, RouteInfo] = {}
@@ -91,13 +89,12 @@ def build_route_to_api_map(
             continue
         router = build_fastapi_router(api, impls[api])
         if router:
-            for route in router.routes:
-                if isinstance(route, APIRoute):
-                    info = RouteInfo(api_name, route.name or "unknown")
-                    for http_method in route.methods or {"GET"}:
-                        if http_method == "HEAD":
-                            continue
-                        route_to_api[f"{http_method}:{route.path}"] = info
+            for route in get_router_routes(router):
+                info = RouteInfo(api_name, route.name or "unknown")
+                for http_method in route.methods or {"GET"}:
+                    if http_method == "HEAD":
+                        continue
+                    route_to_api[f"{http_method}:{route.path}"] = info
 
     return route_to_api
 

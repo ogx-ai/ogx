@@ -70,9 +70,9 @@
 #   which were published under the old package name. The CLI binary and home
 #   directory are derived automatically ("llama-stack" -> "llama"/".llama").
 #
-# skip_latest: When true, production image builds are tagged only with the
-#   version and not also as "latest". Use when backfilling an older release so
-#   it does not become the default image users pull.
+# skip_latest: When true, production images receive only their version tag and
+#   npm clients use release-X.Y instead of latest. Use when backfilling an older
+#   release. Release events also compare against GitHub's latest stable version.
 #
 # =============================================================================
 
@@ -135,7 +135,7 @@ on:
         type: string
         default: 'ogx'
       skip_latest:
-        description: 'Do not also tag/push images as "latest". Use when backfilling an older release so it does not become the default pull.'
+        description: 'Keep Docker and npm latest tags unchanged when backfilling an older release.'
         required: false
         type: boolean
         default: false
@@ -242,12 +242,14 @@ jobs:
         id: should-build
         run: |
           PACKAGES="${{ inputs.packages || 'all' }}"
+          # Clients are published before preparation locks the server to their exact version.
+          if [ "${{ github.event_name }}" == "release" ]; then PACKAGES="ogx-only"; fi
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
           if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
+          elif [ "$PACKAGES" == "ogx-only" ] && [ "$TYPE" == "local" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "clients-only" ] && { [ "$TYPE" == "external" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -367,15 +369,28 @@ jobs:
 
       - name: Install openapi-generator-cli (openapi-sdk)
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        # Wrapper version intentionally not pinned: the generator JAR version that
+        # determines SDK output is pinned in client-sdks/openapi/openapitools.json.
         run: npm install -g @openapitools/openapi-generator-cli
+
+      # Cache the generator JAR (downloaded from Maven Central on first use) to
+      # avoid repeated large downloads and rate-limit (HTTP 429) failures in CI.
+      # The key tracks openapitools.json so the cache invalidates when the pinned
+      # generator version changes.
+      - name: Cache openapi-generator JAR (openapi-sdk)
+        if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: ~/.openapi-generator
+          key: openapi-generator-${{ runner.os }}-${{ hashFiles('client-sdks/openapi/openapitools.json') }}
 
       - name: Generate and build OpenAPI SDK
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'openapi-sdk'
         working-directory: ${{ matrix.path }}
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
-          echo "Generating SDK with OPEN=0 (ogx_client) at version ${VERSION}..."
-          make sdk OPEN=0 VERSION="${VERSION}"
+          echo "Generating SDK (ogx_client) at version ${VERSION}..."
+          make sdk VERSION="${VERSION}"
 
           cd sdks/python
           echo "Building Python package..."
@@ -394,75 +409,12 @@ jobs:
           echo "SDK generated successfully"
 
       # === EXTERNAL PYTHON PACKAGE BUILD ===
-      - name: Check and bump version if exists on PyPI
+      - name: Set external Python package version
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external' && matrix.registry == 'pypi'
         id: version-check
-        run: |
-          BASE_VERSION="${{ needs.compute-version.outputs.version }}"
-          MATRIX_PACKAGE="${{ matrix.package }}"
-
-          # Map matrix package name to actual PyPI package name
-          if [ "$MATRIX_PACKAGE" == "ogx-client-python" ]; then
-            PACKAGE="ogx-client"
-          else
-            PACKAGE="$MATRIX_PACKAGE"
-          fi
-
-          # Function to check if version exists on PyPI
-          check_version_exists() {
-            local pkg=$1
-            local ver=$2
-            if curl -sf "https://pypi.org/pypi/${pkg}/${ver}/json" -o /dev/null 2>&1; then
-              return 0  # exists
-            else
-              return 1  # does not exist
-            fi
-          }
-
-          # Start with the base version and increment patch if needed
-          VERSION="$BASE_VERSION"
-
-          # Only check/bump for non-dev versions (production releases)
-          if [[ ! "$VERSION" =~ \.dev ]]; then
-            echo "Checking if ${PACKAGE} ${VERSION} exists on PyPI..."
-
-            # Parse version components
-            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-              SUFFIX="${BASH_REMATCH[4]}"
-
-              # Keep incrementing patch version until we find one that doesn't exist
-              MAX_ATTEMPTS=10
-              ATTEMPT=0
-              while check_version_exists "$PACKAGE" "$VERSION"; do
-                ATTEMPT=$((ATTEMPT + 1))
-                if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-                  echo "::error::Reached maximum attempts ($MAX_ATTEMPTS) trying to find unused version"
-                  exit 1
-                fi
-
-                echo "Version ${VERSION} already exists on PyPI, trying next patch version..."
-                PATCH=$((PATCH + 1))
-                VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
-                echo "Checking ${VERSION}..."
-              done
-
-              if [ "$VERSION" != "$BASE_VERSION" ]; then
-                echo "::notice::Bumped ${MATRIX_PACKAGE} (PyPI: ${PACKAGE}) version from ${BASE_VERSION} to ${VERSION} (already existed on PyPI)"
-              else
-                echo "Version ${VERSION} is available on PyPI for ${PACKAGE}"
-              fi
-            else
-              echo "::warning::Could not parse version ${VERSION}, using as-is"
-            fi
-          else
-            echo "Dev version detected (${VERSION}), skipping PyPI check"
-          fi
-
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Final version: ${VERSION}"
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
+        run: echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Build external Python package
         if: steps.should-build.outputs.skip != 'true' && matrix.type == 'external' && matrix.registry == 'pypi'
@@ -481,76 +433,14 @@ jobs:
           python -m build --outdir dist
 
       # === NPM PACKAGE BUILD ===
-      - name: Check and bump npm version if exists
+      - name: Set npm package version
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
         id: npm-version-check
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
         run: |
-          BASE_VERSION="${{ needs.compute-version.outputs.version }}"
-          MATRIX_PACKAGE="${{ matrix.package }}"
-
-          # Map matrix package name to actual npm package name
-          if [ "$MATRIX_PACKAGE" == "ogx-client-typescript" ]; then
-            PACKAGE="ogx-client"
-          else
-            PACKAGE="$MATRIX_PACKAGE"
-          fi
-
-          # Convert PEP 440 dev version to valid semver for npm
-          # e.g. 0.4.5.dev20260202 -> 0.4.5-dev.20260202
-          VERSION="${BASE_VERSION/.dev/-dev.}"
-
-          # Function to check if version exists on npm using registry API
-          check_npm_version_exists() {
-            local pkg=$1
-            local ver=$2
-            if curl -sf "https://registry.npmjs.org/${pkg}/${ver}" -o /dev/null 2>&1; then
-              return 0  # exists
-            else
-              return 1  # does not exist
-            fi
-          }
-
-          # Only check/bump for non-dev versions (production releases)
-          if [[ ! "$VERSION" =~ -dev\. ]]; then
-            echo "Checking if ${PACKAGE} ${VERSION} exists on npm..."
-
-            # Parse version components (semver format)
-            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(.*)$ ]]; then
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              PATCH="${BASH_REMATCH[3]}"
-              SUFFIX="${BASH_REMATCH[4]}"
-
-              # Keep incrementing patch version until we find one that doesn't exist
-              MAX_ATTEMPTS=10
-              ATTEMPT=0
-              while check_npm_version_exists "$PACKAGE" "$VERSION"; do
-                ATTEMPT=$((ATTEMPT + 1))
-                if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-                  echo "::error::Reached maximum attempts ($MAX_ATTEMPTS) trying to find unused version"
-                  exit 1
-                fi
-
-                echo "Version ${VERSION} already exists on npm, trying next patch version..."
-                PATCH=$((PATCH + 1))
-                VERSION="${MAJOR}.${MINOR}.${PATCH}${SUFFIX}"
-                echo "Checking ${VERSION}..."
-              done
-
-              if [ "$VERSION" != "${BASE_VERSION/.dev/-dev.}" ]; then
-                echo "::notice::Bumped ${MATRIX_PACKAGE} (npm: ${PACKAGE}) version from ${BASE_VERSION/.dev/-dev.} to ${VERSION} (already existed on npm)"
-              else
-                echo "Version ${VERSION} is available on npm for ${PACKAGE}"
-              fi
-            else
-              echo "::warning::Could not parse version ${VERSION}, using as-is"
-            fi
-          else
-            echo "Dev version detected (${VERSION}), skipping npm check"
-          fi
-
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Final version: ${VERSION}"
+          # Translate PEP 440 development versions to npm semver without changing the release.
+          echo "version=${VERSION/.dev/-dev.}" >> "$GITHUB_OUTPUT"
 
       - name: Build TypeScript package
         if: steps.should-build.outputs.skip != 'true' && matrix.registry == 'npm'
@@ -558,7 +448,7 @@ jobs:
         run: |
           NPM_VERSION="${{ steps.npm-version-check.outputs.version }}"
           echo "Setting version to $NPM_VERSION"
-          npm version "$NPM_VERSION" --no-git-tag-version
+          npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version
           npm install
           npm run build
 
@@ -758,7 +648,7 @@ jobs:
       id-token: write  # for PyPI trusted publishing
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: test-package
+    needs: [test-package, compute-version]
     strategy:
       max-parallel: 1
       matrix:
@@ -783,12 +673,14 @@ jobs:
         id: should-publish
         run: |
           PACKAGES="${{ inputs.packages || 'all' }}"
+          # Clients are published before preparation locks the server to their exact version.
+          if [ "${{ github.event_name }}" == "release" ]; then PACKAGES="ogx-only"; fi
           PACKAGE="${{ matrix.package }}"
           TYPE="${{ matrix.type }}"
 
           if [ "$PACKAGES" == "all" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          elif [ "$PACKAGES" == "ogx-only" ] && { [ "$TYPE" == "local" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
+          elif [ "$PACKAGES" == "ogx-only" ] && [ "$TYPE" == "local" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
           elif [ "$PACKAGES" == "clients-only" ] && { [ "$TYPE" == "external" ] || [ "$TYPE" == "openapi-sdk" ]; }; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -900,6 +792,8 @@ jobs:
         if: steps.should-publish.outputs.skip != 'true' && matrix.registry == 'npm' && steps.check-artifacts.outputs.has_artifacts == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.compute-version.outputs.version }}
+          SKIP_LATEST: ${{ inputs.skip_latest }}
         run: |
           DRY_RUN="${{ inputs.dry_run }}"
           EVENT="${{ github.event_name }}"
@@ -924,7 +818,15 @@ jobs:
             fi
             # Extract and publish from the tarball
             TARBALL=$(find ./dist -name '*.tgz' | head -1)
-            npm publish "$TARBALL" --access public
+            DIST_TAG="latest"
+            if [ "$SKIP_LATEST" == "true" ]; then
+              if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\. ]]; then
+                echo "::error::Failed to determine npm release stream from ${VERSION}"
+                exit 1
+              fi
+              DIST_TAG="release-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            fi
+            npm publish "$TARBALL" --access public --tag "$DIST_TAG"
           else
             echo "DRY RUN: Verifying npm package (not publishing)"
             echo "Package tarball:"
@@ -1003,6 +905,8 @@ jobs:
 
       - name: Determine image tags and build args
         id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.compute-version.outputs.version }}"
           DISTRO="${{ matrix.distro }}"
@@ -1028,7 +932,25 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [ "$EVENT" == "release" ] || [ "$DRY_RUN" == "off" ]; then
-            if [ "${{ inputs.skip_latest }}" == "true" ]; then
+            SKIP_LATEST="${{ inputs.skip_latest }}"
+            if [ "$EVENT" == "release" ] && [ "$SKIP_LATEST" != "true" ]; then
+              if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                SKIP_LATEST="true"
+              else
+                if ! LATEST_TAG=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name'); then
+                  echo "::error::Failed to look up the latest release; refusing to overwrite Docker latest"
+                  exit 1
+                fi
+                LATEST_VERSION="${LATEST_TAG#v}"
+                if [[ ! "$LATEST_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                  echo "::error::Failed to parse latest release ${LATEST_TAG}; refusing to overwrite Docker latest"
+                  exit 1
+                fi
+                NEWEST_VERSION=$(printf '%s\n' "$VERSION" "$LATEST_VERSION" | sort -V | tail -1)
+                if [ "$NEWEST_VERSION" != "$VERSION" ]; then SKIP_LATEST="true"; fi
+              fi
+            fi
+            if [ "$SKIP_LATEST" == "true" ]; then
               TAGS="${IMAGE}:${VERSION}"
               LATEST_NOTE=""
             else

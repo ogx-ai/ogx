@@ -1,0 +1,58 @@
+{
+  "test_id": "tests/integration/inference/test_openai_embeddings.py::test_openai_embeddings_with_dimensions[ogx_client-emb=text-embeddings-inference/nomic-ai/nomic-embed-text-v1.5]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/embeddings",
+    "headers": {},
+    "body": {
+      "model": "nomic-ai/nomic-embed-text-v1.5",
+      "input": "Test dimensions parameter",
+      "encoding_format": "float",
+      "dimensions": 16
+    },
+    "endpoint": "/v1/embeddings",
+    "model": "nomic-ai/nomic-embed-text-v1.5",
+    "provider_metadata": {
+      "openai_sdk_version": "3.17.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.create_embedding_response.CreateEmbeddingResponse",
+      "__data__": {
+        "data": [
+          {
+            "embedding": [
+              0.17536747,
+              0.19724481,
+              -0.6031263,
+              -0.24036162,
+              0.089289084,
+              0.24829796,
+              0.31155002,
+              -0.08654813,
+              -0.18460494,
+              0.00031076936,
+              0.0018317044,
+              0.19680843,
+              0.14296442,
+              -0.18938644,
+              -0.16179083,
+              -0.4234724
+            ],
+            "index": 0,
+            "object": "embedding"
+          }
+        ],
+        "model": "nomic-ai/nomic-embed-text-v1.5",
+        "object": "list",
+        "usage": {
+          "prompt_tokens": 5,
+          "total_tokens": 5
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

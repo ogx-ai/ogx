@@ -1,0 +1,118 @@
+{
+  "test_id": "tests/integration/inference/test_tools_with_schemas.py::TestChatCompletionWithTools::test_tool_with_complex_schema[txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Book a flight from SFO to JFK for John Doe"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "book_flight",
+            "description": "Book a flight",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "flight": {
+                  "$ref": "#/$defs/FlightInfo"
+                },
+                "passenger": {
+                  "$ref": "#/$defs/Passenger"
+                }
+              },
+              "required": [
+                "flight",
+                "passenger"
+              ],
+              "$defs": {
+                "FlightInfo": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  }
+                },
+                "Passenger": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "age": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-c951ded421dc",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Sure thing! To book the flight I\u2019ll need a couple more details:\n\n1. **Travel date** \u2013 what date would you like to fly from SFO to JFK? (Please provide in YYYY\u2011MM\u2011DD format.)\n2. **Passenger age** \u2013 how old is John\u202fDoe? (This is required for the booking.)\n\nOnce I have those, I can complete the booking right away.",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "We have a request: Book a flight from SFO to JFK for John Doe. Need to call book_flight with flight info (from, to, date) and passenger info (name, age). We need a date, but user didn't provide. We could ask for date, but we must respond. Possibly we can assume a default date? But better to ask for missing info. However guidelines: If missing required parameters, we should ask user. The function requires flight (from, to, date) and passenger (name, age). We have from SFO, to JFK, passenger name John Doe, age unknown. So we need date and age. We should ask the user for the travel date and age (or confirm). So respond asking for date and age.",
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 248,
+          "prompt_tokens": 403,
+          "total_tokens": 651,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 0
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

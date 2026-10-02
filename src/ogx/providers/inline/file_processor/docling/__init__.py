@@ -18,8 +18,9 @@ async def get_provider_impl(config: DoclingFileProcessorConfig, deps: dict[Api, 
     assert isinstance(config, DoclingFileProcessorConfig), f"Unexpected config type: {type(config)}"
 
     files_api = deps.get(Api.files)
+    inference_api = deps.get(Api.inference)
 
-    impl = DoclingFileProcessor(config, files_api)
+    impl = DoclingFileProcessor(config, files_api, inference_api)
     return impl
 
 

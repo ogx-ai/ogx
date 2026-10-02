@@ -1,0 +1,91 @@
+---
+description: |
+  [Neo4j](https://neo4j.com/) is a remote graph database provider for OGX VectorIO.
+  It supports vector search with Neo4j vector indexes, keyword search with full-text
+  indexes, hybrid search with OGX reranking, and optional graph-aware expansion through
+  relationships between retrieved chunks.
+
+  ## Features
+
+  - Vector search over chunk embeddings
+  - Keyword search over chunk text
+  - Hybrid search using OGX reranking
+  - Optional graph-aware retrieval through related chunks
+  - OpenAI-compatible vector store lifecycle through OGX
+
+  ## Usage
+
+  Run Neo4j locally:
+
+  ```bash
+  docker run -d --name ogx-neo4j -p 7474:7474 -p 7687:7687 \
+    -e NEO4J_AUTH=neo4j/ogxpassword neo4j:2025.10
+  ```
+sidebar_label: Remote - Neo4J
+title: remote::neo4j
+---
+
+# remote::neo4j
+
+## Description
+
+
+[Neo4j](https://neo4j.com/) is a remote graph database provider for OGX VectorIO.
+It supports vector search with Neo4j vector indexes, keyword search with full-text
+indexes, hybrid search with OGX reranking, and optional graph-aware expansion through
+relationships between retrieved chunks.
+
+## Features
+
+- Vector search over chunk embeddings
+- Keyword search over chunk text
+- Hybrid search using OGX reranking
+- Optional graph-aware retrieval through related chunks
+- OpenAI-compatible vector store lifecycle through OGX
+
+## Usage
+
+Run Neo4j locally:
+
+```bash
+docker run -d --name ogx-neo4j -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=neo4j/ogxpassword neo4j:2025.10
+```
+
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `uri` | `str` | No | bolt://localhost:7687 | Neo4j Bolt URI. |
+| `user` | `str` | No | neo4j | Neo4j username. |
+| `password` | `SecretStr \| None` | No |  | Neo4j password. |
+| `database` | `str` | No | neo4j | Neo4j database name. |
+| `index_prefix` | `str` | No | ogx | Prefix for Neo4j vector and full-text indexes. |
+| `graph_retrieval_enabled` | `bool` | No | False | Whether to expand initial retrieval results through graph relationships. |
+| `graph_expansion_depth` | `int` | No | 1 | Maximum relationship traversal depth for graph-aware retrieval. |
+| `graph_max_neighbors` | `int` | No | 10 | Maximum graph-expanded neighbor chunks to consider per query. |
+| `graph_expansion_weight` | `float` | No | 0.15 | Score multiplier applied to graph-expanded chunks relative to seed chunk scores. |
+| `graph_relationship_types` | `list[str] \| None` | No |  | Relationship types used for graph expansion. When omitted, all relationships are considered. |
+| `persistence` | `KVStoreReference` | No |  | Config for KV store backend. |
+| `persistence.namespace` | `str` | No |  | Key prefix for KVStore backends |
+| `persistence.backend` | `str` | No |  | Name of backend from storage.backends |
+| `metadata_store` | `SqlStoreReference \| None` | No |  | SQL store reference for tenant-isolated vector store metadata. |
+| `metadata_store.table_name` | `str` | No |  | Name of the table to use for the SqlStore |
+| `metadata_store.backend` | `str` | No |  | Name of backend from storage.backends |
+
+## Sample Configuration
+
+```yaml
+uri: ${env.NEO4J_URI:=bolt://localhost:7687}
+user: ${env.NEO4J_USER:=neo4j}
+password: ${env.NEO4J_PASSWORD:=}
+database: ${env.NEO4J_DATABASE:=neo4j}
+graph_retrieval_enabled: false
+graph_expansion_depth: 1
+graph_max_neighbors: 10
+graph_expansion_weight: 0.15
+persistence:
+  namespace: vector_io::neo4j
+  backend: kv_default
+```

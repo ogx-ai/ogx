@@ -22,7 +22,7 @@ import json
 import sys
 import zipfile
 
-import httpx
+import httpx2
 
 DEFAULT_BASE_URL = "http://localhost:8321"
 
@@ -43,7 +43,7 @@ description: {description}
     return buf.getvalue()
 
 
-def print_response(label: str, resp: httpx.Response) -> dict | None:
+def print_response(label: str, resp: httpx2.Response) -> dict | None:
     print(f"\n{'=' * 60}")
     print(f"  {label}")
     print(f"{'=' * 60}")
@@ -66,7 +66,7 @@ def main():
     args = parser.parse_args()
 
     base = args.base_url.rstrip("/")
-    client = httpx.Client(base_url=base, timeout=30.0)
+    client = httpx2.Client(base_url=base, timeout=30.0)
 
     print("\n" + "=" * 60)
     print("  OGX Skills API Demo")

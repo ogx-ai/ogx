@@ -331,7 +331,7 @@ class TestOpenAIMaxOutputTokensWarning:
 
         assert result1 is None
         assert result2 is None
-        warning_count = sum(1 for r in caplog.records if "brand-new-model" in r.message)
+        warning_count = sum(1 for r in caplog.records if "Unknown max_output_tokens for model" in r.message)
         assert warning_count == 1
 
     def test_all_known_models_have_limits(self):

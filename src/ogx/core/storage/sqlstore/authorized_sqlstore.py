@@ -212,6 +212,10 @@ class AuthorizedSqlStore:
         """Expose schema migration helper from the wrapped SQL store."""
         await self.sql_store.add_column_if_not_exists(table, column_name, column_type, nullable)
 
+    async def create_index(self, index_name: str, table: str, columns: Sequence[str]) -> None:
+        """Create an index through the wrapped SQL store."""
+        await self.sql_store.create_index(index_name, table, columns)
+
     async def check_access_for_rows(
         self,
         table: str,
@@ -222,15 +226,18 @@ class AuthorizedSqlStore:
         current_user = get_authenticated_user()
         await self._check_access_for_rows(table, where, action, current_user)
 
-    def _build_tenant_filter(self, current_user: User | None) -> tuple[str, dict[str, Any]]:
+    def _build_tenant_filter(
+        self, current_user: User | None, *, table: str | None = None
+    ) -> tuple[str, dict[str, Any]]:
         """Non-bypassable tenant partition filter. Applied before ABAC."""
+        tenant_column = f'"{table}"."tenant_id"' if table is not None else "tenant_id"
         if self.tenancy_mode == TenancyMode.DISABLED:
             return "1=1", {}
         if not current_user or not current_user.tenant_id:
             if self.tenancy_mode == TenancyMode.SINGLE and self.default_tenant_id:
-                return "tenant_id = :_tenant_id_filter", {"_tenant_id_filter": self.default_tenant_id}
+                return f"{tenant_column} = :_tenant_id_filter", {"_tenant_id_filter": self.default_tenant_id}
             return "1=0", {}
-        return "tenant_id = :_tenant_id_filter", {"_tenant_id_filter": current_user.tenant_id}
+        return f"{tenant_column} = :_tenant_id_filter", {"_tenant_id_filter": current_user.tenant_id}
 
     def _tenant_id_for_current_context(self, current_user: User | None) -> str | None:
         if self.tenancy_mode == TenancyMode.DISABLED:
@@ -329,7 +336,7 @@ class AuthorizedSqlStore:
         else:
             update_columns = [c for c in enhanced_data.keys() if c not in conflict_columns and c not in frozen_fields]
 
-        tenant_update_where, tenant_update_params = self._build_tenant_filter(current_user)
+        tenant_update_where, tenant_update_params = self._build_tenant_filter(current_user, table=table)
 
         await self.sql_store.upsert(
             table=table,

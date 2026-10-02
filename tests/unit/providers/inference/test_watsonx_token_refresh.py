@@ -6,7 +6,7 @@
 
 import asyncio
 
-import httpx
+import httpx2
 
 from ogx.providers.remote.inference.watsonx.config import WatsonXConfig
 from ogx.providers.remote.inference.watsonx.watsonx import WatsonXInferenceAdapter
@@ -26,7 +26,7 @@ class _FailingIamClient:
     async def post(self, *args, **kwargs):
         self._calls.append(1)
         await asyncio.sleep(0.05)
-        raise httpx.ConnectError("boom")
+        raise httpx2.ConnectError("boom")
 
 
 async def test_refresh_iam_token_deduplicates_concurrent_failures(monkeypatch):
@@ -36,7 +36,7 @@ async def test_refresh_iam_token_deduplicates_concurrent_failures(monkeypatch):
     calls: list[int] = []
 
     monkeypatch.setattr(
-        "ogx.providers.remote.inference.watsonx.watsonx.httpx.AsyncClient",
+        "ogx.providers.remote.inference.watsonx.watsonx.httpx2.AsyncClient",
         lambda **kwargs: _FailingIamClient(calls),
     )
 
@@ -47,8 +47,8 @@ async def test_refresh_iam_token_deduplicates_concurrent_failures(monkeypatch):
 
 
 async def test_iam_token_exchange_applies_network_tls_config(monkeypatch):
-    """IAM token exchange builds its httpx client with the provider's network config (issue #6251)."""
-    from ogx.providers.utils.inference.model_registry import NetworkConfig, TLSConfig
+    """IAM token exchange builds its httpx2 client with the provider's network config (issue #6251)."""
+    from ogx.providers.utils.inference.network_config import NetworkConfig, TLSConfig
 
     adapter = WatsonXInferenceAdapter(
         config=WatsonXConfig(
@@ -63,7 +63,7 @@ async def test_iam_token_exchange_applies_network_tls_config(monkeypatch):
         return _FailingIamClient([], kwargs)
 
     monkeypatch.setattr(
-        "ogx.providers.remote.inference.watsonx.watsonx.httpx.AsyncClient",
+        "ogx.providers.remote.inference.watsonx.watsonx.httpx2.AsyncClient",
         _make_client,
     )
 

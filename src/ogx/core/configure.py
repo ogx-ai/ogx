@@ -11,40 +11,9 @@ from ogx.core.datatypes import (
     StackConfig,
 )
 from ogx.core.stack import cast_distro_name_to_string, replace_env_vars
-from ogx.core.utils.dynamic import instantiate_class_type
-from ogx.core.utils.prompt_for_config import prompt_for_config
 from ogx.log import get_logger
-from ogx_api import ProviderSpec
 
 logger = get_logger(name=__name__, category="core")
-
-
-def configure_single_provider(registry: dict[str, ProviderSpec], provider: Provider) -> Provider:
-    """Interactively configure a single provider by prompting for its config values.
-
-    Args:
-        registry: Dictionary mapping provider types to their specifications.
-        provider: The provider to configure.
-
-    Returns:
-        A new Provider instance with the user-provided configuration.
-    """
-    provider_spec = registry[provider.provider_type]
-    config_type = instantiate_class_type(provider_spec.config_class)
-    try:
-        if provider.config:
-            existing = config_type(**provider.config)
-        else:
-            existing = None
-    except Exception:
-        existing = None
-
-    cfg = prompt_for_config(config_type, existing)
-    return Provider(
-        provider_id=provider.provider_id,
-        provider_type=provider.provider_type,
-        config=cfg.model_dump(),
-    )
 
 
 def upgrade_from_routing_table(
@@ -157,6 +126,20 @@ def _ensure_tenancy_defaults(config_dict: dict[str, Any]) -> None:
         server["tenancy"] = {"mode": "disabled"}
 
 
+def _warn_bare_apis_key(config_dict: dict[str, Any]) -> None:
+    """Warn when the `apis` key is present but has no value.
+
+    YAML parses a bare `apis:` key to None, which is treated the same as an
+    absent key: all provider-backed APIs are served. That is the maximally
+    permissive outcome for what is usually a typo, so call it out at startup.
+    """
+    if "apis" in config_dict and config_dict["apis"] is None:
+        logger.warning(
+            "The 'apis' key is present but has no value; it is treated the same as an absent key, "
+            "so all provider-backed APIs are served. Use 'apis: []' to serve no provider-backed APIs."
+        )
+
+
 def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
     """Parse a configuration dictionary into a StackConfig, upgrading from legacy format if needed.
 
@@ -176,4 +159,5 @@ def parse_and_maybe_upgrade_config(config_dict: dict[str, Any]) -> StackConfig:
     config_dict["version"] = OGX_RUN_CONFIG_VERSION
 
     processed_config_dict = replace_env_vars(config_dict)
+    _warn_bare_apis_key(processed_config_dict)
     return StackConfig(**cast_distro_name_to_string(processed_config_dict))

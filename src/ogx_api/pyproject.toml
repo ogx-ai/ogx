@@ -31,12 +31,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
-    "openai>=2.43.0",
-    "fastapi>=0.136.3,<1.0",
-    "pydantic>=2.11.9",
+    "openai>=3.0.0",                          # keep in sync with the top-level ogx package
+    "httpx2",
+    "fastapi>=0.137.2,<1.0",                  # cap mirrored in .github/dependabot.yml
+    "pydantic>=2.13.5",
     "jsonschema>=4.26.0",
     "opentelemetry-sdk>=1.43.0",
-    "opentelemetry-exporter-otlp-proto-http>=1.43.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.42.1",
 ]
 
@@ -86,6 +87,7 @@ py-modules = [
     "ogx_api.rag_tool",
     "ogx_api.resource",
     "ogx_api.router_utils",
+    "ogx_api.utils",
     "ogx_api.schema_utils",
     "ogx_api.vector_stores",
     "ogx_api.version",
@@ -97,7 +99,7 @@ ogx_api = ["py.typed", "**/*.json", "**/*.yaml"]
 
 [tool.setuptools_scm]
 root = "../.."
-fallback_version = "1.1.4.dev0"
+fallback_version = "1.4.1.dev0"
 
 [tool.ruff]
 line-length = 120

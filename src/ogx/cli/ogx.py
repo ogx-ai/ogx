@@ -13,7 +13,7 @@ from ogx.log import setup_logging
 setup_logging()
 
 from .connect import ConnectParser  # type: ignore[attr-defined]
-from .letsgo import LetsGo
+from .letsgo import LetsGo, LetsGoDeprecated
 from .run import Run
 from .stack import StackParser  # type: ignore[attr-defined]
 from .stack.utils import print_subcommand_description
@@ -37,6 +37,7 @@ class OGXCLIParser:
 
         # Add sub-commands
         LetsGo.create(subparsers)
+        LetsGoDeprecated.create(subparsers)
         Run.create(subparsers)
         StackParser.create(subparsers)
         ConnectParser.create(subparsers)

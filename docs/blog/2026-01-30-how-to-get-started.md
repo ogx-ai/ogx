@@ -53,7 +53,7 @@ If you already have Ollama installed as a service, you can simply pull the model
 
 ```bash
 ollama pull gpt-oss:20b
-uv run --with ogx ogx list-deps --providers inference=remote::ollama --format uv | sh
+uv run --with ogx ogx stack list-deps --providers inference=remote::ollama --format uv | sh
 uv run --with ogx ogx stack run --providers inference=remote::ollama
 
 ```
@@ -75,7 +75,7 @@ For a more feature-rich setup, you can use the starter distribution which gives 
 ```bash
 ollama serve > /dev/null 2>&1 &
 ollama run gpt-oss:20b --keepalive 60m # you can exit this once the model is running due to --keepalive
-uv run --with ogx ogx list-deps starter --format uv | sh
+uv run --with ogx ogx stack list-deps starter --format uv | sh
 export OLLAMA_URL=http://localhost:11434/v1
 uv run --with ogx ogx run starter
 

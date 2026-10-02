@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from redis.asyncio import Redis  # type: ignore[import-not-found]
+from redis.asyncio import Redis
 
 from ogx_api.internal.kvstore import KVStore
 

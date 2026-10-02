@@ -9,13 +9,13 @@ import os
 import sys
 import traceback
 import warnings
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
 from importlib.metadata import version as parse_version
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import httpx
+import httpx2
 import yaml
 import zstandard
 from fastapi import FastAPI, HTTPException, Request
@@ -28,6 +28,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from ogx.core.access_control.access_control import AccessDeniedError
 from ogx.core.datatypes import (
     AuthenticationRequiredError,
+    LocalApiKeyAuthConfig,
     StackConfig,
     TenancyMode,
 )
@@ -59,6 +60,18 @@ REPO_ROOT = Path(__file__).parent.parent.parent.parent
 
 logger = get_logger(name=__name__, category="core::server")
 
+# APIs that administer or describe the stack itself rather than serving inference
+# traffic. Operators need them reachable to diagnose a deployment, so `apis:` cannot opt
+# out of them. (It can still list them; doing so is simply redundant.)
+ALWAYS_SERVED_APIS = ("admin", "inspect", "providers")
+
+# Built-in, user-facing APIs implied by serving `responses`: the builtin responses
+# provider hard-depends on their impls in-process (see providers/registry/responses.py),
+# and OpenAI clients on a responses deployment expect their HTTP surface. A deployment
+# that fronts responses with its own gateway drops `responses` from `apis:`, which turns
+# these off with it.
+RESPONSES_IMPLIED_APIS = ("conversations", "prompts")
+
 
 def warn_with_traceback(
     message: Warning | str,
@@ -88,7 +101,7 @@ def _format_google_error_response(status_code: int, message: str) -> JSONRespons
 
 def _is_interactions_path(request: Request) -> bool:
     """Check if the request targets the Google Interactions API."""
-    return request.url.path.startswith("/v1alpha/interactions")
+    return bool(request.url.path.startswith("/v1alpha/interactions"))
 
 
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -116,7 +129,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     # but integration tests (and OpenAI client behavior expectations in this repo)
     # assert they surface as BadRequestError instead.
     if isinstance(exc, ResourceNotFoundError) and request.url.path.startswith("/v1/vector_stores"):
-        http_exc = HTTPException(status_code=httpx.codes.BAD_REQUEST, detail=str(exc))
+        http_exc = HTTPException(status_code=httpx2.codes.BAD_REQUEST, detail=str(exc))
 
     return JSONResponse(
         status_code=http_exc.status_code, content=OpenAIErrorResponse.from_message(http_exc.detail).to_dict()
@@ -132,6 +145,29 @@ class StackApp(FastAPI):
     def __init__(self, config: StackConfig, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.stack: Stack = Stack(config)
+
+
+def apis_to_serve(run_config: StackConfig, impls: dict[Api, Any]) -> set[str]:
+    """Return the names of the APIs whose HTTP routers should be registered.
+
+    An explicit `apis:` list is authoritative for the user-facing surface, including when
+    it is empty, except that serving `responses` implies the built-in APIs a responses
+    deployment is expected to expose. Only an absent list falls back to serving
+    everything the providers give us.
+    """
+    served = set(run_config.apis) if run_config.apis is not None else {api.value for api in impls}
+
+    if Api.responses.value in served:
+        served.update(RESPONSES_IMPLIED_APIS)
+
+    for inf in builtin_automatically_routed_apis():
+        # if we do not serve the corresponding router API, we should not serve the routing table API
+        if inf.router_api.value not in served:
+            continue
+        served.add(inf.routing_table_api.value)
+
+    served.update(ALWAYS_SERVED_APIS)
+    return served
 
 
 @asynccontextmanager
@@ -162,39 +198,29 @@ async def lifespan(app: StackApp) -> AsyncIterator[None]:
     if external_apis:
         register_external_api_routers(external_apis)
 
-    if app.stack.run_config.apis:
-        apis_to_serve = set(app.stack.run_config.apis)
-    else:
-        apis_to_serve = set(impls.keys())
+    served_apis = apis_to_serve(app.stack.run_config, impls)
 
-    for inf in builtin_automatically_routed_apis():
-        # if we do not serve the corresponding router API, we should not serve the routing table API
-        if inf.router_api.value not in apis_to_serve:
-            continue
-        apis_to_serve.add(inf.routing_table_api.value)
-
-    apis_to_serve.add("admin")
-    apis_to_serve.add("inspect")
-    apis_to_serve.add("providers")
-    apis_to_serve.add("prompts")
-    apis_to_serve.add("conversations")
-
-    for api_str in apis_to_serve:
+    for api_str in sorted(served_apis):
         api = Api(api_str)
-        impl = impls[api]
+        impl = impls.get(api)
+        if impl is None:
+            # `apis:` can name an API that no configured provider backs; the resolver
+            # ignores those, so there is nothing to build a router from.
+            logger.warning("Skipping API with no implementation", api=api_str)
+            continue
         router = build_fastapi_router(api, impl)
         if router:
             app.include_router(router)
             logger.debug("Registered FastAPI router", api=str(api))
 
-    logger.debug("Serving APIs", apis=list(apis_to_serve))
+    logger.debug("Serving APIs", apis=sorted(served_apis))
 
     # Start the registry refresh background task
-    app.stack.create_registry_refresh_task()  # type: ignore[no-untyped-call]
+    app.stack.create_registry_refresh_task()
 
     yield
     logger.info("Shutting down")
-    await app.stack.shutdown()  # type: ignore[no-untyped-call]
+    await app.stack.shutdown()
 
 
 async def _send_error_response(send: Send, status: int, message: str) -> None:
@@ -220,7 +246,7 @@ class HSTSMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Any:
         if scope["type"] == "http":
 
-            async def send_with_hsts(message: dict[str, Any]) -> None:
+            async def send_with_hsts(message: MutableMapping[str, Any]) -> None:
                 if message["type"] == "http.response.start":
                     headers = list(message.get("headers", []))
                     headers.append([b"strict-transport-security", self.hsts_value])
@@ -247,7 +273,7 @@ class ClientVersionMiddleware:
                     if not _client_version_is_compatible(client_version, self.server_version):
                         return await _send_error_response(
                             send,
-                            status=httpx.codes.UPGRADE_REQUIRED,
+                            status=httpx2.codes.UPGRADE_REQUIRED,
                             message=f"Client version {client_version} is not compatible with server version {self.server_version}. Please update your client.",
                         )
                 except InvalidVersion:
@@ -290,7 +316,7 @@ class ProviderDataMiddleware:
                         sync_test_context_from_provider_data,
                     )
 
-                    test_context_token = sync_test_context_from_provider_data()  # type: ignore[no-untyped-call]
+                    test_context_token = sync_test_context_from_provider_data()
                     reset_fn = reset_test_context
                 try:
                     return await self.app(scope, receive, send)
@@ -309,6 +335,19 @@ def validate_auth_security(config: StackConfig) -> None:
     if not config.server.auth:
         return
     provider_config = config.server.auth.provider_config
+
+    # Hard error: local_api_key doesn't resolve tenant IDs, so multi-tenancy
+    # is incompatible. The admin will get runtime 401s with no explanation.
+    tenancy_mode = config.server.tenancy.mode
+    if isinstance(provider_config, LocalApiKeyAuthConfig) and tenancy_mode == TenancyMode.MULTI:
+        raise SystemExit(
+            "server.auth.provider_config.type is 'local_api_key' but "
+            "server.tenancy.mode is 'multi'. The local_api_key provider does "
+            "not resolve tenant IDs. Use tenancy mode 'single' or 'disabled' "
+            "instead, or switch to an auth provider that resolves tenant_ids "
+            "(oauth2_token, kubernetes, upstream_header, custom)."
+        )
+
     if not provider_config or not hasattr(provider_config, "verify_tls") or provider_config.verify_tls:
         return
 
@@ -381,6 +420,13 @@ class ZstdDecompressionMiddleware:
                     message=f"Decompressed request body exceeds maximum allowed size of {max_decompressed_size} bytes",
                 )
 
+            if decompressed_body is None:
+                return await _send_error_response(
+                    send,
+                    status=500,
+                    message="Failed to decompress request body",
+                )
+
             # Strip content-encoding header and update content-length
             new_headers = [
                 (k, v) for k, v in scope["headers"] if k.lower() not in (b"content-encoding", b"content-length")
@@ -393,12 +439,14 @@ class ZstdDecompressionMiddleware:
             # responses stay alive until the client actually disconnects.
             body_sent = False
 
-            async def receive_decompressed() -> dict:  # type: ignore[type-arg]
+            async def receive_decompressed() -> MutableMapping[str, Any]:
                 nonlocal body_sent
                 if not body_sent:
                     body_sent = True
                     return {"type": "http.request", "body": decompressed_body, "more_body": False}
-                return await receive()
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
 
             return await self.app(scope, receive_decompressed, send)
         except Exception as e:
@@ -407,12 +455,14 @@ class ZstdDecompressionMiddleware:
             # Replay the original compressed body since decompression failed
             body_sent = False
 
-            async def receive_original() -> dict:  # type: ignore[type-arg]
+            async def receive_original() -> MutableMapping[str, Any]:
                 nonlocal body_sent
                 if not body_sent:
                     body_sent = True
                     return {"type": "http.request", "body": compressed_body, "more_body": False}
-                return await receive()
+                return cast(
+                    MutableMapping[str, Any], await receive()
+                )  # needed because mypy config skips following imports
 
             return await self.app(scope, receive_original, send)
 
@@ -474,6 +524,13 @@ def create_app() -> StackApp:
     app.add_middleware(ProviderDataMiddleware)
 
     validate_auth_security(config)
+
+    if not (config.server.auth and config.server.auth.provider_config):
+        logger.warning(
+            "Authentication is not configured. All API endpoints are accessible without credentials. "
+            "See https://ogx-ai.github.io/docs/distributions/configuration#authentication-configuration"
+            " to configure authentication.",
+        )
 
     if config.server.auth:
         # Add route authorization middleware if route_policy is configured

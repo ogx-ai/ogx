@@ -3,6 +3,7 @@
 #
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
+import ssl
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
@@ -12,13 +13,16 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    Index,
     Integer,
     MetaData,
     String,
     Table,
     Text,
+    and_,
     event,
     inspect,
+    or_,
     select,
     text,
 )
@@ -125,9 +129,20 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             await self._engine.dispose()
             self._engine = None
 
+    def _build_ssl(self) -> ssl.SSLContext | str | None:
+        assert isinstance(self.config, PostgresSqlStoreConfig)
+        if self.config.ssl_mode in ("verify-full", "verify-ca") and self.config.ca_cert_path:
+            ctx = ssl.create_default_context(cafile=self.config.ca_cert_path)
+            if self.config.ssl_mode == "verify-ca":
+                ctx.check_hostname = False
+            return ctx
+        if self.config.ssl_mode and self.config.ssl_mode != "disable":
+            return self.config.ssl_mode
+        return None
+
     def create_engine(self) -> AsyncEngine:
         # Configure connection args for better concurrency support
-        connect_args = {}
+        connect_args: dict[str, Any] = {}
         engine_kwargs: dict[str, Any] = {"pool_pre_ping": self.config.pool_pre_ping}
         if self._is_sqlite_backend:
             # SQLite-specific optimizations for concurrent access
@@ -139,6 +154,9 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             engine_kwargs["max_overflow"] = self.config.max_overflow
             if self.config.pool_recycle >= 0:
                 engine_kwargs["pool_recycle"] = self.config.pool_recycle
+            ssl_context = self._build_ssl()
+            if ssl_context is not None:
+                connect_args["ssl"] = ssl_context
 
         engine = create_async_engine(
             self.config.engine_str,
@@ -201,6 +219,24 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             if self._engine is not None:
                 async with self._engine.begin() as conn:
                     await conn.run_sync(self.metadata.create_all, checkfirst=True)
+
+    async def create_index(self, index_name: str, table: str, columns: Sequence[str]) -> None:
+        """Create an index if it does not already exist."""
+        if table not in self.metadata.tables:
+            raise ValueError(f"Failed to create index '{index_name}': table '{table}' is not registered.")
+        table_obj = self.metadata.tables[table]
+        missing = [column for column in columns if column not in table_obj.c]
+        if missing:
+            raise ValueError(
+                f"Failed to create index '{index_name}': columns {missing} are not registered on table '{table}'."
+            )
+        index = next((candidate for candidate in table_obj.indexes if candidate.name == index_name), None)
+        if index is None:
+            index = Index(index_name, *(table_obj.c[column] for column in columns))
+        await self._ensure_engine()
+        assert self._engine is not None
+        async with self._engine.begin() as connection:
+            await connection.run_sync(lambda sync_connection: index.create(sync_connection, checkfirst=True))
 
     async def insert(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         await self._ensure_engine()  # Lazy init in current event loop
@@ -311,11 +347,29 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
                 cursor_value = cursor_row[0]
 
-                # Apply cursor condition based on sort direction
+                # Apply cursor condition based on sort direction. Break ties on the
+                # unique cursor key so rows that share the cursor row's order value
+                # are not skipped across pages.
                 if order_direction == "desc":
-                    query = query.where(table_obj.c[order_column] < cursor_value)
+                    query = query.where(
+                        or_(
+                            table_obj.c[order_column] < cursor_value,
+                            and_(
+                                table_obj.c[order_column] == cursor_value,
+                                table_obj.c[cursor_key_column] > cursor_id,
+                            ),
+                        )
+                    )
                 else:
-                    query = query.where(table_obj.c[order_column] > cursor_value)
+                    query = query.where(
+                        or_(
+                            table_obj.c[order_column] > cursor_value,
+                            and_(
+                                table_obj.c[order_column] == cursor_value,
+                                table_obj.c[cursor_key_column] > cursor_id,
+                            ),
+                        )
+                    )
 
             # Apply ordering
             if order_by:
@@ -337,6 +391,23 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                         query = query.order_by(table_obj.c[name].desc())
                     else:
                         raise ValueError(f"Invalid order '{order_type}' for column '{name}'")
+
+            # Append a unique tiebreaker to the ORDER BY so rows that share the
+            # primary order value have a stable total order across pages. On cursor
+            # pages this is the cursor key; otherwise the table's primary key.
+            tiebreaker_column = None
+            if cursor:
+                tiebreaker_column = cursor[0]
+            else:
+                primary_key_columns = list(table_obj.primary_key.columns)
+                if len(primary_key_columns) == 1:
+                    tiebreaker_column = primary_key_columns[0].name
+            if (
+                tiebreaker_column is not None
+                and order_by
+                and tiebreaker_column not in [column_name for column_name, _ in order_by]
+            ):
+                query = query.order_by(table_obj.c[tiebreaker_column].asc())
 
             # Fetch limit + 1 to determine has_more
             fetch_limit = limit

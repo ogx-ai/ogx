@@ -10,6 +10,7 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
+import httpx2
 import pytest
 from pydantic import SecretStr
 
@@ -18,6 +19,7 @@ from ogx.core.routers.inference import InferenceRouter
 from ogx.core.routing_tables.models import ModelsRoutingTable
 from ogx.providers.remote.inference.vllm.config import VLLMInferenceAdapterConfig
 from ogx.providers.remote.inference.vllm.vllm import VLLMInferenceAdapter
+from ogx.testing.api_recorder import APIRecordingMode, api_recording
 from ogx_api import (
     HealthStatus,
     Model,
@@ -31,6 +33,7 @@ from ogx_api import (
     OpenAICompletionRequestWithExtraBody,
     OpenAIDeveloperMessageParam,
 )
+from ogx_api.inference import RerankRequest
 
 # These are unit test for the remote vllm provider
 # implementation. This should only contain tests which are specific to
@@ -59,7 +62,7 @@ async def test_health_status_success(vllm_inference_adapter):
     This test verifies that the health method returns a HealthResponse with status OK
     when the /health endpoint responds successfully.
     """
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         # Create mock response
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -88,7 +91,7 @@ async def test_health_status_failure(vllm_inference_adapter):
     This test verifies that the health method returns a HealthResponse with status ERROR
     and an appropriate error message when the connection to the vLLM server fails.
     """
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         # Create mock client instance that raises an exception
         mock_client_instance = MagicMock()
         mock_client_instance.get.side_effect = Exception("Connection failed")
@@ -109,7 +112,7 @@ async def test_health_status_no_static_api_key(vllm_inference_adapter):
     This test verifies that the health method returns a HealthResponse with status OK
     when the /health endpoint responds successfully, regardless of API token configuration.
     """
-    with patch("httpx.AsyncClient") as mock_client_class:
+    with patch("httpx2.AsyncClient") as mock_client_class:
         # Create mock response
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -142,7 +145,6 @@ async def test_openai_chat_completion_converts_developer_messages_for_vllm(vllm_
             ],
         )
     )
-    vllm_inference_adapter.model_store.has_model.return_value = False
 
     params = OpenAIChatCompletionRequestWithExtraBody(
         model="mock-model",
@@ -180,7 +182,6 @@ async def test_openai_chat_completion_converts_typed_developer_messages_for_vllm
             ],
         )
     )
-    vllm_inference_adapter.model_store.has_model.return_value = False
 
     params = OpenAIChatCompletionRequestWithExtraBody(
         model="mock-model",
@@ -396,55 +397,28 @@ async def test_vllm_chat_completion_extra_body():
 
 
 class TestConstructModelFromIdentifier:
+    """construct_model_from_identifier() delegates to the shared classify_model();
+    see test_models_dev_registry.py for classification coverage (models.dev lookup,
+    metadata enrichment, name-heuristic fallback, rerank, HuggingFace precedence)."""
+
     def _make_adapter(self) -> VLLMInferenceAdapter:
         config = VLLMInferenceAdapterConfig(base_url="http://mocked.localhost:12345")
         adapter = VLLMInferenceAdapter(config=config)
         adapter.__provider_id__ = "vllm"
         return adapter
 
-    def test_family_check_classifies_embedding_without_embed_in_identifier(self):
-        # intfloat/multilingual-e5-large-instruct has no "embed" in its identifier
-        # but its models.dev family is "text-embedding", so it must be classified
-        # as an embedding model with metadata populated from models.dev.
-        adapter = self._make_adapter()
-        model = adapter.construct_model_from_identifier("intfloat/multilingual-e5-large-instruct")
-
-        assert model.model_type == ModelType.embedding
-        assert model.metadata.get("embedding_dimension") == 512
-
-    def test_known_embedding_model_populates_metadata_from_models_dev(self):
-        # text-embedding-3-large is in models_dev (openai provider) with
-        # limit.output=3072 (embedding dimension) and limit.context=8191.
+    def test_classified_model_uses_adapters_provider_id(self):
         adapter = self._make_adapter()
         model = adapter.construct_model_from_identifier("text-embedding-3-large")
 
         assert model.model_type == ModelType.embedding
-        assert model.metadata.get("embedding_dimension") == 3072
-        assert model.metadata.get("context_length") == 8191
+        assert model.provider_id == "vllm"
 
-    def test_unknown_embedding_model_falls_back_to_name_heuristic(self):
+    def test_unclassified_identifier_falls_through_to_default(self):
         adapter = self._make_adapter()
-        model = adapter.construct_model_from_identifier("acme/custom-embed-v1")
+        model = adapter.construct_model_from_identifier("qwen3-0.6b")
 
-        assert model.model_type == ModelType.embedding
-        assert model.metadata == {}
-
-    def test_rerank_model_classified_correctly(self):
-        adapter = self._make_adapter()
-        model = adapter.construct_model_from_identifier("Qwen/Qwen3-Reranker-0.6B")
-
-        assert model.model_type == ModelType.rerank
-
-    def test_huggingface_provider_wins_over_other_providers(self):
-        # Qwen/Qwen3-Embedding-8B exists in multiple providers. evroc records
-        # output=40960 (the context window, not the embedding dimension).
-        # huggingface correctly records output=4096. The index must prefer
-        # huggingface so callers see the right embedding_dimension.
-        adapter = self._make_adapter()
-        model = adapter.construct_model_from_identifier("Qwen/Qwen3-Embedding-8B")
-
-        assert model.model_type == ModelType.embedding
-        assert model.metadata.get("embedding_dimension") == 4096
+        assert model.model_type == ModelType.llm
 
     """Tests that health() honours TLS/network configuration."""
 
@@ -471,7 +445,7 @@ class TestConstructModelFromIdentifier:
         assert kwargs["verify"] is False
 
     async def test_health_passes_kwargs_to_httpx(self):
-        """health() should pass _build_httpx_client_kwargs() to httpx.AsyncClient."""
+        """health() should pass _build_httpx_client_kwargs() to httpx2.AsyncClient."""
         config = VLLMInferenceAdapterConfig(
             base_url="https://vllm.example.com/v1",
             network={"tls": {"verify": False}},
@@ -479,7 +453,7 @@ class TestConstructModelFromIdentifier:
         adapter = VLLMInferenceAdapter(config=config)
         await adapter.initialize()
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.raise_for_status.return_value = None
             mock_client_instance = MagicMock()
@@ -518,7 +492,7 @@ class TestRerankTLSAndAuth:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -547,7 +521,7 @@ class TestRerankTLSAndAuth:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -573,7 +547,7 @@ class TestRerankTLSAndAuth:
         await adapter.initialize()
         adapter.get_request_provider_data = MagicMock(return_value=None)
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -605,7 +579,7 @@ class TestRerankTLSAndAuth:
             return_value=SimpleNamespace(vllm_api_token=SecretStr("provider-data-token"))
         )
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("httpx2.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -623,6 +597,86 @@ class TestRerankTLSAndAuth:
             call_args = mock_client_instance.post.call_args
             headers = call_args.kwargs.get("headers", {})
             assert headers.get("Authorization") == "Bearer provider-data-token"
+
+
+class TestBaseUrlVersionStripping:
+    """Regression tests for double /v1/v1/ path bug (issue #6290)."""
+
+    @pytest.mark.parametrize(
+        "base_url, expected",
+        [
+            ("http://localhost:8000/v1", "http://localhost:8000"),
+            ("http://localhost:8000/v1/", "http://localhost:8000"),
+            ("http://localhost:8000", "http://localhost:8000"),
+            ("http://localhost:8000/", "http://localhost:8000"),
+        ],
+    )
+    def test_get_base_url_without_version(self, base_url, expected):
+        config = VLLMInferenceAdapterConfig(base_url=base_url)
+        adapter = VLLMInferenceAdapter(config=config)
+        assert adapter._get_base_url_without_version() == expected
+
+    async def test_anthropic_messages_no_double_v1(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://localhost:8000/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx2.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "hello"}],
+                "model": "test-model",
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            }
+            mock_client_instance = MagicMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+            from ogx_api.messages.models import AnthropicCreateMessageRequest
+
+            request = AnthropicCreateMessageRequest(
+                model="test-model",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "hi"}],
+                stream=False,
+            )
+            await adapter.anthropic_messages(request)
+
+            url_called = mock_client_instance.post.call_args[0][0]
+            assert url_called == "http://localhost:8000/v1/messages"
+            assert "/v1/v1/" not in url_called
+
+    async def test_anthropic_count_tokens_no_double_v1(self):
+        config = VLLMInferenceAdapterConfig(base_url="http://localhost:8000/v1")
+        adapter = VLLMInferenceAdapter(config=config)
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+
+        with patch("httpx2.AsyncClient") as mock_client_class:
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = {"input_tokens": 10}
+            mock_client_instance = MagicMock()
+            mock_client_instance.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value.__aenter__.return_value = mock_client_instance
+
+            from ogx_api.messages.models import AnthropicCountTokensRequest
+
+            request = AnthropicCountTokensRequest(
+                model="test-model",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            await adapter.anthropic_count_tokens(request)
+
+            url_called = mock_client_instance.post.call_args[0][0]
+            assert url_called == "http://localhost:8000/v1/messages/count_tokens"
+            assert "/v1/v1/" not in url_called
 
 
 class TestFairnessHeaderPropagation:
@@ -733,3 +787,83 @@ class TestFairnessHeaderPropagation:
 
             call_kwargs = mock_client.chat.completions.create.call_args.kwargs
             assert call_kwargs["extra_headers"] == {"x-gateway-inference-fairness-id": "tenant-1"}
+
+
+async def test_reasoning_wrapper_closes_inner_stream_when_abandoned(vllm_inference_adapter):
+    closed = []
+
+    async def inner_stream():
+        try:
+            for _ in range(2):
+                chunk = MagicMock()
+                chunk.choices = [MagicMock()]
+                chunk.choices[0].delta = MagicMock()
+                chunk.choices[0].delta.reasoning = None
+                chunk.choices[0].delta.reasoning_content = None
+                yield chunk
+        finally:
+            closed.append(True)
+
+    with patch.object(
+        vllm_inference_adapter,
+        "openai_chat_completion",
+        new=AsyncMock(return_value=inner_stream()),
+    ):
+        params = OpenAIChatCompletionRequestWithExtraBody(
+            model="mock-model",
+            messages=[{"role": "user", "content": "test"}],
+            stream=True,
+        )
+        result = await vllm_inference_adapter.openai_chat_completions_with_reasoning(params)
+        assert await result.__anext__() is not None
+        await result.aclose()
+
+    assert closed == [True]
+
+
+class TestRerankRecordReplay:
+    """rerank() posts with a raw ``httpx2.AsyncClient``, so it only takes part in the
+    record/replay system if the recorder's httpx2 interceptors cover ``/rerank`` (#6626).
+    Without that, replay CI -- which has no vLLM server -- cannot exercise this path at all.
+    """
+
+    BODY = {"results": [{"index": 0, "relevance_score": 0.25}, {"index": 1, "relevance_score": 0.75}]}
+
+    @staticmethod
+    async def _adapter() -> VLLMInferenceAdapter:
+        adapter = VLLMInferenceAdapter(config=VLLMInferenceAdapterConfig(base_url="http://vllm.test:8000/v1"))
+        await adapter.initialize()
+        adapter.get_request_provider_data = MagicMock(return_value=None)
+        return adapter
+
+    async def test_rerank_records_then_replays_with_no_server(self, tmp_path):
+        request = RerankRequest(model="rerank-model", query="why", items=["doc-a", "doc-b"])
+        adapter = await self._adapter()
+
+        # -- Record against a stand-in backend --
+        served: list[httpx2.Request] = []
+
+        def serve(http_request: httpx2.Request) -> httpx2.Response:
+            served.append(http_request)
+            return httpx2.Response(200, json=self.BODY)
+
+        with patch.object(
+            adapter, "_build_httpx_client_kwargs", return_value={"transport": httpx2.MockTransport(serve)}
+        ):
+            with api_recording(mode=APIRecordingMode.RECORD, storage_dir=str(tmp_path)):
+                recorded = await adapter.rerank(request)
+
+        assert [http_request.url.path for http_request in served] == ["/rerank"]
+        assert [(d.index, d.relevance_score) for d in recorded.data] == [(1, 0.75), (0, 0.25)]
+
+        # -- Replay with nothing listening: the recorder must answer from disk --
+        def refuse(http_request: httpx2.Request) -> httpx2.Response:
+            raise httpx2.ConnectError("no vLLM server in replay CI", request=http_request)
+
+        with patch.object(
+            adapter, "_build_httpx_client_kwargs", return_value={"transport": httpx2.MockTransport(refuse)}
+        ):
+            with api_recording(mode=APIRecordingMode.REPLAY, storage_dir=str(tmp_path)):
+                replayed = await adapter.rerank(request)
+
+        assert [(d.index, d.relevance_score) for d in replayed.data] == [(1, 0.75), (0, 0.25)]

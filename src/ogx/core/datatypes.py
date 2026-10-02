@@ -202,6 +202,7 @@ class OAuth2IntrospectionConfig(BaseModel):
 class AuthProviderType(StrEnum):
     """Supported authentication provider types."""
 
+    LOCAL_API_KEY = "local_api_key"
     OAUTH2_TOKEN = "oauth2_token"
     GITHUB_TOKEN = "github_token"
     CUSTOM = "custom"
@@ -303,6 +304,15 @@ class CustomAuthConfig(BaseModel):
     )
 
 
+class LocalApiKeyAuthConfig(BaseModel):
+    """Simple API key authentication for single-key deployments."""
+
+    type: Literal[AuthProviderType.LOCAL_API_KEY] = AuthProviderType.LOCAL_API_KEY
+    api_keys: list[str] = Field(
+        description="API keys that clients can send via the Authorization: Bearer header.",
+    )
+
+
 class GitHubTokenAuthConfig(BaseModel):
     """Configuration for GitHub token authentication."""
 
@@ -390,10 +400,35 @@ class UpstreamHeaderAuthConfig(BaseModel):
             "Example: {'X-MaaS-Group': 'teams', 'X-MaaS-Subscription': 'namespaces'}"
         ),
     )
+    trusted_proxy_cidrs: list[str] | None = Field(
+        default=None,
+        description=(
+            "CIDR allowlist for trusted proxy source IPs. "
+            "When set, requests from IPs outside these ranges are rejected with 403. "
+            "Example: ['10.96.0.0/12', '10.244.0.0/16']"
+        ),
+    )
+
+    @field_validator("trusted_proxy_cidrs")
+    @classmethod
+    def validate_cidrs(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        import ipaddress
+
+        if not v:
+            raise ValueError("trusted_proxy_cidrs must contain at least one entry when set")
+        for cidr in v:
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as e:
+                raise ValueError(f"Invalid CIDR notation '{cidr}': {e}") from e
+        return v
 
 
 AuthProviderConfig = Annotated[
     OAuth2TokenAuthConfig
+    | LocalApiKeyAuthConfig
     | GitHubTokenAuthConfig
     | CustomAuthConfig
     | KubernetesAuthProviderConfig
@@ -847,10 +882,15 @@ this could be just a hash
         default=None,
         description="Reference to the container image if this package refers to a container",
     )
-    apis: list[str] = Field(
-        default_factory=list,
+    apis: list[str] | None = Field(
+        default=None,
         description="""
-The list of APIs to serve. If not specified, all APIs specified in the provider_map will be served""",
+The list of APIs to serve over HTTP. If not specified, all APIs specified in the provider_map will
+be served. An explicit list is authoritative, including when it is empty: an empty list serves no
+provider-backed APIs, which is not the same as omitting the field. The list gates route
+registration only: an API left out is still resolved in-process for providers that depend on it.
+Two exceptions to the list: the stack administration APIs (admin, inspect, providers) are always
+served, and serving responses also serves conversations and prompts.""",
     )
 
     providers: dict[str, list[Provider]] = Field(

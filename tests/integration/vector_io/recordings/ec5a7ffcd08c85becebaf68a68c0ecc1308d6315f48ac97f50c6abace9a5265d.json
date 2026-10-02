@@ -1,0 +1,72 @@
+{
+  "test_id": "tests/integration/vector_io/test_openai_vector_stores.py::test_openai_vector_store_contextual_vs_static_chunks[client_with_models-vector_io=faiss-txt=fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b:emb=sentence-transformers/nomic-ai/nomic-embed-text-v1.5:dim=768]",
+  "request": {
+    "method": "POST",
+    "url": "https://api.fireworks.ai/inference/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "<document>\n# Technical Overview of Machine Learning Systems\n\n## Introduction to Neural Networks\n\nNeural networks are computational models inspired by biological neural networks.\nThey consist of interconnected nodes called neurons organized in layers.\nEach connection has a weight that is adjusted during training.\n\n## Gradient Descent Optimization\n\nThe backpropagation algorithm computes gradients for each layer.\nThese gradients are used to update weights using gradient descent.\nThe learning rate controls the step size during optimization.\n\n## Data Preprocessing\n\nRaw data must be normalized before training.\nFeature scaling ensures all inputs have similar ranges.\nData augmentation can increase the effective training set size.\n\n</document>\nHere is the chunk we want to situate within the whole document\n<chunk>"
+        },
+        {
+          "role": "user",
+          "content": "# Technical Overview of Machine Learning Systems\n## Introduction to Neural Networks\nNeural networks are computational models inspired by biological neural networks.\nThey consist of interconnected nodes called neurons organized in layers.\nEach connection has a weight that is adjusted during training.\n## Gradient Descent Optimization\nThe backpropagation algorithm computes gradients for each layer.\nThese gradients are used to update weights using gradient descent.\nThe learning rate controls the step size during optimization.\n## Data Preprocessing\nRaw data must be normalized before training.\nFeature scaling ensures all inputs have similar ranges.\nData augmentation can increase the effective training set size.\n</chunk>\nPlease give a short succinct description to situate this chunk of text within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct description and nothing else."
+        }
+      ],
+      "max_tokens": 256,
+      "stream": false,
+      "temperature": 0.0
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-ec5a7ffcd08c",
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "Here's a thinking process:\n\n1.  **Analyze the User's Request:**\n   - **Input:** A chunk of text from a document titled \"Technical Overview of Machine Learning Systems\"\n   - **Content of chunk:** Covers three sections: Introduction to Neural Networks, Gradient Descent Optimization, and Data Preprocessing. It defines neural networks, backpropagation, gradient descent, learning rate, data normalization, feature scaling, and data augmentation.\n   - **Task:** Provide a \"short succinct description to situate this chunk of text within the overall document for the purposes of improving search retrieval of the chunk.\"\n   - **Constraint:** Answer only with the succinct description and nothing else.\n\n2.  **Understand the Goal:**\n   - The user wants a brief description that contextualizes this chunk within the larger document. This is typically used for search/indexing purposes (like in RAG, vector stores, etc.).\n   - The description should capture the essence/topics of the chunk so that when someone searches for related concepts, this chunk is retrievable.\n   - It needs to be succinct (short, concise).\n   - It must be the only thing in the output.\n\n3.  **Identify Key Themes in the Chunk:**",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "tools": null
+            }
+          }
+        ],
+        "created": 0,
+        "model": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 256,
+          "prompt_tokens": 318,
+          "total_tokens": 574,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 317
+          }
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

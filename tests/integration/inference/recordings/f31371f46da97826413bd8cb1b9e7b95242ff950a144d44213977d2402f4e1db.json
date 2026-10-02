@@ -1,0 +1,81 @@
+{
+  "test_id": "tests/integration/inference/test_openai_completion.py::test_openai_chat_completion_with_tool_choice_none[txt=llama-cpp-server/qwen3-0.6b-inference:chat_completion:tool_calling]",
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8080/v1/v1/chat/completions",
+    "headers": {},
+    "body": {
+      "model": "qwen3-0.6b",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Pretend you are a weather assistant."
+        },
+        {
+          "role": "user",
+          "content": "What's the weather like in San Francisco, CA?"
+        }
+      ],
+      "stream": false
+    },
+    "endpoint": "/v1/chat/completions",
+    "model": "qwen3-0.6b",
+    "provider_metadata": {
+      "openai_sdk_version": "2.43.0"
+    }
+  },
+  "response": {
+    "body": {
+      "__type__": "openai.types.chat.chat_completion.ChatCompletion",
+      "__data__": {
+        "id": "rec-f31371f46da9",
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "The weather in San Francisco, CA is currently mild with a comfortable temperature range of 65\u201378\u00b0F (18\u201325\u00b0C). Humidity is moderate, with a chance of light rain or showers. The skies are clear, and the weather is ideal for outdoor activities. Let me know if you need further details!",
+              "refusal": null,
+              "role": "assistant",
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "tool_calls": null,
+              "reasoning_content": "Okay, the user is asking about the weather in San Francisco, CA. Let me start by recalling the current weather conditions. I need to check the latest data. San Francisco has a mix of humidity and temperatures. It's a city known for its weather, so I should mention the key factors. Maybe start with the temperature, then humidity, and maybe some forecast for the day. Also, consider if the user might be planning a trip or just wants general info. I should keep the response concise but informative. Make sure to highlight the key points without being too technical. Let me structure it to cover temperature, humidity, and any other relevant factors.\n"
+            }
+          }
+        ],
+        "created": 0,
+        "model": "qwen3-0.6b",
+        "object": "chat.completion",
+        "moderation": null,
+        "service_tier": null,
+        "system_fingerprint": "b10964-b29c606e2",
+        "usage": {
+          "completion_tokens": 204,
+          "prompt_tokens": 33,
+          "total_tokens": 237,
+          "completion_tokens_details": null,
+          "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 11
+          }
+        },
+        "timings": {
+          "cache_n": 11,
+          "prompt_n": 22,
+          "prompt_ms": 130.239,
+          "prompt_per_token_ms": 5.919954545454545,
+          "prompt_per_second": 168.9202159107487,
+          "predicted_n": 204,
+          "predicted_ms": 5273.653,
+          "predicted_per_token_ms": 25.97858620689655,
+          "predicted_per_second": 38.493241781361036
+        }
+      }
+    },
+    "is_streaming": false
+  },
+  "id_normalization_mapping": {}
+}

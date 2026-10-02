@@ -4,12 +4,10 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 from collections.abc import AsyncIterator
-from functools import cache
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import urljoin
 
-import httpx
-import models_dev as _models_dev
+import httpx2
 from pydantic import ConfigDict
 
 from ogx.core.request_headers import get_authenticated_user
@@ -17,15 +15,14 @@ from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.responses.types import (
     AssistantMessageWithReasoning,
 )
-from ogx.providers.utils.inference.http_client import (
-    build_network_client_kwargs as _build_network_client_kwargs,
-)
+from ogx.providers.utils.inference.anthropic_mixin import AnthropicMixin
+from ogx.providers.utils.inference.models_dev_registry import classify_model
 from ogx.providers.utils.inference.openai_mixin import OpenAIMixin
+from ogx.providers.utils.inference.stream_utils import wrap_reasoning_chunks
 from ogx_api import (
     HealthResponse,
     HealthStatus,
     Model,
-    ModelType,
     OpenAIChatCompletion,
     OpenAIChatCompletionChunk,
     OpenAIChatCompletionChunkWithReasoning,
@@ -45,26 +42,6 @@ from .config import VLLMInferenceAdapterConfig
 log = get_logger(name=__name__, category="inference::vllm")
 
 
-def _is_embedding_model(model_id: str, model: _models_dev.Model) -> bool:
-    return (model.family is not None and "embed" in model.family) or "embed" in model_id.lower()
-
-
-@cache
-def _models_dev_index() -> dict[str, _models_dev.Model]:
-    index: dict[str, _models_dev.Model] = {}
-    # Sort so huggingface is processed last: vLLM serves HF model IDs and the
-    # huggingface provider entry is the most authoritative source for them.
-    for provider in sorted(_models_dev.providers(), key=lambda p: p.id == "huggingface"):
-        for model_id, model in provider.models.items():
-            if _is_embedding_model(model_id, model):
-                index[model_id] = model
-    return index
-
-
-def _lookup_models_dev(identifier: str) -> _models_dev.Model | None:
-    return _models_dev_index().get(identifier)
-
-
 def _convert_developer_messages(messages: list[Any]) -> list[Any]:
     converted_messages: list[Any] = []
     for message in messages:
@@ -79,7 +56,7 @@ def _convert_developer_messages(messages: list[Any]) -> list[Any]:
     return converted_messages
 
 
-class VLLMInferenceAdapter(OpenAIMixin):
+class VLLMInferenceAdapter(AnthropicMixin, OpenAIMixin):
     """Inference adapter for remote vLLM servers."""
 
     config: VLLMInferenceAdapterConfig
@@ -87,6 +64,8 @@ class VLLMInferenceAdapter(OpenAIMixin):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     provider_data_api_key_field: str = "vllm_api_token"
+    anthropic_auth_style: ClassVar[str] = "bearer"
+    anthropic_no_key_placeholder: ClassVar[str | None] = None
 
     def get_api_key(self) -> str | None:
         if self.config.auth_credential:
@@ -115,13 +94,6 @@ class VLLMInferenceAdapter(OpenAIMixin):
                 "You must provide a URL in config.yaml (or via the VLLM_URL environment variable) to use vLLM."
             )
 
-    def _build_httpx_client_kwargs(self) -> dict:
-        """Build httpx.AsyncClient kwargs that honour network/TLS configuration."""
-        kwargs = _build_network_client_kwargs(self.config.network)
-        if not kwargs:
-            kwargs["verify"] = self.shared_ssl_context
-        return kwargs
-
     async def health(self) -> HealthResponse:
         """
         Performs a health check by verifying connectivity to the remote vLLM server.
@@ -136,7 +108,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
             base_url = self.get_base_url()
             health_url = urljoin(base_url, "health")
 
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.get(health_url)
                 response.raise_for_status()
                 return HealthResponse(status=HealthStatus.OK)
@@ -209,59 +181,25 @@ class VLLMInferenceAdapter(OpenAIMixin):
         params.messages = mapped_messages
 
         result = await self.openai_chat_completion(params)
+        # narrow the result type to AsyncIterator for the reasoning wrapper below
+        if not isinstance(result, AsyncIterator):
+            raise RuntimeError("Expected streaming response for reasoning, but got non-streaming result")
 
-        async def _wrap_chunks() -> AsyncIterator[OpenAIChatCompletionChunkWithReasoning]:
-            async for chunk in result:  # type: ignore[union-attr]
-                reasoning = None
-                for choice in chunk.choices or []:
-                    reasoning = getattr(choice.delta, "reasoning", None) or getattr(
-                        choice.delta, "reasoning_content", None
-                    )
-                yield OpenAIChatCompletionChunkWithReasoning(
-                    chunk=chunk,
-                    reasoning_content=reasoning,
-                )
+        return wrap_reasoning_chunks(result)
 
-        return _wrap_chunks()
+    def _get_base_url_without_version(self) -> str:
+        """Get the base URL with any trailing /v1 suffix removed."""
+        base_url = str(self.get_base_url()).rstrip("/")
+        if base_url.endswith("/v1"):
+            base_url = base_url[:-3]
+        return base_url
 
     def construct_model_from_identifier(self, identifier: str) -> Model:
         # vLLM's /v1/models response does not expose a model task/type field,
         # so we classify with models.dev with a name fallback.
-        md = _lookup_models_dev(identifier)
-        is_embedding = md is not None or "embed" in identifier.lower()
-
-        if is_embedding:
-            metadata: dict[str, int] = {}
-            if md is not None:
-                if md.limit.output:
-                    metadata["embedding_dimension"] = md.limit.output
-                if md.limit.context:
-                    metadata["context_length"] = md.limit.context
-                log.debug(
-                    "Classified embedding model via models.dev",
-                    identifier=identifier,
-                    family=md.family,
-                    metadata=metadata,
-                )
-            else:
-                log.debug(
-                    "Classified embedding model via name heuristic (not in models.dev)",
-                    identifier=identifier,
-                )
-            return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.embedding,
-                metadata=metadata,
-            )
-        if "rerank" in identifier.lower():
-            return Model(
-                provider_id=self.__provider_id__,  # type: ignore[attr-defined]
-                provider_resource_id=identifier,
-                identifier=identifier,
-                model_type=ModelType.rerank,
-            )
+        model = classify_model(identifier, self.__provider_id__)
+        if model is not None:
+            return model
         return super().construct_model_from_identifier(identifier)
 
     async def rerank(
@@ -292,7 +230,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
         #   "To indicate that the rerank API is not part of the standard OpenAI API,
         #    we have located it at `/rerank`. Please update your client accordingly.
         #    (Note: Conforms to JinaAI rerank API)" - vLLM 0.15.1
-        endpoint = self.get_base_url().replace("/v1", "") + "/rerank"  # TODO: find a better solution
+        endpoint = self._get_base_url_without_version() + "/rerank"
 
         headers: dict[str, str] = {}
         api_key = self._get_api_key_from_config_or_provider_data()
@@ -300,7 +238,7 @@ class VLLMInferenceAdapter(OpenAIMixin):
             headers["Authorization"] = f"Bearer {api_key}"
 
         try:
-            async with httpx.AsyncClient(**self._build_httpx_client_kwargs()) as client:
+            async with httpx2.AsyncClient(**self._build_httpx_client_kwargs()) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
                 if response.status_code != 200:
                     raise RuntimeError(
@@ -328,5 +266,5 @@ class VLLMInferenceAdapter(OpenAIMixin):
 
                 return RerankResponse(data=rerank_data)
 
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             raise ConnectionError(f"Failed to connect to vLLM rerank API at {endpoint}: {e}") from e

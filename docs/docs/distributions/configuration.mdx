@@ -95,6 +95,30 @@ apis:
 - vector_io
 ```
 
+The list is authoritative: only the APIs it names are served over HTTP. Omitting an API
+from the list stops the server from routing it, even when a provider for it is
+configured. That holds when the list is empty too: `apis: []` serves no provider-backed
+APIs. Leaving the key out entirely is the way to say "serve everything the providers
+supply".
+
+Three tiers decide what ends up served:
+
+1. **Always served** — `admin`, `inspect`, and `providers`. They describe and administer
+   the stack itself, and an operator needs them reachable to diagnose a deployment, so
+   `apis:` cannot turn them off.
+2. **Implied by `responses`** — `conversations` and `prompts`. Both are served whenever
+   `responses` is, listed or not: the builtin responses provider depends on them, and
+   OpenAI clients on a responses deployment call `/v1/conversations` to manage the
+   conversations their responses use. Listing either one on its own also works, for a
+   deployment that wants it without `responses`.
+3. **Everything else** — served only when listed.
+
+This is what lets a gateway deployment split the OpenAI-compatible surface. If a gateway
+in front of OGX serves `/v1/responses` and `/v1/conversations` itself, drop `responses`
+from `apis:`; `conversations` and `prompts` go with it, and OGX stops answering all
+three. Gating applies to route registration only — the implementations stay wired up
+in-process for providers that depend on them.
+
 ## Providers
 Next up is the most critical part: the set of providers that the stack will use to serve the above APIs. Consider the `inference` API:
 ```yaml
@@ -308,6 +332,24 @@ This allows you to:
 
 The server supports multiple authentication providers:
 
+#### Local API Key Provider
+
+Validates a shared secret API key against a list of allowed keys:
+
+```yaml
+server:
+  auth:
+    provider_config:
+      type: "local_api_key"
+      api_keys:
+      - "ogk_mykey1"
+      - "ogk_mykey2"
+```
+
+This is the simplest authentication provider — any key in the list authenticates successfully and is granted `admin` and `owner` [roles](#access-control) so the default owner-based access-controls work out of the box. Use it for development, internal services, or when you prefer to manage keys outside an identity provider.
+
+The token is validated as `Authorization: Bearer <key>` and the key string itself becomes the user principal. Because this provider does not resolve a `tenant_id`, it is only compatible with `server.tenancy.mode` `single` or `disabled` — startup will fail with `multi`.
+
 #### OAuth 2.0/OpenID Connect Provider with Kubernetes
 
 The server can be configured to use service account tokens for authorization, validating these against the Kubernetes API server, e.g.:
@@ -516,7 +558,7 @@ scoring_function, benchmark, tool, tool_group and session. In
 addition, stored data such as conversations, conversation items,
 responses, and files use the `sql_record::<table_name>` resource
 type (e.g. `sql_record::openai_conversations`,
-`sql_record::responses`). See [Multi-Tenant Isolation for Conversations and Responses](#multi-tenant-isolation-for-conversations-and-responses) for details.
+`sql_record::responses`). See [Combining Tenant Isolation with Access Control](#combining-tenant-isolation-with-access-control) for details.
 
 A rule may also specify a condition, either a 'when' or an 'unless',
 with additional constraints as to where the rule applies. The
@@ -1242,4 +1284,8 @@ providers:
       moderation_endpoint: ${env.MODERATION_ENDPOINT:+}
 ```
 
-With this configured, guardrail IDs passed in Responses requests are forwarded as the `model` in moderation requests to that endpoint.
+With this configured, enable moderation per Responses request with `guardrails: true`.
+When using the OpenAI Python SDK, pass `extra_body={"guardrails": True}`. OGX sends
+the text as `input` to the moderation endpoint; requests do not select shield IDs or
+moderation models. For services that require authentication, configure
+`moderation_headers` on the server's builtin responses provider.

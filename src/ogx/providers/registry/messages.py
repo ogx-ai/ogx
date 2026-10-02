@@ -25,9 +25,12 @@ def available_providers() -> list[ProviderSpec]:
                 Api.inference,
             ],
             description=(
-                "Implements the Anthropic Messages API with two modes: native passthrough for providers "
-                "that support /v1/messages natively (e.g. Ollama, vLLM), and automatic translation for "
-                "all other providers by converting between Anthropic and OpenAI Chat Completions formats."
+                "Implements the Anthropic Messages API by delegating to the inference API's "
+                "anthropic_messages() method. OpenAIMixin provides default translation via "
+                "openai_chat_completion. Providers with native /v1/messages support "
+                "(e.g., Anthropic, Meta AI, Ollama, vLLM, Fireworks, DeepSeek) use AnthropicMixin to "
+                "forward directly to the provider's own /v1/messages endpoint. Message batch "
+                "operations are implemented locally."
             ),
         ),
     ]

@@ -208,6 +208,29 @@ async def test_single_mode_requestless_write_uses_default_tenant(mock_user):
 
 
 @patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_tenant_upsert_qualifies_conflict_update_filter(mock_user):
+    """Tenant-aware upserts must qualify tenant_id in conflict updates."""
+    with TemporaryDirectory() as tmp:
+        store = _make_store(tmp, "tenant_upsert.db")
+        await store.create_table(
+            "docs",
+            {
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "title": ColumnType.STRING,
+            },
+        )
+
+        user = User("alice", {"roles": ["admin"]}, tenant_id="tenant-a")
+        mock_user.return_value = user
+        await store.upsert("docs", {"id": "doc1", "title": "Original"}, conflict_columns=["id"])
+        await store.upsert("docs", {"id": "doc1", "title": "Updated"}, conflict_columns=["id"])
+
+        row = await store.fetch_one("docs", where={"id": "doc1"})
+        assert row is not None
+        assert row["title"] == "Updated"
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
 async def test_single_mode_backfills_existing_disabled_mode_rows(mock_user):
     """Enabling single tenancy should keep legacy disabled-mode rows visible."""
     with TemporaryDirectory() as tmp:

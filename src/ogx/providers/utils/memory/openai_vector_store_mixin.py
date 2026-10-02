@@ -43,6 +43,7 @@ from ogx_api import (
     Files,
     Inference,
     InsertChunksRequest,
+    InvalidParameterError,
     OpenAIAttachFileRequest,
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionRequestWithExtraBody,
@@ -137,6 +138,12 @@ class OpenAIVectorStoreMixin(ABC):
     Providers need to implement the abstract storage methods and maintain
     an openai_vector_stores in-memory cache.
     """
+
+    # Set to False for providers that cannot run hybrid search with the caller's embedding/keyword weights,
+    # either because they have no hybrid search at all or because their hybrid search ignores the weights.
+    # Searches that pass ranking_options.hybrid_search to such a provider are rejected with a 400 instead of
+    # silently returning differently ranked results.
+    supports_weighted_hybrid_search: bool = True
 
     # Implementing classes should call super().__init__() in their __init__ method
     # to properly initialize the mixin attributes.
@@ -1097,6 +1104,16 @@ class OpenAIVectorStoreMixin(ABC):
 
         await self._get_authorized_openai_vector_store(vector_store_id)
 
+        search_mode = request.search_mode
+        if request.ranking_options is not None and request.ranking_options.hybrid_search is not None:
+            if not self.supports_weighted_hybrid_search:
+                raise InvalidParameterError(
+                    "ranking_options.hybrid_search",
+                    request.ranking_options.hybrid_search.model_dump(),
+                    f"The provider of vector store '{vector_store_id}' does not support weighted hybrid search.",
+                )
+            search_mode = "hybrid"
+
         if isinstance(request.query, list):
             search_query = " ".join(request.query)
         else:
@@ -1125,7 +1142,7 @@ class OpenAIVectorStoreMixin(ABC):
                 "max_num_results": max_num_results,
                 "max_chunks": max_num_results * self.vector_stores_config.chunk_retrieval_params.chunk_multiplier,
                 "score_threshold": score_threshold,
-                "mode": request.search_mode,
+                "mode": search_mode,
             }
 
             # Parse filters into typed objects and pass through to the query
@@ -1180,7 +1197,22 @@ class OpenAIVectorStoreMixin(ABC):
         reranker_params: dict[str, Any] = {}
         params: dict[str, Any] = {}
 
-        if ranking_options and ranking_options.ranker:
+        if ranking_options and ranking_options.hybrid_search:
+            # OpenAI hybrid_search weights are relative; normalize them to sum to 1 like the weights option.
+            hybrid_search = ranking_options.hybrid_search
+            total_weight = hybrid_search.embedding_weight + hybrid_search.text_weight
+            impact_factor = ranking_options.impact_factor
+            if impact_factor is None:
+                impact_factor = config.chunk_retrieval_params.rrf_impact_factor
+            params["reranker_type"] = "rrf"
+            params["reranker_params"] = {
+                "impact_factor": impact_factor,
+                "weights": {
+                    "vector": hybrid_search.embedding_weight / total_weight,
+                    "keyword": hybrid_search.text_weight / total_weight,
+                },
+            }
+        elif ranking_options and ranking_options.ranker:
             reranker_type = ranking_options.ranker
 
             if ranking_options.ranker == "weighted":
@@ -1201,6 +1233,9 @@ class OpenAIVectorStoreMixin(ABC):
                     reranker_params["weights"] = ranking_options.weights
             elif ranking_options.ranker == "neural":
                 reranker_params["model"] = ranking_options.model
+            elif ranking_options.ranker == "classifier":
+                reranker_params["model"] = ranking_options.model
+                reranker_params["confidence_threshold"] = ranking_options.score_threshold or 0.0
             else:
                 logger.debug("Unknown ranker value, passing through", ranker=ranking_options.ranker)
 
@@ -1329,7 +1364,11 @@ class OpenAIVectorStoreMixin(ABC):
 
             logger.debug("Using FileProcessor API to process file", file_id=file_id)
             pf_resp = await self.file_processor_api.process_file(
-                ProcessFileRequest(file_id=file_id, chunking_strategy=chunking_strategy)
+                ProcessFileRequest(
+                    file_id=file_id,
+                    options=request.options,
+                    chunking_strategy=chunking_strategy,
+                )
             )
 
             chunks = []
@@ -1376,9 +1415,10 @@ class OpenAIVectorStoreMixin(ABC):
                 # Generate embeddings for all chunks before insertion
 
                 # Prepare embedding request for all chunks
+                chunk_texts = [interleaved_content_as_str(c.content) for c in chunks]
                 params = OpenAIEmbeddingsRequestWithExtraBody(
                     model=embedding_model,
-                    input=[interleaved_content_as_str(c.content) for c in chunks],
+                    input=chunk_texts,
                     dimensions=embedding_dimension,
                 )
                 resp = await self.inference_api.openai_embeddings(params)
@@ -1407,6 +1447,9 @@ class OpenAIVectorStoreMixin(ABC):
                         chunks=embedded_chunks,
                     )
                 )
+                # Only counted once chunks are actually inserted, so a failed
+                # embed/insert never contributes to the store's usage total.
+                vector_store_file_object.usage_bytes = sum(len(text.encode("utf-8")) for text in chunk_texts)
                 vector_store_file_object.status = "completed"
         except HTTPException as e:
             logger.warning(
@@ -1447,6 +1490,7 @@ class OpenAIVectorStoreMixin(ABC):
             store_info["file_ids"].append(file_id)
             store_info["file_counts"]["total"] += 1
             store_info["file_counts"][vector_store_file_object.status] += 1
+            store_info["usage_bytes"] = store_info.get("usage_bytes", 0) + vector_store_file_object.usage_bytes
 
             # Save updated vector store to persistent storage
             await self._save_openai_vector_store(vector_store_id, store_info)
@@ -1604,14 +1648,22 @@ class OpenAIVectorStoreMixin(ABC):
 
         await self._delete_openai_vector_store_file_from_storage(vector_store_id, file_id)
 
-        # Update in-memory cache
-        store_info["file_ids"].remove(file_id)
-        store_info["file_counts"][file.status] -= 1
-        store_info["file_counts"]["total"] -= 1
-        self.openai_vector_stores[vector_store_id] = store_info
+        # Update file_ids, file_counts, and usage_bytes in vector store metadata.
+        # Use lock to prevent a lost update racing with a concurrent attach/delete
+        # (mirrors the locking in openai_attach_file_to_vector_store).
+        async with self._get_vector_store_lock(vector_store_id):
+            store_info = self.openai_vector_stores[vector_store_id].copy()
+            # Deep copy file_counts and file_ids to avoid mutating shared collections
+            store_info["file_counts"] = store_info["file_counts"].copy()
+            store_info["file_ids"] = store_info["file_ids"].copy()
+            store_info["file_ids"].remove(file_id)
+            store_info["file_counts"][file.status] -= 1
+            store_info["file_counts"]["total"] -= 1
+            store_info["usage_bytes"] = max(0, store_info.get("usage_bytes", 0) - file.usage_bytes)
+            self.openai_vector_stores[vector_store_id] = store_info
 
-        # Save updated vector store to persistent storage
-        await self._save_openai_vector_store(vector_store_id, store_info)
+            # Save updated vector store to persistent storage
+            await self._save_openai_vector_store(vector_store_id, store_info)
 
         return VectorStoreFileDeleteResponse(
             id=file_id,

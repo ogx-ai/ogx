@@ -9,11 +9,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi.routing import APIRoute
-
 from ogx.core.server.fastapi_router_registry import (
     _ROUTER_FACTORIES,
     build_fastapi_router,
+    collect_api_routes,
     get_router_routes,
 )
 from ogx_api import Api
@@ -119,9 +118,7 @@ def build_route_impls_from_routes(routes: list[Any]) -> RouteImpls:
         RouteImpls mapping method -> path regex -> (endpoint, path, RouteAuthInfo)
     """
     route_impls: RouteImpls = {}
-    for route in routes:
-        if not isinstance(route, APIRoute):
-            continue
+    for route in collect_api_routes(routes):
         methods = [m for m in (route.methods or []) if m != "HEAD"]
         if not methods:
             continue

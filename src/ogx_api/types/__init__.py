@@ -123,7 +123,7 @@ from ogx_api.conversations import (
 )
 
 # File processors
-from ogx_api.file_processors import ProcessFileRequest, ProcessFileResponse
+from ogx_api.file_processors import ListProcessFileJobsResponse, ProcessFileJob, ProcessFileRequest, ProcessFileResponse
 
 # Files
 from ogx_api.files import (
@@ -462,6 +462,7 @@ from ogx_api.vector_io import (
     ChunkMetadata,
     DeleteChunksRequest,
     EmbeddedChunk,
+    HybridSearchOptions,
     InsertChunksRequest,
     OpenAIAttachFileRequest,
     OpenAICreateVectorStoreFileBatchRequestWithExtraBody,
@@ -588,6 +589,8 @@ __all__ = [
     "RetrieveItemRequest",
     "UpdateConversationRequest",
     # File processors
+    "ListProcessFileJobsResponse",
+    "ProcessFileJob",
     "ProcessFileRequest",
     "ProcessFileResponse",
     # Files
@@ -892,6 +895,7 @@ __all__ = [
     "DEFAULT_CHUNK_SIZE_TOKENS",
     "DeleteChunksRequest",
     "EmbeddedChunk",
+    "HybridSearchOptions",
     "InsertChunksRequest",
     "MAX_PAGINATION_LIMIT",
     "OpenAIAttachFileRequest",

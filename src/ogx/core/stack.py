@@ -11,7 +11,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, get_type_hints
+from typing import Any, get_type_hints, overload
 
 import yaml
 from pydantic import BaseModel
@@ -28,6 +28,8 @@ from ogx.core.datatypes import (
 )
 from ogx.core.distribution import get_provider_registry
 from ogx.core.inspect import DistributionInspectConfig, DistributionInspectImpl
+from ogx.core.jobs.bootstrap import initialize_job_runtime
+from ogx.core.jobs.runtime import JobRuntime, reset_job_runtime
 from ogx.core.prompts.prompts import PromptServiceConfig, PromptServiceImpl
 from ogx.core.providers import ProviderImpl, ProviderImplConfig
 from ogx.core.resolver import ProviderRegistry, resolve_impls
@@ -483,6 +485,18 @@ def extract_env_var_references(config: Any) -> list[str]:
     return result
 
 
+@overload
+def replace_env_vars(config: dict, path: str = "", ignore_unresolved: bool = False) -> dict: ...
+
+
+@overload
+def replace_env_vars(config: list, path: str = "", ignore_unresolved: bool = False) -> list: ...
+
+
+@overload
+def replace_env_vars(config: str, path: str = "", ignore_unresolved: bool = False) -> str: ...
+
+
 def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = False) -> Any:
     """Recursively replace environment variable references in a configuration object.
 
@@ -510,13 +524,13 @@ def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = Fals
                     if resolved_type is None or resolved_type == "":
                         # Process rest of config normally but exclude provider_config from expansion
                         # to avoid EnvVarError from bare env vars (e.g., ${env.KEYCLOAK_URL})
-                        result = {
+                        auth_result: dict[str, Any] = {
                             k: replace_env_vars(v, f"{path}.{k}" if path else k, ignore_unresolved)
                             for k, v in config.items()
                             if k != "provider_config"
                         }
-                        result["provider_config"] = None
-                        return result
+                        auth_result["provider_config"] = None
+                        return auth_result
                 except EnvVarError as e:
                     # If we can't resolve type, continue with normal processing
                     # and let validation catch the error
@@ -525,7 +539,7 @@ def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = Fals
                         var_name=e.var_name,
                     )
 
-        result = {}
+        result: Any = {}
         for k, v in config.items():
             try:
                 result[k] = replace_env_vars(v, f"{path}.{k}" if path else k, ignore_unresolved)
@@ -534,9 +548,7 @@ def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = Fals
         return result
 
     elif isinstance(config, list):
-        # result is assigned as list here but dict/str in other branches.
-        # Mypy cannot track that only one branch executes.
-        result = []  # type: ignore[assignment]
+        result = []
         for i, v in enumerate(config):
             try:
                 # Special handling for providers: first resolve the provider_id to check if provider
@@ -588,8 +600,7 @@ def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = Fals
                         continue
 
                 # Normal processing
-                # result is a list here, but mypy sees it could be dict/str
-                result.append(replace_env_vars(v, f"{path}[{i}]", ignore_unresolved))  # type: ignore[attr-defined]
+                result.append(replace_env_vars(v, f"{path}[{i}]", ignore_unresolved))
             except EnvVarError as e:
                 raise EnvVarError(e.var_name, e.path) from None
         return result
@@ -643,12 +654,9 @@ def replace_env_vars(config: Any, path: str = "", ignore_unresolved: bool = Fals
             return os.path.expanduser(value)
 
         try:
-            # re.sub returns str, but result could be dict/list in other branches
-            result = re.sub(pattern, get_env_var, config)  # type: ignore[assignment]
-            # Only apply type conversion if substitution actually happened
+            result = re.sub(pattern, get_env_var, config)
             if result != config:
-                # result is str here but mypy sees it could be dict/list
-                return _convert_string_to_proper_type(result)  # type: ignore[arg-type]
+                return _convert_string_to_proper_type(result)
             return result
         except EnvVarError as e:
             raise EnvVarError(e.var_name, e.path) from None
@@ -693,23 +701,21 @@ def cast_distro_name_to_string(config_dict: dict[str, Any]) -> dict[str, Any]:
 
 def add_internal_implementations(impls: dict[Api, Any], config: StackConfig, policy: list) -> None:
     """Add internal implementations (inspect, providers, admin, etc.) to the implementations dictionary."""
-    # deps expects dict[str, Any] but receives dict[Api, Any].
-    # Api is an enum, runtime compatible as dict key.
     inspect_impl = DistributionInspectImpl(
         DistributionInspectConfig(config=config),
-        deps=impls,  # type: ignore[arg-type]
+        deps=impls,
     )
     impls[Api.inspect] = inspect_impl
 
     providers_impl = ProviderImpl(
         ProviderImplConfig(config=config),
-        deps=impls,  # type: ignore[arg-type]
+        deps=impls,
     )
     impls[Api.providers] = providers_impl
 
     admin_impl = AdminImpl(
         AdminImplConfig(config=config),
-        deps=impls,  # type: ignore[arg-type]
+        deps=impls,
     )
     impls[Api.admin] = admin_impl
 
@@ -759,6 +765,7 @@ class Stack:
         self.run_config = run_config
         self.provider_registry = provider_registry
         self.impls = None
+        self.job_runtime: JobRuntime | None = None
 
     # Produces a stack of providers for the given run config. Not all APIs may be
     # asked for in the run config.
@@ -781,6 +788,10 @@ class Stack:
             raise ValueError("storage.stores.metadata must be configured with a kv_* backend")
         dist_registry, _ = await create_dist_registry(stores.metadata, self.run_config.distro_name)
         policy = self.run_config.server.auth.access_policy if self.run_config.server.auth else []
+
+        # Build the job queue + worker pool before resolving providers so that
+        # worker-mode providers can register descriptors and receive a proxy.
+        self.job_runtime = await initialize_job_runtime(self.run_config)
 
         internal_impls = {}
         add_internal_implementations(internal_impls, self.run_config, policy)
@@ -805,6 +816,12 @@ class Stack:
         await register_connectors(self.run_config, impls)
         await refresh_registry_once(impls)
         await validate_vector_stores_config(self.run_config.vector_stores, impls)
+
+        # Workers reclaim interrupted jobs so terminal resource cleanup happens
+        # inside the restored request identity and provider context.
+        if self.job_runtime is not None:
+            self.job_runtime.pool.start()
+
         self.impls = impls
 
     def create_registry_refresh_task(self):
@@ -828,6 +845,11 @@ class Stack:
         REGISTRY_REFRESH_TASK.add_done_callback(cb)
 
     async def shutdown(self):
+        if self.job_runtime is not None:
+            self.job_runtime.pool.shutdown()
+            reset_job_runtime()
+            self.job_runtime = None
+
         for impl in self.impls.values():
             impl_name = impl.__class__.__name__
             logger.debug("Shutting down", impl_name=impl_name)
