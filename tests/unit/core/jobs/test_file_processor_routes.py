@@ -11,6 +11,7 @@ import pytest
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.testclient import TestClient
 
+from ogx.core.server.server import register_exception_handlers
 from ogx_api.file_processors import FileProcessors, ProcessFileResponse
 from ogx_api.file_processors.fastapi_routes import _build_request_and_file, create_router
 from ogx_api.vector_io import Chunk
@@ -32,6 +33,7 @@ def test_legacy_provider_still_satisfies_file_processors_protocol() -> None:
 
 def test_legacy_provider_job_route_returns_not_implemented() -> None:
     app = FastAPI()
+    register_exception_handlers(app)
     app.include_router(create_router(_LegacyFileProcessor()))
 
     response = TestClient(app, raise_server_exceptions=False).post(
@@ -40,7 +42,7 @@ def test_legacy_provider_job_route_returns_not_implemented() -> None:
     )
 
     assert response.status_code == 501
-    assert "job execution" in response.json()["detail"].lower()
+    assert "job execution" in response.json()["error"]["message"].lower()
 
 
 def test_legacy_provider_job_route_rejects_before_reading_upload() -> None:
