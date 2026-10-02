@@ -198,29 +198,32 @@ class FaissIndex(EmbeddingIndex):
         deduped: dict[str, EmbeddedChunk] = {}
         for embedded_chunk in embedded_chunks:
             deduped[embedded_chunk.chunk_id] = embedded_chunk
-        embedded_chunks = list(deduped.values())
+        upserted_chunks = list(deduped.values())
 
         # Extract embeddings and validate dimensions
         np = _get_numpy()
-        embeddings = np.array([ec.embedding for ec in embedded_chunks], dtype=np.float32)
+        embeddings = np.array([ec.embedding for ec in upserted_chunks], dtype=np.float32)
         embedding_dim = embeddings.shape[1] if len(embeddings.shape) > 1 else embeddings.shape[0]
         if embedding_dim != self.index.d:
             raise ValueError(f"Embedding dimension mismatch. Expected {self.index.d}, got {embedding_dim}")
 
         async with self.chunk_id_lock:
-            for chunk_id in [ec.chunk_id for ec in embedded_chunks if ec.chunk_id in self.chunk_ids]:
+            # Duplicates persisted before upsert semantics landed are only partially
+            # cleaned up: _remove_chunk removes the first occurrence of a chunk_id.
+            existing_ids = set(self.chunk_ids)
+            for chunk_id in [ec.chunk_id for ec in upserted_chunks if ec.chunk_id in existing_ids]:
                 self._remove_chunk(chunk_id)
 
             # Store chunks by index and update inverted metadata index
             indexlen = len(self.chunk_by_index)
-            for i, embedded_chunk in enumerate(embedded_chunks):
+            for i, embedded_chunk in enumerate(upserted_chunks):
                 faiss_pos = indexlen + i
                 self.chunk_by_index[faiss_pos] = embedded_chunk
                 for key, val in embedded_chunk.metadata.items():
                     self._meta_index.setdefault(key, {}).setdefault(val, set()).add(faiss_pos)
 
             self.index.add(embeddings)
-            self.chunk_ids.extend([ec.chunk_id for ec in embedded_chunks])  # EmbeddedChunk inherits from Chunk
+            self.chunk_ids.extend([ec.chunk_id for ec in upserted_chunks])  # EmbeddedChunk inherits from Chunk
 
         # Save updated index
         await self._save_index()
