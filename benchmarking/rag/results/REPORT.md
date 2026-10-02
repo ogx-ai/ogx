@@ -107,7 +107,7 @@ Multi-hop reasoning over 609 news articles, 2,556 queries.
 | nDCG@10 | — | — | — | **0.6202** | — |
 | Recall@10 | — | — | — | **0.6975** | — |
 
-> **Note**: Gemma 31B outperforms GPT-4.1 on MultiHOP RAG by +47% F1, suggesting that the open-source model's more verbose, synthesized answers better capture multi-hop reasoning compared to GPT-4.1's shorter responses. Answer quality remains low across all backends (F1 < 0.03) due to the inherent difficulty of multi-hop reasoning — the generation model is the bottleneck, not retrieval. Contextual chunking delivers strong retrieval metrics (nDCG@10 = 0.62, Recall@10 = 0.70), confirming that the retrieval layer is effective even when generation scores are low.
+> **MultiHOP token-F1 is not a usable ranking.** MultiHOP gold answers are short (median 1 word; 782 of 2,556 are "Yes"), but these runs sent the bare query and the `file_search` template asks for cited, multi-sentence replies, so SQuAD token-F1 mostly reflects reply length. A constant "Yes" reply, with no retrieval or generation, scores 0.3059, and a fully correct reply padded to 120-250 tokens scores 0.02-0.01, the same band as every system above (0.0114-0.0207). The comparisons previously drawn from these numbers (Gemma 31B +47%, OGX +23% over OpenAI) are withdrawn. The benchmark now scores MultiHOP by normalized-gold containment and prints a constant-reply baseline (a query-independent reply listing the five most common gold answers, which scores 0.8337) next to it; the runs above predate that change and must be re-run before they can be compared. Retrieval metrics (nDCG@10, Recall@10) are unaffected. Contextual chunking delivers strong retrieval metrics (nDCG@10 = 0.62, Recall@10 = 0.70), confirming that the retrieval layer is effective.
 
 ### Doc2Dial
 
@@ -129,7 +129,6 @@ Document-grounded dialogue: 488 documents, 200 conversations, 1,203 total turns.
 
 - **arguana** (+29.5% nDCG@10): The largest retrieval margin in the benchmark. Counterargument retrieval benefits from hybrid search — keyword matching catches specific argument patterns that pure semantic search misses.
 - **nfcorpus** (+6.2% nDCG@10): Biomedical domain benefits from hybrid search, where exact term matching (drug names, conditions) complements semantic similarity.
-- **MultiHOP RAG** (+47% F1 with Gemma 31B): Gemma 31B outperforms both OGX GPT-4.1 and OpenAI on multi-hop reasoning. Even with GPT-4.1, OGX edges ahead of OpenAI by +23%.
 - **scifact**: Effectively tied — OpenAI leads by 0.4%, within noise.
 
 ### Where OpenAI wins
@@ -166,13 +165,13 @@ For end-to-end RAG, contextual chunking improves Doc2Dial F1 by +13.5% over stan
 ### Open-source model (Gemma 31B)
 
 - Gemma 4 31B-IT was served via vLLM and connected to OGX as a `remote::openai` inference provider, using the same retrieval pipeline as the GPT-4.1 runs.
-- **MultiHOP RAG**: Gemma 31B outperforms GPT-4.1 by +47% F1 (0.0207 vs 0.0141), suggesting its more verbose, synthesized responses better capture multi-hop reasoning. This is the only benchmark where the open-source model beats the proprietary one.
+- **MultiHOP RAG**: Gemma 31B scored 0.0207 token-F1 vs 0.0141 for GPT-4.1, but token-F1 is dominated by reply length here, so this difference says nothing about answer quality (see the MultiHOP note above).
 - **Doc2Dial**: Lower F1/ROUGE-L scores vs GPT-4.1 are driven by response verbosity (avg ~2,500 chars vs ~95 char ground truths), not retrieval failure. The model produced zero empty responses across all 1,203 queries.
 - This demonstrates OGX's model-swappable architecture: the retrieval layer is model-agnostic, and open-source models can be plugged in without any code changes.
 
 ### Generation quality
 
-- All end-to-end benchmarks show low absolute scores (F1 < 0.15), consistent with published baselines on these datasets.
+- Doc2Dial shows low absolute scores (F1 < 0.15), consistent with published baselines. MultiHOP token-F1 is low because replies are long and gold answers short, not because answers are wrong (see the MultiHOP note).
 - Exact Match is 0.0 across all backends — the model generates verbose answers while ground truths are short extractive spans.
 - For GPT-4.1 runs, answer quality differences isolate retrieval and prompting, not generation capability. For the Gemma run, the generation model's verbosity is an additional factor.
 
@@ -186,6 +185,6 @@ For end-to-end RAG, contextual chunking improves Doc2Dial F1 by +13.5% over stan
 
 4. **The system layer works.** With identical generation models, OGX's open-source retrieval, embedding, and orchestration pipeline produces results in the same range as — or better than — OpenAI's proprietary stack.
 
-5. **Open-source models plug in without code changes.** Gemma 4 31B-IT, served via vLLM, produced coherent answers across both Doc2Dial (1,203 queries, zero empty responses) and MultiHOP RAG (2,556 queries). On MultiHOP, Gemma 31B outperforms GPT-4.1 by +47% F1 — the only benchmark where the open-source model beats the proprietary one.
+5. **Open-source models plug in without code changes.** Gemma 4 31B-IT, served via vLLM, produced coherent answers across both Doc2Dial (1,203 queries, zero empty responses) and MultiHOP RAG (2,556 queries).
 
-6. **Generation, not retrieval, is the bottleneck for complex tasks.** MultiHOP RAG scores are low across all backends despite strong retrieval, but Gemma 31B's +47% improvement over GPT-4.1 shows that model choice matters even within low-absolute-score regimes. Open-source models are viable for production RAG when paired with a strong retrieval layer.
+6. **MultiHOP answer quality is not yet measured.** Retrieval on MultiHOP is strong (nDCG@10 = 0.62), but token-F1 cannot separate systems from a constant reply on 1-word gold answers, so these runs support no conclusion about generation quality or model choice on multi-hop questions.

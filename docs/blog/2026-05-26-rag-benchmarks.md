@@ -6,7 +6,7 @@ tags: [benchmarks, rag, vector-stores, retrieval, openai-compatibility]
 date: 2026-05-26
 ---
 
-We benchmarked OGX's RAG pipeline against OpenAI's file search across four BEIR retrieval datasets, MultiHOP RAG, and Doc2Dial. The results: **OGX hybrid search beats OpenAI on 3 of 4 BEIR datasets**, with up to 29.6% higher nDCG@10 on argument retrieval. With **contextual chunking** (gpt-4.1-mini), OGX now wins on all 4 datasets — closing the fiqa gap with a +65% improvement. Pair it with Gemma 31B and you get end-to-end RAG that exceeds GPT-4.1 by 81% on multi-hop reasoning, all running on your own infrastructure.
+We benchmarked OGX's RAG pipeline against OpenAI's file search across four BEIR retrieval datasets, MultiHOP RAG, and Doc2Dial. The results: **OGX hybrid search beats OpenAI on 3 of 4 BEIR datasets**, with up to 29.6% higher nDCG@10 on argument retrieval. With **contextual chunking** (gpt-4.1-mini), OGX now wins on all 4 datasets — closing the fiqa gap with a +65% improvement. The same pipeline also runs with an open-source model (Gemma 31B) on your own infrastructure.
 
 This isn't a synthetic demo. These are standard academic benchmarks, measured end-to-end through the same OpenAI-compatible APIs you'd use in production.
 
@@ -73,19 +73,21 @@ With contextual chunking, OGX now wins on **all 4 datasets** in both nDCG@10 and
 
 Retrieval is only half the story. End-to-end RAG tests whether the system can retrieve relevant context _and_ produce correct answers. We used GPT-4.1 as the generation model for both OpenAI and OGX pipelines, plus Gemma 31B as an open-source alternative.
 
-### MultiHOP RAG (F1 Score)
+### MultiHOP RAG (token-F1, not a ranking)
 
 MultiHOP tests multi-hop reasoning over 609 news articles with 2,556 queries that require synthesizing information across documents.
 
-| Configuration | F1 | ROUGE-L | vs OpenAI |
-|--------------|-----|---------|-----------|
-| OpenAI | 0.0114 | 0.0116 | -- |
-| OGX Vector + GPT-4.1 | 0.0141 | 0.0147 | +23.7% |
-| OGX Hybrid + GPT-4.1 | 0.0141 | 0.0147 | +23.7% |
-| OGX Hybrid + Contextual + GPT-4.1 | 0.0136 | 0.0134 | +19.3% |
-| OGX Hybrid + Gemma 31B | **0.0207** | **0.0203** | **+81.6%** |
+> **Correction.** An earlier version of this post ranked these systems by token-F1 and reported Gemma 31B as 81.6% ahead of OpenAI. That comparison is withdrawn. MultiHOP gold answers are mostly one word, so token-F1 mostly measures reply length: a constant "Yes" reply scores 0.3059, and a fully correct reply padded to 120-250 tokens scores 0.02-0.01, the same band as every row below. The benchmark now scores MultiHOP by containment and prints a constant-reply baseline (0.8337); these runs predate that change and need re-running.
 
-The headline number: **OGX with Gemma 31B scores 81.6% higher F1 than OpenAI with GPT-4.1 on multi-hop reasoning.** Even with GPT-4.1 on both sides, OGX's retrieval pipeline delivers 23.7% better end-to-end accuracy. Contextual chunking delivers strong retrieval metrics (nDCG@10 = 0.62, Recall@10 = 0.70), confirming the retrieval layer works well even when generation scores remain low.
+| Configuration | Token-F1 | ROUGE-L |
+|--------------|-----|---------|
+| OpenAI | 0.0114 | 0.0116 |
+| OGX Vector + GPT-4.1 | 0.0141 | 0.0147 |
+| OGX Hybrid + GPT-4.1 | 0.0141 | 0.0147 |
+| OGX Hybrid + Contextual + GPT-4.1 | 0.0136 | 0.0134 |
+| OGX Hybrid + Gemma 31B | 0.0207 | 0.0203 |
+
+These numbers do not show which system answers better. What they do support is retrieval: contextual chunking reaches nDCG@10 = 0.62 and Recall@10 = 0.70 on MultiHOP, confirming the retrieval layer works well.
 
 ### Doc2Dial (F1 Score)
 
@@ -107,9 +109,9 @@ Three takeaways from these benchmarks:
 
 **1. Hybrid search + contextual chunking is the strongest configuration.** With contextual chunking, OGX now wins on all 4 BEIR datasets — including fiqa, where standard hybrid search lagged behind OpenAI. The +65% improvement on fiqa shows that domain-specific text benefits enormously from LLM-generated chunk context.
 
-**2. Open-source models can win at end-to-end RAG.** Gemma 31B with OGX retrieval outperformed GPT-4.1 with OpenAI retrieval on multi-hop reasoning by a wide margin. The retrieval pipeline matters as much as the generation model.
+**2. Open-source models plug into the same pipeline.** Gemma 31B ran through OGX retrieval with no code changes and answered every query. We make no answer-quality claim on multi-hop reasoning until MultiHOP is re-run with containment scoring.
 
-**3. The configurability pays off.** OpenAI still leads on conversational grounding (Doc2Dial), but contextual chunking cuts the gap from 39% to 18%. OGX leads on biomedical, scientific, argumentative, and financial retrieval, plus multi-hop reasoning. The ability to tune chunking strategy, embedding model, and search mode per-domain is a concrete advantage.
+**3. The configurability pays off.** OpenAI still leads on conversational grounding (Doc2Dial), but contextual chunking cuts the gap from 39% to 18%. OGX leads on biomedical, scientific, argumentative, and financial retrieval. The ability to tune chunking strategy, embedding model, and search mode per-domain is a concrete advantage.
 
 ## Reproduce It Yourself
 
