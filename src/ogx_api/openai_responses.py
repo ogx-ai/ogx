@@ -561,6 +561,14 @@ class OpenAIResponseInputToolFunction(BaseModel):
     parameters: dict[str, Any] | None
     strict: bool | None = None
 
+    @model_validator(mode="after")
+    def validate_parameters_type(self) -> "OpenAIResponseInputToolFunction":
+        # A non-empty JSON Schema must declare a top-level "type". An empty
+        # schema is allowed and normalized to {"type": "object"} downstream.
+        if self.parameters and "type" not in self.parameters:
+            raise ValueError("Function tool 'parameters' must include a top-level 'type' field")
+        return self
+
 
 @json_schema_type
 class OpenAIResponseInputToolFileSearch(BaseModel):
