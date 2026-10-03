@@ -171,7 +171,9 @@ class WeaviateIndex(EmbeddingIndex):
                 self.client.collections.delete(sanitized_collection_name)
             return
         collection = self.client.collections.get(sanitized_collection_name)
-        collection.data.delete_many(where=Filter.by_property("id").contains_any(chunk_ids))
+        # "id" is the Weaviate object UUID, not a stored property -- chunk_id is, and is
+        # what delete_chunks() above filters on too.
+        collection.data.delete_many(where=Filter.by_property("chunk_id").contains_any(chunk_ids))
 
     async def query_keyword(
         self,
