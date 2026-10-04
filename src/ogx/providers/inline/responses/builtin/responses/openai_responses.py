@@ -1817,4 +1817,4 @@ class OpenAIResponsesImpl:
 
         adapter = TypeAdapter(list[ConversationItem])
         validated_items = adapter.validate_python(conversation_items)
-        await self.conversations_api.add_items(conversation_id, AddItemsRequest(items=validated_items))
+        await self.conversations_api.sync_items(conversation_id, AddItemsRequest(items=validated_items))

@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     and_,
     event,
+    exists,
     inspect,
     or_,
     select,
@@ -332,8 +333,12 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                     raise ValueError(f"Cursor key column '{cursor_key_column}' not found in table '{table}'")
 
                 # Get cursor value for the order column, scoped by the same
-                # access filters as the main query to prevent cross-tenant leaks
+                # filters as the main query so the cursor row is the one this page
+                # would return (the key column need not be unique across filters)
                 cursor_query = select(table_obj.c[order_column]).where(table_obj.c[cursor_key_column] == cursor_id)
+                if where:
+                    for key, value in where.items():
+                        cursor_query = cursor_query.where(_build_where_expr(table_obj.c[key], value))
                 if where_sql:
                     cursor_clause = text(where_sql)
                     if where_sql_params:
@@ -594,6 +599,43 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                 logger.debug("Column already exists, skipping", table=table, column=column_name)
             else:
                 raise RuntimeError(f"Failed to add column {column_name} to {table}") from e
+
+    async def copy_missing_rows(self, source_table: str, target_table: str, key_columns: Sequence[str]) -> int:
+        """Insert every row of ``source_table`` whose key is absent from ``target_table``.
+
+        Only columns present in both tables are copied, so the tables may differ in
+        shape. Returns the number of rows inserted, or 0 when ``source_table`` does
+        not exist. Safe to run on every startup, which makes it usable for carrying
+        data over to a replacement table.
+        """
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+        target = self.metadata.tables[target_table]
+
+        async with self._engine.begin() as conn:
+
+            def reflect_source(sync_conn: Any) -> Table | None:
+                inspector = inspect(sync_conn)
+                if source_table not in inspector.get_table_names():
+                    return None
+                return Table(source_table, MetaData(), autoload_with=sync_conn)
+
+            source = await conn.run_sync(reflect_source)
+            if source is None:
+                return 0
+
+            columns = [column.name for column in source.columns if column.name in target.c]
+            missing_keys = [key for key in key_columns if key not in columns]
+            if missing_keys:
+                raise ValueError(
+                    f"Failed to copy rows from {source_table} to {target_table}: key columns {missing_keys} "
+                    "are not present in both tables"
+                )
+
+            already_present = exists().where(and_(*(target.c[key] == source.c[key] for key in key_columns)))
+            select_missing = select(*(source.c[name] for name in columns)).where(~already_present)
+            result = await conn.execute(target.insert().from_select(columns, select_missing))
+            return int(result.rowcount or 0)
 
     def _get_dialect_insert(self, table: Table) -> Any:
         if self._is_sqlite_backend:
