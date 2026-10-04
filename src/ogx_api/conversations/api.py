@@ -36,6 +36,13 @@ class Conversations(Protocol):
 
     async def add_items(self, conversation_id: str, request: AddItemsRequest) -> ConversationItemList: ...
 
+    async def sync_items(self, conversation_id: str, request: AddItemsRequest) -> None:
+        """Append items keeping their ids and skipping ids already in the conversation.
+
+        Server-internal path for the Responses API; it is not an HTTP route.
+        """
+        ...
+
     async def retrieve(self, request: RetrieveItemRequest) -> ConversationItem: ...
 
     async def list_items(self, request: ListItemsRequest) -> ConversationItemList: ...

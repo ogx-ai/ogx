@@ -106,9 +106,9 @@ class TestMessageSyncing:
 
         await responses_impl_with_conversations._sync_response_to_conversation(conv_id, input_text, output_items)
 
-        # should call add_items with user input and assistant response
-        mock_conversations_api.add_items.assert_called_once()
-        call_args = mock_conversations_api.add_items.call_args
+        # should call sync_items with user input and assistant response
+        mock_conversations_api.sync_items.assert_called_once()
+        call_args = mock_conversations_api.sync_items.call_args
 
         assert call_args[0][0] == conv_id  # conversation_id
         request = call_args[0][1]  # AddItemsRequest
@@ -128,7 +128,7 @@ class TestMessageSyncing:
     async def test_sync_response_to_conversation_api_error(
         self, responses_impl_with_conversations, mock_conversations_api
     ):
-        mock_conversations_api.add_items.side_effect = Exception("API Error")
+        mock_conversations_api.sync_items.side_effect = Exception("API Error")
         output_items = []
 
         # matching the behavior of OpenAI here
@@ -155,8 +155,8 @@ class TestMessageSyncing:
 
         await responses_impl_with_conversations._sync_response_to_conversation(conv_id, input_messages, output_items)
 
-        mock_conversations_api.add_items.assert_called_once()
-        call_args = mock_conversations_api.add_items.call_args
+        mock_conversations_api.sync_items.assert_called_once()
+        call_args = mock_conversations_api.sync_items.call_args
 
         request = call_args[0][1]  # AddItemsRequest
         items = request.items
@@ -311,7 +311,7 @@ class TestStoreFalseConversationLeak:
 
         assert result.status == "completed"
         mock_responses_store.store_conversation_messages.assert_not_called()
-        mock_conversations_api.add_items.assert_not_called()
+        mock_conversations_api.sync_items.assert_not_called()
         mock_responses_store.upsert_response_object.assert_not_called()
 
     async def test_store_true_does_sync_conversation(
@@ -337,7 +337,7 @@ class TestStoreFalseConversationLeak:
 
         assert result.status == "completed"
         mock_responses_store.store_conversation_messages.assert_called_once()
-        mock_conversations_api.add_items.assert_called_once()
+        mock_conversations_api.sync_items.assert_called_once()
         mock_responses_store.upsert_response_object.assert_called()
 
     async def test_store_false_streaming_does_not_sync_conversation(
@@ -365,4 +365,4 @@ class TestStoreFalseConversationLeak:
 
         assert any(c.type == "response.completed" for c in chunks)
         mock_responses_store.store_conversation_messages.assert_not_called()
-        mock_conversations_api.add_items.assert_not_called()
+        mock_conversations_api.sync_items.assert_not_called()
