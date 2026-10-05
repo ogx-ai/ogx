@@ -600,6 +600,13 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             else:
                 raise RuntimeError(f"Failed to add column {column_name} to {table}") from e
 
+    async def table_exists(self, table: str) -> bool:
+        """Return whether ``table`` is present in the database, registered with this store or not."""
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+        async with self._engine.connect() as conn:
+            return bool(await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table(table)))
+
     async def copy_missing_rows(self, source_table: str, target_table: str, key_columns: Sequence[str]) -> int:
         """Insert every row of ``source_table`` whose key is absent from ``target_table``.
 

@@ -43,10 +43,13 @@ from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperat
 
 logger = get_logger(name=__name__, category="openai_conversations")
 
-ITEMS_TABLE = "conversation_items_v2"
+ITEMS_TABLE_VERSION = "v2"
+ITEMS_TABLE = f"conversation_items_{ITEMS_TABLE_VERSION}"
 # Replaced by ITEMS_TABLE: it was keyed on id alone, so an item id could belong to only one conversation.
 LEGACY_ITEMS_TABLE = "conversation_items"
 ITEM_KEY_COLUMNS = ["conversation_id", "id"]
+MIGRATIONS_TABLE = "conversation_migrations"
+ITEMS_BACKFILL_KEY = f"conversation_items_backfill:{ITEMS_TABLE_VERSION}"
 
 
 class ConversationServiceConfig(BaseModel):
@@ -90,7 +93,7 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
             {
                 "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
                 "created_at": ColumnType.INTEGER,
-                "items": ColumnType.JSON,  # Deprecated: kept for backward compatibility, use conversation_items table instead
+                "items": ColumnType.JSON,  # Deprecated: kept for backward compatibility, use ITEMS_TABLE instead
                 "metadata": ColumnType.JSON,
             },
         )
@@ -103,13 +106,41 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
                 "created_at": ColumnType.INTEGER,
                 "sort_order": ColumnType.INTEGER,
                 "item_data": ColumnType.JSON,
+                # Declared explicitly so the backfill below carries it even when tenancy is disabled.
+                "tenant_id": ColumnType.STRING,
             },
         )
-        # Carry rows written by earlier servers over to the per-conversation key; the
-        # legacy table is left in place and is skipped once every row is present.
-        copied = await self.sql_store.sql_store.copy_missing_rows(LEGACY_ITEMS_TABLE, ITEMS_TABLE, ITEM_KEY_COLUMNS)
-        if copied:
-            logger.info("Copied legacy conversation items", copied_rows=copied, table=ITEMS_TABLE)
+        await self._backfill_legacy_items()
+
+    async def _backfill_legacy_items(self) -> None:
+        """Copy rows written by earlier servers into ITEMS_TABLE, once per database.
+
+        The legacy table is left in place so no data is deleted; a completion flag in
+        MIGRATIONS_TABLE stops the copy from re-scanning it on every boot.
+        """
+        store = self.sql_store.sql_store
+        await store.create_table(
+            MIGRATIONS_TABLE,
+            {
+                "name": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "completed_at": ColumnType.INTEGER,
+            },
+        )
+        if await store.fetch_one(MIGRATIONS_TABLE, where={"name": ITEMS_BACKFILL_KEY}) is None:
+            copied = await store.copy_missing_rows(LEGACY_ITEMS_TABLE, ITEMS_TABLE, ITEM_KEY_COLUMNS)
+            await store.insert(MIGRATIONS_TABLE, {"name": ITEMS_BACKFILL_KEY, "completed_at": int(time.time())})
+            logger.info(
+                "Backfilled legacy conversation items",
+                copied_rows=copied,
+                source_table=LEGACY_ITEMS_TABLE,
+                table=ITEMS_TABLE,
+            )
+        if await store.table_exists(LEGACY_ITEMS_TABLE):
+            logger.warning(
+                "Legacy conversation items table retained; verify the backfill and drop it manually once confirmed",
+                legacy_table=LEGACY_ITEMS_TABLE,
+                table=ITEMS_TABLE,
+            )
 
     async def create_conversation(self, request: CreateConversationRequest) -> Conversation:
         """Create a conversation."""
