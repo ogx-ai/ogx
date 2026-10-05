@@ -178,9 +178,16 @@ By default, the starter distribution uses SQLite. For production, use PostgreSQL
 uvx --from 'ogx[starter]' ogx run starter::run-with-postgres-store.yaml
 ```
 
+To configure both stores with a PostgreSQL URI, use the URI variant:
+
+```bash
+POSTGRES_CONNECTION_STRING='postgresql://ogx:ogx@localhost:5432/ogx' \
+  uvx --from 'ogx[starter]' ogx run starter::run-with-postgres-uri-store.yaml
+```
+
 A pre-built container image with PostgreSQL storage is also available as [`ogxai/distribution-postgres-demo`](https://hub.docker.com/r/ogxai/distribution-postgres-demo).
 
-Required environment variables for PostgreSQL:
+The existing PostgreSQL configuration and postgres-demo image use these environment variables:
 
 | Variable | Default |
 |----------|---------|

@@ -155,6 +155,8 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             engine_kwargs["max_overflow"] = self.config.max_overflow
             if self.config.pool_recycle >= 0:
                 engine_kwargs["pool_recycle"] = self.config.pool_recycle
+            if self.config.connection_string is not None:
+                connect_args["dsn"] = self.config.connection_string.get_secret_value()
             ssl_context = self._build_ssl()
             if ssl_context is not None:
                 connect_args["ssl"] = ssl_context
