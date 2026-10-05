@@ -902,11 +902,11 @@ server:
     # Conversation item isolation
     - permit:
         actions: [create]
-        resource: sql_record::conversation_items::*
+        resource: sql_record::conversation_items_v2::*
       description: Any authenticated user can create conversation items
     - permit:
         actions: [read, update, delete]
-        resource: sql_record::conversation_items::*
+        resource: sql_record::conversation_items_v2::*
       when: user is owner
       description: Users can only access items in their own conversations
 
@@ -989,7 +989,7 @@ access policies:
 | Table Name | Description |
 |---|---|
 | `openai_conversations` | Conversation sessions |
-| `conversation_items` | Messages and items within conversations |
+| `conversation_items_v2` | Messages and items within conversations (`conversation_items` is the pre-backfill table, kept until dropped) |
 | `responses` | Stored responses (table name is configurable in provider config) |
 | `openai_files` | Uploaded files |
 
