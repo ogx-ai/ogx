@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 import tiktoken
 from pydantic import TypeAdapter
 
+from ogx.core.conversations.item_sync import SyncableConversations
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
 from ogx.core.datatypes import VectorStoresConfig
 from ogx.core.task import (
@@ -28,7 +29,6 @@ from ogx.core.task import (
     capture_request_context,
     create_detached_background_task,
 )
-from ogx.core.conversations.item_sync import SyncableConversations
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.config import CompactionConfig, MemoryConfig
 from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
