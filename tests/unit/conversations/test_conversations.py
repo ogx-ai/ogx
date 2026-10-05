@@ -11,9 +11,9 @@
 2. Tests: lifecycle create/read/delete; item add/list/retrieve; ID validation; empty params; OpenAI adapters; deprecated fields; policy config; regression for missing message type.
 """
 
-import sqlite3
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from openai.types.conversations.conversation import Conversation as OpenAIConversation
@@ -23,18 +23,22 @@ from sqlalchemy import event
 
 from ogx.core.conversations.conversations import (
     ITEMS_TABLE,
-    LEGACY_ITEMS_TABLE,
     ConversationServiceConfig,
     ConversationServiceImpl,
 )
-from ogx.core.datatypes import StackConfig
+from ogx.core.datatypes import StackConfig, TenancyMode, User
 from ogx.core.storage.datatypes import (
     ServerStoresConfig,
+    SqlAlchemySqlStoreConfig,
     SqliteSqlStoreConfig,
     SqlStoreReference,
     StorageConfig,
 )
-from ogx.core.storage.sqlstore.sqlalchemy_sqlstore import SqlAlchemySqlStoreImpl
+from ogx.core.storage.sqlstore.authorized_sqlstore import (
+    get_default_tenancy_config,
+    set_default_tenancy_config,
+    set_default_tenancy_mode,
+)
 from ogx.core.storage.sqlstore.sqlstore import register_sqlstore_backends
 from ogx_api import (
     ConversationItemNotFoundError,
@@ -57,7 +61,6 @@ from ogx_api.conversations.models import (
     ConversationDeletedResource,
     ConversationItemList,
 )
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType
 
 
 def _message(text: str, item_id: str | None = None) -> OpenAIResponseMessage:
@@ -74,10 +77,10 @@ def _texts(items: ConversationItemList) -> list[tuple[str, str]]:
     return [(item.id, item.content[0].text) for item in items.data]
 
 
-async def _make_service(db_path: Path) -> ConversationServiceImpl:
+async def _make_service(backend: SqlAlchemySqlStoreConfig) -> ConversationServiceImpl:
     storage = StorageConfig(
         backends={
-            "sql_test": SqliteSqlStoreConfig(db_path=str(db_path)),
+            "sql_test": backend,
         },
         stores=ServerStoresConfig(
             conversations=SqlStoreReference(backend="sql_test", table_name="openai_conversations"),
@@ -99,7 +102,19 @@ async def _make_service(db_path: Path) -> ConversationServiceImpl:
 @pytest.fixture
 async def service():
     with tempfile.TemporaryDirectory() as tmpdir:
-        yield await _make_service(Path(tmpdir) / "test_conversations.db")
+        yield await _make_service(SqliteSqlStoreConfig(db_path=str(Path(tmpdir) / "test_conversations.db")))
+
+
+@pytest.fixture
+async def multi_tenant_service():
+    """A service whose store isolates rows by tenant, as a multi-tenant deployment does."""
+    previous = get_default_tenancy_config()
+    set_default_tenancy_mode(TenancyMode.MULTI)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield await _make_service(SqliteSqlStoreConfig(db_path=str(Path(tmpdir) / "multi_tenant.db")))
+    finally:
+        set_default_tenancy_config(previous)
 
 
 async def test_conversation_lifecycle(service):
@@ -751,65 +766,65 @@ async def test_list_items_after_cursor_uses_position_in_this_conversation(servic
     assert [item.content[0].text for item in page.data] == ["b3"]
 
 
-async def test_initialize_copies_legacy_conversation_items():
-    """Rows written to the id-keyed table by earlier servers are readable after upgrade, once."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "legacy.db"
-        conversation_id = "conv_" + "a" * 48
-        legacy_rows = [
-            {
-                "id": f"msg_{i}",
-                "conversation_id": conversation_id,
-                "created_at": 1700000000,
-                "sort_order": i,
-                "item_data": _message(f"legacy {i}", f"msg_{i}").model_dump(),
-                "owner_principal": "",
-                "access_attributes": None,
-            }
-            for i in range(2)
-        ]
-        legacy_store = SqlAlchemySqlStoreImpl(SqliteSqlStoreConfig(db_path=str(db_path)))
-        await legacy_store.create_table(
-            LEGACY_ITEMS_TABLE,
-            {
-                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
-                "conversation_id": ColumnType.STRING,
-                "created_at": ColumnType.INTEGER,
-                "sort_order": ColumnType.INTEGER,
-                "item_data": ColumnType.JSON,
-                "owner_principal": ColumnType.STRING,
-                "access_attributes": ColumnType.JSON,
-            },
-        )
-        await legacy_store.create_table(
-            "openai_conversations",
-            {
-                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
-                "created_at": ColumnType.INTEGER,
-                "items": ColumnType.JSON,
-                "metadata": ColumnType.JSON,
-                "owner_principal": ColumnType.STRING,
-                "access_attributes": ColumnType.JSON,
-            },
-        )
-        await legacy_store.insert(
-            "openai_conversations",
-            {"id": conversation_id, "created_at": 1700000000, "metadata": None, "owner_principal": ""},
-        )
-        await legacy_store.insert(LEGACY_ITEMS_TABLE, legacy_rows)
-        await legacy_store.shutdown()
+async def _raw_items(service: ConversationServiceImpl, table: str, conversation_id: str) -> list[dict]:
+    result = await service.sql_store.sql_store.fetch_all(
+        table, where={"conversation_id": conversation_id}, order_by=[("sort_order", "asc")]
+    )
+    return result.data
 
-        for _ in range(2):
-            service = await _make_service(db_path)
-            listed = await service.list_items(ListItemsRequest(conversation_id=conversation_id, order="asc"))
-            assert _texts(listed) == [("msg_0", "legacy 0"), ("msg_1", "legacy 1")]
-            await service.sql_store.sql_store.shutdown()
 
-        service = await _make_service(db_path)
-        other = await service.create_conversation(CreateConversationRequest(items=[_message("x", "msg_0")]))
-        assert _texts(await service.list_items(ListItemsRequest(conversation_id=other.id))) == [("msg_0", "legacy 0")]
-        with sqlite3.connect(db_path) as legacy_db:
-            assert legacy_db.execute(f"SELECT COUNT(*) FROM {LEGACY_ITEMS_TABLE}").fetchone() == (2,)
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_add_items_treats_other_tenants_item_id_as_unknown(mock_user, multi_tenant_service):
+    """An id the caller cannot read gets a server-minted id, the same outcome as an unknown id, so
+    nothing about the other tenant's item leaks and the response cannot be used as an existence oracle."""
+    service = multi_tenant_service
+    alice = User("alice", {"roles": ["user"]}, tenant_id="tenant-a")
+    bob = User("bob", {"roles": ["user"]}, tenant_id="tenant-b")
+    mock_user.return_value = alice
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    alice_item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("alice secret")]))).data[0].id
+
+    mock_user.return_value = bob
+    conv_b = await service.create_conversation(CreateConversationRequest())
+    added = await service.add_items(conv_b.id, AddItemsRequest(items=[_message("bob content", alice_item_id)]))
+
+    assert added.data[0].id != alice_item_id
+    assert added.data[0].id.startswith("msg_")
+    assert "alice secret" not in added.model_dump_json()
+    assert _texts(added) == [(added.data[0].id, "bob content")]
+    bob_rows = await _raw_items(service, ITEMS_TABLE, conv_b.id)
+    assert [(row["owner_principal"], row["tenant_id"], row["item_data"]["content"][0]["text"]) for row in bob_rows] == [
+        ("bob", "tenant-b", "bob content")
+    ]
+    alice_rows = await _raw_items(service, ITEMS_TABLE, conv_a.id)
+    assert [
+        (row["id"], row["owner_principal"], row["tenant_id"], row["item_data"]["content"][0]["text"])
+        for row in alice_rows
+    ] == [(alice_item_id, "alice", "tenant-a", "alice secret")]
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_create_conversation_treats_other_tenants_item_id_as_unknown(mock_user, multi_tenant_service):
+    service = multi_tenant_service
+    mock_user.return_value = User("alice", {"roles": ["user"]}, tenant_id="tenant-a")
+    conv_a = await service.create_conversation(CreateConversationRequest())
+    alice_item_id = (await service.add_items(conv_a.id, AddItemsRequest(items=[_message("alice secret")]))).data[0].id
+
+    mock_user.return_value = User("bob", {"roles": ["user"]}, tenant_id="tenant-b")
+    conv_b = await service.create_conversation(
+        CreateConversationRequest(items=[_message("bob content", alice_item_id)])
+    )
+
+    listed = await service.list_items(ListItemsRequest(conversation_id=conv_b.id))
+    assert listed.data[0].id != alice_item_id
+    assert "alice secret" not in listed.model_dump_json()
+    assert _texts(listed) == [(listed.data[0].id, "bob content")]
+    bob_rows = await _raw_items(service, ITEMS_TABLE, conv_b.id)
+    assert [(row["owner_principal"], row["tenant_id"]) for row in bob_rows] == [("bob", "tenant-b")]
+    alice_rows = await _raw_items(service, ITEMS_TABLE, conv_a.id)
+    assert [(row["id"], row["owner_principal"], row["item_data"]["content"][0]["text"]) for row in alice_rows] == [
+        (alice_item_id, "alice", "alice secret")
+    ]
 
 
 async def test_create_conversation_with_items_supports_pagination(service):
