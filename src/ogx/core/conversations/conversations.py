@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import BaseModel, TypeAdapter
 
 from ogx.core.access_control.datatypes import AccessRule
+from ogx.core.conversations.item_sync import ConversationItemSync
 from ogx.core.conversations.validation import CONVERSATION_ID_PATTERN
 from ogx.core.datatypes import StackConfig
 from ogx.core.storage.sqlstore.authorized_sqlstore import authorized_sqlstore
@@ -66,7 +67,7 @@ async def get_provider_impl(config: ConversationServiceConfig, deps: dict[Api, A
     return impl
 
 
-class ConversationServiceImpl(Conversations):
+class ConversationServiceImpl(Conversations, ConversationItemSync):
     """Built-in conversation service implementation using AuthorizedSqlStore."""
 
     def __init__(self, config: ConversationServiceConfig, deps: dict[Api, Any]):
@@ -305,9 +306,10 @@ class ConversationServiceImpl(Conversations):
     async def sync_items(self, conversation_id: str, request: AddItemsRequest) -> None:
         """Append items to a conversation keeping their ids, skipping ids already present.
 
-        Used by the Responses API to mirror a response into its conversation, where the
-        output items must keep the ids the response reported and re-sent input items
-        must not be duplicated or rejected.
+        Implements the internal ``ConversationItemSync`` protocol used by the Responses
+        API to mirror a response into its conversation, where the output items must keep
+        the ids the response reported and re-sent input items must not be duplicated or
+        rejected. It is not an HTTP route.
         """
         await self._get_validated_conversation(conversation_id)
 

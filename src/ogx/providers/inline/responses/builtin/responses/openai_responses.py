@@ -28,6 +28,7 @@ from ogx.core.task import (
     capture_request_context,
     create_detached_background_task,
 )
+from ogx.core.conversations.item_sync import SyncableConversations
 from ogx.log import get_logger
 from ogx.providers.inline.responses.builtin.config import CompactionConfig, MemoryConfig
 from ogx.providers.inline.skills.builtin.manifest import parse_skill_manifest
@@ -42,7 +43,6 @@ from ogx_api import (
     ConflictError,
     Connectors,
     ConversationItem,
-    Conversations,
     CreateResponseRequest,
     Files,
     GetPromptRequest,
@@ -133,7 +133,7 @@ class OpenAIResponsesImpl:
         responses_store: ResponsesStore,
         vector_io_api: VectorIO,  # VectorIO
         moderation_endpoint: str | None,
-        conversations_api: Conversations,
+        conversations_api: SyncableConversations,
         prompts_api: Prompts,
         files_api: Files,
         connectors_api: Connectors,
