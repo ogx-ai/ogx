@@ -24,6 +24,7 @@ import pytest
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 
+from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 from ogx.core.conversations.conversations import (
     ITEM_KEY_COLUMNS,
     ITEMS_BACKFILL_KEY,
@@ -103,6 +104,19 @@ V1_ITEMS_SCHEMA = {
     "tenant_id": ColumnType.STRING,
 }
 
+# The composite-keyed items table the service creates, with every column the backfill copies,
+# so a crashed migration can be left with a target that a later boot can finish filling.
+COMPOSITE_ITEMS_SCHEMA = {
+    "conversation_id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+    "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+    "created_at": ColumnType.INTEGER,
+    "sort_order": ColumnType.INTEGER,
+    "item_data": ColumnType.JSON,
+    "owner_principal": ColumnType.STRING,
+    "access_attributes": ColumnType.JSON,
+    "tenant_id": ColumnType.STRING,
+}
+
 
 async def _v1_store(config: SqlAlchemySqlStoreConfig, table: str) -> SqlAlchemySqlStoreImpl:
     """A store with the id-keyed schema registered under ``table``; the service never registers it."""
@@ -111,8 +125,16 @@ async def _v1_store(config: SqlAlchemySqlStoreConfig, table: str) -> SqlAlchemyS
     return store
 
 
-async def _write_v1_database(config: SqlAlchemySqlStoreConfig, conversation_id: str) -> None:
-    """Lay down the tables an earlier server would have left behind, with two items."""
+async def _write_v1_database(
+    config: SqlAlchemySqlStoreConfig,
+    conversation_id: str,
+    owner_principal: str = "",
+) -> None:
+    """Lay down the tables an earlier server would have left behind, with two items.
+
+    ``owner_principal`` is the owner stored on the conversation row; the items are always
+    owned by alice (see ``_v1_row``). An empty owner leaves the conversation unowned.
+    """
     store = await _v1_store(config, ITEMS_TABLE)
     await store.create_table(
         "openai_conversations",
@@ -127,7 +149,7 @@ async def _write_v1_database(config: SqlAlchemySqlStoreConfig, conversation_id: 
     )
     await store.insert(
         "openai_conversations",
-        {"id": conversation_id, "created_at": 1700000000, "metadata": None, "owner_principal": ""},
+        {"id": conversation_id, "created_at": 1700000000, "metadata": None, "owner_principal": owner_principal},
     )
     await store.insert(ITEMS_TABLE, [_v1_row(conversation_id, i) for i in range(2)])
     await store.shutdown()
@@ -232,4 +254,200 @@ async def test_fresh_database_gets_composite_key_without_migration(upgrade_backe
     assert not any("RENAME" in s or f"FROM {ITEMS_V1_TABLE}" in s for s in statements)
     logger.info.assert_not_called()
     logger.warning.assert_not_called()
+    await store.shutdown()
+
+
+# --- Crash-recovery -----------------------------------------------------------
+#
+# Each helper leaves the database in the state a hard crash would leave it: the migration's
+# rename, recreate and backfill are separate transactions, so any of them can be the last one
+# that completes. A later boot must recognize the state and finish where it stopped.
+
+
+async def _renamed_not_copied(config: SqlAlchemySqlStoreConfig, conversation_id: str) -> None:
+    """The id-keyed table is renamed to v1 but the composite table is not yet created: a crash
+    between the rename and the recreate leaves the live table missing entirely."""
+    await _write_v1_database(config, conversation_id)
+    store = SqlAlchemySqlStoreImpl(config)
+    await store.rename_table(ITEMS_TABLE, ITEMS_V1_TABLE)
+    await store.shutdown()
+
+
+async def _created_not_copied(config: SqlAlchemySqlStoreConfig, conversation_id: str) -> None:
+    """The composite table is created (empty) but the rows have not yet been copied: a crash after
+    the recreate and before the backfill."""
+    await _renamed_not_copied(config, conversation_id)
+    store = SqlAlchemySqlStoreImpl(config)
+    await store.create_table(ITEMS_TABLE, COMPOSITE_ITEMS_SCHEMA)
+    await store.shutdown()
+
+
+async def _copied_not_flagged(config: SqlAlchemySqlStoreConfig, conversation_id: str) -> None:
+    """Some rows are copied but the completion flag is not yet set: a crash mid-backfill. The
+    anti-join top-up must fill only what is missing on the next boot, with no duplicates."""
+    await _created_not_copied(config, conversation_id)
+    store = SqlAlchemySqlStoreImpl(config)
+    await store.create_table(ITEMS_TABLE, COMPOSITE_ITEMS_SCHEMA)
+    await store.insert(ITEMS_TABLE, _v1_row(conversation_id, 0))
+    await store.shutdown()
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_recovers_when_renamed_but_not_copied(mock_user, upgrade_backend):
+    """A crash between the rename and the recreate leaves the live table missing; the next boot
+    recreates it, copies the rows with owner and tenant preserved, and sets the flag."""
+    conversation_id = "conv_" + "c" * 48
+    await _renamed_not_copied(upgrade_backend, conversation_id)
+
+    before = SqlAlchemySqlStoreImpl(upgrade_backend)
+    assert not await before.table_exists(ITEMS_TABLE)
+    assert await before.table_exists(ITEMS_V1_TABLE)
+    await before.shutdown()
+
+    mock_user.return_value = User("alice", {"roles": ["admin"]})
+    service = await _make_service(upgrade_backend)
+    store = service.sql_store.sql_store
+    assert await store.primary_key_columns(ITEMS_TABLE) == ITEM_KEY_COLUMNS
+    flag = await store.fetch_one(MIGRATIONS_TABLE, where={"name": ITEMS_BACKFILL_KEY})
+    assert flag is not None and flag["completed_at"] > 0
+    copied = await _raw_items(service, ITEMS_TABLE, conversation_id)
+    assert [(row["id"], row["owner_principal"], row["tenant_id"]) for row in copied] == [
+        ("msg_0", "alice", "tenant-a"),
+        ("msg_1", "alice", "tenant-a"),
+    ]
+    await store.shutdown()
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_recovers_when_created_but_not_copied(mock_user, upgrade_backend):
+    """A crash after the recreate and before the backfill leaves an empty composite table; the next
+    boot copies the rows and sets the flag without renaming, since the key is already composite."""
+    conversation_id = "conv_" + "d" * 48
+    await _created_not_copied(upgrade_backend, conversation_id)
+    mock_user.return_value = User("alice", {"roles": ["admin"]})
+
+    with _recorded_statements() as statements:
+        service = await _make_service(upgrade_backend)
+    assert not any("RENAME" in s for s in statements)
+
+    store = service.sql_store.sql_store
+    assert await store.primary_key_columns(ITEMS_TABLE) == ITEM_KEY_COLUMNS
+    flag = await store.fetch_one(MIGRATIONS_TABLE, where={"name": ITEMS_BACKFILL_KEY})
+    assert flag is not None and flag["completed_at"] > 0
+    copied = await _raw_items(service, ITEMS_TABLE, conversation_id)
+    assert [row["id"] for row in copied] == ["msg_0", "msg_1"]
+    await store.shutdown()
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_recovers_when_copied_but_not_flagged(mock_user, upgrade_backend):
+    """A crash mid-backfill leaves some rows copied but no flag; the next boot tops up only the
+    missing rows and sets the flag, with no duplicates and ownership preserved."""
+    conversation_id = "conv_" + "e" * 48
+    await _copied_not_flagged(upgrade_backend, conversation_id)
+    mock_user.return_value = User("alice", {"roles": ["admin"]})
+
+    service = await _make_service(upgrade_backend)
+    store = service.sql_store.sql_store
+    assert await store.primary_key_columns(ITEMS_TABLE) == ITEM_KEY_COLUMNS
+    flag = await store.fetch_one(MIGRATIONS_TABLE, where={"name": ITEMS_BACKFILL_KEY})
+    assert flag is not None and flag["completed_at"] > 0
+    copied = await _raw_items(service, ITEMS_TABLE, conversation_id)
+    assert [(row["id"], row["owner_principal"], row["tenant_id"]) for row in copied] == [
+        ("msg_0", "alice", "tenant-a"),
+        ("msg_1", "alice", "tenant-a"),
+    ]
+    await store.shutdown()
+
+
+# --- Access-policy compatibility ----------------------------------------------
+#
+# The live table keeps its name precisely so that access policies naming it keep matching.
+# These tests drive reads through the authorized store with policies whose resource globs
+# reference conversation_items and confirm the migrated rows are still what the policies see.
+
+
+def _items_policy(resource: str, *, owner_scoped: bool = False) -> list[AccessRule]:
+    when = ["user is owner"] if owner_scoped else None
+    return [
+        AccessRule(
+            permit=Scope(actions=[Action.READ], resource="sql_record::openai_conversations::*"),
+            when=when,
+        ),
+        AccessRule(permit=Scope(actions=[Action.READ], resource=resource), when=when),
+    ]
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_items_policy_glob_still_matches_after_migration(mock_user, upgrade_backend):
+    """A policy whose resource glob names sql_record::conversation_items::* keeps authorizing
+    reads after the in-place migration, because the live table keeps its name."""
+    conversation_id = "conv_" + "f" * 48
+    await _write_v1_database(upgrade_backend, conversation_id)
+    mock_user.return_value = User("alice", {"roles": ["admin"]})
+    service = await _make_service(upgrade_backend, policy=_items_policy("sql_record::conversation_items::*"))
+    listed = await service.list_items(ListItemsRequest(conversation_id=conversation_id, order="asc"))
+    assert _texts(listed) == [("msg_0", "v1 0"), ("msg_1", "v1 1")]
+    await service.sql_store.sql_store.shutdown()
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_policy_glob_on_v1_name_does_not_match_live_table(mock_user, upgrade_backend):
+    """A policy that names only the retained v1 table does not authorize reads of the migrated
+    items, confirming reads target the live conversation_items table, not conversation_items_v1."""
+    conversation_id = "conv_" + "0" * 48
+    await _write_v1_database(upgrade_backend, conversation_id)
+    mock_user.return_value = User("alice", {"roles": ["admin"]})
+    service = await _make_service(upgrade_backend, policy=_items_policy("sql_record::conversation_items_v1::*"))
+    listed = await service.list_items(ListItemsRequest(conversation_id=conversation_id, order="asc"))
+    assert listed.data == []
+    await service.sql_store.sql_store.shutdown()
+
+
+@patch("ogx.core.storage.sqlstore.authorized_sqlstore.get_authenticated_user")
+async def test_owner_isolation_policy_still_matches_after_migration(mock_user, upgrade_backend):
+    """The documented owner-isolation policy for conversation_items still authorizes the owner's
+    reads after migration. The 'user is owner' condition matches only because the backfill
+    preserved ownership, so this also pins that the copied rows are still owned by alice."""
+    conversation_id = "conv_" + "1" * 48
+    await _write_v1_database(upgrade_backend, conversation_id, owner_principal="alice")
+    mock_user.return_value = User("alice", {"roles": ["admin"]})
+    service = await _make_service(
+        upgrade_backend, policy=_items_policy("sql_record::conversation_items::*", owner_scoped=True)
+    )
+    listed = await service.list_items(ListItemsRequest(conversation_id=conversation_id, order="asc"))
+    assert _texts(listed) == [("msg_0", "v1 0"), ("msg_1", "v1 1")]
+    await service.sql_store.sql_store.shutdown()
+
+
+# --- Primary-key comparison robustness ----------------------------------------
+
+
+async def test_reversed_composite_key_is_recognized_without_rename(upgrade_backend):
+    """A composite-keyed table whose primary key columns the database reports in the opposite
+    order is still recognized as migrated and not renamed, because the check compares as a set."""
+    store = SqlAlchemySqlStoreImpl(upgrade_backend)
+    # Same columns as the composite table, but the two key columns declared in the reverse order.
+    await store.create_table(
+        ITEMS_TABLE,
+        {
+            "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+            "conversation_id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+            "created_at": ColumnType.INTEGER,
+            "sort_order": ColumnType.INTEGER,
+            "item_data": ColumnType.JSON,
+            "owner_principal": ColumnType.STRING,
+            "access_attributes": ColumnType.JSON,
+            "tenant_id": ColumnType.STRING,
+        },
+    )
+    await store.shutdown()
+
+    with _recorded_statements() as statements:
+        service = await _make_service(upgrade_backend)
+
+    assert not any("RENAME" in s for s in statements)
+    store = service.sql_store.sql_store
+    assert set(await store.primary_key_columns(ITEMS_TABLE)) == set(ITEM_KEY_COLUMNS)
+    assert not await store.table_exists(ITEMS_V1_TABLE)
     await store.shutdown()

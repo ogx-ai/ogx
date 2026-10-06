@@ -110,7 +110,8 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
         """
         store = self.sql_store.sql_store
         primary_key = await store.primary_key_columns(ITEMS_TABLE)
-        if primary_key is not None and primary_key != ITEM_KEY_COLUMNS:
+        # Compare as a set: the database may report composite primary key columns in any order.
+        if primary_key is not None and set(primary_key) != set(ITEM_KEY_COLUMNS):
             await store.rename_table(ITEMS_TABLE, ITEMS_V1_TABLE)
             logger.info("Renamed the id-keyed conversation items table", table=ITEMS_TABLE, renamed_to=ITEMS_V1_TABLE)
         await self.sql_store.create_table(

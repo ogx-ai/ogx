@@ -21,6 +21,7 @@ from openai.types.conversations.conversation_item import ConversationItem as Ope
 from pydantic import TypeAdapter
 from sqlalchemy import event
 
+from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.conversations.conversations import (
     ITEMS_TABLE,
     ConversationServiceConfig,
@@ -77,7 +78,10 @@ def _texts(items: ConversationItemList) -> list[tuple[str, str]]:
     return [(item.id, item.content[0].text) for item in items.data]
 
 
-async def _make_service(backend: SqlAlchemySqlStoreConfig) -> ConversationServiceImpl:
+async def _make_service(
+    backend: SqlAlchemySqlStoreConfig,
+    policy: list[AccessRule] | None = None,
+) -> ConversationServiceImpl:
     storage = StorageConfig(
         backends={
             "sql_test": backend,
@@ -93,7 +97,7 @@ async def _make_service(backend: SqlAlchemySqlStoreConfig) -> ConversationServic
     register_sqlstore_backends({"sql_test": storage.backends["sql_test"]})
     stack_config = StackConfig(distro_name="test", providers={}, storage=storage)
 
-    config = ConversationServiceConfig(config=stack_config, policy=[])
+    config = ConversationServiceConfig(config=stack_config, policy=policy or [])
     service = ConversationServiceImpl(config, {})
     await service.initialize()
     return service
