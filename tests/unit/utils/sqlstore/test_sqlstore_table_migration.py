@@ -4,10 +4,11 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-"""Unit tests for SqlAlchemySqlStoreImpl.copy_missing_rows and table_exists.
+"""Unit tests for the SqlAlchemySqlStoreImpl primitives a table migration is built from:
+table_exists, primary_key_columns, rename_table and copy_missing_rows.
 
 They run on SQLite always and on PostgreSQL when ENABLE_POSTGRES_TESTS is set, since
-copy_missing_rows reports the inserted row count from the driver's rowcount.
+rename_table issues raw DDL and copy_missing_rows reports the driver's rowcount.
 """
 
 import os
@@ -159,3 +160,53 @@ async def test_table_exists_sees_registered_and_foreign_tables(tables):
             await conn.execute(text(f'DROP TABLE IF EXISTS "{foreign}"'))
         await engine.dispose()
         await other.shutdown()
+
+
+async def test_primary_key_columns_follow_the_database(tables):
+    assert await tables.store.primary_key_columns(tables.source) == ["id"]
+    assert await tables.store.primary_key_columns(tables.target) == KEY_COLUMNS
+    assert await tables.store.primary_key_columns("no_such_table") is None
+
+
+async def test_rename_table_frees_the_old_name_for_a_new_shape(tables):
+    """After the rename the rows live under the new name and the old name can be registered again
+    with a different primary key, which is how an in-place table migration starts."""
+    await tables.store.insert(tables.source, [_row("a"), _row("b")])
+    renamed = f"{tables.source}_v1"
+
+    await tables.store.rename_table(tables.source, renamed)
+
+    try:
+        assert not await tables.store.table_exists(tables.source)
+        assert await tables.store.primary_key_columns(renamed) == ["id"]
+        await tables.store.create_table(
+            tables.source,
+            {
+                "group_id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                "payload": ColumnType.JSON,
+            },
+        )
+        assert await tables.store.primary_key_columns(tables.source) == KEY_COLUMNS
+        assert await tables.store.copy_missing_rows(renamed, tables.source, KEY_COLUMNS) == 2
+        assert [row["id"] for row in (await tables.store.fetch_all(tables.source, order_by=[("id", "asc")])).data] == [
+            "a",
+            "b",
+        ]
+    finally:
+        engine = tables.store.create_engine()
+        async with engine.begin() as conn:
+            await conn.execute(text(f'DROP TABLE IF EXISTS "{renamed}"'))
+        await engine.dispose()
+
+
+async def test_rename_table_onto_an_existing_name_changes_nothing(tables):
+    """The rename runs in a transaction: when it fails, both tables are exactly as before."""
+    await tables.store.insert(tables.source, [_row("a")])
+
+    with pytest.raises(Exception, match="already"):
+        await tables.store.rename_table(tables.source, tables.target)
+
+    assert await tables.store.primary_key_columns(tables.source) == ["id"]
+    assert await tables.store.primary_key_columns(tables.target) == KEY_COLUMNS
+    assert [row["id"] for row in (await tables.store.fetch_all(tables.source)).data] == ["a"]

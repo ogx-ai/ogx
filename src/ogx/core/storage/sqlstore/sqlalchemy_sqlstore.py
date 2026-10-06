@@ -609,6 +609,35 @@ class SqlAlchemySqlStoreImpl(SqlStore):
         async with self._engine.connect() as conn:
             return bool(await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table(table)))
 
+    async def primary_key_columns(self, table: str) -> list[str] | None:
+        """Return the primary key columns of ``table`` as the database has them, or None if it is absent."""
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+
+        def read_primary_key(sync_conn: Any) -> list[str] | None:
+            inspector = inspect(sync_conn)
+            if not inspector.has_table(table):
+                return None
+            return list(inspector.get_pk_constraint(table)["constrained_columns"])
+
+        async with self._engine.connect() as conn:
+            primary_key: list[str] | None = await conn.run_sync(read_primary_key)
+            return primary_key
+
+    async def rename_table(self, table: str, new_name: str) -> None:
+        """Rename ``table`` to ``new_name`` in its own transaction, freeing the old name for a replacement.
+
+        Any registration of ``table`` with this store is dropped so that ``create_table`` can
+        register a table of a different shape under the old name afterwards.
+        """
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self._engine is not None  # _ensure_engine guarantees this
+        quote = self._engine.dialect.identifier_preparer.quote
+        async with self._engine.begin() as conn:
+            await conn.execute(text(f"ALTER TABLE {quote(table)} RENAME TO {quote(new_name)}"))
+        if table in self.metadata.tables:
+            self.metadata.remove(self.metadata.tables[table])
+
     async def copy_missing_rows(self, source_table: str, target_table: str, key_columns: Sequence[str]) -> int:
         """Insert every row of ``source_table`` whose key is absent from ``target_table``.
 
