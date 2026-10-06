@@ -239,6 +239,15 @@ gh workflow run record-integration-tests.yml \
   -f pattern="test_streaming"
 ```
 
+**Forcing a full re-record:** Recordings are keyed by the SHA256 of the request body, so `record-if-missing` never overwrites existing recordings. This matters when a pinned test server is bumped, since recordings captured against the old server stay stale for as long as the request body is unchanged. To force a full re-record, dispatch with `inference_mode=record`:
+
+```bash
+gh workflow run record-integration-tests.yml \
+  -f pr_number=1234 -f providers="vllm" -f inference_mode=record
+```
+
+Note that `record` overwrites all existing recordings for the selected provider/suite, producing a large recording diff on the PR branch. This option is only available via `workflow_dispatch`; `pull_request`-triggered runs always use `record-if-missing`.
+
 **Available providers:**
 
 - `ollama` - No API keys (auto-runs on PRs)
