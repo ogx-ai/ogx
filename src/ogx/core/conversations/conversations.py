@@ -43,13 +43,14 @@ from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperat
 
 logger = get_logger(name=__name__, category="openai_conversations")
 
-ITEMS_TABLE_VERSION = "v2"
-ITEMS_TABLE = f"conversation_items_{ITEMS_TABLE_VERSION}"
-# Replaced by ITEMS_TABLE: it was keyed on id alone, so an item id could belong to only one conversation.
-LEGACY_ITEMS_TABLE = "conversation_items"
+# The name is fixed: access policies match sql_record resources on the physical table name.
+ITEMS_TABLE = "conversation_items"
+# Where the upgrade keeps the earlier table, which was keyed on id alone so an item id could
+# belong to only one conversation. It is retained and not read; drop it manually once verified.
+ITEMS_V1_TABLE = "conversation_items_v1"
 ITEM_KEY_COLUMNS = ["conversation_id", "id"]
 MIGRATIONS_TABLE = "conversation_migrations"
-ITEMS_BACKFILL_KEY = f"conversation_items_backfill:{ITEMS_TABLE_VERSION}"
+ITEMS_BACKFILL_KEY = "conversation_items_backfill:v2"
 
 
 class ConversationServiceConfig(BaseModel):
@@ -98,6 +99,20 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
             },
         )
 
+        await self._create_items_table()
+
+    async def _create_items_table(self) -> None:
+        """Create ITEMS_TABLE keyed on (conversation_id, id), migrating an id-keyed one in place.
+
+        A table left by an earlier server is recognised by its primary key, renamed to
+        ITEMS_V1_TABLE and recreated under the same name, so access policies that name
+        the table keep matching. Its rows are then copied across once.
+        """
+        store = self.sql_store.sql_store
+        primary_key = await store.primary_key_columns(ITEMS_TABLE)
+        if primary_key is not None and primary_key != ITEM_KEY_COLUMNS:
+            await store.rename_table(ITEMS_TABLE, ITEMS_V1_TABLE)
+            logger.info("Renamed the id-keyed conversation items table", table=ITEMS_TABLE, renamed_to=ITEMS_V1_TABLE)
         await self.sql_store.create_table(
             ITEMS_TABLE,
             {
@@ -110,15 +125,18 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
                 "tenant_id": ColumnType.STRING,
             },
         )
-        await self._backfill_legacy_items()
+        await self._backfill_v1_items()
 
-    async def _backfill_legacy_items(self) -> None:
-        """Copy rows written by earlier servers into ITEMS_TABLE, once per database.
+    async def _backfill_v1_items(self) -> None:
+        """Copy the rows of ITEMS_V1_TABLE into ITEMS_TABLE, once per database.
 
-        The legacy table is left in place so no data is deleted; a completion flag in
-        MIGRATIONS_TABLE stops the copy from re-scanning it on every boot.
+        Nothing runs on a database that never had the v1 table. While it exists, a
+        completion flag in MIGRATIONS_TABLE keeps later boots from scanning it again,
+        and a warning reminds the operator that it is still there.
         """
         store = self.sql_store.sql_store
+        if not await store.table_exists(ITEMS_V1_TABLE):
+            return
         await store.create_table(
             MIGRATIONS_TABLE,
             {
@@ -127,20 +145,19 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
             },
         )
         if await store.fetch_one(MIGRATIONS_TABLE, where={"name": ITEMS_BACKFILL_KEY}) is None:
-            copied = await store.copy_missing_rows(LEGACY_ITEMS_TABLE, ITEMS_TABLE, ITEM_KEY_COLUMNS)
+            copied = await store.copy_missing_rows(ITEMS_V1_TABLE, ITEMS_TABLE, ITEM_KEY_COLUMNS)
             await store.insert(MIGRATIONS_TABLE, {"name": ITEMS_BACKFILL_KEY, "completed_at": int(time.time())})
             logger.info(
-                "Backfilled legacy conversation items",
+                "Backfilled conversation items from the id-keyed table",
                 copied_rows=copied,
-                source_table=LEGACY_ITEMS_TABLE,
+                source_table=ITEMS_V1_TABLE,
                 table=ITEMS_TABLE,
             )
-        if await store.table_exists(LEGACY_ITEMS_TABLE):
-            logger.warning(
-                "Legacy conversation items table retained; verify the backfill and drop it manually once confirmed",
-                legacy_table=LEGACY_ITEMS_TABLE,
-                table=ITEMS_TABLE,
-            )
+        logger.warning(
+            "Pre-migration conversation items table retained; verify the backfill and drop it manually once confirmed",
+            retained_table=ITEMS_V1_TABLE,
+            table=ITEMS_TABLE,
+        )
 
     async def create_conversation(self, request: CreateConversationRequest) -> Conversation:
         """Create a conversation."""
