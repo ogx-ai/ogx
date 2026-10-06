@@ -214,11 +214,11 @@ jobs:
                   description: Users can access their own conversations
                 - permit:
                     actions: [create]
-                    resource: sql_record::conversation_items_v2::*
+                    resource: sql_record::conversation_items::*
                   description: Any authenticated user can create conversation items
                 - permit:
                     actions: [read, update, delete]
-                    resource: sql_record::conversation_items_v2::*
+                    resource: sql_record::conversation_items::*
                   when:
                     - user is owner
                   description: Users can access items in their own conversations

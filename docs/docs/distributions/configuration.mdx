@@ -902,11 +902,11 @@ server:
     # Conversation item isolation
     - permit:
         actions: [create]
-        resource: sql_record::conversation_items_v2::*
+        resource: sql_record::conversation_items::*
       description: Any authenticated user can create conversation items
     - permit:
         actions: [read, update, delete]
-        resource: sql_record::conversation_items_v2::*
+        resource: sql_record::conversation_items::*
       when: user is owner
       description: Users can only access items in their own conversations
 
@@ -989,9 +989,15 @@ access policies:
 | Table Name | Description |
 |---|---|
 | `openai_conversations` | Conversation sessions |
-| `conversation_items_v2` | Messages and items within conversations (`conversation_items` is the pre-backfill table, kept until dropped) |
+| `conversation_items` | Messages and items within conversations |
 | `responses` | Stored responses (table name is configurable in provider config) |
 | `openai_files` | Uploaded files |
+
+Upgrading a server that keyed `conversation_items` on item id alone renames
+that table to `conversation_items_v1` and recreates `conversation_items`
+keyed on `(conversation_id, id)`, copying the rows across. The server does not
+read `conversation_items_v1` again and logs a warning on each start while it
+exists; drop it manually once you have verified the migrated items.
 
 ### Route-Level Authorization
 
