@@ -29,6 +29,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
@@ -281,6 +282,20 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             where=update_where,
         )
 
+        async with self.async_session() as session:
+            await session.execute(stmt)
+            await session.commit()
+
+    async def insert_do_nothing(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
+        """Insert rows, skipping any that would violate a unique constraint.
+
+        Unlike insert, a conflicting row is dropped silently instead of raising, so it is safe
+        when several workers race to write the same row (e.g. a one-time migration flag).
+        """
+        await self._ensure_engine()  # Lazy init in current event loop
+        assert self.async_session is not None  # _ensure_engine guarantees this
+        table_obj = self.metadata.tables[table]
+        stmt = self._get_dialect_insert(table_obj).values(data).on_conflict_do_nothing()
         async with self.async_session() as session:
             await session.execute(stmt)
             await session.commit()
@@ -618,7 +633,11 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             inspector = inspect(sync_conn)
             if not inspector.has_table(table):
                 return None
-            return list(inspector.get_pk_constraint(table)["constrained_columns"])
+            try:
+                return list(inspector.get_pk_constraint(table)["constrained_columns"])
+            except NoSuchTableError:
+                # The table was renamed or dropped between the existence check and this read.
+                return None
 
         async with self._engine.connect() as conn:
             primary_key: list[str] | None = await conn.run_sync(read_primary_key)
@@ -672,7 +691,13 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
             already_present = exists().where(and_(*(target.c[key] == source.c[key] for key in key_columns)))
             select_missing = select(*(source.c[name] for name in columns)).where(~already_present)
-            result = await conn.execute(target.insert().from_select(columns, select_missing))
+            # ON CONFLICT DO NOTHING makes the copy safe under concurrent workers that start
+            # migrating the same database at once: a row a sibling inserts first is skipped,
+            # not an error.
+            insert_missing = (
+                self._get_dialect_insert(target).from_select(columns, select_missing).on_conflict_do_nothing()
+            )
+            result = await conn.execute(insert_missing)
             return int(result.rowcount or 0)
 
     def _get_dialect_insert(self, table: Table) -> Any:

@@ -4,12 +4,14 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
+import asyncio
 import secrets
 import time
 from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel, TypeAdapter
+from sqlalchemy.exc import DBAPIError
 
 from ogx.core.access_control.datatypes import AccessRule
 from ogx.core.conversations.item_sync import ConversationItemSync
@@ -39,7 +41,7 @@ from ogx_api.conversations import (
     RetrieveItemRequest,
     UpdateConversationRequest,
 )
-from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation
+from ogx_api.internal.sqlstore import ColumnDefinition, ColumnType, DeleteOperation, SqlStore
 
 logger = get_logger(name=__name__, category="openai_conversations")
 
@@ -51,6 +53,10 @@ ITEMS_V1_TABLE = "conversation_items_v1"
 ITEM_KEY_COLUMNS = ["conversation_id", "id"]
 MIGRATIONS_TABLE = "conversation_migrations"
 ITEMS_BACKFILL_KEY = "conversation_items_backfill:v2"
+# Several workers can start migrating the same database at once on the first upgrade. The migration
+# is idempotent, so a worker that loses a DDL race to a sibling retries and settles.
+_MIGRATION_ATTEMPTS = 5
+_MIGRATION_RETRY_DELAY_SECONDS = 0.1
 
 
 class ConversationServiceConfig(BaseModel):
@@ -107,26 +113,50 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
         A table left by an earlier server is recognised by its primary key, renamed to
         ITEMS_V1_TABLE and recreated under the same name, so access policies that name
         the table keep matching. Its rows are then copied across once.
+
+        Several workers can start migrating the same database at once on the first upgrade. Every
+        step is idempotent, so a worker that loses a DDL race to a sibling (the rename, or the
+        recreate of the live table) simply retries and re-reads the now-migrated state instead of
+        failing its boot.
         """
         store = self.sql_store.sql_store
+        for attempt in range(_MIGRATION_ATTEMPTS):
+            try:
+                await self._rename_id_keyed_table_if_present(store)
+                await self.sql_store.create_table(
+                    ITEMS_TABLE,
+                    {
+                        "conversation_id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                        "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
+                        "created_at": ColumnType.INTEGER,
+                        "sort_order": ColumnType.INTEGER,
+                        "item_data": ColumnType.JSON,
+                        # Declared explicitly so the backfill below carries it even when tenancy is disabled.
+                        "tenant_id": ColumnType.STRING,
+                    },
+                )
+                await self._backfill_v1_items()
+                return
+            except DBAPIError:
+                if attempt == _MIGRATION_ATTEMPTS - 1:
+                    raise
+                await asyncio.sleep(_MIGRATION_RETRY_DELAY_SECONDS)
+
+    async def _rename_id_keyed_table_if_present(self, store: SqlStore) -> None:
+        """Rename an id-keyed ITEMS_TABLE to ITEMS_V1_TABLE if (and only if) it still is one.
+
+        A fresh or already-composite table needs no rename, and a v1 table a sibling already
+        parked means the live table is gone or being recreated. A rename that loses the race to a
+        sibling raises a database error; the caller retries the idempotent migration and settles.
+        """
         primary_key = await store.primary_key_columns(ITEMS_TABLE)
         # Compare as a set: the database may report composite primary key columns in any order.
-        if primary_key is not None and set(primary_key) != set(ITEM_KEY_COLUMNS):
-            await store.rename_table(ITEMS_TABLE, ITEMS_V1_TABLE)
-            logger.info("Renamed the id-keyed conversation items table", table=ITEMS_TABLE, renamed_to=ITEMS_V1_TABLE)
-        await self.sql_store.create_table(
-            ITEMS_TABLE,
-            {
-                "conversation_id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
-                "id": ColumnDefinition(type=ColumnType.STRING, primary_key=True),
-                "created_at": ColumnType.INTEGER,
-                "sort_order": ColumnType.INTEGER,
-                "item_data": ColumnType.JSON,
-                # Declared explicitly so the backfill below carries it even when tenancy is disabled.
-                "tenant_id": ColumnType.STRING,
-            },
-        )
-        await self._backfill_v1_items()
+        if primary_key is None or set(primary_key) == set(ITEM_KEY_COLUMNS):
+            return
+        if await store.table_exists(ITEMS_V1_TABLE):
+            return
+        await store.rename_table(ITEMS_TABLE, ITEMS_V1_TABLE)
+        logger.info("Renamed the id-keyed conversation items table", table=ITEMS_TABLE, renamed_to=ITEMS_V1_TABLE)
 
     async def _backfill_v1_items(self) -> None:
         """Copy the rows of ITEMS_V1_TABLE into ITEMS_TABLE, once per database.
@@ -147,7 +177,10 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
         )
         if await store.fetch_one(MIGRATIONS_TABLE, where={"name": ITEMS_BACKFILL_KEY}) is None:
             copied = await store.copy_missing_rows(ITEMS_V1_TABLE, ITEMS_TABLE, ITEM_KEY_COLUMNS)
-            await store.insert(MIGRATIONS_TABLE, {"name": ITEMS_BACKFILL_KEY, "completed_at": int(time.time())})
+            # do-nothing so a sibling that sets the flag first does not fail this worker.
+            await store.insert_do_nothing(
+                MIGRATIONS_TABLE, {"name": ITEMS_BACKFILL_KEY, "completed_at": int(time.time())}
+            )
             logger.info(
                 "Backfilled conversation items from the id-keyed table",
                 copied_rows=copied,

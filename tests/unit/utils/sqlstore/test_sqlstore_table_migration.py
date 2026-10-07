@@ -11,6 +11,7 @@ They run on SQLite always and on PostgreSQL when ENABLE_POSTGRES_TESTS is set, s
 rename_table issues raw DDL and copy_missing_rows reports the driver's rowcount.
 """
 
+import asyncio
 import os
 import uuid
 from dataclasses import dataclass
@@ -210,3 +211,32 @@ async def test_rename_table_onto_an_existing_name_changes_nothing(tables):
     assert await tables.store.primary_key_columns(tables.source) == ["id"]
     assert await tables.store.primary_key_columns(tables.target) == KEY_COLUMNS
     assert [row["id"] for row in (await tables.store.fetch_all(tables.source)).data] == ["a"]
+
+
+async def test_insert_do_nothing_skips_conflicting_rows(tables):
+    """A conflicting row is dropped silently instead of raising, so racing workers can both write
+    the same key (e.g. a one-time migration flag) without one failing."""
+    await tables.store.insert_do_nothing(tables.target, {"group_id": "g1", "id": "a"})
+    await tables.store.insert_do_nothing(tables.target, {"group_id": "g1", "id": "a"})
+    await tables.store.insert_do_nothing(tables.target, {"group_id": "g1", "id": "b"})
+
+    rows = await _target_rows(tables)
+    assert [(row["group_id"], row["id"]) for row in rows] == [
+        ("g1", "a"),
+        ("g1", "b"),
+    ]
+
+
+async def test_copy_missing_rows_is_safe_under_concurrent_copies(tables):
+    """Two copies of the same rows running at once both succeed: a row a sibling inserts first is
+    skipped, not a duplicate-key error, so every row lands exactly once. (The full two-worker
+    case is covered end-to-end by the conversation upgrade tests.)"""
+    await tables.store.insert(tables.source, [_row("a"), _row("b"), _row("c")])
+
+    first, second = await asyncio.gather(
+        tables.store.copy_missing_rows(tables.source, tables.target, KEY_COLUMNS),
+        tables.store.copy_missing_rows(tables.source, tables.target, KEY_COLUMNS),
+    )
+
+    assert first + second == 3
+    assert [row["id"] for row in await _target_rows(tables)] == ["a", "b", "c"]

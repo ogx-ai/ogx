@@ -13,6 +13,7 @@ warning and is never read again. The tests run on SQLite always and on PostgreSQ
 ENABLE_POSTGRES_TESTS is set.
 """
 
+import asyncio
 import os
 import tempfile
 from collections.abc import Iterator
@@ -451,3 +452,26 @@ async def test_reversed_composite_key_is_recognized_without_rename(upgrade_backe
     assert set(await store.primary_key_columns(ITEMS_TABLE)) == set(ITEM_KEY_COLUMNS)
     assert not await store.table_exists(ITEMS_V1_TABLE)
     await store.shutdown()
+
+
+async def test_concurrent_workers_migrate_the_same_database(upgrade_backend):
+    """Two workers booting the same not-yet-migrated database at once both finish: the id-keyed
+    table is renamed once, its rows copied exactly once with ownership intact, and neither worker
+    fails its boot (the rename loses to its sibling and settles, the copy and flag skip conflicts).
+    """
+    conversation_id = "conv_" + "2" * 48
+    await _write_v1_database(upgrade_backend, conversation_id)
+
+    first, second = await asyncio.gather(_make_service(upgrade_backend), _make_service(upgrade_backend))
+
+    store = first.sql_store.sql_store
+    assert await store.primary_key_columns(ITEMS_TABLE) == ITEM_KEY_COLUMNS
+    assert await store.primary_key_columns(ITEMS_V1_TABLE) == ["id"]
+    assert await store.fetch_one(MIGRATIONS_TABLE, where={"name": ITEMS_BACKFILL_KEY}) is not None
+    rows = await _raw_items(first, ITEMS_TABLE, conversation_id)
+    assert [(row["id"], row["owner_principal"], row["tenant_id"]) for row in rows] == [
+        ("msg_0", "alice", "tenant-a"),
+        ("msg_1", "alice", "tenant-a"),
+    ]
+    await store.shutdown()
+    await second.sql_store.sql_store.shutdown()

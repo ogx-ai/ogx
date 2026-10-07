@@ -64,6 +64,8 @@ class SqlStore(Protocol):
         update_where_sql_params: Mapping[str, Any] | None = None,
     ) -> None: ...
 
+    async def insert_do_nothing(self, table: str, data: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None: ...
+
     async def fetch_all(
         self,
         table: str,
