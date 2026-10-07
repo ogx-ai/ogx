@@ -263,7 +263,7 @@ class WebSearchActionFind(BaseModel):
 class OpenAIResponseOutputMessageWebSearchToolCall(BaseModel):
     """Web search tool call output message for OpenAI responses."""
 
-    id: str
+    id: str | None = None
     status: str
     type: Literal["web_search_call"] = "web_search_call"
     action: WebSearchActionSearch | WebSearchActionOpenPage | WebSearchActionFind | None = None
