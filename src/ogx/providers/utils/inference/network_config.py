@@ -131,9 +131,9 @@ class TimeoutConfig(BaseModel):
 
 
 class LimitsConfig(BaseModel):
-    """HTTP connection pool limits, matching httpx.Limits.
+    """HTTP connection pool limits, matching httpx2.Limits.
 
-    Defaults match httpx's own defaults, so setting one field doesn't leave the others
+    Defaults match httpx2's own defaults, so setting one field doesn't leave the others
     unbounded.
     """
 
@@ -175,5 +175,5 @@ class NetworkConfig(BaseModel):
     )
     limits: LimitsConfig | None = Field(
         default=None,
-        description="HTTP connection pool limits (max connections, keepalive connections, keepalive expiry). None uses httpx's own defaults.",
+        description="HTTP connection pool limits (max connections, keepalive connections, keepalive expiry). None uses httpx2's own defaults.",
     )

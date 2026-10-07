@@ -35,6 +35,14 @@ from ogx.env import get_env_or_fail
 DEFAULT_PORT = 8321
 
 
+def _client_timeout() -> float:
+    # scripts/integration-tests.sh exports OGX_CLIENT_TIMEOUT=300 for CI; the
+    # 120s default covers direct pytest runs, where CPU inference (e.g. vLLM)
+    # can go idle for well over 30s while the server buffers a
+    # constrained-decoding response.
+    return float(os.environ.get("OGX_CLIENT_TIMEOUT", "120"))
+
+
 def is_port_available(port: int, host: str = "localhost") -> bool:
     """Check if a port is available for binding."""
     try:
@@ -134,6 +142,7 @@ def get_provider_data():
     # like sample run config on which we can do replace_env_vars()
     keymap = {
         "TAVILY_SEARCH_API_KEY": "tavily_search_api_key",
+        "EXA_API_KEY": "exa_search_api_key",
         "BRAVE_SEARCH_API_KEY": "brave_search_api_key",
         "FIREWORKS_API_KEY": "fireworks_api_key",
         "GEMINI_API_KEY": "gemini_api_key",
@@ -312,7 +321,7 @@ def instantiate_ogx_client(session):
         return OgxClient(
             base_url=base_url,
             default_headers=get_provider_data_headers(),
-            timeout=int(os.environ.get("OGX_CLIENT_TIMEOUT", "30")),
+            timeout=_client_timeout(),
         )
 
     # check if this looks like a URL using proper URL parsing
@@ -390,8 +399,16 @@ def require_server(ogx_client):
 
 @pytest.fixture(scope="session")
 def openai_client(ogx_client, require_server):
+    from ogx.testing.api_recorder import build_test_id_http_client
+
     base_url = f"{ogx_client.base_url}/v1"
-    client = OpenAI(base_url=base_url, api_key="fake", max_retries=0, timeout=30.0)
+    client = OpenAI(
+        base_url=base_url,
+        api_key="fake",
+        max_retries=0,
+        timeout=_client_timeout(),
+        http_client=build_test_id_http_client(),
+    )
     yield client
     # Cleanup: close HTTP connections
     try:

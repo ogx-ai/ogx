@@ -12,6 +12,8 @@ from openai import OpenAI
 
 from ogx.core.library_client import OGXAsLibraryClient
 
+from ..helpers import provider_from_model
+
 ASYMMETRIC_EMBEDDING_MODELS_BY_PROVIDER = {
     "remote::nvidia": [
         "nvidia/llama-3.2-nv-embedqa-1b-v2",
@@ -28,20 +30,6 @@ def decode_base64_to_floats(base64_string: str) -> list[float]:
     float_count = len(embedding_bytes) // 4  # 4 bytes per float32
     embedding_floats = struct.unpack(f"{float_count}f", embedding_bytes)
     return list(embedding_floats)
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def is_asymmetric_model(client_with_models, model_id):
@@ -148,8 +136,10 @@ def skip_if_model_doesnt_support_openai_embeddings(client, model_id):
 
 @pytest.fixture
 def openai_client(client_with_models):
+    from ogx.testing.api_recorder import build_test_id_http_client
+
     base_url = f"{client_with_models.base_url}/v1"
-    return OpenAI(base_url=base_url, api_key="fake")
+    return OpenAI(base_url=base_url, api_key="fake", http_client=build_test_id_http_client())
 
 
 def test_openai_embeddings_single_string(compat_client, client_with_models, embedding_model_id):

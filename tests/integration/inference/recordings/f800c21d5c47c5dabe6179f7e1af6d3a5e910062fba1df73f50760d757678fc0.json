@@ -43,7 +43,7 @@
     "endpoint": "/v1/chat/completions",
     "model": "qwen3-0.6b",
     "provider_metadata": {
-      "openai_sdk_version": "2.43.0"
+      "openai_sdk_version": "3.17.0"
     }
   },
   "response": {
@@ -65,7 +65,7 @@
               "function_call": null,
               "tool_calls": [
                 {
-                  "id": "Iib1SaCdT3Cd5zm7BCNMCrMXu0io12ER",
+                  "id": "2kyWdNmhMyODPSkN6hMFnnABSbvgQk0d",
                   "function": {
                     "arguments": "{\"location\": \"San Francisco, CA\"}",
                     "name": "get_weather"
@@ -73,36 +73,40 @@
                   "type": "function"
                 }
               ],
-              "reasoning_content": "Okay, the user is asking about the weather in San Francisco, CA. I need to use the get_weather function. The function requires the location, which they provided as \"San Francisco, CA.\" I should make sure to include both the city and state in the correct format. Since the function's parameters are a required object with \"location\" as the key, I just need to pass that. No other parameters are needed here. Let me structure the tool call accordingly.\n"
+              "reasoning_content": "Okay, the user is asking about the weather in San Francisco, CA. I need to use the get_weather function. The function requires the location, which is provided as San Francisco, CA. I should make sure to format the arguments correctly as a JSON object. Let me check the parameters again to confirm. The location is a string, and the required parameter is \"location\". So the tool call should include that. Alright, I'll construct the JSON with the location parameter set to \"San Francisco, CA\".\n"
             }
           }
         ],
         "created": 0,
         "model": "qwen3-0.6b",
         "object": "chat.completion",
+        "metadata": null,
         "moderation": null,
         "service_tier": null,
-        "system_fingerprint": "b10964-b29c606e2",
+        "system_fingerprint": "b11147-fee39dd92",
         "usage": {
-          "completion_tokens": 122,
+          "completion_tokens": 130,
           "prompt_tokens": 185,
-          "total_tokens": 307,
+          "total_tokens": 315,
           "completion_tokens_details": null,
           "prompt_tokens_details": {
             "audio_tokens": null,
-            "cached_tokens": 0
+            "cache_write_tokens": null,
+            "cached_tokens": 0,
+            "image_tokens": null,
+            "text_tokens": null
           }
         },
         "timings": {
           "cache_n": 0,
           "prompt_n": 185,
-          "prompt_ms": 817.965,
-          "prompt_per_token_ms": 4.421432432432432,
-          "prompt_per_second": 226.1710464384173,
-          "predicted_n": 122,
-          "predicted_ms": 3528.567,
-          "predicted_per_token_ms": 29.161710743801653,
-          "predicted_per_second": 34.29154101367496
+          "prompt_ms": 1263.637,
+          "prompt_per_token_ms": 6.83047027027027,
+          "prompt_per_second": 146.40280396981098,
+          "predicted_n": 130,
+          "predicted_ms": 3813.135,
+          "predicted_per_token_ms": 29.55918604651163,
+          "predicted_per_second": 33.83043086594102
         }
       }
     },

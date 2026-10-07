@@ -47,6 +47,7 @@ Model parameters can be influenced by the following options:
 - `--vision-model`: comma-separated list of vision models.
 - `--embedding-model`: comma-separated list of embedding models.
 - `--judge-model`: comma-separated list of judge models.
+- `--rerank-model`: comma-separated list of rerank models.
 - `--embedding-dimension`: output dimensionality of the embedding model to use for testing. Default: 768
 
 Each of these are comma-separated lists and can be used to generate multiple parameter combinations. Note that tests will be skipped
@@ -62,7 +63,7 @@ if no model is specified.
 - `--setup`: global configuration that can be used with any suite. Setups prefill model/env defaults; explicit CLI flags always win.
   - Available setups:
     - `ollama`: Local Ollama provider with lightweight models (sets OLLAMA_URL, uses llama3.2:3b-instruct-fp16)
-    - `vllm`: VLLM provider for efficient local inference (sets VLLM_URL, uses Llama-3.2-1B-Instruct)
+    - `vllm`: vLLM provider running natively on the host (sets VLLM_URL, uses Qwen/Qwen3-0.6B)
     - `gpt`: OpenAI GPT models for high-quality responses (uses gpt-4o)
     - `claude`: Anthropic Claude models for high-quality responses (uses claude-3-5-sonnet)
 
@@ -238,15 +239,25 @@ gh workflow run record-integration-tests.yml \
   -f pattern="test_streaming"
 ```
 
+**Forcing a full re-record:** Recordings are keyed by the SHA256 of the request body, so `record-if-missing` never overwrites existing recordings. This matters when a pinned test server is bumped, since recordings captured against the old server stay stale for as long as the request body is unchanged. To force a full re-record, dispatch with `inference_mode=record`:
+
+```bash
+gh workflow run record-integration-tests.yml \
+  -f pr_number=1234 -f providers="vllm" -f inference_mode=record
+```
+
+Note that `record` overwrites all existing recordings for the selected provider/suite, producing a large recording diff on the PR branch. This option is only available via `workflow_dispatch`; `pull_request`-triggered runs always use `record-if-missing`.
+
 **Available providers:**
 
 - `ollama` - No API keys (auto-runs on PRs)
+- `llama-cpp-server` - No API keys (auto-runs on PRs)
+- `vllm` - No API keys (auto-runs on PRs; installed natively from a pinned CPU wheel)
+- `text-embeddings-inference` - No API keys (auto-runs on PRs)
 - `gpt` - OpenAI (requires `OPENAI_API_KEY` secret)
 - `azure` - Azure OpenAI (requires `AZURE_API_KEY`, `AZURE_API_BASE` secrets)
 - `bedrock` - AWS Bedrock (requires `AWS_BEARER_TOKEN_BEDROCK` secret)
 - `watsonx` - IBM watsonx (requires `WATSONX_API_KEY`, `WATSONX_BASE_URL`, `WATSONX_PROJECT_ID` secrets)
-
-Note: `vllm` is not yet supported in this recording workflow (not in the provider matrix).
 
 **Adding new providers:**
 

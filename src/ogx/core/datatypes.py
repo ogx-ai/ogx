@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from ogx.core.access_control.datatypes import AccessRule, RouteAccessRule
 from ogx.core.server_tls import ServerTLSConfig, validate_fips_tls
@@ -860,6 +860,8 @@ class ServerConfig(BaseModel):
 class StackConfig(BaseModel):
     """Top-level runtime configuration for a OGX distribution including providers, storage, and server settings."""
 
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     version: int = OGX_RUN_CONFIG_VERSION
 
     distro_name: str | None = Field(
@@ -882,10 +884,15 @@ this could be just a hash
         default=None,
         description="Reference to the container image if this package refers to a container",
     )
-    apis: list[str] = Field(
-        default_factory=list,
+    apis: list[str] | None = Field(
+        default=None,
         description="""
-The list of APIs to serve. If not specified, all APIs specified in the provider_map will be served""",
+The list of APIs to serve over HTTP. If not specified, all APIs specified in the provider_map will
+be served. An explicit list is authoritative, including when it is empty: an empty list serves no
+provider-backed APIs, which is not the same as omitting the field. The list gates route
+registration only: an API left out is still resolved in-process for providers that depend on it.
+Two exceptions to the list: the stack administration APIs (admin, inspect, providers) are always
+served, and serving responses also serves conversations and prompts.""",
     )
 
     providers: dict[str, list[Provider]] = Field(

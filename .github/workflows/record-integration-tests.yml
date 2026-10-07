@@ -12,7 +12,7 @@
 # 5. Recordings uploaded as artifacts; companion workflow handles commits
 name: Integration Tests (Record)
 
-run-name: Auto-record missing test recordings for PR #${{ github.event.pull_request.number || inputs.pr_number || github.run_number }}
+run-name: Auto-record missing test recordings for PR #${{ github.event.pull_request.number || inputs.pr_number || github.run_number }}${{ inputs.inference_mode == 'record' && ' (forced re-record)' || '' }}
 
 on:
   pull_request:
@@ -56,6 +56,13 @@ on:
         type: string
         required: false
         default: ''
+      inference_mode:
+        description: 'Inference mode: record-if-missing (default) or record (overwrites all existing recordings for the selected provider/suite)'
+        type: choice
+        options:
+          - record-if-missing
+          - record
+        default: record-if-missing
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || inputs.pr_number || github.run_number }}
@@ -91,6 +98,7 @@ jobs:
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
           INPUT_PROVIDERS: ${{ inputs.providers }}
           INPUT_COMMIT_MODE: ${{ inputs.commit_mode }}
+          INPUT_INFER_MODE: ${{ inputs.inference_mode }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
@@ -143,14 +151,15 @@ jobs:
           fi
 
           # Determine which providers to run
-          # Security: For pull_request, only run secret-free providers (ollama variants +
-          # llama-cpp-server, which records against a locally-started router)
+          # Security: For pull_request, only run secret-free providers (ollama variants,
+          # llama-cpp-server, vllm and text-embeddings-inference, which record against
+          # locally-started servers)
           # Manual workflow_dispatch uses input providers (defaults to API providers)
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             PROVIDERS="$INPUT_PROVIDERS"
           else
             # Auto-trigger on PR: only secret-free providers (no secrets exposed to any PR)
-            PROVIDERS="ollama,ollama-reasoning,llama-cpp-server"
+            PROVIDERS="ollama,ollama-reasoning,llama-cpp-server,vllm,text-embeddings-inference"
           fi
 
           {
@@ -170,6 +179,7 @@ jobs:
           echo "  Fork PR: ${IS_FORK_PR}"
           echo "  Providers: ${PROVIDERS}"
           echo "  Commit mode: ${COMMIT_MODE}"
+          echo "  Inference mode: ${INPUT_INFER_MODE:-record-if-missing}"
 
   # Upload PR metadata for companion workflow
   upload-pr-metadata:
@@ -226,6 +236,12 @@ jobs:
             suite: messages
           - setup: llama-cpp-server
             suite: llama-cpp-server
+          - setup: vllm
+            suite: base-vllm-subset
+          - setup: vllm
+            suite: vllm-reasoning
+          - setup: text-embeddings-inference
+            suite: text-embeddings-inference
           - setup: gpt
             suite: responses
           - setup: gpt
@@ -288,13 +304,13 @@ jobs:
 
       - name: Setup test environment
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/ogx/.github/actions/setup-test-environment@f8ca3d3840ac4046e9b066854e4d6719337a9672
+        uses: ogx-ai/ogx/.github/actions/setup-test-environment@0807a93e8508bb22dcd633de0a993343a6b1b346
         with:
           python-version: "3.12"
           client-version: "latest"
           setup: ${{ matrix.provider.setup }}
           suite: ${{ inputs.suite || matrix.provider.suite }}
-          inference-mode: 'record-if-missing'
+          inference-mode: ${{ inputs.inference_mode || 'record-if-missing' }}
 
       - name: Prepare AWS web identity for Bedrock
         if: steps.should_run.outputs.run == 'true' && matrix.provider.setup == 'bedrock'
@@ -322,7 +338,7 @@ jobs:
 
       - name: Run and record tests
         if: steps.should_run.outputs.run == 'true'
-        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@f8ca3d3840ac4046e9b066854e4d6719337a9672
+        uses: ogx-ai/ogx/.github/actions/run-and-record-tests@0807a93e8508bb22dcd633de0a993343a6b1b346
         env:
           OPENAI_API_KEY: ${{ matrix.provider.setup == 'gpt' && secrets.OPENAI_API_KEY || '' }}
           AZURE_API_KEY: ${{ matrix.provider.setup == 'azure' && secrets.AZURE_API_KEY || '' }}
@@ -342,7 +358,7 @@ jobs:
         with:
           stack-config: 'server:ci-tests'
           setup: ${{ matrix.provider.setup }}
-          inference-mode: 'record-if-missing'
+          inference-mode: ${{ inputs.inference_mode || 'record-if-missing' }}
           suite: ${{ inputs.suite || matrix.provider.suite }}
           subdirs: ${{ inputs.subdirs || '' }}
           pattern: ${{ inputs.pattern || '' }}
@@ -376,6 +392,7 @@ jobs:
           RECORD_STATUS: ${{ needs.record-providers.result }}
           PR_NUM: ${{ needs.compute-pr-info.outputs.pr_number }}
           IS_FORK_PR: ${{ needs.compute-pr-info.outputs.is_fork_pr }}
+          INFER_MODE: ${{ inputs.inference_mode }}
         with:
           script: |
             const COMMENT_MARKER = '<!-- record-integration-tests-bot -->';
@@ -391,6 +408,10 @@ jobs:
             }
 
             let message = `${COMMENT_MARKER}\n**Recording workflow ${status === 'success' ? 'completed' : 'finished with status: ' + status}**\n\nProviders: ${providers.join(', ')}\n\n`;
+
+            if (process.env.INFER_MODE === 'record') {
+              message += '**Forced re-record**: all existing recordings for the selected provider/suite were overwritten.\n\n';
+            }
 
             if (status === 'success') {
               message += 'Recordings have been generated and will be committed automatically by the companion workflow.\n\n';

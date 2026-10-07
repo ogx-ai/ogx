@@ -327,6 +327,29 @@ def test_messages_error_empty_messages(messages_client, text_model_id):
     assert response.status_code in (400, 422, 500)
 
 
+def test_messages_upstream_error_preserved(messages_client):
+    """A 4xx for an unknown model is preserved end-to-end in Anthropic error format.
+
+    The model ID uses the provider/model fallback format with a model that is not pulled
+    in the backend. Under the ollama setup the request reaches the provider and its own
+    4xx is preserved; under setups without an 'ollama' provider the server's own
+    ModelNotFoundError is returned. Either way the status stays a 4xx and the body is
+    Anthropic-formatted, not a generic 500.
+    """
+    response = make_messages_request(
+        messages_client,
+        model="ollama/this-model-is-not-pulled",
+        messages=[{"role": "user", "content": "Hi"}],
+        max_tokens=16,
+    )
+
+    assert 400 <= response.status_code < 500
+    data = response.json()
+    assert data["type"] == "error"
+    assert data["error"]["type"] in ("not_found_error", "invalid_request_error")
+    assert data["error"]["message"]
+
+
 def test_messages_response_headers(messages_client, text_model_id):
     """Response includes anthropic-version header."""
     response = make_messages_request(

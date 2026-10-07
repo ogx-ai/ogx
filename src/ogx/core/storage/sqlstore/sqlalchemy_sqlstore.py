@@ -19,8 +19,10 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    and_,
     event,
     inspect,
+    or_,
     select,
     text,
 )
@@ -152,6 +154,8 @@ class SqlAlchemySqlStoreImpl(SqlStore):
             engine_kwargs["max_overflow"] = self.config.max_overflow
             if self.config.pool_recycle >= 0:
                 engine_kwargs["pool_recycle"] = self.config.pool_recycle
+            if self.config.connection_string is not None:
+                connect_args["dsn"] = self.config.connection_string.get_secret_value()
             ssl_context = self._build_ssl()
             if ssl_context is not None:
                 connect_args["ssl"] = ssl_context
@@ -345,11 +349,29 @@ class SqlAlchemySqlStoreImpl(SqlStore):
 
                 cursor_value = cursor_row[0]
 
-                # Apply cursor condition based on sort direction
+                # Apply cursor condition based on sort direction. Break ties on the
+                # unique cursor key so rows that share the cursor row's order value
+                # are not skipped across pages.
                 if order_direction == "desc":
-                    query = query.where(table_obj.c[order_column] < cursor_value)
+                    query = query.where(
+                        or_(
+                            table_obj.c[order_column] < cursor_value,
+                            and_(
+                                table_obj.c[order_column] == cursor_value,
+                                table_obj.c[cursor_key_column] > cursor_id,
+                            ),
+                        )
+                    )
                 else:
-                    query = query.where(table_obj.c[order_column] > cursor_value)
+                    query = query.where(
+                        or_(
+                            table_obj.c[order_column] > cursor_value,
+                            and_(
+                                table_obj.c[order_column] == cursor_value,
+                                table_obj.c[cursor_key_column] > cursor_id,
+                            ),
+                        )
+                    )
 
             # Apply ordering
             if order_by:
@@ -371,6 +393,23 @@ class SqlAlchemySqlStoreImpl(SqlStore):
                         query = query.order_by(table_obj.c[name].desc())
                     else:
                         raise ValueError(f"Invalid order '{order_type}' for column '{name}'")
+
+            # Append a unique tiebreaker to the ORDER BY so rows that share the
+            # primary order value have a stable total order across pages. On cursor
+            # pages this is the cursor key; otherwise the table's primary key.
+            tiebreaker_column = None
+            if cursor:
+                tiebreaker_column = cursor[0]
+            else:
+                primary_key_columns = list(table_obj.primary_key.columns)
+                if len(primary_key_columns) == 1:
+                    tiebreaker_column = primary_key_columns[0].name
+            if (
+                tiebreaker_column is not None
+                and order_by
+                and tiebreaker_column not in [column_name for column_name, _ in order_by]
+            ):
+                query = query.order_by(table_obj.c[tiebreaker_column].asc())
 
             # Fetch limit + 1 to determine has_more
             fetch_limit = limit

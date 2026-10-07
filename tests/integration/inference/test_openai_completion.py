@@ -11,22 +11,8 @@ import pytest
 from openai import OpenAI
 from pydantic import BaseModel
 
-from ..helpers import assert_text_contains
+from ..helpers import assert_text_contains, provider_from_model
 from ..test_cases.test_case import TestCase
-
-
-def provider_from_model(client_with_models, model_id):
-    models = {m.id: m for m in client_with_models.models.list().data}
-    models.update(
-        {
-            m.custom_metadata["provider_resource_id"]: m
-            for m in client_with_models.models.list().data
-            if m.custom_metadata
-        }
-    )
-    provider_id = models[model_id].custom_metadata["provider_id"]
-    providers = {p.provider_id: p for p in client_with_models.providers.list()}
-    return providers[provider_id]
 
 
 def skip_if_model_doesnt_support_openai_completion(client_with_models, model_id):
@@ -309,6 +295,19 @@ def test_openai_completion_streaming_with_usage(ogx_client, client_with_models, 
 
 def test_openai_completion_guided_choice(ogx_client, client_with_models, text_model_id):
     skip_if_provider_isnt_vllm(client_with_models, text_model_id)
+    # vllm-project/vllm#57726: when the vLLM server is started with a
+    # --reasoning-parser (which our CI setup does, to support the vllm-reasoning
+    # suite), structured outputs on /v1/completions are silently NOT enforced:
+    # the grammar is gated on the prompt having ended a reasoning turn, which a
+    # raw completion prompt never does, so the model generates unconstrained
+    # text with a 200 and no warning (observed on vLLM 0.31.0). The existing
+    # recording for this test (made before the bug landed in our pinned vLLM)
+    # still replays fine. To re-enable: confirm the fix is in the pinned
+    # release, remove this skip, and re-record with --inference-mode record.
+    pytest.skip(
+        "vLLM does not enforce /v1/completions structured outputs while a --reasoning-parser is "
+        "configured (vllm-project/vllm#57726); re-enable once the pinned vLLM release includes the fix."
+    )
 
     prompt = "I am feeling really sad today."
     response = ogx_client.completions.create(

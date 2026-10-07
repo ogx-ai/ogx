@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 from datetime import datetime
+from unittest.mock import Mock
 
 import pytest
 import yaml
@@ -389,3 +390,57 @@ def test_parse_config_with_both_names_prefers_distro_name():
 
     # Verify distro_name is preferred over image_name
     assert result.distro_name == "new-name"
+
+
+def _minimal_config_yaml(apis_line: str) -> dict:
+    return yaml.safe_load(
+        f"""
+        version: {OGX_RUN_CONFIG_VERSION}
+        distro_name: foo
+        {apis_line}
+        storage:
+          backends:
+            kv_default:
+              type: kv_sqlite
+              db_path: /tmp/test_kv.db
+            sql_default:
+              type: sql_sqlite
+              db_path: /tmp/test_sql.db
+          stores:
+            metadata:
+              backend: kv_default
+              namespace: metadata
+        providers: {{}}
+    """
+    )
+
+
+def test_parse_warns_when_apis_key_bare(monkeypatch):
+    mock_logger = Mock()
+    monkeypatch.setattr("ogx.core.configure.logger", mock_logger)
+
+    config = parse_and_maybe_upgrade_config(_minimal_config_yaml("apis:"))
+
+    assert config.apis is None
+    mock_logger.warning.assert_called_once()
+    assert "apis: []" in str(mock_logger.warning.call_args)
+
+
+def test_parse_no_warning_when_apis_absent(monkeypatch):
+    mock_logger = Mock()
+    monkeypatch.setattr("ogx.core.configure.logger", mock_logger)
+
+    config = parse_and_maybe_upgrade_config(_minimal_config_yaml(""))
+
+    assert config.apis is None
+    mock_logger.warning.assert_not_called()
+
+
+def test_parse_no_warning_when_apis_empty_list(monkeypatch):
+    mock_logger = Mock()
+    monkeypatch.setattr("ogx.core.configure.logger", mock_logger)
+
+    config = parse_and_maybe_upgrade_config(_minimal_config_yaml("apis: []"))
+
+    assert config.apis == []
+    mock_logger.warning.assert_not_called()

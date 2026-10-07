@@ -46,7 +46,7 @@ flowchart TD
 - **Streaming**: OpenAI streaming chunks are transformed into Anthropic SSE events (`message_start`, `content_block_delta`, `message_delta`, etc.)
 - **Tool use**: Anthropic `tool_use` / `tool_result` blocks are translated to and from OpenAI `tool_calls` / `tool` messages
 
-**Passthrough path** (Ollama, vLLM): the request is forwarded directly to the provider's `/v1/messages` endpoint without any translation, since these providers natively speak the Anthropic format.
+**Passthrough path** (Anthropic, Ollama, vLLM): the request is forwarded directly to the provider's `/v1/messages` endpoint without any translation, since these providers natively speak the Anthropic format. This is what lets features the OpenAI format cannot represent, such as extended thinking, work with the `anthropic` provider. `config.network` (proxy, TLS, headers, timeout) applies, and errors from Anthropic keep their status code and message.
 
 ## Implemented endpoints
 

@@ -19,6 +19,7 @@ from ogx.core.stack import run_config_from_dynamic_config_spec
 from ogx.log import get_logger
 from ogx.testing.api_recorder import patch_httpx_for_test_id
 
+from .stack_config import LIBRARY_CLIENT_ONLY_TEST_PATHS, SERVER_ONLY_TEST_PATHS, is_server_stack_config
 from .suites import SETUP_DEFINITIONS, SUITE_DEFINITIONS
 
 logger = get_logger(__name__, category="tests")
@@ -46,17 +47,6 @@ def pytest_sessionstart(session):
         os.environ["SQLITE_STORE_DIR"] = tempfile.mkdtemp()
         logger.info(f"Setting SQLITE_STORE_DIR: {os.environ['SQLITE_STORE_DIR']}")
 
-    # Set test stack config type for api_recorder test isolation
-    stack_config = session.config.getoption("--stack-config", default=None)
-    if stack_config and (
-        stack_config.startswith("server:") or stack_config.startswith("docker:") or stack_config.startswith("http")
-    ):
-        os.environ["OGX_TEST_STACK_CONFIG_TYPE"] = "server"
-        logger.info(f"Test stack config type: server (stack_config={stack_config})")
-    else:
-        os.environ["OGX_TEST_STACK_CONFIG_TYPE"] = "library_client"
-        logger.info(f"Test stack config type: library_client (stack_config={stack_config})")
-
     patch_httpx_for_test_id()
 
 
@@ -64,6 +54,7 @@ def pytest_sessionstart(session):
 def suppress_httpx_logs(caplog):
     """Suppress httpx INFO logs for all integration tests"""
     caplog.set_level(logging.WARNING, logger="httpx")
+    caplog.set_level(logging.WARNING, logger="httpx2")
 
 
 @pytest.fixture(autouse=True)
@@ -353,8 +344,27 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool:
     return True
 
 
+def _item_rel_parts(item: pytest.Item, rootpath: Path) -> tuple[str, ...] | None:
+    """The item's path relative to rootpath, as parts, or None if it isn't under rootpath."""
+    item_path = Path(item.fspath).resolve()
+    if not item_path.is_relative_to(rootpath):
+        return None
+    return item_path.relative_to(rootpath).parts
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Filter collected tests to only those matching suite roots with ::test_function specifiers."""
+    """Filter collected tests to only those matching suite roots with ::test_function specifiers,
+    and skip the handful of tests that are only valid in one stack-config mode."""
+    is_server = is_server_stack_config(config.getoption("--stack-config", default=None))
+    for item in items:
+        rel_parts = _item_rel_parts(item, config.rootpath)
+        if rel_parts in SERVER_ONLY_TEST_PATHS and not is_server:
+            item.add_marker(pytest.mark.skip(reason="Only runs against a real server process"))
+        elif rel_parts in LIBRARY_CLIENT_ONLY_TEST_PATHS and is_server:
+            item.add_marker(
+                pytest.mark.skip(reason="Boots an in-process library client; cannot run inside a server-mode session")
+            )
+
     suite = config.getoption("--suite")
     if not suite:
         return

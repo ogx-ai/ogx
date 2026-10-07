@@ -16,6 +16,7 @@ from ogx.core.datatypes import VectorStoresConfig
 from ogx.log import get_logger
 from ogx_api import (
     ImageContentItem,
+    InvalidParameterError,
     OpenAIChatCompletionContentPartImageParam,
     OpenAIChatCompletionContentPartTextParam,
     OpenAIChatCompletionToolCall,
@@ -216,6 +217,12 @@ class ToolExecutor:
                     ),
                 )
                 return search_response.data
+            except InvalidParameterError:
+                # The caller sent a parameter this store cannot honour (e.g. ranking_options.hybrid_search
+                # on a provider that cannot apply the weights). That is the client's to fix, so let it
+                # reach responses.create as an error instead of degrading to an empty, indistinguishable
+                # result. Genuine store failures below still degrade to no results from that store.
+                raise
             except Exception as e:
                 logger.warning("Failed to search vector store", vector_store_id=vector_store_id, error=str(e))
                 return []
@@ -470,6 +477,10 @@ class ToolExecutor:
                         tool_name=function_name,
                         kwargs=tool_kwargs,
                     )
+        except InvalidParameterError:
+            # A rejected client parameter is not a tool failure to report inside a successful
+            # response: propagate it so the Responses layer turns it into a 400.
+            raise
         except Exception as e:
             error_exc = e
 

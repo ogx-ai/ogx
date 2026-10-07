@@ -168,6 +168,10 @@ async def resolve_impls(
         run_config, provider_registry, routing_table_apis, router_apis
     )
 
+    # `apis:` gates the HTTP surface (see ogx.core.server.server.apis_to_serve), not what
+    # gets wired in-process: providers depend on each other's impls regardless of which
+    # ones are reachable over HTTP. An empty list therefore resolves everything, the same
+    # as an absent one.
     apis_to_serve = run_config.apis or set(
         list(providers_with_specs.keys()) + [x.value for x in routing_table_apis] + [x.value for x in router_apis]
     )

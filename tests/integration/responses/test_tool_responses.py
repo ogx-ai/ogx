@@ -8,7 +8,7 @@ import json
 import logging  # allow-direct-logging
 import os
 
-import httpx
+import httpx2
 import ogx_client
 import openai
 import pytest
@@ -267,7 +267,7 @@ def test_response_non_streaming_mcp_tool(responses_client, client_with_models, t
         exc_type = (
             AuthenticationRequiredError
             if isinstance(responses_client, OGXAsLibraryClient)
-            else (httpx.HTTPStatusError, openai.AuthenticationError, ogx_client.AuthenticationError)
+            else (httpx2.HTTPStatusError, openai.AuthenticationError, ogx_client.AuthenticationError)
         )
         # Suppress expected auth error logs only for the failing auth attempt
         with caplog.at_level(logging.CRITICAL, logger="ogx.providers.inline.responses.builtin.responses.streaming"):

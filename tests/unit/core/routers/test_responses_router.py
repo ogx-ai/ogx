@@ -7,7 +7,7 @@
 import json
 from unittest.mock import AsyncMock
 
-import httpx
+import httpx2
 from fastapi import FastAPI
 from openai import AsyncOpenAI
 from opentelemetry.sdk.metrics import MeterProvider
@@ -35,11 +35,11 @@ from ogx_api.responses.models import (
 
 
 async def _collect_stream_events(app: FastAPI, model: str) -> list[object]:
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx2.ASGITransport(app=app)
     client = AsyncOpenAI(
         base_url="http://test/v1",
         api_key="test",
-        http_client=httpx.AsyncClient(transport=transport, base_url="http://test"),
+        http_client=httpx2.AsyncClient(transport=transport, base_url="http://test"),
     )
     try:
         stream = await client.responses.create(input="hi", model=model, stream=True)

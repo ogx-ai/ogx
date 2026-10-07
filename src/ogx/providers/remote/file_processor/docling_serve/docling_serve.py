@@ -11,7 +11,7 @@ from io import BytesIO
 from typing import Any
 from zipfile import ZipFile
 
-import httpx
+import httpx2
 from docling.datamodel.base_models import OutputFormat
 from docling.datamodel.service.chunking import HybridChunkerOptions
 from docling.datamodel.service.options import ConvertDocumentsOptions
@@ -224,7 +224,7 @@ class DoclingServeFileProcessor:
                     sdk_module="docling.service_client",
                 )
                 conversion_method = "async"
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
+            except (httpx2.ConnectError, httpx2.TimeoutException) as e:
                 if self.config.mode == "auto":
                     log.warning("Async failed, falling back to sync", error=str(e))
                     chunks = None
@@ -276,7 +276,7 @@ class DoclingServeFileProcessor:
             "to_formats": ["md"],
         }
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx2.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 url,
                 files={"files": (filename, content, mime_type)},
@@ -338,7 +338,7 @@ class DoclingServeFileProcessor:
             if result.documents and result.documents[0].artifacts:
                 artifact = result.documents[0].artifacts[0]
                 # Download markdown from presigned URL
-                async with httpx.AsyncClient() as http_client:
+                async with httpx2.AsyncClient() as http_client:
                     response = await http_client.get(str(artifact.uri))
                     response.raise_for_status()
                     md_content = response.text
@@ -387,7 +387,7 @@ class DoclingServeFileProcessor:
             "target_type": "zip",
         }
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx2.AsyncClient(timeout=300.0) as client:
             try:
                 response = await client.post(
                     url,
@@ -396,7 +396,7 @@ class DoclingServeFileProcessor:
                     headers=headers,
                 )
                 response.raise_for_status()
-            except httpx.HTTPStatusError as e:
+            except httpx2.HTTPStatusError as e:
                 # Chunk output is unavailable on older Docling Serve releases.
                 if e.response.status_code in (404, 405):
                     raise InvalidParameterError(
@@ -438,7 +438,7 @@ class DoclingServeFileProcessor:
                     target=ZipTarget(),
                 )
                 response = await job.result()
-            except httpx.HTTPStatusError as e:
+            except httpx2.HTTPStatusError as e:
                 # Chunk output is unavailable on older Docling Serve releases.
                 if e.response.status_code in (404, 405):
                     raise InvalidParameterError(

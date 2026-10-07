@@ -223,13 +223,15 @@ async def test_guardrailed_reasoning_blocked_on_violation(mock_inference_api, mo
 
 
 def _mock_httpx_response(status_code: int = 200, json_data: dict | list | None = None, text: str | None = None):
-    """Build a mock httpx.Response for run_guardrails tests."""
+    """Build a mock httpx2.Response for run_guardrails tests."""
     mock_resp = MagicMock()
     mock_resp.status_code = status_code
     if status_code >= 400:
-        import httpx
+        import httpx2
 
-        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError("error", request=MagicMock(), response=mock_resp)
+        mock_resp.raise_for_status.side_effect = httpx2.HTTPStatusError(
+            "error", request=MagicMock(), response=mock_resp
+        )
     else:
         mock_resp.raise_for_status = MagicMock()
     if json_data is not None:
@@ -251,39 +253,39 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "Failed to validate content" in result
 
     async def test_timeout_blocks_content(self):
-        import httpx
+        import httpx2
 
         from ogx.providers.inline.responses.builtin.responses.utils import run_guardrails
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = AsyncMock(side_effect=httpx.ConnectTimeout("timeout"))
+        mock_client.post = AsyncMock(side_effect=httpx2.ConnectTimeout("timeout"))
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "Failed to validate content" in result
 
     async def test_invalid_url_blocks_content(self):
-        import httpx
+        import httpx2
 
         from ogx.providers.inline.responses.builtin.responses.utils import run_guardrails
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post = AsyncMock(side_effect=httpx.InvalidURL("bad URL"))
+        mock_client.post = AsyncMock(side_effect=httpx2.InvalidURL("bad URL"))
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://[::1", "hello world")
         assert result is not None
         assert "Failed to validate content" in result
@@ -297,9 +299,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "Failed to validate content" in result
@@ -313,9 +315,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "unexpected format" in result
@@ -329,9 +331,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "unexpected format" in result
@@ -345,9 +347,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "unexpected format" in result
@@ -361,9 +363,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "unexpected format" in result
@@ -377,9 +379,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "unexpected format" in result
@@ -393,9 +395,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "unexpected format" in result
@@ -409,9 +411,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "unexpected format" in result
@@ -425,9 +427,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is None
 
@@ -442,9 +444,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails("http://mod.test/v1/moderations", "hello world")
         assert result is not None
         assert "Content blocked" in result
@@ -465,9 +467,9 @@ class TestRunGuardrailsFailClosed:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.post = AsyncMock(return_value=mock_resp)
         with pytest.MonkeyPatch.context() as mp:
-            import httpx
+            import httpx2
 
-            mp.setattr(httpx, "AsyncClient", lambda **kwargs: mock_client)
+            mp.setattr(httpx2, "AsyncClient", lambda **kwargs: mock_client)
             result = await run_guardrails(
                 "http://mod.test/v1/moderations",
                 "hello",

@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-fallback_version = "1.3.1.dev0"
+fallback_version = "1.4.1.dev0"
 
 [tool.uv]
 required-version = ">=0.7.0"
@@ -22,6 +22,7 @@ constraint-dependencies = [
     "locust>=2.46.5",
     "lxml>=6.1.1",                     # Multiple CVEs
     "msgpack>=1.2.1",
+    "oauthlib>=4.0.0",
     "pillow>=12.3.0",                  # CVE-2026-42311: PSD RCE; CVE-2026-55379/55380/54060: font/GD DoS
     "protobuf>=5.29.6",               # CVE-2025-4565 + CVE-2026-0994: parsing vulnerabilities
     "pyasn1>=0.6.4",                   # CVE-2026-30922: DoS via unbounded recursion
@@ -30,10 +31,10 @@ constraint-dependencies = [
     "python-multipart>=0.0.31",        # CVE-2026-40347: header injection; CVE-2026-42561: DoS via oversized headers
     "python-socketio>=5.16.2",         # CVE-2025-61765: RCE via pickle deserialization
     "requests>=2.34.2",
-    "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it
+    "setuptools<81",                   # milvus-lite imports pkg_resources; setuptools 81+ removes it; cap mirrored in .github/dependabot.yml
     "starlette>=1.3.1",                # CVE-2026-48710
     "tornado>=6.5.8",
-    "urllib3>=2.7.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
+    "urllib3>=2.8.0",                  # CVE-2026-44432: DoS via excessive decompression; CVE-2026-44431: cross-origin redirect header leak
     "transformers>=5.0.0",              # CVE-2026-1839 fix in 5.x; ogx doesn't use Trainer
     "werkzeug>=3.1.6",                 # CVE-2025-66221 + 2 more: safe_join() device name bypass
 ]
@@ -58,12 +59,13 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6.0",
-    "fastapi>=0.115.0,<1.0",                  # server
-    "httpx",
+    "fastapi>=0.137.2,<1.0",                  # server; cap mirrored in .github/dependabot.yml
+    "httpx",                                  # still needed for the google-genai and generated client-SDK boundaries
+    "httpx2",
     "jinja2>=3.1.6",
     "jsonschema",
     "ogx-api",                                # API and provider specifications (local dev via tool.uv.sources)
-    "openai>=2.41.0",
+    "openai>=3.0.0",                          # 3.x is the first series built on httpx2; we pass httpx2 clients to it
     "python-dotenv>=1.2.3",                              # CVE-2026-28684: arbitrary file overwrite via symlink following
     "pyjwt[crypto]>=2.13.0",                          # Pull crypto to support RS256 for jwt. CVE-2026-48526: auth bypass via forged JWTs.
     "pydantic>=2.11.9",
@@ -81,7 +83,7 @@ dependencies = [
     "aiosqlite>=0.21.0",                              # server - for metadata store
     "asyncpg",                                        # for metadata store
     "sqlalchemy[asyncio]>=2.0.41",                    # server - for conversations
-    "mcp>=1.28.1,<2.0",                                # for connectors
+    "mcp>=2.0",                                        # for connectors
     "zstandard>=0.23.0",                              # server - zstd request decompression
     "models-dev>=1.0.398",
 ]
@@ -100,16 +102,15 @@ starter = [
     "datasets>=5.0.1",
     "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
     "einops",
-    "elasticsearch>=9.5.1,<10.0.0",
+    "elasticsearch>=9.5.1,<10.0.0",          # cap mirrored in .github/dependabot.yml
     "emoji",
     "faiss-cpu>=1.15.0",
     "fire",
-    "google-genai>=2.23.0,<3",
+    "google-genai>=2.23.0,<3",               # cap mirrored in .github/dependabot.yml
     "langdetect",
     "markitdown[all]",
     "matplotlib>=3.11.2",
-    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts
-    "nltk>=3.10.3",                                      # Multiple CVEs
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts; cap mirrored in .github/dependabot.yml
     "neo4j>=6.3.1",
     "numpy>=2.5.3",
     "ollama",
@@ -118,14 +119,14 @@ starter = [
     "pgvector>=0.5.0",
     "pymilvus[milvus-lite]>=3.0.1",
     "pymongo>=4.18.1",
-    "pypdf>=6.13.3,<6.14",
+    "pypdf>=6.16.2",
     "pythainlp>=5.3.7",
     "qdrant-client>=1.19.0",
     "redis>=8.1.0",
     "requests",
     "safetensors>=0.8.0",
     "scipy>=1.18.1",
-    "sentence-transformers>=6.0.0",
+    "sentence-transformers>=6.0.0",  # floor must match inline::sentence-transformers pip_packages in src/ogx/providers/registry/inference.py -- update both
     "sentencepiece>=0.2.2",
     "sqlite-vec",
     "together>=2.34.0",
@@ -155,17 +156,17 @@ dev = [
     "databricks-sdk>=0.139.0",
     "datasets>=5.0.1",
     "docling-slim[service-client]>=2.117.0",  # Chunk output through the convert endpoint added in 2.117.0
-    "elasticsearch>=9.5.1,<10.0.0",
+    "elasticsearch>=9.5.1,<10.0.0",          # cap mirrored in .github/dependabot.yml
     "faiss-cpu>=1.15.0",
     "fairscale",
-    "google-genai>=2.23.0,<3",
+    "google-genai>=2.23.0,<3",               # cap mirrored in .github/dependabot.yml
     "langchain-core>=1.6.3",                            # CVE-2026-44843: insecure deserialization
     "langchain-openai>=1.2.2",
     "langgraph",
     "lm-format-enforcer",
     "markitdown[all]",
-    "mcp>=1.28.1,<2.0",
-    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts
+    "mcp>=2.0",
+    "milvus-lite>=2.5.1,<3.0; platform_machine == 'x86_64' or platform_machine == 'aarch64' or platform_machine == 'arm64'",  # milvus-lite 3.x does not implement the AllocTimestamp RPC, breaking row inserts; cap mirrored in .github/dependabot.yml
     "moto[s3]>=5.1.10",
     "nest-asyncio",
     "neo4j>=6.3.1",
@@ -175,7 +176,7 @@ dev = [
     "psycopg2-binary>=2.9.13",
     "pymilvus>=3.0.1",
     "pymongo>=4.18.1",
-    "pypdf>=6.13.3,<6.14",
+    "pypdf>=6.16.2",
     "qdrant-client>=1.19.0",
     "requests",
     "sqlalchemy[asyncio]>=2.0.41",
@@ -207,7 +208,7 @@ dev = [
     "ogx-client>=1.4.0",
     "openapi-spec-validator>=0.9.0",
     "pre-commit>=4.6.2",
-    "pytest>=8.4,<9.1",                        # CI/unit: 9.1.x monkeypatch.resolve() calls importlib.import_module, breaking tests that mock ogx.core.resolver.importlib.import_module (global)
+    "pytest>=8.4,<9.1",                        # CI/unit: 9.1.x monkeypatch.resolve() calls importlib.import_module, breaking tests that mock ogx.core.resolver.importlib.import_module (global); cap mirrored in .github/dependabot.yml
     "pytest-asyncio>=1.4.0",
     "pytest-cov",
     "pytest-html",

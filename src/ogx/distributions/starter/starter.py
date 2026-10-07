@@ -34,7 +34,9 @@ from ogx.providers.inline.vector_io.sqlite_vec.config import (
 )
 from ogx.providers.registry.inference import available_providers
 from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
+from ogx.providers.remote.tool_runtime.exa_search.config import ExaSearchToolConfig
 from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
+from ogx.providers.remote.tool_runtime.serply_search.config import SerplySearchToolConfig
 from ogx.providers.remote.tool_runtime.tavily_search.config import TavilySearchToolConfig
 from ogx.providers.remote.vector_io.chroma.config import ChromaVectorIOConfig
 from ogx.providers.remote.vector_io.elasticsearch.config import ElasticsearchVectorIOConfig
@@ -152,9 +154,11 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         "responses": [BuildProvider(provider_type="inline::builtin")],
         "skills": [BuildProvider(provider_type="inline::builtin")],
         "tool_runtime": [
+            BuildProvider(provider_type="remote::exa-search"),
             BuildProvider(provider_type="remote::brave-search"),
             BuildProvider(provider_type="remote::tavily-search"),
             BuildProvider(provider_type="remote::nimble-search"),
+            BuildProvider(provider_type="remote::serply-search"),
             BuildProvider(provider_type="inline::file-search"),
             BuildProvider(provider_type="remote::model-context-protocol"),
         ],
@@ -190,6 +194,8 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
     )
     postgres_sql_config = PostgresSqlStoreConfig.sample_run_config()
     postgres_kv_config = PostgresKVStoreConfig.sample_run_config()
+    postgres_uri_sql_config = PostgresSqlStoreConfig.sample_run_config(use_connection_string=True)
+    postgres_uri_kv_config = PostgresKVStoreConfig.sample_run_config(use_connection_string=True)
     default_overrides = {
         "inference": remote_inference_providers + [embedding_provider],
         "vector_io": [
@@ -275,6 +281,11 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         ],
         "tool_runtime": [
             Provider(
+                provider_id="exa-search",
+                provider_type="remote::exa-search",
+                config=ExaSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+            Provider(
                 provider_id="brave-search",
                 provider_type="remote::brave-search",
                 config=BraveSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
@@ -288,6 +299,11 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
                 provider_id="nimble-search",
                 provider_type="remote::nimble-search",
                 config=NimbleSearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
+            ),
+            Provider(
+                provider_id="serply-search",
+                provider_type="remote::serply-search",
+                config=SerplySearchToolConfig.sample_run_config(f"~/.ogx/distributions/{name}"),
             ),
             Provider(
                 provider_id="file-search",
@@ -345,6 +361,15 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         },
         deep=True,
     )
+    postgres_uri_run_settings = base_run_settings.model_copy(
+        update={
+            "storage_backends": {
+                "kv_default": postgres_uri_kv_config,
+                "sql_default": postgres_uri_sql_config,
+            }
+        },
+        deep=True,
+    )
 
     return DistributionTemplate(
         name=name,
@@ -356,11 +381,16 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         run_configs={
             "config.yaml": base_run_settings,
             "run-with-postgres-store.yaml": postgres_run_settings,
+            "run-with-postgres-uri-store.yaml": postgres_uri_run_settings,
         },
         run_config_env_vars={
             "OGX_PORT": (
                 "8321",
                 "Port for the OGX distribution server",
+            ),
+            "POSTGRES_CONNECTION_STRING": (
+                "postgresql://ogx:ogx@localhost:5432/ogx",
+                "PostgreSQL connection URI for the PostgreSQL storage configuration",
             ),
             "FIREWORKS_API_KEY": (
                 "",
