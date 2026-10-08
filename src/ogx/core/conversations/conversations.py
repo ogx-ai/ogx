@@ -145,15 +145,14 @@ class ConversationServiceImpl(Conversations, ConversationItemSync):
     async def _rename_id_keyed_table_if_present(self, store: SqlStore) -> None:
         """Rename an id-keyed ITEMS_TABLE to ITEMS_V1_TABLE if (and only if) it still is one.
 
-        A fresh or already-composite table needs no rename, and a v1 table a sibling already
-        parked means the live table is gone or being recreated. A rename that loses the race to a
+        A fresh or already-composite table needs no rename. A rename that loses the race to a
         sibling raises a database error; the caller retries the idempotent migration and settles.
+        An ITEMS_V1_TABLE that is not a sibling's work, while the live table is still id-keyed,
+        makes every rename fail, so the boot fails rather than silently skipping the migration.
         """
         primary_key = await store.primary_key_columns(ITEMS_TABLE)
         # Compare as a set: the database may report composite primary key columns in any order.
         if primary_key is None or set(primary_key) == set(ITEM_KEY_COLUMNS):
-            return
-        if await store.table_exists(ITEMS_V1_TABLE):
             return
         await store.rename_table(ITEMS_TABLE, ITEMS_V1_TABLE)
         logger.info("Renamed the id-keyed conversation items table", table=ITEMS_TABLE, renamed_to=ITEMS_V1_TABLE)

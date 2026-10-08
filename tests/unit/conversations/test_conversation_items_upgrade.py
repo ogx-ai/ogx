@@ -24,6 +24,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DBAPIError
 
 from ogx.core.access_control.datatypes import AccessRule, Action, Scope
 from ogx.core.conversations.conversations import (
@@ -451,6 +452,25 @@ async def test_reversed_composite_key_is_recognized_without_rename(upgrade_backe
     store = service.sql_store.sql_store
     assert set(await store.primary_key_columns(ITEMS_TABLE)) == set(ITEM_KEY_COLUMNS)
     assert not await store.table_exists(ITEMS_V1_TABLE)
+    await store.shutdown()
+
+
+async def test_stray_v1_table_fails_boot_instead_of_skipping_migration(upgrade_backend):
+    """A conversation_items_v1 that is not a sibling's work, while conversation_items is still
+    id-keyed, is a name collision: the boot fails rather than succeeding with the id-keyed table
+    live and the backfill flagged as done."""
+    conversation_id = "conv_" + "3" * 48
+    await _write_v1_database(upgrade_backend, conversation_id)
+    stray = await _v1_store(upgrade_backend, ITEMS_V1_TABLE)
+    assert await stray.table_exists(ITEMS_V1_TABLE)  # the store creates tables on first use
+    await stray.shutdown()
+
+    with pytest.raises(DBAPIError):
+        await _make_service(upgrade_backend)
+
+    store = SqlAlchemySqlStoreImpl(upgrade_backend)
+    assert await store.primary_key_columns(ITEMS_TABLE) == ["id"]
+    assert not await store.table_exists(MIGRATIONS_TABLE)
     await store.shutdown()
 
 
