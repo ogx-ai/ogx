@@ -182,7 +182,11 @@ def try_translate_to_http_exception(exc: Exception) -> HTTPException | None:
         return exc
     status_code = getattr(exc, "status_code", None)
     if isinstance(status_code, int):
-        return HTTPException(status_code=status_code, detail=str(exc))
+        http_exc = HTTPException(status_code=status_code, detail=str(exc))
+        http_exc.error_type = getattr(exc, "error_type", None)
+        http_exc.code = getattr(exc, "code", None)
+        http_exc.param = getattr(exc, "param", None)
+        return http_exc
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc) or "Invalid value")
     return None

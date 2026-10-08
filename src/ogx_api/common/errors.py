@@ -39,10 +39,15 @@ class OpenAIErrorResponse(BaseModel):
 
     @classmethod
     def from_message(
-        cls, message: str | Exception, *, type: str | None = None, code: str | None = None
+        cls,
+        message: str | Exception,
+        *,
+        type: str | None = None,
+        code: str | None = None,
+        param: str | None = None,
     ) -> "OpenAIErrorResponse":
         """Create an error response from a message string or exception."""
-        return cls(error=OpenAIErrorDetail(message=str(message), type=type, code=code))
+        return cls(error=OpenAIErrorDetail(message=str(message), type=type, code=code, param=param))
 
     def to_dict(self) -> dict:
         """Return a dict suitable for JSONResponse content or SSE events."""
@@ -56,10 +61,23 @@ class OpenAIErrorResponse(BaseModel):
 class OGXError(Exception):
     """A base class for all OGX errors with an HTTP status code for API responses."""
 
-    status_code: httpx2.codes
+    status_code: httpx2.codes = httpx2.codes.INTERNAL_SERVER_ERROR
+    error_type: str | None = None
+    code: str | None = None
+    param: str | None = None
 
-    def __init__(self, message: str):
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_type: str | None = None,
+        code: str | None = None,
+        param: str | None = None,
+    ):
         super().__init__(message)
+        self.error_type = error_type
+        self.code = code
+        self.param = param
 
 
 class ClientListCommand:
@@ -201,6 +219,20 @@ class ConversationItemNotFoundError(ResourceNotFoundError):
             client_command_args=conversation_id,
             resource_name_plural="conversation items",
             parent_resource=f"conversation '{conversation_id}'",
+        )
+
+
+class ItemAlreadyInConversationError(OGXError):
+    """Raised when an item is already present in the conversation."""
+
+    status_code: httpx2.codes = httpx2.codes.BAD_REQUEST
+
+    def __init__(self, message: str = "Item already in conversation.") -> None:
+        super().__init__(
+            message,
+            error_type="invalid_request_error",
+            code="item_already_in_conversation",
+            param="items",
         )
 
 
