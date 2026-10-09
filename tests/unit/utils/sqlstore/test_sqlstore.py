@@ -577,6 +577,24 @@ async def test_pool_pre_ping_defaults_to_true():
     assert pg_cfg.pool_pre_ping is True
 
 
+async def test_postgres_connection_string_is_passed_as_asyncpg_dsn() -> None:
+    """PostgreSQL URI options are passed to asyncpg as DSN options, not URL kwargs."""
+    dsn = (
+        "postgresql://pguser:secret@db.local/mydb?application_name=ogx"
+        "&target_session_attrs=read-write&sslmode=require&sslrootcert=%2Fetc%2Fpostgres%2Fca.pem"
+    )
+    with patch.object(_SQLSTORE_MODULE, "create_async_engine") as mock_create:
+        config = PostgresSqlStoreConfig(connection_string=dsn)
+        store = SqlAlchemySqlStoreImpl(config)
+        await store._ensure_engine()
+
+        url = mock_create.call_args.args[0]
+        kwargs = mock_create.call_args.kwargs
+        assert url.drivername == "postgresql+asyncpg"
+        assert not url.query
+        assert kwargs["connect_args"] == {"dsn": dsn}
+
+
 async def test_postgres_pool_config_defaults():
     """PostgresSqlStoreConfig exposes pool tuning knobs with sensible defaults."""
     cfg = PostgresSqlStoreConfig(user="test", password="test")

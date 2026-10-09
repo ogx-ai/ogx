@@ -99,6 +99,18 @@ class TestCreateEngineWithSsl:
         assert kwargs["connect_args"]["ssl"] == "require"
 
     @patch("ogx.core.storage.sqlstore.sqlalchemy_sqlstore.create_async_engine")
+    def test_ssl_in_connect_args_with_connection_string(self, mock_create_engine: MagicMock) -> None:
+        mock_create_engine.return_value = MagicMock()
+        dsn = "postgresql://user:password@db.example/app"
+        config = PostgresSqlStoreConfig(connection_string=dsn, ssl_mode="require")
+        store = SqlAlchemySqlStoreImpl(config)
+
+        store.create_engine()
+
+        _, kwargs = mock_create_engine.call_args
+        assert kwargs["connect_args"] == {"dsn": dsn, "ssl": "require"}
+
+    @patch("ogx.core.storage.sqlstore.sqlalchemy_sqlstore.create_async_engine")
     def test_ssl_context_in_connect_args_when_verify_full_with_ca(self, mock_create_engine, tmp_path):
         ca_file = tmp_path / "ca.pem"
         ca_file.write_text("")
