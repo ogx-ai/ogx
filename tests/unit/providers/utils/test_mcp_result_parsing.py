@@ -92,3 +92,18 @@ def test_tool_error_keeps_its_message():
     assert result.error_code == 1
     assert result.error_message == "division by zero"
     assert _texts(result) == ["division by zero"]
+
+
+def test_unknown_block_type_is_described_instead_of_dropped():
+    class FutureBlock:
+        type = "hologram"
+
+    class Result:
+        content = [FutureBlock()]
+        structured_content = None
+        is_error = False
+
+    result = _parse_mcp_result(Result())
+
+    assert result.error_code == 0
+    assert _texts(result) == ["[unsupported MCP content block: FutureBlock]"]

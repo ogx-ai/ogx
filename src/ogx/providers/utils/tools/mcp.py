@@ -506,7 +506,9 @@ def _parse_mcp_result(result: mcp_types.CallToolResult) -> ToolInvocationResult:
         elif isinstance(item, mcp_types.AudioContent):
             content.append(TextContentItem(text=f"[audio content, {item.mime_type}]"))
         else:
+            # Keep the call alive and let the model see that something was there.
             logger.warning("Unsupported MCP content block", block_type=type(item).__name__)
+            content.append(TextContentItem(text=f"[unsupported MCP content block: {type(item).__name__}]"))
 
     metadata = None
     if result.structured_content is not None:
