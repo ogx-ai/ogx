@@ -6,6 +6,7 @@
 
 import asyncio
 import hashlib
+import json
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
@@ -469,8 +470,16 @@ async def list_mcp_tools(
     return ListToolDefsResponse(data=tools)
 
 
-def _parse_mcp_result(result) -> ToolInvocationResult:
+def _parse_mcp_result(result: mcp_types.CallToolResult) -> ToolInvocationResult:
     """Parse MCP tool call result into ToolInvocationResult.
+
+    Every content block becomes something the model can read: text and images
+    pass through, embedded text resources contribute their text, and binary
+    resources, resource links and audio are described in a text item instead
+    of failing the whole call. A result that only carries ``structured_content``
+    is serialized to JSON so the model does not receive an empty tool message;
+    the structured value is also kept under ``metadata["structured_content"]``.
+    When the tool reports ``is_error``, its text becomes ``error_message``.
 
     Args:
         result: The raw MCP tool call result
@@ -485,12 +494,37 @@ def _parse_mcp_result(result) -> ToolInvocationResult:
         elif isinstance(item, mcp_types.ImageContent):
             content.append(ImageContentItem(image=_URLOrData(data=item.data)))
         elif isinstance(item, mcp_types.EmbeddedResource):
-            logger.warning("EmbeddedResource is not supported", item=item)
+            resource = item.resource
+            if isinstance(resource, mcp_types.TextResourceContents):
+                content.append(TextContentItem(text=resource.text))
+            else:
+                mime_type = resource.mime_type or "unknown type"
+                content.append(TextContentItem(text=f"[binary resource {resource.uri}, {mime_type}]"))
+        elif isinstance(item, mcp_types.ResourceLink):
+            description = f": {item.description}" if item.description else ""
+            content.append(TextContentItem(text=f"[resource link {item.uri} ({item.name}){description}]"))
+        elif isinstance(item, mcp_types.AudioContent):
+            content.append(TextContentItem(text=f"[audio content, {item.mime_type}]"))
         else:
-            raise ValueError(f"Unknown content type: {type(item)}")
+            # Keep the call alive and let the model see that something was there.
+            logger.warning("Unsupported MCP content block", block_type=type(item).__name__)
+            content.append(TextContentItem(text=f"[unsupported MCP content block: {type(item).__name__}]"))
+
+    metadata = None
+    if result.structured_content is not None:
+        metadata = {"structured_content": result.structured_content}
+        if not content:
+            content.append(TextContentItem(text=json.dumps(result.structured_content)))
+
+    error_message = None
+    if result.is_error:
+        error_message = "\n".join(item.text for item in content if isinstance(item, TextContentItem)) or None
+
     return ToolInvocationResult(
         content=content,
         error_code=1 if result.is_error else 0,
+        error_message=error_message,
+        metadata=metadata,
     )
 
 
