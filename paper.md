@@ -85,7 +85,7 @@ Content moderation uses a separate integration path. Optional Responses guardrai
 
 ## Dual Deployment Model
 
-OGX runs in two modes. **Server mode** exposes HTTP endpoints accessible from any language or tool. **Library mode** allows direct Python import with zero network overhead, suitable for notebooks and scripts. Both modes use identical provider routing and API semantics.
+OGX runs in two modes. **Server mode** exposes HTTP endpoints accessible from any language or tool. **Library mode** runs in process through direct Python import, avoiding client/server HTTP overhead and suiting notebooks and scripts. Embedding-model initialization may still download model assets or check Hugging Face metadata, even for cached models; offline use requires the assets to be cached and `HF_HUB_OFFLINE=1`. Both modes use identical provider routing and API semantics.
 
 ## Multi-SDK Compatibility
 
