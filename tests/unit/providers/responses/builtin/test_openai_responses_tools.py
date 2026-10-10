@@ -351,7 +351,7 @@ async def test_reuse_mcp_tool_list(
             store=True,
             tools=[
                 OpenAIResponseInputToolFunction(name="fake", parameters=None),
-                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="http://8.8.8.8/mcp"),
             ],
         )
     )
@@ -369,7 +369,7 @@ async def test_reuse_mcp_tool_list(
             model="meta-llama/Llama-3.1-8B-Instruct",
             store=True,
             tools=[
-                OpenAIResponseInputToolMCP(server_label="alabel", server_url="aurl"),
+                OpenAIResponseInputToolMCP(server_label="alabel", server_url="http://8.8.8.8/mcp"),
             ],
         )
     )
