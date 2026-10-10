@@ -283,14 +283,6 @@ SETUP_DEFINITIONS: dict[str, Setup] = {
             "embedding_dimension": 768,
         },
     ),
-    "vllm-qwen3next": Setup(
-        name="vllm-qwen3next",
-        description="Qwen3-Next model for contextual retrieval validation",
-        defaults={
-            "text_model": "Qwen3-Next-80B-A3B-Instruct-FP8",
-            "embedding_model": "sentence-transformers/nomic-ai/nomic-embed-text-v1.5",
-        },
-    ),
 }
 
 
