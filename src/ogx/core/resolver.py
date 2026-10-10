@@ -48,6 +48,7 @@ from ogx_api import (
     RemoteProviderSpec,
     Responses,
     Skills,
+    SystemOne,
     ToolGroups,
     ToolGroupsProtocolPrivate,
     ToolRuntime,
@@ -96,6 +97,10 @@ def api_protocol_map(external_apis: dict[Api, ExternalApiSpec] | None = None) ->
         Api.messages: Messages,
         Api.interactions: Interactions,
         Api.skills: Skills,
+        Api.systemone: SystemOne,
+        # ModelsRoutingTable (reused for systemone_models) implements the public Models
+        # protocol regardless of which router_api it's paired with.
+        Api.systemone_models: Models,
     }
 
     if external_apis:
@@ -136,6 +141,7 @@ def additional_protocols_map() -> dict[Api, Any]:
     return {
         Api.inference: (ModelsProtocolPrivate, Models, Api.models),
         Api.tool_groups: (ToolGroupsProtocolPrivate, ToolGroups, Api.tool_groups),
+        Api.systemone: (ModelsProtocolPrivate, Models, Api.systemone_models),
     }
 
 

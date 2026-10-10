@@ -33,6 +33,7 @@ from ogx.providers.inline.vector_io.sqlite_vec.config import (
     SQLiteVectorIOConfig,
 )
 from ogx.providers.registry.inference import available_providers
+from ogx.providers.remote.systemone.typesafe.config import TypeSafeConfig
 from ogx.providers.remote.tool_runtime.brave_search.config import BraveSearchToolConfig
 from ogx.providers.remote.tool_runtime.exa_search.config import ExaSearchToolConfig
 from ogx.providers.remote.tool_runtime.nimble_search.config import NimbleSearchToolConfig
@@ -164,6 +165,9 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
         ],
         "batches": [
             BuildProvider(provider_type="inline::reference"),
+        ],
+        "systemone": [
+            BuildProvider(provider_type="remote::typesafe"),
         ],
     }
     files_config = LocalfsFilesImplConfig.sample_run_config(f"~/.ogx/distributions/{name}")
@@ -312,6 +316,13 @@ def get_distribution_template(name: str = "starter") -> DistributionTemplate:
             Provider(
                 provider_id="model-context-protocol",
                 provider_type="remote::model-context-protocol",
+            ),
+        ],
+        "systemone": [
+            Provider(
+                provider_id="typesafe",
+                provider_type="remote::typesafe",
+                config=TypeSafeConfig.sample_run_config(),
             ),
         ],
     }

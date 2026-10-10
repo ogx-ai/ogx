@@ -2852,6 +2852,7 @@ components:
       - llm
       - embedding
       - rerank
+      - systemone
       title: ModelType
       description: Enumeration of supported model types in OGX.
     Prompt:
@@ -7823,6 +7824,278 @@ components:
       - version
       title: SkillVersionDeleteResponse
       description: Response from deleting a skill version. Matches OpenAI DeletedSkillVersion wire format.
+    SystemOneChoiceAnswer:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - choice
+        choice:
+          type: string
+          title: Choice
+          description: The selected option name, one of the question's `criteria` keys.
+        probabilities:
+          additionalProperties:
+            type: number
+          type: object
+          title: Probabilities
+          description: Probability assigned to each option.
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+          description: Overall confidence in `choice`.
+      additionalProperties: true
+      type: object
+      required:
+      - choice
+      - probabilities
+      - confidence
+      title: SystemOneChoiceAnswer
+      description: Answer to a `choice` question.
+    SystemOneChoiceQuestion:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - choice
+        instructions:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          title: string | object | array
+          description: The question to answer about `state`.
+        criteria:
+          additionalProperties:
+            type: string
+          type: object
+          title: Criteria
+          description: Option name -> description, up to 255 options.
+      additionalProperties: true
+      type: object
+      required:
+      - instructions
+      - criteria
+      title: SystemOneChoiceQuestion
+      description: A question answered by picking one of up to 255 named options.
+    SystemOneNoulAnswer:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - noul
+        noul:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Noul
+          description: Calibrated probability that the answer is true.
+      additionalProperties: true
+      type: object
+      required:
+      - noul
+      title: SystemOneNoulAnswer
+      description: Answer to a `noul` question.
+    SystemOneNoulQuestion:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - noul
+        instructions:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          title: string | object | array
+          description: The question to answer about `state`.
+        criteria:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          description: Optional labels for the true/false outcomes.
+      additionalProperties: true
+      type: object
+      required:
+      - instructions
+      title: SystemOneNoulQuestion
+      description: A yes/no question, answered with a calibrated probability.
+    SystemOneRequest:
+      properties:
+        model:
+          type: string
+          title: Model
+          description: The decision model to use for judgment.
+        state:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          title: string | object | array
+          description: The context the questions are evaluated against.
+        questions:
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/SystemOneNoulQuestion'
+              title: SystemOneNoulQuestion
+            - $ref: '#/components/schemas/SystemOneChoiceQuestion'
+              title: SystemOneChoiceQuestion
+            - $ref: '#/components/schemas/SystemOneScoreQuestion'
+              title: SystemOneScoreQuestion
+            discriminator:
+              propertyName: type
+              mapping:
+                choice: '#/components/schemas/SystemOneChoiceQuestion'
+                noul: '#/components/schemas/SystemOneNoulQuestion'
+                score: '#/components/schemas/SystemOneScoreQuestion'
+            title: SystemOneNoulQuestion | SystemOneChoiceQuestion | SystemOneScoreQuestion
+          type: object
+          title: Questions
+          description: Questions to answer about `state`, keyed by caller-chosen name.
+      additionalProperties: true
+      type: object
+      required:
+      - model
+      - state
+      - questions
+      title: SystemOneRequest
+      description: Request body for POST /v1/systemone.
+    SystemOneResponse:
+      properties:
+        model:
+          type: string
+          title: Model
+          description: The decision model that produced the answers.
+        answers:
+          additionalProperties:
+            oneOf:
+            - $ref: '#/components/schemas/SystemOneNoulAnswer'
+              title: SystemOneNoulAnswer
+            - $ref: '#/components/schemas/SystemOneChoiceAnswer'
+              title: SystemOneChoiceAnswer
+            - $ref: '#/components/schemas/SystemOneScoreAnswer'
+              title: SystemOneScoreAnswer
+            discriminator:
+              propertyName: type
+              mapping:
+                choice: '#/components/schemas/SystemOneChoiceAnswer'
+                noul: '#/components/schemas/SystemOneNoulAnswer'
+                score: '#/components/schemas/SystemOneScoreAnswer'
+            title: SystemOneNoulAnswer | SystemOneChoiceAnswer | SystemOneScoreAnswer
+          type: object
+          title: Answers
+          description: Answers to the request's questions, keyed by the same names.
+        usage:
+          $ref: '#/components/schemas/SystemOneUsage'
+          description: Token usage for this call.
+      additionalProperties: true
+      type: object
+      required:
+      - model
+      - answers
+      title: SystemOneResponse
+      description: Response body for POST /v1/systemone.
+    SystemOneScoreAnswer:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - score
+        score:
+          type: number
+          title: Score
+          description: Weighted score across the rubric's ordered levels.
+        legend:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Human-readable description of what `score` means.
+        probabilities:
+          anyOf:
+          - additionalProperties:
+              type: number
+            type: object
+          - type: 'null'
+          description: Probability assigned to each rubric level.
+        confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          description: Overall confidence in `score`.
+      additionalProperties: true
+      type: object
+      required:
+      - score
+      title: SystemOneScoreAnswer
+      description: Answer to a `score` question.
+    SystemOneScoreQuestion:
+      properties:
+        type:
+          type: string
+          title: Type
+          enum:
+          - score
+        instructions:
+          anyOf:
+          - type: string
+          - additionalProperties: true
+            type: object
+          - items: {}
+            type: array
+            title: array
+          title: string | object | array
+          description: The question to answer about `state`.
+        criteria:
+          additionalProperties:
+            type: string
+          type: object
+          title: Criteria
+          description: Ordered rubric level name -> description (2-10 levels).
+      additionalProperties: true
+      type: object
+      required:
+      - instructions
+      - criteria
+      title: SystemOneScoreQuestion
+      description: A question answered against an ordered rubric of 2-10 levels.
+    SystemOneUsage:
+      properties:
+        input_tokens:
+          type: integer
+          minimum: 0.0
+          title: Input Tokens
+          description: Number of tokens in `state` and the questions.
+          default: 0
+        output_tokens:
+          type: integer
+          minimum: 0.0
+          title: Output Tokens
+          description: Number of tokens used to produce the answers.
+          default: 0
+      additionalProperties: true
+      type: object
+      title: SystemOneUsage
+      description: Token usage for a SystemOne judgment call.
     UpdatePromptBodyRequest:
       properties:
         prompt:
@@ -8724,6 +8997,8 @@ components:
       - skills
       - inspect
       - admin
+      - systemone
+      - systemone_models
       title: Api
       type: string
     ProviderSpec:

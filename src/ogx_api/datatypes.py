@@ -108,6 +108,7 @@ class Api(Enum, metaclass=DynamicApiMeta):
     :cvar container_runtime: Backend runtime for containers (Docker/Podman, Kubernetes)
     :cvar skills: Versioned skill bundle management
     :cvar inspect: Built-in system inspection and introspection
+    :cvar systemone: Judgment/decision model inference (SystemOne wire format)
     """
 
     providers = "providers"
@@ -134,6 +135,10 @@ class Api(Enum, metaclass=DynamicApiMeta):
     # built-in API
     inspect = "inspect"
     admin = "admin"
+
+    # New APIs must be appended here, never inserted above (api_leveling.mdx).
+    systemone = "systemone"
+    systemone_models = "systemone_models"  # only used for routing table
 
 
 @json_schema_type

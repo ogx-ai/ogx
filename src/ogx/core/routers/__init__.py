@@ -31,6 +31,10 @@ async def get_routing_table_impl(
         "models": ModelsRoutingTable,
         "tool_groups": ToolGroupsRoutingTable,
         "vector_stores": VectorStoresRoutingTable,
+        # ModelsRoutingTable is generic over which providers register into it; reusing it here
+        # (rather than a dedicated class) means systemone-registered models land in the same
+        # shared dist_registry as inference models, so they show up in GET /v1/models for free.
+        "systemone_models": ModelsRoutingTable,
     }
 
     if api.value not in api_to_tables:
@@ -46,6 +50,7 @@ async def get_auto_router_impl(
     api: Api, routing_table: RoutingTable, deps: dict[str, Any], run_config: StackConfig, policy: list[AccessRule]
 ) -> Any:
     from .inference import InferenceRouter
+    from .systemone import SystemOneRouter
     from .tool_runtime import ToolRuntimeRouter
     from .vector_io import VectorIORouter
 
@@ -53,6 +58,7 @@ async def get_auto_router_impl(
         "vector_io": VectorIORouter,
         "inference": InferenceRouter,
         "tool_runtime": ToolRuntimeRouter,
+        "systemone": SystemOneRouter,
     }
     if api.value not in api_to_routers:
         raise ValueError(f"API {api.value} not found in router map")

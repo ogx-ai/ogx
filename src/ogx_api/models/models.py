@@ -27,11 +27,14 @@ class ModelType(StrEnum):
     :cvar llm: Large language model for text generation and completion
     :cvar embedding: Embedding model for converting text to vector representations
     :cvar rerank: Reranking model for reordering documents based on their relevance to a query
+    :cvar systemone: Judgment/decision model that returns a calibrated probability or score
+        instead of generated text (SystemOne wire format)
     """
 
     llm = "llm"
     embedding = "embedding"
     rerank = "rerank"
+    systemone = "systemone"
 
 
 class CommonModelFields(BaseModel):

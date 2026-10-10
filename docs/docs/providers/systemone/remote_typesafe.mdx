@@ -1,0 +1,25 @@
+---
+description: "TypeSafe (Jev) decision model provider, the canonical implementation of the SystemOne judgment wire format (POST /v1/systemone)."
+sidebar_label: Remote - Typesafe
+title: remote::typesafe
+---
+
+# remote::typesafe
+
+## Description
+
+TypeSafe (Jev) decision model provider, the canonical implementation of the SystemOne judgment wire format (POST /v1/systemone).
+
+## Configuration
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `base_url` | `HttpUrl` | No | https://api.typesafe.ai/ | Base URL for the TypeSafe API. |
+| `api_key` | `SecretStr \| None` | No |  | API key for TypeSafe. Can be overridden per-request via the X-OGX-Provider-Data header. |
+
+## Sample Configuration
+
+```yaml
+base_url: https://api.typesafe.ai
+api_key: ${env.TYPESAFE_API_KEY:=}
+```
