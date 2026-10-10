@@ -10,7 +10,7 @@ switch backends.
 | Benchmark | Type | Primary Metric | Description |
 |---|---|---|---|
 | **BEIR** | Retrieval-only | nDCG@10 | Standard IR benchmarks (nfcorpus, scifact, arguana, fiqa, trec-covid) |
-| **MultiHOP RAG** | End-to-end RAG | EM / F1 | Multi-hop reasoning over news articles |
+| **MultiHOP RAG** | End-to-end RAG | Containment (vs. constant-reply baseline) | Multi-hop reasoning over news articles |
 | **QReCC** | Conversational RAG | EM / F1 | Multi-turn conversational QA with scoped corpus per conversation |
 | **Doc2Dial** | Document-grounded dialogue | EM / F1 | Goal-oriented dialogues grounded in documents |
 
@@ -133,7 +133,7 @@ benchmarking/rag/
 ├── benchmarks/           # Benchmark adapters
 │   ├── base.py           # Abstract BenchmarkRunner
 │   ├── beir_bench.py     # BEIR (retrieval-only, nDCG@10)
-│   ├── multihop_bench.py # MultiHOP RAG (end-to-end, EM/F1)
+│   ├── multihop_bench.py # MultiHOP RAG (end-to-end, containment)
 │   ├── qrecc_bench.py    # QReCC (conversational, scoped corpus)
 │   └── doc2dial_bench.py # Doc2Dial (document-grounded dialogue)
 ├── run_benchmark.py      # CLI entry point
@@ -157,6 +157,12 @@ benchmarking/rag/
 3. **End-to-end RAG** (MultiHOP, QReCC, Doc2Dial): Queries are sent to the
    Responses API with the `file_search` tool. Answer quality is measured with
    Exact Match, token-level F1 (HuggingFace SQuAD metric), and ROUGE-L.
+   MultiHOP gold answers are ~1 word, so token-F1 there mostly measures reply
+   length; MultiHOP is instead scored by containment (does the normalized gold
+   answer appear in the reply) and reported next to a constant-reply baseline
+   (a query-independent reply listing the five most common gold answers, 0.8337
+   on MultiHOP). A run that does not beat that baseline is flagged by
+   `compare_results.py`.
 
 4. **Conversational RAG** (QReCC, Doc2Dial): Multi-turn conversations are
    threaded using `previous_response_id` to maintain context across turns.

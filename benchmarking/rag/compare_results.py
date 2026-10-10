@@ -12,6 +12,7 @@ from pathlib import Path
 
 import click
 import pandas as pd
+from lib.answer_match import baseline_warning
 from tabulate import tabulate
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
@@ -19,14 +20,14 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 # Benchmark -> primary metric mapping
 PRIMARY_METRICS = {
     "beir": "ndcg_cut_10",
-    "multihop": "f1",
+    "multihop": "containment",
     "qrecc": "f1",
     "doc2dial": "f1",
 }
 
 SECONDARY_METRICS = {
     "beir": ["recall_10", "map_cut_10"],
-    "multihop": ["exact_match", "rouge_l", "ndcg_cut_10"],
+    "multihop": ["constant_baseline", "f1", "exact_match", "rouge_l", "ndcg_cut_10"],
     "qrecc": ["exact_match", "rouge_l"],
     "doc2dial": ["exact_match", "rouge_l"],
 }
@@ -140,6 +141,12 @@ def main(fmt: str, output: str | None):
 
     df = pd.DataFrame(table_rows)
 
+    warnings = [
+        f"{row['backend']}/{row['search_mode']}: {warning}"
+        for row in rows
+        if row["benchmark"] == "multihop" and (warning := baseline_warning(row["metrics"]))
+    ]
+
     if fmt == "csv":
         result = df.to_csv(index=False)
     elif fmt == "json":
@@ -152,6 +159,9 @@ def main(fmt: str, output: str | None):
         click.echo(f"Results written to {output}")
     else:
         click.echo(result)
+
+    for warning in warnings:
+        click.echo(f"WARNING multihop {warning}", err=True)
 
     # Print pivot comparison if we have multiple backends
     if len(df["Backend"].unique()) > 1:

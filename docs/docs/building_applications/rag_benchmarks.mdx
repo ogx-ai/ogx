@@ -31,15 +31,15 @@ We evaluated OGX against OpenAI across four benchmark suites covering retrieval 
 | MultiHOP RAG | Multi-hop reasoning | 0.0114 | 0.0141 | 0.0141 | 0.0136 | **0.0207** |
 | Doc2Dial | Document-grounded dialogue | **0.1337** | 0.0962 | 0.0966 | 0.1101 | 0.0634 |
 
-*Metric: Token-level F1 (SQuAD-style). Higher is better. OpenAI and OGX vector/hybrid/contextual used GPT-4.1 for generation. The Gemma 31B column uses google/gemma-4-31B-it served via vLLM.*
+*Metric: Token-level F1 (SQuAD-style). Higher is better. MultiHOP token-F1 is dominated by reply length and cannot rank systems (see the note under MultiHOP RAG). OpenAI and OGX vector/hybrid/contextual used GPT-4.1 for generation. The Gemma 31B column uses google/gemma-4-31B-it served via vLLM.*
 
 ### Key Takeaways
 
 - **Hybrid search matches or beats OpenAI on 3 of 4 BEIR datasets** (nfcorpus, scifact, arguana), demonstrating that OGX's combination of semantic search, keyword search, and reranking is competitive with OpenAI's proprietary retrieval.
 - **OGX outperforms OpenAI on arguana by 29%** (0.3835 vs 0.2960), a dataset that benefits from keyword matching on argumentative text.
 - **Contextual chunking closes the fiqa gap.** With contextual chunking (gpt-4.1-mini), OGX achieves 0.3586 nDCG@10 on fiqa — surpassing OpenAI's 0.2862 by 25.3%. Financial documents benefit from LLM-generated context that disambiguates domain-specific terminology.
-- **End-to-end RAG scores are low across all backends**, reflecting the difficulty of these benchmarks (multi-hop reasoning, document-grounded dialogue) rather than a RAG-specific weakness.
-- **Open-source models plug in without code changes.** Gemma 4 31B-IT, served via vLLM, produced coherent answers across both Doc2Dial (1,203 queries, zero empty responses) and MultiHOP RAG (2,556 queries). On MultiHOP, Gemma 31B outperforms GPT-4.1 by +47% F1 — the only benchmark where the open-source model beats the proprietary one.
+- **Doc2Dial end-to-end scores are low across all backends**, reflecting the difficulty of document-grounded dialogue rather than a RAG-specific weakness. MultiHOP answer quality is not yet measured (see the MultiHOP note).
+- **Open-source models plug in without code changes.** Gemma 4 31B-IT, served via vLLM, produced coherent answers across both Doc2Dial (1,203 queries, zero empty responses) and MultiHOP RAG (2,556 queries).
 
 ### Additional Retrieval Metrics
 
@@ -75,7 +75,7 @@ Multi-hop reasoning over 609 news articles, 2,556 queries.
 | nDCG@10 | — | — | — | **0.6202** | — |
 | Recall@10 | — | — | — | **0.6975** | — |
 
-> Gemma 31B outperforms GPT-4.1 on MultiHOP by +47% F1, suggesting its more verbose, synthesized responses better capture multi-hop reasoning across documents. Contextual chunking delivers strong retrieval metrics (nDCG@10 = 0.62, Recall@10 = 0.70), confirming that the retrieval layer is effective even when generation scores are low.
+> **MultiHOP token-F1 is not a usable ranking.** MultiHOP gold answers are short (median 1 word; 782 of 2,556 are "Yes"), but these runs sent the bare query and the `file_search` template asks for cited, multi-sentence replies, so SQuAD token-F1 mostly reflects reply length. A constant "Yes" reply, with no retrieval or generation, scores 0.3059, and a fully correct reply padded to 120-250 tokens scores 0.02-0.01, the same band as every system above (0.0114-0.0207). The comparisons previously drawn from these numbers (Gemma 31B +47%, OGX +23% over OpenAI) are withdrawn. The benchmark now scores MultiHOP by normalized-gold containment and prints a constant-reply baseline (a query-independent reply listing the five most common gold answers, which scores 0.8337) next to it; the runs above predate that change and must be re-run before they can be compared. Retrieval metrics (nDCG@10, Recall@10) are unaffected. Contextual chunking delivers strong retrieval metrics (nDCG@10 = 0.62, Recall@10 = 0.70), confirming that the retrieval layer is effective.
 
 #### Doc2Dial
 
@@ -131,13 +131,13 @@ For end-to-end RAG, contextual chunking improves Doc2Dial F1 by +14% over standa
 
 ### Open-source model (Gemma 31B)
 
-Gemma 4 31B-IT was served via vLLM and connected to OGX as a `remote::openai` inference provider, using the same retrieval pipeline as the GPT-4.1 runs. On **MultiHOP RAG**, Gemma 31B outperforms GPT-4.1 by +47% F1 (0.0207 vs 0.0141), suggesting its more verbose, synthesized responses better capture multi-hop reasoning. On **Doc2Dial**, lower F1/ROUGE-L scores vs GPT-4.1 are driven by response verbosity (avg ~2,500 chars vs ~95 char ground truths), not retrieval failure — the model produced zero empty responses across all 1,203 queries. This demonstrates OGX's model-swappable architecture: open-source models can be plugged in without any code changes.
+Gemma 4 31B-IT was served via vLLM and connected to OGX as a `remote::openai` inference provider, using the same retrieval pipeline as the GPT-4.1 runs. On **MultiHOP RAG**, no answer-quality comparison is drawn (see the MultiHOP note). On **Doc2Dial**, lower F1/ROUGE-L scores vs GPT-4.1 are driven by response verbosity (avg ~2,500 chars vs ~95 char ground truths), not retrieval failure — the model produced zero empty responses across all 1,203 queries. This demonstrates OGX's model-swappable architecture: open-source models can be plugged in without any code changes.
 
 ### Generation quality observations
 
-- All end-to-end benchmarks show low absolute scores (F1 < 0.15), which is consistent with prior work on these datasets.
+- Doc2Dial shows low absolute scores (F1 < 0.15), which is consistent with prior work on that dataset. MultiHOP token-F1 is low because replies are long and gold answers short, not because answers are wrong.
 - Exact Match is 0.0 across all backends — the model generates verbose answers while ground truths are often short extractive spans.
-- For GPT-4.1 runs, answer quality differences reflect retrieval quality differences, not generation differences. The Gemma 31B results show that model choice matters: verbosity hurts on Doc2Dial (short ground truths) but helps on MultiHOP (multi-document synthesis).
+- For GPT-4.1 runs, answer quality differences reflect retrieval quality differences, not generation differences. Verbosity hurts token-F1 on Doc2Dial (short ground truths) and on MultiHOP (mostly 1-word ground truths); adding tokens to a correct answer can only lower it.
 
 ## Methodology
 
@@ -180,7 +180,7 @@ BEIR benchmarks are **retrieval-only** — no LLM is involved. Documents are upl
 
 #### MultiHOP RAG (End-to-End)
 
-[MultiHOP RAG](https://github.com/yixuantt/MultiHop-RAG) tests multi-hop reasoning over news articles. The system must retrieve evidence from multiple documents and synthesize an answer. Queries are sent to the Responses API with the `file_search` tool, and answers are evaluated with Exact Match, token-level F1, and ROUGE-L.
+[MultiHOP RAG](https://github.com/yixuantt/MultiHop-RAG) tests multi-hop reasoning over news articles. The system must retrieve evidence from multiple documents and synthesize an answer. Queries are sent to the Responses API with the `file_search` tool, and answers are scored by containment: whether the normalized gold answer appears as whole tokens in the reply. Containment accepts hedged replies, and most gold answers are one of a few values (Yes, No, Insufficient information, two entity names), so a constant reply listing them scores 0.8337 with no retrieval or generation. That constant-reply baseline is reported alongside every run, and a run that does not beat it is flagged. Containment is therefore only informative above 0.8337 on this dataset. Exact Match, token-level F1 and ROUGE-L are still recorded for reference.
 
 #### Doc2Dial (Document-Grounded Dialogue)
 
@@ -193,8 +193,10 @@ BEIR benchmarks are **retrieval-only** — no LLM is involved. Documents are upl
 | **nDCG@10** | BEIR | Normalized Discounted Cumulative Gain at rank 10 — measures ranking quality |
 | **Recall@10** | BEIR | Fraction of relevant documents retrieved in top 10 |
 | **MAP@10** | BEIR | Mean Average Precision at rank 10 |
+| **Containment** | MultiHOP | Whether the normalized gold answer appears, as whole tokens, in the reply. Independent of reply length |
+| **Constant-reply baseline** | MultiHOP | Containment score of a query-independent reply listing the five most common gold answers. A run must beat it |
 | **Exact Match** | MultiHOP, Doc2Dial | Whether the prediction exactly matches the ground truth |
-| **F1** | MultiHOP, Doc2Dial | Token-level F1 (SQuAD-style precision/recall on answer tokens) |
+| **F1** | MultiHOP, Doc2Dial | Token-level F1 (SQuAD-style precision/recall on answer tokens). Not used to rank MultiHOP, where it depends mostly on reply length |
 | **ROUGE-L** | MultiHOP, Doc2Dial | Longest common subsequence overlap between prediction and ground truth |
 
 ## Running the Benchmarks
