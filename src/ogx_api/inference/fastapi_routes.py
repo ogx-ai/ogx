@@ -51,7 +51,7 @@ def _format_inference_sse_error_event(e: Exception) -> str:
     logger.exception("Error in inference SSE generator")
     exc = _http_exception_from_sse_error(e)
     return create_sse_event(
-        OpenAIErrorResponse.from_message(get_sse_error_message(e), code=str(exc.status_code)).to_dict()
+        OpenAIErrorResponse.for_status(exc.status_code, get_sse_error_message(e), code=str(exc.status_code)).to_dict()
     )
 
 

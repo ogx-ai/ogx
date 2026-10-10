@@ -192,8 +192,9 @@ class ExceptionTranslatingRoute(APIRoute):
     """Route class that converts known exception types to HTTPException.
 
     ValueError and OGXError (which carry a ``status_code``) are
-    translated to the appropriate HTTPException so that FastAPI's built-in
-    handler returns a proper JSON error response.  All other exceptions
+    translated to the appropriate HTTPException so that the server's
+    ``StarletteHTTPException`` handler returns a proper JSON error response.
+    All other exceptions
     are left untouched so they can propagate to the server's global
     ``Exception`` handler registered via ``app.exception_handler(Exception)``.
     """
