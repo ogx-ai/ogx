@@ -6,6 +6,7 @@
 
 from unittest.mock import patch
 
+import pytest
 from openai.types.chat.chat_completion_chunk import (
     ChatCompletionChunk,
     Choice,
@@ -1289,4 +1290,77 @@ async def test_streaming_deltas_stay_consistent_with_final_text_when_marker_spli
             content_part_done_text = event.part.text
 
     assert content_part_done_text == "Global warming is caused by greenhouse gases."
+    assert "".join(delta_texts) == content_part_done_text
+
+
+@pytest.mark.parametrize(
+    "chunks_content",
+    [
+        # The tokens gpt-4o streams for the citation in the recording of
+        # test_response_sequential_file_search (tests/integration/responses/recordings/).
+        ["The model has", " ", "128", " experts", " <", "|", "file", "-", "528", "246", "887", "823", "|", ">."],
+        ["The model has 128 experts <|fi", "le-528246887823|>."],
+        ["The model has 128 experts <|file-528246887823|", ">."],
+        ["The model has 128 experts [", "file", "-528246887823]."],
+        ["The model has 128 experts (", "fil", "e-528246887823)."],
+    ],
+)
+async def test_streaming_deltas_stay_consistent_with_final_text_when_marker_split_into_provider_tokens(
+    openai_responses_impl, mock_inference_api, mock_vector_io_api, chunks_content
+):
+    """Same contract as the test above, but with the chunk boundary inside "file-" or right
+    before the closing ">", which is where real providers split the marker.
+    """
+    mock_vector_io_api.openai_search_vector_store.return_value = VectorStoreSearchResponsePage(
+        search_query=["How many experts does the model have?"],
+        has_more=False,
+        data=[
+            VectorStoreSearchResponse(
+                file_id="file-528246887823",
+                filename="models.pdf",
+                score=0.9,
+                content=[VectorStoreContent(type="text", text="The model has 128 experts.")],
+            )
+        ],
+    )
+
+    async def split_marker_final_answer():
+        for i, delta_text in enumerate(chunks_content):
+            yield ChatCompletionChunk(
+                id="chat-completion-1000",
+                created=1234567894,
+                model="openai/gpt-4o",
+                object="chat.completion.chunk",
+                choices=[
+                    Choice(
+                        index=0,
+                        delta=ChoiceDelta(role="assistant", content=delta_text),
+                        finish_reason="stop" if i == len(chunks_content) - 1 else None,
+                    )
+                ],
+            )
+
+    mock_inference_api.openai_chat_completion.side_effect = [
+        fake_stream("file_search_tool_call_completion.yaml"),
+        split_marker_final_answer(),
+    ]
+
+    stream = await openai_responses_impl.create_openai_response(
+        CreateResponseRequest(
+            input="How many experts does the model have?",
+            model="openai/gpt-4o",
+            tools=[OpenAIResponseInputToolFileSearch(type="file_search", vector_store_ids=["vs_1"])],
+            stream=True,
+        )
+    )
+
+    delta_texts = []
+    content_part_done_text = None
+    async for event in stream:
+        if isinstance(event, OpenAIResponseObjectStreamResponseOutputTextDelta):
+            delta_texts.append(event.delta)
+        elif isinstance(event, OpenAIResponseObjectStreamResponseContentPartDone) and event.part.text:
+            content_part_done_text = event.part.text
+
+    assert content_part_done_text == "The model has 128 experts."
     assert "".join(delta_texts) == content_part_done_text
