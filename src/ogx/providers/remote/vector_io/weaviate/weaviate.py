@@ -104,8 +104,8 @@ class WeaviateIndex(EmbeddingIndex):
             return
         sanitized_collection_name = sanitize_collection_name(self.collection_name, weaviate_format=True)
         collection = self.client.collections.get(sanitized_collection_name)
-        chunk_ids = [chunk.chunk_id for chunk in chunks_for_deletion]
-        collection.data.delete_many(where=Filter.by_property("chunk_id").contains_any(chunk_ids))
+        uuids = [_chunk_uuid(chunk.chunk_id) for chunk in chunks_for_deletion]
+        collection.data.delete_many(where=Filter.by_id().contains_any(uuids))
 
     async def query_vector(
         self, embedding: NDArray, k: int, score_threshold: float, filters: Any = None
@@ -176,9 +176,8 @@ class WeaviateIndex(EmbeddingIndex):
             # contains_any([]) raises WeaviateInvalidInputError rather than matching nothing.
             return
         collection = self.client.collections.get(sanitized_collection_name)
-        # "id" is the Weaviate object UUID, not a stored property -- chunk_id is, and is
-        # what delete_chunks() above filters on too.
-        collection.data.delete_many(where=Filter.by_property("chunk_id").contains_any(chunk_ids))
+        uuids = [_chunk_uuid(chunk_id) for chunk_id in chunk_ids]
+        collection.data.delete_many(where=Filter.by_id().contains_any(uuids))
 
     async def query_keyword(
         self,
