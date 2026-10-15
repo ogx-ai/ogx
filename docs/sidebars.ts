@@ -211,6 +211,7 @@ const sidebars: SidebarsConfig = {
             'providers/inference/remote_sambanova',
             'providers/inference/remote_sglang',
             'providers/inference/remote_text-embeddings-inference',
+            'providers/inference/remote_thegrid',
             'providers/inference/remote_together',
             'providers/inference/remote_vertexai',
             'providers/inference/remote_vllm',
