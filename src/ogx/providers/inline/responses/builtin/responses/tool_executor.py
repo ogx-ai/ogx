@@ -57,7 +57,7 @@ tracer = trace.get_tracer(__name__)
 # untrusted data before being placed back into the model's context. This is a
 # mitigation for indirect prompt injection, not a guarantee against it -- see
 # _wrap_untrusted_tool_output.
-_UNTRUSTED_CONTENT_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+_UNTRUSTED_CONTENT_TOOL_NAMES = frozenset({"web_search", "file_search"})
 
 _UNTRUSTED_TOOL_OUTPUT_HEADER = (
     "The following is untrusted content retrieved by a tool call (e.g. a web page or "
@@ -352,7 +352,7 @@ class ToolExecutor:
                 ),
                 sequence_number=sequence_number,
             )
-        elif function_name in ("knowledge_search", "file_search"):
+        elif function_name == "file_search":
             sequence_number += 1
             yield ToolExecutionResult(
                 stream_event=OpenAIResponseObjectStreamResponseFileSearchCallInProgress(
@@ -376,7 +376,7 @@ class ToolExecutor:
             )
 
         # For file search, emit searching event
-        if function_name in ("knowledge_search", "file_search"):
+        if function_name == "file_search":
             sequence_number += 1
             yield ToolExecutionResult(
                 stream_event=OpenAIResponseObjectStreamResponseFileSearchCallSearching(
@@ -422,7 +422,7 @@ class ToolExecutor:
                         authorization=mcp_tool.authorization,
                         session_manager=self.mcp_session_manager,
                     )
-            elif function_name in ("knowledge_search", "file_search"):
+            elif function_name == "file_search":
                 response_file_search_tool = (
                     next(
                         (t for t in ctx.response_tools if isinstance(t, OpenAIResponseInputToolFileSearch)),
@@ -517,7 +517,7 @@ class ToolExecutor:
                 sequence_number=sequence_number,
             )
             yield ToolExecutionResult(stream_event=web_completion_event, sequence_number=sequence_number)
-        elif function_name in ("knowledge_search", "file_search"):
+        elif function_name == "file_search":
             sequence_number += 1
             file_completion_event = OpenAIResponseObjectStreamResponseFileSearchCallCompleted(
                 item_id=item_id,
@@ -585,7 +585,7 @@ class ToolExecutor:
                         queries=[query],
                         sources=sources,
                     )
-            elif function.name in ("knowledge_search", "file_search"):
+            elif function.name == "file_search":
                 message = OpenAIResponseOutputMessageFileSearchToolCall(
                     id=item_id,
                     queries=[tool_kwargs.get("query", "")],

@@ -78,11 +78,6 @@ class TestUntrustedToolOutputDelimiting:
         assert _UNTRUSTED_TOOL_OUTPUT_HEADER in input_message.content
         assert malicious_doc in input_message.content
 
-    async def test_knowledge_search_string_content_is_delimited(self, tool_executor):
-        input_message = await _build_input_message(tool_executor, "knowledge_search", "some indexed text")
-
-        assert _UNTRUSTED_TOOL_OUTPUT_HEADER in input_message.content
-
     async def test_web_search_list_content_text_parts_are_delimited(self, tool_executor):
         content = [TextContentItem(text="attacker-controlled snippet")]
         input_message = await _build_input_message(tool_executor, "web_search", content)

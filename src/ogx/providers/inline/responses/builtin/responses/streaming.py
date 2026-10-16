@@ -157,7 +157,7 @@ class _ContextLengthRetryError(Exception):
 
 # Built-in tool names that the server knows how to execute itself.
 # Anything else is either a registered function tool (client-side) or a hallucinated name.
-_SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "knowledge_search", "file_search"})
+_SERVER_SIDE_BUILTIN_TOOL_NAMES = frozenset({"web_search", "file_search"})
 
 _MAX_HALLUCINATED_TOOL_RETRIES = 3
 
@@ -1670,7 +1670,7 @@ class StreamingResponseOrchestrator:
                     id=matching_item_id,
                     status="in_progress",
                 )
-            elif tool_call.function.name in ("knowledge_search", "file_search"):
+            elif tool_call.function.name == "file_search":
                 item = OpenAIResponseOutputMessageFileSearchToolCall(
                     id=matching_item_id,
                     status="in_progress",
