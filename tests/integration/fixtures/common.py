@@ -150,7 +150,6 @@ def get_provider_data():
         "TOGETHER_API_KEY": "together_api_key",
         "ANTHROPIC_API_KEY": "anthropic_api_key",
         "GROQ_API_KEY": "groq_api_key",
-        "WOLFRAM_ALPHA_API_KEY": "wolfram_alpha_api_key",
     }
     provider_data = {}
     for key, value in keymap.items():

@@ -106,17 +106,6 @@ def available_providers() -> list[ProviderSpec]:
         ),
         RemoteProviderSpec(
             api=Api.tool_runtime,
-            adapter_type="wolfram-alpha",
-            provider_type="remote::wolfram-alpha",
-            module="ogx.providers.remote.tool_runtime.wolfram_alpha",
-            config_class="ogx.providers.remote.tool_runtime.wolfram_alpha.config.WolframAlphaToolConfig",
-            pip_packages=["requests"],
-            provider_data_validator="ogx.providers.remote.tool_runtime.wolfram_alpha.WolframAlphaToolProviderDataValidator",
-            toolgroup_id="builtin::wolfram_alpha",
-            description="Wolfram Alpha tool for computational knowledge and mathematical calculations.",
-        ),
-        RemoteProviderSpec(
-            api=Api.tool_runtime,
             adapter_type="model-context-protocol",
             provider_type="remote::model-context-protocol",
             module="ogx.providers.remote.tool_runtime.model_context_protocol",

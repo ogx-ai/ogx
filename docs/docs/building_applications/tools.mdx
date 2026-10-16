@@ -11,7 +11,7 @@ import TabItem from '@theme/TabItem';
 # Tools
 
 :::note[Tool Configuration Simplified]
-Built-in tools (web search, RAG, WolframAlpha) are now auto-registered based on your provider configuration. The `/v1/admin/tools` and `/v1/toolgroups` endpoints are available for tool discovery and management. For MCP servers, use the [Connectors API](/docs/concepts/apis/).
+Built-in tools (web search, RAG) are now auto-registered based on your provider configuration. The `/v1/admin/tools` and `/v1/toolgroups` endpoints are available for tool discovery and management. For MCP servers, use the [Connectors API](/docs/concepts/apis/).
 :::
 
 Tools are functions that can be invoked by an agent to perform tasks. They are organized into tool groups and registered with specific providers. Each tool group represents a collection of related tools from a single provider. They are organized into groups so that state can be externalized: the collection operates on the same state typically.
@@ -28,7 +28,7 @@ OGX allows you to use both server-side and client-side tools. With server-side t
 
 ## Server-side Tools
 
-OGX provides built-in providers for some common tools. These include web search, math, and RAG capabilities.
+OGX provides built-in providers for some common tools. These include web search and RAG capabilities.
 
 Built-in tool groups are automatically registered based on your configured `tool_runtime` providers. For example, if you have a `remote::tavily-search` provider configured, the `builtin::websearch` tool group is auto-registered.
 
@@ -40,10 +40,6 @@ The tool requires an API key which can be provided either in the configuration o
 ```
 {"<provider_name>_api_key": <your api key>}
 ```
-
-### Math
-
-The WolframAlpha tool provides access to computational knowledge through the WolframAlpha API. Configure the `remote::wolfram-alpha` provider in your `tool_runtime` providers and the `builtin::wolfram_alpha` tool group will be auto-registered.
 
 ### File Search (RAG)
 
@@ -269,48 +265,6 @@ response = agent.create_turn(
 )
 for log in EventLogger().log(response):
     log.print()
-```
-
-</TabItem>
-</Tabs>
-
-### WolframAlpha Math Agent
-
-<Tabs>
-<TabItem value="setup" label="Setup & Configuration">
-
-1. Start by registering for a WolframAlpha API key at [WolframAlpha Developer Portal](https://developer.wolframalpha.com/access).
-2. Provide the API key either by setting it in your environment before starting the OGX server:
-    ```bash
-    export WOLFRAM_ALPHA_API_KEY="your key"
-    ```
-    or from the client side:
-    ```python
-    client = OgxClient(
-        base_url="http://localhost:8321",
-        provider_data={"wolfram_alpha_api_key": wolfram_api_key},
-    )
-    ```
-
-</TabItem>
-<TabItem value="implementation" label="Implementation">
-
-```python
-# Configure the tools in the Agent by setting tools=["builtin::wolfram_alpha"]
-agent = Agent(
-    client,
-    model="meta-llama/Llama-3.2-3B-Instruct",
-    instructions="You are a mathematical assistant that can solve complex equations.",
-    tools=["builtin::wolfram_alpha"],
-)
-
-session_id = agent.create_session("math-session")
-
-# Example user query
-response = agent.create_turn(
-    messages=[{"role": "user", "content": "Solve x^2 + 2x + 1 = 0 using WolframAlpha"}],
-    session_id=session_id,
-)
 ```
 
 </TabItem>
