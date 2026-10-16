@@ -10,6 +10,7 @@ from typing import Any
 import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.providers.utils.tools.web_search import WebSearchSourceDict
 from ogx_api import (
     URL,
     ListToolDefsResponse,
@@ -120,7 +121,9 @@ class ExaSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRequ
         top_k = [
             {field: r[field] for field in self._RESULT_FIELDS if field in r} for r in response_json.get("results", [])
         ]
-        sources = [{"url": r["url"]} for r in top_k if "url" in r]
+        sources: list[WebSearchSourceDict] = [
+            {"url": r["url"], "title": r.get("title", "")} for r in top_k if "url" in r
+        ]
         return ToolInvocationResult(
             content=json.dumps({"query": kwargs["query"], "top_k": top_k}),
             metadata={"query": kwargs["query"], "sources": sources},

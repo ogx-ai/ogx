@@ -10,6 +10,7 @@ from typing import Any
 import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.providers.utils.tools.web_search import WebSearchSourceDict
 from ogx_api import (
     URL,
     ListToolDefsResponse,
@@ -121,11 +122,11 @@ class BingSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsReq
         response.raise_for_status()
 
         response_json = response.json()
-        sources = []
+        sources: list[WebSearchSourceDict] = []
         if "webPages" in response_json:
             for page in response_json["webPages"]["value"]:
                 if "url" in page:
-                    sources.append({"url": page["url"]})
+                    sources.append({"url": page["url"], "title": page.get("name", "")})
         return ToolInvocationResult(
             content=json.dumps(self._clean_response(response_json)),
             metadata={"query": kwargs["query"], "sources": sources},

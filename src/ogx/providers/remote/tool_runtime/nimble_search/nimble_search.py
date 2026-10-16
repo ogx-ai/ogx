@@ -10,6 +10,7 @@ from typing import Any
 import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.providers.utils.tools.web_search import WebSearchSourceDict
 from ogx_api import (
     URL,
     ListToolDefsResponse,
@@ -132,20 +133,21 @@ class NimbleSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
 
         response_json = response.json()
         results = []
-        sources = []
+        sources: list[WebSearchSourceDict] = []
         for r in response_json.get("results", []):
             url = r.get("url")
+            title = r.get("title", "")
             # In 'lite' depth the API returns metadata only (empty content); the
             # description carries the result text, so fall back to it.
             results.append(
                 {
-                    "title": r.get("title", ""),
+                    "title": title,
                     "url": url,
                     "content": r.get("content") or r.get("description", ""),
                 }
             )
             if url:
-                sources.append({"url": url})
+                sources.append({"url": url, "title": title})
 
         return ToolInvocationResult(
             content=json.dumps({"query": kwargs["query"], "results": results}),

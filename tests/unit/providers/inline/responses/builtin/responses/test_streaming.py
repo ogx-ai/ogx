@@ -59,6 +59,7 @@ def mock_context():
     # Add required attributes that StreamingResponseOrchestrator expects
     context.tool_context = AsyncMock()
     context.tool_context.previous_tools = {}
+    context.tool_context.historical_citation_urls = {}
     context.messages = []
     context.tool_choice = None
     context.available_tools = MagicMock(return_value=[])
@@ -116,6 +117,7 @@ def _build_orchestrator(mcp_tool_to_server: dict[str, OpenAIResponseInputToolMCP
     mock_ctx = MagicMock(spec=ChatCompletionContext)
     mock_ctx.tool_context = MagicMock(spec=ToolContext)
     mock_ctx.tool_context.previous_tools = mcp_tool_to_server
+    mock_ctx.tool_context.historical_citation_urls = {}
     mock_ctx.model = "test-model"
     mock_ctx.messages = []
     mock_ctx.temperature = None

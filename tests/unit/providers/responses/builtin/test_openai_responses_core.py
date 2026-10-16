@@ -299,6 +299,59 @@ async def test_prepend_previous_response_web_search(openai_responses_impl, mock_
     assert input[3].content == "fake_input"
 
 
+async def test_process_input_with_previous_response_reconstructs_web_search_citation_history(
+    openai_responses_impl, mock_responses_store
+):
+    """Regression test for a review finding: a follow-up turn that echoes an earlier turn's
+    `<|url-...|>` marker without calling web_search again used to never resolve it, because
+    citation_urls starts empty every turn. The tool_context returned for a previous_response_id
+    turn must carry a reconstructed historical_citation_urls map built from that previous
+    response's own web_search_call output (see tool_executor.build_web_search_citation_history).
+    """
+    from ogx.providers.inline.responses.builtin.responses.tool_executor import (
+        _web_search_citation_marker_id,
+    )
+    from ogx_api.openai_responses import WebSearchActionSearch, WebSearchSource
+
+    output_web_search = OpenAIResponseOutputMessageWebSearchToolCall(
+        id="ws_123",
+        status="completed",
+        action=WebSearchActionSearch(query="q", sources=[WebSearchSource(url="https://example.com/a")]),
+    )
+    output_message = OpenAIResponseMessage(
+        id="123",
+        content=[OpenAIResponseOutputMessageContentOutputText(text="fake_web_search_response")],
+        status="completed",
+        role="assistant",
+    )
+    response = _OpenAIResponseObjectWithInputAndMessages(
+        created_at=1,
+        id="resp_123",
+        model="fake_model",
+        output=[output_web_search, output_message],
+        status="completed",
+        text=OpenAIResponseText(format=OpenAIResponseTextFormat(type="text")),
+        input=[],
+        messages=[OpenAIUserMessageParam(content="test input")],
+        store=True,
+    )
+    mock_responses_store.get_response_object.return_value = response
+
+    (
+        _all_input,
+        _messages,
+        tool_context,
+        _usage,
+        _skills,
+    ) = await openai_responses_impl._process_input_with_previous_response(
+        input="follow up", tools=None, previous_response_id="resp_123", conversation=None
+    )
+
+    marker_id = _web_search_citation_marker_id("https://example.com/a")
+    assert marker_id in tool_context.historical_citation_urls
+    assert tool_context.historical_citation_urls[marker_id].url == "https://example.com/a"
+
+
 async def test_prepend_previous_response_mcp_tool_call(openai_responses_impl, mock_responses_store):
     """Test prepending a previous response which included an mcp tool call to a new response."""
     input_item_message = OpenAIResponseMessage(

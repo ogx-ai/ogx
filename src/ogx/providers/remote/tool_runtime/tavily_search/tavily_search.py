@@ -10,6 +10,7 @@ from typing import Any
 import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.providers.utils.tools.web_search import WebSearchSourceDict
 from ogx_api import (
     URL,
     ListToolDefsResponse,
@@ -107,10 +108,10 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         response.raise_for_status()
 
         response_json = response.json()
-        sources = []
+        sources: list[WebSearchSourceDict] = []
         for r in response_json.get("results", []):
             if "url" in r:
-                sources.append({"url": r["url"]})
+                sources.append({"url": r["url"], "title": r.get("title", "")})
         return ToolInvocationResult(
             content=json.dumps(self._clean_tavily_response(response_json)),
             metadata={"query": kwargs["query"], "sources": sources},

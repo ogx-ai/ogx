@@ -37,6 +37,7 @@ def mock_context():
     context = AsyncMock(spec=ChatCompletionContext)
     context.tool_context = AsyncMock()
     context.tool_context.previous_tools = {}
+    context.tool_context.historical_citation_urls = {}
     context.messages = []
     context.tool_choice = None
     context.available_tools = MagicMock(return_value=[])

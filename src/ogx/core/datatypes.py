@@ -5,6 +5,7 @@
 # the root directory of this source tree.
 
 import re
+import string
 import warnings
 from enum import StrEnum
 from pathlib import Path
@@ -613,6 +614,92 @@ class AnnotationPromptParams(BaseModel):
         return v
 
 
+def _require_exact_template_fields(v: str, required: set[str]) -> str:
+    """Validate that v's str.format() fields are exactly `required`, no more and no fewer, and
+    that the template actually formats successfully.
+
+    A substring check (e.g. "{source_list}" in v) misses several ways a template can still
+    break at format() time or silently produce the wrong text: an extra field like {extra} or
+    stray JSON braces raises a KeyError (which, for a web_search citation template, now
+    escapes execute_tool_call uncaught -- citation-marker building runs outside
+    _execute_tool's try/except on purpose, see _add_web_search_citation_markers); a doubled
+    brace like {{source_list}} is a literal escape sequence, not the real placeholder, so it
+    silently renders as the text "{source_list}" instead of the actual list. Parsing with
+    string.Formatter, which understands {{/}} escaping and only reports genuine fields,
+    catches all of these, including the empty-template case.
+
+    The field-name check alone still misses a bad format spec on an otherwise-correct field
+    (e.g. {title:d}): that loads fine here since the field name is right, then raises on every
+    search that returns a source. Actually formatting with sample values (matching `required`
+    exactly, so this never raises for an unrelated reason) catches that too, at config-load
+    time rather than at every call.
+    """
+    if len(v) == 0:
+        raise ValueError("template must not be empty")
+    fields = {field for _, field, _, _ in string.Formatter().parse(v) if field is not None}
+    if fields != required:
+        raise ValueError(f"template fields must be exactly {sorted(required)}, got {sorted(fields)}")
+    sample = {name: 1 if name == "index" else f"Sample {name}" for name in required}
+    try:
+        v.format(**sample)
+    except Exception as e:
+        raise ValueError(f"template cannot be formatted: {type(e).__name__}: {e}") from e
+    return v
+
+
+class WebSearchAnnotationParams(BaseModel):
+    """Configuration for web_search citation annotations (the url_citation counterpart to
+    AnnotationPromptParams, which only covers file_search)."""
+
+    enable_annotations: bool = Field(
+        default=True,
+        description="Whether to instruct the model to cite web_search sources inline, producing "
+        "url_citation annotations. When False, web_search still returns results and "
+        "action.sources, but no citation instruction is sent and no url_citation annotations "
+        "are produced.",
+    )
+    source_list_header_template: str = Field(
+        default="Sources:\n{source_list}",
+        description="Header introducing the numbered source list, appended to the search "
+        "engine's own (untrusted) content before it's delimited -- see source_line_template "
+        "for each line's format. Available placeholders: {source_list} the numbered, "
+        "formatted source list.",
+    )
+    citation_instruction_template: str = Field(
+        default=(
+            "Cite a source immediately at the end of a sentence before punctuation, using the "
+            "exact token shown after it above, like 'This is a fact <|url-1a2b3c4d5e6f|>.' Copy "
+            "the token exactly as given, do not invent new ones."
+        ),
+        description="Instructions for how the model should cite web_search sources, appended "
+        "after a blank-line separator and the search engine's delimited content (added "
+        "automatically, not part of this template). Used when enable_annotations is True. "
+        "Takes no placeholders: it must not reference the source list, which is delimited "
+        "separately (see source_list_header_template).",
+    )
+    source_line_template: str = Field(
+        default="{index}. {title} - {url} (cite as <|{marker_id}|>)",
+        description="Template for each line of the numbered source list. Available "
+        "placeholders: {index} 1-based source index, {title} source title, {url} source url, "
+        "{marker_id} the citation marker id to use.",
+    )
+
+    @field_validator("source_list_header_template")
+    @classmethod
+    def validate_source_list_header_template(cls, v: str) -> str:
+        return _require_exact_template_fields(v, {"source_list"})
+
+    @field_validator("citation_instruction_template")
+    @classmethod
+    def validate_citation_instruction_template(cls, v: str) -> str:
+        return _require_exact_template_fields(v, set())
+
+    @field_validator("source_line_template")
+    @classmethod
+    def validate_source_line_template(cls, v: str) -> str:
+        return _require_exact_template_fields(v, {"index", "title", "url", "marker_id"})
+
+
 class FileIngestionParams(BaseModel):
     """Configuration for file processing during ingestion."""
 
@@ -730,6 +817,10 @@ class VectorStoresConfig(BaseModel):
     annotation_prompt_params: AnnotationPromptParams = Field(
         default_factory=AnnotationPromptParams,
         description="Configuration for source annotation and attribution features.",
+    )
+    web_search_annotation_params: WebSearchAnnotationParams = Field(
+        default_factory=WebSearchAnnotationParams,
+        description="Configuration for web_search citation annotations.",
     )
 
     file_ingestion_params: FileIngestionParams = Field(

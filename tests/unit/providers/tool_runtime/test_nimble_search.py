@@ -122,7 +122,7 @@ async def test_invoke_returns_source_metadata(nimble_search, mock_nimble_respons
     result = await nimble_search.invoke_tool(tool_name="web_search", kwargs={"query": "test query"})
     assert result.metadata is not None
     assert result.metadata["query"] == "test query"
-    assert result.metadata["sources"] == [{"url": "https://example.com"}]
+    assert result.metadata["sources"] == [{"url": "https://example.com", "title": "Test Result"}]
 
 
 @pytest.mark.parametrize("size,expected", [("low", 3), ("medium", 5), ("high", 10)])

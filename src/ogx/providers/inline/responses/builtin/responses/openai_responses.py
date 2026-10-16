@@ -91,7 +91,7 @@ from ogx_api.inference import OpenAIChatCompletionRequestWithExtraBody, ServiceT
 
 from .memory import resolve_memory_context, resolve_memory_owner_id, write_conversation_memory
 from .streaming import StreamingResponseOrchestrator
-from .tool_executor import ToolExecutor
+from .tool_executor import ToolExecutor, build_web_search_citation_history
 from .types import ChatCompletionContext, ToolContext
 from .utils import (
     APPROX_CHARS_PER_TOKEN,
@@ -369,6 +369,7 @@ class OpenAIResponsesImpl:
                 messages = await convert_response_input_to_chat_messages(all_input, files_api=self.files_api)
 
             tool_context.recover_tools_from_previous_response(previous_response)
+            tool_context.historical_citation_urls = build_web_search_citation_history(previous_response)
         elif conversation is not None:
             conversation_items = await self.conversations_api.list_items(
                 ListItemsRequest(conversation_id=conversation, order="asc")

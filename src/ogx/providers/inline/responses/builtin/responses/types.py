@@ -57,6 +57,13 @@ def _json_equal(a: str, b: str) -> bool:
         return a == b
 
 
+class CitationUrl(BaseModel):
+    """A web source cited inline via a `<|url-id|>` marker (see extract_citations_from_text)."""
+
+    url: str
+    title: str
+
+
 class ToolExecutionResult(BaseModel):
     """Result of streaming tool execution."""
 
@@ -65,6 +72,7 @@ class ToolExecutionResult(BaseModel):
     final_output_message: OpenAIResponseOutput | None = None
     final_input_message: OpenAIMessageParam | None = None
     citation_files: dict[str, str] | None = None
+    citation_urls: dict[str, CitationUrl] | None = None
 
 
 @dataclass
@@ -108,6 +116,14 @@ class ToolContext(BaseModel):
     previous_tool_listings: list[OpenAIResponseOutputMessageMCPListTools]
     # tool arguments from current request that still need to be processed:
     tools_to_process: list[OpenAIResponseInputTool]
+    # marker id -> CitationUrl reconstructed from the previous response's own web_search_call
+    # outputs (see tool_executor.build_web_search_citation_history), so a follow-up turn can
+    # resolve a `<|url-...|>` marker the model copies from stored history without searching
+    # again. Populated by the caller, not by a method here (unlike previous_tools above):
+    # building it needs _web_search_citation_marker_id from tool_executor.py, and
+    # tool_executor.py already imports this module, so a method here importing back from
+    # there would be circular.
+    historical_citation_urls: dict[str, CitationUrl]
 
     def __init__(
         self,
@@ -118,6 +134,7 @@ class ToolContext(BaseModel):
             previous_tools={},
             previous_tool_listings=[],
             tools_to_process=current_tools or [],
+            historical_citation_urls={},
         )
 
     def recover_tools_from_previous_response(

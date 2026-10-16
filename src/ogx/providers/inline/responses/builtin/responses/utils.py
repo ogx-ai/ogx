@@ -11,7 +11,7 @@ import uuid
 from collections.abc import AsyncIterator, Sequence
 
 from ogx.log import get_logger
-from ogx.providers.inline.responses.builtin.responses.types import AssistantMessageWithReasoning
+from ogx.providers.inline.responses.builtin.responses.types import AssistantMessageWithReasoning, CitationUrl
 from ogx.providers.utils.files.response import response_body_bytes
 from ogx_api import (
     Files,
@@ -31,6 +31,7 @@ from ogx_api import (
     OpenAIImageURL,
     OpenAIJSONSchema,
     OpenAIMessageParam,
+    OpenAIResponseAnnotationCitation,
     OpenAIResponseAnnotationFileCitation,
     OpenAIResponseCompaction,
     OpenAIResponseFormatJSONObject,
@@ -110,13 +111,17 @@ def construct_data_url(ascii_text: str, mime_type: str | None) -> str:
 async def convert_chat_choice_to_response_message(
     choice: OpenAIChoice,
     citation_files: dict[str, str] | None = None,
+    citation_urls: dict[str, CitationUrl] | None = None,
     *,
     message_id: str | None = None,
+    historical_citation_urls: dict[str, CitationUrl] | None = None,
 ) -> OpenAIResponseMessage:
     """Convert an OpenAI Chat Completion choice into an OpenAI Response output message."""
     output_content = choice.message.content or ""
 
-    annotations, clean_text = extract_citations_from_text(output_content, citation_files or {})
+    annotations, clean_text = extract_citations_from_text(
+        output_content, citation_files or {}, citation_urls, historical_citation_urls
+    )
     logprobs = choice.logprobs.content if choice.logprobs and choice.logprobs.content else []
 
     return OpenAIResponseMessage(
@@ -481,10 +486,20 @@ async def get_message_type_by_role(role: str) -> type[OpenAIMessageParam] | None
 
 
 CITATION_MARKER_REGEX = re.compile(
-    r"<\|(?P<file_id_pipe>file-[A-Za-z0-9_-]+)\|>"
-    r"|\[(?P<file_id_bracket>file-[A-Za-z0-9_-]+)\]"
-    r"|\((?P<file_id_paren>file-[A-Za-z0-9_-]+)\)"
+    r"<\|(?P<id_pipe>(?:file|url)-[A-Za-z0-9_-]+)\|>"
+    r"|\[(?P<id_bracket>(?:file|url)-[A-Za-z0-9_-]+)\]"
+    r"|\((?P<id_paren>(?:file|url)-[A-Za-z0-9_-]+)\)"
 )
+
+# Matches any proper prefix of the literal word "file-" or "url-" (including the empty
+# prefix), each character gated behind the ones before it so e.g. "fi" matches but "fx"
+# does not. Needed because providers stream a marker as several separate tokens (e.g.
+# "<", "|", "file", "-", "abc", "|", ">"), so the pending-marker check below has to
+# recognize it's mid-marker at every one of those boundaries, not just once the whole
+# "file-"/"url-" word has already arrived.
+_PARTIAL_FILE_ID = r"f(?:i(?:l(?:e(?:-[A-Za-z0-9_-]*)?)?)?)?"
+_PARTIAL_URL_ID = r"u(?:r(?:l(?:-[A-Za-z0-9_-]*)?)?)?"
+_PARTIAL_CITATION_ID = rf"(?:{_PARTIAL_FILE_ID}|{_PARTIAL_URL_ID})?"
 
 # Matches an in-progress citation marker at the very end of a string, including a possible
 # single space right before it (since a known marker's preceding space gets dropped by
@@ -494,39 +509,103 @@ CITATION_MARKER_REGEX = re.compile(
 # chunk. Used to withhold text from streamed deltas until either a marker completes (and
 # gets cleaned) or a later chunk proves it wasn't a marker after all (and gets flushed
 # through as literal text).
+#
+# The `<|...` branch additionally matches a *complete* id followed by its closing `|`
+# but not yet the final `>` (e.g. "<|file-abc123|"), since that's a distinct pending
+# state the bracket/paren forms don't have (`[id]`/`(id)` have no internal `|`).
 _PENDING_CITATION_MARKER_TAIL_REGEX = re.compile(
-    r"(?: ?<(?:\|(?:file-[A-Za-z0-9_-]*)?)?| ?\[(?:file-[A-Za-z0-9_-]*)?| ?\((?:file-[A-Za-z0-9_-]*)?| )$"
+    rf"(?: ?<(?:\|(?:{_PARTIAL_CITATION_ID}|(?:file|url)-[A-Za-z0-9_-]+\|))?"
+    rf"| ?\[{_PARTIAL_CITATION_ID}"
+    rf"| ?\({_PARTIAL_CITATION_ID}"
+    r"| )$"
 )
+
+CitationAnnotation = OpenAIResponseAnnotationFileCitation | OpenAIResponseAnnotationCitation
+
+_SENTENCE_BREAK = re.compile(r"[.!?؟]\s|\n")
+
+
+def _sentence_start(text: str, floor: int) -> int:
+    """Find where the sentence containing `text`'s current end actually starts, without going
+    earlier than `floor`. A url citation's span is meant to cover the sentence it's attached
+    to, not drag in whatever unrelated text came before it back to the last citation of either
+    kind, which is what using the checkpoint left by that citation as the span start
+    unconditionally did.
+
+    Callers pass only the text *since* that checkpoint (with floor=0), not the whole text seen
+    so far: re-joining and re-scanning everything on every marker is quadratic in the number of
+    markers, and unknown/stale markers (attacker-controlled, since they're never validated
+    against a real id) never advance the checkpoint, so a long run of them makes each call scan
+    the same, ever-growing prefix again -- see _extract_citations_from_text's seg_start/
+    prefix_end bookkeeping.
+    """
+    end = len(text.rstrip(" \n.!?؟"))
+    start = floor
+    for m in _SENTENCE_BREAK.finditer(text, floor, end):
+        start = m.end()
+    return len(text) - len(text[start:].lstrip())
 
 
 def _extract_citations_from_text(
-    text: str, citation_files: dict[str, str]
-) -> tuple[list[OpenAIResponseAnnotationFileCitation], str]:
+    text: str,
+    citation_files: dict[str, str],
+    citation_urls: dict[str, CitationUrl] | None = None,
+) -> tuple[list[CitationAnnotation], str]:
     """Extract citation markers from text and create annotations
 
     Args:
-        text: The text containing citation markers like <|file-Cn3MSNn72ENTiiq11Qda4A|>.
-            The primary marker format is `<|file-id|>`, but `[file-id]` and `(file-id)`
-            are also accepted since weaker models often approximate the instructed
+        text: The text containing citation markers like <|file-Cn3MSNn72ENTiiq11Qda4A|> or
+            <|url-1a2b3c4d5e6f|>. The primary marker format is `<|id|>`, but `[id]` and
+            `(id)` are also accepted since weaker models often approximate the instructed
             format rather than reproduce it exactly.
         citation_files: Dictionary mapping file_id to filename
+        citation_urls: Dictionary mapping a `url-<hash>` marker id to its CitationUrl(url,
+            title), for web_search results (see tool_executor.py).
 
     Returns:
         Tuple of (annotations_list, clean_text_without_markers)
     """
-    file_id_regex = CITATION_MARKER_REGEX
+    if citation_urls is None:
+        citation_urls = {}
+    marker_regex = CITATION_MARKER_REGEX
 
-    annotations = []
+    annotations: list[CitationAnnotation] = []
     parts = []
     total_len = 0
     last_end = 0
+    # Checkpoint: the position right after the last citation marker of either kind, used to
+    # anchor the *next new* (non-glued) cluster of citations.
+    url_span_start = 0
+    # Start index shared by every url citation in the current glued cluster -- a run of
+    # markers (file and/or url, any mix) with no real text between them, all backing the same
+    # claim. Reset, only when real text separates this marker from the previous one, to the
+    # start of the sentence containing that text -- never earlier than the checkpoint above,
+    # since a url citation's span is meant to cover its own sentence, not drag in whatever
+    # unrelated text came before it back to the last citation of either kind (see
+    # _sentence_start). Carried forward unchanged across glued markers regardless of type, so
+    # e.g. "<|url-1|><|file-a|><|url-2|>" gives url-2 the same span as url-1 instead of a
+    # zero-width one, and "<|file-a|>. <|url-1|>" doesn't let url-1 reach back across text that
+    # only the file citation covers.
+    cluster_start = 0
+    # parts[seg_start:] is exactly the text produced since url_span_start (both are updated
+    # together below), so _sentence_start only ever rescans the text since the last checkpoint
+    # instead of everything seen so far.
+    seg_start = 0
+    # Index into `parts` just after the latest prefix, if that prefix hasn't been folded into
+    # cluster_start yet. Deferring the (re)join+scan in _sentence_start to the next *known*
+    # marker means a long run of unknown/stale markers -- which never advance the checkpoint,
+    # and are attacker-controlled since they're never validated against a real id -- can't
+    # force a rescan on every single one of them.
+    prefix_end: int | None = None
 
-    for m in file_id_regex.finditer(text):
+    for m in marker_regex.finditer(text):
         # segment before the marker
         prefix = text[last_end : m.start()]
 
-        fid = m.group("file_id_pipe") or m.group("file_id_bracket") or m.group("file_id_paren")
-        is_known = fid in citation_files
+        cid = m.group("id_pipe") or m.group("id_bracket") or m.group("id_paren")
+        is_file = cid in citation_files
+        is_url = cid in citation_urls
+        is_known = is_file or is_url
 
         # drop one space if it exists (since marker is at sentence end); only do this when
         # the marker itself is about to be removed below, otherwise we'd merge the prefix
@@ -537,16 +616,36 @@ def _extract_citations_from_text(
         parts.append(prefix)
         total_len += len(prefix)
 
-        if is_known:
+        if prefix:
+            prefix_end = len(parts)
+        if is_known and prefix_end is not None:
+            cluster_start = url_span_start + _sentence_start("".join(parts[seg_start:prefix_end]), 0)
+            prefix_end = None
+
+        if is_file:
             annotations.append(
                 OpenAIResponseAnnotationFileCitation(
-                    file_id=fid,
-                    filename=citation_files[fid],
+                    file_id=cid,
+                    filename=citation_files[cid],
                     index=total_len,  # index points to punctuation
                 )
             )
+            url_span_start = total_len
+            seg_start = len(parts)
+        elif is_url:
+            source = citation_urls[cid]
+            annotations.append(
+                OpenAIResponseAnnotationCitation(
+                    url=source.url,
+                    title=source.title,
+                    start_index=cluster_start,
+                    end_index=total_len,  # end_index points to punctuation
+                )
+            )
+            url_span_start = total_len
+            seg_start = len(parts)
         else:
-            # Unrecognized marker (e.g. a stale/mismatched file id): preserve it verbatim
+            # Unrecognized marker (e.g. a stale/mismatched id): preserve it verbatim
             # rather than silently deleting user-visible text we can't actually attribute.
             marker_text = m.group(0)
             parts.append(marker_text)
@@ -560,30 +659,60 @@ def _extract_citations_from_text(
 
 
 def extract_citations_from_text(
-    text: str, citation_files: dict[str, str]
-) -> tuple[list[OpenAIResponseAnnotationFileCitation], str]:
+    text: str,
+    citation_files: dict[str, str],
+    citation_urls: dict[str, CitationUrl] | None = None,
+    historical_citation_urls: dict[str, CitationUrl] | None = None,
+) -> tuple[list[CitationAnnotation], str]:
     """Extract citation markers from text, with a fallback for models that don't cite inline.
 
     Delegates to `_extract_citations_from_text` for marker-based extraction. Some models
     (particularly small/local ones served e.g. via Ollama) don't reliably reproduce the
-    inline citation marker even when instructed to. If file_search actually retrieved
-    documents for this response, attribute the answer to the single most relevant one
-    rather than silently returning no annotations just because the model didn't echo the
-    marker. Attributing every retrieved file would imply the whole answer draws equally
-    on all of them, which usually isn't true and isn't what OpenAI's API does.
+    inline citation marker even when instructed to. If file_search or web_search actually
+    retrieved results for this response, attribute the answer to the single most relevant
+    one rather than silently returning no annotations just because the model didn't echo
+    the marker. Attributing every retrieved result would imply the whole answer draws
+    equally on all of them, which usually isn't true and isn't what OpenAI's API does.
 
     Args:
         text: The text possibly containing citation markers.
         citation_files: Dictionary mapping file_id to filename for files retrieved this turn,
             ordered by descending relevance score (see tool_executor.py).
-
+        citation_urls: Dictionary mapping a `url-<hash>` marker id to its CitationUrl(url,
+            title) for web_search results retrieved this turn, in result order.
+        historical_citation_urls: Same mapping, but reconstructed from a *previous* turn's
+            own web_search_call outputs (see tool_executor.build_web_search_citation_history),
+            so a marker the model copies from stored history can still be resolved even
+            without re-searching. Used only to resolve markers actually present in text --
+            never merged into the fallback below, which must only ever guess from what this
+            turn itself retrieved (citation_urls), not from unrelated earlier searches.
     Returns:
         Tuple of (annotations_list, clean_text_without_markers)
     """
-    annotations, clean_text = _extract_citations_from_text(text, citation_files)
-    if not annotations and citation_files:
-        file_id, filename = next(iter(citation_files.items()))
-        annotations = [OpenAIResponseAnnotationFileCitation(file_id=file_id, filename=filename, index=len(clean_text))]
+    if citation_urls is None:
+        citation_urls = {}
+    resolvable_urls = {**(historical_citation_urls or {}), **citation_urls}
+    annotations, clean_text = _extract_citations_from_text(text, citation_files, resolvable_urls)
+
+    # Only guess when the model cited *nothing* inline, of either type. A model that did
+    # cite inline (even only a file, with web_search also having run) made a deliberate
+    # attribution choice; forcing an extra guessed citation for the type it didn't use
+    # would misrepresent that choice, not fill a gap.
+    if not annotations:
+        if citation_files:
+            file_id, filename = next(iter(citation_files.items()))
+            annotations.append(
+                OpenAIResponseAnnotationFileCitation(file_id=file_id, filename=filename, index=len(clean_text))
+            )
+
+        if citation_urls:
+            source = next(iter(citation_urls.values()))
+            annotations.append(
+                OpenAIResponseAnnotationCitation(
+                    url=source.url, title=source.title, start_index=0, end_index=len(clean_text)
+                )
+            )
+
     return annotations, clean_text
 
 
@@ -607,8 +736,17 @@ class StreamingCitationCleaner:
     minor cosmetic difference from the final text, not a correctness issue.
     """
 
-    def __init__(self, citation_files: dict[str, str]):
+    def __init__(
+        self,
+        citation_files: dict[str, str],
+        citation_urls: dict[str, CitationUrl] | None = None,
+        historical_citation_urls: dict[str, CitationUrl] | None = None,
+    ):
         self._citation_files = citation_files
+        # Merged for resolution only (same reasoning as extract_citations_from_text): this
+        # cleaner never does the "didn't cite anything" fallback, so there's no fallback to
+        # accidentally pollute with stale sources here.
+        self._citation_urls = {**(historical_citation_urls or {}), **(citation_urls or {})}
         self._buffer = ""
 
     def feed(self, delta: str) -> str:
@@ -619,14 +757,14 @@ class StreamingCitationCleaner:
         safe_text, self._buffer = self._buffer[:safe_upto], self._buffer[safe_upto:]
         if not safe_text:
             return ""
-        _, cleaned = _extract_citations_from_text(safe_text, self._citation_files)
+        _, cleaned = _extract_citations_from_text(safe_text, self._citation_files, self._citation_urls)
         return cleaned
 
     def flush(self) -> str:
         """Flush any remaining buffered text once no more input is coming this round."""
         if not self._buffer:
             return ""
-        _, cleaned = _extract_citations_from_text(self._buffer, self._citation_files)
+        _, cleaned = _extract_citations_from_text(self._buffer, self._citation_files, self._citation_urls)
         self._buffer = ""
         return cleaned
 

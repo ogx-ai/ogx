@@ -121,7 +121,7 @@ async def test_invoke_returns_source_metadata(serply_search, mock_serply_respons
     result = await serply_search.invoke_tool(tool_name="web_search", kwargs={"query": "test query"})
     assert result.metadata is not None
     assert result.metadata["query"] == "test query"
-    assert result.metadata["sources"] == [{"url": "https://example.com/0"}]
+    assert result.metadata["sources"] == [{"url": "https://example.com/0", "title": "Test Result 0"}]
 
 
 async def test_user_location_country_is_forwarded_as_gl(serply_search, mock_serply_response):

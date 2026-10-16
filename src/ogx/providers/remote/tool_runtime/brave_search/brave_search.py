@@ -9,6 +9,7 @@ from typing import Any
 import httpx2
 
 from ogx.core.request_headers import NeedsRequestProviderData
+from ogx.providers.utils.tools.web_search import WebSearchSourceDict
 from ogx_api import (
     URL,
     ListToolDefsResponse,
@@ -120,8 +121,8 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
             metadata={"query": kwargs["query"], "sources": sources},
         )
 
-    def _extract_sources(self, search_response: dict[str, Any], max_results: int) -> list[dict[str, str]]:
-        sources = []
+    def _extract_sources(self, search_response: dict[str, Any], max_results: int) -> list[WebSearchSourceDict]:
+        sources: list[WebSearchSourceDict] = []
         if "mixed" in search_response:
             for m in search_response["mixed"]["main"][:max_results]:
                 r_type = m["type"]
@@ -135,7 +136,7 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
                     else:
                         continue
                     if isinstance(item, dict) and "url" in item:
-                        sources.append({"url": item["url"]})
+                        sources.append({"url": item["url"], "title": item.get("title", "")})
         return sources
 
     def _clean_brave_response(self, search_response: dict[str, Any], max_results: int) -> list[str]:
