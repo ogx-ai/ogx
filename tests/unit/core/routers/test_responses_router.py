@@ -15,7 +15,7 @@ from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 from starlette.testclient import TestClient
 
 from ogx.core.server.fastapi_router_registry import build_fastapi_router
-from ogx.core.server.server import global_exception_handler
+from ogx.core.server.server import register_exception_handlers
 from ogx.telemetry.constants import RESPONSES_PARAMETER_USAGE_TOTAL
 from ogx_api import Api, Responses
 from ogx_api.openai_responses import (
@@ -105,7 +105,7 @@ async def test_create_response_returns_sse_streaming_response_when_impl_streams(
 def test_create_response_maps_value_error_to_400():
     """_ExceptionTranslatingRoute converts ValueError to HTTP 400."""
     app = FastAPI()
-    app.add_exception_handler(Exception, global_exception_handler)
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Responses)
     impl.create_openai_response.side_effect = ValueError("not found")
 
@@ -117,7 +117,7 @@ def test_create_response_maps_value_error_to_400():
     resp = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "not found"
+    assert resp.json() == {"error": {"message": "not found", "type": "invalid_request_error"}}
 
 
 async def test_create_response_returns_json_for_non_streaming():
@@ -323,7 +323,7 @@ async def test_get_response_returns_response_object():
 def test_get_response_maps_value_error_to_400():
     """_ExceptionTranslatingRoute converts ValueError on GET to HTTP 400."""
     app = FastAPI()
-    app.add_exception_handler(Exception, global_exception_handler)
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Responses)
     impl.get_openai_response.side_effect = ValueError("Response not found")
 
@@ -335,7 +335,7 @@ def test_get_response_maps_value_error_to_400():
     resp = client.get("/v1/responses/nonexistent")
 
     assert resp.status_code == 400
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 async def test_list_responses_returns_list():
@@ -429,7 +429,7 @@ async def test_delete_response_returns_confirmation():
 def test_delete_response_maps_value_error_to_400():
     """_ExceptionTranslatingRoute converts ValueError on DELETE to HTTP 400."""
     app = FastAPI()
-    app.add_exception_handler(Exception, global_exception_handler)
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Responses)
     impl.delete_openai_response.side_effect = ValueError("Response not found")
 
@@ -441,7 +441,7 @@ def test_delete_response_maps_value_error_to_400():
     resp = client.delete("/v1/responses/nonexistent")
 
     assert resp.status_code == 400
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 def test_openapi_create_response_advertises_form_urlencoded_request_body():
@@ -657,12 +657,13 @@ def test_create_response_form_urlencoded_with_charset():
 def test_request_validation_error_passes_through_route_class():
     """RequestValidationError must NOT be caught by _ExceptionTranslatingRoute.
 
-    FastAPI has its own handler for RequestValidationError that returns a
-    422 response with detailed validation errors.  The route class must let
-    it pass through so that invalid request bodies (e.g. max_tool_calls=0)
-    get a proper 422 instead of a generic 500.
+    The server registers its own RequestValidationError handler, which reports the
+    failing fields as a 400.  The route class must let the error pass through to it so
+    that invalid request bodies (e.g. max_tool_calls=0) get that instead of a generic
+    500.
     """
     app = FastAPI()
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Responses)
 
     router = build_fastapi_router(Api.responses, impl)
@@ -674,12 +675,9 @@ def test_request_validation_error_passes_through_route_class():
     # max_tool_calls has ge=1 constraint — sending 0 triggers RequestValidationError
     resp = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False, "max_tool_calls": 0})
 
-    assert resp.status_code == 422
+    assert resp.status_code == 400
     body = resp.json()
-    assert "detail" in body
-    # FastAPI returns a list of validation errors
-    assert isinstance(body["detail"], list)
-    assert any("max_tool_calls" in str(err) for err in body["detail"])
+    assert "max_tool_calls" in body["error"]["message"]
 
 
 def test_exception_translating_route_converts_value_error_to_400():
@@ -690,6 +688,7 @@ def test_exception_translating_route_converts_value_error_to_400():
     via TestClient (full ASGI stack) to verify end-to-end behavior.
     """
     app = FastAPI()
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Responses)
     impl.create_openai_response.side_effect = ValueError("bad input value")
 
@@ -702,7 +701,7 @@ def test_exception_translating_route_converts_value_error_to_400():
 
     assert resp.status_code == 400
     assert resp.headers["content-type"] == "application/json"
-    assert resp.json()["detail"] == "bad input value"
+    assert resp.json() == {"error": {"message": "bad input value", "type": "invalid_request_error"}}
 
 
 def test_unknown_exception_propagates_to_global_handler():
@@ -713,7 +712,7 @@ def test_unknown_exception_propagates_to_global_handler():
     which uses the full translate_exception pipeline from ogx.core.
     """
     app = FastAPI()
-    app.add_exception_handler(Exception, global_exception_handler)
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Responses)
     impl.create_openai_response.side_effect = RuntimeError("something broke")
 
@@ -736,6 +735,7 @@ def test_consecutive_value_errors_keep_connection_alive():
     on the same TestClient verify the connection stays alive.
     """
     app = FastAPI()
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Responses)
     impl.create_openai_response.side_effect = ValueError("bad request")
 
@@ -752,7 +752,7 @@ def test_consecutive_value_errors_keep_connection_alive():
     # Second request on the same connection — must NOT get a connection error
     resp2 = client.post("/v1/responses", json={"input": "hi", "model": "test", "stream": False})
     assert resp2.status_code == 400
-    assert resp2.json()["detail"] == "bad request"
+    assert resp2.json() == {"error": {"message": "bad request", "type": "invalid_request_error"}}
 
 
 def test_parameter_usage_records_only_explicitly_provided_params():
