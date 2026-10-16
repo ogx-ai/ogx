@@ -146,6 +146,61 @@ tools=[
 ]
 ```
 
+### Requiring Approval for MCP Tool Calls
+
+By default, MCP tool calls run without approval (`require_approval` defaults to `"never"`). Set `require_approval` on the tool to pause before a call runs:
+
+- `"always"`: every call from this server needs approval.
+- `"never"`: no call needs approval.
+- A filter, `{"always": [...], "never": [...]}`, listing tool names. A tool that appears in neither list still needs approval.
+
+```python
+tools = [
+    {
+        "type": "mcp",
+        "server_url": "https://mcp.deepwiki.com/sse",
+        "server_label": "deepwiki",
+        "require_approval": "always",
+    }
+]
+```
+
+When a call needs approval, the response stops with an `mcp_approval_request` item in `output`, carrying `id`, `server_label`, `name` (the tool) and `arguments` (a JSON string). To continue, send a new request with `previous_response_id` set to that response and an `mcp_approval_response` item in `input`, with `approval_request_id` (the request's `id`), `approve` (`True` or `False`) and an optional `reason`. The previous response's output, including the approval request, is carried forward, so `input` only needs the response. An approved call runs. A denied call does not run.
+
+A minimal client loop that answers approval requests until none remain, with a person deciding each one:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8321/v1", api_key="none")
+
+response = client.responses.create(
+    model="meta-llama/Llama-3.2-3B-Instruct",
+    input="What does the ogx-ai/ogx repository do?",
+    tools=tools,
+)
+
+while True:
+    requests = [item for item in response.output if item.type == "mcp_approval_request"]
+    if not requests:
+        break
+    answers = []
+    for req in requests:
+        print(f"{req.server_label}.{req.name}({req.arguments})")
+        approve = input("Approve? [y/N] ").strip().lower() == "y"
+        answers.append({"type": "mcp_approval_response", "approval_request_id": req.id, "approve": approve})
+    response = client.responses.create(
+        model="meta-llama/Llama-3.2-3B-Instruct",
+        previous_response_id=response.id,
+        input=answers,
+        tools=tools,
+    )
+
+print(response.output_text)
+```
+
+The approver does not have to be a person. Any check that can decide on the exact `name` and `arguments` can answer the request.
+
 ### Running Your Own MCP Server
 
 Here's an example of how to run a simple MCP server that exposes a File System as a set of tools to the OGX agent.
