@@ -29,9 +29,8 @@ This end-to-end tutorial shows how to leverage the NeMo Microservices platform f
 The following stages will be covered in this set of tutorials:
 
 1. [Preparing Data for fine-tuning and evaluation](./1_data_preparation.ipynb)
-2. [Customizing the model with LoRA fine-tuning](./2_finetuning_and_inference.ipynb)
-3. [Evaluating the accuracy of the customized model](./3_model_evaluation.ipynb)
-4. [Adding Guardrails to safeguard your LLM behavior](./4_adding_safety_guardrails.ipynb)
+2. [Evaluating the accuracy of the customized model](./3_model_evaluation.ipynb)
+3. [Adding Guardrails to safeguard your LLM behavior](./4_adding_safety_guardrails.ipynb)
 
 > **Note:** The LoRA fine-tuning of the Llama-3.2-1B-Instruct model takes up to 45 minutes to complete.
 
