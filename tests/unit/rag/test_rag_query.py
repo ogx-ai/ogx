@@ -45,7 +45,7 @@ class TestRagQuery:
                 "key1": "value1",
                 "token_count": 10,
                 "metadata_token_count": 5,
-                # Note this is inserted into `metadata` during FileSearchToolRuntimeImpl().insert()
+                # Note this is inserted into `metadata` during chunk creation (make_overlapped_chunks)
                 "document_id": "doc1",
             },
             chunk_metadata=chunk_metadata,

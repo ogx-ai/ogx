@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +12,6 @@ from ogx.providers.utils.memory.vector_store import (
     content_from_data_and_mime_type,
     validate_tiktoken_encoding,
 )
-from ogx_api import URL, RAGDocument
 
 
 def test_validate_tiktoken_encoding_succeeds():
@@ -69,41 +68,3 @@ def test_content_from_data_and_mime_type_both_encodings_fail():
         # Should raise an exception instead of returning empty string
         with pytest.raises(UnicodeDecodeError):
             content_from_data_and_mime_type(data, mime_type)
-
-
-async def test_memory_tool_error_handling():
-    """Test that memory tool handles various failures gracefully without crashing."""
-    from ogx.providers.inline.tool_runtime.file_search.config import FileSearchToolRuntimeConfig
-    from ogx.providers.inline.tool_runtime.file_search.file_search import FileSearchToolRuntimeImpl
-
-    config = FileSearchToolRuntimeConfig()
-    memory_tool = FileSearchToolRuntimeImpl(
-        config=config,
-        vector_io_api=AsyncMock(),
-        inference_api=AsyncMock(),
-        files_api=AsyncMock(),
-    )
-
-    docs = [
-        RAGDocument(document_id="good_doc", content="Good content", metadata={}),
-        RAGDocument(document_id="bad_url_doc", content=URL(uri="https://bad.url"), metadata={}),
-        RAGDocument(document_id="another_good_doc", content="Another good content", metadata={}),
-    ]
-
-    mock_file1 = MagicMock()
-    mock_file1.id = "file_good1"
-    mock_file2 = MagicMock()
-    mock_file2.id = "file_good2"
-    memory_tool.files_api.openai_upload_file.side_effect = [mock_file1, mock_file2]
-
-    with patch("httpx2.AsyncClient") as mock_client:
-        mock_instance = AsyncMock()
-        mock_instance.get.side_effect = Exception("Bad URL")
-        mock_client.return_value.__aenter__.return_value = mock_instance
-
-        # won't raise exception despite one document failing
-        await memory_tool.insert(docs, "vector_store_123")
-
-    # processed 2 documents successfully, skipped 1
-    assert memory_tool.files_api.openai_upload_file.call_count == 2
-    assert memory_tool.vector_io_api.openai_attach_file_to_vector_store.call_count == 2
