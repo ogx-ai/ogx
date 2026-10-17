@@ -25,6 +25,7 @@ scripts/
   docker.sh                    # Docker build helper
   install.sh                   # Installation helper
   integration-tests.sh         # Run integration test suite
+  quickstart-smoke.sh          # Run the docs Quickstart against a fresh ogx go install
   unit-tests.sh                # Run unit test suite
   run-ui-linter.sh             # Run UI linter
   uv-run-with-index.sh         # Run uv with custom package index

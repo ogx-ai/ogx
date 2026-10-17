@@ -6,7 +6,7 @@ inputs:
     required: false
     default: ''
   setup:
-    description: 'Setup name (ollama, ollama-vision, ollama-reasoning, etc.)'
+    description: 'Setup name (ollama, ollama-vision, ollama-reasoning, quickstart, etc.)'
     required: false
     default: 'ollama'
   ollama-version:
@@ -48,6 +48,10 @@ runs:
         elif [ "$SETUP" == "ollama-reasoning" ]; then
           pull_model "deepseek-r1:1.5b"
           pull_model "nomic-embed-text:v1.5"
+        elif [ "$SETUP" == "quickstart" ]; then
+          # Exactly the models docs/docs/getting_started/quickstart.mdx tells users to pull.
+          pull_model "llama3.2:3b"
+          pull_model "nomic-embed-text"
         else
           pull_model "llama3.2:3b-instruct-fp16"
           pull_model "nomic-embed-text:v1.5"
