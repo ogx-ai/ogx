@@ -493,6 +493,7 @@ class InferenceRouter(Inference):
                                 "tool_calls_builder": {},
                                 "finish_reason": "stop",
                                 "logprobs_content_parts": [],
+                                "annotations": [],
                             }
                         current_choice_data = choices_data[idx]
 
@@ -502,6 +503,9 @@ class InferenceRouter(Inference):
                                 if first_token_time is None:
                                     first_token_time = time.perf_counter()
                                 current_choice_data["content_parts"].append(delta.content)
+                            # Provider chunks are often the OpenAI SDK's, where annotations is an extra field
+                            if annotations := getattr(delta, "annotations", None):
+                                current_choice_data["annotations"].extend(annotations)
                             if delta.tool_calls:
                                 for tool_call_delta in delta.tool_calls:
                                     tc_idx = tool_call_delta.index
@@ -614,6 +618,7 @@ class InferenceRouter(Inference):
                         role="assistant",
                         content=content_str if content_str else None,
                         tool_calls=assembled_tool_calls if assembled_tool_calls else None,
+                        annotations=choice_data["annotations"] or None,
                     )
                     logprobs_content = choice_data["logprobs_content_parts"]
                     final_logprobs = OpenAIChoiceLogprobs(content=logprobs_content) if logprobs_content else None
