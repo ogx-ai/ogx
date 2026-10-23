@@ -5,7 +5,7 @@
 # the root directory of this source tree.
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openai import AuthenticationError
@@ -84,3 +84,69 @@ async def test_authentication_error_handling():
     finally:
         # Restore original method
         BedrockInferenceAdapter.__bases__[0].openai_chat_completion = original_method
+
+
+async def test_list_provider_model_ids_sigv4(monkeypatch):
+    """Test dynamic model discovery includes both foundation models and inference profiles."""
+    monkeypatch.delenv("AWS_BEDROCK_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
+    monkeypatch.delenv("OGX_BEDROCK_BEARER_TOKEN", raising=False)
+    config = BedrockConfig(aws_bedrock_bearer_token="", region_name="us-east-2")
+    adapter = BedrockInferenceAdapter(config=config)
+
+    mock_client = MagicMock()
+    mock_client.list_foundation_models.return_value = {
+        "modelSummaries": [
+            {"modelId": "meta.llama3-1-8b-instruct-v1:0", "modelLifecycleStatus": "ACTIVE"},
+            {"modelId": "deprecated-model", "modelLifecycleStatus": "LEGACY"},
+        ]
+    }
+    mock_client.list_inference_profiles.return_value = {
+        "inferenceProfileSummaries": [
+            {"inferenceProfileId": "us.meta.llama3-1-8b-instruct-v1:0", "status": "ACTIVE"},
+            {"inferenceProfileId": "us.meta.llama3-3-70b-instruct-v1:0", "status": "ACTIVE"},
+            {"inferenceProfileId": "inactive-profile", "status": "INACTIVE"},
+        ]
+    }
+    adapter._bedrock_client = mock_client
+
+    models = await adapter.list_provider_model_ids()
+
+    assert "meta.llama3-1-8b-instruct-v1:0" in models
+    assert "us.meta.llama3-1-8b-instruct-v1:0" in models
+    assert "us.meta.llama3-3-70b-instruct-v1:0" in models
+    assert "deprecated-model" not in models
+    assert "inactive-profile" not in models
+    mock_client.list_foundation_models.assert_called_once_with(byInferenceType="ON_DEMAND")
+    mock_client.list_inference_profiles.assert_called_once_with(typeEquals="SYSTEM_DEFINED")
+
+
+async def test_list_provider_model_ids_sigv4_error_raises(monkeypatch):
+    """Test that errors in list_foundation_models or list_inference_profiles re-raise."""
+    monkeypatch.delenv("AWS_BEDROCK_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("AWS_BEARER_TOKEN_BEDROCK", raising=False)
+    monkeypatch.delenv("OGX_BEDROCK_BEARER_TOKEN", raising=False)
+    config = BedrockConfig(aws_bedrock_bearer_token="", region_name="us-east-2")
+    adapter = BedrockInferenceAdapter(config=config)
+
+    mock_client = MagicMock()
+    mock_client.list_foundation_models.side_effect = RuntimeError("AWS Bedrock Error")
+    adapter._bedrock_client = mock_client
+
+    with pytest.raises(RuntimeError, match="AWS Bedrock Error"):
+        await adapter.list_provider_model_ids()
+
+
+async def test_list_provider_model_ids_bearer_token_error_raises(monkeypatch):
+    """Test that errors in mantle endpoint model listing re-raise."""
+    config = BedrockConfig(aws_bedrock_bearer_token="test-bearer-token", region_name="us-east-1")
+    adapter = BedrockInferenceAdapter(config=config)
+
+    with patch.object(adapter, "get_api_key", return_value="test-bearer-token"):
+        with patch("ogx.providers.remote.inference.bedrock.bedrock.AsyncOpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_client.models.list.side_effect = RuntimeError("Mantle Error")
+            mock_openai.return_value = mock_client
+
+            with pytest.raises(RuntimeError, match="Mantle Error"):
+                await adapter.list_provider_model_ids()
