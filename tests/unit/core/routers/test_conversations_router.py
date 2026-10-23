@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from ogx.core.server.fastapi_router_registry import build_fastapi_router
+from ogx.core.server.server import register_exception_handlers
 from ogx_api import Api
 from ogx_api.conversations import Conversations
 
@@ -23,6 +24,7 @@ def test_consecutive_errors_keep_connection_alive():
     connection and confirming both requests get proper JSON responses.
     """
     app = FastAPI()
+    register_exception_handlers(app)
     impl = AsyncMock(spec=Conversations)
     impl.get_conversation.side_effect = ValueError("bad request")
 
@@ -37,4 +39,4 @@ def test_consecutive_errors_keep_connection_alive():
 
     resp2 = client.get("/v1/conversations/conv_abc")
     assert resp2.status_code == 400
-    assert resp2.json()["detail"] == "bad request"
+    assert resp2.json() == {"error": {"message": "bad request", "type": "invalid_request_error"}}
