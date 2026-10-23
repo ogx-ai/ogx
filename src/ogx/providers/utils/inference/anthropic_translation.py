@@ -83,7 +83,7 @@ _FINISH_TO_STOP_REASON = {
     "stop": "end_turn",
     "tool_calls": "tool_use",
     "length": "max_tokens",
-    "content_filter": "end_turn",
+    "content_filter": "refusal",
 }
 
 
