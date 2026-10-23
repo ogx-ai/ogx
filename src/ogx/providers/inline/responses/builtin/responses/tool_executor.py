@@ -56,7 +56,10 @@ tracer = trace.get_tracer(__name__)
 # (arbitrary web pages, indexed documents) and must therefore be delimited as
 # untrusted data before being placed back into the model's context. This is a
 # mitigation for indirect prompt injection, not a guarantee against it -- see
-# _wrap_untrusted_tool_output.
+# _wrap_untrusted_tool_output. MCP tool results are delimited too (see
+# _build_result_messages): the server may be trusted, but the data it returns
+# (tickets, emails, documents) can be written by anyone. MCP tools are matched
+# through mcp_tool_to_server because their names are chosen by the server.
 _UNTRUSTED_CONTENT_TOOL_NAMES = frozenset({"web_search", "file_search"})
 
 _UNTRUSTED_TOOL_OUTPUT_HEADER = (
@@ -640,7 +643,8 @@ class ToolExecutor:
                 msg_content = content_list
             else:
                 raise ValueError(f"Unknown result content type: {type(result_content)}")
-            if function.name in _UNTRUSTED_CONTENT_TOOL_NAMES:
+            is_mcp_tool = bool(mcp_tool_to_server and function.name in mcp_tool_to_server)
+            if is_mcp_tool or function.name in _UNTRUSTED_CONTENT_TOOL_NAMES:
                 msg_content = _wrap_untrusted_tool_output(msg_content)
             # OpenAIToolMessageParam accepts str | list[TextParam] but we may have images
             # This is runtime-safe as the API accepts it, but mypy complains
