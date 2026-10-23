@@ -144,11 +144,33 @@ class ToolExecutor:
     ) -> AsyncIterator[ToolExecutionResult]:
         tool_call_id = tool_call.id
         function = tool_call.function
-        tool_kwargs = json.loads(function.arguments) if function and function.arguments else {}
 
         if not function or not tool_call_id or not function.name:
             yield ToolExecutionResult(sequence_number=sequence_number)
             return
+
+        # Malformed arguments are common with small/local models (truncated strings,
+        # trailing commas) and have repeatedly turned up via provider-specific streaming
+        # bugs too. Parsed here, outside _execute_tool's try/except, so a bad parse can
+        # still produce a tool-message error fed back to the model (via error_exc below)
+        # instead of crashing the whole response -- the model gets a chance to retry with
+        # corrected arguments on the next inference iteration, bounded by the loop's
+        # existing max_infer_iters, the same as any other tool execution failure.
+        tool_kwargs: dict[str, Any] = {}
+        parse_error: Exception | None = None
+        if function.arguments:
+            try:
+                parsed_args = json.loads(function.arguments)
+            except json.JSONDecodeError as e:
+                parse_error = ValueError(f"Failed to parse tool call arguments as a JSON object: {e}")
+            else:
+                if isinstance(parsed_args, dict):
+                    tool_kwargs = parsed_args
+                else:
+                    parse_error = ValueError(
+                        "Failed to parse tool call arguments as a JSON object: expected a JSON object, "
+                        f"got {type(parsed_args).__name__}"
+                    )
 
         # Emit progress events for tool execution start
         async for event_result in self._emit_progress_events(
@@ -157,8 +179,12 @@ class ToolExecutor:
             sequence_number = event_result.sequence_number
             yield event_result
 
-        # Execute the actual tool call
-        error_exc, result = await self._execute_tool(function.name, tool_kwargs, ctx, mcp_tool_to_server)
+        if parse_error is not None:
+            error_exc: Exception | None = parse_error
+            result: Any = None
+        else:
+            # Execute the actual tool call
+            error_exc, result = await self._execute_tool(function.name, tool_kwargs, ctx, mcp_tool_to_server)
 
         # Emit completion events for tool execution
         has_error = bool(
