@@ -1917,15 +1917,18 @@ class StreamingResponseOrchestrator:
         # Handle all mcp tool lists from previous response that are still valid:
         # tool_context can be None when no tools are provided in the response request
         if self.ctx.tool_context:
-            for tool in self.ctx.tool_context.previous_tool_listings:
-                async for evt in self._reuse_mcp_list_tools(tool, output_messages):
-                    yield evt
-            # Process all remaining tools (including MCP tools) and emit streaming events
-            if self.ctx.tool_context.tools_to_process:
-                async for stream_event in self._process_new_tools(
-                    self.ctx.tool_context.tools_to_process, output_messages
-                ):
-                    yield stream_event
+            # Walk the request's tools in order so the chat tools sent to the model keep
+            # that order whether a listing is reused or listed afresh. A changed order
+            # misses the inference server's prefix cache.
+            reusable = {listing.server_label: listing for listing in self.ctx.tool_context.previous_tool_listings}
+            to_process = {id(tool) for tool in self.ctx.tool_context.tools_to_process}
+            for tool in self.ctx.tool_context.current_tools:
+                if id(tool) not in to_process and tool.type == "mcp" and tool.server_label in reusable:
+                    async for evt in self._reuse_mcp_list_tools(reusable[tool.server_label], output_messages):
+                        yield evt
+                elif id(tool) in to_process:
+                    async for stream_event in self._process_new_tools([tool], output_messages):
+                        yield stream_event
 
     def _approval_required(self, tool_name: str) -> bool:
         if tool_name not in self.mcp_tool_to_server:
