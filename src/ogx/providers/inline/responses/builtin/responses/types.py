@@ -5,11 +5,11 @@
 # the root directory of this source tree.
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 
 from openai.types.chat import ChatCompletionToolParam
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ogx_api import (
     OpenAIAssistantMessageParam,
@@ -34,6 +34,8 @@ from ogx_api import (
     OpenAIResponseToolMCP,
     OpenAITokenLogProb,
 )
+
+from .citations import Annotation, CitationRegistry
 
 
 class AssistantMessageWithReasoning(OpenAIAssistantMessageParam):
@@ -83,6 +85,9 @@ class ChatCompletionResult:
     logprobs: list[OpenAITokenLogProb] | None = None
     service_tier: str | None = None  # The actual service tier used (may differ from input)
     reasoning_content: str | None = None
+    # content after citation rewriting
+    output_text: str = ""
+    annotations: list[Annotation] = field(default_factory=list)
 
     @property
     def content_text(self) -> str:
@@ -184,6 +189,8 @@ class ToolContext(BaseModel):
 class ChatCompletionContext(BaseModel):
     """Holds the accumulated state for a chat completion request within a response turn."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     model: str
     messages: list[OpenAIMessageParam]
     response_tools: list[OpenAIResponseInputTool] | None = None
@@ -197,6 +204,8 @@ class ChatCompletionContext(BaseModel):
     extra_body: dict | None = None
     approval_requests: list[OpenAIResponseMCPApprovalRequest] = []
     approval_responses: dict[str, OpenAIResponseMCPApprovalResponse] = {}
+    # None when web citations are off, or the request offers neither web_search nor file_search
+    citations: CitationRegistry | None = None
 
     def __init__(
         self,
@@ -211,6 +220,7 @@ class ChatCompletionContext(BaseModel):
         tool_choice: OpenAIResponseInputToolChoice | None = None,
         frequency_penalty: float | None = None,
         extra_body: dict | None = None,
+        citations: CitationRegistry | None = None,
     ):
         super().__init__(
             model=model,
@@ -223,6 +233,7 @@ class ChatCompletionContext(BaseModel):
             tool_context=tool_context,
             tool_choice=tool_choice,
             extra_body=extra_body,
+            citations=citations,
         )
         if not isinstance(inputs, str):
             self.approval_requests = [input for input in inputs if input.type == "mcp_approval_request"]

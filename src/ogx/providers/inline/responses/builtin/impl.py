@@ -147,6 +147,7 @@ class BuiltinResponsesImpl(Responses):
             skills_api=self.skills_api,
             compaction_config=self.config.compaction_config,
             memory_config=self.config.memory_config,
+            citations_config=self.config.citations_config,
         )
         await self.openai_responses_impl.initialize()
 

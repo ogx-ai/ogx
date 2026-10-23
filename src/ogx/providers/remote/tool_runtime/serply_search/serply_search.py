@@ -145,7 +145,7 @@ class SerplySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
                 }
             )
             if url:
-                sources.append({"url": url})
+                sources.append({"url": url, "title": r.get("title", "")})
 
         return ToolInvocationResult(
             content=json.dumps({"query": kwargs["query"], "results": results}),

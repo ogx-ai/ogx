@@ -4,7 +4,7 @@
 # This source code is licensed under the terms described in the LICENSE file in
 # the root directory of this source tree.
 
-from typing import Any
+from typing import Any, Literal
 
 import tiktoken
 from pydantic import BaseModel, Field, field_validator
@@ -213,6 +213,19 @@ class MemoryConfig(BaseModel):
     )
 
 
+class CitationsConfig(BaseModel):
+    """How Responses asks models to cite web_search results and annotates the answers."""
+
+    web_search: Literal["numbered", "off"] = Field(
+        default="numbered",
+        description=(
+            "numbered: list each web_search result as [N] with its title and URL, ask the model to cite [N], and "
+            "replace each cited number with a ([domain](url)) link carrying a url_citation. off: no web_search "
+            "citations. Responses with a JSON text format get no web_search citations."
+        ),
+    )
+
+
 class ResponsesPersistenceConfig(BaseModel):
     """Nested persistence configuration for the responses provider."""
 
@@ -237,6 +250,11 @@ class BuiltinResponsesImplConfig(BaseModel):
     memory_config: MemoryConfig = Field(
         default_factory=MemoryConfig,
         description="Configuration for Responses memory reads and writes.",
+    )
+
+    citations_config: CitationsConfig = Field(
+        default_factory=CitationsConfig,
+        description="Citation behavior for web_search results.",
     )
 
     moderation_endpoint: str | None = Field(

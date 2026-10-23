@@ -135,7 +135,7 @@ class BraveSearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsRe
                     else:
                         continue
                     if isinstance(item, dict) and "url" in item:
-                        sources.append({"url": item["url"]})
+                        sources.append({"url": item["url"], "title": item.get("title", "")})
         return sources
 
     def _clean_brave_response(self, search_response: dict[str, Any], max_results: int) -> list[str]:

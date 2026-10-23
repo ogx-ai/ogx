@@ -47,6 +47,7 @@ from ogx_api import (
     WebSearchSource,
 )
 
+from .citations import CITATION_INSTRUCTION, CitationRegistry
 from .types import ChatCompletionContext, ToolExecutionResult
 
 logger = get_logger(name=__name__, category="agents::builtin")
@@ -196,6 +197,7 @@ class ToolExecutor:
         self,
         query: str,
         response_file_search_tool: OpenAIResponseInputToolFileSearch,
+        citations: CitationRegistry | None = None,
     ) -> ToolInvocationResult:
         """Execute file search using vector_stores.search API with filters support."""
         search_results = []
@@ -260,6 +262,7 @@ class ToolExecutor:
         content_items.append(TextContentItem(text=header_template.format(num_chunks=len(search_results))))
 
         unique_files = set()
+        first_label = citations.label_chunks(len(search_results)) if citations else 1
         for i, result_item in enumerate(search_results):
             chunk_text = result_item.content[0].text if result_item.content else ""
             # Get file_id from attributes if result_item.file_id is empty
@@ -271,7 +274,7 @@ class ToolExecutor:
                 metadata_text += f", attributes: {result_item.attributes}"
 
             text_content = chunk_annotation_template.format(
-                index=i + 1, metadata_text=metadata_text, file_id=file_id, chunk_text=chunk_text
+                index=first_label + i, metadata_text=metadata_text, file_id=file_id, chunk_text=chunk_text
             )
             content_items.append(TextContentItem(text=text_content))
             unique_files.add(file_id)
@@ -291,9 +294,9 @@ class ToolExecutor:
         )
 
         # handling missing attributes for old versions
-        # Iterate in descending score order so that when a model doesn't cite inline and
-        # extract_citations_from_text falls back to a single file, it picks the most relevant
-        # one: dict insertion order determines which file_id lands first.
+        # Iterate in descending score order so that when a model doesn't cite inline and the
+        # citation rewriter falls back to a single file, it picks the most relevant one: dict
+        # insertion order determines which file_id lands first.
         citation_files = {}
         for result in sorted(search_results, key=lambda r: r.score, reverse=True):
             file_id = result.file_id
@@ -439,6 +442,7 @@ class ToolExecutor:
                         result = await self._execute_file_search_via_vector_store(
                             query=query,
                             response_file_search_tool=response_file_search_tool,
+                            citations=ctx.citations,
                         )
             elif function_name == "web_search":
                 if ctx.response_tools:
@@ -545,6 +549,7 @@ class ToolExecutor:
 
         # Build output message
         message: Any
+        cited: dict[int, None] = {}
         if mcp_tool_to_server and function.name in mcp_tool_to_server:
             from ogx_api import (
                 OpenAIResponseOutputMessageMCPCall,
@@ -579,6 +584,8 @@ class ToolExecutor:
                     for source in metadata.get("sources", []):
                         if "url" in source:
                             sources.append(WebSearchSource(url=source["url"]))
+                            if ctx.citations and (number := ctx.citations.add(source["url"], source.get("title"))):
+                                cited[number] = None
                     query = metadata.get("query", tool_kwargs.get("query", ""))
                     message.action = WebSearchActionSearch(
                         query=query,
@@ -640,8 +647,17 @@ class ToolExecutor:
                 msg_content = content_list
             else:
                 raise ValueError(f"Unknown result content type: {type(result_content)}")
+            listed = (
+                ctx.citations.source_list(cited)
+                if cited and ctx.citations and ctx.response_format.type == "text"
+                else ""
+            )
+            if listed:
+                msg_content = _append_text(msg_content, listed)
             if function.name in _UNTRUSTED_CONTENT_TOOL_NAMES:
                 msg_content = _wrap_untrusted_tool_output(msg_content)
+            if listed:
+                msg_content = _append_text(msg_content, CITATION_INSTRUCTION)
             # OpenAIToolMessageParam accepts str | list[TextParam] but we may have images
             # This is runtime-safe as the API accepts it, but mypy complains
             input_message = OpenAIToolMessageParam(content=msg_content, tool_call_id=tool_call_id)  # type: ignore[arg-type]
@@ -650,3 +666,9 @@ class ToolExecutor:
             input_message = OpenAIToolMessageParam(content=text, tool_call_id=tool_call_id)
 
         return message, input_message
+
+
+def _append_text(content: str | list[Any], text: str) -> str | list[Any]:
+    if isinstance(content, str):
+        return f"{content}\n\n{text}"
+    return [*content, OpenAIChatCompletionContentPartTextParam(text=text)]

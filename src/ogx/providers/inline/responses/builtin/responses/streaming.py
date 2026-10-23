@@ -78,6 +78,7 @@ from ogx_api import (
     OpenAIResponseObjectStreamResponseMcpListToolsInProgress,
     OpenAIResponseObjectStreamResponseOutputItemAdded,
     OpenAIResponseObjectStreamResponseOutputItemDone,
+    OpenAIResponseObjectStreamResponseOutputTextAnnotationAdded,
     OpenAIResponseObjectStreamResponseOutputTextDelta,
     OpenAIResponseObjectStreamResponseReasoningTextDelta,
     OpenAIResponseObjectStreamResponseReasoningTextDone,
@@ -108,6 +109,7 @@ from ogx_api import (
 )
 from ogx_api.inference import ServiceTier
 
+from .citations import CitationRewriter
 from .truncation import build_turn_groups as _build_turn_groups
 from .truncation import drop_oldest_turn
 from .truncation import is_context_length_error as _is_context_length_error
@@ -117,10 +119,8 @@ from .types import (
     ChatCompletionResult,
 )
 from .utils import (
-    StreamingCitationCleaner,
     convert_chat_choice_to_response_message,
     convert_mcp_tool_choice,
-    extract_citations_from_text,
     is_function_tool_call,
     run_guardrails,
     should_summarize_reasoning,
@@ -807,7 +807,8 @@ class StreamingResponseOrchestrator:
                         output_messages.append(
                             await convert_chat_choice_to_response_message(
                                 choice,
-                                self.citation_files,
+                                completion_result_data.output_text,
+                                completion_result_data.annotations,
                                 message_id=completion_result_data.message_item_id,
                             )
                         )
@@ -1221,10 +1222,10 @@ class StreamingResponseOrchestrator:
         refusal_text_accumulated = []
         pending_guardrail_events: list[OpenAIResponseObjectStream] = []
         chars_since_last_check = 0
-        # Cleans citation markers out of delta text as it streams, so a client
-        # reconstructing output from deltas sees the same text as content_part.done /
-        # output_item.done (which clean the fully accumulated text once streaming ends).
-        citation_cleaner = StreamingCitationCleaner(self.citation_files)
+        # Deltas, the done events and the response all carry this rewriter's output, so they agree.
+        citations = CitationRewriter(
+            self.citation_files, self.ctx.citations if self.ctx.response_format.type == "text" else None
+        )
 
         async for raw_chunk in completion_result:
             # Providers returning OpenAIChatCompletionChunkWithReasoning wrap
@@ -1287,27 +1288,17 @@ class StreamingResponseOrchestrator:
                             ),
                             sequence_number=self.sequence_number,
                         )
-                    # Withhold citation markers (and any text that might still turn into
-                    # one) from the delta stream, so it stays consistent with the cleaned
-                    # text in content_part.done / output_item.done below. A marker split
-                    # across chunk boundaries can cause this to yield nothing for a chunk.
-                    cleaned_delta = citation_cleaner.feed(chunk_choice.delta.content)
-                    if cleaned_delta:
-                        self.sequence_number += 1
-
-                        text_delta_event = OpenAIResponseObjectStreamResponseOutputTextDelta(
-                            content_index=content_index,
-                            delta=cleaned_delta,
-                            item_id=message_item_id,
-                            logprobs=chunk_logprobs if chunk_logprobs is not None else [],
-                            output_index=message_output_index,
-                            sequence_number=self.sequence_number,
-                        )
-                        # Buffer text delta events for guardrail check
-                        if self.enable_guardrails:
-                            pending_guardrail_events.append(text_delta_event)
-                        else:
-                            yield text_delta_event
+                    # A marker split across chunks can make this yield nothing for a chunk.
+                    for text_event in self._rewritten_text_events(
+                        citations,
+                        citations.feed(chunk_choice.delta.content),
+                        message_item_id,
+                        message_output_index,
+                        content_index,
+                        chunk_logprobs if chunk_logprobs is not None else [],
+                        pending_guardrail_events,
+                    ):
+                        yield text_event
 
                 # Collect content for final response
                 content_delta = chunk_choice.delta.content or ""
@@ -1432,7 +1423,7 @@ class StreamingResponseOrchestrator:
                 guardrail_check_due = True
 
             if self.enable_guardrails and guardrail_check_due:
-                accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
+                accumulated_text = citations.text + "".join(reasoning_text_accumulated)
                 violation_message = await run_guardrails(
                     self.moderation_endpoint,
                     accumulated_text,
@@ -1448,9 +1439,18 @@ class StreamingResponseOrchestrator:
                 pending_guardrail_events.clear()
                 chars_since_last_check = 0
 
+        # The held tail is text the client will see, so it goes through the final check too. An empty answer still
+        # gets the file fallback.
+        step = citations.finish()
+        if content_part_emitted:
+            for text_event in self._rewritten_text_events(
+                citations, step, message_item_id, message_output_index, content_index, [], pending_guardrail_events
+            ):
+                yield text_event
+
         # Final guardrail check on remaining buffered content
         if self.enable_guardrails and pending_guardrail_events:
-            accumulated_text = "".join(chat_response_content + reasoning_text_accumulated)
+            accumulated_text = citations.text + "".join(reasoning_text_accumulated)
             violation_message = await run_guardrails(
                 self.moderation_endpoint,
                 accumulated_text,
@@ -1494,25 +1494,6 @@ class StreamingResponseOrchestrator:
 
         # Emit content_part.done event if text content was streamed (before content gets cleared)
         if content_part_emitted:
-            # Flush any text the citation cleaner was still withholding (e.g. a marker-like
-            # sequence that never completed) so delta-reconstructed text catches up with
-            # the cleaned text below before the round closes out. Guardrail buffering
-            # doesn't apply here: the moderation check above already ran over the full raw
-            # accumulated text, which includes whatever this flush contains.
-            flushed_delta = citation_cleaner.flush()
-            if flushed_delta:
-                self.sequence_number += 1
-                yield OpenAIResponseObjectStreamResponseOutputTextDelta(
-                    content_index=content_index,
-                    delta=flushed_delta,
-                    item_id=message_item_id,
-                    logprobs=[],
-                    output_index=message_output_index,
-                    sequence_number=self.sequence_number,
-                )
-
-            final_text = "".join(chat_response_content)
-            part_annotations, part_clean_text = extract_citations_from_text(final_text, self.citation_files)
             self.sequence_number += 1
             yield OpenAIResponseObjectStreamResponseContentPartDone(
                 content_index=content_index,
@@ -1520,8 +1501,8 @@ class StreamingResponseOrchestrator:
                 item_id=message_item_id,
                 output_index=message_output_index,
                 part=OpenAIResponseContentPartOutputText(
-                    text=part_clean_text,
-                    annotations=list(part_annotations),
+                    text=citations.text,
+                    annotations=list(citations.annotations),
                     logprobs=[],
                 ),
                 sequence_number=self.sequence_number,
@@ -1555,12 +1536,10 @@ class StreamingResponseOrchestrator:
         if message_item_added_emitted and not chat_response_tool_calls:
             content_parts = []
             if content_part_emitted:
-                final_text = "".join(chat_response_content)
-                final_annotations, final_clean_text = extract_citations_from_text(final_text, self.citation_files)
                 content_parts.append(
                     OpenAIResponseOutputMessageContentOutputText(
-                        text=final_clean_text,
-                        annotations=list(final_annotations),
+                        text=citations.text,
+                        annotations=list(citations.annotations),
                         logprobs=chat_response_logprobs if chat_response_logprobs else [],
                     )
                 )
@@ -1592,7 +1571,52 @@ class StreamingResponseOrchestrator:
             logprobs=chat_response_logprobs if chat_response_logprobs else None,
             service_tier=chunk_service_tier,
             reasoning_content="".join(reasoning_text_accumulated) if reasoning_text_accumulated else None,
+            output_text="" if chat_response_tool_calls else citations.text,
+            annotations=[] if chat_response_tool_calls else list(citations.annotations),
         )
+
+    def _rewritten_text_events(
+        self,
+        citations: CitationRewriter,
+        step: tuple[str, int],
+        item_id: str,
+        output_index: int,
+        content_index: int,
+        logprobs: list,
+        pending_guardrail_events: list[OpenAIResponseObjectStream],
+    ) -> list[OpenAIResponseObjectStream]:
+        """The delta for text the rewriter made final, then one annotation.added per annotation it completed. With
+        guardrails on they wait in pending_guardrail_events for the next check instead, and none is returned."""
+        text, first_annotation = step
+        events: list[OpenAIResponseObjectStream] = []
+        if text:
+            self.sequence_number += 1
+            events.append(
+                OpenAIResponseObjectStreamResponseOutputTextDelta(
+                    content_index=content_index,
+                    delta=text,
+                    item_id=item_id,
+                    logprobs=logprobs,
+                    output_index=output_index,
+                    sequence_number=self.sequence_number,
+                )
+            )
+        for index in range(first_annotation, len(citations.annotations)):
+            self.sequence_number += 1
+            events.append(
+                OpenAIResponseObjectStreamResponseOutputTextAnnotationAdded(
+                    item_id=item_id,
+                    output_index=output_index,
+                    content_index=content_index,
+                    annotation_index=index,
+                    annotation=citations.annotations[index],
+                    sequence_number=self.sequence_number,
+                )
+            )
+        if self.enable_guardrails:
+            pending_guardrail_events.extend(events)
+            return []
+        return events
 
     def _build_chat_completion(self, result: ChatCompletionResult) -> OpenAIChatCompletion:
         """Build OpenAIChatCompletion from ChatCompletionResult."""

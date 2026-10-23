@@ -110,7 +110,7 @@ class TavilySearchToolRuntimeImpl(ToolGroupsProtocolPrivate, ToolRuntime, NeedsR
         sources = []
         for r in response_json.get("results", []):
             if "url" in r:
-                sources.append({"url": r["url"]})
+                sources.append({"url": r["url"], "title": r.get("title", "")})
         return ToolInvocationResult(
             content=json.dumps(self._clean_tavily_response(response_json)),
             metadata={"query": kwargs["query"], "sources": sources},
