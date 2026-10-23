@@ -16,6 +16,8 @@ from ogx_api import (
     OpenAICreateVectorStoreRequestWithExtraBody,
     OpenAISearchVectorStoreRequest,
     OpenAIUpdateVectorStoreRequest,
+    VectorStoreFileCounts,
+    VectorStoreObject,
 )
 
 
@@ -344,3 +346,28 @@ async def test_search_without_rewrite():
     assert call_kwargs["vector_store_id"] == "vs_123"
     forward_request = call_kwargs["request"]
     assert forward_request.query == "test query"
+
+
+async def test_list_vector_stores_before_cursor_returns_previous_page():
+    stores = {
+        f"vs_{i}": VectorStoreObject(
+            id=f"vs_{i}",
+            created_at=i,
+            name=f"store {i}",
+            usage_bytes=0,
+            status="completed",
+            file_counts=VectorStoreFileCounts(completed=0, cancelled=0, failed=0, in_progress=0, total=0),
+        )
+        for i in range(1, 7)
+    }
+    mock_routing_table = _mock_routing_table()
+    mock_routing_table.get_all_with_type = AsyncMock(return_value=[Mock(identifier=store_id) for store_id in stores])
+    mock_routing_table.openai_retrieve_vector_store = AsyncMock(side_effect=lambda store_id: stores[store_id])
+    router = VectorIORouter(mock_routing_table)
+
+    previous_page = await router.openai_list_vector_stores(limit=2, order="asc", before="vs_5")
+
+    assert [store.id for store in previous_page.data] == ["vs_3", "vs_4"]
+    assert previous_page.first_id == "vs_3"
+    assert previous_page.last_id == "vs_4"
+    assert previous_page.has_more is True

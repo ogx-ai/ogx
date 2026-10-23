@@ -998,15 +998,18 @@ class OpenAIVectorStoreMixin(ABC):
             if after_index >= 0:
                 all_stores = all_stores[after_index + 1 :]
 
+        before_found = False
         if before:
             before_index = next(
                 (i for i, store in enumerate(all_stores) if store["id"] == before),
                 len(all_stores),
             )
+            before_found = before_index < len(all_stores)
             all_stores = all_stores[:before_index]
 
-        # Apply limit
-        limited_stores = all_stores[:limit]
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
+        limited_stores = all_stores[-limit:] if before_found else all_stores[:limit]
         # Convert to VectorStoreObject instances
         data = [VectorStoreObject(**store) for store in limited_stores]
 
@@ -1532,15 +1535,18 @@ class OpenAIVectorStoreMixin(ABC):
             if after_index >= 0:
                 file_objects = file_objects[after_index + 1 :]
 
+        before_found = False
         if before:
             before_index = next(
                 (i for i, file in enumerate(file_objects) if file.id == before),
                 len(file_objects),
             )
+            before_found = before_index < len(file_objects)
             file_objects = file_objects[:before_index]
 
-        # Apply limit
-        limited_files = file_objects[:limit]
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
+        limited_files = file_objects[-limit:] if before_found else file_objects[:limit]
 
         # Determine pagination info
         has_more = len(file_objects) > limit
@@ -1912,15 +1918,18 @@ class OpenAIVectorStoreMixin(ABC):
             if after_index >= 0:
                 file_objects = file_objects[after_index + 1 :]
 
+        before_found = False
         if before:
             before_index = next(
                 (i for i, file in enumerate(file_objects) if file.id == before),
                 len(file_objects),
             )
+            before_found = before_index < len(file_objects)
             file_objects = file_objects[:before_index]
 
-        # Apply limit
-        limited_files = file_objects[:limit]
+        # Apply limit. A `before` cursor asks for the page immediately preceding it,
+        # so keep the items closest to the cursor rather than the head of the list.
+        limited_files = file_objects[-limit:] if before_found else file_objects[:limit]
 
         # Determine pagination info
         has_more = len(file_objects) > limit
