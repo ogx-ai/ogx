@@ -22,12 +22,13 @@ from collections.abc import Awaitable, Callable, Coroutine, Generator
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+import httpx2
 import yaml
 from termcolor import cprint
 
 from ogx.cli.stack.run import _start_ui_development_server, _uvicorn_run
 from ogx.cli.subcommand import Subcommand
-from ogx.core.build import get_provider_dependencies
+from ogx.core.build import get_provider_dependencies, split_pip_packages
 from ogx.core.datatypes import Provider, QualifiedModel, StackConfig, VectorStoresConfig
 from ogx.core.distribution import get_provider_registry
 from ogx.core.server_tls import generate_self_signed_cert
@@ -370,7 +371,10 @@ async def _run_letsgo_cmd_impl(args: argparse.Namespace, parser: argparse.Argume
         providers_spec = args.providers_override
         autodetect_embedding: tuple[QualifiedModel, int | None] | None = None
     else:
-        providers_spec, autodetect_embedding = await _autodetect_providers(debug=getattr(args, "debug", False))
+        providers_spec, autodetect_embedding = await _autodetect_providers(
+            debug=getattr(args, "debug", False),
+            install_missing_deps=not args.skip_install_deps,
+        )
 
     has_inference = any(p.startswith("inference=") for p in (providers_spec or "").split(","))
     if not has_inference:
@@ -554,38 +558,95 @@ def run_letsgo_cmd(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         raise
 
 
-def _install_provider_deps(normal_deps: list[str], special_deps: list[str]) -> None:
+def _pip_install_command() -> list[str]:
+    """Return the command that installs packages into the interpreter running `ogx go`.
+
+    Without --python, `uv pip install` targets $VIRTUAL_ENV or a .venv found from the
+    current directory, which is not the environment `uvx ogx go` runs in.
+    """
+    if shutil.which("uv"):
+        return ["uv", "pip", "install", "--python", sys.executable]
+    return [sys.executable, "-m", "pip", "install"]
+
+
+def _run_installer(installer: list[str], packages: list[str]) -> bool:
+    """Run one install command and, on failure, print a short summary instead of its full output.
+
+    The installer's own output is captured because its full error dump (e.g. pip's PEP 668
+    "externally-managed-environment" explanation) otherwise buries the failure.
+    """
+    result = subprocess.run([*installer, *packages], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if result.returncode == 0:
+        return True
+
+    output_lines = (result.stderr or result.stdout or "").strip().splitlines()
+    error_lines = [line.strip() for line in output_lines if line.strip().lower().startswith("error")]
+    summary_lines = error_lines or [line.strip() for line in output_lines[-5:]]
+    cprint(f"  ✗ Failed to install {' '.join(packages)} into {sys.executable}", color="red", file=sys.stderr)
+    for line in summary_lines:
+        cprint(f"      {line}", color="red", file=sys.stderr)
+    if "externally" in "\n".join(output_lines).lower():
+        cprint(
+            "      This Python is externally managed (PEP 668). Run `ogx go` from a virtual environment or with `uvx`.",
+            color="yellow",
+            file=sys.stderr,
+        )
+    logger.warning("Failed to install provider dependencies", packages=packages, returncode=result.returncode)
+    return False
+
+
+def _install_provider_deps(normal_deps: list[str], special_deps: list[str]) -> bool:
     """Install provider pip dependencies into the current environment.
 
     Uses `uv pip install` when uv is available, falling back to `pip install`.
-    A non-zero exit is logged as a warning rather than aborting startup,
-    since packages may already satisfy the declared constraints.
+    A failed install is reported rather than aborting startup, since packages may
+    already satisfy the declared constraints.
+
+    Returns True when every install command succeeded.
     """
-    if shutil.which("uv"):
-        installer = ["uv", "pip", "install"]
-    else:
-        installer = [sys.executable, "-m", "pip", "install"]
+    installer = _pip_install_command()
+    succeeded = True
 
     if normal_deps:
         cprint("Installing provider dependencies...", color="cyan")
-        result = subprocess.run([*installer, *normal_deps])
-        if result.returncode != 0:
-            logger.warning("Failed to install provider dependencies", returncode=result.returncode)
+        succeeded = _run_installer(installer, normal_deps)
 
     for special_dep in special_deps:
-        result = subprocess.run([*installer, *special_dep.split()])
-        if result.returncode != 0:
-            logger.warning(
-                "Failed to install special provider dependency", dep=special_dep, returncode=result.returncode
-            )
+        succeeded = _run_installer(installer, special_dep.split()) and succeeded
+
+    return succeeded
 
 
-async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[QualifiedModel, int | None] | None]:
+async def _is_reachable(base_url: str, timeout_seconds: float = 2) -> bool:
+    """Return True when a server answers HTTP(S) at base_url, whatever the status code.
+
+    This only answers "is something serving on this port", so TLS verification is off:
+    a backend with a self-signed certificate (vLLM, SGLang or llama.cpp started with TLS)
+    must still count as reachable. Certificate validity and backend identity are checked
+    by the re-probe, which instantiates the provider and calls list_models() through the
+    provider's own client with its normal TLS settings.
+    """
+    if not base_url:
+        return False
+    try:
+        async with httpx2.AsyncClient(timeout=timeout_seconds, verify=False) as client:
+            await client.get(base_url)
+    except httpx2.HTTPError:
+        return False
+    return True
+
+
+async def _autodetect_providers(
+    debug: bool = False, install_missing_deps: bool = False
+) -> tuple[str, tuple[QualifiedModel, int | None] | None]:
     """Probe all candidate providers and return a spec string and first detected embedding model.
 
     Each provider is probed by instantiating it and calling list_models() to confirm
     availability and model access. Providers that require an API key skip probing
     when the key environment variable is not set.
+
+    With install_missing_deps, a provider whose module fails to import is given its
+    registry pip_packages and probed again, as long as its server answers HTTP.
     """
     candidates = [
         # provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env
@@ -617,6 +678,28 @@ async def _autodetect_providers(debug: bool = False) -> tuple[str, tuple[Qualifi
         status, models, base_url, base_source, pip_packages = await _probe_provider_availability(
             provider_type, base_url_env, default_base_url, required_api_key_env, optional_api_key_env, debug=debug
         )
+
+        # Dependencies are otherwise installed only for providers that pass the probe, but a
+        # provider whose module fails to import can never pass it. Installing the registry's
+        # pip_packages for a reachable server breaks that cycle.
+        if (
+            status == _ProbeStatus.MISSING_DEPS
+            and pip_packages
+            and install_missing_deps
+            and await _is_reachable(base_url)
+        ):
+            packages_str = " ".join(f"'{pkg}'" for pkg in pip_packages)
+            cprint(f"  ↻ {provider_type} is reachable; installing missing dependencies: {packages_str}", color="cyan")
+            if _install_provider_deps(*split_pip_packages(pip_packages)):
+                importlib.invalidate_caches()
+                status, models, base_url, base_source, pip_packages = await _probe_provider_availability(
+                    provider_type,
+                    base_url_env,
+                    default_base_url,
+                    required_api_key_env,
+                    optional_api_key_env,
+                    debug=debug,
+                )
 
         # Build annotation parts
         parts = []
@@ -958,7 +1041,8 @@ async def _probe_provider_availability(
                 provider.__provider_id__ = provider_type  # type: ignore[attr-defined]
                 provider.__provider_spec__ = provider_spec  # type: ignore[attr-defined]
                 provider.__provider_config__ = config  # type: ignore[attr-defined]
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as e:
+                cprint(f"    Missing dependencies for {provider_type}: {str(e)[:200]}", color="red")
                 return _ProbeStatus.MISSING_DEPS, [], base_url, base_source, provider_spec.pip_packages
             except Exception as e:
                 if _is_auth_error(e):
