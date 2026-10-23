@@ -875,7 +875,7 @@ class StreamingResponseOrchestrator:
             # propagate so responses.create raises it instead of reporting a "server_error" failure.
             raise
         except Exception as exc:  # noqa: BLE001
-            if _is_context_length_error(exc):
+            if self.truncation == ResponseTruncation.auto and _is_context_length_error(exc):
                 # Context-length exceeded from provider - signal retry with truncation
                 logger.warning(
                     "Context length exceeded during response generation - will retry with truncated history",
